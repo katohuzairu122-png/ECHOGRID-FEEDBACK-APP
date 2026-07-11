@@ -1,0 +1,65 @@
+{
+  "page": {
+    "title": "Analytique",
+    "searchFeedback": "Rechercher des avis →",
+    "trendTitle": "Tendance de sentiment",
+    "trendDescription": "30 derniers jours, jour par jour",
+    "summariesTitle": "Résumés IA",
+    "summariesDescription": "Résumés générés automatiquement avec des recommandations concrètes"
+  },
+  "branchFilter": {
+    "ariaLabel": "Filtrer par succursale",
+    "allBranches": "Toutes les succursales"
+  },
+  "summaryGenerator": {
+    "periodAriaLabel": "Période du résumé",
+    "weekly": "Hebdomadaire",
+    "monthly": "Mensuel",
+    "queuing": "Mise en file…",
+    "generate": "Générer un résumé",
+    "queued": "En file d'attente — cela peut prendre un instant. Actualisez la page dans un moment pour le voir.",
+    "error": "Impossible de mettre en file un nouveau résumé. Veuillez réessayer."
+  },
+  "summariesList": {
+    "empty": "Aucun résumé IA pour le moment. Générez-en un ci-dessus une fois qu'il y a des avis à résumer.",
+    "weekly": "Hebdomadaire",
+    "monthly": "Mensuel",
+    "positive": "{count} positifs",
+    "neutral": "{count} neutres",
+    "negative": "{count} négatifs",
+    "feedbackCount": "{count} avis"
+  },
+  "search": {
+    "backToOverview": "← Retour à la vue d'ensemble",
+    "title": "Rechercher des avis",
+    "emptyTitle": "Aucun avis correspondant",
+    "emptyDescription": "Essayez d'élargir la plage de dates ou de retirer un filtre.",
+    "unknownBranch": "Succursale inconnue",
+    "positive": "positif",
+    "neutral": "neutre",
+    "negative": "négatif",
+    "statusNew": "Nouveau",
+    "statusReviewed": "Traité",
+    "newer": "← Plus récents",
+    "older": "Plus anciens →"
+  },
+  "searchFilters": {
+    "branchLabel": "Succursale",
+    "keywordLabel": "Rechercher dans les avis",
+    "sentimentLabel": "Sentiment",
+    "ratingLabel": "Note",
+    "rangeLabel": "Plage de dates",
+    "allBranches": "Toutes les succursales",
+    "any": "Tous",
+    "positive": "Positif",
+    "neutral": "Neutre",
+    "negative": "Négatif",
+    "starSingular": "{n} étoile",
+    "starPlural": "{n} étoiles",
+    "range7": "7 derniers jours",
+    "range30": "30 derniers jours",
+    "range90": "90 derniers jours",
+    "range365": "Dernière année",
+    "search": "Rechercher"
+  }
+}

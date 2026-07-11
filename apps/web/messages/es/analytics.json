@@ -1,0 +1,65 @@
+{
+  "page": {
+    "title": "Analítica",
+    "searchFeedback": "Buscar comentarios →",
+    "trendTitle": "Tendencia de sentimiento",
+    "trendDescription": "Últimos 30 días, día por día",
+    "summariesTitle": "Resúmenes de IA",
+    "summariesDescription": "Resúmenes generados automáticamente con recomendaciones prácticas"
+  },
+  "branchFilter": {
+    "ariaLabel": "Filtrar por sucursal",
+    "allBranches": "Todas las sucursales"
+  },
+  "summaryGenerator": {
+    "periodAriaLabel": "Período del resumen",
+    "weekly": "Semanal",
+    "monthly": "Mensual",
+    "queuing": "Encolando…",
+    "generate": "Generar resumen",
+    "queued": "En cola — esto puede tardar un momento. Actualiza la página en breve para verlo.",
+    "error": "No se pudo encolar un nuevo resumen. Inténtalo de nuevo."
+  },
+  "summariesList": {
+    "empty": "Aún no hay resúmenes de IA. Genera uno arriba una vez que haya comentarios que resumir.",
+    "weekly": "Semanal",
+    "monthly": "Mensual",
+    "positive": "{count} positivos",
+    "neutral": "{count} neutrales",
+    "negative": "{count} negativos",
+    "feedbackCount": "{count} comentarios"
+  },
+  "search": {
+    "backToOverview": "← Volver al resumen",
+    "title": "Buscar comentarios",
+    "emptyTitle": "No hay comentarios coincidentes",
+    "emptyDescription": "Intenta ampliar el rango de fechas o quitar un filtro.",
+    "unknownBranch": "Sucursal desconocida",
+    "positive": "positivo",
+    "neutral": "neutral",
+    "negative": "negativo",
+    "statusNew": "Nuevo",
+    "statusReviewed": "Revisado",
+    "newer": "← Más recientes",
+    "older": "Más antiguos →"
+  },
+  "searchFilters": {
+    "branchLabel": "Sucursal",
+    "keywordLabel": "Buscar en comentarios",
+    "sentimentLabel": "Sentimiento",
+    "ratingLabel": "Calificación",
+    "rangeLabel": "Rango de fechas",
+    "allBranches": "Todas las sucursales",
+    "any": "Cualquiera",
+    "positive": "Positivo",
+    "neutral": "Neutral",
+    "negative": "Negativo",
+    "starSingular": "{n} estrella",
+    "starPlural": "{n} estrellas",
+    "range7": "Últimos 7 días",
+    "range30": "Últimos 30 días",
+    "range90": "Últimos 90 días",
+    "range365": "Último año",
+    "search": "Buscar"
+  }
+}

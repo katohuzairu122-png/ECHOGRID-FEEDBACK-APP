@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Echo Grid Feedback — Design Preview</title>
+<style>
+  :root {
+    --brand-50:#eefbf6; --brand-100:#d5f5e8; --brand-200:#aeead5; --brand-300:#7adaba;
+    --brand-400:#45c29c; --brand-500:#22a682; --brand-600:#16856a; --brand-700:#146a57;
+    --brand-800:#135547; --brand-900:#12463c;
+    --accent-400:#f5b942; --accent-500:#eea023; --accent-600:#d1830f;
+    --neutral-50:#f8f9fa; --neutral-100:#f1f3f5; --neutral-200:#e5e8eb; --neutral-300:#d1d6db;
+    --neutral-400:#9ba3ab; --neutral-500:#6b7480; --neutral-600:#4d5561; --neutral-700:#363c46;
+    --neutral-800:#23272e; --neutral-900:#16191e;
+    --success:#1a9c5c; --warning:#d1830f; --danger:#d64545; --info:#2f7fd6;
+    --radius-md:0.5rem; --radius-lg:0.75rem;
+    --font-sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:var(--font-sans); color:var(--neutral-900); background:var(--neutral-50); }
+  .note { max-width:1040px; margin:0 auto; padding:24px 24px 0; color:var(--neutral-500); font-size:13px; }
+  .note b { color:var(--neutral-700); }
+  section.screen { max-width:1040px; margin:32px auto; padding:0 24px; }
+  .screen h2 { font-size:13px; text-transform:uppercase; letter-spacing:.06em; color:var(--neutral-400); margin:0 0 10px; }
+  .frame { border:1px solid var(--neutral-200); border-radius:var(--radius-lg); overflow:hidden; background:#fff; box-shadow:0 1px 2px rgba(0,0,0,.04); }
+
+  /* Nav */
+  header.app-nav { border-bottom:1px solid var(--neutral-200); background:#fff; }
+  .app-nav-inner { max-width:960px; margin:0 auto; display:flex; align-items:center; justify-content:space-between; padding:16px 24px; }
+  .app-nav-left { display:flex; align-items:center; gap:24px; }
+  .brand-logo { font-weight:600; font-size:18px; color:var(--neutral-900); text-decoration:none; }
+  .app-nav nav { display:flex; gap:16px; }
+  .app-nav nav a { font-size:14px; color:var(--neutral-600); text-decoration:none; }
+  .app-nav nav a.active { color:var(--brand-700); font-weight:600; }
+
+  /* Buttons */
+  .btn { display:inline-flex; align-items:center; justify-content:center; gap:6px; border-radius:var(--radius-md);
+         font-weight:500; font-size:14px; height:38px; padding:0 16px; border:1px solid transparent; cursor:default; }
+  .btn.sm { height:32px; padding:0 12px; font-size:13px; }
+  .btn.lg { height:46px; padding:0 22px; font-size:15px; }
+  .btn.primary { background:var(--brand-600); color:#fff; }
+  .btn.outline { background:transparent; color:var(--neutral-900); border-color:var(--neutral-300); }
+  .btn.ghost { background:transparent; color:var(--neutral-900); }
+  .btn.danger { background:var(--danger); color:#fff; }
+
+  /* Card */
+  .card { border:1px solid var(--neutral-200); border-radius:var(--radius-lg); background:#fff; box-shadow:0 1px 2px rgba(0,0,0,.04); }
+  .card-header { padding:24px 24px 0; }
+  .card-header .title { font-size:18px; font-weight:600; margin:0; }
+  .card-header .desc { font-size:14px; color:var(--neutral-500); margin:4px 0 0; }
+  .card-content { padding:24px; }
+
+  /* Badge */
+  .badge { display:inline-flex; align-items:center; border-radius:999px; padding:2px 10px; font-size:12px; font-weight:500; }
+  .badge.accent { background:rgba(245,185,66,.2); color:var(--accent-600); }
+  .badge.neutral { background:var(--neutral-100); color:var(--neutral-600); }
+
+  /* Stars */
+  .stars { display:inline-flex; gap:2px; vertical-align:middle; }
+  .star { width:16px; height:16px; }
+  .star.big { width:34px; height:34px; }
+  .star.filled { fill:var(--accent-500); stroke:var(--accent-500); }
+  .star.empty { fill:transparent; stroke:var(--neutral-300); }
+
+  /* Input-ish */
+  .field-label { display:block; font-size:13px; font-weight:500; color:var(--neutral-800); margin-bottom:5px; }
+  .field { width:100%; height:38px; border:1px solid var(--neutral-300); border-radius:var(--radius-md); padding:0 12px; font-size:14px; color:var(--neutral-900); background:#fff; }
+  textarea.field { height:76px; padding:8px 12px; resize:none; }
+  select.field { height:38px; }
+
+  /* Dashboard layout */
+  .dash-body { background:var(--neutral-50); padding:28px 24px; }
+  .dash-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:20px; }
+  .dash-head h1 { font-size:22px; font-weight:600; margin:0; }
+  .dash-head p { font-size:13px; color:var(--neutral-500); margin:2px 0 0; }
+  .branch-row { display:flex; align-items:center; justify-content:space-between; padding:16px 24px; }
+  .branch-row + .branch-row { border-top:1px solid var(--neutral-200); }
+  .branch-row .name { font-weight:500; margin:0; }
+  .branch-row .meta { font-size:13px; color:var(--neutral-500); margin:2px 0 0; }
+  .row-actions { display:flex; gap:8px; }
+
+  /* Modal overlay mock */
+  .modal-wrap { position:relative; background:var(--neutral-900); border-radius:var(--radius-lg); padding:40px; display:flex; justify-content:center; }
+  .modal { width:100%; max-width:340px; background:#fff; border:1px solid var(--neutral-200); border-radius:var(--radius-lg); box-shadow:0 8px 24px rgba(0,0,0,.25); padding:24px; }
+  .modal h3 { margin:0 0 2px; font-size:16px; font-weight:600; }
+  .modal .sub { font-size:13px; color:var(--neutral-500); margin:0 0 16px; }
+  .qr-box { border:1px solid var(--neutral-200); border-radius:var(--radius-md); padding:16px; display:flex; justify-content:center; margin-bottom:12px; }
+  .qr-url { font-size:11px; color:var(--neutral-500); text-align:center; word-break:break-all; margin-bottom:16px; }
+  .modal-actions { display:flex; justify-content:center; gap:8px; }
+  .modal-close { display:flex; justify-content:flex-end; margin-top:20px; }
+
+  /* Public landing page mock */
+  .public-wrap { background:var(--neutral-50); padding:48px 16px; display:flex; justify-content:center; }
+  .public-card { width:100%; max-width:420px; }
+  details.contact { border:1px solid var(--neutral-200); border-radius:var(--radius-md); padding:12px; margin-top:6px; }
+  details.contact summary { cursor:default; font-size:14px; font-weight:500; color:var(--neutral-700); }
+  .contact-fields { display:flex; flex-direction:column; gap:10px; margin-top:12px; }
+
+  /* Feedback inbox */
+  .fb-toolbar { display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; }
+  .fb-card { border:1px solid var(--neutral-200); border-radius:var(--radius-lg); background:#fff; padding:16px; margin-bottom:12px; }
+  .fb-top { display:flex; justify-content:space-between; align-items:flex-start; gap:16px; }
+  .fb-meta { font-size:12px; color:var(--neutral-500); margin-top:4px; }
+  .fb-comment { font-size:14px; color:var(--neutral-800); margin:10px 0 0; }
+  .fb-contact { font-size:12px; color:var(--neutral-500); margin-top:6px; }
+
+  /* Login */
+  .login-wrap { background:var(--neutral-50); padding:56px 16px; display:flex; justify-content:center; }
+  .login-card { width:100%; max-width:340px; }
+</style>
+</head>
+<body>
+
+<div class="note">Static design preview only — not the live app (no server/database running). Colors, spacing, and components are pulled directly from <b>apps/web/src/app/globals.css</b> and <b>components/ui/</b> so this matches the real build.</div>
+
+<!-- LOGIN -->
+<section class="screen">
+  <h2>Login</h2>
+  <div class="frame">
+    <div class="login-wrap">
+      <div class="card login-card">
+        <div class="card-header">
+          <p class="title">Log in</p>
+          <p class="desc">Welcome back to Echo Grid Feedback.</p>
+        </div>
+        <div class="card-content">
+          <label class="field-label">Email</label>
+          <input class="field" style="margin-bottom:14px" value="owner@acmecoffee.test">
+          <label class="field-label">Password</label>
+          <input class="field" style="margin-bottom:18px" value="••••••••••••">
+          <button class="btn primary lg" style="width:100%">Log in</button>
+          <p style="text-align:center;font-size:13px;color:var(--neutral-500);margin-top:16px">No account? <span style="color:var(--brand-600);font-weight:500">Sign up</span></p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- DASHBOARD / BRANCHES -->
+<section class="screen">
+  <h2>Dashboard — Branches</h2>
+  <div class="frame">
+    <header class="app-nav">
+      <div class="app-nav-inner">
+        <div class="app-nav-left">
+          <a class="brand-logo">Echo Grid Feedback</a>
+          <nav><a class="active">Branches</a><a>Feedback</a></nav>
+        </div>
+        <button class="btn ghost sm">Log out</button>
+      </div>
+    </header>
+    <div class="dash-body">
+      <div class="dash-head">
+        <div><h1>Branches</h1><p>Acme Coffee</p></div>
+        <button class="btn primary sm">+ New branch</button>
+      </div>
+      <div class="card">
+        <div class="branch-row">
+          <div><p class="name">Downtown</p><p class="meta">/downtown · Austin, US</p></div>
+          <div class="row-actions">
+            <button class="btn outline sm">QR code</button>
+            <button class="btn outline sm">Edit</button>
+            <button class="btn ghost sm">Delete</button>
+          </div>
+        </div>
+        <div class="branch-row">
+          <div><p class="name">Riverside</p><p class="meta">/riverside · Austin, US</p></div>
+          <div class="row-actions">
+            <button class="btn outline sm">QR code</button>
+            <button class="btn outline sm">Edit</button>
+            <button class="btn ghost sm">Delete</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- QR DIALOG -->
+<section class="screen">
+  <h2>QR Code Dialog (branch management)</h2>
+  <div class="frame">
+    <div class="modal-wrap">
+      <div class="modal">
+        <h3>QR code</h3>
+        <p class="sub">Downtown</p>
+        <div class="qr-box">
+          <svg width="140" height="140" viewBox="0 0 29 29" shape-rendering="crispEdges">
+            <rect width="29" height="29" fill="#fff"/>
+            <g fill="#16191e">
+              <rect x="0" y="0" width="7" height="7"/><rect x="1" y="1" width="5" height="5" fill="#fff"/><rect x="2" y="2" width="3" height="3"/>
+              <rect x="22" y="0" width="7" height="7"/><rect x="23" y="1" width="5" height="5" fill="#fff"/><rect x="24" y="2" width="3" height="3"/>
+              <rect x="0" y="22" width="7" height="7"/><rect x="1" y="23" width="5" height="5" fill="#fff"/><rect x="2" y="24" width="3" height="3"/>
+              <rect x="9" y="1" width="1" height="1"/><rect x="11" y="1" width="2" height="1"/><rect x="15" y="2" width="1" height="1"/><rect x="17" y="1" width="3" height="1"/>
+              <rect x="9" y="4" width="3" height="1"/><rect x="14" y="4" width="1" height="1"/><rect x="16" y="4" width="2" height="1"/>
+              <rect x="10" y="9" width="2" height="2"/><rect x="14" y="9" width="1" height="3"/><rect x="17" y="9" width="2" height="1"/><rect x="21" y="10" width="2" height="2"/>
+              <rect x="9" y="12" width="1" height="4"/><rect x="12" y="13" width="3" height="1"/><rect x="18" y="12" width="1" height="4"/><rect x="24" y="13" width="3" height="1"/>
+              <rect x="10" y="17" width="2" height="1"/><rect x="15" y="18" width="1" height="2"/><rect x="20" y="17" width="1" height="3"/><rect x="26" y="18" width="1" height="4"/>
+              <rect x="9" y="20" width="4" height="1"/><rect x="16" y="21" width="2" height="1"/><rect x="22" y="20" width="1" height="4"/>
+              <rect x="9" y="9" width="1" height="1"/><rect x="12" y="10" width="1" height="1"/><rect x="19" y="15" width="2" height="1"/><rect x="23" y="9" width="1" height="1"/>
+            </g>
+          </svg>
+        </div>
+        <p class="qr-url">http://localhost:3000/feedback/a1b2c3d4e5f6g7h8i9j0</p>
+        <div class="modal-actions">
+          <button class="btn outline sm">Download SVG</button>
+          <button class="btn outline sm">Regenerate</button>
+        </div>
+        <div class="modal-close"><button class="btn ghost sm">Close</button></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- FEEDBACK INBOX -->
+<section class="screen">
+  <h2>Dashboard — Feedback Inbox</h2>
+  <div class="frame">
+    <div class="dash-body">
+      <div class="fb-toolbar">
+        <div><h1 style="font-size:22px;font-weight:600;margin:0">Feedback</h1><p style="font-size:13px;color:var(--neutral-500);margin:2px 0 0">Acme Coffee</p></div>
+        <select class="field" style="width:180px"><option>All branches</option><option>Downtown</option><option>Riverside</option></select>
+      </div>
+
+      <div class="fb-card">
+        <div class="fb-top">
+          <div>
+            <div style="display:flex;align-items:center;gap:8px">
+              <span class="stars">
+                <svg class="star filled" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M11.48 3.5a.56.56 0 0 1 1.04 0l2.12 5.11a.56.56 0 0 0 .48.35l5.52.44c.5.04.7.66.32.99l-4.2 3.6a.56.56 0 0 0-.18.56l1.28 5.38a.56.56 0 0 1-.84.61l-4.72-2.88a.56.56 0 0 0-.59 0l-4.72 2.88a.56.56 0 0 1-.84-.61l1.28-5.38a.56.56 0 0 0-.18-.56l-4.2-3.6a.56.56 0 0 1 .32-.99l5.52-.44a.56.56 0 0 0 .48-.35Z"/></svg>
+                <svg class="star filled" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M11.48 3.5a.56.56 0 0 1 1.04 0l2.12 5.11a.56.56 0 0 0 .48.35l5.52.44c.5.04.7.66.32.99l-4.2 3.6a.56.56 0 0 0-.18.56l1.28 5.38a.56.56 0 0 1-.84.61l-4.72-2.88a.56.56 0 0 0-.59 0l-4.72 2.88a.56.56 0 0 1-.84-.61l1.28-5.38a.56.56 0 0 0-.18-.56l-4.2-3.6a.56.56 0 0 1 .32-.99l5.52-.44a.56.56 0 0 0 .48-.35Z"/></svg>
+                <svg class="star filled" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M11.48 3.5a.56.56 0 0 1 1.04 0l2.12 5.11a.56.56 0 0 0 .48.35l5.52.44c.5.04.7.66.32.99l-4.2 3.6a.56.56 0 0 0-.18.56l1.28 5.38a.56.56 0 0 1-.84.61l-4.72-2.88a.56.56 0 0 0-.59 0l-4.72 2.88a.56.56 0 0 1-.84-.61l1.28-5.38a.56.56 0 0 0-.18-.56l-4.2-3.6a.56.56 0 0 1 .32-.99l5.52-.44a.56.56 0 0 0 .48-.35Z"/></svg>
+                <svg class="star filled" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M11.48 3.5a.56.56 0 0 1 1.04 0l2.12 5.11a.56.56 0 0 0 .48.35l5.52.44c.5.04.7.66.32.99l-4.2 3.6a.56.56 0 0 0-.18.56l1.28 5.38a.56.56 0 0 1-.84.61l-4.72-2.88a.56.56 0 0 0-.59 0l-4.72 2.88a.56.56 0 0 1-.84-.61l1.28-5.38a.56.56 0 0 0-.18-.56l-4.2-3.6a.56.56 0 0 1 .32-.99l5.52-.44a.56.56 0 0 0 .48-.35Z"/></svg>
+                <svg class="star empty" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M11.48 3.5a.56.56 0 0 1 1.04 0l2.12 5.11a.56.56 0 0 0 .48.35l5.52.44c.5.04.7.66.32.99l-4.2 3.6a.56.56 0 0 0-.18.56l1.28 5.38a.56.56 0 0 1-.84.61l-4.72-2.88a.56.56 0 0 0-.59 0l-4.72 2.88a.56.56 0 0 1-.84-.61l1.28-5.38a.56.56 0 0 0-.18-.56l-4.2-3.6a.56.56 0 0 1 .32-.99l5.52-.44a.56.56 0 0 0 .48-.35Z"/></svg>
+              </span>
+              <span class="badge accent">New</span>
+            </div>
+            <p class="fb-meta">Downtown · 7/9/2026</p>
+          </div>
+          <div class="row-actions"><button class="btn outline sm">Mark reviewed</button><button class="btn ghost sm">Delete</button></div>
+        </div>
+        <p class="fb-comment">Great coffee and super fast service, will definitely come back!</p>
+        <p class="fb-contact">Alex R. · alex@example.com</p>
+      </div>
+
+      <div class="fb-card">
+        <div class="fb-top">
+          <div>
+            <div style="display:flex;align-items:center;gap:8px">
+              <span class="stars">
+                <svg class="star filled" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M11.48 3.5a.56.56 0 0 1 1.04 0l2.12 5.11a.56.56 0 0 0 .48.35l5.52.44c.5.04.7.66.32.99l-4.2 3.6a.56.56 0 0 0-.18.56l1.28 5.38a.56.56 0 0 1-.84.61l-4.72-2.88a.56.56 0 0 0-.59 0l-4.72 2.88a.56.56 0 0 1-.84-.61l1.28-5.38a.56.56 0 0 0-.18-.56l-4.2-3.6a.56.56 0 0 1 .32-.99l5.52-.44a.56.56 0 0 0 .48-.35Z"/></svg>
+                <svg class="star filled" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M11.48 3.5a.56.56 0 0 1 1.04 0l2.12 5.11a.56.56 0 0 0 .48.35l5.52.44c.5.04.7.66.32.99l-4.2 3.6a.56.56 0 0 0-.18.56l1.28 5.38a.56.56 0 0 1-.84.61l-4.72-2.88a.56.56 0 0 0-.59 0l-4.72 2.88a.56.56 0 0 1-.84-.61l1.28-5.38a.56.56 0 0 0-.18-.56l-4.2-3.6a.56.56 0 0 1 .32-.99l5.52-.44a.56.56 0 0 0 .48-.35Z"/></svg>
+                <svg class="star empty" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M11.48 3.5a.56.56 0 0 1 1.04 0l2.12 5.11a.56.56 0 0 0 .48.35l5.52.44c.5.04.7.66.32.99l-4.2 3.6a.56.56 0 0 0-.18.56l1.28 5.38a.56.56 0 0 1-.84.61l-4.72-2.88a.56.56 0 0 0-.59 0l-4.72 2.88a.56.56 0 0 1-.84-.61l1.28-5.38a.56.56 0 0 0-.18-.56l-4.2-3.6a.56.56 0 0 1 .32-.99l5.52-.44a.56.56 0 0 0 .48-.35Z"/></svg>
+                <svg class="star empty" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M11.48 3.5a.56.56 0 0 1 1.04 0l2.12 5.11a.56.56 0 0 0 .48.35l5.52.44c.5.04.7.66.32.99l-4.2 3.6a.56.56 0 0 0-.18.56l1.28 5.38a.56.56 0 0 1-.84.61l-4.72-2.88a.56.56 0 0 0-.59 0l-4.72 2.88a.56.56 0 0 1-.84-.61l1.28-5.38a.56.56 0 0 0-.18-.56l-4.2-3.6a.56.56 0 0 1 .32-.99l5.52-.44a.56.56 0 0 0 .48-.35Z"/></svg>
+                <svg class="star empty" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M11.48 3.5a.56.56 0 0 1 1.04 0l2.12 5.11a.56.56 0 0 0 .48.35l5.52.44c.5.04.7.66.32.99l-4.2 3.6a.56.56 0 0 0-.18.56l1.28 5.38a.56.56 0 0 1-.84.61l-4.72-2.88a.56.56 0 0 0-.59 0l-4.72 2.88a.56.56 0 0 1-.84-.61l1.28-5.38a.56.56 0 0 0-.18-.56l-4.2-3.6a.56.56 0 0 1 .32-.99l5.52-.44a.56.56 0 0 0 .48-.35Z"/></svg>
+              </span>
+              <span class="badge neutral">Reviewed</span>
+            </div>
+            <p class="fb-meta">Riverside · 7/6/2026</p>
+          </div>
+          <div class="row-actions"><button class="btn ghost sm">Delete</button></div>
+        </div>
+        <p class="fb-comment">Line was a bit long at lunch but staff were friendly.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- PUBLIC LANDING PAGE -->
+<section class="screen">
+  <h2>Public Feedback Landing Page (customer, anonymous)</h2>
+  <div class="frame">
+    <div class="public-wrap">
+      <div class="card public-card">
+        <div class="card-header">
+          <p class="title">How was your visit?</p>
+          <p class="desc">Downtown · Acme Coffee</p>
+        </div>
+        <div class="card-content">
+          <div style="display:flex;justify-content:center;gap:6px;padding:8px 0 20px">
+            <svg class="star big filled" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M11.48 3.5a.56.56 0 0 1 1.04 0l2.12 5.11a.56.56 0 0 0 .48.35l5.52.44c.5.04.7.66.32.99l-4.2 3.6a.56.56 0 0 0-.18.56l1.28 5.38a.56.56 0 0 1-.84.61l-4.72-2.88a.56.56 0 0 0-.59 0l-4.72 2.88a.56.56 0 0 1-.84-.61l1.28-5.38a.56.56 0 0 0-.18-.56l-4.2-3.6a.56.56 0 0 1 .32-.99l5.52-.44a.56.56 0 0 0 .48-.35Z"/></svg>
+            <svg class="star big filled" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M11.48 3.5a.56.56 0 0 1 1.04 0l2.12 5.11a.56.56 0 0 0 .48.35l5.52.44c.5.04.7.66.32.99l-4.2 3.6a.56.56 0 0 0-.18.56l1.28 5.38a.56.56 0 0 1-.84.61l-4.72-2.88a.56.56 0 0 0-.59 0l-4.72 2.88a.56.56 0 0 1-.84-.61l1.28-5.38a.56.56 0 0 0-.18-.56l-4.2-3.6a.56.56 0 0 1 .32-.99l5.52-.44a.56.56 0 0 0 .48-.35Z"/></svg>
+            <svg class="star big filled" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M11.48 3.5a.56.56 0 0 1 1.04 0l2.12 5.11a.56.56 0 0 0 .48.35l5.52.44c.5.04.7.66.32.99l-4.2 3.6a.56.56 0 0 0-.18.56l1.28 5.38a.56.56 0 0 1-.84.61l-4.72-2.88a.56.56 0 0 0-.59 0l-4.72 2.88a.56.56 0 0 1-.84-.61l1.28-5.38a.56.56 0 0 0-.18-.56l-4.2-3.6a.56.56 0 0 1 .32-.99l5.52-.44a.56.56 0 0 0 .48-.35Z"/></svg>
+            <svg class="star big empty" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M11.48 3.5a.56.56 0 0 1 1.04 0l2.12 5.11a.56.56 0 0 0 .48.35l5.52.44c.5.04.7.66.32.99l-4.2 3.6a.56.56 0 0 0-.18.56l1.28 5.38a.56.56 0 0 1-.84.61l-4.72-2.88a.56.56 0 0 0-.59 0l-4.72 2.88a.56.56 0 0 1-.84-.61l1.28-5.38a.56.56 0 0 0-.18-.56l-4.2-3.6a.56.56 0 0 1 .32-.99l5.52-.44a.56.56 0 0 0 .48-.35Z"/></svg>
+            <svg class="star big empty" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M11.48 3.5a.56.56 0 0 1 1.04 0l2.12 5.11a.56.56 0 0 0 .48.35l5.52.44c.5.04.7.66.32.99l-4.2 3.6a.56.56 0 0 0-.18.56l1.28 5.38a.56.56 0 0 1-.84.61l-4.72-2.88a.56.56 0 0 0-.59 0l-4.72 2.88a.56.56 0 0 1-.84-.61l1.28-5.38a.56.56 0 0 0-.18-.56l-4.2-3.6a.56.56 0 0 1 .32-.99l5.52-.44a.56.56 0 0 0 .48-.35Z"/></svg>
+          </div>
+          <label class="field-label">Comments (optional)</label>
+          <textarea class="field" style="margin-bottom:14px">Really enjoyed the new seasonal blend!</textarea>
+          <details class="contact">
+            <summary>Share your contact info (optional)</summary>
+            <div class="contact-fields">
+              <div><label class="field-label">Name</label><input class="field"></div>
+              <div><label class="field-label">Email</label><input class="field"></div>
+              <div><label class="field-label">Phone</label><input class="field"></div>
+            </div>
+          </details>
+          <button class="btn primary lg" style="width:100%;margin-top:18px">Submit feedback</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div style="height:40px"></div>
+</body>
+</html>

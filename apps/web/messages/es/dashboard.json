@@ -1,0 +1,77 @@
+{
+  "nav": {
+    "branches": "Sucursales",
+    "feedback": "Comentarios",
+    "loyalty": "Fidelización",
+    "analytics": "Analítica",
+    "notifications": "Notificaciones",
+    "settings": "Configuración",
+    "billing": "Facturación",
+    "logout": "Cerrar sesión"
+  },
+  "home": {
+    "branchesTitle": "Sucursales",
+    "branchesDescription": "Gestiona los locales donde los clientes dejan comentarios.",
+    "viewBranches": "Ver sucursales",
+    "platformAdminTitle": "Consola de administración de plataforma",
+    "platformAdminDescription": "Tienes acceso de administrador de plataforma. Gestiona negocios, revisa el registro de auditoría multiempresa y más.",
+    "viewPlatformAdmin": "Abrir consola"
+  },
+  "createBusiness": {
+    "title": "Crea tu negocio",
+    "description": "Has iniciado sesión pero aún no perteneces a ningún negocio. Crea uno para continuar.",
+    "nameLabel": "Nombre del negocio",
+    "slugLabel": "Slug de URL",
+    "slugHint": "Solo letras minúsculas, números y guiones.",
+    "submit": "Crear negocio",
+    "submitPending": "Creando…"
+  },
+  "settings": {
+    "title": "Configuración",
+    "generalTitle": "General",
+    "generalDescription": "El nombre visible de tu negocio y sus valores predeterminados de idioma, moneda y zona horaria. Se aplican en todo el panel y en cada página orientada al cliente (registro por QR, formularios de comentarios, recompensas de fidelización).",
+    "nameLabel": "Nombre del negocio",
+    "languageLabel": "Idioma",
+    "currencyLabel": "Moneda",
+    "timezoneLabel": "Zona horaria",
+    "timezoneHint": "Nombre de zona horaria IANA.",
+    "submit": "Guardar configuración",
+    "submitPending": "Guardando…",
+    "success": "Configuración guardada."
+  },
+  "impersonationBanner": {
+    "label": "Suplantación activa —",
+    "viewingAs": "viendo como {name} ({email}).",
+    "stop": "Detener suplantación"
+  },
+  "billing": {
+    "title": "Facturación",
+    "manageBilling": "Gestionar facturación",
+    "openingPortal": "Abriendo…",
+    "plansTitle": "Planes",
+    "plansDescription": "Cambia de plan cuando quieras -- tu nuevo plan se aplica de inmediato.",
+    "status": {
+      "trialing": "Prueba",
+      "active": "Activo",
+      "past_due": "Pago vencido",
+      "incomplete": "Incompleto",
+      "canceled": "Cancelado",
+      "incomplete_expired": "Expirado",
+      "unpaid": "Impago"
+    },
+    "trialEndsOn": "La prueba termina el {date}.",
+    "cancelsOn": "Se cancela el {date}.",
+    "renewsOn": "Se renueva el {date}.",
+    "plans": {
+      "currentPlan": "Plan actual",
+      "perMonth": "mes",
+      "unlimitedBranches": "Sucursales ilimitadas",
+      "limitedBranches": "Hasta {count} {count, plural, one {sucursal} other {sucursales}}",
+      "unlimitedUsers": "Miembros del equipo ilimitados",
+      "limitedUsers": "Hasta {count} {count, plural, one {miembro} other {miembros}} del equipo",
+      "subscribeMonthly": "Suscribirse mensualmente",
+      "subscribeYearly": "Suscribirse anualmente ({price})",
+      "starting": "Iniciando…"
+    }
+  }
+}

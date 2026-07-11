@@ -1,0 +1,164 @@
+{
+  "staff": {
+    "title": "Fidélité",
+    "subnav": {
+      "accounts": "Comptes",
+      "tiers": "Niveaux",
+      "rewards": "Récompenses",
+      "redeem": "Confirmer l'échange",
+      "settings": "Paramètres"
+    },
+    "accounts": {
+      "emptyTitle": "Aucun membre pour le moment",
+      "emptyDescription": "Les clients qui s'enregistrent via le code QR d'une succursale apparaîtront ici.",
+      "visits": "{count} visites",
+      "lastVisit": "Dernière visite {date}",
+      "noVisits": "Aucune visite pour le moment",
+      "suspended": "Suspendu"
+    },
+    "accountDialog": {
+      "manageTrigger": "Gérer",
+      "description": "Enregistrez un achat ou effectuez un ajustement manuel de points.",
+      "purchaseTab": "Achat",
+      "adjustTab": "Ajustement",
+      "purchaseAmountLabel": "Montant de l'achat",
+      "recording": "Enregistrement…",
+      "recordPurchase": "Enregistrer l'achat",
+      "pointsLabel": "Points (négatif pour déduire)",
+      "reasonLabel": "Motif (facultatif)",
+      "saving": "Enregistrement…",
+      "saveAdjustment": "Enregistrer l'ajustement"
+    },
+    "tiers": {
+      "newButton": "Nouveau niveau",
+      "emptyTitle": "Aucun niveau pour le moment",
+      "emptyDescription": "Les niveaux récompensent les clients qui franchissent un seuil de points -- par exemple Argent à 100 pts, Or à 500.",
+      "minPoints": "{points}+ pts",
+      "editButton": "Modifier"
+    },
+    "tierForm": {
+      "titleEdit": "Modifier le niveau",
+      "titleNew": "Nouveau niveau",
+      "descriptionEdit": "Mettez à jour {name}.",
+      "descriptionNew": "Ajoutez un niveau de fidélité que les clients débloquent en gagnant des points.",
+      "nameLabel": "Nom",
+      "minPointsLabel": "Points minimum",
+      "benefitsLabel": "Avantages (facultatif)",
+      "cancel": "Annuler",
+      "saving": "Enregistrement…",
+      "saveChanges": "Enregistrer les modifications",
+      "create": "Créer le niveau"
+    },
+    "deleteTier": {
+      "button": "Supprimer",
+      "confirm": "Supprimer le niveau « {name} » ? Cette action est irréversible.",
+      "failedAlert": "Impossible de supprimer ce niveau. Veuillez réessayer."
+    },
+    "rewards": {
+      "newButton": "Nouvelle récompense",
+      "emptyTitle": "Aucune récompense pour le moment",
+      "emptyDescription": "Ajoutez des récompenses que les clients peuvent échanger avec des points -- un article gratuit, une réduction, etc.",
+      "active": "Active",
+      "inactive": "Inactive",
+      "pointsCost": "{points} pts",
+      "editButton": "Modifier"
+    },
+    "rewardForm": {
+      "titleEdit": "Modifier la récompense",
+      "titleNew": "Nouvelle récompense",
+      "descriptionEdit": "Mettez à jour {name}.",
+      "descriptionNew": "Ajoutez une récompense que les clients peuvent échanger avec des points.",
+      "nameLabel": "Nom",
+      "descriptionLabel": "Description (facultatif)",
+      "pointsCostLabel": "Coût en points",
+      "cancel": "Annuler",
+      "saving": "Enregistrement…",
+      "saveChanges": "Enregistrer les modifications",
+      "create": "Créer la récompense"
+    },
+    "rewardActions": {
+      "deactivate": "Désactiver",
+      "activate": "Activer",
+      "delete": "Supprimer",
+      "deleteConfirm": "Supprimer cette récompense ? Cette action est irréversible.",
+      "deleteFailedAlert": "Impossible de supprimer cette récompense. Veuillez réessayer."
+    },
+    "redeem": {
+      "title": "Confirmer un échange",
+      "description": "Saisissez le code que le client vous montre pour lui remettre sa récompense."
+    },
+    "redeemForm": {
+      "codeLabel": "Code d'échange",
+      "lookingUp": "Recherche…",
+      "lookUp": "Rechercher",
+      "pointsRedeemed": "{points} points échangés",
+      "codePrefix": "Code {code}",
+      "confirmed": "Confirmé",
+      "confirming": "Confirmation…",
+      "confirmHandoff": "Confirmer la remise",
+      "confirmError": "Impossible de confirmer cet échange."
+    },
+    "settings": {
+      "sectionTitle": "Taux d'acquisition",
+      "sectionDescription": "Comment les clients gagnent des points dans cette entreprise. Les modifications ne s'appliquent qu'à l'activité future.",
+      "pointsPerCheckinLabel": "Points par enregistrement",
+      "pointsPerCurrencyLabel": "Points par {currency} dépensé",
+      "referralBonusLabel": "Bonus de parrainage",
+      "birthdayBonusLabel": "Bonus d'anniversaire",
+      "saved": "Paramètres enregistrés.",
+      "saving": "Enregistrement…",
+      "save": "Enregistrer les paramètres"
+    }
+  },
+  "customer": {
+    "shell": {
+      "brand": "Mes récompenses",
+      "logout": "Se déconnecter"
+    },
+    "login": {
+      "title": "Connexion fidélité",
+      "codeSentDescription": "Saisissez le code que nous avons envoyé au {phone}.",
+      "phoneDescription": "Saisissez votre numéro de téléphone pour gagner et échanger des points.",
+      "phoneLabel": "Numéro de téléphone",
+      "phoneHint": "Incluez votre code pays, par exemple +1 pour les États-Unis.",
+      "sending": "Envoi…",
+      "sendCode": "Envoyer le code",
+      "codeLabel": "Code de vérification",
+      "verifying": "Vérification…",
+      "verify": "Vérifier"
+    },
+    "myRewards": {
+      "title": "Mes récompenses",
+      "emptyTitle": "Aucune carte de fidélité pour le moment",
+      "emptyDescription": "Scannez le code QR d'une entreprise et enregistrez-vous pour commencer à gagner des points.",
+      "visits": "{count} visites",
+      "businessFallback": "Entreprise"
+    },
+    "businessDashboard": {
+      "notificationPreferences": "Préférences de notifications →",
+      "points": "{points} pts",
+      "progressToNextTier": "{remaining} pts avant {tierName}",
+      "topTierReached": "Niveau maximum atteint",
+      "rewardsHeading": "Récompenses",
+      "recentActivityHeading": "Activité récente"
+    },
+    "rewardCard": {
+      "points": "{points} pts",
+      "showCode": "Montrez ce code au personnel",
+      "redeeming": "Échange en cours…",
+      "redeem": "Échanger",
+      "notEnoughPoints": "Points insuffisants"
+    },
+    "checkin": {
+      "checkedInTitle": "Vous êtes enregistré !",
+      "points": "{points} pts",
+      "viewRewards": "Voir mes récompenses →",
+      "welcome": "Bienvenue chez {branchName}",
+      "subtitle": "{businessName} · Enregistrez-vous pour gagner des points de fidélité",
+      "checkingIn": "Enregistrement…",
+      "checkIn": "S'enregistrer",
+      "signInToCheckIn": "Se connecter pour s'enregistrer",
+      "genericError": "Une erreur s'est produite. Veuillez réessayer."
+    }
+  }
+}

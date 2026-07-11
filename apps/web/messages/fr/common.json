@@ -1,0 +1,16 @@
+{
+  "appName": "Echo Grid Feedback",
+  "actions": {
+    "save": "Enregistrer",
+    "cancel": "Annuler",
+    "delete": "Supprimer",
+    "edit": "Modifier",
+    "close": "Fermer",
+    "loading": "Chargement...",
+    "retry": "Réessayer"
+  },
+  "status": {
+    "error": "Une erreur s'est produite.",
+    "success": "Enregistré avec succès."
+  }
+}

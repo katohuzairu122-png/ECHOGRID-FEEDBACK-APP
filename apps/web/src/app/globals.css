@@ -1,0 +1,71 @@
+@import "tailwindcss";
+
+/**
+ * Design tokens (Tailwind v4 CSS-first theming -- no tailwind.config.js
+ * needed for this). Original palette, not copied from any existing
+ * product: brand = deep teal (deliberately not the blue/purple every SaaS
+ * default leans on), accent = warm amber (fits a reviews/ratings/loyalty
+ * product). Semantic colors (success/warning/danger/info) use conventional
+ * meanings -- that's a UX convention, not branding, so reusing the common
+ * association is correct, not a copy of anyone's identity.
+ *
+ * Spacing intentionally uses Tailwind's built-in scale rather than a
+ * custom one -- it's already well-tuned, no reason to reinvent it.
+ * Dark mode is intentionally out of scope here -- partially theming just
+ * the body while every component below hardcodes light-mode colors would
+ * look broken, not better; add it as its own deliberate pass later.
+ */
+@theme {
+  --color-brand-50: #eefbf6;
+  --color-brand-100: #d5f5e8;
+  --color-brand-200: #aeead5;
+  --color-brand-300: #7adaba;
+  --color-brand-400: #45c29c;
+  --color-brand-500: #22a682;
+  --color-brand-600: #16856a;
+  --color-brand-700: #146a57;
+  --color-brand-800: #135547;
+  --color-brand-900: #12463c;
+  --color-brand-950: #072721;
+
+  --color-accent-400: #f5b942;
+  --color-accent-500: #eea023;
+  --color-accent-600: #d1830f;
+
+  --color-neutral-50: #f8f9fa;
+  --color-neutral-100: #f1f3f5;
+  --color-neutral-200: #e5e8eb;
+  --color-neutral-300: #d1d6db;
+  --color-neutral-400: #9ba3ab;
+  --color-neutral-500: #6b7480;
+  --color-neutral-600: #4d5561;
+  --color-neutral-700: #363c46;
+  --color-neutral-800: #23272e;
+  --color-neutral-900: #16191e;
+  --color-neutral-950: #0b0d10;
+
+  --color-success: #1a9c5c;
+  --color-warning: #d1830f;
+  --color-danger: #d64545;
+  --color-info: #2f7fd6;
+
+  --font-sans:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+
+  --radius-sm: 0.25rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+  --radius-xl: 1rem;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  color: var(--color-neutral-900);
+  background-color: var(--color-neutral-50);
+}

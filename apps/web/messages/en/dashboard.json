@@ -1,0 +1,77 @@
+{
+  "nav": {
+    "branches": "Branches",
+    "feedback": "Feedback",
+    "loyalty": "Loyalty",
+    "analytics": "Analytics",
+    "notifications": "Notifications",
+    "settings": "Settings",
+    "billing": "Billing",
+    "logout": "Log out"
+  },
+  "home": {
+    "branchesTitle": "Branches",
+    "branchesDescription": "Manage the locations customers give feedback at.",
+    "viewBranches": "View branches",
+    "platformAdminTitle": "Platform Admin Console",
+    "platformAdminDescription": "You have platform admin access. Manage businesses, review the cross-tenant audit log, and more.",
+    "viewPlatformAdmin": "Open console"
+  },
+  "createBusiness": {
+    "title": "Create your business",
+    "description": "You're logged in but not part of a business yet -- set one up to continue.",
+    "nameLabel": "Business name",
+    "slugLabel": "URL slug",
+    "slugHint": "Lowercase letters, numbers, and hyphens only.",
+    "submit": "Create business",
+    "submitPending": "Creating…"
+  },
+  "settings": {
+    "title": "Settings",
+    "generalTitle": "General",
+    "generalDescription": "Your business's display name and default language, currency, and timezone. These apply across the dashboard and every customer-facing page (QR check-in, feedback forms, loyalty rewards).",
+    "nameLabel": "Business name",
+    "languageLabel": "Language",
+    "currencyLabel": "Currency",
+    "timezoneLabel": "Timezone",
+    "timezoneHint": "IANA timezone name.",
+    "submit": "Save settings",
+    "submitPending": "Saving…",
+    "success": "Settings saved."
+  },
+  "impersonationBanner": {
+    "label": "Impersonating —",
+    "viewingAs": "viewing as {name} ({email}).",
+    "stop": "Stop impersonating"
+  },
+  "billing": {
+    "title": "Billing",
+    "manageBilling": "Manage billing",
+    "openingPortal": "Opening…",
+    "plansTitle": "Plans",
+    "plansDescription": "Change plan any time -- your new plan takes effect immediately.",
+    "status": {
+      "trialing": "Trial",
+      "active": "Active",
+      "past_due": "Past due",
+      "incomplete": "Incomplete",
+      "canceled": "Canceled",
+      "incomplete_expired": "Expired",
+      "unpaid": "Unpaid"
+    },
+    "trialEndsOn": "Trial ends {date}.",
+    "cancelsOn": "Cancels {date}.",
+    "renewsOn": "Renews {date}.",
+    "plans": {
+      "currentPlan": "Current plan",
+      "perMonth": "mo",
+      "unlimitedBranches": "Unlimited branches",
+      "limitedBranches": "Up to {count} {count, plural, one {branch} other {branches}}",
+      "unlimitedUsers": "Unlimited team members",
+      "limitedUsers": "Up to {count} team {count, plural, one {member} other {members}}",
+      "subscribeMonthly": "Subscribe monthly",
+      "subscribeYearly": "Subscribe yearly ({price})",
+      "starting": "Starting…"
+    }
+  }
+}

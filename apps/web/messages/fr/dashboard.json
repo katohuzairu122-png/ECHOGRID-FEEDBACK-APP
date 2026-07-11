@@ -1,0 +1,77 @@
+{
+  "nav": {
+    "branches": "Succursales",
+    "feedback": "Avis",
+    "loyalty": "Fidélité",
+    "analytics": "Analytique",
+    "notifications": "Notifications",
+    "settings": "Paramètres",
+    "billing": "Facturation",
+    "logout": "Se déconnecter"
+  },
+  "home": {
+    "branchesTitle": "Succursales",
+    "branchesDescription": "Gérez les établissements où les clients laissent des avis.",
+    "viewBranches": "Voir les succursales",
+    "platformAdminTitle": "Console d'administration de la plateforme",
+    "platformAdminDescription": "Vous disposez d'un accès administrateur de la plateforme. Gérez les entreprises, consultez le journal d'audit multi-entreprises, et plus encore.",
+    "viewPlatformAdmin": "Ouvrir la console"
+  },
+  "createBusiness": {
+    "title": "Créez votre entreprise",
+    "description": "Vous êtes connecté, mais vous n'appartenez encore à aucune entreprise. Créez-en une pour continuer.",
+    "nameLabel": "Nom de l'entreprise",
+    "slugLabel": "Slug d'URL",
+    "slugHint": "Lettres minuscules, chiffres et tirets uniquement.",
+    "submit": "Créer l'entreprise",
+    "submitPending": "Création…"
+  },
+  "settings": {
+    "title": "Paramètres",
+    "generalTitle": "Général",
+    "generalDescription": "Le nom affiché de votre entreprise et ses valeurs par défaut de langue, devise et fuseau horaire. Elles s'appliquent à tout le tableau de bord et à chaque page destinée aux clients (enregistrement QR, formulaires d'avis, récompenses de fidélité).",
+    "nameLabel": "Nom de l'entreprise",
+    "languageLabel": "Langue",
+    "currencyLabel": "Devise",
+    "timezoneLabel": "Fuseau horaire",
+    "timezoneHint": "Nom de fuseau horaire IANA.",
+    "submit": "Enregistrer les paramètres",
+    "submitPending": "Enregistrement…",
+    "success": "Paramètres enregistrés."
+  },
+  "impersonationBanner": {
+    "label": "Emprunt d'identité —",
+    "viewingAs": "vous voyez en tant que {name} ({email}).",
+    "stop": "Arrêter l'emprunt d'identité"
+  },
+  "billing": {
+    "title": "Facturation",
+    "manageBilling": "Gérer la facturation",
+    "openingPortal": "Ouverture…",
+    "plansTitle": "Forfaits",
+    "plansDescription": "Changez de forfait à tout moment -- votre nouveau forfait prend effet immédiatement.",
+    "status": {
+      "trialing": "Essai",
+      "active": "Actif",
+      "past_due": "Paiement en retard",
+      "incomplete": "Incomplet",
+      "canceled": "Annulé",
+      "incomplete_expired": "Expiré",
+      "unpaid": "Impayé"
+    },
+    "trialEndsOn": "L'essai se termine le {date}.",
+    "cancelsOn": "S'annule le {date}.",
+    "renewsOn": "Se renouvelle le {date}.",
+    "plans": {
+      "currentPlan": "Forfait actuel",
+      "perMonth": "mois",
+      "unlimitedBranches": "Succursales illimitées",
+      "limitedBranches": "Jusqu'à {count} succursale{count, plural, one {} other {s}}",
+      "unlimitedUsers": "Membres d'équipe illimités",
+      "limitedUsers": "Jusqu'à {count} membre{count, plural, one {} other {s}} d'équipe",
+      "subscribeMonthly": "S'abonner mensuellement",
+      "subscribeYearly": "S'abonner annuellement ({price})",
+      "starting": "Démarrage…"
+    }
+  }
+}

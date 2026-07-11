@@ -1,0 +1,65 @@
+{
+  "page": {
+    "title": "Analytics",
+    "searchFeedback": "Search feedback →",
+    "trendTitle": "Sentiment trend",
+    "trendDescription": "Last 30 days, day by day",
+    "summariesTitle": "AI summaries",
+    "summariesDescription": "Auto-generated overviews with actionable recommendations"
+  },
+  "branchFilter": {
+    "ariaLabel": "Filter by branch",
+    "allBranches": "All branches"
+  },
+  "summaryGenerator": {
+    "periodAriaLabel": "Summary period",
+    "weekly": "Weekly",
+    "monthly": "Monthly",
+    "queuing": "Queuing…",
+    "generate": "Generate summary",
+    "queued": "Queued — this can take a moment. Refresh the page shortly to see it.",
+    "error": "Could not queue a new summary. Please try again."
+  },
+  "summariesList": {
+    "empty": "No AI summaries yet. Generate one above once there's feedback to summarize.",
+    "weekly": "Weekly",
+    "monthly": "Monthly",
+    "positive": "{count} positive",
+    "neutral": "{count} neutral",
+    "negative": "{count} negative",
+    "feedbackCount": "{count} feedback items"
+  },
+  "search": {
+    "backToOverview": "← Back to overview",
+    "title": "Search feedback",
+    "emptyTitle": "No matching feedback",
+    "emptyDescription": "Try widening the date range or clearing a filter.",
+    "unknownBranch": "Unknown branch",
+    "positive": "positive",
+    "neutral": "neutral",
+    "negative": "negative",
+    "statusNew": "New",
+    "statusReviewed": "Reviewed",
+    "newer": "← Newer",
+    "older": "Older →"
+  },
+  "searchFilters": {
+    "branchLabel": "Branch",
+    "keywordLabel": "Search comments",
+    "sentimentLabel": "Sentiment",
+    "ratingLabel": "Rating",
+    "rangeLabel": "Date range",
+    "allBranches": "All branches",
+    "any": "Any",
+    "positive": "Positive",
+    "neutral": "Neutral",
+    "negative": "Negative",
+    "starSingular": "{n} star",
+    "starPlural": "{n} stars",
+    "range7": "Last 7 days",
+    "range30": "Last 30 days",
+    "range90": "Last 90 days",
+    "range365": "Last year",
+    "search": "Search"
+  }
+}

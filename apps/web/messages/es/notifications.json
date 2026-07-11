@@ -1,0 +1,56 @@
+{
+  "events": {
+    "feedback_received": "Nuevo comentario recibido",
+    "summary_ready": "Resumen de IA listo",
+    "redemption_pending": "Canje pendiente de confirmación",
+    "points_earned": "Puntos ganados",
+    "tier_upgraded": "Nivel mejorado",
+    "reward_redeemed": "Recompensa canjeada"
+  },
+  "channels": {
+    "email": "Correo electrónico",
+    "sms": "SMS",
+    "push": "Push"
+  },
+  "preferences": {
+    "eventColumn": "Evento",
+    "channelAriaLabel": "Notificaciones de {channel} para {event}",
+    "saveFailedAlert": "No se pudieron guardar las preferencias. Inténtalo de nuevo.",
+    "saved": "Preferencias guardadas.",
+    "saving": "Guardando…",
+    "save": "Guardar preferencias"
+  },
+  "staff": {
+    "title": "Notificaciones",
+    "myPreferencesTitle": "Mis preferencias",
+    "myPreferencesDescription": "Elige cómo quieres que te notifiquemos. Se aplica solo a tu cuenta.",
+    "businessSettingsTitle": "Configuración del negocio",
+    "businessSettingsDescription": "Controles de envío a nivel de plataforma y el límite diario de costo de SMS.",
+    "settings": {
+      "emailLabel": "Notificaciones por correo",
+      "emailAriaLabel": "Notificaciones por correo activadas",
+      "emailDescription": "Interruptor general para todos los eventos por correo electrónico.",
+      "smsLabel": "Notificaciones por SMS",
+      "smsAriaLabel": "Notificaciones por SMS activadas",
+      "smsDescription": "Interruptor general para todos los eventos por SMS.",
+      "maxSmsPerDayLabel": "Máximo de SMS por día",
+      "maxSmsPerDayHint": "Límite de seguridad de costo -- el envío de SMS se detiene silenciosamente al alcanzarlo cada día.",
+      "saved": "Configuración guardada.",
+      "saving": "Guardando…",
+      "save": "Guardar configuración"
+    },
+    "log": {
+      "heading": "Actividad reciente",
+      "empty": "Aún no se han enviado notificaciones.",
+      "status": {
+        "sent": "enviado",
+        "pending": "pendiente",
+        "failed": "fallido"
+      }
+    }
+  },
+  "customer": {
+    "title": "Preferencias de notificaciones",
+    "description": "Elige cómo quieres saber sobre tus puntos y recompensas."
+  }
+}

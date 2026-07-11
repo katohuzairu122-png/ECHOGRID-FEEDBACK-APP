@@ -1,0 +1,44 @@
+{
+  "title": "Branches",
+  "newButton": "+ New branch",
+  "emptyTitle": "No branches yet",
+  "emptyDescription": "Add your first branch to start collecting feedback there.",
+  "qrButton": "QR code",
+  "editButton": "Edit",
+  "form": {
+    "titleEdit": "Edit branch",
+    "titleNew": "New branch",
+    "descriptionEdit": "Update details for {name}.",
+    "descriptionNew": "Add a branch to this business.",
+    "nameLabel": "Name",
+    "slugLabel": "URL slug",
+    "addressLine1Label": "Address line 1",
+    "addressLine2Label": "Address line 2",
+    "cityLabel": "City",
+    "stateProvinceLabel": "State/Province",
+    "postalCodeLabel": "Postal code",
+    "countryCodeLabel": "Country code",
+    "timezoneLabel": "Timezone",
+    "cancel": "Cancel",
+    "saving": "Saving…",
+    "saveChanges": "Save changes",
+    "create": "Create branch"
+  },
+  "delete": {
+    "button": "Delete",
+    "deleting": "Deleting…",
+    "confirm": "Delete \"{name}\"? It will stop appearing anywhere in the app immediately.",
+    "failedAlert": "Could not delete this branch. Please try again."
+  },
+  "qr": {
+    "title": "QR code",
+    "loading": "Loading…",
+    "downloadButton": "Download SVG",
+    "regenerateButton": "Regenerate",
+    "working": "Working…",
+    "close": "Close",
+    "loadError": "Could not load this QR code. Please try again.",
+    "regenerateConfirm": "Regenerate this QR code? The current code will stop working immediately -- any printed copies of it will need to be replaced.",
+    "regenerateError": "Could not regenerate this QR code. Please try again."
+  }
+}

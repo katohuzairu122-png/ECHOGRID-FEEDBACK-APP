@@ -1,0 +1,149 @@
+name = "echo-grid-feedback-api"
+main = "src/index.ts"
+compatibility_date = "2026-07-08"
+compatibility_flags = ["nodejs_compat"]
+
+[vars]
+ENVIRONMENT = "development"
+# Anthropic model identifier -- non-secret, [vars] not [secrets] so it's
+# swappable without a deploy. claude-sonnet-5 confirmed as the current, real
+# model string via Anthropic's own docs (platform.claude.com/docs, checked
+# 2026-07-11) -- a balanced choice for SummaryService's period-summary +
+# recommendation generation (real prose quality matters, but this isn't a
+# task that needs Opus-level reasoning). Re-confirm against Anthropic's docs
+# before changing environments, since model identifiers do change over time.
+ANTHROPIC_MODEL = "claude-sonnet-5"
+# Resend sender identity (Notifications Block 2) -- non-secret, one
+# platform-wide "from" address for v1. Must be a verified sender/domain in
+# the Resend account the RESEND_API_KEY secret below belongs to, or sends
+# will fail in production.
+RESEND_FROM_ADDRESS = "Echo Grid Feedback <notifications@yourdomain.example>"
+# CORS allow-list for apps/web's deployed origin(s), comma-separated --
+# read by index.ts's cors() middleware (config/env.ts's Bindings). Add every
+# real deployed apps/web origin here before production; the local-dev
+# default below is deliberately narrow (fails closed, not open) rather than
+# a wildcard.
+ALLOWED_ORIGINS = "http://localhost:3000"
+
+# Required secrets -- set with `wrangler secret put <NAME>` (never stored here).
+# Validated automatically by `wrangler dev` / `wrangler deploy`. See .dev.vars.example
+# for local development.
+[secrets]
+required = [
+  "JWT_ACCESS_SECRET",
+  "JWT_REFRESH_SECRET",
+  "CUSTOMER_JWT_SECRET",
+  "TWILIO_ACCOUNT_SID",
+  "TWILIO_AUTH_TOKEN",
+  "TWILIO_FROM_NUMBER",
+  "ANTHROPIC_API_KEY",
+  "RESEND_API_KEY",
+  "STRIPE_SECRET_KEY",
+  "STRIPE_WEBHOOK_SECRET",
+]
+
+# Postgres (Neon) via Hyperdrive -- the connection string lives in Cloudflare's
+# Hyperdrive config, never in this file or in a Worker secret. Provision with:
+#   npx wrangler hyperdrive create echo-grid-feedback-db --connection-string="postgresql://..."
+[[hyperdrive]]
+binding = "HYPERDRIVE"
+id = "<hyperdrive-id-from-wrangler-hyperdrive-create>"
+
+# Object storage for receipts, exports, and other business-uploaded files.
+# QR codes are rendered client-side from a token + known URL (no server-side
+# image generation/storage -- see README's QR Engagement section), so this
+# bucket is never used for QR images. Provision with:
+#   npx wrangler r2 bucket create echo-grid-feedback-uploads
+[[r2_buckets]]
+binding = "UPLOADS"
+bucket_name = "echo-grid-feedback-uploads"
+
+# Cache / session support. Provision with:
+#   npx wrangler kv namespace create CACHE
+[[kv_namespaces]]
+binding = "CACHE"
+id = "<kv-namespace-id-from-wrangler-kv-namespace-create>"
+
+# Async job queue (sentiment analysis, notifications, loyalty recalculation).
+# Consumer handler wired up in Sentiment Analytics Block 2 (src/index.ts's
+# `queue` export). Provision with:
+#   npx wrangler queues create echo-grid-feedback-jobs
+[[queues.producers]]
+binding = "JOBS"
+queue = "echo-grid-feedback-jobs"
+
+[[queues.consumers]]
+queue = "echo-grid-feedback-jobs"
+max_batch_size = 10
+max_retries = 3
+# Sends a message to this queue (by name) after 3 failed attempts, instead of
+# dropping it -- classification failures already degrade gracefully to
+# analysis_status='failed' on the row itself (see sentiment.service.ts), but
+# a DLQ still exists so a systemic failure (e.g. Workers AI outage) is
+# visible/inspectable rather than silently absorbed by that per-row fallback.
+# Provision with: npx wrangler queues create echo-grid-feedback-jobs-dlq
+dead_letter_queue = "echo-grid-feedback-jobs-dlq"
+
+# Workers AI -- native binding, not a provisioned resource with an ID (no
+# `wrangler ai create` step). Powers per-item sentiment classification only
+# (sentiment/sentiment-classifier.ts); see AI Standards in project
+# instructions for why LLM-backed summarization (Block 3) is a separate,
+# explainable async path rather than folded into this binding.
+[ai]
+binding = "AI"
+
+# Native Rate Limiting binding (not Durable Objects -- see middleware/rate-limit.ts
+# for why). namespace_id is an arbitrary account-unique label you define yourself,
+# not something to provision via CLI. period must be 10 or 60 (Cloudflare limitation).
+[[ratelimits]]
+name = "AUTH_RATE_LIMITER"
+namespace_id = "1001"
+[ratelimits.simple]
+limit = 10
+period = 60
+
+[[ratelimits]]
+name = "API_RATE_LIMITER"
+namespace_id = "1002"
+[ratelimits.simple]
+limit = 300
+period = 60
+
+# Guards the anonymous QR/feedback surface (qr.routes.ts). Stacks on top of
+# API_RATE_LIMITER, same pattern as AUTH_RATE_LIMITER on /auth/*. 20/min/IP
+# is a reasonable starting estimate, not derived from real traffic data --
+# revisit once production usage patterns are known.
+[[ratelimits]]
+name = "PUBLIC_RATE_LIMITER"
+namespace_id = "1003"
+[ratelimits.simple]
+limit = 20
+period = 60
+
+# Guards SMS OTP requests (customer-auth.routes.ts) -- deliberately much
+# stricter than PUBLIC_RATE_LIMITER: each successful request costs real money
+# (one Twilio SMS), so the abuse budget is a small fraction of the free
+# feedback-submission surface. 3/min/IP is a starting estimate.
+[[ratelimits]]
+name = "OTP_RATE_LIMITER"
+namespace_id = "1004"
+[ratelimits.simple]
+limit = 3
+period = 60
+
+# Cron triggers -- fire the `scheduled` export (src/index.ts, Sentiment
+# Analytics Block 3), which enqueues one generate_summary job per business
+# per period. Business-wide only (branchId null) for now; per-branch
+# auto-summaries are a documented future extension the schema already
+# supports (feedback_summaries.branchId is nullable), not a missing feature.
+[triggers]
+crons = [
+  "0 0 * * 1",  # weekly -- every Monday 00:00 UTC
+  "0 0 1 * *",  # monthly -- 1st of the month, 00:00 UTC
+]
+
+[observability]
+enabled = true
+
+[dev]
+port = 8787

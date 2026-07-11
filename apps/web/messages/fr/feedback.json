@@ -1,0 +1,36 @@
+{
+  "staff": {
+    "title": "Avis",
+    "emptyTitle": "Aucun avis pour le moment",
+    "emptyDescription": "Les avis envoyés via le code QR d'une succursale apparaîtront ici.",
+    "statusNew": "Nouveau",
+    "statusReviewed": "Examiné",
+    "unknownBranch": "Succursale inconnue",
+    "newer": "← Plus récents",
+    "older": "Plus anciens →",
+    "markReviewed": "Marquer comme examiné",
+    "working": "Traitement…",
+    "delete": "Supprimer",
+    "deleteConfirm": "Supprimer cet avis ? Cette action est irréversible.",
+    "deleteFailedAlert": "Impossible de supprimer cet avis. Veuillez réessayer.",
+    "allBranches": "Toutes les succursales",
+    "filterAriaLabel": "Filtrer par succursale"
+  },
+  "submit": {
+    "thankYouTitle": "Merci !",
+    "thankYouDescription": "Votre avis pour {branchName} a bien été reçu.",
+    "heading": "Comment s'est passée votre visite ?",
+    "commentLabel": "Commentaires (facultatif)",
+    "commentPlaceholder": "Parlez-nous en davantage sur votre visite...",
+    "contactDisclosure": "Partagez vos coordonnées (facultatif)",
+    "nameLabel": "Nom",
+    "emailLabel": "E-mail",
+    "phoneLabel": "Téléphone",
+    "submitting": "Envoi…",
+    "submit": "Envoyer l'avis"
+  },
+  "notFound": {
+    "title": "Ce lien n'est pas valide",
+    "description": "Ce code d'avis a peut-être expiré ou été remplacé. Demandez un code actuel à un membre du personnel, ou essayez de scanner à nouveau."
+  }
+}

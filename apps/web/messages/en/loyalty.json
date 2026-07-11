@@ -1,0 +1,164 @@
+{
+  "staff": {
+    "title": "Loyalty",
+    "subnav": {
+      "accounts": "Accounts",
+      "tiers": "Tiers",
+      "rewards": "Rewards",
+      "redeem": "Confirm redemption",
+      "settings": "Settings"
+    },
+    "accounts": {
+      "emptyTitle": "No loyalty members yet",
+      "emptyDescription": "Customers who check in via a branch's QR code will appear here.",
+      "visits": "{count} visits",
+      "lastVisit": "Last visit {date}",
+      "noVisits": "No visits yet",
+      "suspended": "Suspended"
+    },
+    "accountDialog": {
+      "manageTrigger": "Manage",
+      "description": "Record a purchase or make a manual points adjustment.",
+      "purchaseTab": "Purchase",
+      "adjustTab": "Adjust",
+      "purchaseAmountLabel": "Purchase amount",
+      "recording": "Recording…",
+      "recordPurchase": "Record purchase",
+      "pointsLabel": "Points (negative to deduct)",
+      "reasonLabel": "Reason (optional)",
+      "saving": "Saving…",
+      "saveAdjustment": "Save adjustment"
+    },
+    "tiers": {
+      "newButton": "New tier",
+      "emptyTitle": "No tiers yet",
+      "emptyDescription": "Tiers reward customers who cross a points threshold -- e.g. Silver at 100 pts, Gold at 500.",
+      "minPoints": "{points}+ pts",
+      "editButton": "Edit"
+    },
+    "tierForm": {
+      "titleEdit": "Edit tier",
+      "titleNew": "New tier",
+      "descriptionEdit": "Update {name}.",
+      "descriptionNew": "Add a loyalty tier customers unlock by earning points.",
+      "nameLabel": "Name",
+      "minPointsLabel": "Minimum points",
+      "benefitsLabel": "Benefits (optional)",
+      "cancel": "Cancel",
+      "saving": "Saving…",
+      "saveChanges": "Save changes",
+      "create": "Create tier"
+    },
+    "deleteTier": {
+      "button": "Delete",
+      "confirm": "Delete the \"{name}\" tier? This cannot be undone.",
+      "failedAlert": "Could not delete this tier. Please try again."
+    },
+    "rewards": {
+      "newButton": "New reward",
+      "emptyTitle": "No rewards yet",
+      "emptyDescription": "Add rewards customers can redeem with points -- a free item, a discount, etc.",
+      "active": "Active",
+      "inactive": "Inactive",
+      "pointsCost": "{points} pts",
+      "editButton": "Edit"
+    },
+    "rewardForm": {
+      "titleEdit": "Edit reward",
+      "titleNew": "New reward",
+      "descriptionEdit": "Update {name}.",
+      "descriptionNew": "Add a reward customers can redeem with points.",
+      "nameLabel": "Name",
+      "descriptionLabel": "Description (optional)",
+      "pointsCostLabel": "Points cost",
+      "cancel": "Cancel",
+      "saving": "Saving…",
+      "saveChanges": "Save changes",
+      "create": "Create reward"
+    },
+    "rewardActions": {
+      "deactivate": "Deactivate",
+      "activate": "Activate",
+      "delete": "Delete",
+      "deleteConfirm": "Delete this reward? This cannot be undone.",
+      "deleteFailedAlert": "Could not delete this reward. Please try again."
+    },
+    "redeem": {
+      "title": "Confirm a redemption",
+      "description": "Enter the code a customer shows you to hand over their reward."
+    },
+    "redeemForm": {
+      "codeLabel": "Redemption code",
+      "lookingUp": "Looking up…",
+      "lookUp": "Look up",
+      "pointsRedeemed": "{points} points redeemed",
+      "codePrefix": "Code {code}",
+      "confirmed": "Confirmed",
+      "confirming": "Confirming…",
+      "confirmHandoff": "Confirm handoff",
+      "confirmError": "Could not confirm this redemption."
+    },
+    "settings": {
+      "sectionTitle": "Earning rates",
+      "sectionDescription": "How customers earn points at this business. Changes apply to future activity only.",
+      "pointsPerCheckinLabel": "Points per check-in",
+      "pointsPerCurrencyLabel": "Points per {currency} spent",
+      "referralBonusLabel": "Referral bonus",
+      "birthdayBonusLabel": "Birthday bonus",
+      "saved": "Settings saved.",
+      "saving": "Saving…",
+      "save": "Save settings"
+    }
+  },
+  "customer": {
+    "shell": {
+      "brand": "My Rewards",
+      "logout": "Log out"
+    },
+    "login": {
+      "title": "Loyalty sign in",
+      "codeSentDescription": "Enter the code we sent to {phone}.",
+      "phoneDescription": "Enter your phone number to earn and redeem points.",
+      "phoneLabel": "Phone number",
+      "phoneHint": "Include your country code, e.g. +1 for the US.",
+      "sending": "Sending…",
+      "sendCode": "Send code",
+      "codeLabel": "Verification code",
+      "verifying": "Verifying…",
+      "verify": "Verify"
+    },
+    "myRewards": {
+      "title": "My Rewards",
+      "emptyTitle": "No loyalty cards yet",
+      "emptyDescription": "Scan a business's QR code and check in to start earning points.",
+      "visits": "{count} visits",
+      "businessFallback": "Business"
+    },
+    "businessDashboard": {
+      "notificationPreferences": "Notification preferences →",
+      "points": "{points} pts",
+      "progressToNextTier": "{remaining} pts to {tierName}",
+      "topTierReached": "Top tier reached",
+      "rewardsHeading": "Rewards",
+      "recentActivityHeading": "Recent activity"
+    },
+    "rewardCard": {
+      "points": "{points} pts",
+      "showCode": "Show this code to staff",
+      "redeeming": "Redeeming…",
+      "redeem": "Redeem",
+      "notEnoughPoints": "Not enough points"
+    },
+    "checkin": {
+      "checkedInTitle": "You're checked in!",
+      "points": "{points} pts",
+      "viewRewards": "View my rewards →",
+      "welcome": "Welcome to {branchName}",
+      "subtitle": "{businessName} · Check in to earn loyalty points",
+      "checkingIn": "Checking in…",
+      "checkIn": "Check in",
+      "signInToCheckIn": "Sign in to check in",
+      "genericError": "Something went wrong. Please try again."
+    }
+  }
+}

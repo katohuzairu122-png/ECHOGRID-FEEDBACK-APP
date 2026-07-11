@@ -1,0 +1,183 @@
+{
+  "nav": {
+    "brand": "Administration",
+    "directory": "Annuaire",
+    "auditLog": "Journal d'audit",
+    "billing": "Facturation",
+    "backToDashboard": "Retour au tableau de bord",
+    "logout": "Se déconnecter",
+    "roleLabels": {
+      "support": "Support",
+      "billing": "Facturation",
+      "admin": "Administrateur"
+    }
+  },
+  "accessDenied": {
+    "title": "Accès administrateur de la plateforme requis",
+    "description": "Votre compte n'a pas accès à la console d'administration de la plateforme.",
+    "backToDashboard": "Retour au tableau de bord"
+  },
+  "home": {
+    "title": "Aperçu de la plateforme",
+    "description": "Outils multi-entreprises pour le support, la facturation et l'administration de la plateforme.",
+    "recentBusinessesTitle": "Entreprises créées récemment",
+    "recentBusinessesDescription": "Les 5 entreprises les plus récemment créées sur la plateforme.",
+    "empty": "Aucune entreprise pour le moment.",
+    "statusLabels": {
+      "active": "Active",
+      "suspended": "Suspendue",
+      "archived": "Archivée"
+    }
+  },
+  "businesses": {
+    "title": "Annuaire des entreprises",
+    "description": "Toutes les entreprises de la plateforme, avec recherche et filtres.",
+    "emptyTitle": "Aucune entreprise trouvée",
+    "emptyDescription": "Essayez une autre recherche ou retirez le filtre de statut.",
+    "newer": "Plus récentes",
+    "older": "Plus anciennes",
+    "filters": {
+      "searchLabel": "Rechercher",
+      "searchPlaceholder": "Nom ou slug",
+      "statusLabel": "Statut",
+      "anyStatus": "Tous les statuts",
+      "statusActive": "Active",
+      "statusSuspended": "Suspendue",
+      "statusArchived": "Archivée",
+      "apply": "Appliquer"
+    },
+    "detail": {
+      "backToDirectory": "← Retour à l'annuaire",
+      "overviewTitle": "Aperçu",
+      "legalNameLabel": "Raison sociale",
+      "industryLabel": "Secteur",
+      "localeLabel": "Langue par défaut",
+      "currencyLabel": "Devise par défaut",
+      "timezoneLabel": "Fuseau horaire par défaut",
+      "createdLabel": "Créée le",
+      "notSet": "Non défini",
+      "teamTitle": "Équipe",
+      "teamDescription": "Toutes les personnes disposant d'un rôle actif dans cette entreprise.",
+      "teamEmpty": "Aucun membre dans l'équipe pour le moment.",
+      "viewAuditLog": "Voir le journal d'audit de cette entreprise →",
+      "statusForm": {
+        "title": "Modifier le statut",
+        "description": "Suspendre une entreprise bloque immédiatement la connexion du personnel et les pages destinées aux clients de cette entreprise.",
+        "statusLabel": "Statut",
+        "statusActive": "Active",
+        "statusSuspended": "Suspendue",
+        "statusArchived": "Archivée",
+        "reasonLabel": "Motif (facultatif)",
+        "reasonPlaceholder": "p. ex. non-paiement, violation des conditions d'utilisation",
+        "submit": "Enregistrer le statut",
+        "saving": "Enregistrement…",
+        "success": "Statut mis à jour."
+      },
+      "impersonate": {
+        "button": "Emprunter l'identité",
+        "title": "Emprunter l'identité de {name}",
+        "description": "Vous verrez le tableau de bord exactement comme cette personne le voit, pendant 30 minutes maximum. Cette action est journalisée, y compris dans le propre journal d'audit de cette entreprise.",
+        "reasonLabel": "Motif (obligatoire)",
+        "reasonPlaceholder": "p. ex. investigation d'un ticket de support",
+        "cancel": "Annuler",
+        "confirm": "Démarrer l'emprunt d'identité",
+        "starting": "Démarrage…"
+      }
+    }
+  },
+  "auditLog": {
+    "title": "Journal d'audit",
+    "description": "Toutes les actions enregistrées sur toutes les entreprises de la plateforme.",
+    "emptyTitle": "Aucune entrée trouvée",
+    "emptyDescription": "Essayez d'élargir ou de retirer vos filtres.",
+    "newer": "Plus récentes",
+    "older": "Plus anciennes",
+    "systemActor": "Système",
+    "impersonatedBadge": "Emprunt d'identité",
+    "filters": {
+      "businessIdLabel": "ID de l'entreprise",
+      "businessIdPlaceholder": "UUID",
+      "actorUserIdLabel": "ID de l'utilisateur",
+      "actorUserIdPlaceholder": "UUID",
+      "entityTypeLabel": "Type d'entité",
+      "entityTypePlaceholder": "p. ex. business",
+      "actionLabel": "Action",
+      "actionPlaceholder": "p. ex. business.status_changed_by_platform",
+      "fromLabel": "Du",
+      "toLabel": "Au",
+      "apply": "Appliquer"
+    }
+  },
+  "billing": {
+    "subscriptions": {
+      "title": "Facturation",
+      "description": "L'abonnement de chaque entreprise sur la plateforme, avec le revenu récurrent mensuel.",
+      "managePlans": "Gérer les forfaits →",
+      "mrrLabel": "{count, plural, one {# abonnement actif} other {# abonnements actifs}}",
+      "emptyTitle": "Aucun abonnement trouvé",
+      "emptyDescription": "Essayez de retirer le filtre de statut.",
+      "trialEndsOn": "l'essai se termine le {date}",
+      "renewsOn": "se renouvelle le {date}",
+      "newer": "Plus récentes",
+      "older": "Plus anciennes",
+      "status": {
+        "trialing": "Essai",
+        "active": "Actif",
+        "past_due": "Paiement en retard",
+        "incomplete": "Incomplet",
+        "canceled": "Annulé",
+        "incomplete_expired": "Expiré",
+        "unpaid": "Impayé"
+      },
+      "filters": {
+        "statusLabel": "Statut",
+        "anyStatus": "Tous les statuts",
+        "statusTrialing": "Essai",
+        "statusActive": "Actif",
+        "statusPastDue": "Paiement en retard",
+        "statusIncomplete": "Incomplet",
+        "statusCanceled": "Annulé",
+        "statusIncompleteExpired": "Expiré",
+        "statusUnpaid": "Impayé",
+        "apply": "Appliquer"
+      }
+    },
+    "plans": {
+      "backToBilling": "← Retour à la facturation",
+      "title": "Catalogue de forfaits",
+      "description": "Les forfaits auxquels les entreprises peuvent s'abonner.",
+      "newButton": "Nouveau forfait",
+      "editButton": "Modifier",
+      "defaultTrialBadge": "Essai par défaut",
+      "inactiveBadge": "Inactif",
+      "perMonth": "mois",
+      "perYear": "an",
+      "noStripePriceWarning": "aucun prix Stripe configuré"
+    },
+    "planForm": {
+      "titleNew": "Nouveau forfait",
+      "titleEdit": "Modifier {name}",
+      "descriptionNew": "Ajoutez un nouveau forfait au catalogue.",
+      "descriptionEdit": "Modifiez le prix, les limites ou la configuration Stripe de {name}.",
+      "keyLabel": "Clé",
+      "keyImmutableHint": "La clé ne peut pas être modifiée après la création.",
+      "nameLabel": "Nom",
+      "descriptionLabel": "Description",
+      "priceMonthlyLabel": "Prix mensuel (USD)",
+      "priceYearlyLabel": "Prix annuel (USD)",
+      "currencyLabel": "Devise",
+      "stripePriceIdMonthlyLabel": "ID de prix mensuel Stripe",
+      "stripePriceIdYearlyLabel": "ID de prix annuel Stripe",
+      "maxBranchesLabel": "Succursales max.",
+      "maxUsersLabel": "Membres d'équipe max.",
+      "unlimitedPlaceholder": "Illimité",
+      "sortOrderLabel": "Ordre d'affichage",
+      "isActiveLabel": "Actif (achetable)",
+      "isDefaultTrialLabel": "Forfait d'essai par défaut",
+      "cancel": "Annuler",
+      "saving": "Enregistrement…",
+      "create": "Créer le forfait",
+      "saveChanges": "Enregistrer les modifications"
+    }
+  }
+}

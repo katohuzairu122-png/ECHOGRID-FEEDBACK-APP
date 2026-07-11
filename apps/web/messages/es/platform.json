@@ -1,0 +1,183 @@
+{
+  "nav": {
+    "brand": "Administración",
+    "directory": "Directorio",
+    "auditLog": "Registro de auditoría",
+    "billing": "Facturación",
+    "backToDashboard": "Volver al panel",
+    "logout": "Cerrar sesión",
+    "roleLabels": {
+      "support": "Soporte",
+      "billing": "Facturación",
+      "admin": "Administrador"
+    }
+  },
+  "accessDenied": {
+    "title": "Se requiere acceso de administrador de plataforma",
+    "description": "Tu cuenta no tiene acceso a la consola de administración de la plataforma.",
+    "backToDashboard": "Volver al panel"
+  },
+  "home": {
+    "title": "Resumen de la plataforma",
+    "description": "Herramientas multiempresa para soporte, facturación y administración de la plataforma.",
+    "recentBusinessesTitle": "Empresas creadas recientemente",
+    "recentBusinessesDescription": "Las 5 empresas más recientes creadas en la plataforma.",
+    "empty": "Aún no hay empresas.",
+    "statusLabels": {
+      "active": "Activa",
+      "suspended": "Suspendida",
+      "archived": "Archivada"
+    }
+  },
+  "businesses": {
+    "title": "Directorio de negocios",
+    "description": "Todos los negocios de la plataforma, con búsqueda y filtros.",
+    "emptyTitle": "No se encontraron negocios",
+    "emptyDescription": "Prueba con otra búsqueda o quita el filtro de estado.",
+    "newer": "Más recientes",
+    "older": "Más antiguos",
+    "filters": {
+      "searchLabel": "Buscar",
+      "searchPlaceholder": "Nombre o slug",
+      "statusLabel": "Estado",
+      "anyStatus": "Cualquier estado",
+      "statusActive": "Activa",
+      "statusSuspended": "Suspendida",
+      "statusArchived": "Archivada",
+      "apply": "Aplicar"
+    },
+    "detail": {
+      "backToDirectory": "← Volver al directorio",
+      "overviewTitle": "Resumen",
+      "legalNameLabel": "Razón social",
+      "industryLabel": "Sector",
+      "localeLabel": "Idioma predeterminado",
+      "currencyLabel": "Moneda predeterminada",
+      "timezoneLabel": "Zona horaria predeterminada",
+      "createdLabel": "Creada",
+      "notSet": "No definido",
+      "teamTitle": "Equipo",
+      "teamDescription": "Todas las personas con un rol activo en este negocio.",
+      "teamEmpty": "Aún no hay miembros en el equipo.",
+      "viewAuditLog": "Ver el registro de auditoría de este negocio →",
+      "statusForm": {
+        "title": "Cambiar estado",
+        "description": "Suspender un negocio bloquea de inmediato el inicio de sesión del personal y las páginas orientadas al cliente de ese negocio.",
+        "statusLabel": "Estado",
+        "statusActive": "Activa",
+        "statusSuspended": "Suspendida",
+        "statusArchived": "Archivada",
+        "reasonLabel": "Motivo (opcional)",
+        "reasonPlaceholder": "p. ej., falta de pago, incumplimiento de los términos de servicio",
+        "submit": "Guardar estado",
+        "saving": "Guardando…",
+        "success": "Estado actualizado."
+      },
+      "impersonate": {
+        "button": "Suplantar",
+        "title": "Suplantar a {name}",
+        "description": "Verás el panel exactamente como lo ve esta persona, durante un máximo de 30 minutos. Esto queda registrado, incluso en el propio registro de auditoría de este negocio.",
+        "reasonLabel": "Motivo (obligatorio)",
+        "reasonPlaceholder": "p. ej., investigando un ticket de soporte",
+        "cancel": "Cancelar",
+        "confirm": "Iniciar suplantación",
+        "starting": "Iniciando…"
+      }
+    }
+  },
+  "auditLog": {
+    "title": "Registro de auditoría",
+    "description": "Todas las acciones registradas en todos los negocios de la plataforma.",
+    "emptyTitle": "No se encontraron entradas",
+    "emptyDescription": "Intenta ampliar o quitar los filtros.",
+    "newer": "Más recientes",
+    "older": "Más antiguos",
+    "systemActor": "Sistema",
+    "impersonatedBadge": "Suplantación",
+    "filters": {
+      "businessIdLabel": "ID del negocio",
+      "businessIdPlaceholder": "UUID",
+      "actorUserIdLabel": "ID del usuario que actuó",
+      "actorUserIdPlaceholder": "UUID",
+      "entityTypeLabel": "Tipo de entidad",
+      "entityTypePlaceholder": "p. ej., business",
+      "actionLabel": "Acción",
+      "actionPlaceholder": "p. ej., business.status_changed_by_platform",
+      "fromLabel": "Desde",
+      "toLabel": "Hasta",
+      "apply": "Aplicar"
+    }
+  },
+  "billing": {
+    "subscriptions": {
+      "title": "Facturación",
+      "description": "La suscripción de cada negocio en la plataforma, con ingresos recurrentes mensuales.",
+      "managePlans": "Gestionar planes →",
+      "mrrLabel": "{count, plural, one {# suscripción activa} other {# suscripciones activas}}",
+      "emptyTitle": "No se encontraron suscripciones",
+      "emptyDescription": "Intenta quitar el filtro de estado.",
+      "trialEndsOn": "la prueba termina el {date}",
+      "renewsOn": "se renueva el {date}",
+      "newer": "Más recientes",
+      "older": "Más antiguos",
+      "status": {
+        "trialing": "Prueba",
+        "active": "Activo",
+        "past_due": "Pago vencido",
+        "incomplete": "Incompleto",
+        "canceled": "Cancelado",
+        "incomplete_expired": "Expirado",
+        "unpaid": "Impago"
+      },
+      "filters": {
+        "statusLabel": "Estado",
+        "anyStatus": "Cualquier estado",
+        "statusTrialing": "Prueba",
+        "statusActive": "Activo",
+        "statusPastDue": "Pago vencido",
+        "statusIncomplete": "Incompleto",
+        "statusCanceled": "Cancelado",
+        "statusIncompleteExpired": "Expirado",
+        "statusUnpaid": "Impago",
+        "apply": "Aplicar"
+      }
+    },
+    "plans": {
+      "backToBilling": "← Volver a facturación",
+      "title": "Catálogo de planes",
+      "description": "Los planes a los que los negocios pueden suscribirse.",
+      "newButton": "Nuevo plan",
+      "editButton": "Editar",
+      "defaultTrialBadge": "Prueba predeterminada",
+      "inactiveBadge": "Inactivo",
+      "perMonth": "mes",
+      "perYear": "año",
+      "noStripePriceWarning": "sin precio de Stripe configurado"
+    },
+    "planForm": {
+      "titleNew": "Nuevo plan",
+      "titleEdit": "Editar {name}",
+      "descriptionNew": "Agrega un nuevo plan al catálogo.",
+      "descriptionEdit": "Actualiza el precio, los límites o la configuración de Stripe de {name}.",
+      "keyLabel": "Clave",
+      "keyImmutableHint": "La clave no se puede cambiar después de crearla.",
+      "nameLabel": "Nombre",
+      "descriptionLabel": "Descripción",
+      "priceMonthlyLabel": "Precio mensual (USD)",
+      "priceYearlyLabel": "Precio anual (USD)",
+      "currencyLabel": "Moneda",
+      "stripePriceIdMonthlyLabel": "ID de precio mensual de Stripe",
+      "stripePriceIdYearlyLabel": "ID de precio anual de Stripe",
+      "maxBranchesLabel": "Máximo de sucursales",
+      "maxUsersLabel": "Máximo de miembros del equipo",
+      "unlimitedPlaceholder": "Ilimitado",
+      "sortOrderLabel": "Orden",
+      "isActiveLabel": "Activo (disponible para compra)",
+      "isDefaultTrialLabel": "Plan de prueba predeterminado",
+      "cancel": "Cancelar",
+      "saving": "Guardando…",
+      "create": "Crear plan",
+      "saveChanges": "Guardar cambios"
+    }
+  }
+}

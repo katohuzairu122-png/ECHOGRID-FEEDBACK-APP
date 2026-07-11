@@ -1,0 +1,36 @@
+{
+  "staff": {
+    "title": "Comentarios",
+    "emptyTitle": "Aún no hay comentarios",
+    "emptyDescription": "Los comentarios enviados mediante el código QR de una sucursal aparecerán aquí.",
+    "statusNew": "Nuevo",
+    "statusReviewed": "Revisado",
+    "unknownBranch": "Sucursal desconocida",
+    "newer": "← Más recientes",
+    "older": "Más antiguos →",
+    "markReviewed": "Marcar como revisado",
+    "working": "Procesando…",
+    "delete": "Eliminar",
+    "deleteConfirm": "¿Eliminar este comentario? Esta acción no se puede deshacer.",
+    "deleteFailedAlert": "No se pudo eliminar este comentario. Inténtalo de nuevo.",
+    "allBranches": "Todas las sucursales",
+    "filterAriaLabel": "Filtrar por sucursal"
+  },
+  "submit": {
+    "thankYouTitle": "¡Gracias!",
+    "thankYouDescription": "Hemos recibido tu comentario para {branchName}.",
+    "heading": "¿Cómo fue tu visita?",
+    "commentLabel": "Comentarios (opcional)",
+    "commentPlaceholder": "Cuéntanos más sobre tu visita...",
+    "contactDisclosure": "Comparte tus datos de contacto (opcional)",
+    "nameLabel": "Nombre",
+    "emailLabel": "Correo electrónico",
+    "phoneLabel": "Teléfono",
+    "submitting": "Enviando…",
+    "submit": "Enviar comentario"
+  },
+  "notFound": {
+    "title": "Este enlace no es válido",
+    "description": "Este código de comentarios puede haber caducado o haber sido reemplazado. Pide a un miembro del personal un código actual, o intenta escanear de nuevo."
+  }
+}

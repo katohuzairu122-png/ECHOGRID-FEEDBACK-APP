@@ -1,0 +1,35 @@
+# Copy to `.dev.vars` for local development. Never commit `.dev.vars` (it's gitignored).
+# Generate strong values with: openssl rand -base64 32
+
+JWT_ACCESS_SECRET=replace-with-a-strong-random-value
+JWT_REFRESH_SECRET=replace-with-a-different-strong-random-value
+
+# Digital Loyalty module -- customer sessions use a separate secret from staff.
+CUSTOMER_JWT_SECRET=replace-with-a-third-strong-random-value
+
+# Twilio (SMS OTP delivery). Unused in development/staging -- ConsoleSmsService
+# logs the code instead, so these can stay as placeholders locally.
+TWILIO_ACCOUNT_SID=replace-with-twilio-account-sid
+TWILIO_AUTH_TOKEN=replace-with-twilio-auth-token
+TWILIO_FROM_NUMBER=+15550000000
+
+# Anthropic (AI summary/recommendation generation). Unused in development/
+# staging -- ConsoleSummaryGenerator substitutes instead, so this can stay a
+# placeholder locally.
+ANTHROPIC_API_KEY=replace-with-anthropic-api-key
+
+# Resend (notification email delivery). Unused in development/staging --
+# ConsoleEmailService substitutes instead, so this can stay a placeholder
+# locally.
+RESEND_API_KEY=replace-with-resend-api-key
+
+# Stripe (platform SaaS billing). Unlike the integrations above, there is no
+# console-log dev fallback -- use a real Stripe TEST MODE secret key
+# (starts with sk_test_, never sk_live_ outside production) so Checkout/
+# Portal redirects actually work locally against fake money. Get both values
+# from the Stripe Dashboard: Developers > API keys (STRIPE_SECRET_KEY) and
+# Developers > Webhooks > your endpoint (STRIPE_WEBHOOK_SECRET, a distinct
+# per-endpoint signing secret) -- or via `stripe listen` for local webhook
+# forwarding, which prints its own temporary whsec_... value.
+STRIPE_SECRET_KEY=sk_test_replace-with-your-stripe-test-secret-key
+STRIPE_WEBHOOK_SECRET=whsec_replace-with-your-webhook-signing-secret

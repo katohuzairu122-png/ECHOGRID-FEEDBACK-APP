@@ -1,0 +1,56 @@
+{
+  "events": {
+    "feedback_received": "Nouvel avis reçu",
+    "summary_ready": "Résumé IA prêt",
+    "redemption_pending": "Échange en attente de confirmation",
+    "points_earned": "Points gagnés",
+    "tier_upgraded": "Niveau amélioré",
+    "reward_redeemed": "Récompense échangée"
+  },
+  "channels": {
+    "email": "E-mail",
+    "sms": "SMS",
+    "push": "Push"
+  },
+  "preferences": {
+    "eventColumn": "Événement",
+    "channelAriaLabel": "Notifications {channel} pour {event}",
+    "saveFailedAlert": "Impossible d'enregistrer les préférences. Veuillez réessayer.",
+    "saved": "Préférences enregistrées.",
+    "saving": "Enregistrement…",
+    "save": "Enregistrer les préférences"
+  },
+  "staff": {
+    "title": "Notifications",
+    "myPreferencesTitle": "Mes préférences",
+    "myPreferencesDescription": "Choisissez comment vous êtes notifié. S'applique uniquement à votre compte.",
+    "businessSettingsTitle": "Paramètres de l'entreprise",
+    "businessSettingsDescription": "Contrôles d'envoi à l'échelle de la plateforme et plafond de coût SMS quotidien.",
+    "settings": {
+      "emailLabel": "Notifications par e-mail",
+      "emailAriaLabel": "Notifications par e-mail activées",
+      "emailDescription": "Interrupteur général pour tous les événements par e-mail.",
+      "smsLabel": "Notifications par SMS",
+      "smsAriaLabel": "Notifications par SMS activées",
+      "smsDescription": "Interrupteur général pour tous les événements par SMS.",
+      "maxSmsPerDayLabel": "Nombre maximum de SMS par jour",
+      "maxSmsPerDayHint": "Plafond de sécurité des coûts -- l'envoi de SMS s'arrête silencieusement une fois ce seuil atteint chaque jour.",
+      "saved": "Paramètres enregistrés.",
+      "saving": "Enregistrement…",
+      "save": "Enregistrer les paramètres"
+    },
+    "log": {
+      "heading": "Activité récente",
+      "empty": "Aucune notification envoyée pour le moment.",
+      "status": {
+        "sent": "envoyé",
+        "pending": "en attente",
+        "failed": "échoué"
+      }
+    }
+  },
+  "customer": {
+    "title": "Préférences de notifications",
+    "description": "Choisissez comment vous souhaitez être informé de vos points et récompenses."
+  }
+}

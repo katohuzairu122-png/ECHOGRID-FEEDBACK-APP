@@ -1,0 +1,36 @@
+{
+  "staff": {
+    "title": "Feedback",
+    "emptyTitle": "No feedback yet",
+    "emptyDescription": "Feedback submitted through a branch's QR code will show up here.",
+    "statusNew": "New",
+    "statusReviewed": "Reviewed",
+    "unknownBranch": "Unknown branch",
+    "newer": "← Newer",
+    "older": "Older →",
+    "markReviewed": "Mark reviewed",
+    "working": "Working…",
+    "delete": "Delete",
+    "deleteConfirm": "Delete this feedback? This cannot be undone.",
+    "deleteFailedAlert": "Could not delete this feedback. Please try again.",
+    "allBranches": "All branches",
+    "filterAriaLabel": "Filter by branch"
+  },
+  "submit": {
+    "thankYouTitle": "Thank you!",
+    "thankYouDescription": "Your feedback for {branchName} has been received.",
+    "heading": "How was your visit?",
+    "commentLabel": "Comments (optional)",
+    "commentPlaceholder": "Tell us more about your visit...",
+    "contactDisclosure": "Share your contact info (optional)",
+    "nameLabel": "Name",
+    "emailLabel": "Email",
+    "phoneLabel": "Phone",
+    "submitting": "Submitting…",
+    "submit": "Submit feedback"
+  },
+  "notFound": {
+    "title": "This link isn't valid",
+    "description": "This feedback code may have expired or been replaced. Please ask a staff member for a current code, or try scanning again."
+  }
+}

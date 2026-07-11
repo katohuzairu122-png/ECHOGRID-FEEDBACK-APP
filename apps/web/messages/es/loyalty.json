@@ -1,0 +1,164 @@
+{
+  "staff": {
+    "title": "Fidelización",
+    "subnav": {
+      "accounts": "Cuentas",
+      "tiers": "Niveles",
+      "rewards": "Recompensas",
+      "redeem": "Confirmar canje",
+      "settings": "Configuración"
+    },
+    "accounts": {
+      "emptyTitle": "Aún no hay miembros",
+      "emptyDescription": "Los clientes que se registren mediante el código QR de una sucursal aparecerán aquí.",
+      "visits": "{count} visitas",
+      "lastVisit": "Última visita {date}",
+      "noVisits": "Sin visitas todavía",
+      "suspended": "Suspendido"
+    },
+    "accountDialog": {
+      "manageTrigger": "Gestionar",
+      "description": "Registra una compra o realiza un ajuste manual de puntos.",
+      "purchaseTab": "Compra",
+      "adjustTab": "Ajuste",
+      "purchaseAmountLabel": "Monto de la compra",
+      "recording": "Registrando…",
+      "recordPurchase": "Registrar compra",
+      "pointsLabel": "Puntos (negativo para restar)",
+      "reasonLabel": "Motivo (opcional)",
+      "saving": "Guardando…",
+      "saveAdjustment": "Guardar ajuste"
+    },
+    "tiers": {
+      "newButton": "Nuevo nivel",
+      "emptyTitle": "Aún no hay niveles",
+      "emptyDescription": "Los niveles premian a los clientes que superan un umbral de puntos -- por ejemplo, Plata a los 100 pts, Oro a los 500.",
+      "minPoints": "{points}+ pts",
+      "editButton": "Editar"
+    },
+    "tierForm": {
+      "titleEdit": "Editar nivel",
+      "titleNew": "Nuevo nivel",
+      "descriptionEdit": "Actualiza {name}.",
+      "descriptionNew": "Agrega un nivel de fidelización que los clientes desbloqueen al ganar puntos.",
+      "nameLabel": "Nombre",
+      "minPointsLabel": "Puntos mínimos",
+      "benefitsLabel": "Beneficios (opcional)",
+      "cancel": "Cancelar",
+      "saving": "Guardando…",
+      "saveChanges": "Guardar cambios",
+      "create": "Crear nivel"
+    },
+    "deleteTier": {
+      "button": "Eliminar",
+      "confirm": "¿Eliminar el nivel \"{name}\"? Esta acción no se puede deshacer.",
+      "failedAlert": "No se pudo eliminar este nivel. Inténtalo de nuevo."
+    },
+    "rewards": {
+      "newButton": "Nueva recompensa",
+      "emptyTitle": "Aún no hay recompensas",
+      "emptyDescription": "Agrega recompensas que los clientes puedan canjear con puntos -- un artículo gratis, un descuento, etc.",
+      "active": "Activa",
+      "inactive": "Inactiva",
+      "pointsCost": "{points} pts",
+      "editButton": "Editar"
+    },
+    "rewardForm": {
+      "titleEdit": "Editar recompensa",
+      "titleNew": "Nueva recompensa",
+      "descriptionEdit": "Actualiza {name}.",
+      "descriptionNew": "Agrega una recompensa que los clientes puedan canjear con puntos.",
+      "nameLabel": "Nombre",
+      "descriptionLabel": "Descripción (opcional)",
+      "pointsCostLabel": "Costo en puntos",
+      "cancel": "Cancelar",
+      "saving": "Guardando…",
+      "saveChanges": "Guardar cambios",
+      "create": "Crear recompensa"
+    },
+    "rewardActions": {
+      "deactivate": "Desactivar",
+      "activate": "Activar",
+      "delete": "Eliminar",
+      "deleteConfirm": "¿Eliminar esta recompensa? Esta acción no se puede deshacer.",
+      "deleteFailedAlert": "No se pudo eliminar esta recompensa. Inténtalo de nuevo."
+    },
+    "redeem": {
+      "title": "Confirmar un canje",
+      "description": "Ingresa el código que te muestra el cliente para entregarle su recompensa."
+    },
+    "redeemForm": {
+      "codeLabel": "Código de canje",
+      "lookingUp": "Buscando…",
+      "lookUp": "Buscar",
+      "pointsRedeemed": "{points} puntos canjeados",
+      "codePrefix": "Código {code}",
+      "confirmed": "Confirmado",
+      "confirming": "Confirmando…",
+      "confirmHandoff": "Confirmar entrega",
+      "confirmError": "No se pudo confirmar este canje."
+    },
+    "settings": {
+      "sectionTitle": "Tasas de acumulación",
+      "sectionDescription": "Cómo ganan puntos los clientes en este negocio. Los cambios se aplican solo a la actividad futura.",
+      "pointsPerCheckinLabel": "Puntos por registro",
+      "pointsPerCurrencyLabel": "Puntos por {currency} gastado",
+      "referralBonusLabel": "Bono por referido",
+      "birthdayBonusLabel": "Bono de cumpleaños",
+      "saved": "Configuración guardada.",
+      "saving": "Guardando…",
+      "save": "Guardar configuración"
+    }
+  },
+  "customer": {
+    "shell": {
+      "brand": "Mis Recompensas",
+      "logout": "Cerrar sesión"
+    },
+    "login": {
+      "title": "Inicio de sesión de fidelización",
+      "codeSentDescription": "Ingresa el código que enviamos a {phone}.",
+      "phoneDescription": "Ingresa tu número de teléfono para ganar y canjear puntos.",
+      "phoneLabel": "Número de teléfono",
+      "phoneHint": "Incluye tu código de país, por ejemplo +1 para EE. UU.",
+      "sending": "Enviando…",
+      "sendCode": "Enviar código",
+      "codeLabel": "Código de verificación",
+      "verifying": "Verificando…",
+      "verify": "Verificar"
+    },
+    "myRewards": {
+      "title": "Mis Recompensas",
+      "emptyTitle": "Aún no tienes tarjetas de fidelización",
+      "emptyDescription": "Escanea el código QR de un negocio y regístrate para empezar a ganar puntos.",
+      "visits": "{count} visitas",
+      "businessFallback": "Negocio"
+    },
+    "businessDashboard": {
+      "notificationPreferences": "Preferencias de notificaciones →",
+      "points": "{points} pts",
+      "progressToNextTier": "{remaining} pts para {tierName}",
+      "topTierReached": "Nivel máximo alcanzado",
+      "rewardsHeading": "Recompensas",
+      "recentActivityHeading": "Actividad reciente"
+    },
+    "rewardCard": {
+      "points": "{points} pts",
+      "showCode": "Muestra este código al personal",
+      "redeeming": "Canjeando…",
+      "redeem": "Canjear",
+      "notEnoughPoints": "Puntos insuficientes"
+    },
+    "checkin": {
+      "checkedInTitle": "¡Registro completado!",
+      "points": "{points} pts",
+      "viewRewards": "Ver mis recompensas →",
+      "welcome": "Bienvenido a {branchName}",
+      "subtitle": "{businessName} · Regístrate para ganar puntos de fidelización",
+      "checkingIn": "Registrando…",
+      "checkIn": "Registrarme",
+      "signInToCheckIn": "Inicia sesión para registrarte",
+      "genericError": "Algo salió mal. Inténtalo de nuevo."
+    }
+  }
+}

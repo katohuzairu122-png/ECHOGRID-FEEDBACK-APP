@@ -1,0 +1,183 @@
+{
+  "nav": {
+    "brand": "Platform Admin",
+    "directory": "Directory",
+    "auditLog": "Audit Log",
+    "billing": "Billing",
+    "backToDashboard": "Back to dashboard",
+    "logout": "Log out",
+    "roleLabels": {
+      "support": "Support",
+      "billing": "Billing",
+      "admin": "Admin"
+    }
+  },
+  "accessDenied": {
+    "title": "Platform admin access required",
+    "description": "Your account doesn't have access to the Platform Admin Console.",
+    "backToDashboard": "Back to dashboard"
+  },
+  "home": {
+    "title": "Platform overview",
+    "description": "Cross-tenant tools for support, billing, and platform administration.",
+    "recentBusinessesTitle": "Recently created businesses",
+    "recentBusinessesDescription": "The 5 most recently created businesses on the platform.",
+    "empty": "No businesses yet.",
+    "statusLabels": {
+      "active": "Active",
+      "suspended": "Suspended",
+      "archived": "Archived"
+    }
+  },
+  "businesses": {
+    "title": "Business directory",
+    "description": "Every business on the platform, searchable and filterable.",
+    "emptyTitle": "No businesses found",
+    "emptyDescription": "Try a different search or clear the status filter.",
+    "newer": "Newer",
+    "older": "Older",
+    "filters": {
+      "searchLabel": "Search",
+      "searchPlaceholder": "Name or slug",
+      "statusLabel": "Status",
+      "anyStatus": "Any status",
+      "statusActive": "Active",
+      "statusSuspended": "Suspended",
+      "statusArchived": "Archived",
+      "apply": "Apply"
+    },
+    "detail": {
+      "backToDirectory": "← Back to directory",
+      "overviewTitle": "Overview",
+      "legalNameLabel": "Legal name",
+      "industryLabel": "Industry",
+      "localeLabel": "Default locale",
+      "currencyLabel": "Default currency",
+      "timezoneLabel": "Default timezone",
+      "createdLabel": "Created",
+      "notSet": "Not set",
+      "teamTitle": "Team",
+      "teamDescription": "Everyone with an active role grant at this business.",
+      "teamEmpty": "No team members yet.",
+      "viewAuditLog": "View this business's audit log →",
+      "statusForm": {
+        "title": "Change status",
+        "description": "Suspending a business immediately blocks staff sign-in and customer-facing pages for that business.",
+        "statusLabel": "Status",
+        "statusActive": "Active",
+        "statusSuspended": "Suspended",
+        "statusArchived": "Archived",
+        "reasonLabel": "Reason (optional)",
+        "reasonPlaceholder": "e.g. non-payment, terms of service violation",
+        "submit": "Save status",
+        "saving": "Saving…",
+        "success": "Status updated."
+      },
+      "impersonate": {
+        "button": "Impersonate",
+        "title": "Impersonate {name}",
+        "description": "You will see the dashboard exactly as this person does, for up to 30 minutes. This is logged, including in this business's own audit log.",
+        "reasonLabel": "Reason (required)",
+        "reasonPlaceholder": "e.g. investigating a support ticket",
+        "cancel": "Cancel",
+        "confirm": "Start impersonating",
+        "starting": "Starting…"
+      }
+    }
+  },
+  "auditLog": {
+    "title": "Audit log",
+    "description": "Every recorded action across every business on the platform.",
+    "emptyTitle": "No entries found",
+    "emptyDescription": "Try broadening or clearing your filters.",
+    "newer": "Newer",
+    "older": "Older",
+    "systemActor": "System",
+    "impersonatedBadge": "Impersonated",
+    "filters": {
+      "businessIdLabel": "Business ID",
+      "businessIdPlaceholder": "UUID",
+      "actorUserIdLabel": "Actor user ID",
+      "actorUserIdPlaceholder": "UUID",
+      "entityTypeLabel": "Entity type",
+      "entityTypePlaceholder": "e.g. business",
+      "actionLabel": "Action",
+      "actionPlaceholder": "e.g. business.status_changed_by_platform",
+      "fromLabel": "From",
+      "toLabel": "To",
+      "apply": "Apply"
+    }
+  },
+  "billing": {
+    "subscriptions": {
+      "title": "Billing",
+      "description": "Every business's subscription on the platform, with monthly recurring revenue.",
+      "managePlans": "Manage plans →",
+      "mrrLabel": "{count, plural, one {# active subscription} other {# active subscriptions}}",
+      "emptyTitle": "No subscriptions found",
+      "emptyDescription": "Try clearing the status filter.",
+      "trialEndsOn": "trial ends {date}",
+      "renewsOn": "renews {date}",
+      "newer": "Newer",
+      "older": "Older",
+      "status": {
+        "trialing": "Trial",
+        "active": "Active",
+        "past_due": "Past due",
+        "incomplete": "Incomplete",
+        "canceled": "Canceled",
+        "incomplete_expired": "Expired",
+        "unpaid": "Unpaid"
+      },
+      "filters": {
+        "statusLabel": "Status",
+        "anyStatus": "Any status",
+        "statusTrialing": "Trial",
+        "statusActive": "Active",
+        "statusPastDue": "Past due",
+        "statusIncomplete": "Incomplete",
+        "statusCanceled": "Canceled",
+        "statusIncompleteExpired": "Expired",
+        "statusUnpaid": "Unpaid",
+        "apply": "Apply"
+      }
+    },
+    "plans": {
+      "backToBilling": "← Back to billing",
+      "title": "Plan catalog",
+      "description": "The plans businesses can subscribe to.",
+      "newButton": "New plan",
+      "editButton": "Edit",
+      "defaultTrialBadge": "Default trial",
+      "inactiveBadge": "Inactive",
+      "perMonth": "mo",
+      "perYear": "yr",
+      "noStripePriceWarning": "no Stripe price set"
+    },
+    "planForm": {
+      "titleNew": "New plan",
+      "titleEdit": "Edit {name}",
+      "descriptionNew": "Add a new plan to the catalog.",
+      "descriptionEdit": "Update {name}'s pricing, limits, or Stripe configuration.",
+      "keyLabel": "Key",
+      "keyImmutableHint": "Key can't be changed after creation.",
+      "nameLabel": "Name",
+      "descriptionLabel": "Description",
+      "priceMonthlyLabel": "Monthly price (USD)",
+      "priceYearlyLabel": "Yearly price (USD)",
+      "currencyLabel": "Currency",
+      "stripePriceIdMonthlyLabel": "Stripe monthly price ID",
+      "stripePriceIdYearlyLabel": "Stripe yearly price ID",
+      "maxBranchesLabel": "Max branches",
+      "maxUsersLabel": "Max team members",
+      "unlimitedPlaceholder": "Unlimited",
+      "sortOrderLabel": "Sort order",
+      "isActiveLabel": "Active (purchasable)",
+      "isDefaultTrialLabel": "Default trial plan",
+      "cancel": "Cancel",
+      "saving": "Saving…",
+      "create": "Create plan",
+      "saveChanges": "Save changes"
+    }
+  }
+}

@@ -1,0 +1,56 @@
+{
+  "events": {
+    "feedback_received": "New feedback received",
+    "summary_ready": "AI summary ready",
+    "redemption_pending": "Redemption pending confirmation",
+    "points_earned": "Points earned",
+    "tier_upgraded": "Tier upgraded",
+    "reward_redeemed": "Reward redeemed"
+  },
+  "channels": {
+    "email": "Email",
+    "sms": "SMS",
+    "push": "Push"
+  },
+  "preferences": {
+    "eventColumn": "Event",
+    "channelAriaLabel": "{channel} notifications for {event}",
+    "saveFailedAlert": "Could not save preferences. Please try again.",
+    "saved": "Preferences saved.",
+    "saving": "Saving…",
+    "save": "Save preferences"
+  },
+  "staff": {
+    "title": "Notifications",
+    "myPreferencesTitle": "My preferences",
+    "myPreferencesDescription": "Choose how you're notified. Applies to your account only.",
+    "businessSettingsTitle": "Business settings",
+    "businessSettingsDescription": "Platform-wide delivery controls and the daily SMS cost cap.",
+    "settings": {
+      "emailLabel": "Email notifications",
+      "emailAriaLabel": "Email notifications enabled",
+      "emailDescription": "Platform-wide kill switch for every email event.",
+      "smsLabel": "SMS notifications",
+      "smsAriaLabel": "SMS notifications enabled",
+      "smsDescription": "Platform-wide kill switch for every SMS event.",
+      "maxSmsPerDayLabel": "Max SMS per day",
+      "maxSmsPerDayHint": "Cost safety cap -- SMS delivery silently stops once this is hit for the day.",
+      "saved": "Settings saved.",
+      "saving": "Saving…",
+      "save": "Save settings"
+    },
+    "log": {
+      "heading": "Recent activity",
+      "empty": "No notifications sent yet.",
+      "status": {
+        "sent": "sent",
+        "pending": "pending",
+        "failed": "failed"
+      }
+    }
+  },
+  "customer": {
+    "title": "Notification preferences",
+    "description": "Choose how you'd like to hear about your points and rewards."
+  }
+}

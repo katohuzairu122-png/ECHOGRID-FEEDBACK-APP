@@ -1,0 +1,44 @@
+{
+  "title": "Sucursales",
+  "newButton": "+ Nueva sucursal",
+  "emptyTitle": "Aún no hay sucursales",
+  "emptyDescription": "Agrega tu primera sucursal para empezar a recopilar comentarios allí.",
+  "qrButton": "Código QR",
+  "editButton": "Editar",
+  "form": {
+    "titleEdit": "Editar sucursal",
+    "titleNew": "Nueva sucursal",
+    "descriptionEdit": "Actualiza los datos de {name}.",
+    "descriptionNew": "Agrega una sucursal a este negocio.",
+    "nameLabel": "Nombre",
+    "slugLabel": "Slug de URL",
+    "addressLine1Label": "Dirección línea 1",
+    "addressLine2Label": "Dirección línea 2",
+    "cityLabel": "Ciudad",
+    "stateProvinceLabel": "Estado/Provincia",
+    "postalCodeLabel": "Código postal",
+    "countryCodeLabel": "Código de país",
+    "timezoneLabel": "Zona horaria",
+    "cancel": "Cancelar",
+    "saving": "Guardando…",
+    "saveChanges": "Guardar cambios",
+    "create": "Crear sucursal"
+  },
+  "delete": {
+    "button": "Eliminar",
+    "deleting": "Eliminando…",
+    "confirm": "¿Eliminar \"{name}\"? Dejará de aparecer en cualquier parte de la aplicación de inmediato.",
+    "failedAlert": "No se pudo eliminar esta sucursal. Inténtalo de nuevo."
+  },
+  "qr": {
+    "title": "Código QR",
+    "loading": "Cargando…",
+    "downloadButton": "Descargar SVG",
+    "regenerateButton": "Regenerar",
+    "working": "Procesando…",
+    "close": "Cerrar",
+    "loadError": "No se pudo cargar este código QR. Inténtalo de nuevo.",
+    "regenerateConfirm": "¿Regenerar este código QR? El código actual dejará de funcionar de inmediato; cualquier copia impresa deberá reemplazarse.",
+    "regenerateError": "No se pudo regenerar este código QR. Inténtalo de nuevo."
+  }
+}
