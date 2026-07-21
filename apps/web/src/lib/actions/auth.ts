@@ -24,7 +24,11 @@ async function callAuthEndpoint(
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   });
-  const result = await response.json();
+  const result = (await response.json()) as {
+    success?: boolean;
+    data: { accessToken: string; refreshToken: string };
+    error?: { message?: string };
+  };
 
   if (!response.ok || !result.success) {
     return { error: result.error?.message ?? 'Something went wrong. Please try again.' };

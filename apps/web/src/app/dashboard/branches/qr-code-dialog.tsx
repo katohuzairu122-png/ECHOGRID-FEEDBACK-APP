@@ -19,7 +19,7 @@ interface QrCodeDialogProps {
   branchId: string;
   branchName: string;
   /** See BranchFormDialog's identical prop -- Base UI's Trigger clones this element. */
-  trigger: React.ReactElement;
+  trigger: React.ReactElement<Record<string, unknown>>;
 }
 
 /**

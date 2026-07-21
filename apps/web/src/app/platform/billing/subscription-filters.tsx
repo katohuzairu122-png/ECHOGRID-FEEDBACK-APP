@@ -6,7 +6,7 @@ import { useTranslations } from 'next-intl';
 import { Button, Select } from '@/components/ui';
 
 interface SubscriptionFiltersProps {
-  status?: string;
+  status?: string | undefined;
 }
 
 /** Single-field filter -- simpler than businesses/business-filters.tsx's

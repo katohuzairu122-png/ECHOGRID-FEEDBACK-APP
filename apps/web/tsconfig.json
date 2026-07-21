@@ -3,6 +3,9 @@
   "compilerOptions": {
     "module": "ESNext",
     "moduleResolution": "Bundler",
+    // The base config ships only ES2022 (correct for the Workers API); the
+    // browser app needs the DOM typings for window/document/DOM events.
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "jsx": "preserve",
     "noEmit": true,
     "incremental": true,

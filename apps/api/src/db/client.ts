@@ -13,6 +13,17 @@ export function buildDb(client: Client) {
 export type Database = ReturnType<typeof buildDb>;
 
 /**
+ * The handle drizzle passes to a `db.transaction(async (tx) => ...)` callback.
+ * Structurally it is a Database without the `$client` field, so repositories
+ * accept `Db` (either form) and can run inside a transaction -- see
+ * BusinessService and the loyalty services, which span multiple writes.
+ */
+export type Transaction = Parameters<Parameters<Database['transaction']>[0]>[0];
+
+/** Anything the repositories can issue queries against. */
+export type Db = Database | Transaction;
+
+/**
  * Creates a new Postgres client + Drizzle instance for a single request.
  * Hyperdrive maintains the real connection pool upstream, so creating a new
  * `pg.Client` per request is fast and is Cloudflare's documented pattern:

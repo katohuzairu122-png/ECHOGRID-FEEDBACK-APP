@@ -6,7 +6,7 @@ import type { BranchDto } from '@echo-grid-feedback/shared-types';
 
 interface BranchFilterProps {
   branches: BranchDto[];
-  selectedBranchId?: string;
+  selectedBranchId?: string | undefined;
 }
 
 /**

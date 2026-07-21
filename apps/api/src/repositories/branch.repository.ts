@@ -49,6 +49,7 @@ export class BranchRepository extends BaseRepository {
 
   async create(input: NewBranch): Promise<Branch> {
     const [row] = await this.db.insert(branches).values(input).returning();
+    if (!row) throw new Error('Insert returned no row');
     return row;
   }
 

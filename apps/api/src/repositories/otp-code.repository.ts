@@ -8,6 +8,7 @@ export type NewOtpCode = typeof otpCodes.$inferInsert;
 export class OtpCodeRepository extends BaseRepository {
   async create(input: NewOtpCode): Promise<OtpCode> {
     const [row] = await this.db.insert(otpCodes).values(input).returning();
+    if (!row) throw new Error('Insert returned no row');
     return row;
   }
 

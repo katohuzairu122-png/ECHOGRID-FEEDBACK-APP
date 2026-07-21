@@ -8,6 +8,7 @@ export type NewLoyaltyTransaction = typeof loyaltyTransactions.$inferInsert;
 export class LoyaltyTransactionRepository extends BaseRepository {
   async create(input: NewLoyaltyTransaction): Promise<LoyaltyTransaction> {
     const [row] = await this.db.insert(loyaltyTransactions).values(input).returning();
+    if (!row) throw new Error('Insert returned no row');
     return row;
   }
 

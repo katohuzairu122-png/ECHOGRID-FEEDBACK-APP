@@ -101,7 +101,7 @@ describe('SummaryService.generateForPeriod', () => {
 
     await service.generateForPeriod({ businessId: BUSINESS_A, periodType: 'weekly', periodStart, periodEnd });
 
-    const call = vi.mocked(generator.generate).mock.calls[0][0] as SummaryGenerationInput;
+    const call = vi.mocked(generator.generate).mock.calls[0]![0] as SummaryGenerationInput;
     expect(call.positiveCount).toBe(2);
     expect(call.neutralCount).toBe(1);
     expect(call.negativeCount).toBe(1);
@@ -120,7 +120,7 @@ describe('SummaryService.generateForPeriod', () => {
 
     await service.generateForPeriod({ businessId: BUSINESS_A, periodType: 'weekly', periodStart, periodEnd });
 
-    const call = vi.mocked(generator.generate).mock.calls[0][0] as SummaryGenerationInput;
+    const call = vi.mocked(generator.generate).mock.calls[0]![0] as SummaryGenerationInput;
     expect(call.comments).toEqual(['Great stuff']);
   });
 
@@ -132,7 +132,7 @@ describe('SummaryService.generateForPeriod', () => {
 
     await service.generateForPeriod({ businessId: BUSINESS_A, periodType: 'weekly', periodStart, periodEnd });
 
-    const call = vi.mocked(generator.generate).mock.calls[0][0] as SummaryGenerationInput;
+    const call = vi.mocked(generator.generate).mock.calls[0]![0] as SummaryGenerationInput;
     expect(call.comments).toHaveLength(100);
     // feedbackCount still reflects the true total, not the capped prompt size.
     expect(call.feedbackCount).toBe(150);

@@ -8,11 +8,11 @@ import { Button } from '@/components/ui';
 
 interface SearchFiltersProps {
   branches: BranchDto[];
-  branchId?: string;
-  sentiment?: string;
-  rating?: string;
-  keyword?: string;
-  range?: string;
+  branchId?: string | undefined;
+  sentiment?: string | undefined;
+  rating?: string | undefined;
+  keyword?: string | undefined;
+  range?: string | undefined;
 }
 
 /** Keyed by the same range value the URL/query string uses, so the

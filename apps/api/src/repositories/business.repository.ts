@@ -63,6 +63,7 @@ export class BusinessRepository extends BaseRepository {
 
   async create(input: NewBusiness): Promise<Business> {
     const [row] = await this.db.insert(businesses).values(input).returning();
+    if (!row) throw new Error('Insert returned no row');
     return row;
   }
 

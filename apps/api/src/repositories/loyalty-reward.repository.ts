@@ -35,6 +35,7 @@ export class LoyaltyRewardRepository extends BaseRepository {
 
   async create(input: NewLoyaltyReward): Promise<LoyaltyReward> {
     const [row] = await this.db.insert(loyaltyRewards).values(input).returning();
+    if (!row) throw new Error('Insert returned no row');
     return row;
   }
 

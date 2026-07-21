@@ -55,7 +55,12 @@ export class CustomerAuthService {
    * customer row existing -- there is nothing to enumerate either way. */
   async requestOtp(phone: string): Promise<void> {
     const latest = await this.repos.otpCodes.findLatestForPhone(phone);
-    if (latest) {
+    // Only an unconsumed recent code triggers the cooldown: it exists to
+    // rate-limit SMS sends from repeated *unverified* requests. Once a code
+    // has been consumed (which requires a successful verify -- proof of phone
+    // ownership), a fresh request is a legitimate re-authentication, not spam,
+    // and must not be blocked (e.g. a returning customer re-verifying).
+    if (latest && !latest.consumedAt) {
       const secondsSinceLastRequest = (Date.now() - latest.createdAt.getTime()) / 1000;
       if (secondsSinceLastRequest < OTP_REQUEST_COOLDOWN_SECONDS) {
         throw new CustomerAuthError(

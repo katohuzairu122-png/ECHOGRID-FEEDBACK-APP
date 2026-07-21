@@ -70,6 +70,7 @@ export async function pbkdf2Verify(input: string, storedHash: string): Promise<b
   const parts = storedHash.split('$');
   if (parts.length !== 4 || parts[0] !== 'pbkdf2') return false;
   const [, iterationsStr, saltB64, hashB64] = parts;
+  if (iterationsStr === undefined || saltB64 === undefined || hashB64 === undefined) return false;
   const iterations = Number(iterationsStr);
   if (!Number.isInteger(iterations) || iterations <= 0) return false;
 

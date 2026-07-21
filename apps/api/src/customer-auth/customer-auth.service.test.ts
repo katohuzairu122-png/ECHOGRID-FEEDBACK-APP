@@ -111,7 +111,11 @@ describe('CustomerAuthService', () => {
   beforeEach(() => {
     repos = createFakeRepos();
     sms = createFakeSmsService();
-    service = new CustomerAuthService(repos, sms, SECRETS);
+    service = new CustomerAuthService(
+      repos as unknown as ConstructorParameters<typeof CustomerAuthService>[0],
+      sms,
+      SECRETS,
+    );
   });
 
   it('requestOtp sends an SMS containing a 6-digit code', async () => {

@@ -56,6 +56,7 @@ export class BusinessSubscriptionRepository extends BaseRepository {
 
   async create(input: NewBusinessSubscription): Promise<BusinessSubscription> {
     const [row] = await this.db.insert(businessSubscriptions).values(input).returning();
+    if (!row) throw new Error('Insert returned no row');
     return row;
   }
 
@@ -76,6 +77,7 @@ export class BusinessSubscriptionRepository extends BaseRepository {
         set: { ...patch, updatedAt: new Date() },
       })
       .returning();
+    if (!row) throw new Error('Insert returned no row');
     return row;
   }
 

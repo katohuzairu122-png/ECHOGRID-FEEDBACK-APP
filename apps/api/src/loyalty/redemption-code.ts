@@ -16,7 +16,7 @@ export function generateRedemptionCode(): string {
   const bytes = crypto.getRandomValues(new Uint32Array(CODE_LENGTH));
   let code = '';
   for (let i = 0; i < CODE_LENGTH; i++) {
-    code += ALPHABET[bytes[i] % ALPHABET.length];
+    code += ALPHABET[bytes[i]! % ALPHABET.length];
   }
   return code;
 }

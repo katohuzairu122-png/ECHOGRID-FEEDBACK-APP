@@ -6,12 +6,12 @@ import { useTranslations } from 'next-intl';
 import { Button, Input } from '@/components/ui';
 
 interface AuditFiltersProps {
-  businessId?: string;
-  actorUserId?: string;
-  entityType?: string;
-  action?: string;
-  from?: string;
-  to?: string;
+  businessId?: string | undefined;
+  actorUserId?: string | undefined;
+  entityType?: string | undefined;
+  action?: string | undefined;
+  from?: string | undefined;
+  to?: string | undefined;
 }
 
 /**

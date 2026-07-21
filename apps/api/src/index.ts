@@ -84,7 +84,7 @@ api.use(
     origin: (origin, c) => {
       const allowed = (c.env.ALLOWED_ORIGINS ?? '')
         .split(',')
-        .map((o) => o.trim())
+        .map((o: string) => o.trim())
         .filter(Boolean);
       return allowed.includes(origin) ? origin : null;
     },

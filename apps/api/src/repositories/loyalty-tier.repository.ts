@@ -35,6 +35,7 @@ export class LoyaltyTierRepository extends BaseRepository {
 
   async create(input: NewLoyaltyTier): Promise<LoyaltyTier> {
     const [row] = await this.db.insert(loyaltyTiers).values(input).returning();
+    if (!row) throw new Error('Insert returned no row');
     return row;
   }
 

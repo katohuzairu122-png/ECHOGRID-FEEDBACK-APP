@@ -64,6 +64,7 @@ export class LoyaltyAccountRepository extends BaseRepository {
 
   async create(input: NewLoyaltyAccount): Promise<LoyaltyAccount> {
     const [row] = await this.db.insert(loyaltyAccounts).values(input).returning();
+    if (!row) throw new Error('Insert returned no row');
     return row;
   }
 
@@ -92,6 +93,7 @@ export class LoyaltyAccountRepository extends BaseRepository {
       })
       .where(eq(loyaltyAccounts.id, id))
       .returning();
+    if (!row) throw new Error('Insert returned no row');
     return row;
   }
 
@@ -105,6 +107,7 @@ export class LoyaltyAccountRepository extends BaseRepository {
       .set({ tierId, updatedAt: new Date() })
       .where(eq(loyaltyAccounts.id, id))
       .returning();
+    if (!row) throw new Error('Insert returned no row');
     return row;
   }
 }

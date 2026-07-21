@@ -1,6 +1,9 @@
 import { sign, verify } from 'hono/jwt';
 
-export interface AccessTokenPayload {
+// Declared as `type` (not `interface`) so each gets an implicit string index
+// signature and is assignable to hono/jwt's `JWTPayload` param -- interfaces
+// are open to augmentation and TS withholds that implicit index signature.
+export type AccessTokenPayload = {
   sub: string; // userId
   type: 'access';
   // Set only on a token minted by signImpersonationToken (Platform Admin
@@ -14,15 +17,15 @@ export interface AccessTokenPayload {
   impersonatedBy?: string;
   iat: number;
   exp: number;
-}
+};
 
-export interface RefreshTokenPayload {
+export type RefreshTokenPayload = {
   sub: string; // userId
   jti: string; // refresh_tokens.id -- links the JWT to its DB record
   type: 'refresh';
   iat: number;
   exp: number;
-}
+};
 
 export const ACCESS_TOKEN_TTL_SECONDS = 15 * 60; // 15 minutes
 export const REFRESH_TOKEN_TTL_SECONDS = 30 * 24 * 60 * 60; // 30 days

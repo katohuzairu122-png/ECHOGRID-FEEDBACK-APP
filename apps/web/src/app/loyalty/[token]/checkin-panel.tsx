@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import type { LoyaltyAccountDto } from '@echo-grid-feedback/shared-types';
 import { checkinAction } from '@/lib/actions/loyalty-customer';
-import { ApiError } from '@/lib/api-client';
+import { ApiError } from '@/lib/api-error';
 import { Button, buttonVariants, Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui';
 
 interface CheckinPanelProps {

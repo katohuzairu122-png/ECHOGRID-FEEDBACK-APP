@@ -10,7 +10,7 @@ interface SummaryGeneratorProps {
    * generation and the summaries list should always agree on scope
    * (business-wide vs. one branch are different report types, see
    * feedback-summary.repository.ts, never mixed in one view). */
-  branchId?: string;
+  branchId?: string | undefined;
 }
 
 /**

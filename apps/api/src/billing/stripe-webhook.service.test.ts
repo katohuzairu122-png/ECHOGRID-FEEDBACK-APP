@@ -1,20 +1,29 @@
 import { describe, it, expect, vi } from 'vitest';
 import type Stripe from 'stripe';
 import { StripeWebhookService } from './stripe-webhook.service';
-import type { SubscriptionPlan } from '../repositories/subscription-plan.repository';
-import type { BusinessSubscription, StripeSyncPatch } from '../repositories/business-subscription.repository';
-import type { NewAuditLogEntry } from '../repositories/audit-log.repository';
+import type { SubscriptionPlan, SubscriptionPlanRepository } from '../repositories/subscription-plan.repository';
+import type {
+  BusinessSubscription,
+  BusinessSubscriptionRepository,
+  StripeSyncPatch,
+} from '../repositories/business-subscription.repository';
+import type { NewAuditLogEntry, AuditLogRepository } from '../repositories/audit-log.repository';
 
-/** Same minimal in-memory fake spirit as branch.service.test.ts. */
-function createFakePlanRepo(plans: SubscriptionPlan[]) {
+/** Same minimal in-memory fake spirit as branch.service.test.ts. The fakes
+ * implement only the subset each repository the service uses; the return is
+ * cast to the repository type (intersected with the test-only inspection
+ * props the assertions read) so it satisfies the service's injected shape. */
+function createFakePlanRepo(plans: SubscriptionPlan[]): SubscriptionPlanRepository {
   return {
     async findByStripePriceId(priceId: string): Promise<SubscriptionPlan | undefined> {
       return plans.find((p) => p.stripePriceIdMonthly === priceId || p.stripePriceIdYearly === priceId);
     },
-  };
+  } as unknown as SubscriptionPlanRepository;
 }
 
-function createFakeSubscriptionRepo() {
+function createFakeSubscriptionRepo(): BusinessSubscriptionRepository & {
+  upserts: Array<{ businessId: string; patch: StripeSyncPatch }>;
+} {
   const upserts: Array<{ businessId: string; patch: StripeSyncPatch }> = [];
   return {
     upserts,
@@ -22,10 +31,14 @@ function createFakeSubscriptionRepo() {
       upserts.push({ businessId, patch });
       return { id: 'sub-row-1', businessId, ...patch } as BusinessSubscription;
     },
+  } as unknown as BusinessSubscriptionRepository & {
+    upserts: Array<{ businessId: string; patch: StripeSyncPatch }>;
   };
 }
 
-function createFakeAuditLogRepo(opts: { throwOnRecord?: boolean } = {}) {
+function createFakeAuditLogRepo(
+  opts: { throwOnRecord?: boolean } = {},
+): AuditLogRepository & { records: NewAuditLogEntry[] } {
   const records: NewAuditLogEntry[] = [];
   return {
     records,
@@ -33,7 +46,7 @@ function createFakeAuditLogRepo(opts: { throwOnRecord?: boolean } = {}) {
       if (opts.throwOnRecord) throw new Error('simulated audit log write failure');
       records.push(entry);
     },
-  };
+  } as unknown as AuditLogRepository & { records: NewAuditLogEntry[] };
 }
 
 const GROWTH_PLAN: SubscriptionPlan = {
@@ -100,7 +113,7 @@ describe('StripeWebhookService', () => {
       await service.processEvent(makeEvent('customer.subscription.created', makeSubscription()));
 
       expect(subscriptionRepo.upserts).toHaveLength(1);
-      expect(subscriptionRepo.upserts[0].businessId).toBe('business-1');
+      expect(subscriptionRepo.upserts[0]!.businessId).toBe('business-1');
     });
 
     it('syncs on customer.subscription.updated', async () => {
@@ -114,7 +127,7 @@ describe('StripeWebhookService', () => {
       await service.processEvent(makeEvent('customer.subscription.updated', makeSubscription({ status: 'past_due' })));
 
       expect(subscriptionRepo.upserts).toHaveLength(1);
-      expect(subscriptionRepo.upserts[0].patch.status).toBe('past_due');
+      expect(subscriptionRepo.upserts[0]!.patch.status).toBe('past_due');
     });
 
     it('ignores unhandled event types (e.g. invoice.paid) without throwing', async () => {
@@ -143,7 +156,7 @@ describe('StripeWebhookService', () => {
 
       await service.processEvent(makeEvent('customer.subscription.created', makeSubscription()));
 
-      const { patch } = subscriptionRepo.upserts[0];
+      const { patch } = subscriptionRepo.upserts[0]!;
       expect(patch.planId).toBe(GROWTH_PLAN.id);
       expect(patch.stripeCustomerId).toBe('cus_test_123');
       expect(patch.stripeSubscriptionId).toBe('sub_test_123');
@@ -175,8 +188,8 @@ describe('StripeWebhookService', () => {
 
       await service.processEvent(makeEvent('customer.subscription.created', subscription));
 
-      expect(subscriptionRepo.upserts[0].patch.billingInterval).toBe('year');
-      expect(subscriptionRepo.upserts[0].patch.planId).toBe(GROWTH_PLAN.id);
+      expect(subscriptionRepo.upserts[0]!.patch.billingInterval).toBe('year');
+      expect(subscriptionRepo.upserts[0]!.patch.planId).toBe(GROWTH_PLAN.id);
     });
 
     it('falls back to subscription.metadata.planId when the price ID cannot be resolved against the catalog', async () => {
@@ -192,7 +205,7 @@ describe('StripeWebhookService', () => {
       await service.processEvent(makeEvent('customer.subscription.created', subscription));
 
       expect(subscriptionRepo.upserts).toHaveLength(1);
-      expect(subscriptionRepo.upserts[0].patch.planId).toBe('plan-fallback');
+      expect(subscriptionRepo.upserts[0]!.patch.planId).toBe('plan-fallback');
     });
 
     it('skips the sync (no upsert, no throw) when businessId is missing from metadata', async () => {
@@ -249,7 +262,7 @@ describe('StripeWebhookService', () => {
 
       await service.processEvent(makeEvent('customer.subscription.deleted', subscription));
 
-      expect(subscriptionRepo.upserts[0].patch.status).toBe('canceled');
+      expect(subscriptionRepo.upserts[0]!.patch.status).toBe('canceled');
     });
 
     it('customer.subscription.deleted uses "now" for canceledAt even when the payload has its own canceled_at', async () => {
@@ -266,7 +279,7 @@ describe('StripeWebhookService', () => {
 
       const before = Date.now();
       await service.processEvent(makeEvent('customer.subscription.deleted', subscription));
-      const canceledAt = subscriptionRepo.upserts[0].patch.canceledAt as Date;
+      const canceledAt = subscriptionRepo.upserts[0]!.patch.canceledAt as Date;
 
       expect(canceledAt.getTime()).toBeGreaterThan(before - 5000);
       expect(canceledAt.getTime()).toBeLessThan(before + 5000);
@@ -284,8 +297,8 @@ describe('StripeWebhookService', () => {
 
       await service.processEvent(makeEvent('customer.subscription.updated', subscription));
 
-      expect(subscriptionRepo.upserts[0].patch.canceledAt).toEqual(new Date(1700000000 * 1000));
-      expect(subscriptionRepo.upserts[0].patch.cancelAtPeriodEnd).toBe(true);
+      expect(subscriptionRepo.upserts[0]!.patch.canceledAt).toEqual(new Date(1700000000 * 1000));
+      expect(subscriptionRepo.upserts[0]!.patch.cancelAtPeriodEnd).toBe(true);
     });
 
     it('canceledAt is null when the payload has neither canceled_at nor forceCanceled', async () => {
@@ -298,7 +311,7 @@ describe('StripeWebhookService', () => {
 
       await service.processEvent(makeEvent('customer.subscription.updated', makeSubscription({ canceled_at: null })));
 
-      expect(subscriptionRepo.upserts[0].patch.canceledAt).toBeNull();
+      expect(subscriptionRepo.upserts[0]!.patch.canceledAt).toBeNull();
     });
   });
 

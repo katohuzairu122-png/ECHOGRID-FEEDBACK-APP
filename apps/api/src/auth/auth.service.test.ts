@@ -29,6 +29,7 @@ function createFakeRepos() {
           passwordHash: input.passwordHash,
           fullName: input.fullName,
           phone: input.phone ?? null,
+          platformRole: input.platformRole ?? null,
           status: input.status ?? 'invited',
           lastLoginAt: null,
           createdAt: new Date(),
@@ -92,7 +93,13 @@ describe('AuthService', () => {
 
   beforeEach(() => {
     repos = createFakeRepos();
-    service = new AuthService(repos, SECRETS);
+    // The fakes implement only the subset AuthService uses; the concrete
+    // repositories also carry a `protected db` no object literal can match,
+    // so inject through the constructor's declared param type.
+    service = new AuthService(
+      repos as unknown as ConstructorParameters<typeof AuthService>[0],
+      SECRETS,
+    );
   });
 
   it('signup creates a user (with a hashed, not raw, password) and returns tokens', async () => {
@@ -134,12 +141,12 @@ describe('AuthService', () => {
   it('login gives the same error for a missing account and a wrong password (no user enumeration)', async () => {
     await service.signup({ email: 'real@example.com', password: 'real-password', fullName: 'R' });
 
-    const missingAccount = await service
+    const missingAccount = (await service
       .login({ email: 'nobody@example.com', password: 'anything' })
-      .catch((err) => err as AuthError);
-    const wrongPassword = await service
+      .catch((err) => err)) as AuthError;
+    const wrongPassword = (await service
       .login({ email: 'real@example.com', password: 'wrong' })
-      .catch((err) => err as AuthError);
+      .catch((err) => err)) as AuthError;
 
     expect(missingAccount.message).toBe(wrongPassword.message);
     expect(missingAccount.code).toBe(wrongPassword.code);

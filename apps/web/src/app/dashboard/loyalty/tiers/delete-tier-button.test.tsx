@@ -42,7 +42,7 @@ describe('DeleteTierButton', () => {
     render(<DeleteTierButton tierId="tier-1" tierName="Gold" />);
     await user.click(screen.getByRole('button', { name: 'Delete' }));
 
-    expect(confirmSpy.mock.calls[0][0]).toContain('Gold');
+    expect(confirmSpy.mock.calls[0]![0]).toContain('Gold');
   });
 
   it('surfaces a failed delete with an alert instead of failing silently', async () => {

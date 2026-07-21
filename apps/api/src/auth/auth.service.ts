@@ -44,8 +44,8 @@ export interface SignupInput {
 export interface LoginInput {
   email: string;
   password: string;
-  userAgent?: string;
-  ipAddress?: string;
+  userAgent?: string | undefined;
+  ipAddress?: string | undefined;
 }
 
 /**

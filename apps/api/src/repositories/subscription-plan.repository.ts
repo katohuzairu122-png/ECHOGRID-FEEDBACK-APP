@@ -79,6 +79,7 @@ export class SubscriptionPlanRepository extends BaseRepository {
     const existing = await this.findByKey(input.key);
     if (!existing) {
       const [row] = await this.db.insert(subscriptionPlans).values(input).returning();
+      if (!row) throw new Error('Insert returned no row');
       return row;
     }
     const { isActive: _ignoredIsActive, key: _ignoredKey, ...editable } = input;
@@ -87,6 +88,7 @@ export class SubscriptionPlanRepository extends BaseRepository {
       .set(editable)
       .where(eq(subscriptionPlans.id, existing.id))
       .returning();
+    if (!row) throw new Error('Insert returned no row');
     return row;
   }
 
@@ -99,6 +101,7 @@ export class SubscriptionPlanRepository extends BaseRepository {
    * 409 -- see that file for why the check lives at the route layer here. */
   async create(input: NewSubscriptionPlan): Promise<SubscriptionPlan> {
     const [row] = await this.db.insert(subscriptionPlans).values(input).returning();
+    if (!row) throw new Error('Insert returned no row');
     return row;
   }
 

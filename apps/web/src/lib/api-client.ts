@@ -1,18 +1,13 @@
 import 'server-only';
 import { getAccessToken, getRefreshToken, setSession, clearSession } from './session';
+import { ApiError } from './api-error';
+
+// Re-exported so the many server-side callers that `import { ApiError } from
+// '@/lib/api-client'` keep working; the class itself now lives in the
+// server-only-free api-error.ts so Client Components can import it too.
+export { ApiError };
 
 export const API_BASE_URL = process.env.API_BASE_URL ?? 'http://localhost:8787';
-
-export class ApiError extends Error {
-  constructor(
-    message: string,
-    public readonly status: number,
-    public readonly code?: string,
-  ) {
-    super(message);
-    this.name = 'ApiError';
-  }
-}
 
 interface ApiEnvelope<T> {
   success: boolean;

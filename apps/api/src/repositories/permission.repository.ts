@@ -22,6 +22,7 @@ export class PermissionRepository extends BaseRepository {
     const existing = await this.findByKey(input.key);
     if (existing) return existing;
     const [row] = await this.db.insert(permissions).values(input).returning();
+    if (!row) throw new Error('Insert returned no row');
     return row;
   }
 

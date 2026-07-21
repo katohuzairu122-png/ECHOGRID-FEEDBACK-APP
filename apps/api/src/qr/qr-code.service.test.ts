@@ -72,7 +72,7 @@ describe('QrCodeService', () => {
 
   beforeEach(() => {
     repos = { qrCodes: createFakeQrCodeRepo() };
-    service = new QrCodeService(repos);
+    service = new QrCodeService(repos as unknown as ConstructorParameters<typeof QrCodeService>[0]);
   });
 
   it('getOrCreateActiveForBranch creates a new active code when none exists', async () => {

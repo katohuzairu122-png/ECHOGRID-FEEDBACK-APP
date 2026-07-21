@@ -11,6 +11,7 @@ const MAX_PAGE_SIZE = 100;
 export class FeedbackSummaryRepository extends BaseRepository {
   async create(input: NewFeedbackSummary): Promise<FeedbackSummary> {
     const [row] = await this.db.insert(feedbackSummaries).values(input).returning();
+    if (!row) throw new Error('Insert returned no row');
     return row;
   }
 

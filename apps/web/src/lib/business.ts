@@ -36,7 +36,7 @@ export async function getActiveBusiness(): Promise<BusinessDto | null> {
   // on bracket access (businesses[0]) -- see dashboard/page.tsx's original
   // Block 4 note for the same pattern.
   const [active] = businesses;
-  return active;
+  return active ?? null;
 }
 
 /**

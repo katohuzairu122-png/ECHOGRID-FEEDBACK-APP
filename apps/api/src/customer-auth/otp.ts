@@ -20,7 +20,7 @@ export const OTP_REQUEST_COOLDOWN_SECONDS = 60;
  * Math.random -- predictable OTPs defeat the entire verification purpose). */
 export function generateOtpCode(): string {
   const max = 10 ** OTP_LENGTH;
-  const randomValue = crypto.getRandomValues(new Uint32Array(1))[0] % max;
+  const randomValue = crypto.getRandomValues(new Uint32Array(1))[0]! % max;
   return randomValue.toString().padStart(OTP_LENGTH, '0');
 }
 

@@ -17,7 +17,7 @@ export const authRoutes = new Hono<{ Bindings: Bindings; Variables: AuthVariable
  * for this request only, closed via waitUntil once the handler is done.
  */
 async function withAuthService<T>(
-  c: Context<{ Bindings: Bindings }>,
+  c: Context<{ Bindings: Bindings; Variables: AuthVariables }>,
   fn: (service: AuthService) => Promise<T>,
 ): Promise<T> {
   const { db, close } = await createDb(c.env.HYPERDRIVE);
