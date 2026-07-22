@@ -121,6 +121,16 @@ export class AuthService {
       throw new AuthError('Refresh token is invalid or expired.', 'INVALID_REFRESH_TOKEN');
     }
 
+    // Re-check account status on every rotation (mirrors requirePlatformRole's
+    // fresh per-request status check) -- without this, deactivating a user
+    // only blocks new logins; a session already in hand keeps renewing itself
+    // for the full 30-day refresh-token lifetime instead of stopping at the
+    // next access-token expiry (<=15 min).
+    const user = await this.repos.users.findById(stored.userId);
+    if (!user || user.status !== 'active') {
+      throw new AuthError('This account is not active.', 'ACCOUNT_INACTIVE');
+    }
+
     const next = await this.issueTokens(
       stored.userId,
       stored.userAgent ?? undefined,

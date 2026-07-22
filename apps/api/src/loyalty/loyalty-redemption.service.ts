@@ -102,9 +102,14 @@ export class LoyaltyRedemptionService {
       throw new AppError('This redemption has already been confirmed.', 409, 'REDEMPTION_ALREADY_CONFIRMED');
     }
 
+    // The real guard against a double-confirm race is confirmRedemption's own
+    // conditional WHERE (redemptionConfirmedAt IS NULL), not the read above --
+    // two concurrent requests can both pass that read before either writes.
+    // "Not found" was already ruled out by the transaction/account lookups
+    // above, so undefined here can only mean another request won the race.
     const confirmed = await repos.loyaltyTransactions.confirmRedemption(transaction.id);
     if (!confirmed) {
-      throw new AppError('Redemption code not found.', 404, 'REDEMPTION_NOT_FOUND');
+      throw new AppError('This redemption has already been confirmed.', 409, 'REDEMPTION_ALREADY_CONFIRMED');
     }
     return confirmed;
   }

@@ -1,4 +1,4 @@
-import { eq, and, desc } from 'drizzle-orm';
+import { eq, and, desc, isNull } from 'drizzle-orm';
 import { loyaltyTransactions } from '../db/schema';
 import { BaseRepository } from './base.repository';
 
@@ -33,11 +33,19 @@ export class LoyaltyTransactionRepository extends BaseRepository {
     });
   }
 
+  /** WHERE guards on `redemptionConfirmedAt IS NULL` so this is the actual
+   * source of truth for "did THIS call win the confirmation," not a
+   * check-then-act race against a value read earlier -- two concurrent
+   * confirms of the same code must not both succeed and hand out the reward
+   * twice. Returns undefined for "already confirmed" exactly the same as
+   * "doesn't exist"; the caller (LoyaltyRedemptionService.confirmRedemption)
+   * has already ruled out "doesn't exist" via a preceding lookup, so it
+   * attributes undefined here to a lost race. */
   async confirmRedemption(id: string): Promise<LoyaltyTransaction | undefined> {
     const [row] = await this.db
       .update(loyaltyTransactions)
       .set({ redemptionConfirmedAt: new Date() })
-      .where(and(eq(loyaltyTransactions.id, id)))
+      .where(and(eq(loyaltyTransactions.id, id), isNull(loyaltyTransactions.redemptionConfirmedAt)))
       .returning();
     return row;
   }

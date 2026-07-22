@@ -47,6 +47,12 @@ function createFakeRepos() {
         const user = users.get(id);
         if (user) user.lastLoginAt = new Date();
       },
+      async update(id: string, patch: Partial<User>, _updatedBy: string) {
+        const user = users.get(id);
+        if (!user) return undefined;
+        Object.assign(user, patch);
+        return user;
+      },
     },
     refreshTokens: {
       async create(input: NewRefreshToken): Promise<RefreshToken> {
@@ -170,6 +176,20 @@ describe('AuthService', () => {
 
     await expect(service.refresh(second.refreshToken)).resolves.toMatchObject({
       accessToken: expect.any(String),
+    });
+  });
+
+  it('refresh rejects a valid token once the account is deactivated -- a suspended user cannot keep renewing an existing session', async () => {
+    const tokens = await service.signup({
+      email: 'deactivated@example.com',
+      password: 'password-123',
+      fullName: 'D',
+    });
+    const user = await repos.users.findByEmail('deactivated@example.com');
+    await repos.users.update(user!.id, { status: 'suspended' }, user!.id);
+
+    await expect(service.refresh(tokens.refreshToken)).rejects.toMatchObject({
+      code: 'ACCOUNT_INACTIVE',
     });
   });
 
