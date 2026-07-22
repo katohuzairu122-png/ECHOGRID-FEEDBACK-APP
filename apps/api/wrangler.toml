@@ -47,7 +47,7 @@ required = [
 #   npx wrangler hyperdrive create echo-grid-feedback-db --connection-string="postgresql://..."
 [[hyperdrive]]
 binding = "HYPERDRIVE"
-id = "<hyperdrive-id-from-wrangler-hyperdrive-create>"
+id = "542dd173d3d14d54ac66c0f1f69e5ff9"
 
 # Object storage for receipts, exports, and other business-uploaded files.
 # QR codes are rendered client-side from a token + known URL (no server-side
@@ -62,7 +62,7 @@ bucket_name = "echo-grid-feedback-uploads"
 #   npx wrangler kv namespace create CACHE
 [[kv_namespaces]]
 binding = "CACHE"
-id = "<kv-namespace-id-from-wrangler-kv-namespace-create>"
+id = "5cf62e12f7d940e2b70a0e453463ec90"
 
 # Async job queue (sentiment analysis, notifications, loyalty recalculation).
 # Consumer handler wired up in Sentiment Analytics Block 2 (src/index.ts's
