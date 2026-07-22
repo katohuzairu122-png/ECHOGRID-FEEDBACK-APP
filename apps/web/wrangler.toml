@@ -3,6 +3,16 @@ main = ".open-next/worker.js"
 compatibility_date = "2026-07-08"
 compatibility_flags = ["nodejs_compat"]
 
+# OpenNext's Cloudflare adapter maps [vars] into process.env at runtime, same
+# as apps/api's own [vars] block -- api-client.ts reads this via
+# `process.env.API_BASE_URL`. Without it the deployed Worker silently falls
+# back to api-client.ts's `http://localhost:8787` default, which is
+# unreachable from Cloudflare's edge and breaks every Server Action. Point
+# this at the deployed apps/api Worker's URL (or custom domain) before
+# deploying -- there is no working default for a real environment.
+[vars]
+API_BASE_URL = "http://localhost:8787"
+
 [assets]
 directory = ".open-next/assets"
 binding = "ASSETS"

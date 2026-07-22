@@ -157,10 +157,18 @@ guard, not a bug).
 API first, then web — the web app calls the API at build/runtime, so
 deploying API second would leave web briefly pointed at nothing new.
 
+**Before the web deploy**, set `apps/web/wrangler.toml`'s `[vars].API_BASE_URL`
+to the API Worker's real URL (from the `npx wrangler deploy` output below, or
+your custom domain) — see [SETUP.md#environment-variables](./SETUP.md#environment-variables).
+Left at its `http://localhost:8787` default, the deployed web Worker cannot
+reach the API at all.
+
 ```bash
 # API
 cd apps/api
 npx wrangler deploy
+# note the printed *.workers.dev URL (or your custom domain) --
+# apps/web/wrangler.toml's API_BASE_URL must point here
 
 # Web
 cd apps/web
