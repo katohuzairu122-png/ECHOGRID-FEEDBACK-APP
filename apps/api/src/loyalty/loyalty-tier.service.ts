@@ -1,11 +1,22 @@
 import type { Repositories, LoyaltyTier } from '../repositories';
 import { AppError } from '../lib/errors';
 
-export interface UpsertTierInput {
-  name?: string;
-  minPoints?: number;
-  benefits?: string;
-  sortOrder?: number;
+/** create()'s shape: name/minPoints required (matches createTierSchema),
+ * benefits/sortOrder optional. */
+export interface CreateTierInput {
+  name: string;
+  minPoints: number;
+  benefits?: string | undefined;
+  sortOrder?: number | undefined;
+}
+
+/** update()'s shape: every field optional (matches updateTierSchema, a
+ * `.partial()` of createTierSchema). */
+export interface UpdateTierInput {
+  name?: string | undefined;
+  minPoints?: number | undefined;
+  benefits?: string | undefined;
+  sortOrder?: number | undefined;
 }
 
 /**
@@ -21,7 +32,7 @@ export class LoyaltyTierService {
     return this.repos.loyaltyTiers.listForBusiness(businessId);
   }
 
-  async create(businessId: string, input: Required<Pick<UpsertTierInput, 'name' | 'minPoints'>> & UpsertTierInput, createdBy: string): Promise<LoyaltyTier> {
+  async create(businessId: string, input: CreateTierInput, createdBy: string): Promise<LoyaltyTier> {
     return this.repos.loyaltyTiers.create({
       businessId,
       name: input.name,
@@ -32,7 +43,7 @@ export class LoyaltyTierService {
     });
   }
 
-  async update(id: string, businessId: string, patch: UpsertTierInput, updatedBy: string): Promise<LoyaltyTier> {
+  async update(id: string, businessId: string, patch: UpdateTierInput, updatedBy: string): Promise<LoyaltyTier> {
     const tier = await this.repos.loyaltyTiers.update(id, businessId, patch, updatedBy);
     if (!tier) throw new AppError('Loyalty tier not found.', 404, 'LOYALTY_TIER_NOT_FOUND');
     return tier;

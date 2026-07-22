@@ -24,7 +24,7 @@ export class FeedbackSummaryRepository extends BaseRepository {
    */
   async listForBusiness(
     businessId: string,
-    options: { branchId?: string; periodType?: 'weekly' | 'monthly'; limit?: number; offset?: number } = {},
+    options: { branchId?: string | undefined; periodType?: 'weekly' | 'monthly' | undefined; limit?: number | undefined; offset?: number | undefined } = {},
   ): Promise<FeedbackSummary[]> {
     const limit = Math.min(options.limit ?? DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE);
     return this.db.query.feedbackSummaries.findMany({

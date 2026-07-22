@@ -1,6 +1,7 @@
 import { eq, and, or, ilike } from 'drizzle-orm';
 import { businesses } from '../db/schema';
 import { BaseRepository } from './base.repository';
+import type { Patch } from '../lib/types';
 
 export type Business = typeof businesses.$inferSelect;
 export type NewBusiness = typeof businesses.$inferInsert;
@@ -42,7 +43,7 @@ export class BusinessRepository extends BaseRepository {
    * and keeps seeing every business, unfiltered, exactly as before.
    */
   async list(
-    options: { search?: string; status?: BusinessStatus; limit?: number; offset?: number } = {},
+    options: { search?: string | undefined; status?: BusinessStatus | undefined; limit?: number | undefined; offset?: number | undefined } = {},
   ): Promise<Business[]> {
     const limit = Math.min(options.limit ?? DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE);
     const offset = options.offset ?? 0;
@@ -69,7 +70,7 @@ export class BusinessRepository extends BaseRepository {
 
   async update(
     id: string,
-    patch: Partial<Omit<NewBusiness, 'id'>>,
+    patch: Patch<Omit<NewBusiness, 'id'>>,
     updatedBy: string,
   ): Promise<Business | undefined> {
     const [row] = await this.db

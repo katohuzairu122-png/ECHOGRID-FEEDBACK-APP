@@ -1,6 +1,7 @@
 import { eq, and } from 'drizzle-orm';
 import { loyaltyRewards } from '../db/schema';
 import { BaseRepository } from './base.repository';
+import type { Patch } from '../lib/types';
 
 export type LoyaltyReward = typeof loyaltyRewards.$inferSelect;
 export type NewLoyaltyReward = typeof loyaltyRewards.$inferInsert;
@@ -42,7 +43,7 @@ export class LoyaltyRewardRepository extends BaseRepository {
   async update(
     id: string,
     businessId: string,
-    patch: Partial<Omit<NewLoyaltyReward, 'id' | 'businessId'>>,
+    patch: Patch<Omit<NewLoyaltyReward, 'id' | 'businessId'>>,
     updatedBy: string,
   ): Promise<LoyaltyReward | undefined> {
     const [row] = await this.db

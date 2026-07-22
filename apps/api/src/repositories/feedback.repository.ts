@@ -33,7 +33,7 @@ export class FeedbackRepository extends BaseRepository {
 
   async listForBusiness(
     businessId: string,
-    options: { branchId?: string; limit?: number; offset?: number } = {},
+    options: { branchId?: string | undefined; limit?: number | undefined; offset?: number | undefined } = {},
   ): Promise<Feedback[]> {
     const limit = Math.min(options.limit ?? DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE);
     const offset = options.offset ?? 0;
@@ -113,7 +113,7 @@ export class FeedbackRepository extends BaseRepository {
    * why this is capped even though callers pass an explicit date range. */
   async listForPeriod(
     businessId: string,
-    options: { branchId?: string; from: Date; to: Date },
+    options: { branchId?: string | undefined; from: Date; to: Date },
   ): Promise<Feedback[]> {
     return this.db.query.feedback.findMany({
       where: and(
@@ -137,14 +137,14 @@ export class FeedbackRepository extends BaseRepository {
   async search(
     businessId: string,
     options: {
-      branchId?: string;
-      sentiment?: 'positive' | 'neutral' | 'negative';
-      rating?: number;
-      keyword?: string;
-      from?: Date;
-      to?: Date;
-      limit?: number;
-      offset?: number;
+      branchId?: string | undefined;
+      sentiment?: 'positive' | 'neutral' | 'negative' | undefined;
+      rating?: number | undefined;
+      keyword?: string | undefined;
+      from?: Date | undefined;
+      to?: Date | undefined;
+      limit?: number | undefined;
+      offset?: number | undefined;
     } = {},
   ): Promise<Feedback[]> {
     const limit = Math.min(options.limit ?? DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE);
@@ -174,7 +174,7 @@ export class FeedbackRepository extends BaseRepository {
    */
   async sentimentTrend(
     businessId: string,
-    options: { branchId?: string; from: Date; to: Date },
+    options: { branchId?: string | undefined; from: Date; to: Date },
   ): Promise<SentimentTrendBucket[]> {
     const rows = await this.db
       .select({

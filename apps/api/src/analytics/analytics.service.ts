@@ -12,8 +12,8 @@ const DEFAULT_RANGE_DAYS = 30;
 const MAX_RANGE_DAYS = 366;
 
 export interface DateRangeInput {
-  from?: string;
-  to?: string;
+  from?: string | undefined;
+  to?: string | undefined;
 }
 
 function resolveRange({ from, to }: DateRangeInput): { from: Date; to: Date } {
@@ -46,7 +46,7 @@ export class AnalyticsService {
 
   async trend(
     businessId: string,
-    options: { branchId?: string } & DateRangeInput,
+    options: { branchId?: string | undefined } & DateRangeInput,
   ): Promise<SentimentTrendBucket[]> {
     const { from, to } = resolveRange(options);
     return this.repos.feedback.sentimentTrend(businessId, { branchId: options.branchId, from, to });
@@ -55,12 +55,12 @@ export class AnalyticsService {
   async search(
     businessId: string,
     options: {
-      branchId?: string;
-      sentiment?: 'positive' | 'neutral' | 'negative';
-      rating?: number;
-      keyword?: string;
-      limit?: number;
-      offset?: number;
+      branchId?: string | undefined;
+      sentiment?: 'positive' | 'neutral' | 'negative' | undefined;
+      rating?: number | undefined;
+      keyword?: string | undefined;
+      limit?: number | undefined;
+      offset?: number | undefined;
     } & DateRangeInput,
   ): Promise<Feedback[]> {
     const { from, to } = resolveRange(options);
@@ -69,7 +69,7 @@ export class AnalyticsService {
 
   async listSummaries(
     businessId: string,
-    options: { branchId?: string; periodType?: 'weekly' | 'monthly'; limit?: number; offset?: number } = {},
+    options: { branchId?: string | undefined; periodType?: 'weekly' | 'monthly' | undefined; limit?: number | undefined; offset?: number | undefined } = {},
   ): Promise<FeedbackSummary[]> {
     return this.repos.feedbackSummaries.listForBusiness(businessId, options);
   }

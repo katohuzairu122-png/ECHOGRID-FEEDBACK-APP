@@ -6,7 +6,7 @@ import { AppError } from '../lib/errors';
 
 export interface GenerateSummaryOptions {
   businessId: string;
-  branchId?: string;
+  branchId?: string | undefined;
   periodType: 'weekly' | 'monthly';
   periodStart: Date;
   periodEnd: Date;

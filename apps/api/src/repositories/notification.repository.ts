@@ -39,7 +39,7 @@ export class NotificationRepository extends BaseRepository {
 
   async listForBusiness(
     businessId: string,
-    options: { limit?: number; offset?: number } = {},
+    options: { limit?: number | undefined; offset?: number | undefined } = {},
   ): Promise<Notification[]> {
     const limit = Math.min(options.limit ?? DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE);
     return this.db.query.notifications.findMany({

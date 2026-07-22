@@ -82,7 +82,7 @@ function createFakeRepos() {
  * for, but ConsoleSmsService already exists for dev; this fake exists so
  * the test can read the code back and complete a full request-then-verify
  * cycle without parsing console output. */
-function createFakeSmsService(): SmsService & { lastMessage?: string; lastPhone?: string } {
+function createFakeSmsService(): SmsService & { lastMessage?: string | undefined; lastPhone?: string | undefined } {
   const fake = {
     lastMessage: undefined as string | undefined,
     lastPhone: undefined as string | undefined,

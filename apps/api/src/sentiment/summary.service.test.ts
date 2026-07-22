@@ -48,7 +48,7 @@ function fakeGenerator(): SummaryGenerator {
   };
 }
 
-function createFakeRepos(options: { items: Feedback[]; business: Business; branch?: Branch }) {
+function createFakeRepos(options: { items: Feedback[]; business: Business; branch?: Branch | undefined }) {
   const created: unknown[] = [];
   return {
     feedback: {

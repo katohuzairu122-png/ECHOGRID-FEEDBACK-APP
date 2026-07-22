@@ -14,7 +14,7 @@ export class LoyaltyTransactionRepository extends BaseRepository {
 
   async listForAccount(
     loyaltyAccountId: string,
-    options: { limit?: number; offset?: number } = {},
+    options: { limit?: number | undefined; offset?: number | undefined } = {},
   ): Promise<LoyaltyTransaction[]> {
     return this.db.query.loyaltyTransactions.findMany({
       where: eq(loyaltyTransactions.loyaltyAccountId, loyaltyAccountId),

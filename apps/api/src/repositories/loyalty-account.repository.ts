@@ -51,7 +51,7 @@ export class LoyaltyAccountRepository extends BaseRepository {
    * this file stays on the plain LoyaltyAccount shape. */
   async listForBusiness(
     businessId: string,
-    options: { limit?: number; offset?: number } = {},
+    options: { limit?: number | undefined; offset?: number | undefined } = {},
   ): Promise<LoyaltyAccountWithCustomer[]> {
     return this.db.query.loyaltyAccounts.findMany({
       where: and(eq(loyaltyAccounts.businessId, businessId), eq(loyaltyAccounts.isDeleted, false)),
@@ -79,7 +79,7 @@ export class LoyaltyAccountRepository extends BaseRepository {
   async applyPointsDelta(
     id: string,
     pointsDelta: number,
-    options: { recordVisit?: boolean; tierId?: string | null } = {},
+    options: { recordVisit?: boolean | undefined; tierId?: string | null | undefined } = {},
   ): Promise<LoyaltyAccount> {
     const [row] = await this.db
       .update(loyaltyAccounts)

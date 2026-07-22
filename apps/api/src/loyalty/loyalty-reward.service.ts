@@ -1,11 +1,21 @@
 import type { Repositories, LoyaltyReward } from '../repositories';
 import { AppError } from '../lib/errors';
 
-export interface UpsertRewardInput {
-  name?: string;
-  description?: string;
-  pointsCost?: number;
-  status?: 'active' | 'inactive';
+/** create()'s shape: name/pointsCost required (matches createRewardSchema),
+ * description optional. */
+export interface CreateRewardInput {
+  name: string;
+  pointsCost: number;
+  description?: string | undefined;
+}
+
+/** update()'s shape: every field optional (matches updateRewardSchema, a
+ * `.partial()` of createRewardSchema plus `status`). */
+export interface UpdateRewardInput {
+  name?: string | undefined;
+  description?: string | undefined;
+  pointsCost?: number | undefined;
+  status?: 'active' | 'inactive' | undefined;
 }
 
 /** Reward catalog configuration (rewards:manage) -- mirrors LoyaltyTierService's shape. */
@@ -20,7 +30,7 @@ export class LoyaltyRewardService {
 
   async create(
     businessId: string,
-    input: Required<Pick<UpsertRewardInput, 'name' | 'pointsCost'>> & UpsertRewardInput,
+    input: CreateRewardInput,
     createdBy: string,
   ): Promise<LoyaltyReward> {
     return this.repos.loyaltyRewards.create({
@@ -35,7 +45,7 @@ export class LoyaltyRewardService {
   async update(
     id: string,
     businessId: string,
-    patch: UpsertRewardInput,
+    patch: UpdateRewardInput,
     updatedBy: string,
   ): Promise<LoyaltyReward> {
     const reward = await this.repos.loyaltyRewards.update(id, businessId, patch, updatedBy);

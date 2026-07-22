@@ -161,7 +161,7 @@ export class NotificationService {
     return result;
   }
 
-  private async resolveAddress(recipient: NotifyRecipient): Promise<{ email?: string; phone?: string }> {
+  private async resolveAddress(recipient: NotifyRecipient): Promise<{ email?: string | undefined; phone?: string | undefined }> {
     if (recipient.userId) {
       const user = await this.repos.users.findById(recipient.userId);
       return { email: user?.email, phone: user?.phone ?? undefined };

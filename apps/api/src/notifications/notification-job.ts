@@ -21,13 +21,13 @@ import type { NotificationChannel, NotificationEventType } from '@echo-grid-feed
 export interface SendNotificationJob {
   type: 'send_notification';
   businessId: string;
-  userId?: string;
-  customerId?: string;
+  userId?: string | undefined;
+  customerId?: string | undefined;
   eventType: NotificationEventType;
   channel: NotificationChannel;
   recipientAddress: string;
   /** Email only -- omitted for SMS, which has no subject line. */
-  subject?: string;
+  subject?: string | undefined;
   body: string;
 }
 

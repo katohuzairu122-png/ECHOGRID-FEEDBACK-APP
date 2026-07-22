@@ -7,7 +7,7 @@
  * with each other by construction.
  */
 export type NotificationTemplateData =
-  | { eventType: 'feedback_received'; businessName: string; branchName: string; rating: number; comment?: string }
+  | { eventType: 'feedback_received'; businessName: string; branchName: string; rating: number; comment?: string | undefined }
   | { eventType: 'summary_ready'; businessName: string; periodLabel: string }
   | {
       eventType: 'redemption_pending';

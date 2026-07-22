@@ -97,8 +97,8 @@ export class BusinessSubscriptionRepository extends BaseRepository {
    * contrast with the audit log entry's genuinely-nullable equivalents.
    */
   async listAllWithDetails(
-    filters: { status?: string } = {},
-    pagination: { limit?: number; offset?: number } = {},
+    filters: { status?: string | undefined } = {},
+    pagination: { limit?: number | undefined; offset?: number | undefined } = {},
   ): Promise<BusinessSubscriptionWithDetails[]> {
     const limit = Math.min(pagination.limit ?? DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE);
     const rows = await this.db.query.businessSubscriptions.findMany({

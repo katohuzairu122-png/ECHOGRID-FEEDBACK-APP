@@ -1,6 +1,7 @@
 import { eq, or, and, ne } from 'drizzle-orm';
 import { subscriptionPlans } from '../db/schema';
 import { BaseRepository } from './base.repository';
+import type { Patch } from '../lib/types';
 
 export type SubscriptionPlan = typeof subscriptionPlans.$inferSelect;
 export type NewSubscriptionPlan = typeof subscriptionPlans.$inferInsert;
@@ -115,7 +116,7 @@ export class SubscriptionPlanRepository extends BaseRepository {
    */
   async update(
     id: string,
-    patch: Partial<Omit<NewSubscriptionPlan, 'id' | 'key'>>,
+    patch: Patch<Omit<NewSubscriptionPlan, 'id' | 'key'>>,
     updatedBy: string,
   ): Promise<SubscriptionPlan | undefined> {
     if (patch.isDefaultTrial) {

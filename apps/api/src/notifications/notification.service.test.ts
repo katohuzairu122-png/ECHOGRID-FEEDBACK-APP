@@ -36,7 +36,7 @@ interface FakeRepoOptions {
   customer?: Partial<Customer> | null;
   /** The one preference row findOne() should resolve to -- undefined (the
    * default) exercises the "no row = enabled" rule. */
-  preference?: NotificationPreference;
+  preference?: NotificationPreference | undefined;
   existingPreferences?: NotificationPreference[];
   smsSentToday?: number;
   grants?: UserBusinessRole[];

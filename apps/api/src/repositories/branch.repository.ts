@@ -1,6 +1,7 @@
 import { eq, and } from 'drizzle-orm';
 import { branches } from '../db/schema';
 import { BaseRepository } from './base.repository';
+import type { Patch } from '../lib/types';
 
 export type Branch = typeof branches.$inferSelect;
 export type NewBranch = typeof branches.$inferInsert;
@@ -35,7 +36,7 @@ export class BranchRepository extends BaseRepository {
 
   async listByBusiness(
     businessId: string,
-    options: { limit?: number; offset?: number } = {},
+    options: { limit?: number | undefined; offset?: number | undefined } = {},
   ): Promise<Branch[]> {
     const limit = Math.min(options.limit ?? DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE);
     const offset = options.offset ?? 0;
@@ -56,7 +57,7 @@ export class BranchRepository extends BaseRepository {
   async update(
     id: string,
     businessId: string,
-    patch: Partial<Omit<NewBranch, 'id' | 'businessId'>>,
+    patch: Patch<Omit<NewBranch, 'id' | 'businessId'>>,
     updatedBy: string,
   ): Promise<Branch | undefined> {
     const [row] = await this.db
