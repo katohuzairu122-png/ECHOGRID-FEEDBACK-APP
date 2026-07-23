@@ -11,7 +11,7 @@ compatibility_flags = ["nodejs_compat"]
 # this at the deployed apps/api Worker's URL (or custom domain) before
 # deploying -- there is no working default for a real environment.
 [vars]
-API_BASE_URL = "http://localhost:8787"
+API_BASE_URL = "https://echo-grid-feedback-api.katohuzairu122.workers.dev"
 
 [assets]
 directory = ".open-next/assets"
