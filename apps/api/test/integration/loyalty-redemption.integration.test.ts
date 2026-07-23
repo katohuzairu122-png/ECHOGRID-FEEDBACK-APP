@@ -5,6 +5,11 @@ import { createRepositories } from '../../src/repositories';
 import { LoyaltyAccountService } from '../../src/loyalty/loyalty-account.service';
 import { LoyaltyRedemptionService } from '../../src/loyalty/loyalty-redemption.service';
 
+// createdBy/actor columns are `uuid` at the schema level -- a placeholder
+// string like STAFF_ACTOR_ID fails at the database, not just in spirit; these
+// tests don't assert on the actor's identity, only that one is recorded.
+const STAFF_ACTOR_ID = crypto.randomUUID();
+
 /**
  * LoyaltyRedemptionService, like LoyaltyAccountService, owns its own
  * transaction (deducting points + writing the ledger row atomically), so
@@ -47,7 +52,7 @@ describe.skipIf(!process.env.DATABASE_URL)('LoyaltyRedemptionService (integratio
     customerId = customer.id;
 
     const account = await accountService.enroll({ customerId, businessId: businessA });
-    await accountService.adjustPoints(businessA, account.id, 500, 'seed points for redemption test', 'staff-actor');
+    await accountService.adjustPoints(businessA, account.id, 500, 'seed points for redemption test', STAFF_ACTOR_ID);
 
     const reward = await repos.loyaltyRewards.create({
       businessId: businessA,
@@ -91,7 +96,7 @@ describe.skipIf(!process.env.DATABASE_URL)('LoyaltyRedemptionService (integratio
       name: 'Soon to be retired',
       pointsCost: 10,
     });
-    await repos.loyaltyRewards.update(reward.id, businessA, { status: 'inactive' }, 'staff-actor');
+    await repos.loyaltyRewards.update(reward.id, businessA, { status: 'inactive' }, STAFF_ACTOR_ID);
 
     await expect(redemptionService.redeem(customerId, businessA, reward.id)).rejects.toMatchObject({
       code: 'LOYALTY_REWARD_NOT_FOUND',

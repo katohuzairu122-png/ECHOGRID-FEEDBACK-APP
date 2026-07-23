@@ -48,7 +48,12 @@ required = [
 [[hyperdrive]]
 binding = "HYPERDRIVE"
 id = "542dd173d3d14d54ac66c0f1f69e5ff9"
-
+# Do NOT add `localConnectionString` here -- this file is tracked by git and
+# already pushed to GitHub. It is not needed for migrations or integration
+# tests (those connect directly via DATABASE_URL from apps/api/.env, never
+# through Hyperdrive). It is only used by `wrangler dev` to proxy Hyperdrive
+# locally; if that's ever needed, set it via a local, gitignored mechanism
+# (.dev.vars or a shell env var), never by editing this file.
 # Object storage for receipts, exports, and other business-uploaded files.
 # QR codes are rendered client-side from a token + known URL (no server-side
 # image generation/storage -- see README's QR Engagement section), so this

@@ -4,6 +4,11 @@ import { buildDb } from '../../src/db/client';
 import { createRepositories } from '../../src/repositories';
 import { LoyaltyAccountService } from '../../src/loyalty/loyalty-account.service';
 
+// createdBy/actor columns are `uuid` at the schema level -- a placeholder
+// string like 'staff-actor' fails at the database, not just in spirit; these
+// tests don't assert on the actor's identity, only that one is recorded.
+const STAFF_ACTOR_ID = crypto.randomUUID();
+
 /**
  * LoyaltyAccountService takes the raw Database (not injected repos) because
  * every earning method needs a real transaction spanning the points update,
@@ -73,9 +78,15 @@ describe.skipIf(!process.env.DATABASE_URL)('LoyaltyAccountService points engine 
   });
 
   it('recordCheckin on an already-enrolled customer increments the SAME account, not a duplicate', async () => {
+    // A distinct `type` from the previous test's QR code -- qr_codes has an
+    // active-uniqueness constraint per (branch_id, type) (see
+    // qr-code-active-uniqueness.integration.test.ts), so a second 'feedback'
+    // QR for the same branch while the first is still active would violate it.
+    // recordCheckin doesn't care about type; only that it's a valid active code.
     const qrCode = await repos.qrCodes.create({
       businessId,
       branchId,
+      type: 'loyalty',
       token: `checkin-test-2-${crypto.randomUUID()}`,
     });
 
@@ -95,7 +106,7 @@ describe.skipIf(!process.env.DATABASE_URL)('LoyaltyAccountService points engine 
     const before = account!.points;
 
     // Default pointsPerCurrencyUnit is 1.00 -> $19.99 floors to 19 points.
-    const updated = await service.recordPurchase(businessId, account!.id, 19.99, 'staff-actor');
+    const updated = await service.recordPurchase(businessId, account!.id, 19.99, STAFF_ACTOR_ID);
 
     expect(updated.points).toBe(before + 19);
   });
@@ -103,7 +114,7 @@ describe.skipIf(!process.env.DATABASE_URL)('LoyaltyAccountService points engine 
   it('adjustPoints rejects an adjustment that would drop the balance below zero', async () => {
     const account = await repos.loyaltyAccounts.findByCustomerAndBusiness(customerId, businessId);
     await expect(
-      service.adjustPoints(businessId, account!.id, -(account!.points + 1000), 'oops', 'staff-actor'),
+      service.adjustPoints(businessId, account!.id, -(account!.points + 1000), 'oops', STAFF_ACTOR_ID),
     ).rejects.toMatchObject({ code: 'INSUFFICIENT_POINTS', status: 422 });
 
     // Confirms the rejected adjustment did NOT partially apply -- the whole
@@ -122,7 +133,7 @@ describe.skipIf(!process.env.DATABASE_URL)('LoyaltyAccountService points engine 
       account!.id,
       200 - account!.points,
       'test bump to Gold',
-      'staff-actor',
+      STAFF_ACTOR_ID,
     );
 
     const goldTier = (await repos.loyaltyTiers.listForBusiness(businessId)).find((t) => t.name === 'Gold');
