@@ -12,6 +12,20 @@ compatibility_flags = ["nodejs_compat"]
 # deploying -- there is no working default for a real environment.
 [vars]
 API_BASE_URL = "https://echo-grid-feedback-api.katohuzairu122.workers.dev"
+# TEMPORARY WORKAROUND for a confirmed open upstream bug: Next.js's
+# getMiddlewareManifest() dynamic-requires middleware-manifest.json, which
+# Workers' runtime doesn't support -- every route 500'd until this was set.
+# https://github.com/opennextjs/opennextjs-cloudflare/issues/1232 (open as of
+# 2026-07-23). This forces Next.js into minimal mode, which skips src/
+# middleware.ts entirely. Verified safe: every protected layout
+# (dashboard/platform/loyalty) already does its own independent
+# hasSession()/redirect() check server-side, and the API's own auth/RBAC is
+# unaffected -- the only loss is middleware's instant edge-redirect (a UX
+# nicety that avoided one render before redirecting), not a security
+# boundary. Remove this once the upstream issue is fixed and middleware.ts's
+# behavior (esp. the /login-when-already-authenticated redirect) is
+# confirmed still working without it.
+NEXT_PRIVATE_MINIMAL_MODE = "1"
 
 [assets]
 directory = ".open-next/assets"
