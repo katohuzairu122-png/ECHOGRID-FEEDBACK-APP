@@ -5,6 +5,7 @@ import { hasSession } from '@/lib/session';
 import { getCurrentUser } from '@/lib/platform';
 import { buttonVariants } from '@/components/ui';
 import { cn } from '@/lib/utils';
+import { AppFooter } from '@/components/brand';
 import { PlatformNav } from './platform-nav';
 
 /**
@@ -47,6 +48,7 @@ export default async function PlatformLayout({ children }: { children: React.Rea
     <div className="min-h-screen bg-neutral-50">
       <PlatformNav role={user.platformRole} />
       <main className="mx-auto max-w-5xl px-6 py-8">{children}</main>
+      <AppFooter />
     </div>
   );
 }

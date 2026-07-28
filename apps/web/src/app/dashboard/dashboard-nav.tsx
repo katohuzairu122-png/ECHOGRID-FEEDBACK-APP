@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { getTranslations } from 'next-intl/server';
 import { logoutAction } from '@/lib/actions/auth';
 import { Button } from '@/components/ui';
+import { Logo } from '@/components/brand';
 
 /**
  * Server Component -- async only because getTranslations() is (i18n &
@@ -24,8 +25,8 @@ export async function DashboardNav() {
     <header className="border-b border-neutral-200 bg-white">
       <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-4">
         <div className="flex items-center gap-6">
-          <Link href="/dashboard" className="text-lg font-semibold text-neutral-900">
-            Echo Grid Feedback
+          <Link href="/dashboard" aria-label="Echo Grid dashboard home">
+            <Logo variant="horizontal" iconSize={28} />
           </Link>
           <nav className="flex items-center gap-4">
             <Link

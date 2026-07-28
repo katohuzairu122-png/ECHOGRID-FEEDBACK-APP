@@ -1,7 +1,12 @@
 name = "echo-grid-feedback-web"
 main = ".open-next/worker.js"
 compatibility_date = "2026-07-08"
-compatibility_flags = ["nodejs_compat"]
+# global_fetch_strictly_public: without it, Server Actions here calling
+# apps/api (a separate *.workers.dev subdomain) throw Cloudflare error 1042
+# -- workers.dev subdomains are treated as "private" for Worker-to-Worker
+# fetches by default. Needed on both this Worker and apps/api's until a
+# custom domain replaces workers.dev for both.
+compatibility_flags = ["nodejs_compat", "global_fetch_strictly_public"]
 
 # OpenNext's Cloudflare adapter maps [vars] into process.env at runtime, same
 # as apps/api's own [vars] block -- api-client.ts reads this via
@@ -12,6 +17,10 @@ compatibility_flags = ["nodejs_compat"]
 # deploying -- there is no working default for a real environment.
 [vars]
 API_BASE_URL = "https://echo-grid-feedback-api.katohuzairu122.workers.dev"
+# This Worker's own public URL -- used by metadataBase/robots.ts/sitemap.ts
+# for absolute URLs (lib/app-url.ts). Update alongside API_BASE_URL once
+# echogrid.uk replaces this workers.dev URL.
+APP_URL = "https://echo-grid-feedback-web.katohuzairu122.workers.dev"
 # TEMPORARY WORKAROUND for a confirmed open upstream bug: Next.js's
 # getMiddlewareManifest() dynamic-requires middleware-manifest.json, which
 # Workers' runtime doesn't support -- every route 500'd until this was set.

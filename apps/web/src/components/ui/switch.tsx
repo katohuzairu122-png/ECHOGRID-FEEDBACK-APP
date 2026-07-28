@@ -37,7 +37,7 @@ export const Switch = React.forwardRef<HTMLInputElement, SwitchProps>(
           'absolute inset-0 rounded-full bg-neutral-300 transition-colors',
           'peer-checked:bg-brand-600',
           'peer-focus-visible:outline peer-focus-visible:outline-2',
-          'peer-focus-visible:outline-offset-2 peer-focus-visible:outline-brand-500',
+          'peer-focus-visible:outline-offset-2 peer-focus-visible:outline-brand-600',
           'peer-disabled:cursor-not-allowed peer-disabled:opacity-50',
         )}
       />

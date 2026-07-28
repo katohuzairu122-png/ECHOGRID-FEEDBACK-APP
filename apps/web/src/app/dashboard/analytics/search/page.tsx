@@ -100,7 +100,7 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <Link href="/dashboard/analytics" className="text-sm font-medium text-brand-600 hover:underline">
+        <Link href="/dashboard/analytics" className="text-sm font-medium text-brand-700 hover:underline">
           {t('backToOverview')}
         </Link>
         <h1 className="mt-1 text-2xl font-semibold text-neutral-900">{t('title')}</h1>
@@ -166,7 +166,7 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
           {offset > 0 && (
             <Link
               href={pageHref(Math.max(0, offset - PAGE_SIZE))}
-              className="text-sm font-medium text-brand-600 hover:underline"
+              className="text-sm font-medium text-brand-700 hover:underline"
             >
               {t('newer')}
             </Link>
@@ -174,7 +174,7 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
           {hasMore && (
             <Link
               href={pageHref(offset + PAGE_SIZE)}
-              className="text-sm font-medium text-brand-600 hover:underline"
+              className="text-sm font-medium text-brand-700 hover:underline"
             >
               {t('older')}
             </Link>

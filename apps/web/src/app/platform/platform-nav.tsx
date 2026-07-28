@@ -3,6 +3,7 @@ import { getTranslations } from 'next-intl/server';
 import type { CurrentUserDto } from '@echo-grid-feedback/shared-types';
 import { logoutAction } from '@/lib/actions/auth';
 import { Badge, Button } from '@/components/ui';
+import { Logo } from '@/components/brand';
 
 type PlatformRole = NonNullable<CurrentUserDto['platformRole']>;
 
@@ -39,9 +40,10 @@ export async function PlatformNav({ role }: PlatformNavProps) {
       <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-4">
         <div className="flex items-center gap-6">
           <div className="flex items-center gap-3">
-            <Link href="/platform" className="text-lg font-semibold text-neutral-900">
-              {t('brand')}
+            <Link href="/platform" aria-label="Echo Grid platform admin home">
+              <Logo variant="horizontal" iconSize={28} />
             </Link>
+            <span className="text-sm font-medium text-neutral-500">{t('brand')}</span>
             <Badge variant="accent">{t(ROLE_LABEL_KEYS[role])}</Badge>
           </div>
           <nav className="flex items-center gap-4">

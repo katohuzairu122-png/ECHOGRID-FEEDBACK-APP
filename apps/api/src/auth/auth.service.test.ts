@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { AuthService, AuthError } from './auth.service';
+import { createDirectPbkdf2Worker } from './pbkdf2-worker';
 import type { User, NewUser } from '../repositories/user.repository';
 import type { RefreshToken, NewRefreshToken } from '../repositories/refresh-token.repository';
 
@@ -105,6 +106,7 @@ describe('AuthService', () => {
     service = new AuthService(
       repos as unknown as ConstructorParameters<typeof AuthService>[0],
       SECRETS,
+      createDirectPbkdf2Worker(),
     );
   });
 

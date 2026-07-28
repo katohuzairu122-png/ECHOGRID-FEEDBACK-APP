@@ -1,5 +1,6 @@
 {
-  "appName": "Echo Grid Feedback",
+  "appName": "Echo Grid",
+  "tagline": "Chaque voix guide de meilleures décisions.",
   "actions": {
     "save": "Enregistrer",
     "cancel": "Annuler",

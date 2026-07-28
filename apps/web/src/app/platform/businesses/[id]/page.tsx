@@ -67,7 +67,7 @@ export default async function BusinessDetailPage({ params }: BusinessDetailPageP
       <div>
         <Link
           href="/platform/businesses"
-          className="text-sm font-medium text-brand-600 hover:underline"
+          className="text-sm font-medium text-brand-700 hover:underline"
         >
           {t('backToDirectory')}
         </Link>
@@ -143,7 +143,7 @@ export default async function BusinessDetailPage({ params }: BusinessDetailPageP
 
       <Link
         href={`/platform/audit-log?businessId=${business.id}`}
-        className="text-sm font-medium text-brand-600 hover:underline"
+        className="text-sm font-medium text-brand-700 hover:underline"
       >
         {t('viewAuditLog')}
       </Link>

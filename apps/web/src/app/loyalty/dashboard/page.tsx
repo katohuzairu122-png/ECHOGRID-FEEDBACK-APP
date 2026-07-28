@@ -49,7 +49,7 @@ export default async function LoyaltyCustomerDashboardPage() {
                       {t('visits', { count: account.visitCount })}
                     </p>
                   </div>
-                  <p className="text-xl font-semibold text-brand-600">{account.points} pts</p>
+                  <p className="text-xl font-semibold text-brand-700">{account.points} pts</p>
                 </CardContent>
               </Card>
             </Link>

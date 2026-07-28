@@ -14,7 +14,36 @@ const STAFF_AUTH_PATHS = ['/login', '/signup'];
 // no staff refresh token. That bug had gone unnoticed because the QR
 // Engagement E2E suite runs against the API/pages directly, not through
 // this middleware.
-const PUBLIC_PATHS = ['/feedback', '/loyalty', ...STAFF_AUTH_PATHS];
+// Next.js file-convention metadata/asset routes (Echo Grid brand
+// implementation, Phase 4) -- these are fetched anonymously by browsers
+// (favicon/manifest, before any session exists) and by crawlers/social
+// scrapers (robots.txt, sitemap.xml, OG/Twitter images), never carrying the
+// staff refresh-token cookie. Without this, every one of them 307-redirected
+// to /login instead of serving the actual asset -- caught by hitting them
+// directly against the local dev server during Phase 9 verification.
+const METADATA_ASSET_PATHS = [
+  '/icon',
+  '/apple-icon',
+  '/opengraph-image',
+  '/twitter-image',
+  '/manifest.webmanifest',
+  '/robots.txt',
+  '/sitemap.xml',
+];
+const PUBLIC_PATHS = ['/feedback', '/loyalty', ...STAFF_AUTH_PATHS, ...METADATA_ASSET_PATHS];
+// The root route is the public landing page as of the Echo Grid rebrand
+// (previously an unconditional redirect to /dashboard, which is why this
+// wasn't needed before). Checked by EXACT match below, never added to
+// PUBLIC_PATHS itself -- every entry there is prefix-matched
+// (`startsWith`), and '/' is a prefix of literally every pathname, which
+// would make the whole app public. page.tsx already redirects an
+// authenticated visitor from '/' to '/dashboard' on its own (the same
+// "every protected route re-verifies its own session" pattern this app
+// uses everywhere else, not just an artifact of NEXT_PRIVATE_MINIMAL_MODE
+// currently skipping this file in production -- see wrangler.toml), so
+// this only needs to stop middleware force-redirecting a signed-out
+// visitor away from it.
+const ROOT_PATH = '/';
 
 /**
  * Presence-only gate, not a validity check -- redirects to /login if the
@@ -29,7 +58,7 @@ const PUBLIC_PATHS = ['/feedback', '/loyalty', ...STAFF_AUTH_PATHS];
  */
 export function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
-  const isPublicPath = PUBLIC_PATHS.some((path) => pathname.startsWith(path));
+  const isPublicPath = pathname === ROOT_PATH || PUBLIC_PATHS.some((path) => pathname.startsWith(path));
   const isStaffAuthPath = STAFF_AUTH_PATHS.some((path) => pathname.startsWith(path));
   const hasRefreshToken = request.cookies.has(REFRESH_TOKEN_COOKIE);
 

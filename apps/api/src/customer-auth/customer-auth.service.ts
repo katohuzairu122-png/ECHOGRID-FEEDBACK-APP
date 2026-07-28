@@ -1,6 +1,7 @@
 import type { Repositories } from '../repositories';
 import type { Bindings } from '../config/env';
 import { AppError } from '../lib/errors';
+import type { Pbkdf2Worker } from '../auth/pbkdf2-worker';
 import type { SmsService } from './sms.service';
 import {
   generateOtpCode,
@@ -48,6 +49,7 @@ export class CustomerAuthService {
     private readonly repos: Pick<Repositories, 'customers' | 'otpCodes'>,
     private readonly sms: SmsService,
     private readonly secrets: Pick<Bindings, 'CUSTOMER_JWT_SECRET'>,
+    private readonly hasher: Pbkdf2Worker,
   ) {}
 
   /** Issues a new OTP and sends it via SMS. Silent on an unknown phone (no
@@ -73,11 +75,11 @@ export class CustomerAuthService {
     const code = generateOtpCode();
     await this.repos.otpCodes.create({
       phone,
-      codeHash: await hashOtpCode(code),
+      codeHash: await hashOtpCode(code, this.hasher),
       expiresAt: otpExpiresAt(),
     });
 
-    await this.sms.send(phone, `Your Echo Grid Feedback verification code is ${code}. It expires in 10 minutes.`);
+    await this.sms.send(phone, `Your Echo Grid verification code is ${code}. It expires in 10 minutes.`);
   }
 
   /**
@@ -97,7 +99,7 @@ export class CustomerAuthService {
       );
     }
 
-    const valid = await verifyOtpCode(code, active.codeHash);
+    const valid = await verifyOtpCode(code, active.codeHash, this.hasher);
     if (!valid) {
       await this.repos.otpCodes.incrementAttempts(active.id);
       throw new CustomerAuthError('Code is invalid or has expired.', 'OTP_INVALID');

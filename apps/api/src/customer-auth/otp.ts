@@ -1,4 +1,4 @@
-import { pbkdf2Hash, pbkdf2Verify } from '../auth/password';
+import type { Pbkdf2Worker } from '../auth/pbkdf2-worker';
 
 /**
  * OTP-specific constants and primitives, kept separate from
@@ -24,12 +24,12 @@ export function generateOtpCode(): string {
   return randomValue.toString().padStart(OTP_LENGTH, '0');
 }
 
-export function hashOtpCode(code: string): Promise<string> {
-  return pbkdf2Hash(code, OTP_ITERATIONS);
+export function hashOtpCode(code: string, hasher: Pbkdf2Worker): Promise<string> {
+  return hasher.hash(code, OTP_ITERATIONS);
 }
 
-export function verifyOtpCode(code: string, storedHash: string): Promise<boolean> {
-  return pbkdf2Verify(code, storedHash);
+export function verifyOtpCode(code: string, storedHash: string, hasher: Pbkdf2Worker): Promise<boolean> {
+  return hasher.verify(code, storedHash);
 }
 
 export function otpExpiresAt(): Date {

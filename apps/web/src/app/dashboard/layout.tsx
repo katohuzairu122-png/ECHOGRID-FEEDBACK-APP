@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation';
 import { hasSession, isImpersonating } from '@/lib/session';
+import { AppFooter } from '@/components/brand';
 import { DashboardNav } from './dashboard-nav';
 import { ImpersonationBanner } from './impersonation-banner';
 
@@ -27,6 +28,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
       {impersonating && <ImpersonationBanner />}
       <DashboardNav />
       <main className="mx-auto max-w-5xl px-6 py-8">{children}</main>
+      <AppFooter />
     </div>
   );
 }

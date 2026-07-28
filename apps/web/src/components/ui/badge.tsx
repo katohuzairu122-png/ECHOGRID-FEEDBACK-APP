@@ -15,7 +15,7 @@ export const badgeVariants = cva(
     variants: {
       variant: {
         brand: 'bg-brand-100 text-brand-700',
-        accent: 'bg-accent-400/20 text-accent-600',
+        accent: 'bg-accent-400/20 text-accent-700',
         neutral: 'bg-neutral-100 text-neutral-600',
         // Added for Sentiment Analytics' AI-summary sentiment-count badges
         // (dashboard/analytics/summaries-list.tsx) -- same bg-{color}/10

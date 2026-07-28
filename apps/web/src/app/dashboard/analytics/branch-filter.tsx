@@ -31,7 +31,7 @@ export function BranchFilter({ branches, selectedBranchId }: BranchFilterProps) 
         router.push(value ? `/dashboard/analytics?branchId=${value}` : '/dashboard/analytics');
       }}
       aria-label={t('ariaLabel')}
-      className="h-10 rounded-md border border-neutral-300 bg-white px-3 text-sm text-neutral-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+      className="h-10 rounded-md border border-neutral-300 bg-white px-3 text-sm text-neutral-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600"
     >
       <option value="">{t('allBranches')}</option>
       {branches.map((branch) => (

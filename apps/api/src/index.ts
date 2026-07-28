@@ -33,6 +33,11 @@ import { createSmsService } from './customer-auth/sms.service';
 import { NotificationDeliveryService } from './notifications/notification-delivery.service';
 import { NotificationService } from './notifications/notification.service';
 
+// Durable Object classes must be exported from the Worker's main module for
+// wrangler to find them (see wrangler.toml's durable_objects.bindings /
+// migrations entries, and auth/password-hasher.do.ts's own doc comment).
+export { PasswordHasherDurableObject } from './auth/password-hasher.do';
+
 /**
  * Root Hono application for the Echo Grid Feedback CEP API.
  *

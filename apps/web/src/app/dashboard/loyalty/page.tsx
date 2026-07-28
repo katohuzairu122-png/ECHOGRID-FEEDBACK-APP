@@ -65,7 +65,7 @@ export default async function LoyaltyDashboardPage() {
                   {account.status !== 'active' && (
                     <Badge variant="neutral">{t('accounts.suspended')}</Badge>
                   )}
-                  <p className="text-lg font-semibold text-brand-600">{account.points} pts</p>
+                  <p className="text-lg font-semibold text-brand-700">{account.points} pts</p>
                   <AccountDialog
                     accountId={account.id}
                     customerLabel={account.customer.fullName ?? account.customer.phone}

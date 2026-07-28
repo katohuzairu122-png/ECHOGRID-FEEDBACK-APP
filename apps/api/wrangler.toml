@@ -1,7 +1,31 @@
 name = "echo-grid-feedback-api"
 main = "src/index.ts"
 compatibility_date = "2026-07-08"
-compatibility_flags = ["nodejs_compat"]
+# global_fetch_strictly_public: without it, *.workers.dev subdomains are
+# treated as "private" and a Worker-to-Worker fetch between two of them
+# (here, apps/web's Server Actions calling this API) throws Cloudflare error
+# 1042. Needed on both this Worker and apps/web's until a custom domain
+# replaces workers.dev for both -- then this becomes unnecessary but is safe
+# to leave in place.
+compatibility_flags = ["nodejs_compat", "global_fetch_strictly_public"]
+
+# RESOLVED: Cloudflare's Free Workers plan has a hard, non-configurable
+# 10ms CPU-time limit per request invocation, which 600k-iteration PBKDF2
+# password hashing (auth/password.ts) blew through, causing every real
+# /auth/signup and /auth/login to fail with Cloudflare error 1102. Fixed
+# by moving the actual hashing compute into a Durable Object (see
+# auth/password-hasher.do.ts, auth/pbkdf2-worker.ts) -- a Worker calling a
+# Durable Object's fetch() counts as I/O wait for the caller, not CPU time,
+# and the Durable Object gets its own separate 30s default CPU budget.
+# SQLite-backed Durable Objects (below) are available on the Free plan, so
+# this needed no Workers Paid upgrade and no PBKDF2 iteration reduction.
+[[durable_objects.bindings]]
+name = "PASSWORD_HASHER"
+class_name = "PasswordHasherDurableObject"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["PasswordHasherDurableObject"]
 
 [vars]
 ENVIRONMENT = "development"
@@ -16,13 +40,17 @@ ANTHROPIC_MODEL = "claude-sonnet-5"
 # Resend sender identity (Notifications Block 2) -- non-secret, one
 # platform-wide "from" address for v1. Must be a verified sender/domain in
 # the Resend account the RESEND_API_KEY secret below belongs to, or sends
-# will fail in production.
-RESEND_FROM_ADDRESS = "Echo Grid Feedback <notifications@yourdomain.example>"
+# will fail in production. Update the domain to notifications@echogrid.uk
+# once that domain is verified in Resend (Echo Grid brand implementation's
+# domain-migration step) -- the display name is already the current brand
+# name, only the domain is a placeholder.
+RESEND_FROM_ADDRESS = "Echo Grid <notifications@yourdomain.example>"
 # CORS allow-list for apps/web's deployed origin(s), comma-separated --
 # read by index.ts's cors() middleware (config/env.ts's Bindings). Add every
 # real deployed apps/web origin here before production; the local-dev
 # default below is deliberately narrow (fails closed, not open) rather than
-# a wildcard.
+# a wildcard. Add the echogrid.uk web origin here once that domain is live,
+# alongside (not instead of) the workers.dev origin until cutover is final.
 ALLOWED_ORIGINS = "http://localhost:3000"
 
 # Required secrets -- set with `wrangler secret put <NAME>` (never stored here).

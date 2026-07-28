@@ -61,7 +61,7 @@ export default async function AnalyticsPage({ searchParams }: AnalyticsPageProps
         <div className="flex items-center gap-4">
           <Link
             href={branchId ? `/dashboard/analytics/search?branchId=${branchId}` : '/dashboard/analytics/search'}
-            className="text-sm font-medium text-brand-600 hover:underline"
+            className="text-sm font-medium text-brand-700 hover:underline"
           >
             {t('searchFeedback')}
           </Link>

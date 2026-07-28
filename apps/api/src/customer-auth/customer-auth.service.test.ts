@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { CustomerAuthService } from './customer-auth.service';
+import { createDirectPbkdf2Worker } from '../auth/pbkdf2-worker';
 import type { SmsService } from './sms.service';
 import { OTP_MAX_ATTEMPTS } from './otp';
 import type { Customer, NewCustomer } from '../repositories/customer.repository';
@@ -115,6 +116,7 @@ describe('CustomerAuthService', () => {
       repos as unknown as ConstructorParameters<typeof CustomerAuthService>[0],
       sms,
       SECRETS,
+      createDirectPbkdf2Worker(),
     );
   });
 

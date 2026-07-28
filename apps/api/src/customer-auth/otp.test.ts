@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { createDirectPbkdf2Worker } from '../auth/pbkdf2-worker';
 import {
   generateOtpCode,
   hashOtpCode,
@@ -7,6 +8,8 @@ import {
   OTP_LENGTH,
   OTP_ITERATIONS,
 } from './otp';
+
+const hasher = createDirectPbkdf2Worker();
 
 describe('generateOtpCode', () => {
   it('always produces a zero-padded 6-digit numeric string', () => {
@@ -28,24 +31,24 @@ describe('generateOtpCode', () => {
 
 describe('OTP hashing', () => {
   it('verifies a correct code against its own hash', async () => {
-    const hash = await hashOtpCode('123456');
-    await expect(verifyOtpCode('123456', hash)).resolves.toBe(true);
+    const hash = await hashOtpCode('123456', hasher);
+    await expect(verifyOtpCode('123456', hash, hasher)).resolves.toBe(true);
   });
 
   it('rejects an incorrect code', async () => {
-    const hash = await hashOtpCode('123456');
-    await expect(verifyOtpCode('654321', hash)).resolves.toBe(false);
+    const hash = await hashOtpCode('123456', hasher);
+    await expect(verifyOtpCode('654321', hash, hasher)).resolves.toBe(false);
   });
 
   it('uses a far lower iteration count than password hashing -- OTP security comes from expiry + attempt-capping, not offline-hash resistance', async () => {
-    const hash = await hashOtpCode('123456');
+    const hash = await hashOtpCode('123456', hasher);
     const [, iterations] = hash.split('$');
     expect(Number(iterations)).toBe(OTP_ITERATIONS);
     expect(Number(iterations)).toBeLessThan(600_000);
   });
 
   it('reuses the same self-describing pbkdf2 hash format password hashing uses', async () => {
-    const hash = await hashOtpCode('123456');
+    const hash = await hashOtpCode('123456', hasher);
     expect(hash.split('$')[0]).toBe('pbkdf2');
   });
 });

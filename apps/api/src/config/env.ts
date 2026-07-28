@@ -94,6 +94,13 @@ export interface Bindings {
   CACHE: KVNamespace;
   JOBS: Queue<PlatformJob>;
 
+  /** Durable Object namespace for PasswordHasherDurableObject (auth/
+   * password-hasher.do.ts) -- routes PBKDF2 hashing/verification here so
+   * the compute runs on the DO's own CPU budget instead of the HTTP-
+   * handling Worker's 10ms-on-Free-plan limit. See auth/pbkdf2-worker.ts
+   * for the client side; never call the DO directly from a route. */
+  PASSWORD_HASHER: DurableObjectNamespace;
+
   /** Workers AI (Sentiment Analytics Block 2) -- a native binding, not a
    * secret; no API key to provision. Used only for per-item sentiment
    * classification (sentiment/sentiment-classifier.ts). The LLM-backed

@@ -20,7 +20,7 @@ export default async function PlatformBillingPlansPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <Link href="/platform/billing" className="text-sm font-medium text-brand-600 hover:underline">
+      <Link href="/platform/billing" className="text-sm font-medium text-brand-700 hover:underline">
         {t('backToBilling')}
       </Link>
 

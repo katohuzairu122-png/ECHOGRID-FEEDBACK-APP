@@ -4,6 +4,7 @@ import { createDb } from '../db/client';
 import { createRepositories } from '../repositories';
 import { CustomerAuthService } from './customer-auth.service';
 import { createSmsService } from './sms.service';
+import { createDurableObjectPbkdf2Worker } from '../auth/pbkdf2-worker';
 import { requestOtpSchema, verifyOtpSchema } from '@echo-grid-feedback/shared-types';
 import { parseJsonBody } from '../lib/validate';
 import { ok } from '../lib/response';
@@ -28,9 +29,12 @@ async function withCustomerAuthService<T>(
     authToken: c.env.TWILIO_AUTH_TOKEN,
     fromNumber: c.env.TWILIO_FROM_NUMBER,
   });
-  const service = new CustomerAuthService(repos, sms, {
-    CUSTOMER_JWT_SECRET: c.env.CUSTOMER_JWT_SECRET,
-  });
+  const service = new CustomerAuthService(
+    repos,
+    sms,
+    { CUSTOMER_JWT_SECRET: c.env.CUSTOMER_JWT_SECRET },
+    createDurableObjectPbkdf2Worker(c.env.PASSWORD_HASHER),
+  );
   try {
     return await fn(service);
   } finally {

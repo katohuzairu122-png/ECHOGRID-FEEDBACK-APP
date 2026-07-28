@@ -2,12 +2,26 @@
 
 /**
  * Design tokens (Tailwind v4 CSS-first theming -- no tailwind.config.js
- * needed for this). Original palette, not copied from any existing
- * product: brand = deep teal (deliberately not the blue/purple every SaaS
- * default leans on), accent = warm amber (fits a reviews/ratings/loyalty
- * product). Semantic colors (success/warning/danger/info) use conventional
- * meanings -- that's a UX convention, not branding, so reusing the common
- * association is correct, not a copy of anyone's identity.
+ * needed for this). Echo Grid brand palette (brand implementation, 2026):
+ * brand/accent/neutral are Tailwind's own canonical emerald/cyan/slate
+ * 11-step scales, not custom values -- the brand guide's 5 hex values land
+ * exactly on named steps of those scales (#10B981=emerald-500,
+ * #06B6D4=cyan-500, #0F172A=slate-900, #334155=slate-700,
+ * #F1F5F9=slate-100), so adopting the canonical ramps verbatim is the
+ * correct move, not an interpolation guess. Semantic colors (success/
+ * warning/danger/info) are independent literal values, unchanged by this --
+ * they're a UX convention, not brand identity.
+ *
+ * --color-star-fill is deliberately its own token, decoupled from
+ * --color-accent-500: star ratings keep their conventional amber/gold fill
+ * regardless of what the accent color is (owner decision, brand
+ * implementation).
+ *
+ * A naive 1:1 swap onto the new scale introduced a real WCAG contrast
+ * regression at several -600-step usages (old custom -600 was darker at
+ * the same position than the new canonical -600) -- see the components
+ * that darkened one step (button.tsx, input.tsx, switch.tsx, badge.tsx,
+ * and others) rather than assuming the cascade alone preserved AA contrast.
  *
  * Spacing intentionally uses Tailwind's built-in scale rather than a
  * custom one -- it's already well-tuned, no reason to reinvent it.
@@ -16,41 +30,58 @@
  * look broken, not better; add it as its own deliberate pass later.
  */
 @theme {
-  --color-brand-50: #eefbf6;
-  --color-brand-100: #d5f5e8;
-  --color-brand-200: #aeead5;
-  --color-brand-300: #7adaba;
-  --color-brand-400: #45c29c;
-  --color-brand-500: #22a682;
-  --color-brand-600: #16856a;
-  --color-brand-700: #146a57;
-  --color-brand-800: #135547;
-  --color-brand-900: #12463c;
-  --color-brand-950: #072721;
+  --color-brand-50: #ecfdf5;
+  --color-brand-100: #d1fae5;
+  --color-brand-200: #a7f3d0;
+  --color-brand-300: #6ee7b7;
+  --color-brand-400: #34d399;
+  --color-brand-500: #10b981;
+  --color-brand-600: #059669;
+  --color-brand-700: #047857;
+  --color-brand-800: #065f46;
+  --color-brand-900: #064e3b;
+  --color-brand-950: #022c22;
 
-  --color-accent-400: #f5b942;
-  --color-accent-500: #eea023;
-  --color-accent-600: #d1830f;
+  --color-accent-50: #ecfeff;
+  --color-accent-100: #cffafe;
+  --color-accent-200: #a5f3fc;
+  --color-accent-300: #67e8f9;
+  --color-accent-400: #22d3ee;
+  --color-accent-500: #06b6d4;
+  --color-accent-600: #0891b2;
+  --color-accent-700: #0e7490;
+  --color-accent-800: #155e75;
+  --color-accent-900: #164e63;
+  --color-accent-950: #083344;
 
-  --color-neutral-50: #f8f9fa;
-  --color-neutral-100: #f1f3f5;
-  --color-neutral-200: #e5e8eb;
-  --color-neutral-300: #d1d6db;
-  --color-neutral-400: #9ba3ab;
-  --color-neutral-500: #6b7480;
-  --color-neutral-600: #4d5561;
-  --color-neutral-700: #363c46;
-  --color-neutral-800: #23272e;
-  --color-neutral-900: #16191e;
-  --color-neutral-950: #0b0d10;
+  --color-neutral-50: #f8fafc;
+  --color-neutral-100: #f1f5f9;
+  --color-neutral-200: #e2e8f0;
+  --color-neutral-300: #cbd5e1;
+  --color-neutral-400: #94a3b8;
+  --color-neutral-500: #64748b;
+  --color-neutral-600: #475569;
+  --color-neutral-700: #334155;
+  --color-neutral-800: #1e293b;
+  --color-neutral-900: #0f172a;
+  --color-neutral-950: #020617;
+
+  /* Star-rating fill, decoupled from --color-accent-* on purpose -- see
+     top comment. Not part of either canonical scale above. */
+  --color-star-fill: #f5b942;
 
   --color-success: #1a9c5c;
   --color-warning: #d1830f;
   --color-danger: #d64545;
   --color-info: #2f7fd6;
 
+  /* --font-poppins is populated by next/font/google in app/layout.tsx
+     (applied to <html> as a CSS variable) -- listed first here so every
+     element gets Poppins by default with no per-component font class
+     needed, falling back to the system stack if it hasn't loaded yet. */
   --font-sans:
-    -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    var(--font-poppins), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue",
+    Arial, sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
 
   --radius-sm: 0.25rem;

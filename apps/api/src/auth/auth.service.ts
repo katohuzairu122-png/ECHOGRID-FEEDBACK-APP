@@ -1,7 +1,8 @@
 import type { Repositories } from '../repositories';
 import type { Bindings } from '../config/env';
 import { AppError } from '../lib/errors';
-import { hashPassword, verifyPassword } from './password';
+import { PASSWORD_ITERATIONS } from './password';
+import type { Pbkdf2Worker } from './pbkdf2-worker';
 import { hashToken } from './token-hash';
 import { constantTimeEqualHex } from './crypto-utils';
 import {
@@ -65,6 +66,7 @@ export class AuthService {
   constructor(
     private readonly repos: Pick<Repositories, 'users' | 'refreshTokens'>,
     private readonly secrets: Pick<Bindings, 'JWT_ACCESS_SECRET' | 'JWT_REFRESH_SECRET'>,
+    private readonly hasher: Pbkdf2Worker,
   ) {}
 
   async signup(input: SignupInput): Promise<AuthTokens> {
@@ -73,7 +75,7 @@ export class AuthService {
       throw new AuthError('An account with this email already exists.', 'EMAIL_TAKEN');
     }
 
-    const passwordHash = await hashPassword(input.password);
+    const passwordHash = await this.hasher.hash(input.password, PASSWORD_ITERATIONS);
     const user = await this.repos.users.create({
       email: input.email,
       passwordHash,
@@ -88,7 +90,7 @@ export class AuthService {
     const user = await this.repos.users.findByEmail(input.email);
     // Same error for "no such user" and "wrong password" -- distinguishing
     // them would let an attacker enumerate valid emails.
-    if (!user || !(await verifyPassword(input.password, user.passwordHash))) {
+    if (!user || !(await this.hasher.verify(input.password, user.passwordHash))) {
       throw new AuthError('Invalid email or password.', 'INVALID_CREDENTIALS');
     }
     // Unlike the above, an inactive account gets its own message: for a

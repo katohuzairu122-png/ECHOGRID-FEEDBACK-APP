@@ -63,7 +63,7 @@ export function SearchFilters({ branches, branchId, sentiment, rating, keyword, 
         <select
           value={branchInput}
           onChange={(e) => setBranchInput(e.target.value)}
-          className="h-9 rounded-md border border-neutral-300 bg-white px-3 text-sm text-neutral-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+          className="h-9 rounded-md border border-neutral-300 bg-white px-3 text-sm text-neutral-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600"
         >
           <option value="">{t('allBranches')}</option>
           {branches.map((branch) => (
@@ -79,7 +79,7 @@ export function SearchFilters({ branches, branchId, sentiment, rating, keyword, 
           value={keywordInput}
           onChange={(e) => setKeywordInput(e.target.value)}
           placeholder="e.g. slow service"
-          className="h-9 w-48 rounded-md border border-neutral-300 bg-white px-3 text-sm text-neutral-900 placeholder:text-neutral-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+          className="h-9 w-48 rounded-md border border-neutral-300 bg-white px-3 text-sm text-neutral-900 placeholder:text-neutral-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600"
         />
       </Field>
 
@@ -87,7 +87,7 @@ export function SearchFilters({ branches, branchId, sentiment, rating, keyword, 
         <select
           value={sentimentInput}
           onChange={(e) => setSentimentInput(e.target.value)}
-          className="h-9 rounded-md border border-neutral-300 bg-white px-3 text-sm text-neutral-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+          className="h-9 rounded-md border border-neutral-300 bg-white px-3 text-sm text-neutral-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600"
         >
           <option value="">{t('any')}</option>
           <option value="positive">{t('positive')}</option>
@@ -100,7 +100,7 @@ export function SearchFilters({ branches, branchId, sentiment, rating, keyword, 
         <select
           value={ratingInput}
           onChange={(e) => setRatingInput(e.target.value)}
-          className="h-9 rounded-md border border-neutral-300 bg-white px-3 text-sm text-neutral-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+          className="h-9 rounded-md border border-neutral-300 bg-white px-3 text-sm text-neutral-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600"
         >
           <option value="">{t('any')}</option>
           {[5, 4, 3, 2, 1].map((n) => (
@@ -115,7 +115,7 @@ export function SearchFilters({ branches, branchId, sentiment, rating, keyword, 
         <select
           value={rangeInput}
           onChange={(e) => setRangeInput(e.target.value)}
-          className="h-9 rounded-md border border-neutral-300 bg-white px-3 text-sm text-neutral-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+          className="h-9 rounded-md border border-neutral-300 bg-white px-3 text-sm text-neutral-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600"
         >
           {RANGE_OPTIONS.map((opt) => (
             <option key={opt.value} value={opt.value}>

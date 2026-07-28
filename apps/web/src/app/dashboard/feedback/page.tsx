@@ -125,7 +125,7 @@ export default async function FeedbackPage({ searchParams }: FeedbackPageProps) 
           {offset > 0 && (
             <Link
               href={pageHref(Math.max(0, offset - PAGE_SIZE))}
-              className="text-sm font-medium text-brand-600 hover:underline"
+              className="text-sm font-medium text-brand-700 hover:underline"
             >
               {t('newer')}
             </Link>
@@ -133,7 +133,7 @@ export default async function FeedbackPage({ searchParams }: FeedbackPageProps) 
           {hasMore && (
             <Link
               href={pageHref(offset + PAGE_SIZE)}
-              className="text-sm font-medium text-brand-600 hover:underline"
+              className="text-sm font-medium text-brand-700 hover:underline"
             >
               {t('older')}
             </Link>
