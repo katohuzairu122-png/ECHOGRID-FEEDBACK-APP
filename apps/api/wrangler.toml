@@ -40,18 +40,19 @@ ANTHROPIC_MODEL = "claude-sonnet-5"
 # Resend sender identity (Notifications Block 2) -- non-secret, one
 # platform-wide "from" address for v1. Must be a verified sender/domain in
 # the Resend account the RESEND_API_KEY secret below belongs to, or sends
-# will fail in production. Update the domain to notifications@echogrid.uk
-# once that domain is verified in Resend (Echo Grid brand implementation's
-# domain-migration step) -- the display name is already the current brand
-# name, only the domain is a placeholder.
+# will fail in production. Update the domain to notifications@echo-grid.uk
+# (note the hyphen -- that's the actual registered domain, confirmed via
+# the Cloudflare dashboard, not "echogrid.uk" as earlier comments assumed)
+# once that domain is verified in Resend -- the display name is already the
+# current brand name, only the domain is still a placeholder.
 RESEND_FROM_ADDRESS = "Echo Grid <notifications@yourdomain.example>"
 # CORS allow-list for apps/web's deployed origin(s), comma-separated --
-# read by index.ts's cors() middleware (config/env.ts's Bindings). Add every
-# real deployed apps/web origin here before production; the local-dev
-# default below is deliberately narrow (fails closed, not open) rather than
-# a wildcard. Add the echogrid.uk web origin here once that domain is live,
-# alongside (not instead of) the workers.dev origin until cutover is final.
-ALLOWED_ORIGINS = "http://localhost:3000"
+# read by index.ts's cors() middleware (config/env.ts's Bindings). Only
+# matters for direct browser-to-API calls; today's Server Actions (BFF
+# pattern, api-client.ts) run server-side on the web Worker and never hit
+# this check. echo-grid.uk added alongside (not instead of) the workers.dev
+# origins so both keep working during the domain cutover.
+ALLOWED_ORIGINS = "http://localhost:3000,https://echo-grid.uk,https://echo-grid-feedback-web.katohuzairu122.workers.dev"
 
 # Required secrets -- set with `wrangler secret put <NAME>` (never stored here).
 # Validated automatically by `wrangler dev` / `wrangler deploy`. See .dev.vars.example

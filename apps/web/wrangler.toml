@@ -16,11 +16,19 @@ compatibility_flags = ["nodejs_compat", "global_fetch_strictly_public"]
 # this at the deployed apps/api Worker's URL (or custom domain) before
 # deploying -- there is no working default for a real environment.
 [vars]
+# Still pointed at the workers.dev URL, not the new api.echo-grid.uk custom
+# domain, on purpose -- this is the live inter-service call every Server
+# Action depends on, and workers.dev is the already-confirmed-working path.
+# Switch to https://api.echo-grid.uk once that custom domain is verified
+# reachable end-to-end (DNS propagation, cert issuance).
 API_BASE_URL = "https://echo-grid-feedback-api.katohuzairu122.workers.dev"
 # This Worker's own public URL -- used by metadataBase/robots.ts/sitemap.ts
-# for absolute URLs (lib/app-url.ts). Update alongside API_BASE_URL once
-# echogrid.uk replaces this workers.dev URL.
-APP_URL = "https://echo-grid-feedback-web.katohuzairu122.workers.dev"
+# for absolute URLs (lib/app-url.ts). The real domain turned out to be
+# echo-grid.uk (WITH a hyphen) -- the account's actual registered domain,
+# confirmed against the Cloudflare dashboard, overriding an earlier
+# "echogrid.uk, no hyphen" assumption made before the domain was purchased.
+# Bound as a Workers Custom Domain (root -> this Worker) on 2026-07-29.
+APP_URL = "https://echo-grid.uk"
 # TEMPORARY WORKAROUND for a confirmed open upstream bug: Next.js's
 # getMiddlewareManifest() dynamic-requires middleware-manifest.json, which
 # Workers' runtime doesn't support -- every route 500'd until this was set.
