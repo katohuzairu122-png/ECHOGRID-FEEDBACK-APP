@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { CustomerAuthService } from './customer-auth.service';
+import { createDirectPbkdf2Worker } from '../auth/pbkdf2-worker';
 import type { SmsService } from './sms.service';
 import { OTP_MAX_ATTEMPTS } from './otp';
 import type { Customer, NewCustomer } from '../repositories/customer.repository';
@@ -82,7 +83,7 @@ function createFakeRepos() {
  * for, but ConsoleSmsService already exists for dev; this fake exists so
  * the test can read the code back and complete a full request-then-verify
  * cycle without parsing console output. */
-function createFakeSmsService(): SmsService & { lastMessage?: string; lastPhone?: string } {
+function createFakeSmsService(): SmsService & { lastMessage?: string | undefined; lastPhone?: string | undefined } {
   const fake = {
     lastMessage: undefined as string | undefined,
     lastPhone: undefined as string | undefined,
@@ -111,7 +112,12 @@ describe('CustomerAuthService', () => {
   beforeEach(() => {
     repos = createFakeRepos();
     sms = createFakeSmsService();
-    service = new CustomerAuthService(repos, sms, SECRETS);
+    service = new CustomerAuthService(
+      repos as unknown as ConstructorParameters<typeof CustomerAuthService>[0],
+      sms,
+      SECRETS,
+      createDirectPbkdf2Worker(),
+    );
   });
 
   it('requestOtp sends an SMS containing a 6-digit code', async () => {

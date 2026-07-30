@@ -99,7 +99,7 @@ describe('BranchService', () => {
 
   beforeEach(() => {
     repos = { branches: createFakeBranchRepo() };
-    service = new BranchService(repos);
+    service = new BranchService(repos as unknown as ConstructorParameters<typeof BranchService>[0]);
   });
 
   it('creates a branch scoped to the given business', async () => {

@@ -46,6 +46,7 @@ export class QrCodeRepository extends BaseRepository {
 
   async create(input: NewQrCode): Promise<QrCode> {
     const [row] = await this.db.insert(qrCodes).values(input).returning();
+    if (!row) throw new Error('Insert returned no row');
     return row;
   }
 

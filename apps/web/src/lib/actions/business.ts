@@ -32,6 +32,10 @@ export async function createBusinessAction(
     return { error: 'Something went wrong. Please try again.' };
   }
 
+  // Without this, /dashboard renders from Next's cached Server Component
+  // output, which doesn't yet reflect the business just created -- redirect
+  // would land on a stale dashboard missing the new business entirely.
+  revalidatePath('/dashboard');
   redirect('/dashboard');
 }
 

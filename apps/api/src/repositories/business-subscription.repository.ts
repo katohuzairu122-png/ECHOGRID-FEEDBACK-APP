@@ -56,6 +56,7 @@ export class BusinessSubscriptionRepository extends BaseRepository {
 
   async create(input: NewBusinessSubscription): Promise<BusinessSubscription> {
     const [row] = await this.db.insert(businessSubscriptions).values(input).returning();
+    if (!row) throw new Error('Insert returned no row');
     return row;
   }
 
@@ -76,6 +77,7 @@ export class BusinessSubscriptionRepository extends BaseRepository {
         set: { ...patch, updatedAt: new Date() },
       })
       .returning();
+    if (!row) throw new Error('Insert returned no row');
     return row;
   }
 
@@ -95,8 +97,8 @@ export class BusinessSubscriptionRepository extends BaseRepository {
    * contrast with the audit log entry's genuinely-nullable equivalents.
    */
   async listAllWithDetails(
-    filters: { status?: string } = {},
-    pagination: { limit?: number; offset?: number } = {},
+    filters: { status?: string | undefined } = {},
+    pagination: { limit?: number | undefined; offset?: number | undefined } = {},
   ): Promise<BusinessSubscriptionWithDetails[]> {
     const limit = Math.min(pagination.limit ?? DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE);
     const rows = await this.db.query.businessSubscriptions.findMany({

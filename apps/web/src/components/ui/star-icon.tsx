@@ -21,7 +21,11 @@ export function StarIcon({ filled = false, className, ...props }: StarIconProps)
       stroke="currentColor"
       className={cn(
         'transition-colors',
-        filled ? 'fill-accent-500 text-accent-500' : 'fill-transparent text-neutral-300',
+        // Star fill uses the dedicated --color-star-fill token (globals.css),
+        // deliberately decoupled from --color-accent-* -- owner decision to
+        // keep the conventional amber/gold star rating regardless of the
+        // brand's teal-cyan accent color.
+        filled ? 'fill-star-fill text-star-fill' : 'fill-transparent text-neutral-300',
         className,
       )}
       {...props}

@@ -20,5 +20,11 @@ export default defineConfig({
     environment: 'jsdom',
     setupFiles: ['./vitest.setup.ts'],
     include: ['src/**/*.test.{ts,tsx}'],
+    // userEvent-driven interaction tests (typing, clicking through a dialog)
+    // are legitimately slower than plain unit tests -- the 5s default leaves
+    // too little margin under concurrent load (e.g. running alongside the
+    // api package's PBKDF2 suite). Raise it; fast tests are unaffected since
+    // the timeout is per-test.
+    testTimeout: 20000,
   },
 });

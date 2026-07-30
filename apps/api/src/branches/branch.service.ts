@@ -18,7 +18,7 @@ export class BranchService {
 
   async listBranches(
     businessId: string,
-    options: { limit?: number; offset?: number } = {},
+    options: { limit?: number | undefined; offset?: number | undefined } = {},
   ): Promise<Branch[]> {
     return this.repos.branches.listByBusiness(businessId, options);
   }

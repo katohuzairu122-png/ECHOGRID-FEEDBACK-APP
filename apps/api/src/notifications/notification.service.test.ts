@@ -36,7 +36,7 @@ interface FakeRepoOptions {
   customer?: Partial<Customer> | null;
   /** The one preference row findOne() should resolve to -- undefined (the
    * default) exercises the "no row = enabled" rule. */
-  preference?: NotificationPreference;
+  preference?: NotificationPreference | undefined;
   existingPreferences?: NotificationPreference[];
   smsSentToday?: number;
   grants?: UserBusinessRole[];
@@ -55,7 +55,14 @@ function createFakeRepos(options: FakeRepoOptions = {}) {
   const permsQueue = Array.isArray(options.effectivePermissions) ? [...options.effectivePermissions] : undefined;
 
   const notificationPreferences = {
-    findOne: vi.fn().mockResolvedValue(options.preference),
+    // Channel-aware, mirroring the real findOne(businessId, recipient, eventType,
+    // channel): the single configured preference only applies to its own channel,
+    // so opting out of one channel leaves the others at the default.
+    findOne: vi
+      .fn()
+      .mockImplementation(async (_businessId, _recipient, _eventType, channel) =>
+        options.preference && options.preference.channel === channel ? options.preference : undefined,
+      ),
     listForRecipient: vi.fn().mockResolvedValue(options.existingPreferences ?? []),
   } as unknown as NotificationPreferenceRepository;
 
@@ -202,7 +209,7 @@ describe('NotificationService.notify', () => {
 
   it('attempts every channel independently -- one channel failing to enqueue does not stop the other or throw', async () => {
     const queue = createFakeQueue();
-    vi.mocked(queue.send).mockRejectedValueOnce(new Error('queue unavailable')).mockResolvedValueOnce(undefined);
+    vi.mocked(queue.send).mockRejectedValueOnce(new Error('queue unavailable')).mockResolvedValueOnce(undefined as never);
     const service = new NotificationService(createFakeRepos(), queue);
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 

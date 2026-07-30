@@ -2,6 +2,7 @@ import { NextIntlClientProvider } from 'next-intl';
 import { resolveSupportedLocale, type BusinessPublicDto } from '@echo-grid-feedback/shared-types';
 import { publicApiFetch } from '@/lib/public-api-client';
 import { loadMessages } from '@/i18n/load-messages';
+import { AppFooter } from '@/components/brand';
 
 interface LoyaltyBusinessLayoutProps {
   children: React.ReactNode;
@@ -44,7 +45,10 @@ export default async function LoyaltyBusinessLayout({
 
   return (
     <NextIntlClientProvider locale={locale} messages={messages}>
-      {children}
+      <div className="flex min-h-screen flex-col bg-neutral-50">
+        <main className="mx-auto w-full max-w-3xl flex-1 px-6 py-8">{children}</main>
+        <AppFooter />
+      </div>
     </NextIntlClientProvider>
   );
 }

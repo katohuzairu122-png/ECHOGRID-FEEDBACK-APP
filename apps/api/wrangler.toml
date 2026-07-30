@@ -1,7 +1,31 @@
 name = "echo-grid-feedback-api"
 main = "src/index.ts"
 compatibility_date = "2026-07-08"
-compatibility_flags = ["nodejs_compat"]
+# global_fetch_strictly_public: without it, *.workers.dev subdomains are
+# treated as "private" and a Worker-to-Worker fetch between two of them
+# (here, apps/web's Server Actions calling this API) throws Cloudflare error
+# 1042. Needed on both this Worker and apps/web's until a custom domain
+# replaces workers.dev for both -- then this becomes unnecessary but is safe
+# to leave in place.
+compatibility_flags = ["nodejs_compat", "global_fetch_strictly_public"]
+
+# RESOLVED: Cloudflare's Free Workers plan has a hard, non-configurable
+# 10ms CPU-time limit per request invocation, which 600k-iteration PBKDF2
+# password hashing (auth/password.ts) blew through, causing every real
+# /auth/signup and /auth/login to fail with Cloudflare error 1102. Fixed
+# by moving the actual hashing compute into a Durable Object (see
+# auth/password-hasher.do.ts, auth/pbkdf2-worker.ts) -- a Worker calling a
+# Durable Object's fetch() counts as I/O wait for the caller, not CPU time,
+# and the Durable Object gets its own separate 30s default CPU budget.
+# SQLite-backed Durable Objects (below) are available on the Free plan, so
+# this needed no Workers Paid upgrade and no PBKDF2 iteration reduction.
+[[durable_objects.bindings]]
+name = "PASSWORD_HASHER"
+class_name = "PasswordHasherDurableObject"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["PasswordHasherDurableObject"]
 
 [vars]
 ENVIRONMENT = "development"
@@ -16,14 +40,19 @@ ANTHROPIC_MODEL = "claude-sonnet-5"
 # Resend sender identity (Notifications Block 2) -- non-secret, one
 # platform-wide "from" address for v1. Must be a verified sender/domain in
 # the Resend account the RESEND_API_KEY secret below belongs to, or sends
-# will fail in production.
-RESEND_FROM_ADDRESS = "Echo Grid Feedback <notifications@yourdomain.example>"
+# will fail in production. Update the domain to notifications@echo-grid.uk
+# (note the hyphen -- that's the actual registered domain, confirmed via
+# the Cloudflare dashboard, not "echogrid.uk" as earlier comments assumed)
+# once that domain is verified in Resend -- the display name is already the
+# current brand name, only the domain is still a placeholder.
+RESEND_FROM_ADDRESS = "Echo Grid <notifications@yourdomain.example>"
 # CORS allow-list for apps/web's deployed origin(s), comma-separated --
-# read by index.ts's cors() middleware (config/env.ts's Bindings). Add every
-# real deployed apps/web origin here before production; the local-dev
-# default below is deliberately narrow (fails closed, not open) rather than
-# a wildcard.
-ALLOWED_ORIGINS = "http://localhost:3000"
+# read by index.ts's cors() middleware (config/env.ts's Bindings). Only
+# matters for direct browser-to-API calls; today's Server Actions (BFF
+# pattern, api-client.ts) run server-side on the web Worker and never hit
+# this check. echo-grid.uk added alongside (not instead of) the workers.dev
+# origins so both keep working during the domain cutover.
+ALLOWED_ORIGINS = "http://localhost:3000,https://echo-grid.uk,https://echo-grid-feedback-web.katohuzairu122.workers.dev"
 
 # Required secrets -- set with `wrangler secret put <NAME>` (never stored here).
 # Validated automatically by `wrangler dev` / `wrangler deploy`. See .dev.vars.example
@@ -47,8 +76,28 @@ required = [
 #   npx wrangler hyperdrive create echo-grid-feedback-db --connection-string="postgresql://..."
 [[hyperdrive]]
 binding = "HYPERDRIVE"
-id = "<hyperdrive-id-from-wrangler-hyperdrive-create>"
-
+id = "542dd173d3d14d54ac66c0f1f69e5ff9"
+# RESOLVED (2026-07-30): query caching was DISABLED on this Hyperdrive
+# config via `wrangler hyperdrive update <id> --caching-disabled`. Hyperdrive
+# caches read queries for 60s by default and does NOT invalidate on write --
+# this broke read-after-write everywhere a create was immediately followed
+# by a list/find (most visibly: a brand-new user's first "create your
+# business" submission kept re-showing the create form, since GET
+# /businesses served the cached pre-creation empty result; same root cause
+# behind an earlier "login right after signup fails" finding, via
+# findByEmail's own pre-existence-check caching an empty result). This
+# config change isn't expressed in this file -- it's a property of the
+# Hyperdrive resource itself, not a wrangler.toml setting. If read-heavy,
+# staleness-tolerant caching is wanted later (e.g. public business lookups,
+# analytics), add a SECOND Hyperdrive binding with caching left enabled for
+# just those specific queries, per Cloudflare's own documented pattern --
+# don't re-enable it here without solving read-after-write first.
+# Do NOT add `localConnectionString` here -- this file is tracked by git and
+# already pushed to GitHub. It is not needed for migrations or integration
+# tests (those connect directly via DATABASE_URL from apps/api/.env, never
+# through Hyperdrive). It is only used by `wrangler dev` to proxy Hyperdrive
+# locally; if that's ever needed, set it via a local, gitignored mechanism
+# (.dev.vars or a shell env var), never by editing this file.
 # Object storage for receipts, exports, and other business-uploaded files.
 # QR codes are rendered client-side from a token + known URL (no server-side
 # image generation/storage -- see README's QR Engagement section), so this
@@ -62,7 +111,7 @@ bucket_name = "echo-grid-feedback-uploads"
 #   npx wrangler kv namespace create CACHE
 [[kv_namespaces]]
 binding = "CACHE"
-id = "<kv-namespace-id-from-wrangler-kv-namespace-create>"
+id = "5cf62e12f7d940e2b70a0e453463ec90"
 
 # Async job queue (sentiment analysis, notifications, loyalty recalculation).
 # Consumer handler wired up in Sentiment Analytics Block 2 (src/index.ts's

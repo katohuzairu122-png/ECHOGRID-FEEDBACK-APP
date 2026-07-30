@@ -11,12 +11,14 @@ const EXPECTED_NAMESPACES = [
   'loyalty',
   'analytics',
   'notifications',
+  'platform',
+  'landing',
 ];
 
 /**
  * loadMessages dynamically imports every namespace's messages/<locale>/*.json
  * file (i18n & Multi-Currency Block 2). A missing file, a typo'd namespace
- * name, or invalid JSON in any of the 24 files this app now ships (8
+ * name, or invalid JSON in any of the 30 files this app now ships (10
  * namespaces x 3 locales) would only surface at request time in the real
  * app -- this exercises the exact same import path for every supported
  * locale up front, so a broken file fails a test instead of a page.

@@ -10,7 +10,7 @@ interface SummaryGeneratorProps {
    * generation and the summaries list should always agree on scope
    * (business-wide vs. one branch are different report types, see
    * feedback-summary.repository.ts, never mixed in one view). */
-  branchId?: string;
+  branchId?: string | undefined;
 }
 
 /**
@@ -48,7 +48,7 @@ export function SummaryGenerator({ branchId }: SummaryGeneratorProps) {
         value={periodType}
         onChange={(e) => setPeriodType(e.target.value as 'weekly' | 'monthly')}
         aria-label={t('periodAriaLabel')}
-        className="h-9 rounded-md border border-neutral-300 bg-white px-3 text-sm text-neutral-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+        className="h-9 rounded-md border border-neutral-300 bg-white px-3 text-sm text-neutral-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600"
       >
         <option value="weekly">{t('weekly')}</option>
         <option value="monthly">{t('monthly')}</option>

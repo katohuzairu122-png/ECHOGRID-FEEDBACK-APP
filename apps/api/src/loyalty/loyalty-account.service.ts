@@ -157,7 +157,7 @@ export class LoyaltyAccountService {
 
   async listForBusiness(
     businessId: string,
-    options: { limit?: number; offset?: number } = {},
+    options: { limit?: number | undefined; offset?: number | undefined } = {},
   ): Promise<LoyaltyAccountWithCustomer[]> {
     const repos = createRepositories(this.db);
     return repos.loyaltyAccounts.listForBusiness(businessId, options);
@@ -177,7 +177,7 @@ export class LoyaltyAccountService {
   async listTransactions(
     businessId: string,
     accountId: string,
-    options: { limit?: number; offset?: number } = {},
+    options: { limit?: number | undefined; offset?: number | undefined } = {},
   ) {
     const repos = createRepositories(this.db);
     await this.requireAccount(repos, accountId, businessId);
@@ -209,11 +209,11 @@ export class LoyaltyAccountService {
     type: 'checkin' | 'purchase' | 'referral_bonus' | 'birthday_bonus' | 'adjustment',
     points: number,
     extra: {
-      relatedQrCodeId?: string;
-      purchaseAmount?: string;
-      notes?: string;
-      createdBy?: string;
-      recordVisit?: boolean;
+      relatedQrCodeId?: string | undefined;
+      purchaseAmount?: string | undefined;
+      notes?: string | undefined;
+      createdBy?: string | undefined;
+      recordVisit?: boolean | undefined;
     },
   ): Promise<LoyaltyAccount> {
     let updated = await repos.loyaltyAccounts.applyPointsDelta(account.id, points, {

@@ -24,7 +24,7 @@ export interface ClassifyFeedbackJob {
 export interface GenerateSummaryJob {
   type: 'generate_summary';
   businessId: string;
-  branchId?: string;
+  branchId?: string | undefined;
   periodType: 'weekly' | 'monthly';
   periodStart: string;
   periodEnd: string;

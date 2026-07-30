@@ -43,7 +43,7 @@ describe('AnalyticsService.trend', () => {
 
     await service.trend(BUSINESS_A, {});
 
-    const call = vi.mocked(repos.feedback.sentimentTrend).mock.calls[0][1];
+    const call = vi.mocked(repos.feedback.sentimentTrend).mock.calls[0]![1];
     const rangeDays = (call.to.getTime() - call.from.getTime()) / 86_400_000;
     expect(rangeDays).toBeCloseTo(30, 5);
     expect(call.to.getTime()).toBeGreaterThanOrEqual(before);

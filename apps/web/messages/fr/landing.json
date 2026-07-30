@@ -1,0 +1,22 @@
+{
+  "loginLink": "Se connecter",
+  "signupCta": "Commencer gratuitement",
+  "features": {
+    "feedback": {
+      "title": "Collectez les avis",
+      "description": "De chaque client, à chaque fois."
+    },
+    "insights": {
+      "title": "Comprenez les données",
+      "description": "Des analyses par IA fiables."
+    },
+    "action": {
+      "title": "Passez à l'action",
+      "description": "Transformez les données en croissance mesurable."
+    },
+    "loyalty": {
+      "title": "Fidélisez vos clients",
+      "description": "Récompensez vos clients. Renforcez les relations."
+    }
+  }
+}

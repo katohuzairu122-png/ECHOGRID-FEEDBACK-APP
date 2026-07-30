@@ -13,5 +13,14 @@ export default defineConfig({
   test: {
     include: ['test/integration/**/*.test.ts'],
     environment: 'node',
+    // Each file opens its own real Postgres connection in beforeAll; running
+    // all 6 files in parallel (Vitest's default) opened 6+ simultaneous
+    // connections to Neon's serverless compute and reliably produced
+    // ETIMEDOUT/ENETUNREACH errors. Serial execution avoids the connection
+    // storm. Cold-start latency on top of that also exceeded the 5s/10s
+    // defaults for the first query in a file -- raised alongside it.
+    fileParallelism: false,
+    testTimeout: 30000,
+    hookTimeout: 30000,
   },
 });

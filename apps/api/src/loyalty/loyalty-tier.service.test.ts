@@ -61,7 +61,7 @@ describe('LoyaltyTierService', () => {
 
   beforeEach(() => {
     repos = { loyaltyTiers: createFakeTierRepo() };
-    service = new LoyaltyTierService(repos);
+    service = new LoyaltyTierService(repos as unknown as ConstructorParameters<typeof LoyaltyTierService>[0]);
   });
 
   it('create defaults sortOrder to 0 when not given', async () => {

@@ -22,6 +22,7 @@ export class BusinessNotificationSettingsRepository extends BaseRepository {
       .insert(businessNotificationSettings)
       .values({ businessId })
       .returning();
+    if (!row) throw new Error('Insert returned no row');
     return row;
   }
 
@@ -36,6 +37,7 @@ export class BusinessNotificationSettingsRepository extends BaseRepository {
       .set({ ...patch, updatedBy, updatedAt: new Date() })
       .where(eq(businessNotificationSettings.businessId, businessId))
       .returning();
+    if (!row) throw new Error('Insert returned no row');
     return row;
   }
 }

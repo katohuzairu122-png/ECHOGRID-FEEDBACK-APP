@@ -60,7 +60,7 @@ export default async function PlatformBillingPage({ searchParams }: PlatformBill
           <h1 className="text-2xl font-semibold text-neutral-900">{t('title')}</h1>
           <p className="text-sm text-neutral-500">{t('description')}</p>
         </div>
-        <Link href="/platform/billing/plans" className="text-sm font-medium text-brand-600 hover:underline">
+        <Link href="/platform/billing/plans" className="text-sm font-medium text-brand-700 hover:underline">
           {t('managePlans')}
         </Link>
       </div>
@@ -97,7 +97,7 @@ export default async function PlatformBillingPage({ searchParams }: PlatformBill
               <div>
                 <Link
                   href={`/platform/businesses/${subscription.businessId}`}
-                  className="font-medium text-brand-600 hover:underline"
+                  className="font-medium text-brand-700 hover:underline"
                 >
                   {subscription.businessName}
                 </Link>
@@ -123,7 +123,7 @@ export default async function PlatformBillingPage({ searchParams }: PlatformBill
           {offset > 0 && (
             <Link
               href={pageHref(Math.max(0, offset - PAGE_SIZE))}
-              className="text-sm font-medium text-brand-600 hover:underline"
+              className="text-sm font-medium text-brand-700 hover:underline"
             >
               {t('newer')}
             </Link>
@@ -131,7 +131,7 @@ export default async function PlatformBillingPage({ searchParams }: PlatformBill
           {hasMore && (
             <Link
               href={pageHref(offset + PAGE_SIZE)}
-              className="text-sm font-medium text-brand-600 hover:underline"
+              className="text-sm font-medium text-brand-700 hover:underline"
             >
               {t('older')}
             </Link>

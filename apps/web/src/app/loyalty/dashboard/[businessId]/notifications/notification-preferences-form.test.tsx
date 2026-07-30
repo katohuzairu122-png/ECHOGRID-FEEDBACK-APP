@@ -29,7 +29,7 @@ describe('NotificationPreferencesForm (customer)', () => {
 
   it('renders one checkbox per event type x channel, checked according to the preferences prop', () => {
     const preferences = allEnabled();
-    preferences[0] = { ...preferences[0], enabled: false }; // points_earned/email off
+    preferences[0] = { ...preferences[0]!, enabled: false }; // points_earned/email off
 
     render(
       <NotificationPreferencesForm
@@ -61,7 +61,7 @@ describe('NotificationPreferencesForm (customer)', () => {
     await user.click(screen.getByRole('button', { name: 'Save preferences' }));
 
     await waitFor(() => expect(updateNotificationPreferencesAction).toHaveBeenCalled());
-    const [calledBusinessId, payload] = vi.mocked(updateNotificationPreferencesAction).mock.calls[0];
+    const [calledBusinessId, payload] = vi.mocked(updateNotificationPreferencesAction).mock.calls[0]!;
     expect(calledBusinessId).toBe(BUSINESS_ID);
     const toggled = payload.find((p) => p.eventType === 'tier_upgraded' && p.channel === 'sms');
     expect(toggled?.enabled).toBe(false);

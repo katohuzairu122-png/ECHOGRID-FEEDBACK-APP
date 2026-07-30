@@ -1,11 +1,40 @@
 import type { Metadata } from 'next';
+import { Poppins } from 'next/font/google';
 import { NextIntlClientProvider } from 'next-intl';
 import { getLocale, getMessages } from 'next-intl/server';
+import { APP_URL } from '@/lib/app-url';
 import './globals.css';
 
+// Poppins is not a variable font on Google Fonts, so specific weights must
+// be listed. Exposed as --font-poppins (applied to <html> below), which
+// globals.css's --font-sans already references as its first choice --
+// every element gets Poppins by default with no per-component font class
+// needed. display: 'swap' avoids invisible text while the webfont loads.
+const poppins = Poppins({
+  subsets: ['latin'],
+  weight: ['400', '500', '600', '700'],
+  variable: '--font-poppins',
+  display: 'swap',
+});
+
+const TAGLINE = 'Every Voice Drives Better Decisions.';
+const DESCRIPTION = `Echo Grid — ${TAGLINE} AI-powered customer feedback, loyalty, and sentiment analytics for multi-branch businesses. An INFINICUS company.`;
+
 export const metadata: Metadata = {
-  title: 'Echo Grid Feedback',
-  description: 'Enterprise Customer Experience Platform',
+  metadataBase: new URL(APP_URL),
+  title: { default: 'Echo Grid', template: '%s · Echo Grid' },
+  description: DESCRIPTION,
+  openGraph: {
+    title: 'Echo Grid',
+    description: DESCRIPTION,
+    siteName: 'Echo Grid',
+    type: 'website',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Echo Grid',
+    description: DESCRIPTION,
+  },
 };
 
 /**
@@ -24,7 +53,7 @@ export default async function RootLayout({
   const [locale, messages] = await Promise.all([getLocale(), getMessages()]);
 
   return (
-    <html lang={locale}>
+    <html lang={locale} className={poppins.variable}>
       <body>
         <NextIntlClientProvider locale={locale} messages={messages}>
           {children}

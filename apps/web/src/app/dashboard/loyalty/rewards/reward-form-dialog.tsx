@@ -20,7 +20,7 @@ const initialState: LoyaltyFormState = {};
 
 interface RewardFormDialogProps {
   reward?: LoyaltyRewardDto;
-  trigger: React.ReactElement;
+  trigger: React.ReactElement<Record<string, unknown>>;
 }
 
 export function RewardFormDialog({ reward, trigger }: RewardFormDialogProps) {

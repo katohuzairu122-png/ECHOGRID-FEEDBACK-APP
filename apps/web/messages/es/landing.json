@@ -1,0 +1,22 @@
+{
+  "loginLink": "Iniciar sesión",
+  "signupCta": "Empieza gratis",
+  "features": {
+    "feedback": {
+      "title": "Recopila comentarios",
+      "description": "De cada cliente, cada vez."
+    },
+    "insights": {
+      "title": "Comprende los datos",
+      "description": "Analítica impulsada por IA en la que puedes confiar."
+    },
+    "action": {
+      "title": "Toma acción",
+      "description": "Convierte los datos en crecimiento medible."
+    },
+    "loyalty": {
+      "title": "Fideliza clientes",
+      "description": "Recompensa a tus clientes. Fortalece las relaciones."
+    }
+  }
+}

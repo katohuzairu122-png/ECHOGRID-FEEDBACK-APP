@@ -7,7 +7,7 @@ import {
   confirmRedemptionAction,
   type RedemptionLookupState,
 } from '@/lib/actions/loyalty';
-import { ApiError } from '@/lib/api-client';
+import { ApiError } from '@/lib/api-error';
 import { Badge, Button, Card, CardContent, Input, Label } from '@/components/ui';
 
 const initialState: RedemptionLookupState = {};
@@ -68,7 +68,7 @@ export function RedeemLookupForm() {
                 {t('pointsRedeemed', { points: Math.abs(state.transaction.points) })}
               </p>
               <p className="text-xs text-neutral-500">
-                {t('codePrefix', { code: state.transaction.redemptionCode })}
+                {t('codePrefix', { code: state.transaction.redemptionCode ?? '' })}
               </p>
             </div>
             {alreadyConfirmed ? (

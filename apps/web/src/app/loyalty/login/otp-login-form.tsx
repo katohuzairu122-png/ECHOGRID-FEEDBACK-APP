@@ -9,6 +9,7 @@ import {
   type OtpVerifyState,
 } from '@/lib/actions/customer-auth';
 import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Input, Label } from '@/components/ui';
+import { Logo } from '@/components/brand';
 
 const requestInitial: OtpRequestState = {};
 const verifyInitial: OtpVerifyState = {};
@@ -37,7 +38,8 @@ export function OtpLoginForm({ next }: OtpLoginFormProps) {
   const t = useTranslations('loyalty.customer.login');
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-neutral-50 p-8">
+    <main className="flex min-h-screen flex-col items-center justify-center gap-8 bg-neutral-50 p-8">
+      <Logo variant="full" iconSize={40} />
       <Card className="w-full max-w-sm">
         <CardHeader>
           <CardTitle>{t('title')}</CardTitle>

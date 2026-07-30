@@ -1,0 +1,22 @@
+{
+  "loginLink": "Log in",
+  "signupCta": "Get started free",
+  "features": {
+    "feedback": {
+      "title": "Collect Feedback",
+      "description": "From every customer, every time."
+    },
+    "insights": {
+      "title": "Understand Insights",
+      "description": "AI-powered analytics you can trust."
+    },
+    "action": {
+      "title": "Take Action",
+      "description": "Turn insights into measurable growth."
+    },
+    "loyalty": {
+      "title": "Build Loyalty",
+      "description": "Reward customers. Strengthen relationships."
+    }
+  }
+}

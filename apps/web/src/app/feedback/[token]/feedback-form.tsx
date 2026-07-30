@@ -15,6 +15,7 @@ import {
   StarRating,
   Textarea,
 } from '@/components/ui';
+import { PoweredByFooter } from '@/components/brand';
 
 const initialState: FeedbackFormState = {};
 
@@ -40,7 +41,7 @@ export function FeedbackForm({ token, branchName, businessName }: FeedbackFormPr
   const t = useTranslations('feedback.submit');
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-neutral-50 p-4 sm:p-8">
+    <main className="flex min-h-screen flex-col items-center justify-center gap-4 bg-neutral-50 p-4 sm:p-8">
       <Card className="w-full max-w-md">
         {state.success ? (
           <CardContent className="flex flex-col items-center gap-2 py-14 text-center">
@@ -111,6 +112,7 @@ export function FeedbackForm({ token, branchName, businessName }: FeedbackFormPr
           </>
         )}
       </Card>
+      <PoweredByFooter />
     </main>
   );
 }

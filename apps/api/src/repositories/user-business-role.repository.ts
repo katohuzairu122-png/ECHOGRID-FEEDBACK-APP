@@ -26,6 +26,7 @@ export type PlatformTeamMember = {
 export class UserBusinessRoleRepository extends BaseRepository {
   async grant(input: NewUserBusinessRole): Promise<UserBusinessRole> {
     const [row] = await this.db.insert(userBusinessRoles).values(input).returning();
+    if (!row) throw new Error('Insert returned no row');
     return row;
   }
 

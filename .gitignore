@@ -18,3 +18,6 @@ coverage/
 playwright-report/
 test-results/
 blob-report/
+
+# Next.js generated types
+apps/web/next-env.d.ts

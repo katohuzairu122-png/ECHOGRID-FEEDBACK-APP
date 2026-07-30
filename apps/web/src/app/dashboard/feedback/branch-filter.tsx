@@ -6,7 +6,7 @@ import type { BranchDto } from '@echo-grid-feedback/shared-types';
 
 interface BranchFilterProps {
   branches: BranchDto[];
-  selectedBranchId?: string;
+  selectedBranchId?: string | undefined;
 }
 
 /**
@@ -30,7 +30,7 @@ export function BranchFilter({ branches, selectedBranchId }: BranchFilterProps) 
         router.push(value ? `/dashboard/feedback?branchId=${value}` : '/dashboard/feedback');
       }}
       aria-label={t('filterAriaLabel')}
-      className="h-10 rounded-md border border-neutral-300 bg-white px-3 text-sm text-neutral-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+      className="h-10 rounded-md border border-neutral-300 bg-white px-3 text-sm text-neutral-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600"
     >
       <option value="">{t('allBranches')}</option>
       {branches.map((branch) => (

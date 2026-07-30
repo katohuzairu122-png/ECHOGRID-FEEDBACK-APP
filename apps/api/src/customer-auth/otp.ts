@@ -1,4 +1,4 @@
-import { pbkdf2Hash, pbkdf2Verify } from '../auth/password';
+import type { Pbkdf2Worker } from '../auth/pbkdf2-worker';
 
 /**
  * OTP-specific constants and primitives, kept separate from
@@ -20,16 +20,16 @@ export const OTP_REQUEST_COOLDOWN_SECONDS = 60;
  * Math.random -- predictable OTPs defeat the entire verification purpose). */
 export function generateOtpCode(): string {
   const max = 10 ** OTP_LENGTH;
-  const randomValue = crypto.getRandomValues(new Uint32Array(1))[0] % max;
+  const randomValue = crypto.getRandomValues(new Uint32Array(1))[0]! % max;
   return randomValue.toString().padStart(OTP_LENGTH, '0');
 }
 
-export function hashOtpCode(code: string): Promise<string> {
-  return pbkdf2Hash(code, OTP_ITERATIONS);
+export function hashOtpCode(code: string, hasher: Pbkdf2Worker): Promise<string> {
+  return hasher.hash(code, OTP_ITERATIONS);
 }
 
-export function verifyOtpCode(code: string, storedHash: string): Promise<boolean> {
-  return pbkdf2Verify(code, storedHash);
+export function verifyOtpCode(code: string, storedHash: string, hasher: Pbkdf2Worker): Promise<boolean> {
+  return hasher.verify(code, storedHash);
 }
 
 export function otpExpiresAt(): Date {

@@ -2,7 +2,7 @@ import { redirect } from 'next/navigation';
 import { getFormatter, getTranslations } from 'next-intl/server';
 import { getActiveBusiness } from '@/lib/business';
 import { apiFetch } from '@/lib/api-client';
-import type { LoyaltyAccountWithCustomerDto } from '@/lib/actions/loyalty';
+import type { LoyaltyAccountWithCustomerDto } from '@echo-grid-feedback/shared-types';
 import { Badge, Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui';
 import { LoyaltySubnav } from './loyalty-subnav';
 import { AccountDialog } from './account-dialog';
@@ -65,7 +65,7 @@ export default async function LoyaltyDashboardPage() {
                   {account.status !== 'active' && (
                     <Badge variant="neutral">{t('accounts.suspended')}</Badge>
                   )}
-                  <p className="text-lg font-semibold text-brand-600">{account.points} pts</p>
+                  <p className="text-lg font-semibold text-brand-700">{account.points} pts</p>
                   <AccountDialog
                     accountId={account.id}
                     customerLabel={account.customer.fullName ?? account.customer.phone}

@@ -1,6 +1,7 @@
 import type { Repositories } from '../repositories';
 import type { Bindings } from '../config/env';
 import { AppError } from '../lib/errors';
+import type { Pbkdf2Worker } from '../auth/pbkdf2-worker';
 import type { SmsService } from './sms.service';
 import {
   generateOtpCode,
@@ -48,6 +49,7 @@ export class CustomerAuthService {
     private readonly repos: Pick<Repositories, 'customers' | 'otpCodes'>,
     private readonly sms: SmsService,
     private readonly secrets: Pick<Bindings, 'CUSTOMER_JWT_SECRET'>,
+    private readonly hasher: Pbkdf2Worker,
   ) {}
 
   /** Issues a new OTP and sends it via SMS. Silent on an unknown phone (no
@@ -55,7 +57,12 @@ export class CustomerAuthService {
    * customer row existing -- there is nothing to enumerate either way. */
   async requestOtp(phone: string): Promise<void> {
     const latest = await this.repos.otpCodes.findLatestForPhone(phone);
-    if (latest) {
+    // Only an unconsumed recent code triggers the cooldown: it exists to
+    // rate-limit SMS sends from repeated *unverified* requests. Once a code
+    // has been consumed (which requires a successful verify -- proof of phone
+    // ownership), a fresh request is a legitimate re-authentication, not spam,
+    // and must not be blocked (e.g. a returning customer re-verifying).
+    if (latest && !latest.consumedAt) {
       const secondsSinceLastRequest = (Date.now() - latest.createdAt.getTime()) / 1000;
       if (secondsSinceLastRequest < OTP_REQUEST_COOLDOWN_SECONDS) {
         throw new CustomerAuthError(
@@ -68,11 +75,11 @@ export class CustomerAuthService {
     const code = generateOtpCode();
     await this.repos.otpCodes.create({
       phone,
-      codeHash: await hashOtpCode(code),
+      codeHash: await hashOtpCode(code, this.hasher),
       expiresAt: otpExpiresAt(),
     });
 
-    await this.sms.send(phone, `Your Echo Grid Feedback verification code is ${code}. It expires in 10 minutes.`);
+    await this.sms.send(phone, `Your Echo Grid verification code is ${code}. It expires in 10 minutes.`);
   }
 
   /**
@@ -92,7 +99,7 @@ export class CustomerAuthService {
       );
     }
 
-    const valid = await verifyOtpCode(code, active.codeHash);
+    const valid = await verifyOtpCode(code, active.codeHash, this.hasher);
     if (!valid) {
       await this.repos.otpCodes.incrementAttempts(active.id);
       throw new CustomerAuthError('Code is invalid or has expired.', 'OTP_INVALID');

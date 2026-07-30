@@ -129,6 +129,63 @@ Generate strong secret values with `openssl rand -base64 32`.
 
 ## Environment Variables
 
+### Reference table
+
+Every variable used anywhere in this codebase, cross-checked directly against
+source (`grep -r "c.env\.\|process.env\."` across `apps/`) — nothing here is
+unused, and nothing read in code is missing from here. "Secret?" marks
+whether the value must never appear in a tracked file or log, regardless of
+which mechanism (`wrangler secret put`, `.dev.vars`, `.env`, GitHub Actions
+secret) holds it in a given environment.
+
+| Variable | Provided by | Required? | Where used | Example format | Validation | Secret? |
+|---|---|---|---|---|---|---|
+| `JWT_ACCESS_SECRET` | self-generated | Required | api runtime | `openssl rand -base64 32` output | ≥32 random bytes; distinct from the other two JWT secrets | **Yes** |
+| `JWT_REFRESH_SECRET` | self-generated | Required | api runtime | `openssl rand -base64 32` output | same as above | **Yes** |
+| `CUSTOMER_JWT_SECRET` | self-generated | Required | api runtime | `openssl rand -base64 32` output | same as above | **Yes** |
+| `TWILIO_ACCOUNT_SID` | Twilio Console | Required in production; placeholder OK elsewhere (ConsoleSmsService substitutes) | api runtime | `AC` + 32 hex chars | Twilio's own format | **Yes** |
+| `TWILIO_AUTH_TOKEN` | Twilio Console | Required in production; placeholder OK elsewhere | api runtime | 32 hex chars | Twilio's own format | **Yes** |
+| `TWILIO_FROM_NUMBER` | Twilio Console (a purchased number) | Required in production; placeholder OK elsewhere | api runtime | `+15550000000` | E.164 | **Yes** (Workers secret by convention here, though a phone number alone is low-sensitivity) |
+| `ANTHROPIC_API_KEY` | Anthropic Console | Required in production; placeholder OK elsewhere (ConsoleSummaryGenerator substitutes) | api runtime | `sk-ant-...` | Anthropic's own format | **Yes** |
+| `RESEND_API_KEY` | Resend Dashboard | Required in production; placeholder OK elsewhere (ConsoleEmailService substitutes) | api runtime | `re_...` | Resend's own format | **Yes** |
+| `STRIPE_SECRET_KEY` | Stripe Dashboard → Developers → API keys | Required (no dev fallback — see Billing note above) | api runtime | `sk_test_...` (dev/staging), `sk_live_...` (production only) | must start with `sk_` | **Yes** |
+| `STRIPE_WEBHOOK_SECRET` | Stripe Dashboard → Developers → Webhooks → your endpoint, or `stripe listen` locally | Required | api runtime | `whsec_...` | must start with `whsec_` | **Yes** |
+| `ENVIRONMENT` | self (`wrangler.toml` `[vars]`) | Required | api runtime | `development` \| `staging` \| `production` | zod enum, validated at request time | No |
+| `ANTHROPIC_MODEL` | self / Anthropic's current model catalog | Required | api runtime | `claude-sonnet-5` | must be a currently valid Anthropic model id — reconfirm at docs.claude.com before each environment's setup | No |
+| `RESEND_FROM_ADDRESS` | self, must be a Resend-verified sender | Required | api runtime | `Echo Grid Feedback <notifications@yourdomain.example>` | sender/domain must be verified in the Resend account owning `RESEND_API_KEY`, or sends fail | No |
+| `ALLOWED_ORIGINS` | self (the deployed `apps/web` origin(s)) | Required | api runtime | `https://app.example.com,https://staging.example.com` | comma-separated; fails closed (empty = no origins allowed) if unset | No |
+| `DATABASE_URL` | Neon Console → connection string | Required for migrations/seed scripts only (drizzle-kit and `db:seed*` run as plain Node CLIs, not through the Worker) | local/CI shell only, via `apps/api/.env` | `postgresql://user:pass@host/db?sslmode=require` | must point at the same database as the `HYPERDRIVE` binding | **Yes** |
+| `PLATFORM_ADMIN_EMAIL` | self | Required for `db:seed:platform-admin` | local/CI shell only, via `apps/api/.env` | `admin@yourcompany.example` | valid email | No |
+| `PLATFORM_ADMIN_PASSWORD` | self-chosen | Required for `db:seed:platform-admin` | local/CI shell only, via `apps/api/.env` | a real, strong, unique value — this account reaches every business's data | none enforced by the script; use a password manager | **Yes** |
+| `PLATFORM_ADMIN_NAME` | self-chosen | Optional (defaults to `"Platform Admin"`) | local/CI shell only, via `apps/api/.env` | free text | none | No |
+| `API_BASE_URL` | self (the deployed `apps/api` Worker's URL) | Required | web runtime — `apps/web/.env.local` for `next dev`; `apps/web/wrangler.toml`'s `[vars]` for a deployed Worker (**not** the same file — see below) | `http://localhost:8787` (dev) / `https://echo-grid-feedback-api.<account>.workers.dev` (deployed) | must be reachable from wherever the value is read (`localhost` only works for local dev) | No |
+
+Cloudflare resource **bindings** (not env vars in the `.env` sense, but part
+of the same environment contract — every one below is currently a
+placeholder in `apps/api/wrangler.toml` and must be provisioned per
+environment before that environment can run):
+
+| Binding | Provisioned by | Required? | Notes |
+|---|---|---|---|
+| `HYPERDRIVE` | `wrangler hyperdrive create --connection-string=<DATABASE_URL>` | Required | Returns an ID — paste into `wrangler.toml`'s `[[hyperdrive]].id`. One per environment; never share a Hyperdrive/database between dev, staging, and production. |
+| `UPLOADS` (R2) | `wrangler r2 bucket create echo-grid-feedback-uploads` | Required | Referenced by name in `wrangler.toml`, already correct — no ID to paste in. Use a distinct bucket name per environment if provisioning more than one. |
+| `CACHE` (KV) | `wrangler kv namespace create CACHE` | Required | Returns an ID — paste into `wrangler.toml`'s `[[kv_namespaces]].id`. |
+| `JOBS` (Queue) | `wrangler queues create echo-grid-feedback-jobs` | Required | Referenced by name, already correct. |
+| dead-letter queue | `wrangler queues create echo-grid-feedback-jobs-dlq` | Required | Referenced by name, already correct. |
+| `AI` (Workers AI) | none — native binding | Required | No provisioning step; just needs Workers AI enabled on the account. |
+| `AUTH_RATE_LIMITER` / `API_RATE_LIMITER` / `PUBLIC_RATE_LIMITER` / `OTP_RATE_LIMITER` | none — self-defined labels in `wrangler.toml` | Required | `namespace_id` values (`"1001"`–`"1004"`) are arbitrary account-unique labels, not provisioned resources — leave as-is. |
+| `ASSETS` (web static assets) | automatic, from `opennextjs-cloudflare build` output | Required | No manual step. |
+
+CI/CD only (`.github/workflows/ci-cd.yml`, GitHub repo → Settings → Secrets
+and variables → Actions):
+
+| Secret | Provided by | Required? | Secret? |
+|---|---|---|---|
+| `CLOUDFLARE_API_TOKEN` | Cloudflare Dashboard → My Profile → API Tokens → "Edit Cloudflare Workers" template | Required for automated deploy | **Yes** |
+| `CLOUDFLARE_ACCOUNT_ID` | Cloudflare Dashboard → Workers & Pages → Account ID | Required for automated deploy | Not sensitive on its own, but store as a secret for consistency |
+
+### Files
+
 Two separate concerns, two separate files — do not mix them up:
 
 **`apps/api/.dev.vars`** (copy from `.dev.vars.example`, gitignored) — the
@@ -190,6 +247,22 @@ dialog) — it's read from `window.location.origin` at render time instead,
 since the dashboard and the public landing page are the same Next.js
 deployment. See ARCHITECTURE.md's QR Engagement section if a future change
 ever needs that URL server-side instead.
+
+**Deployed environments (staging/production) — a third place, not `.env.local`:**
+`.env.local` only affects `next dev`/`next build` on your machine; it does not
+exist in the deployed Worker. OpenNext's Cloudflare adapter maps
+`apps/web/wrangler.toml`'s `[vars]` into `process.env` at runtime instead, so
+`API_BASE_URL` must be set there before deploying:
+
+```toml
+# apps/web/wrangler.toml
+[vars]
+API_BASE_URL = "https://<your-deployed-apps-api-worker>.workers.dev"  # or custom domain
+```
+
+Left at its local-dev default (`http://localhost:8787`), the deployed Worker
+tries to reach `localhost` from Cloudflare's edge — every Server Action fails.
+See [DEPLOYMENT.md Step 6](./DEPLOYMENT.md#step-6--deploy).
 
 ## Database
 

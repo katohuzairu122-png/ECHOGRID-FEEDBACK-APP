@@ -20,6 +20,7 @@ export class LoyaltySettingsRepository extends BaseRepository {
     if (existing) return existing;
 
     const [row] = await this.db.insert(loyaltySettings).values({ businessId }).returning();
+    if (!row) throw new Error('Insert returned no row');
     return row;
   }
 
@@ -39,6 +40,7 @@ export class LoyaltySettingsRepository extends BaseRepository {
       .set({ ...patch, updatedBy, updatedAt: new Date() })
       .where(eq(loyaltySettings.businessId, businessId))
       .returning();
+    if (!row) throw new Error('Insert returned no row');
     return row;
   }
 }

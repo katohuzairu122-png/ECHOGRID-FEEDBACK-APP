@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { AuthService, AuthError } from './auth.service';
+import { createDirectPbkdf2Worker } from './pbkdf2-worker';
 import type { User, NewUser } from '../repositories/user.repository';
 import type { RefreshToken, NewRefreshToken } from '../repositories/refresh-token.repository';
 
@@ -29,6 +30,7 @@ function createFakeRepos() {
           passwordHash: input.passwordHash,
           fullName: input.fullName,
           phone: input.phone ?? null,
+          platformRole: input.platformRole ?? null,
           status: input.status ?? 'invited',
           lastLoginAt: null,
           createdAt: new Date(),
@@ -45,6 +47,12 @@ function createFakeRepos() {
       async touchLastLogin(id: string) {
         const user = users.get(id);
         if (user) user.lastLoginAt = new Date();
+      },
+      async update(id: string, patch: Partial<User>, _updatedBy: string) {
+        const user = users.get(id);
+        if (!user) return undefined;
+        Object.assign(user, patch);
+        return user;
       },
     },
     refreshTokens: {
@@ -92,7 +100,14 @@ describe('AuthService', () => {
 
   beforeEach(() => {
     repos = createFakeRepos();
-    service = new AuthService(repos, SECRETS);
+    // The fakes implement only the subset AuthService uses; the concrete
+    // repositories also carry a `protected db` no object literal can match,
+    // so inject through the constructor's declared param type.
+    service = new AuthService(
+      repos as unknown as ConstructorParameters<typeof AuthService>[0],
+      SECRETS,
+      createDirectPbkdf2Worker(),
+    );
   });
 
   it('signup creates a user (with a hashed, not raw, password) and returns tokens', async () => {
@@ -134,12 +149,12 @@ describe('AuthService', () => {
   it('login gives the same error for a missing account and a wrong password (no user enumeration)', async () => {
     await service.signup({ email: 'real@example.com', password: 'real-password', fullName: 'R' });
 
-    const missingAccount = await service
+    const missingAccount = (await service
       .login({ email: 'nobody@example.com', password: 'anything' })
-      .catch((err) => err as AuthError);
-    const wrongPassword = await service
+      .catch((err) => err)) as AuthError;
+    const wrongPassword = (await service
       .login({ email: 'real@example.com', password: 'wrong' })
-      .catch((err) => err as AuthError);
+      .catch((err) => err)) as AuthError;
 
     expect(missingAccount.message).toBe(wrongPassword.message);
     expect(missingAccount.code).toBe(wrongPassword.code);
@@ -163,6 +178,20 @@ describe('AuthService', () => {
 
     await expect(service.refresh(second.refreshToken)).resolves.toMatchObject({
       accessToken: expect.any(String),
+    });
+  });
+
+  it('refresh rejects a valid token once the account is deactivated -- a suspended user cannot keep renewing an existing session', async () => {
+    const tokens = await service.signup({
+      email: 'deactivated@example.com',
+      password: 'password-123',
+      fullName: 'D',
+    });
+    const user = await repos.users.findByEmail('deactivated@example.com');
+    await repos.users.update(user!.id, { status: 'suspended' }, user!.id);
+
+    await expect(service.refresh(tokens.refreshToken)).rejects.toMatchObject({
+      code: 'ACCOUNT_INACTIVE',
     });
   });
 

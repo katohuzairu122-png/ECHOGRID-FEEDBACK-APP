@@ -36,6 +36,7 @@ export class RoleRepository extends BaseRepository {
 
   async create(input: NewRole): Promise<Role> {
     const [row] = await this.db.insert(roles).values(input).returning();
+    if (!row) throw new Error('Insert returned no row');
     return row;
   }
 

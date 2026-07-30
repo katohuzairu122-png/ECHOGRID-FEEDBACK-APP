@@ -34,6 +34,10 @@ function createFakeFeedbackRepo() {
         customerEmail: input.customerEmail ?? null,
         customerPhone: input.customerPhone ?? null,
         status: input.status ?? 'new',
+        sentiment: input.sentiment ?? null,
+        sentimentScore: input.sentimentScore ?? null,
+        analysisStatus: input.analysisStatus ?? 'pending',
+        analyzedAt: input.analyzedAt ?? null,
         createdAt: new Date(),
         createdBy: input.createdBy ?? null,
         updatedAt: new Date(),
@@ -93,7 +97,7 @@ describe('FeedbackService', () => {
 
   beforeEach(() => {
     repos = { feedback: createFakeFeedbackRepo() };
-    service = new FeedbackService(repos);
+    service = new FeedbackService(repos as unknown as ConstructorParameters<typeof FeedbackService>[0]);
   });
 
   it('submit creates a row scoped to the qr code’s business/branch, with no actor', async () => {
@@ -112,7 +116,7 @@ describe('FeedbackService', () => {
 
     const items = await service.listForBusiness(BUSINESS_A);
     expect(items).toHaveLength(1);
-    expect(items[0].rating).toBe(4);
+    expect(items[0]!.rating).toBe(4);
   });
 
   it('listForBusiness filters by branchId when given', async () => {
@@ -121,7 +125,7 @@ describe('FeedbackService', () => {
 
     const items = await service.listForBusiness(BUSINESS_A, { branchId: BRANCH_A });
     expect(items).toHaveLength(1);
-    expect(items[0].branchId).toBe(BRANCH_A);
+    expect(items[0]!.branchId).toBe(BRANCH_A);
   });
 
   it('markReviewed transitions status and returns the updated row', async () => {

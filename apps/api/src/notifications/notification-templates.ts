@@ -7,7 +7,7 @@
  * with each other by construction.
  */
 export type NotificationTemplateData =
-  | { eventType: 'feedback_received'; businessName: string; branchName: string; rating: number; comment?: string }
+  | { eventType: 'feedback_received'; businessName: string; branchName: string; rating: number; comment?: string | undefined }
   | { eventType: 'summary_ready'; businessName: string; periodLabel: string }
   | {
       eventType: 'redemption_pending';
@@ -39,8 +39,25 @@ function escapeHtml(value: string): string {
     .replace(/'/g, '&#39;');
 }
 
+/** Text-only styled wordmark, not a hosted/embedded logo image -- avoids
+ * cross-client image-blocking and hosting-reliability issues (same
+ * reasoning as the OG image's font-fetch tradeoff, see _social-image.tsx).
+ * Easy to upgrade to a hosted image later once a stable production domain
+ * exists. All styling is inline (no external CSS/Tailwind classes) since
+ * email clients strip <style> blocks and most external stylesheets. */
 function wrap(bodyHtml: string): string {
-  return `<div style="font-family:sans-serif;font-size:14px;color:#1a1a1a;line-height:1.5;">${bodyHtml}</div>`;
+  return (
+    `<div style="font-family:sans-serif;font-size:14px;color:#1a1a1a;line-height:1.5;">` +
+    `<div style="padding-bottom:16px;margin-bottom:16px;border-bottom:2px solid #ecfdf5;">` +
+    `<span style="font-size:18px;font-weight:700;color:#0f172a;">Echo</span>` +
+    `<span style="font-size:18px;font-weight:700;color:#059669;">Grid</span>` +
+    `</div>` +
+    bodyHtml +
+    `<div style="margin-top:24px;padding-top:16px;border-top:1px solid #e2e8f0;font-size:11px;color:#94a3b8;">` +
+    `An <span style="font-weight:600;color:#64748b;">INFINICUS</span> Company` +
+    `</div>` +
+    `</div>`
+  );
 }
 
 /**

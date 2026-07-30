@@ -66,7 +66,7 @@ describe('LoyaltyRewardService', () => {
 
   beforeEach(() => {
     repos = { loyaltyRewards: createFakeRewardRepo() };
-    service = new LoyaltyRewardService(repos);
+    service = new LoyaltyRewardService(repos as unknown as ConstructorParameters<typeof LoyaltyRewardService>[0]);
   });
 
   it('create defaults status to active', async () => {

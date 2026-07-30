@@ -27,7 +27,7 @@ describe('PreferencesForm (staff)', () => {
 
   it('renders one checkbox per event type x channel, checked according to the preferences prop', () => {
     const preferences = allEnabled();
-    preferences[0] = { ...preferences[0], enabled: false }; // feedback_received/email off
+    preferences[0] = { ...preferences[0]!, enabled: false }; // feedback_received/email off
 
     render(
       <PreferencesForm
@@ -59,7 +59,7 @@ describe('PreferencesForm (staff)', () => {
     await user.click(screen.getByRole('button', { name: 'Save preferences' }));
 
     await waitFor(() => expect(updateNotificationPreferencesAction).toHaveBeenCalled());
-    const payload = vi.mocked(updateNotificationPreferencesAction).mock.calls[0][0];
+    const payload = vi.mocked(updateNotificationPreferencesAction).mock.calls[0]![0];
     const toggled = payload.find((p) => p.eventType === 'summary_ready' && p.channel === 'email');
     expect(toggled?.enabled).toBe(false);
   });

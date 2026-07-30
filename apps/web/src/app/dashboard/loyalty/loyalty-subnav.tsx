@@ -12,19 +12,19 @@ export async function LoyaltySubnav() {
 
   return (
     <nav className="flex flex-wrap gap-4 border-b border-neutral-200 pb-3">
-      <Link href="/dashboard/loyalty" className="text-sm font-medium text-neutral-700 hover:text-brand-600">
+      <Link href="/dashboard/loyalty" className="text-sm font-medium text-neutral-700 hover:text-brand-700">
         {t('accounts')}
       </Link>
-      <Link href="/dashboard/loyalty/tiers" className="text-sm font-medium text-neutral-700 hover:text-brand-600">
+      <Link href="/dashboard/loyalty/tiers" className="text-sm font-medium text-neutral-700 hover:text-brand-700">
         {t('tiers')}
       </Link>
-      <Link href="/dashboard/loyalty/rewards" className="text-sm font-medium text-neutral-700 hover:text-brand-600">
+      <Link href="/dashboard/loyalty/rewards" className="text-sm font-medium text-neutral-700 hover:text-brand-700">
         {t('rewards')}
       </Link>
-      <Link href="/dashboard/loyalty/redeem" className="text-sm font-medium text-neutral-700 hover:text-brand-600">
+      <Link href="/dashboard/loyalty/redeem" className="text-sm font-medium text-neutral-700 hover:text-brand-700">
         {t('redeem')}
       </Link>
-      <Link href="/dashboard/loyalty/settings" className="text-sm font-medium text-neutral-700 hover:text-brand-600">
+      <Link href="/dashboard/loyalty/settings" className="text-sm font-medium text-neutral-700 hover:text-brand-700">
         {t('settings')}
       </Link>
     </nav>

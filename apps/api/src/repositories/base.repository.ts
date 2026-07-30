@@ -1,4 +1,4 @@
-import type { Database } from '../db/client';
+import type { Db } from '../db/client';
 
 /**
  * Constructor-injects the request-scoped Database so repositories are cheap
@@ -11,5 +11,5 @@ import type { Database } from '../db/client';
  * business-owned table) never query across tenant boundaries.
  */
 export abstract class BaseRepository {
-  constructor(protected readonly db: Database) {}
+  constructor(protected readonly db: Db) {}
 }

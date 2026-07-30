@@ -26,6 +26,7 @@ export class CustomerRepository extends BaseRepository {
 
   async create(input: NewCustomer): Promise<Customer> {
     const [row] = await this.db.insert(customers).values(input).returning();
+    if (!row) throw new Error('Insert returned no row');
     return row;
   }
 

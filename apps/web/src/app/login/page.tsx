@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import { loginAction, type AuthActionState } from '@/lib/actions/auth';
 import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Input, Label } from '@/components/ui';
+import { Logo } from '@/components/brand';
 
 const initialState: AuthActionState = {};
 
@@ -16,7 +17,8 @@ export default function LoginPage() {
   const t = useTranslations('auth.login');
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-neutral-50 p-8">
+    <main className="flex min-h-screen flex-col items-center justify-center gap-8 bg-neutral-50 p-8">
+      <Logo variant="full" iconSize={40} />
       <Card className="w-full max-w-sm">
         <CardHeader>
           <CardTitle>{t('title')}</CardTitle>
@@ -49,7 +51,7 @@ export default function LoginPage() {
           </form>
           <p className="mt-4 text-center text-sm text-neutral-500">
             {t('noAccount')}{' '}
-            <Link href="/signup" className="font-medium text-brand-600 hover:underline">
+            <Link href="/signup" className="font-medium text-brand-700 hover:underline">
               {t('signupLink')}
             </Link>
           </p>

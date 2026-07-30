@@ -8,6 +8,7 @@ export type NewRefreshToken = typeof refreshTokens.$inferInsert;
 export class RefreshTokenRepository extends BaseRepository {
   async create(input: NewRefreshToken): Promise<RefreshToken> {
     const [row] = await this.db.insert(refreshTokens).values(input).returning();
+    if (!row) throw new Error('Insert returned no row');
     return row;
   }
 

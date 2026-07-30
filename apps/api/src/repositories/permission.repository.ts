@@ -22,11 +22,24 @@ export class PermissionRepository extends BaseRepository {
     const existing = await this.findByKey(input.key);
     if (existing) return existing;
     const [row] = await this.db.insert(permissions).values(input).returning();
+    if (!row) throw new Error('Insert returned no row');
     return row;
   }
 
   async assignToRole(roleId: string, permissionId: string): Promise<void> {
     await this.db.insert(rolePermissions).values({ roleId, permissionId }).onConflictDoNothing();
+  }
+
+  /** Same grant as assignToRole, but as one round trip for the whole set --
+   * used by seedDefaultRoles, which otherwise awaits a DB call per
+   * permission per role (~120+ sequential round trips for the 4 starter
+   * roles once the catalog is actually populated). */
+  async assignManyToRole(roleId: string, permissionIds: string[]): Promise<void> {
+    if (permissionIds.length === 0) return;
+    await this.db
+      .insert(rolePermissions)
+      .values(permissionIds.map((permissionId) => ({ roleId, permissionId })))
+      .onConflictDoNothing();
   }
 
   /**

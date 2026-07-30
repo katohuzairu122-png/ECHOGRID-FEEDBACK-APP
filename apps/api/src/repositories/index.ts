@@ -1,4 +1,4 @@
-import type { Database } from '../db/client';
+import type { Db } from '../db/client';
 import { BusinessRepository } from './business.repository';
 import { BranchRepository } from './branch.repository';
 import { UserRepository } from './user.repository';
@@ -52,7 +52,7 @@ export * from './business-subscription.repository';
  * request-scoped Database. Block 7 wires this into Hono middleware so route
  * handlers pull repositories off context instead of constructing them ad hoc.
  */
-export function createRepositories(db: Database) {
+export function createRepositories(db: Db) {
   return {
     businesses: new BusinessRepository(db),
     branches: new BranchRepository(db),

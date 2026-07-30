@@ -30,7 +30,7 @@ export class AuditLogRepository extends BaseRepository {
 
   async listForBusiness(
     businessId: string,
-    options: { limit?: number; offset?: number } = {},
+    options: { limit?: number | undefined; offset?: number | undefined } = {},
   ): Promise<AuditLogEntry[]> {
     const limit = Math.min(options.limit ?? DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE);
     return this.db.query.auditLog.findMany({
@@ -57,14 +57,14 @@ export class AuditLogRepository extends BaseRepository {
    */
   async listAll(
     filters: {
-      businessId?: string;
-      actorUserId?: string;
-      entityType?: string;
-      action?: string;
-      from?: Date;
-      to?: Date;
+      businessId?: string | undefined;
+      actorUserId?: string | undefined;
+      entityType?: string | undefined;
+      action?: string | undefined;
+      from?: Date | undefined;
+      to?: Date | undefined;
     } = {},
-    pagination: { limit?: number; offset?: number } = {},
+    pagination: { limit?: number | undefined; offset?: number | undefined } = {},
   ): Promise<AuditLogEntry[]> {
     const limit = Math.min(pagination.limit ?? DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE);
     return this.db.query.auditLog.findMany({
@@ -93,14 +93,14 @@ export class AuditLogRepository extends BaseRepository {
    */
   async listAllWithDetails(
     filters: {
-      businessId?: string;
-      actorUserId?: string;
-      entityType?: string;
-      action?: string;
-      from?: Date;
-      to?: Date;
+      businessId?: string | undefined;
+      actorUserId?: string | undefined;
+      entityType?: string | undefined;
+      action?: string | undefined;
+      from?: Date | undefined;
+      to?: Date | undefined;
     } = {},
-    pagination: { limit?: number; offset?: number } = {},
+    pagination: { limit?: number | undefined; offset?: number | undefined } = {},
   ): Promise<AuditLogEntryWithDetails[]> {
     const limit = Math.min(pagination.limit ?? DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE);
     const rows = await this.db.query.auditLog.findMany({

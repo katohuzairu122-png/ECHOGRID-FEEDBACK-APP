@@ -5,8 +5,9 @@ import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import type { LoyaltyAccountDto } from '@echo-grid-feedback/shared-types';
 import { checkinAction } from '@/lib/actions/loyalty-customer';
-import { ApiError } from '@/lib/api-client';
+import { ApiError } from '@/lib/api-error';
 import { Button, buttonVariants, Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui';
+import { PoweredByFooter } from '@/components/brand';
 
 interface CheckinPanelProps {
   token: string;
@@ -40,7 +41,7 @@ export function CheckinPanel({ token, branchName, businessName, signedIn }: Chec
   };
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-neutral-50 p-4 sm:p-8">
+    <main className="flex min-h-screen flex-col items-center justify-center gap-4 bg-neutral-50 p-4 sm:p-8">
       <Card className="w-full max-w-md">
         {account ? (
           <CardContent className="flex flex-col items-center gap-3 py-14 text-center">
@@ -48,10 +49,10 @@ export function CheckinPanel({ token, branchName, businessName, signedIn }: Chec
             <CardDescription>
               {branchName} · {businessName}
             </CardDescription>
-            <p className="text-3xl font-semibold text-brand-600">{t('points', { points: account.points })}</p>
+            <p className="text-3xl font-semibold text-brand-700">{t('points', { points: account.points })}</p>
             <Link
               href={`/loyalty/dashboard/${account.businessId}`}
-              className="text-sm font-medium text-brand-600 hover:underline"
+              className="text-sm font-medium text-brand-700 hover:underline"
             >
               {t('viewRewards')}
             </Link>
@@ -84,6 +85,7 @@ export function CheckinPanel({ token, branchName, businessName, signedIn }: Chec
           </>
         )}
       </Card>
+      <PoweredByFooter />
     </main>
   );
 }

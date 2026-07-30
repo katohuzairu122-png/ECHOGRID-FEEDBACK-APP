@@ -3,6 +3,7 @@ import type { Bindings } from '../config/env';
 import { createDb } from '../db/client';
 import { createRepositories } from '../repositories';
 import { AuthService } from './auth.service';
+import { createDurableObjectPbkdf2Worker } from './pbkdf2-worker';
 import { signupSchema, loginSchema, refreshSchema } from './auth.dto';
 import { parseJsonBody } from '../lib/validate';
 import { ok } from '../lib/response';
@@ -17,15 +18,19 @@ export const authRoutes = new Hono<{ Bindings: Bindings; Variables: AuthVariable
  * for this request only, closed via waitUntil once the handler is done.
  */
 async function withAuthService<T>(
-  c: Context<{ Bindings: Bindings }>,
+  c: Context<{ Bindings: Bindings; Variables: AuthVariables }>,
   fn: (service: AuthService) => Promise<T>,
 ): Promise<T> {
   const { db, close } = await createDb(c.env.HYPERDRIVE);
   const repos = createRepositories(db);
-  const service = new AuthService(repos, {
-    JWT_ACCESS_SECRET: c.env.JWT_ACCESS_SECRET,
-    JWT_REFRESH_SECRET: c.env.JWT_REFRESH_SECRET,
-  });
+  const service = new AuthService(
+    repos,
+    {
+      JWT_ACCESS_SECRET: c.env.JWT_ACCESS_SECRET,
+      JWT_REFRESH_SECRET: c.env.JWT_REFRESH_SECRET,
+    },
+    createDurableObjectPbkdf2Worker(c.env.PASSWORD_HASHER),
+  );
   try {
     return await fn(service);
   } finally {

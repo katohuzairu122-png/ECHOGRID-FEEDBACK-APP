@@ -26,7 +26,7 @@ const initialState: PlatformBillingActionState = {};
 
 interface PlanFormDialogProps {
   plan?: PlatformSubscriptionPlanDto;
-  trigger: React.ReactElement;
+  trigger: React.ReactElement<Record<string, unknown>>;
 }
 
 /** Mirrors TierFormDialog exactly -- same create/edit-in-one-component

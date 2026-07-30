@@ -81,6 +81,7 @@ export class NotificationPreferenceRepository extends BaseRepository {
         .set({ enabled, updatedAt: new Date() })
         .where(eq(notificationPreferences.id, existing.id))
         .returning();
+      if (!row) throw new Error('Insert returned no row');
       return row;
     }
 
@@ -95,6 +96,7 @@ export class NotificationPreferenceRepository extends BaseRepository {
         enabled,
       })
       .returning();
+    if (!row) throw new Error('Insert returned no row');
     return row;
   }
 }

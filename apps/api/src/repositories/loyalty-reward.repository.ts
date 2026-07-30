@@ -1,6 +1,7 @@
 import { eq, and } from 'drizzle-orm';
 import { loyaltyRewards } from '../db/schema';
 import { BaseRepository } from './base.repository';
+import type { Patch } from '../lib/types';
 
 export type LoyaltyReward = typeof loyaltyRewards.$inferSelect;
 export type NewLoyaltyReward = typeof loyaltyRewards.$inferInsert;
@@ -35,13 +36,14 @@ export class LoyaltyRewardRepository extends BaseRepository {
 
   async create(input: NewLoyaltyReward): Promise<LoyaltyReward> {
     const [row] = await this.db.insert(loyaltyRewards).values(input).returning();
+    if (!row) throw new Error('Insert returned no row');
     return row;
   }
 
   async update(
     id: string,
     businessId: string,
-    patch: Partial<Omit<NewLoyaltyReward, 'id' | 'businessId'>>,
+    patch: Patch<Omit<NewLoyaltyReward, 'id' | 'businessId'>>,
     updatedBy: string,
   ): Promise<LoyaltyReward | undefined> {
     const [row] = await this.db

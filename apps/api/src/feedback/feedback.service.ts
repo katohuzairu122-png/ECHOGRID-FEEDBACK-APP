@@ -9,7 +9,7 @@ export class FeedbackService {
 
   async listForBusiness(
     businessId: string,
-    options: { branchId?: string; limit?: number; offset?: number } = {},
+    options: { branchId?: string | undefined; limit?: number | undefined; offset?: number | undefined } = {},
   ): Promise<Feedback[]> {
     return this.repos.feedback.listForBusiness(businessId, options);
   }

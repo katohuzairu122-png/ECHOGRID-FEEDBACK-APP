@@ -1,6 +1,6 @@
 export interface SummaryGenerationInput {
   businessName: string;
-  branchName?: string;
+  branchName?: string | undefined;
   periodLabel: string;
   feedbackCount: number;
   positiveCount: number;

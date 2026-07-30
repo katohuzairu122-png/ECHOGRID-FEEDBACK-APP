@@ -6,8 +6,8 @@ import { useTranslations } from 'next-intl';
 import { Button, Input, Select } from '@/components/ui';
 
 interface BusinessFiltersProps {
-  search?: string;
-  status?: string;
+  search?: string | undefined;
+  status?: string | undefined;
 }
 
 /**

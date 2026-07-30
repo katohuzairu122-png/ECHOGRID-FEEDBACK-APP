@@ -1,22 +1,29 @@
 import { describe, it, expect } from 'vitest';
 import { SubscriptionProvisioningService } from './subscription-provisioning.service';
-import type { SubscriptionPlan } from '../repositories/subscription-plan.repository';
+import type {
+  SubscriptionPlan,
+  SubscriptionPlanRepository,
+} from '../repositories/subscription-plan.repository';
 import type {
   NewBusinessSubscription,
   BusinessSubscription,
+  BusinessSubscriptionRepository,
 } from '../repositories/business-subscription.repository';
 
 /** Minimal fakes, same "just enough of the repository's interface" spirit
- * as branch.service.test.ts's createFakeBranchRepo. */
-function createFakePlanRepo(defaultPlan: SubscriptionPlan | undefined) {
+ * as branch.service.test.ts's createFakeBranchRepo. Cast to the repository
+ * type (intersected with the test-only inspection prop the assertions read). */
+function createFakePlanRepo(defaultPlan: SubscriptionPlan | undefined): SubscriptionPlanRepository {
   return {
     async findDefaultTrial(): Promise<SubscriptionPlan | undefined> {
       return defaultPlan;
     },
-  };
+  } as unknown as SubscriptionPlanRepository;
 }
 
-function createFakeSubscriptionRepo() {
+function createFakeSubscriptionRepo(): BusinessSubscriptionRepository & {
+  created: NewBusinessSubscription[];
+} {
   const created: NewBusinessSubscription[] = [];
   return {
     created,
@@ -24,7 +31,7 @@ function createFakeSubscriptionRepo() {
       created.push(input);
       return { id: 'sub-1', ...input } as BusinessSubscription;
     },
-  };
+  } as unknown as BusinessSubscriptionRepository & { created: NewBusinessSubscription[] };
 }
 
 const FAKE_PLAN: SubscriptionPlan = {
@@ -77,7 +84,7 @@ describe('SubscriptionProvisioningService', () => {
 
     const before = Date.now();
     await service.provisionTrial('business-1', 'user-1');
-    const trialEndsAt = subscriptionRepo.created[0].trialEndsAt as Date;
+    const trialEndsAt = subscriptionRepo.created[0]!.trialEndsAt as Date;
 
     const fourteenDaysMs = 14 * 24 * 60 * 60 * 1000;
     // A window, not an exact match -- the test itself takes nonzero time to

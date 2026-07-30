@@ -12,12 +12,14 @@ import { sign, verify } from 'hono/jwt';
  * JWT_ACCESS_SECRET -- a fully separate secret so a leak of one token system
  * never compromises the other.
  */
-export interface CustomerAccessTokenPayload {
+// Declared as `type` (not `interface`) so it gets an implicit string index
+// signature and is assignable to hono/jwt's `JWTPayload` param.
+export type CustomerAccessTokenPayload = {
   sub: string; // customers.id
   type: 'customer_access';
   iat: number;
   exp: number;
-}
+};
 
 export const CUSTOMER_ACCESS_TOKEN_TTL_SECONDS = 90 * 24 * 60 * 60; // 90 days
 

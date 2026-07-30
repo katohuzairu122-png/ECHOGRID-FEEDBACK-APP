@@ -15,6 +15,7 @@ const MAX_PAGE_SIZE = 200;
 export class NotificationRepository extends BaseRepository {
   async create(input: NewNotification): Promise<Notification> {
     const [row] = await this.db.insert(notifications).values(input).returning();
+    if (!row) throw new Error('Insert returned no row');
     return row;
   }
 
@@ -38,7 +39,7 @@ export class NotificationRepository extends BaseRepository {
 
   async listForBusiness(
     businessId: string,
-    options: { limit?: number; offset?: number } = {},
+    options: { limit?: number | undefined; offset?: number | undefined } = {},
   ): Promise<Notification[]> {
     const limit = Math.min(options.limit ?? DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE);
     return this.db.query.notifications.findMany({

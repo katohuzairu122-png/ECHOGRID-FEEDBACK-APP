@@ -1,16 +1,20 @@
 import { describe, it, expect } from 'vitest';
 import type Stripe from 'stripe';
 import { BillingService } from './billing.service';
-import type { SubscriptionPlan } from '../repositories/subscription-plan.repository';
+import type { SubscriptionPlan, SubscriptionPlanRepository } from '../repositories/subscription-plan.repository';
 import type {
   BusinessSubscription,
   BusinessSubscriptionWithPlan,
+  BusinessSubscriptionRepository,
 } from '../repositories/business-subscription.repository';
 
 /** Same minimal in-memory fake spirit as branch.service.test.ts -- enough of
  * each repository's interface for BillingService to run against, nothing
  * more. */
-function createFakePlanRepo(plans: SubscriptionPlan[]) {
+// The fakes implement only the subset of each repository BillingService uses;
+// the concrete repositories also carry a `protected db` no object literal can
+// match, so the return is cast to the repository type for injection.
+function createFakePlanRepo(plans: SubscriptionPlan[]): SubscriptionPlanRepository {
   return {
     async listActive(): Promise<SubscriptionPlan[]> {
       return plans.filter((p) => p.isActive);
@@ -18,10 +22,12 @@ function createFakePlanRepo(plans: SubscriptionPlan[]) {
     async findById(id: string): Promise<SubscriptionPlan | undefined> {
       return plans.find((p) => p.id === id);
     },
-  };
+  } as unknown as SubscriptionPlanRepository;
 }
 
-function createFakeSubscriptionRepo(subscriptions: BusinessSubscriptionWithPlan[]) {
+function createFakeSubscriptionRepo(
+  subscriptions: BusinessSubscriptionWithPlan[],
+): BusinessSubscriptionRepository {
   return {
     async findByBusiness(businessId: string): Promise<BusinessSubscription | undefined> {
       const sub = subscriptions.find((s) => s.businessId === businessId);
@@ -32,7 +38,7 @@ function createFakeSubscriptionRepo(subscriptions: BusinessSubscriptionWithPlan[
     async findByBusinessWithPlan(businessId: string): Promise<BusinessSubscriptionWithPlan | undefined> {
       return subscriptions.find((s) => s.businessId === businessId);
     },
-  };
+  } as unknown as BusinessSubscriptionRepository;
 }
 
 // Derived FROM the real Stripe instance type (Parameters<Stripe[...]...>)
@@ -150,7 +156,7 @@ describe('BillingService', () => {
       const [plan] = await service.listPlans();
       expect(plan).not.toHaveProperty('stripePriceIdMonthly');
       expect(plan).not.toHaveProperty('stripePriceIdYearly');
-      expect(plan.id).toBe(PURCHASABLE_PLAN.id);
+      expect(plan!.id).toBe(PURCHASABLE_PLAN.id);
     });
 
     it('excludes inactive (retired) plans -- the picker only offers what is currently purchasable', async () => {
@@ -165,7 +171,7 @@ describe('BillingService', () => {
 
       const plans = await service.listPlans();
       expect(plans).toHaveLength(1);
-      expect(plans[0].id).toBe(PURCHASABLE_PLAN.id);
+      expect(plans[0]!.id).toBe(PURCHASABLE_PLAN.id);
     });
   });
 
@@ -297,9 +303,9 @@ describe('BillingService', () => {
 
       await service.createCheckoutSession('business-1', 'owner@example.com', INPUT);
 
-      expect(checkoutCalls[0].customer_email).toBe('owner@example.com');
-      expect(checkoutCalls[0].customer).toBeUndefined();
-      expect(checkoutCalls[0].subscription_data?.metadata).toMatchObject({
+      expect(checkoutCalls[0]!.customer_email).toBe('owner@example.com');
+      expect(checkoutCalls[0]!.customer).toBeUndefined();
+      expect(checkoutCalls[0]!.subscription_data?.metadata).toMatchObject({
         businessId: 'business-1',
         planId: PURCHASABLE_PLAN.id,
       });
@@ -318,8 +324,8 @@ describe('BillingService', () => {
 
       await service.createCheckoutSession('business-1', 'owner@example.com', INPUT);
 
-      expect(checkoutCalls[0].customer).toBe('cus_existing');
-      expect(checkoutCalls[0].customer_email).toBeUndefined();
+      expect(checkoutCalls[0]!.customer).toBe('cus_existing');
+      expect(checkoutCalls[0]!.customer_email).toBeUndefined();
     });
 
     it('selects the yearly Stripe price when interval is year', async () => {
@@ -334,7 +340,7 @@ describe('BillingService', () => {
 
       await service.createCheckoutSession('business-1', 'owner@example.com', { ...INPUT, interval: 'year' });
 
-      expect(checkoutCalls[0].line_items?.[0]).toMatchObject({ price: PURCHASABLE_PLAN.stripePriceIdYearly });
+      expect(checkoutCalls[0]!.line_items?.[0]).toMatchObject({ price: PURCHASABLE_PLAN.stripePriceIdYearly });
     });
 
     it('throws STRIPE_SESSION_ERROR if Stripe returns no checkout URL', async () => {

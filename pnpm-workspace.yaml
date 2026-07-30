@@ -1,3 +1,17 @@
 packages:
   - "apps/*"
   - "packages/*"
+
+onlyBuiltDependencies:
+  - esbuild
+  - sharp
+  - workerd
+  - "@swc/core"
+  - "@parcel/watcher"
+
+allowBuilds:
+  esbuild: true
+  sharp: true
+  workerd: true
+  "@swc/core": true
+  "@parcel/watcher": true

@@ -19,6 +19,7 @@ const NAMESPACES = [
   'analytics',
   'notifications',
   'platform',
+  'landing',
 ] as const;
 
 type Messages = Record<string, unknown>;
@@ -29,8 +30,8 @@ type Messages = Record<string, unknown>;
  * `useTranslations('<namespace>')`). Dynamic import with a template literal
  * over a small, closed set of locale/namespace values is next-intl's own
  * documented pattern for split message files -- the bundler resolves it as
- * a context module (every matching messages/*/*.json file gets bundled),
- * not an arbitrary runtime path.
+ * a context module (every matching messages/<locale>/<namespace>.json file
+ * gets bundled), not an arbitrary runtime path.
  */
 export async function loadMessages(locale: Locale): Promise<Messages> {
   const entries = await Promise.all(

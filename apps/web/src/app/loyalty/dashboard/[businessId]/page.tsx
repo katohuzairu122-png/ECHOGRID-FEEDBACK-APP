@@ -63,7 +63,7 @@ export default async function LoyaltyBusinessPage({ params }: LoyaltyBusinessPag
       <div className="flex justify-end">
         <Link
           href={`/loyalty/dashboard/${businessId}/notifications`}
-          className="text-sm font-medium text-brand-600 hover:underline"
+          className="text-sm font-medium text-brand-700 hover:underline"
         >
           {t('notificationPreferences')}
         </Link>
@@ -77,7 +77,7 @@ export default async function LoyaltyBusinessPage({ params }: LoyaltyBusinessPag
           </div>
         </CardHeader>
         <CardContent className="flex flex-col gap-3">
-          <p className="text-4xl font-semibold text-brand-600">{t('points', { points: account.points })}</p>
+          <p className="text-4xl font-semibold text-brand-700">{t('points', { points: account.points })}</p>
           {sortedTiers.length > 0 && (
             <Progress
               value={progress}

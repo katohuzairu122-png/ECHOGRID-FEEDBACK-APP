@@ -41,7 +41,7 @@ describe('SearchFilters', () => {
     await user.selectOptions(screen.getByLabelText('Date range'), '90');
     await user.click(screen.getByRole('button', { name: 'Search' }));
 
-    const url = new URL(push.mock.calls[0][0], 'http://localhost');
+    const url = new URL(push.mock.calls[0]![0], 'http://localhost');
     expect(url.searchParams.get('branchId')).toBe('branch-1');
     expect(url.searchParams.get('keyword')).toBe('slow service');
     expect(url.searchParams.get('sentiment')).toBe('negative');

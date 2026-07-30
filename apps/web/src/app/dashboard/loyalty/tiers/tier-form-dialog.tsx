@@ -20,7 +20,7 @@ const initialState: LoyaltyFormState = {};
 
 interface TierFormDialogProps {
   tier?: LoyaltyTierDto;
-  trigger: React.ReactElement;
+  trigger: React.ReactElement<Record<string, unknown>>;
 }
 
 /** Mirrors BranchFormDialog exactly -- same create/edit-in-one-component

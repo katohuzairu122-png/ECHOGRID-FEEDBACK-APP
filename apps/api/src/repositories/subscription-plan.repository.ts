@@ -1,6 +1,7 @@
 import { eq, or, and, ne } from 'drizzle-orm';
 import { subscriptionPlans } from '../db/schema';
 import { BaseRepository } from './base.repository';
+import type { Patch } from '../lib/types';
 
 export type SubscriptionPlan = typeof subscriptionPlans.$inferSelect;
 export type NewSubscriptionPlan = typeof subscriptionPlans.$inferInsert;
@@ -79,6 +80,7 @@ export class SubscriptionPlanRepository extends BaseRepository {
     const existing = await this.findByKey(input.key);
     if (!existing) {
       const [row] = await this.db.insert(subscriptionPlans).values(input).returning();
+      if (!row) throw new Error('Insert returned no row');
       return row;
     }
     const { isActive: _ignoredIsActive, key: _ignoredKey, ...editable } = input;
@@ -87,6 +89,7 @@ export class SubscriptionPlanRepository extends BaseRepository {
       .set(editable)
       .where(eq(subscriptionPlans.id, existing.id))
       .returning();
+    if (!row) throw new Error('Insert returned no row');
     return row;
   }
 
@@ -99,6 +102,7 @@ export class SubscriptionPlanRepository extends BaseRepository {
    * 409 -- see that file for why the check lives at the route layer here. */
   async create(input: NewSubscriptionPlan): Promise<SubscriptionPlan> {
     const [row] = await this.db.insert(subscriptionPlans).values(input).returning();
+    if (!row) throw new Error('Insert returned no row');
     return row;
   }
 
@@ -112,7 +116,7 @@ export class SubscriptionPlanRepository extends BaseRepository {
    */
   async update(
     id: string,
-    patch: Partial<Omit<NewSubscriptionPlan, 'id' | 'key'>>,
+    patch: Patch<Omit<NewSubscriptionPlan, 'id' | 'key'>>,
     updatedBy: string,
   ): Promise<SubscriptionPlan | undefined> {
     if (patch.isDefaultTrial) {

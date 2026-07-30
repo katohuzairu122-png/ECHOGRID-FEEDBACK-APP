@@ -46,12 +46,16 @@ export class BusinessService {
 
       const roleProvisioning = new RoleProvisioningService(repos);
       const roleIds = await roleProvisioning.seedDefaultRoles(business.id, ownerId);
+      const ownerRoleId = roleIds.Owner;
+      if (!ownerRoleId) {
+        throw new AppError('Failed to provision the Owner role.', 500, 'ROLE_PROVISIONING_FAILED');
+      }
 
       await repos.userBusinessRoles.grant({
         userId: ownerId,
         businessId: business.id,
         branchId: null,
-        roleId: roleIds.Owner,
+        roleId: ownerRoleId,
         createdBy: ownerId,
       });
 
@@ -63,7 +67,7 @@ export class BusinessService {
       const subscriptionProvisioning = new SubscriptionProvisioningService(repos);
       await subscriptionProvisioning.provisionTrial(business.id, ownerId);
 
-      return { businessId: business.id, ownerRoleId: roleIds.Owner };
+      return { businessId: business.id, ownerRoleId };
     });
   }
 

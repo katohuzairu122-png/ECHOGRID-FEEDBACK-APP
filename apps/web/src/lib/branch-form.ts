@@ -1,13 +1,13 @@
 export interface BranchMutationInput {
   name: string;
   slug: string;
-  addressLine1?: string;
-  addressLine2?: string;
-  city?: string;
-  stateProvince?: string;
-  postalCode?: string;
-  countryCode?: string;
-  timezone?: string;
+  addressLine1?: string | undefined;
+  addressLine2?: string | undefined;
+  city?: string | undefined;
+  stateProvince?: string | undefined;
+  postalCode?: string | undefined;
+  countryCode?: string | undefined;
+  timezone?: string | undefined;
 }
 
 /**

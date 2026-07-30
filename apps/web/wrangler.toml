@@ -1,7 +1,48 @@
 name = "echo-grid-feedback-web"
 main = ".open-next/worker.js"
 compatibility_date = "2026-07-08"
-compatibility_flags = ["nodejs_compat"]
+# global_fetch_strictly_public: without it, Server Actions here calling
+# apps/api (a separate *.workers.dev subdomain) throw Cloudflare error 1042
+# -- workers.dev subdomains are treated as "private" for Worker-to-Worker
+# fetches by default. Needed on both this Worker and apps/api's until a
+# custom domain replaces workers.dev for both.
+compatibility_flags = ["nodejs_compat", "global_fetch_strictly_public"]
+
+# OpenNext's Cloudflare adapter maps [vars] into process.env at runtime, same
+# as apps/api's own [vars] block -- api-client.ts reads this via
+# `process.env.API_BASE_URL`. Without it the deployed Worker silently falls
+# back to api-client.ts's `http://localhost:8787` default, which is
+# unreachable from Cloudflare's edge and breaks every Server Action. Point
+# this at the deployed apps/api Worker's URL (or custom domain) before
+# deploying -- there is no working default for a real environment.
+[vars]
+# Still pointed at the workers.dev URL, not the new api.echo-grid.uk custom
+# domain, on purpose -- this is the live inter-service call every Server
+# Action depends on, and workers.dev is the already-confirmed-working path.
+# Switch to https://api.echo-grid.uk once that custom domain is verified
+# reachable end-to-end (DNS propagation, cert issuance).
+API_BASE_URL = "https://echo-grid-feedback-api.katohuzairu122.workers.dev"
+# This Worker's own public URL -- used by metadataBase/robots.ts/sitemap.ts
+# for absolute URLs (lib/app-url.ts). The real domain turned out to be
+# echo-grid.uk (WITH a hyphen) -- the account's actual registered domain,
+# confirmed against the Cloudflare dashboard, overriding an earlier
+# "echogrid.uk, no hyphen" assumption made before the domain was purchased.
+# Bound as a Workers Custom Domain (root -> this Worker) on 2026-07-29.
+APP_URL = "https://echo-grid.uk"
+# TEMPORARY WORKAROUND for a confirmed open upstream bug: Next.js's
+# getMiddlewareManifest() dynamic-requires middleware-manifest.json, which
+# Workers' runtime doesn't support -- every route 500'd until this was set.
+# https://github.com/opennextjs/opennextjs-cloudflare/issues/1232 (open as of
+# 2026-07-23). This forces Next.js into minimal mode, which skips src/
+# middleware.ts entirely. Verified safe: every protected layout
+# (dashboard/platform/loyalty) already does its own independent
+# hasSession()/redirect() check server-side, and the API's own auth/RBAC is
+# unaffected -- the only loss is middleware's instant edge-redirect (a UX
+# nicety that avoided one render before redirecting), not a security
+# boundary. Remove this once the upstream issue is fixed and middleware.ts's
+# behavior (esp. the /login-when-already-authenticated redirect) is
+# confirmed still working without it.
+NEXT_PRIVATE_MINIMAL_MODE = "1"
 
 [assets]
 directory = ".open-next/assets"
