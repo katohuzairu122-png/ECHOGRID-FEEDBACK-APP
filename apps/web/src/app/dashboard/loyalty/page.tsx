@@ -2,7 +2,7 @@ import { redirect } from 'next/navigation';
 import { getFormatter, getTranslations } from 'next-intl/server';
 import { getActiveBusiness } from '@/lib/business';
 import { apiFetch } from '@/lib/api-client';
-import type { LoyaltyAccountWithCustomerDto } from '@/lib/actions/loyalty';
+import type { LoyaltyAccountWithCustomerDto } from '@echo-grid-feedback/shared-types';
 import { Badge, Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui';
 import { LoyaltySubnav } from './loyalty-subnav';
 import { AccountDialog } from './account-dialog';

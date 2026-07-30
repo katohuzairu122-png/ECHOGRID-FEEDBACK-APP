@@ -77,6 +77,21 @@ required = [
 [[hyperdrive]]
 binding = "HYPERDRIVE"
 id = "542dd173d3d14d54ac66c0f1f69e5ff9"
+# RESOLVED (2026-07-30): query caching was DISABLED on this Hyperdrive
+# config via `wrangler hyperdrive update <id> --caching-disabled`. Hyperdrive
+# caches read queries for 60s by default and does NOT invalidate on write --
+# this broke read-after-write everywhere a create was immediately followed
+# by a list/find (most visibly: a brand-new user's first "create your
+# business" submission kept re-showing the create form, since GET
+# /businesses served the cached pre-creation empty result; same root cause
+# behind an earlier "login right after signup fails" finding, via
+# findByEmail's own pre-existence-check caching an empty result). This
+# config change isn't expressed in this file -- it's a property of the
+# Hyperdrive resource itself, not a wrangler.toml setting. If read-heavy,
+# staleness-tolerant caching is wanted later (e.g. public business lookups,
+# analytics), add a SECOND Hyperdrive binding with caching left enabled for
+# just those specific queries, per Cloudflare's own documented pattern --
+# don't re-enable it here without solving read-after-write first.
 # Do NOT add `localConnectionString` here -- this file is tracked by git and
 # already pushed to GitHub. It is not needed for migrations or integration
 # tests (those connect directly via DATABASE_URL from apps/api/.env, never

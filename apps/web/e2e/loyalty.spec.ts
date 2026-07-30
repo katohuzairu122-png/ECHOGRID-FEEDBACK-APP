@@ -59,7 +59,11 @@ test('staff sets up a loyalty tier, reward, and earning rates, end to end', asyn
   await expect(page.getByText('Inactive')).toBeVisible();
 
   // --- Settings ---
-  await page.getByRole('link', { name: 'Settings' }).click();
+  // Scoped to <main> -- the top nav also has its own "Settings" link
+  // (business-wide /dashboard/settings), ambiguous with the loyalty
+  // subnav's "Settings" (/dashboard/loyalty/settings) under a bare
+  // getByRole('link', { name: 'Settings' }).
+  await page.getByRole('main').getByRole('link', { name: 'Settings' }).click();
   await page.getByLabel('Points per check-in').fill('15');
   await page.getByRole('button', { name: 'Save settings' }).click();
   await expect(page.getByText('Settings saved.')).toBeVisible();

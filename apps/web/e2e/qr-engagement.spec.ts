@@ -47,7 +47,12 @@ test('QR code scan to feedback inbox, end to end', async ({ page }) => {
   await customerPage.goto(feedbackUrl!);
 
   await expect(customerPage.getByRole('heading', { name: 'How was your visit?' })).toBeVisible();
-  await customerPage.getByRole('radio', { name: '5 stars' }).click();
+  // force: true -- StarRating (components/ui/star-rating.tsx) renders each
+  // radio input visually-hidden (sr-only) inside a styled <label>; real
+  // users and screen readers interact with the label/input pair natively,
+  // but Playwright's actionability check clicks the input's own (now
+  // off-screen) box and sees the label geometrically on top of it.
+  await customerPage.getByRole('radio', { name: '5 stars' }).click({ force: true });
   await customerPage.getByLabel('Comments (optional)').fill('Excellent service, E2E test.');
   await customerPage.getByRole('button', { name: 'Submit feedback' }).click();
 

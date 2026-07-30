@@ -111,18 +111,27 @@ export class RoleProvisioningService {
   async seedDefaultRoles(businessId: string, createdBy: string): Promise<Record<string, string>> {
     const roleIds: Record<string, string> = {};
 
+    // Loaded once and reused across all 4 roles -- looking each key up
+    // individually (as this used to) means a DB round trip per permission
+    // per role (~120+ sequential awaits total), which is fine against an
+    // empty/unseeded catalog (every lookup is a fast miss) but becomes slow
+    // enough to blow past request timeouts once the catalog is actually
+    // populated, since every one of those becomes a real write too.
+    const catalog = await this.repos.permissions.listAll();
+    const permissionIdByKey = new Map(catalog.map((p) => [p.key, p.id]));
+
     for (const [name, permissionKeys] of Object.entries(DEFAULT_ROLES)) {
       const role = await this.repos.roles.create({ businessId, name, isSystem: true, createdBy });
       roleIds[name] = role.id;
 
-      for (const key of permissionKeys) {
-        const permission = await this.repos.permissions.findByKey(key);
-        // Catalog not seeded yet (pnpm db:seed) -- skip rather than fail so
-        // business creation still succeeds; roles just start with fewer
-        // permissions than intended until the catalog exists.
-        if (!permission) continue;
-        await this.repos.permissions.assignToRole(role.id, permission.id);
-      }
+      // Keys with no matching catalog row (pnpm db:seed not yet run for
+      // them) are skipped rather than failing business creation; the role
+      // just starts with fewer permissions than intended until the catalog
+      // catches up.
+      const permissionIds = permissionKeys
+        .map((key) => permissionIdByKey.get(key))
+        .filter((id): id is string => id !== undefined);
+      await this.repos.permissions.assignManyToRole(role.id, permissionIds);
     }
 
     return roleIds;

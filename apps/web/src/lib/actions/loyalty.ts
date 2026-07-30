@@ -275,7 +275,3 @@ export async function confirmRedemptionAction(code: string): Promise<LoyaltyTran
     businessId: business.id,
   });
 }
-
-// Re-exported so page.tsx files can type their server-fetched lists without
-// a second import from shared-types.
-export type { LoyaltyAccountWithCustomerDto, LoyaltyTierDto, LoyaltyRewardDto };
