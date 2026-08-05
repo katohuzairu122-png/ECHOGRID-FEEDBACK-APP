@@ -28,7 +28,14 @@ tag = "v1"
 new_sqlite_classes = ["PasswordHasherDurableObject"]
 
 [vars]
-ENVIRONMENT = "development"
+# Flipped to "production" 2026-08-05 -- Twilio and Resend now have real
+# credentials (see .dev.vars comments / memory), so ConsoleSmsService and
+# ConsoleEmailService should no longer substitute for them. Stripe is
+# unaffected by this flag either way -- billing/stripe-client.ts always
+# calls the real Stripe API regardless of ENVIRONMENT, gated only by
+# whether STRIPE_SECRET_KEY is a real key (still a placeholder as of this
+# change -- Stripe setup is paused, see memory).
+ENVIRONMENT = "production"
 # Anthropic model identifier -- non-secret, [vars] not [secrets] so it's
 # swappable without a deploy. claude-sonnet-5 confirmed as the current, real
 # model string via Anthropic's own docs (platform.claude.com/docs, checked
@@ -38,14 +45,9 @@ ENVIRONMENT = "development"
 # before changing environments, since model identifiers do change over time.
 ANTHROPIC_MODEL = "claude-sonnet-5"
 # Resend sender identity (Notifications Block 2) -- non-secret, one
-# platform-wide "from" address for v1. Must be a verified sender/domain in
-# the Resend account the RESEND_API_KEY secret below belongs to, or sends
-# will fail in production. Update the domain to notifications@echo-grid.uk
-# (note the hyphen -- that's the actual registered domain, confirmed via
-# the Cloudflare dashboard, not "echogrid.uk" as earlier comments assumed)
-# once that domain is verified in Resend -- the display name is already the
-# current brand name, only the domain is still a placeholder.
-RESEND_FROM_ADDRESS = "Echo Grid <notifications@yourdomain.example>"
+# platform-wide "from" address for v1. echo-grid.uk verified in Resend as of
+# 2026-08-05 (INFINICUS team account) -- real address, not a placeholder.
+RESEND_FROM_ADDRESS = "Echo Grid <notifications@echo-grid.uk>"
 # CORS allow-list for apps/web's deployed origin(s), comma-separated --
 # read by index.ts's cors() middleware (config/env.ts's Bindings). Only
 # matters for direct browser-to-API calls; today's Server Actions (BFF
