@@ -15,6 +15,7 @@
     "db:seed": "tsx src/db/seed/permissions.seed.ts",
     "db:seed:platform-admin": "tsx src/db/seed/platform-admin.seed.ts",
     "db:seed:billing-backfill": "tsx src/db/seed/billing-permissions-backfill.seed.ts",
+    "db:seed:role-permissions-backfill": "tsx src/db/seed/role-permissions-backfill.seed.ts",
     "db:seed:plans": "tsx src/db/seed/subscription-plans.seed.ts",
     "test": "vitest run",
     "test:watch": "vitest",
