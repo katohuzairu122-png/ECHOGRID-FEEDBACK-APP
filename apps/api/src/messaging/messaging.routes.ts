@@ -2,13 +2,13 @@ import { Hono, type Context } from 'hono';
 import { sendMessageSchema, createConversationSchema } from '@echo-grid-feedback/shared-types';
 import type { Bindings } from '../config/env';
 import { createDb, type Database } from '../db/client';
-import { createRepositories } from '../repositories';
 import { authenticate, type AuthVariables } from '../middleware/authenticate';
 import { resolveTenantContext, type TenantVariables } from '../middleware/tenant-context';
 import { requirePermission } from '../middleware/require-permission';
 import type { AuditVariables } from '../middleware/audit';
 import { parseJsonBody } from '../lib/validate';
 import { ok } from '../lib/response';
+import { runInBackground } from '../lib/background-db';
 import { ConversationService } from './conversation.service';
 import { NotificationService } from '../notifications/notification.service';
 
@@ -94,15 +94,17 @@ messagingRoutes.post('/conversations/:id/messages', requirePermission('messages:
   const businessId = c.get('businessId');
   const conversationId = c.req.param('id');
   return withDb(c, async (db) => {
-    const repos = createRepositories(db);
     const message = await new ConversationService(db).sendAsStaff(businessId, conversationId, c.get('userId'), body.body);
     c.set('auditMetadata', { action: 'messaging.message_sent', entityType: 'conversation', entityId: conversationId });
 
     // Notification trigger runs AFTER the send has already succeeded, never
     // inside it -- same "never notify about something that didn't actually
-    // happen" ordering every other trigger in this codebase follows.
+    // happen" ordering every other trigger in this codebase follows. Uses
+    // its own fresh connection (runInBackground), not the outer `db` --
+    // see that helper's doc comment for why reusing it races withDb's own
+    // close().
     c.executionCtx.waitUntil(
-      (async () => {
+      runInBackground(c.env.HYPERDRIVE, async (repos) => {
         const [conversation, business] = await Promise.all([
           repos.conversations.findById(conversationId, businessId),
           repos.businesses.findById(businessId),
@@ -114,7 +116,7 @@ messagingRoutes.post('/conversations/:id/messages', requirePermission('messages:
           { customerId: conversation.customerId },
           { eventType: 'message_received', businessName: business.name, preview: body.body.slice(0, 100) },
         );
-      })(),
+      }),
     );
 
     return ok(c, message, 201);
