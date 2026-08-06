@@ -17,6 +17,7 @@ import { requirePermission } from '../middleware/require-permission';
 import type { AuditVariables } from '../middleware/audit';
 import { parseJsonBody } from '../lib/validate';
 import { ok } from '../lib/response';
+import { runInBackground } from '../lib/background-db';
 import { LoyaltyAccountService } from './loyalty-account.service';
 import { LoyaltyTierService } from './loyalty-tier.service';
 import { LoyaltyRewardService } from './loyalty-reward.service';
@@ -85,7 +86,6 @@ loyaltyRoutes.post('/accounts/:id/purchase', requirePermission('loyalty:manage')
   return withDb(c, async (db) => {
     const businessId = c.get('businessId');
     const accountId = c.req.param('id');
-    const repos = createRepositories(db);
 
     // Fetched BEFORE the mutation so the tier comparison below has a real
     // "before" to compare against -- LoyaltyAccountService's return value is
@@ -104,9 +104,12 @@ loyaltyRoutes.post('/accounts/:id/purchase', requirePermission('loyalty:manage')
     // db.transaction() directly (see its own class comment), and enqueueing
     // to an external queue has no atomicity with that transaction. Firing
     // here means we only ever notify about a purchase that really landed.
+    // Uses its own fresh connection (runInBackground), not the outer
+    // `repos` -- see that helper's doc comment for why reusing it races
+    // withDb's own close().
     const pointsEarned = account.points - before.points;
     c.executionCtx.waitUntil(
-      (async () => {
+      runInBackground(c.env.HYPERDRIVE, async (repos) => {
         const business = await repos.businesses.findById(businessId);
         if (!business || pointsEarned <= 0) return;
         const notifications = new NotificationService(repos, c.env.JOBS);
@@ -125,7 +128,7 @@ loyaltyRoutes.post('/accounts/:id/purchase', requirePermission('loyalty:manage')
             );
           }
         }
-      })(),
+      }),
     );
 
     return ok(c, account);
@@ -273,14 +276,14 @@ loyaltyRoutes.get('/redemptions/:code', requirePermission('loyalty:view'), async
 loyaltyRoutes.post('/redemptions/:code/confirm', requirePermission('loyalty:manage'), async (c) => {
   const businessId = c.get('businessId');
   return withDb(c, async (db) => {
-    const repos = createRepositories(db);
     const transaction = await new LoyaltyRedemptionService(db).confirmRedemption(businessId, c.req.param('code'));
     c.set('auditMetadata', { action: 'loyalty.redemption_confirmed', entityType: 'loyalty_transaction', entityId: transaction.id });
 
     // Same "after commit, not inside the service's transaction" ordering as
-    // the purchase handler above.
+    // the purchase handler above, and the same runInBackground fresh-
+    // connection reasoning.
     c.executionCtx.waitUntil(
-      (async () => {
+      runInBackground(c.env.HYPERDRIVE, async (repos) => {
         if (!transaction.relatedRewardId) return;
         const [account, reward, business] = await Promise.all([
           repos.loyaltyAccounts.findById(transaction.loyaltyAccountId, businessId),
@@ -294,7 +297,7 @@ loyaltyRoutes.post('/redemptions/:code/confirm', requirePermission('loyalty:mana
           { customerId: account.customerId },
           { eventType: 'reward_redeemed', businessName: business.name, rewardName: reward.name },
         );
-      })(),
+      }),
     );
 
     return ok(c, transaction);

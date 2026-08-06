@@ -14,6 +14,7 @@ import { rateLimit } from '../middleware/rate-limit';
 import { parseJsonBody } from '../lib/validate';
 import { ok } from '../lib/response';
 import { AppError } from '../lib/errors';
+import { runInBackground } from '../lib/background-db';
 import { QrCodeService } from '../qr/qr-code.service';
 import { LoyaltyAccountService } from './loyalty-account.service';
 import { LoyaltyRewardService } from './loyalty-reward.service';
@@ -112,7 +113,6 @@ loyaltyCustomerRoutes.post('/accounts/:businessId/redeem', async (c) => {
   const body = await parseJsonBody(c.req.raw, redeemRewardSchema);
   const businessId = c.req.param('businessId');
   return withDb(c, async (db) => {
-    const repos = createRepositories(db);
     const result = await new LoyaltyRedemptionService(db).redeem(c.get('customerId'), businessId, body.rewardId);
 
     // Notify STAFF, not the customer -- a staff member needs to know a code
@@ -120,9 +120,11 @@ loyaltyCustomerRoutes.post('/accounts/:businessId/redeem', async (c) => {
     // transaction has committed" ordering as every other trigger in this
     // module. loyalty:manage is held by all four default roles (including
     // Staff -- confirming a redemption is a front-counter task), so no
-    // permission filter narrows this broadcast.
+    // permission filter narrows this broadcast. Uses its own fresh
+    // connection (runInBackground), not the outer `repos` -- see that
+    // helper's doc comment for why reusing it races withDb's own close().
     c.executionCtx.waitUntil(
-      (async () => {
+      runInBackground(c.env.HYPERDRIVE, async (repos) => {
         const [reward, business] = await Promise.all([
           repos.loyaltyRewards.findById(body.rewardId, businessId),
           repos.businesses.findById(businessId),
@@ -135,7 +137,7 @@ loyaltyCustomerRoutes.post('/accounts/:businessId/redeem', async (c) => {
           rewardName: reward.name,
           redemptionCode: result.redemptionCode,
         });
-      })(),
+      }),
     );
 
     return ok(c, result, 201);

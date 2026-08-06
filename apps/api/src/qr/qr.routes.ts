@@ -12,6 +12,7 @@ import { FeedbackService } from '../feedback/feedback.service';
 import { createFollowUpQuestionGenerator } from '../feedback/follow-up-question-generator';
 import { enqueueClassification } from '../sentiment/sentiment-job';
 import { NotificationService } from '../notifications/notification.service';
+import { runInBackground } from '../lib/background-db';
 
 /**
  * The platform's only fully anonymous write surface -- no authenticate /
@@ -104,9 +105,11 @@ qrRoutes.post('/:token/feedback', async (c) => {
     // everywhere a notification follows a write in this module: never risk
     // notifying about something that didn't actually happen. Broadcasts to
     // every active staff member -- feedback:view is held by all four
-    // default roles, so no permission filter narrows this one.
+    // default roles, so no permission filter narrows this one. Uses its own
+    // fresh connection (runInBackground), not the outer `repos` -- see that
+    // helper's doc comment for why reusing it races withDb's own close().
     c.executionCtx.waitUntil(
-      (async () => {
+      runInBackground(c.env.HYPERDRIVE, async (repos) => {
         const [branch, business] = await Promise.all([
           repos.branches.findById(qrCode.branchId, qrCode.businessId),
           repos.businesses.findById(qrCode.businessId),
@@ -120,7 +123,7 @@ qrRoutes.post('/:token/feedback', async (c) => {
           rating: created.rating,
           comment: created.comment ?? undefined,
         });
-      })(),
+      }),
     );
 
     return ok(c, { id: created.id }, 201);

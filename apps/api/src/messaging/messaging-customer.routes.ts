@@ -2,12 +2,12 @@ import { Hono, type Context } from 'hono';
 import { sendMessageSchema } from '@echo-grid-feedback/shared-types';
 import type { Bindings } from '../config/env';
 import { createDb, type Database } from '../db/client';
-import { createRepositories } from '../repositories';
 import { customerAuthenticate, type CustomerAuthVariables } from '../middleware/customer-authenticate';
 import { rateLimit } from '../middleware/rate-limit';
 import { parseJsonBody } from '../lib/validate';
 import { ok } from '../lib/response';
 import { AppError } from '../lib/errors';
+import { runInBackground } from '../lib/background-db';
 import { ConversationService } from './conversation.service';
 import { NotificationService } from '../notifications/notification.service';
 
@@ -80,11 +80,10 @@ messagingCustomerRoutes.post('/conversations/:businessId/messages', async (c) =>
   const customerId = c.get('customerId');
   const businessId = c.req.param('businessId');
   return withDb(c, async (db) => {
-    const repos = createRepositories(db);
     const message = await new ConversationService(db).sendAsCustomer(customerId, businessId, body.body);
 
     c.executionCtx.waitUntil(
-      (async () => {
+      runInBackground(c.env.HYPERDRIVE, async (repos) => {
         const [customer, business] = await Promise.all([
           repos.customers.findById(customerId),
           repos.businesses.findById(businessId),
@@ -101,7 +100,7 @@ messagingCustomerRoutes.post('/conversations/:businessId/messages', async (c) =>
           },
           'messages:view',
         );
-      })(),
+      }),
     );
 
     return ok(c, message, 201);
