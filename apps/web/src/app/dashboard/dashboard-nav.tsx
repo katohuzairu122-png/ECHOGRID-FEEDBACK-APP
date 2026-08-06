@@ -48,6 +48,12 @@ export async function DashboardNav() {
               {t('nav.loyalty')}
             </Link>
             <Link
+              href="/dashboard/messages"
+              className="text-sm text-neutral-600 hover:text-neutral-900"
+            >
+              {t('nav.messages')}
+            </Link>
+            <Link
               href="/dashboard/analytics"
               className="text-sm text-neutral-600 hover:text-neutral-900"
             >

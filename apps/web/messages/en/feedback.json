@@ -26,6 +26,9 @@
     "nameLabel": "Name",
     "emailLabel": "Email",
     "phoneLabel": "Phone",
+    "continue": "Continue",
+    "continuing": "Continuing…",
+    "skip": "Skip",
     "submitting": "Submitting…",
     "submit": "Submit feedback"
   },

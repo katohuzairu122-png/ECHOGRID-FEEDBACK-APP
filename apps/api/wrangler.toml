@@ -182,6 +182,19 @@ namespace_id = "1004"
 limit = 3
 period = 60
 
+# Guards the AI follow-up-question endpoint (qr.routes.ts) -- deliberately
+# separate from PUBLIC_RATE_LIMITER: every successful call here is a real
+# Anthropic API charge, unlike a free feedback submission or a rate-limited
+# retry against it. Same reasoning as OTP_RATE_LIMITER, scaled to this
+# feature's expected volume (one call per customer per submission normally,
+# so the budget only needs to absorb retries/abuse, not legitimate repeats).
+[[ratelimits]]
+name = "FOLLOWUP_QUESTION_RATE_LIMITER"
+namespace_id = "1005"
+[ratelimits.simple]
+limit = 5
+period = 60
+
 # Cron triggers -- fire the `scheduled` export (src/index.ts, Sentiment
 # Analytics Block 3), which enqueues one generate_summary job per business
 # per period. Business-wide only (branchId null) for now; per-branch

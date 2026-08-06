@@ -1,0 +1,15 @@
+{
+  "staff": {
+    "title": "Mensajes",
+    "emptyTitle": "Aún no hay conversaciones",
+    "emptyDescription": "Inicia una conversación con un miembro de fidelización desde la lista de cuentas de fidelización.",
+    "unreadCount": "{count} sin leer",
+    "thread": {
+      "backToList": "← Volver a Mensajes",
+      "emptyThread": "Aún no hay mensajes -- saluda.",
+      "replyPlaceholder": "Escribe un mensaje…",
+      "sending": "Enviando…",
+      "send": "Enviar"
+    }
+  }
+}

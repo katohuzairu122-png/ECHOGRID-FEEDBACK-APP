@@ -1,0 +1,4 @@
+ALTER TABLE "notification_preferences" DROP CONSTRAINT "notification_preferences_event_type_check";--> statement-breakpoint
+ALTER TABLE "notifications" DROP CONSTRAINT "notifications_event_type_check";--> statement-breakpoint
+ALTER TABLE "notification_preferences" ADD CONSTRAINT "notification_preferences_event_type_check" CHECK ("notification_preferences"."event_type" IN ('feedback_received', 'summary_ready', 'redemption_pending', 'points_earned', 'tier_upgraded', 'reward_redeemed', 'message_reply_received', 'message_received'));--> statement-breakpoint
+ALTER TABLE "notifications" ADD CONSTRAINT "notifications_event_type_check" CHECK ("notifications"."event_type" IN ('feedback_received', 'summary_ready', 'redemption_pending', 'points_earned', 'tier_upgraded', 'reward_redeemed', 'message_reply_received', 'message_received'));

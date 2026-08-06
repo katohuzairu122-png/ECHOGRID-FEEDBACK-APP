@@ -17,7 +17,9 @@ export type NotificationTemplateData =
     }
   | { eventType: 'points_earned'; businessName: string; pointsEarned: number; newBalance: number }
   | { eventType: 'tier_upgraded'; businessName: string; tierName: string }
-  | { eventType: 'reward_redeemed'; businessName: string; rewardName: string };
+  | { eventType: 'reward_redeemed'; businessName: string; rewardName: string }
+  | { eventType: 'message_received'; businessName: string; preview: string }
+  | { eventType: 'message_reply_received'; businessName: string; customerLabel: string; preview: string };
 
 export interface RenderedNotification {
   subject: string;
@@ -122,6 +124,30 @@ export function renderNotification(data: NotificationTemplateData): RenderedNoti
           `<p>Your redemption of <strong>${escapeHtml(data.rewardName)}</strong> at ${escapeHtml(data.businessName)} has been confirmed. Enjoy!</p>`,
         ),
         smsText: `Your redemption of ${data.rewardName} at ${data.businessName} is confirmed. Enjoy!`,
+      };
+    // No deep link into the thread in either of these -- there's no public
+    // unauthenticated read path for a conversation, unlike e.g. a QR
+    // feedback link, so both templates just point the recipient at signing
+    // into the app rather than a URL.
+    case 'message_received':
+      return {
+        subject: `New message from ${data.businessName}`,
+        emailHtml: wrap(
+          `<p>You have a new message from <strong>${escapeHtml(data.businessName)}</strong>:</p>` +
+            `<p>"${escapeHtml(data.preview)}"</p>` +
+            `<p>Sign in to your loyalty dashboard to read and reply.</p>`,
+        ),
+        smsText: `New message from ${data.businessName}: "${data.preview}" -- sign in to your loyalty dashboard to reply.`,
+      };
+    case 'message_reply_received':
+      return {
+        subject: `New reply from ${data.customerLabel}`,
+        emailHtml: wrap(
+          `<p>New reply from <strong>${escapeHtml(data.customerLabel)}</strong> at ${escapeHtml(data.businessName)}:</p>` +
+            `<p>"${escapeHtml(data.preview)}"</p>` +
+            `<p>Open the Messages tab in your dashboard to reply.</p>`,
+        ),
+        smsText: `New reply from ${data.customerLabel} at ${data.businessName}: "${data.preview}" -- check the Messages tab.`,
       };
   }
 }

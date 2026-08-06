@@ -14,9 +14,34 @@ export const submitFeedbackSchema = z.object({
   customerName: z.string().trim().max(200).optional(),
   customerEmail: z.string().trim().toLowerCase().email().max(320).optional(),
   customerPhone: z.string().trim().max(30).optional(),
+  // Both optional, both only meaningful together -- followUpQuestion is
+  // echoed back from an earlier POST /qr/:token/follow-up-question call
+  // rather than regenerated server-side on submit, so the staff inbox shows
+  // exactly what the customer was actually asked. See
+  // FeedbackService.submit for the "answer implies question" pairing rule.
+  followUpQuestion: z.string().trim().max(500).optional(),
+  followUpAnswer: z.string().trim().max(2000).optional(),
 });
 
 export type SubmitFeedbackInput = z.infer<typeof submitFeedbackSchema>;
+
+/**
+ * Contract for POST /qr/:token/follow-up-question -- a stateless,
+ * no-DB-write endpoint that generates ONE optional AI follow-up question
+ * from the rating+comment the customer already entered, before they submit.
+ */
+export const generateFollowUpQuestionSchema = z.object({
+  rating: z.number().int().min(1).max(5),
+  comment: z.string().trim().max(2000).optional(),
+});
+
+export type GenerateFollowUpQuestionInput = z.infer<typeof generateFollowUpQuestionSchema>;
+
+export const followUpQuestionSchema = z.object({
+  question: z.string(),
+});
+
+export type FollowUpQuestionDto = z.infer<typeof followUpQuestionSchema>;
 
 /**
  * Only one transition exists today (new -> reviewed), so this is
@@ -38,6 +63,8 @@ export const feedbackSchema = z.object({
   customerName: z.string().nullable(),
   customerEmail: z.string().nullable(),
   customerPhone: z.string().nullable(),
+  followUpQuestion: z.string().nullable(),
+  followUpAnswer: z.string().nullable(),
   status: z.enum(['new', 'reviewed']),
   // AI Sentiment Analytics module (Block 1/2) -- nullable/'pending' until the
   // async classification pipeline runs. Added to the contract alongside the

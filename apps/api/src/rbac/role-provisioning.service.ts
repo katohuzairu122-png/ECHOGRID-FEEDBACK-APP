@@ -31,6 +31,8 @@ const DEFAULT_ROLES: Record<string, string[]> = {
     'notifications:manage',
     'billing:view',
     'billing:manage',
+    'messages:view',
+    'messages:send',
   ],
   // Admin mirrors Owner for everything EXCEPT the two irreversible,
   // financially-consequential actions: deleting the business and managing
@@ -59,6 +61,8 @@ const DEFAULT_ROLES: Record<string, string[]> = {
     'notifications:view',
     'notifications:manage',
     'billing:view',
+    'messages:view',
+    'messages:send',
   ],
   Manager: [
     'team:view',
@@ -75,6 +79,8 @@ const DEFAULT_ROLES: Record<string, string[]> = {
     'analytics:manage',
     'notifications:view',
     'notifications:manage',
+    'messages:view',
+    'messages:send',
   ],
   // Staff can see feedback about their own branch's service (day-to-day
   // context) but not triage it -- marking reviewed / removing a submission
@@ -94,7 +100,20 @@ const DEFAULT_ROLES: Record<string, string[]> = {
   // notification preferences, which needs no permission at all (self-service,
   // same reasoning as a customer managing their own loyalty account) --
   // notifications:view/:manage gate the business-wide settings screen only.
-  Staff: ['business:view', 'branches:view', 'feedback:view', 'loyalty:view', 'loyalty:manage'],
+  // Messaging follows loyalty:manage's cut, not rewards:manage's: replying
+  // to a customer about their visit is a front-counter task, not program
+  // configuration. No separate 'messages:manage' concept exists (unlike
+  // rewards) because there's no comparable fraud/cost surface to gate --
+  // every role that can see a conversation can also send in it.
+  Staff: [
+    'business:view',
+    'branches:view',
+    'feedback:view',
+    'loyalty:view',
+    'loyalty:manage',
+    'messages:view',
+    'messages:send',
+  ],
 };
 
 /**

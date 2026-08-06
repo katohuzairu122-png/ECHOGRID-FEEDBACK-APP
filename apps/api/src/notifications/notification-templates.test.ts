@@ -147,6 +147,37 @@ describe('renderNotification', () => {
     expect(result.smsText).toContain('10% Off <Sale>');
   });
 
+  it('message_received includes the business name and preview, escaped in the email, and has no deep link', () => {
+    const result = renderNotification({
+      eventType: 'message_received',
+      businessName: 'Test Biz',
+      preview: '<b>Hi</b> there',
+    });
+
+    expect(result.subject).toContain('Test Biz');
+    expect(result.emailHtml).toContain('&lt;b&gt;Hi&lt;/b&gt; there');
+    expect(result.emailHtml).not.toContain('<b>Hi</b>');
+    expect(result.smsText).toContain('<b>Hi</b> there');
+    // No public unauthenticated read path for a conversation -- never a URL.
+    expect(result.emailHtml).not.toContain('http');
+  });
+
+  it('message_reply_received includes the customer label and preview, escaped in the email', () => {
+    const result = renderNotification({
+      eventType: 'message_reply_received',
+      businessName: 'Test Biz',
+      customerLabel: '<script>alert(1)</script>',
+      preview: 'Thanks!',
+    });
+
+    // Subject is plain text (email subject/SMS-adjacent), never HTML-rendered
+    // -- only emailHtml gets escaped, same convention every other event type
+    // in this file follows (e.g. redemption_pending's subject).
+    expect(result.emailHtml).not.toContain('<script>alert(1)</script>');
+    expect(result.emailHtml).toContain('&lt;script&gt;');
+    expect(result.emailHtml).toContain('Thanks!');
+  });
+
   it('every event type returns a non-empty subject, emailHtml, and smsText', () => {
     const cases = [
       { eventType: 'feedback_received' as const, businessName: 'B', branchName: 'Br', rating: 5 },
@@ -155,6 +186,8 @@ describe('renderNotification', () => {
       { eventType: 'points_earned' as const, businessName: 'B', pointsEarned: 1, newBalance: 1 },
       { eventType: 'tier_upgraded' as const, businessName: 'B', tierName: 'T' },
       { eventType: 'reward_redeemed' as const, businessName: 'B', rewardName: 'R' },
+      { eventType: 'message_received' as const, businessName: 'B', preview: 'Hi' },
+      { eventType: 'message_reply_received' as const, businessName: 'B', customerLabel: 'C', preview: 'Hi' },
     ];
 
     for (const data of cases) {

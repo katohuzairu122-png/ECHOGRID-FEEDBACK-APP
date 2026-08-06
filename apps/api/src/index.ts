@@ -22,6 +22,8 @@ import { platformBillingPlansRoutes } from './platform/billing-plans.routes';
 import { platformBillingSubscriptionsRoutes } from './platform/billing-subscriptions.routes';
 import { billingRoutes } from './billing/billing.routes';
 import { stripeWebhookRoutes } from './billing/stripe-webhook.routes';
+import { messagingRoutes } from './messaging/messaging.routes';
+import { messagingCustomerRoutes } from './messaging/messaging-customer.routes';
 import { createDb } from './db/client';
 import { createRepositories } from './repositories';
 import { createSentimentService } from './sentiment/sentiment.service';
@@ -111,6 +113,8 @@ api.route('/loyalty', loyaltyRoutes);
 api.route('/loyalty/me', loyaltyCustomerRoutes);
 api.route('/analytics', analyticsRoutes);
 api.route('/notifications', notificationsRoutes);
+api.route('/messaging', messagingRoutes);
+api.route('/messaging/me', messagingCustomerRoutes);
 api.route('/billing', billingRoutes);
 // Platform Admin Console (Blocks 2-3) -- cross-tenant, gated by
 // requirePlatformRole, not resolveTenantContext. Two files, one prefix each,

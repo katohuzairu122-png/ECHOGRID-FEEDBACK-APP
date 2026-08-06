@@ -23,4 +23,6 @@ export * from './notifications';
 export * from './business-notification-settings';
 export * from './subscription-plans';
 export * from './business-subscriptions';
+export * from './conversations';
+export * from './messages';
 export * from './relations';

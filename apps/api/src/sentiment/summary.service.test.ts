@@ -24,6 +24,8 @@ function makeFeedback(overrides: Partial<Feedback> = {}): Feedback {
     customerName: null,
     customerEmail: null,
     customerPhone: null,
+    followUpQuestion: null,
+    followUpAnswer: null,
     status: 'new',
     sentiment: null,
     sentimentScore: null,

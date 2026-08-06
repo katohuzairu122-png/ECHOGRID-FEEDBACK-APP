@@ -8,7 +8,7 @@ import { z } from 'zod';
  * truth so the two can never drift apart, same reasoning as every other
  * shared enum in this package.
  *
- * Six events for v1, three staff-facing and three customer-facing (no
+ * Eight events for v1, four staff-facing and four customer-facing (no
  * overlap -- a recipient only ever needs the half relevant to their own
  * identity system). Deliberately entirely TRANSACTIONAL, not promotional --
  * see notification-preferences.ts's schema comment for why that distinction
@@ -21,6 +21,8 @@ export const notificationEventTypeSchema = z.enum([
   'points_earned',
   'tier_upgraded',
   'reward_redeemed',
+  'message_reply_received',
+  'message_received',
 ]);
 export type NotificationEventType = z.infer<typeof notificationEventTypeSchema>;
 
@@ -36,11 +38,13 @@ export const STAFF_NOTIFICATION_EVENT_TYPES: readonly NotificationEventType[] = 
   'feedback_received',
   'summary_ready',
   'redemption_pending',
+  'message_reply_received',
 ];
 export const CUSTOMER_NOTIFICATION_EVENT_TYPES: readonly NotificationEventType[] = [
   'points_earned',
   'tier_upgraded',
   'reward_redeemed',
+  'message_received',
 ];
 
 /**

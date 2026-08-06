@@ -5,7 +5,9 @@
     "redemption_pending": "Canje pendiente de confirmación",
     "points_earned": "Puntos ganados",
     "tier_upgraded": "Nivel mejorado",
-    "reward_redeemed": "Recompensa canjeada"
+    "reward_redeemed": "Recompensa canjeada",
+    "message_received": "Nuevo mensaje del personal",
+    "message_reply_received": "El cliente respondió a un mensaje"
   },
   "channels": {
     "email": "Correo electrónico",

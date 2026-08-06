@@ -1,0 +1,15 @@
+{
+  "staff": {
+    "title": "Messages",
+    "emptyTitle": "No conversations yet",
+    "emptyDescription": "Start a conversation with a loyalty member from the Loyalty accounts list.",
+    "unreadCount": "{count} unread",
+    "thread": {
+      "backToList": "← Back to Messages",
+      "emptyThread": "No messages yet -- say hello.",
+      "replyPlaceholder": "Type a message…",
+      "sending": "Sending…",
+      "send": "Send"
+    }
+  }
+}

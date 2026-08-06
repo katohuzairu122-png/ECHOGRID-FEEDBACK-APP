@@ -33,6 +33,8 @@ function createFakeFeedbackRepo() {
         customerName: input.customerName ?? null,
         customerEmail: input.customerEmail ?? null,
         customerPhone: input.customerPhone ?? null,
+        followUpQuestion: input.followUpQuestion ?? null,
+        followUpAnswer: input.followUpAnswer ?? null,
         status: input.status ?? 'new',
         sentiment: input.sentiment ?? null,
         sentimentScore: input.sentimentScore ?? null,
@@ -108,6 +110,25 @@ describe('FeedbackService', () => {
     expect(item.rating).toBe(5);
     expect(item.status).toBe('new');
     expect(item.createdBy).toBeNull();
+  });
+
+  it('submit stores a follow-up answer only when paired with its question', async () => {
+    const withPair = await service.submit(QR_CODE, {
+      rating: 5,
+      followUpQuestion: 'What made this great?',
+      followUpAnswer: 'The staff were wonderful.',
+    });
+    expect(withPair.followUpQuestion).toBe('What made this great?');
+    expect(withPair.followUpAnswer).toBe('The staff were wonderful.');
+
+    // A tampered client sending an answer with no question -- the answer
+    // must be dropped, never stored floating without its question.
+    const withoutQuestion = await service.submit(QR_CODE, {
+      rating: 5,
+      followUpAnswer: 'This should never be stored.',
+    });
+    expect(withoutQuestion.followUpQuestion).toBeNull();
+    expect(withoutQuestion.followUpAnswer).toBeNull();
   });
 
   it('listForBusiness returns only that business’s feedback', async () => {

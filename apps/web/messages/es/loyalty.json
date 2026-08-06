@@ -14,7 +14,8 @@
       "visits": "{count} visitas",
       "lastVisit": "Última visita {date}",
       "noVisits": "Sin visitas todavía",
-      "suspended": "Suspendido"
+      "suspended": "Suspendido",
+      "message": "Mensaje"
     },
     "accountDialog": {
       "manageTrigger": "Gestionar",
@@ -135,6 +136,7 @@
       "businessFallback": "Negocio"
     },
     "businessDashboard": {
+      "messages": "Mensajes",
       "notificationPreferences": "Preferencias de notificaciones →",
       "points": "{points} pts",
       "progressToNextTier": "{remaining} pts para {tierName}",
@@ -159,6 +161,14 @@
       "checkIn": "Registrarme",
       "signInToCheckIn": "Inicia sesión para registrarte",
       "genericError": "Algo salió mal. Inténtalo de nuevo."
+    },
+    "messages": {
+      "title": "Mensajes",
+      "emptyTitle": "Aún no hay mensajes",
+      "emptyDescription": "Cuando el personal te envíe un mensaje, aparecerá aquí.",
+      "replyPlaceholder": "Escribe una respuesta…",
+      "sending": "Enviando…",
+      "send": "Enviar"
     }
   }
 }

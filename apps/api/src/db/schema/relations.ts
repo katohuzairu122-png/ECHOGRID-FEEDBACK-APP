@@ -22,6 +22,8 @@ import { notifications } from './notifications';
 import { businessNotificationSettings } from './business-notification-settings';
 import { subscriptionPlans } from './subscription-plans';
 import { businessSubscriptions } from './business-subscriptions';
+import { conversations } from './conversations';
+import { messages } from './messages';
 
 export const businessesRelations = relations(businesses, ({ many, one }) => ({
   branches: many(branches),
@@ -37,6 +39,7 @@ export const businessesRelations = relations(businesses, ({ many, one }) => ({
   loyaltySettings: many(loyaltySettings),
   notificationPreferences: many(notificationPreferences),
   notifications: many(notifications),
+  conversations: many(conversations),
   // one, not many: business_subscriptions_business_id_key enforces exactly
   // one row per business at the DB layer (Billing Block 8).
   subscription: one(businessSubscriptions, {
@@ -119,6 +122,7 @@ export const customersRelations = relations(customers, ({ many }) => ({
   loyaltyAccounts: many(loyaltyAccounts),
   notificationPreferences: many(notificationPreferences),
   notifications: many(notifications),
+  conversations: many(conversations),
 }));
 
 export const loyaltyTiersRelations = relations(loyaltyTiers, ({ one, many }) => ({
@@ -203,4 +207,14 @@ export const businessSubscriptionsRelations = relations(businessSubscriptions, (
     fields: [businessSubscriptions.planId],
     references: [subscriptionPlans.id],
   }),
+}));
+
+export const conversationsRelations = relations(conversations, ({ one, many }) => ({
+  customer: one(customers, { fields: [conversations.customerId], references: [customers.id] }),
+  business: one(businesses, { fields: [conversations.businessId], references: [businesses.id] }),
+  messages: many(messages),
+}));
+
+export const messagesRelations = relations(messages, ({ one }) => ({
+  conversation: one(conversations, { fields: [messages.conversationId], references: [conversations.id] }),
 }));
