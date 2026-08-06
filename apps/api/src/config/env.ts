@@ -119,6 +119,11 @@ export interface Bindings {
    * request costs real money (one SMS via Twilio), unlike a free feedback
    * submission, so the abuse budget is much smaller. */
   OTP_RATE_LIMITER: RateLimit;
+  /** Guards POST /qr/:token/follow-up-question (qr.routes.ts) -- same
+   * "this specific request costs real money" reasoning as OTP_RATE_LIMITER:
+   * every successful call is a real Anthropic API charge, unlike a free
+   * feedback submission or a rate-limited retry against it. */
+  FOLLOWUP_QUESTION_RATE_LIMITER: RateLimit;
 }
 
 const environmentSchema = z.enum(['development', 'staging', 'production']);

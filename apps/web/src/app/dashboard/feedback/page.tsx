@@ -107,6 +107,13 @@ export default async function FeedbackPage({ searchParams }: FeedbackPageProps) 
 
                 {item.comment && <p className="text-sm text-neutral-800">{item.comment}</p>}
 
+                {item.followUpQuestion && item.followUpAnswer && (
+                  <div className="rounded-md bg-neutral-50 p-3">
+                    <p className="text-xs font-medium text-neutral-500">{item.followUpQuestion}</p>
+                    <p className="text-sm text-neutral-800">{item.followUpAnswer}</p>
+                  </div>
+                )}
+
                 {(item.customerName || item.customerEmail || item.customerPhone) && (
                   <p className="text-xs text-neutral-500">
                     {[item.customerName, item.customerEmail, item.customerPhone]

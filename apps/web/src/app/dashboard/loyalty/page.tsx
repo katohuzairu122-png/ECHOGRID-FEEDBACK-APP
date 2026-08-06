@@ -3,9 +3,10 @@ import { getFormatter, getTranslations } from 'next-intl/server';
 import { getActiveBusiness } from '@/lib/business';
 import { apiFetch } from '@/lib/api-client';
 import type { LoyaltyAccountWithCustomerDto } from '@echo-grid-feedback/shared-types';
-import { Badge, Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui';
+import { Badge, Button, Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui';
 import { LoyaltySubnav } from './loyalty-subnav';
 import { AccountDialog } from './account-dialog';
+import { startConversationAction } from '@/lib/actions/messaging';
 
 /** Staff landing page for Loyalty -- the accounts list, same PAGE_SIZE+1
  * "has more" trick dashboard/feedback/page.tsx uses (no total-count query
@@ -66,6 +67,11 @@ export default async function LoyaltyDashboardPage() {
                     <Badge variant="neutral">{t('accounts.suspended')}</Badge>
                   )}
                   <p className="text-lg font-semibold text-brand-700">{account.points} pts</p>
+                  <form action={startConversationAction.bind(null, account.customer.id)}>
+                    <Button type="submit" variant="outline" size="sm">
+                      {t('accounts.message')}
+                    </Button>
+                  </form>
                   <AccountDialog
                     accountId={account.id}
                     customerLabel={account.customer.fullName ?? account.customer.phone}

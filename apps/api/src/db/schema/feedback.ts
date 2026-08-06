@@ -48,6 +48,14 @@ export const feedback = pgTable(
     customerName: text('customer_name'),
     customerEmail: text('customer_email'),
     customerPhone: text('customer_phone'),
+    // ONE optional AI-generated follow-up question + the customer's optional
+    // answer -- not a transcript/thread, only one Q&A pair is ever supported
+    // (see submitFeedbackSchema). followUpAnswer is meaningless without
+    // followUpQuestion; that pairing is enforced in FeedbackService.submit,
+    // not a CHECK constraint, matching how sentiment/sentimentScore's
+    // cross-validation above also lives in code, not SQL.
+    followUpQuestion: text('follow_up_question'),
+    followUpAnswer: text('follow_up_answer'),
     // Business-meaningful triage state, distinct from isDeleted below (which
     // is for actually removing a spam/abusive submission). Lets an owner
     // mark something seen without a full ticketing workflow. The UI for

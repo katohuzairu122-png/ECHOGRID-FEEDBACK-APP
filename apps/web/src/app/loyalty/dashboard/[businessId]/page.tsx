@@ -7,6 +7,7 @@ import type {
   LoyaltyRewardDto,
   LoyaltyTierDto,
   BusinessPublicDto,
+  ConversationWithBusinessDto,
 } from '@echo-grid-feedback/shared-types';
 import { customerApiFetch } from '@/lib/customer-api-client';
 import { publicApiFetch } from '@/lib/public-api-client';
@@ -34,10 +35,16 @@ export default async function LoyaltyBusinessPage({ params }: LoyaltyBusinessPag
     throw err;
   }
 
-  const [business, rewards, tiers] = await Promise.all([
+  const [business, rewards, tiers, unreadMessageCount] = await Promise.all([
     publicApiFetch<BusinessPublicDto>(`/businesses/${businessId}/public`),
     customerApiFetch<LoyaltyRewardDto[]>(`/loyalty/me/rewards/${businessId}`),
     customerApiFetch<LoyaltyTierDto[]>(`/loyalty/me/tiers/${businessId}`),
+    // 404s if staff hasn't started a conversation yet -- that's a normal
+    // state here (see messages/page.tsx's own comment), not an error, so it
+    // just means no badge rather than propagating.
+    customerApiFetch<ConversationWithBusinessDto>(`/messaging/me/conversations/${businessId}`)
+      .then((c) => c.unreadCount)
+      .catch(() => 0),
   ]);
 
   // i18n & Multi-Currency Block 3 -- reads from the [businessId] layout's
@@ -60,7 +67,14 @@ export default async function LoyaltyBusinessPage({ params }: LoyaltyBusinessPag
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex justify-end">
+      <div className="flex items-center justify-end gap-4">
+        <Link
+          href={`/loyalty/dashboard/${businessId}/messages`}
+          className="flex items-center gap-1.5 text-sm font-medium text-brand-700 hover:underline"
+        >
+          {t('messages')}
+          {unreadMessageCount > 0 && <Badge variant="accent">{unreadMessageCount}</Badge>}
+        </Link>
         <Link
           href={`/loyalty/dashboard/${businessId}/notifications`}
           className="text-sm font-medium text-brand-700 hover:underline"

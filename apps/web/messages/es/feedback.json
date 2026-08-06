@@ -26,6 +26,9 @@
     "nameLabel": "Nombre",
     "emailLabel": "Correo electrónico",
     "phoneLabel": "Teléfono",
+    "continue": "Continuar",
+    "continuing": "Continuando…",
+    "skip": "Omitir",
     "submitting": "Enviando…",
     "submit": "Enviar comentario"
   },

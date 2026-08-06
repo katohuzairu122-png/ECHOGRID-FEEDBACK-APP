@@ -5,7 +5,9 @@
     "redemption_pending": "Redemption pending confirmation",
     "points_earned": "Points earned",
     "tier_upgraded": "Tier upgraded",
-    "reward_redeemed": "Reward redeemed"
+    "reward_redeemed": "Reward redeemed",
+    "message_received": "New message from staff",
+    "message_reply_received": "Customer replied to a message"
   },
   "channels": {
     "email": "Email",

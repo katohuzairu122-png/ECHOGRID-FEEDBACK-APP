@@ -14,7 +14,8 @@
       "visits": "{count} visits",
       "lastVisit": "Last visit {date}",
       "noVisits": "No visits yet",
-      "suspended": "Suspended"
+      "suspended": "Suspended",
+      "message": "Message"
     },
     "accountDialog": {
       "manageTrigger": "Manage",
@@ -135,6 +136,7 @@
       "businessFallback": "Business"
     },
     "businessDashboard": {
+      "messages": "Messages",
       "notificationPreferences": "Notification preferences →",
       "points": "{points} pts",
       "progressToNextTier": "{remaining} pts to {tierName}",
@@ -159,6 +161,14 @@
       "checkIn": "Check in",
       "signInToCheckIn": "Sign in to check in",
       "genericError": "Something went wrong. Please try again."
+    },
+    "messages": {
+      "title": "Messages",
+      "emptyTitle": "No messages yet",
+      "emptyDescription": "When staff sends you a message, it will show up here.",
+      "replyPlaceholder": "Type a reply…",
+      "sending": "Sending…",
+      "send": "Send"
     }
   }
 }

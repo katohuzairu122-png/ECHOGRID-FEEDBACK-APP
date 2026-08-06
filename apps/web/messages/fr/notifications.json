@@ -5,7 +5,9 @@
     "redemption_pending": "Échange en attente de confirmation",
     "points_earned": "Points gagnés",
     "tier_upgraded": "Niveau amélioré",
-    "reward_redeemed": "Récompense échangée"
+    "reward_redeemed": "Récompense échangée",
+    "message_received": "Nouveau message du personnel",
+    "message_reply_received": "Le client a répondu à un message"
   },
   "channels": {
     "email": "E-mail",

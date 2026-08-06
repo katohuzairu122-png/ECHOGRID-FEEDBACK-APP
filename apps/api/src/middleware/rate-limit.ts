@@ -22,7 +22,12 @@ import { AppError } from '../lib/errors';
  * endpoints -- IP is the only signal available pre-token-resolution.
  */
 export function rateLimit(
-  binding: 'AUTH_RATE_LIMITER' | 'API_RATE_LIMITER' | 'PUBLIC_RATE_LIMITER' | 'OTP_RATE_LIMITER',
+  binding:
+    | 'AUTH_RATE_LIMITER'
+    | 'API_RATE_LIMITER'
+    | 'PUBLIC_RATE_LIMITER'
+    | 'OTP_RATE_LIMITER'
+    | 'FOLLOWUP_QUESTION_RATE_LIMITER',
 ) {
   return createMiddleware<{ Bindings: Bindings }>(async (c, next) => {
     const key = c.req.header('cf-connecting-ip') ?? 'unknown';

@@ -23,5 +23,10 @@ export function readFeedbackForm(formData: FormData): SubmitFeedbackInput {
     customerName: optional('customerName'),
     customerEmail: optional('customerEmail'),
     customerPhone: optional('customerPhone'),
+    followUpQuestion: optional('followUpQuestion'),
+    // The Skip button submits a distinct `skipFollowUp` flag so a customer
+    // who typed an answer and then clicked Skip doesn't accidentally submit
+    // it -- more robust than relying on client JS to clear the textarea.
+    followUpAnswer: formData.get('skipFollowUp') ? undefined : optional('followUpAnswer'),
   };
 }

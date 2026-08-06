@@ -59,7 +59,7 @@ export const notifications = pgTable(
     ),
     check(
       'notifications_event_type_check',
-      sql`${table.eventType} IN ('feedback_received', 'summary_ready', 'redemption_pending', 'points_earned', 'tier_upgraded', 'reward_redeemed')`,
+      sql`${table.eventType} IN ('feedback_received', 'summary_ready', 'redemption_pending', 'points_earned', 'tier_upgraded', 'reward_redeemed', 'message_reply_received', 'message_received')`,
     ),
     check('notifications_channel_check', sql`${table.channel} IN ('email', 'sms', 'push')`),
     check('notifications_status_check', sql`${table.status} IN ('pending', 'sent', 'failed')`),

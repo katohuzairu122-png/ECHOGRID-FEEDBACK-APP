@@ -14,7 +14,8 @@
       "visits": "{count} visites",
       "lastVisit": "Dernière visite {date}",
       "noVisits": "Aucune visite pour le moment",
-      "suspended": "Suspendu"
+      "suspended": "Suspendu",
+      "message": "Message"
     },
     "accountDialog": {
       "manageTrigger": "Gérer",
@@ -135,6 +136,7 @@
       "businessFallback": "Entreprise"
     },
     "businessDashboard": {
+      "messages": "Messages",
       "notificationPreferences": "Préférences de notifications →",
       "points": "{points} pts",
       "progressToNextTier": "{remaining} pts avant {tierName}",
@@ -159,6 +161,14 @@
       "checkIn": "S'enregistrer",
       "signInToCheckIn": "Se connecter pour s'enregistrer",
       "genericError": "Une erreur s'est produite. Veuillez réessayer."
+    },
+    "messages": {
+      "title": "Messages",
+      "emptyTitle": "Aucun message pour le moment",
+      "emptyDescription": "Lorsque le personnel vous enverra un message, il apparaîtra ici.",
+      "replyPlaceholder": "Écrivez une réponse…",
+      "sending": "Envoi…",
+      "send": "Envoyer"
     }
   }
 }

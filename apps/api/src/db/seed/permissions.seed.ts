@@ -84,6 +84,16 @@ const PERMISSIONS: NewPermission[] = [
     description: 'Change plan, update payment method, and cancel the subscription.',
     category: 'Billing',
   },
+  {
+    key: 'messages:view',
+    description: 'View customer message conversations and their contents.',
+    category: 'Messages',
+  },
+  {
+    key: 'messages:send',
+    description: 'Send a message to a customer and reply within a conversation.',
+    category: 'Messages',
+  },
 ];
 
 /**

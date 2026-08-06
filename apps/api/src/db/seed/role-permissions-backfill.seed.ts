@@ -30,7 +30,7 @@ const DEFAULT_ROLES: Record<string, string[]> = {
     'branches:view', 'branches:manage', 'audit:view',
     'feedback:view', 'feedback:manage', 'loyalty:view', 'loyalty:manage', 'rewards:manage',
     'analytics:view', 'analytics:manage', 'notifications:view', 'notifications:manage',
-    'billing:view', 'billing:manage',
+    'billing:view', 'billing:manage', 'messages:view', 'messages:send',
   ],
   Admin: [
     'team:invite', 'team:remove', 'team:view', 'roles:manage', 'roles:view',
@@ -38,15 +38,19 @@ const DEFAULT_ROLES: Record<string, string[]> = {
     'branches:view', 'branches:manage', 'audit:view',
     'feedback:view', 'feedback:manage', 'loyalty:view', 'loyalty:manage', 'rewards:manage',
     'analytics:view', 'analytics:manage', 'notifications:view', 'notifications:manage',
-    'billing:view',
+    'billing:view', 'messages:view', 'messages:send',
   ],
   Manager: [
     'team:view', 'roles:view', 'business:view',
     'branches:view', 'branches:manage',
     'feedback:view', 'feedback:manage', 'loyalty:view', 'loyalty:manage', 'rewards:manage',
     'analytics:view', 'analytics:manage', 'notifications:view', 'notifications:manage',
+    'messages:view', 'messages:send',
   ],
-  Staff: ['business:view', 'branches:view', 'feedback:view', 'loyalty:view', 'loyalty:manage'],
+  Staff: [
+    'business:view', 'branches:view', 'feedback:view', 'loyalty:view', 'loyalty:manage',
+    'messages:view', 'messages:send',
+  ],
 };
 
 async function main() {

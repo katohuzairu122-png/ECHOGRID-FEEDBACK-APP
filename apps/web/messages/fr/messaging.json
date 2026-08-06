@@ -1,0 +1,15 @@
+{
+  "staff": {
+    "title": "Messages",
+    "emptyTitle": "Aucune conversation pour le moment",
+    "emptyDescription": "Démarrez une conversation avec un membre fidélité depuis la liste des comptes de fidélité.",
+    "unreadCount": "{count} non lus",
+    "thread": {
+      "backToList": "← Retour aux messages",
+      "emptyThread": "Aucun message pour le moment -- dites bonjour.",
+      "replyPlaceholder": "Écrivez un message…",
+      "sending": "Envoi…",
+      "send": "Envoyer"
+    }
+  }
+}

@@ -27,6 +27,9 @@ export class FeedbackService {
       branchId: qrCode.branchId,
       qrCodeId: qrCode.id,
       ...input,
+      // A follow-up answer only means something paired with the question it
+      // answered -- never trust a client to keep these consistent.
+      followUpAnswer: input.followUpQuestion ? input.followUpAnswer : undefined,
     } satisfies NewFeedback);
   }
 

@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { submitFeedbackSchema } from '@echo-grid-feedback/shared-types';
+import { submitFeedbackSchema, generateFollowUpQuestionSchema } from '@echo-grid-feedback/shared-types';
 import type { Bindings } from '../config/env';
 import { createDb } from '../db/client';
 import { createRepositories } from '../repositories';
@@ -9,6 +9,7 @@ import { AppError } from '../lib/errors';
 import { rateLimit } from '../middleware/rate-limit';
 import { QrCodeService } from './qr-code.service';
 import { FeedbackService } from '../feedback/feedback.service';
+import { createFollowUpQuestionGenerator } from '../feedback/follow-up-question-generator';
 import { enqueueClassification } from '../sentiment/sentiment-job';
 import { NotificationService } from '../notifications/notification.service';
 
@@ -51,6 +52,34 @@ qrRoutes.get('/:token', async (c) => {
       defaultCurrency: business.defaultCurrency,
       defaultTimezone: business.defaultTimezone,
     });
+  } finally {
+    c.executionCtx.waitUntil(close());
+  }
+});
+
+/**
+ * Stateless -- no DB write. Given the rating+comment the customer already
+ * entered, returns ONE AI-generated follow-up question to show before they
+ * submit. Errors bubble to the global errorHandler like every other route;
+ * the *client* action (apps/web) is what swallows failure, so the customer
+ * is never blocked by an Anthropic outage or a rate limit here -- the
+ * follow-up is a nice-to-have, never a blocker. Guarded by its own rate
+ * limit (stacked on top of this router's PUBLIC_RATE_LIMITER) since every
+ * successful call is a real Anthropic API charge, unlike a free submission.
+ */
+qrRoutes.post('/:token/follow-up-question', rateLimit('FOLLOWUP_QUESTION_RATE_LIMITER'), async (c) => {
+  const body = await parseJsonBody(c.req.raw, generateFollowUpQuestionSchema);
+  const { db, close } = await createDb(c.env.HYPERDRIVE);
+  try {
+    const repos = createRepositories(db);
+    // Same token-validity check every other route on this router performs --
+    // keeps a revoked/expired QR code from triggering a paid Anthropic call
+    // for a link nobody should be able to submit through anymore.
+    await new QrCodeService(repos).resolveToken(c.req.param('token'));
+
+    const generator = createFollowUpQuestionGenerator(c.env.ENVIRONMENT, c.env.ANTHROPIC_API_KEY, c.env.ANTHROPIC_MODEL);
+    const result = await generator.generate({ rating: body.rating, comment: body.comment });
+    return ok(c, result);
   } finally {
     c.executionCtx.waitUntil(close());
   }
