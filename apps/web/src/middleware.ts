@@ -29,6 +29,15 @@ const METADATA_ASSET_PATHS = [
   '/manifest.webmanifest',
   '/robots.txt',
   '/sitemap.xml',
+  // PWA install assets (manifest icons, service worker, its offline
+  // fallback) -- same class of anonymous-fetch-before-any-session request
+  // as everything else in this list, so the same bug applies: a browser
+  // installing the app, or the service worker registering itself, carries
+  // no refresh-token cookie either.
+  '/pwa-icon-192',
+  '/pwa-icon-512',
+  '/sw.js',
+  '/offline.html',
 ];
 const PUBLIC_PATHS = ['/feedback', '/loyalty', ...STAFF_AUTH_PATHS, ...METADATA_ASSET_PATHS];
 // The root route is the public landing page as of the Echo Grid rebrand
