@@ -1,4 +1,11 @@
 const CACHE_NAME = 'echo-grid-shell-v1';
+// Cloudflare's static-asset serving 307-redirects this to the extension-
+// less /offline in production (its default html_handling behavior) -- kept
+// as /offline.html anyway since that's the one path that resolves in both
+// environments (Next's local dev server has no such redirect, so /offline
+// alone would 404 there). fetch()'s default redirect:'follow' resolves the
+// production hop transparently before Cache.put() stores it, so this isn't
+// an opaque-redirect response Cache.add() would reject.
 const OFFLINE_URL = '/offline.html';
 
 self.addEventListener('install', (event) => {
