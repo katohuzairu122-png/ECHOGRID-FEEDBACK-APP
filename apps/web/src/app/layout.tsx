@@ -1,8 +1,9 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import { Poppins } from 'next/font/google';
 import { NextIntlClientProvider } from 'next-intl';
 import { getLocale, getMessages } from 'next-intl/server';
 import { APP_URL } from '@/lib/app-url';
+import { PwaServiceWorkerRegistration } from '@/components/pwa-service-worker-registration';
 import './globals.css';
 
 // Poppins is not a variable font on Google Fonts, so specific weights must
@@ -35,6 +36,17 @@ export const metadata: Metadata = {
     title: 'Echo Grid',
     description: DESCRIPTION,
   },
+  // iOS ignores manifest.ts's display/theme_color for "Add to Home Screen";
+  // these are the meta tags Safari actually reads for the same effect.
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'default',
+    title: 'Echo Grid',
+  },
+};
+
+export const viewport: Viewport = {
+  themeColor: '#10b981',
 };
 
 /**
@@ -58,6 +70,7 @@ export default async function RootLayout({
         <NextIntlClientProvider locale={locale} messages={messages}>
           {children}
         </NextIntlClientProvider>
+        <PwaServiceWorkerRegistration />
       </body>
     </html>
   );
