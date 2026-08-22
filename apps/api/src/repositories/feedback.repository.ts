@@ -1,6 +1,7 @@
-import { eq, and, gte, lte, ilike, sql, inArray } from 'drizzle-orm';
+import { eq, and, gte, lte, ilike, sql, inArray, isNull, isNotNull, asc, desc } from 'drizzle-orm';
 import { feedback } from '../db/schema';
 import { BaseRepository } from './base.repository';
+import type { FeedbackFilterInput } from '@echo-grid-feedback/shared-types';
 
 export type Feedback = typeof feedback.$inferSelect;
 export type NewFeedback = typeof feedback.$inferInsert;
@@ -237,5 +238,94 @@ export class FeedbackRepository extends BaseRepository {
       byBucket.set(row.bucket, entry);
     }
     return Array.from(byBucket.values());
+  }
+
+  /**
+   * The inbox's own filter/sort/paginate query (Automated Feedback Sorting)
+   * -- deliberately separate from `search` above (the analytics dashboard's
+   * older, narrower query), since the two evolve independently and this one
+   * needs the full multi-select filter surface `search` was never designed
+   * for. Fetches `limit + 1` rows and slices instead of a separate COUNT
+   * query, matching this file's own stated "avoid COUNT on a potentially
+   * large, frequently-paginated table" reasoning (see MAX_PERIOD_ROWS above) --
+   * `hasMore` is all a paginated inbox actually needs to render a Next button.
+   */
+  async listWithFilters(
+    businessId: string,
+    filters: Omit<FeedbackFilterInput, 'savedView'>,
+  ): Promise<{ items: Feedback[]; hasMore: boolean }> {
+    const limit = Math.min(filters.limit ?? DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE);
+    const offset = filters.offset ?? 0;
+
+    const conditions = [
+      eq(feedback.businessId, businessId),
+      eq(feedback.isDeleted, false),
+      filters.branchId ? eq(feedback.branchId, filters.branchId) : undefined,
+      filters.category?.length ? inArray(feedback.category, filters.category) : undefined,
+      filters.urgency?.length ? inArray(feedback.urgency, filters.urgency) : undefined,
+      filters.sentiment?.length ? inArray(feedback.sentiment, filters.sentiment) : undefined,
+      filters.status?.length ? inArray(feedback.status, filters.status) : undefined,
+      filters.analysisStatus?.length ? inArray(feedback.analysisStatus, filters.analysisStatus) : undefined,
+      filters.assignedTo ? eq(feedback.assignedTo, filters.assignedTo) : undefined,
+      filters.unassigned ? isNull(feedback.assignedTo) : undefined,
+      filters.followUpRequired
+        ? and(isNotNull(feedback.followUpQuestion), isNull(feedback.followUpAnswer))
+        : undefined,
+      filters.search ? ilike(feedback.comment, `%${filters.search}%`) : undefined,
+      filters.dateFrom ? gte(feedback.createdAt, new Date(filters.dateFrom)) : undefined,
+      filters.dateTo ? lte(feedback.createdAt, new Date(filters.dateTo)) : undefined,
+    ];
+
+    const direction = filters.sortDirection === 'asc' ? asc : desc;
+    // Text-sorting urgency works out correctly by coincidence: the P0-P3
+    // labels are alphabetically ordered the same as their real severity
+    // (P0_CRITICAL < P1_HIGH < P2_NORMAL < P3_LOW), so no CASE expression or
+    // numeric mapping is needed to get "most urgent first" from a plain
+    // ascending sort on the column's own text value.
+    const sortColumn =
+      filters.sortBy === 'urgency' ? feedback.urgency : filters.sortBy === 'rating' ? feedback.rating : feedback.createdAt;
+
+    const rows = await this.db.query.feedback.findMany({
+      where: and(...conditions),
+      orderBy: [direction(sortColumn), desc(feedback.createdAt)],
+      limit: limit + 1,
+      offset,
+    });
+
+    return { items: rows.slice(0, limit), hasMore: rows.length > limit };
+  }
+
+  async assign(id: string, businessId: string, assignedTo: string | null, updatedBy: string): Promise<Feedback | undefined> {
+    const [row] = await this.db
+      .update(feedback)
+      .set({ assignedTo, updatedBy, updatedAt: new Date() })
+      .where(and(eq(feedback.id, id), eq(feedback.businessId, businessId), eq(feedback.isDeleted, false)))
+      .returning();
+    return row;
+  }
+
+  /** Returns the rows actually updated -- not just an ack -- so the caller
+   * (bulk action endpoint) can report exactly how many of the requested ids
+   * existed and were writable, same "tell the truth about what happened"
+   * principle as every other mutation in this repository. */
+  async bulkAssign(
+    ids: string[],
+    businessId: string,
+    assignedTo: string | null,
+    updatedBy: string,
+  ): Promise<Feedback[]> {
+    return this.db
+      .update(feedback)
+      .set({ assignedTo, updatedBy, updatedAt: new Date() })
+      .where(and(inArray(feedback.id, ids), eq(feedback.businessId, businessId), eq(feedback.isDeleted, false)))
+      .returning();
+  }
+
+  async bulkMarkReviewed(ids: string[], businessId: string, updatedBy: string): Promise<Feedback[]> {
+    return this.db
+      .update(feedback)
+      .set({ status: 'reviewed', updatedBy, updatedAt: new Date() })
+      .where(and(inArray(feedback.id, ids), eq(feedback.businessId, businessId), eq(feedback.isDeleted, false)))
+      .returning();
   }
 }

@@ -94,6 +94,13 @@ export type FeedbackDto = z.infer<typeof feedbackSchema>;
  * predefined combination of the other fields server-side (see
  * feedback.routes.ts's SAVED_VIEWS) rather than a persisted per-user
  * customization -- see that file's comment for why.
+ *
+ * Only 7 of the spec's 11 named saved views are represented here --
+ * "Reward pending," "Suspected fraud," and "Manual review" need a reward/
+ * fraud/review data model that doesn't exist yet (later slices), and
+ * "Branch comparison" is a whole analytics view, not a feedback filter.
+ * Faking those three as filters that always return nothing would be worse
+ * than omitting them.
  */
 export const feedbackFilterSchema = z.object({
   savedView: z
@@ -102,7 +109,6 @@ export const feedbackFilterSchema = z.object({
       'high_priority_unresolved',
       'negative_unresolved',
       'follow_up_required',
-      'suspected_fraud',
       'unclassified',
       'recently_resolved',
       'positive_feedback',
@@ -116,13 +122,17 @@ export const feedbackFilterSchema = z.object({
   analysisStatus: z.array(z.enum(['pending', 'completed', 'failed', 'skipped'])).optional(),
   assignedTo: z.uuid().optional(),
   unassigned: z.boolean().optional(),
+  // True: an AI follow-up question was asked but the customer hasn't
+  // answered it yet (followUpQuestion set, followUpAnswer still null) --
+  // doesn't map onto any of the fields above, so it's its own flag.
+  followUpRequired: z.boolean().optional(),
   search: z.string().trim().max(500).optional(),
   dateFrom: z.iso.datetime().optional(),
   dateTo: z.iso.datetime().optional(),
   sortBy: z.enum(['createdAt', 'urgency', 'rating']).default('createdAt'),
   sortDirection: z.enum(['asc', 'desc']).default('desc'),
   limit: z.number().int().min(1).max(100).default(25),
-  cursor: z.string().optional(),
+  offset: z.number().int().min(0).default(0),
 });
 export type FeedbackFilterInput = z.infer<typeof feedbackFilterSchema>;
 

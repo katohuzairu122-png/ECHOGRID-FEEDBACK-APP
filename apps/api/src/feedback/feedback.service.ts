@@ -1,9 +1,10 @@
 import type { Repositories } from '../repositories';
 import type { Feedback, NewFeedback } from '../repositories/feedback.repository';
 import type { QrCode } from '../repositories/qr-code.repository';
-import type { SubmitFeedbackInput } from '@echo-grid-feedback/shared-types';
+import type { SubmitFeedbackInput, FeedbackFilterInput } from '@echo-grid-feedback/shared-types';
 import { AppError } from '../lib/errors';
 import { detectCriticalSignals } from './critical-detector';
+import { expandSavedView } from './feedback-saved-views';
 
 export class FeedbackService {
   constructor(private readonly repos: Pick<Repositories, 'feedback' | 'criticalIncidents'>) {}
@@ -60,6 +61,56 @@ export class FeedbackService {
     }
 
     return created;
+  }
+
+  /** Merges a named saved view's preset fields with the caller's own
+   * explicit filters -- the caller's values win wherever both set the same
+   * field (e.g. requesting "Critical now" narrowed to one branchId), never
+   * the other way around. See feedback-saved-views.ts's own doc comment for
+   * why only 7 of the spec's 11 named views are representable today. */
+  async listWithFilters(
+    businessId: string,
+    input: FeedbackFilterInput,
+  ): Promise<{ items: Feedback[]; hasMore: boolean }> {
+    const { savedView, ...explicit } = input;
+    const preset = savedView ? expandSavedView(savedView) : {};
+
+    const merged: Omit<FeedbackFilterInput, 'savedView'> = {
+      ...preset,
+      ...explicit,
+      urgency: explicit.urgency ?? preset.urgency,
+      status: explicit.status ?? preset.status,
+      sentiment: explicit.sentiment ?? preset.sentiment,
+      analysisStatus: explicit.analysisStatus ?? preset.analysisStatus,
+      followUpRequired: explicit.followUpRequired ?? preset.followUpRequired,
+    };
+
+    return this.repos.feedback.listWithFilters(businessId, merged);
+  }
+
+  async assign(id: string, businessId: string, assignedTo: string | null, updatedBy: string): Promise<Feedback> {
+    const updated = await this.repos.feedback.assign(id, businessId, assignedTo, updatedBy);
+    if (!updated) {
+      throw new AppError('Feedback not found.', 404, 'FEEDBACK_NOT_FOUND');
+    }
+    return updated;
+  }
+
+  /** Returns exactly which of the requested ids were actually updated --
+   * a caller who selected 20 rows in the inbox and one was deleted by
+   * another tab in the meantime should see 19 succeeded, not a silent
+   * partial success or an all-or-nothing failure. */
+  async bulkAssign(
+    ids: string[],
+    businessId: string,
+    assignedTo: string | null,
+    updatedBy: string,
+  ): Promise<Feedback[]> {
+    return this.repos.feedback.bulkAssign(ids, businessId, assignedTo, updatedBy);
+  }
+
+  async bulkMarkReviewed(ids: string[], businessId: string, updatedBy: string): Promise<Feedback[]> {
+    return this.repos.feedback.bulkMarkReviewed(ids, businessId, updatedBy);
   }
 
   async markReviewed(id: string, businessId: string, updatedBy: string): Promise<Feedback> {

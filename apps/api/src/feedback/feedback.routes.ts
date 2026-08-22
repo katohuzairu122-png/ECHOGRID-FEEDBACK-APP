@@ -1,5 +1,12 @@
 import { Hono } from 'hono';
-import { updateFeedbackStatusSchema } from '@echo-grid-feedback/shared-types';
+import {
+  updateFeedbackStatusSchema,
+  feedbackFilterSchema,
+  assignFeedbackSchema,
+  bulkAssignFeedbackSchema,
+  bulkUpdateFeedbackStatusSchema,
+  type FeedbackFilterInput,
+} from '@echo-grid-feedback/shared-types';
 import type { Bindings } from '../config/env';
 import { createDb } from '../db/client';
 import { createRepositories } from '../repositories';
@@ -23,17 +30,107 @@ export const feedbackRoutes = new Hono<Env>();
 /** The business-facing inbox -- every route needs tenant context, same as branchRoutes. */
 feedbackRoutes.use('*', authenticate, resolveTenantContext);
 
-feedbackRoutes.get('/', requirePermission('feedback:view'), async (c) => {
-  const url = new URL(c.req.url);
-  const branchId = url.searchParams.get('branchId') ?? undefined;
-  const limit = Number(url.searchParams.get('limit')) || undefined;
-  const offset = Number(url.searchParams.get('offset')) || undefined;
+/**
+ * Builds feedbackFilterSchema's raw input from a query string -- hand-rolled
+ * rather than a generic query-parsing helper, since this is the one route
+ * in the codebase with a filter surface this wide (every other GET route's
+ * query parsing stays a handful of ad hoc `.get()` calls). Multi-select
+ * fields accept repeated keys (?urgency=P0_CRITICAL&urgency=P1_HIGH), the
+ * REST convention `URLSearchParams.getAll` already supports natively.
+ */
+function parseFeedbackFilters(url: URL): FeedbackFilterInput {
+  const params = url.searchParams;
+  const raw: Record<string, unknown> = {};
+  if (params.has('savedView')) raw.savedView = params.get('savedView');
+  if (params.has('branchId')) raw.branchId = params.get('branchId');
+  if (params.has('category')) raw.category = params.getAll('category');
+  if (params.has('urgency')) raw.urgency = params.getAll('urgency');
+  if (params.has('sentiment')) raw.sentiment = params.getAll('sentiment');
+  if (params.has('status')) raw.status = params.getAll('status');
+  if (params.has('analysisStatus')) raw.analysisStatus = params.getAll('analysisStatus');
+  if (params.has('assignedTo')) raw.assignedTo = params.get('assignedTo');
+  if (params.has('unassigned')) raw.unassigned = params.get('unassigned') === 'true';
+  if (params.has('followUpRequired')) raw.followUpRequired = params.get('followUpRequired') === 'true';
+  if (params.has('search')) raw.search = params.get('search');
+  if (params.has('dateFrom')) raw.dateFrom = params.get('dateFrom');
+  if (params.has('dateTo')) raw.dateTo = params.get('dateTo');
+  if (params.has('sortBy')) raw.sortBy = params.get('sortBy');
+  if (params.has('sortDirection')) raw.sortDirection = params.get('sortDirection');
+  if (params.has('limit')) raw.limit = Number(params.get('limit'));
+  if (params.has('offset')) raw.offset = Number(params.get('offset'));
 
+  const parsed = feedbackFilterSchema.safeParse(raw);
+  if (!parsed.success) {
+    throw new AppError('Invalid filter parameters.', 400, 'VALIDATION_ERROR', parsed.error.issues);
+  }
+  return parsed.data;
+}
+
+feedbackRoutes.get('/', requirePermission('feedback:view'), async (c) => {
+  const filters = parseFeedbackFilters(new URL(c.req.url));
   const { db, close } = await createDb(c.env.HYPERDRIVE);
   try {
     const service = new FeedbackService(createRepositories(db));
-    const items = await service.listForBusiness(c.get('businessId'), { branchId, limit, offset });
-    return ok(c, items);
+    const result = await service.listWithFilters(c.get('businessId'), filters);
+    return ok(c, result);
+  } finally {
+    c.executionCtx.waitUntil(close());
+  }
+});
+
+feedbackRoutes.post('/:id/assign', requirePermission('feedback:manage'), async (c) => {
+  const body = await parseJsonBody(c.req.raw, assignFeedbackSchema);
+  const { db, close } = await createDb(c.env.HYPERDRIVE);
+  try {
+    const service = new FeedbackService(createRepositories(db));
+    const item = await service.assign(c.req.param('id'), c.get('businessId'), body.assignedTo, c.get('userId'));
+
+    c.set('auditMetadata', {
+      action: 'feedback.assigned',
+      entityType: 'feedback',
+      entityId: item.id,
+      details: { assignedTo: body.assignedTo },
+    });
+
+    return ok(c, item);
+  } finally {
+    c.executionCtx.waitUntil(close());
+  }
+});
+
+feedbackRoutes.post('/bulk/assign', requirePermission('feedback:manage'), async (c) => {
+  const body = await parseJsonBody(c.req.raw, bulkAssignFeedbackSchema);
+  const { db, close } = await createDb(c.env.HYPERDRIVE);
+  try {
+    const service = new FeedbackService(createRepositories(db));
+    const items = await service.bulkAssign(body.feedbackIds, c.get('businessId'), body.assignedTo, c.get('userId'));
+
+    c.set('auditMetadata', {
+      action: 'feedback.bulk_assigned',
+      entityType: 'feedback',
+      details: { requested: body.feedbackIds.length, updated: items.length, assignedTo: body.assignedTo },
+    });
+
+    return ok(c, { updated: items.length, items });
+  } finally {
+    c.executionCtx.waitUntil(close());
+  }
+});
+
+feedbackRoutes.post('/bulk/status', requirePermission('feedback:manage'), async (c) => {
+  const body = await parseJsonBody(c.req.raw, bulkUpdateFeedbackStatusSchema);
+  const { db, close } = await createDb(c.env.HYPERDRIVE);
+  try {
+    const service = new FeedbackService(createRepositories(db));
+    const items = await service.bulkMarkReviewed(body.feedbackIds, c.get('businessId'), c.get('userId'));
+
+    c.set('auditMetadata', {
+      action: 'feedback.bulk_reviewed',
+      entityType: 'feedback',
+      details: { requested: body.feedbackIds.length, updated: items.length },
+    });
+
+    return ok(c, { updated: items.length, items });
   } finally {
     c.executionCtx.waitUntil(close());
   }

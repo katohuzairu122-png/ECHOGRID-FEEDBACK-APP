@@ -99,6 +99,84 @@ function createFakeFeedbackRepo() {
         item.deletedBy = deletedBy;
       }
     },
+    async assign(
+      id: string,
+      businessId: string,
+      assignedTo: string | null,
+      updatedBy: string,
+    ): Promise<Feedback | undefined> {
+      const item = items.get(id);
+      if (!item || item.businessId !== businessId || item.isDeleted) return undefined;
+      item.assignedTo = assignedTo;
+      item.updatedBy = updatedBy;
+      item.updatedAt = new Date();
+      return item;
+    },
+    async bulkAssign(
+      ids: string[],
+      businessId: string,
+      assignedTo: string | null,
+      updatedBy: string,
+    ): Promise<Feedback[]> {
+      const updated: Feedback[] = [];
+      for (const id of ids) {
+        const item = items.get(id);
+        if (!item || item.businessId !== businessId || item.isDeleted) continue;
+        item.assignedTo = assignedTo;
+        item.updatedBy = updatedBy;
+        item.updatedAt = new Date();
+        updated.push(item);
+      }
+      return updated;
+    },
+    async bulkMarkReviewed(ids: string[], businessId: string, updatedBy: string): Promise<Feedback[]> {
+      const updated: Feedback[] = [];
+      for (const id of ids) {
+        const item = items.get(id);
+        if (!item || item.businessId !== businessId || item.isDeleted) continue;
+        item.status = 'reviewed';
+        item.updatedBy = updatedBy;
+        item.updatedAt = new Date();
+        updated.push(item);
+      }
+      return updated;
+    },
+    /** In-memory stand-in for FeedbackRepository.listWithFilters -- only
+     * the fields this test file actually exercises are filtered on; good
+     * enough to verify FeedbackService.listWithFilters' saved-view-merge
+     * logic without re-implementing the real SQL query. */
+    async listWithFilters(
+      businessId: string,
+      filters: {
+        branchId?: string;
+        category?: string[];
+        urgency?: string[];
+        sentiment?: string[];
+        status?: string[];
+        analysisStatus?: string[];
+        assignedTo?: string;
+        unassigned?: boolean;
+        followUpRequired?: boolean;
+        limit?: number;
+        offset?: number;
+      },
+    ): Promise<{ items: Feedback[]; hasMore: boolean }> {
+      let all = [...items.values()].filter((i) => i.businessId === businessId && !i.isDeleted);
+      if (filters.branchId) all = all.filter((i) => i.branchId === filters.branchId);
+      if (filters.category?.length) all = all.filter((i) => i.category && filters.category!.includes(i.category));
+      if (filters.urgency?.length) all = all.filter((i) => i.urgency && filters.urgency!.includes(i.urgency));
+      if (filters.sentiment?.length) all = all.filter((i) => i.sentiment && filters.sentiment!.includes(i.sentiment));
+      if (filters.status?.length) all = all.filter((i) => filters.status!.includes(i.status));
+      if (filters.analysisStatus?.length) all = all.filter((i) => filters.analysisStatus!.includes(i.analysisStatus));
+      if (filters.assignedTo) all = all.filter((i) => i.assignedTo === filters.assignedTo);
+      if (filters.unassigned) all = all.filter((i) => i.assignedTo === null);
+      if (filters.followUpRequired) all = all.filter((i) => i.followUpQuestion && !i.followUpAnswer);
+
+      const limit = filters.limit ?? 25;
+      const offset = filters.offset ?? 0;
+      const page = all.slice(offset, offset + limit + 1);
+      return { items: page.slice(0, limit), hasMore: page.length > limit };
+    },
   };
 }
 
@@ -231,5 +309,84 @@ describe('FeedbackService', () => {
     const item = await service.submit(QR_CODE, { rating: 1, comment: 'There is a fire in the kitchen!' });
     expect(item.id).toBeTruthy();
     expect(item.rating).toBe(1);
+  });
+
+  it('assign sets assignedTo and throws 404 for an unknown id', async () => {
+    const item = await service.submit(QR_CODE, { rating: 3 });
+    const assigned = await service.assign(item.id, BUSINESS_A, ACTOR, ACTOR);
+    expect(assigned.assignedTo).toBe(ACTOR);
+
+    await expect(service.assign('missing', BUSINESS_A, ACTOR, ACTOR)).rejects.toMatchObject({
+      code: 'FEEDBACK_NOT_FOUND',
+    });
+  });
+
+  it('bulkAssign updates every valid id and silently skips ones from another business', async () => {
+    const a = await service.submit(QR_CODE, { rating: 3 });
+    const b = await service.submit(QR_CODE, { rating: 4 });
+    const other = await service.submit({ ...QR_CODE, businessId: 'business-b' }, { rating: 2 });
+
+    const updated = await service.bulkAssign([a.id, b.id, other.id], BUSINESS_A, ACTOR, ACTOR);
+
+    expect(updated).toHaveLength(2);
+    expect(updated.every((i) => i.assignedTo === ACTOR)).toBe(true);
+  });
+
+  it('bulkMarkReviewed transitions every valid id to reviewed', async () => {
+    const a = await service.submit(QR_CODE, { rating: 3 });
+    const b = await service.submit(QR_CODE, { rating: 4 });
+
+    const updated = await service.bulkMarkReviewed([a.id, b.id], BUSINESS_A, ACTOR);
+
+    expect(updated).toHaveLength(2);
+    expect(updated.every((i) => i.status === 'reviewed')).toBe(true);
+  });
+
+  it('listWithFilters with no savedView just passes the caller\'s own filters through', async () => {
+    await service.submit(QR_CODE, { rating: 1, comment: 'There is a fire!' }); // P0_CRITICAL
+    await service.submit(QR_CODE, { rating: 5 });
+
+    const result = await service.listWithFilters(BUSINESS_A, {
+      urgency: ['P0_CRITICAL'],
+      sortBy: 'createdAt',
+      sortDirection: 'desc',
+      limit: 25,
+      offset: 0,
+    });
+
+    expect(result.items).toHaveLength(1);
+    expect(result.items[0]!.urgency).toBe('P0_CRITICAL');
+  });
+
+  it('listWithFilters expands a savedView, and the caller\'s explicit filters override the preset', async () => {
+    await service.submit(QR_CODE, { rating: 1, comment: 'There is a fire!' }); // P0_CRITICAL, branch-a
+    await service.submit(
+      { ...QR_CODE, branchId: 'branch-b' },
+      { rating: 1, comment: 'There is a fire!' },
+    ); // P0_CRITICAL, branch-b
+
+    // "Critical now" alone -- both match.
+    const both = await service.listWithFilters(BUSINESS_A, {
+      savedView: 'critical_now',
+      sortBy: 'createdAt',
+      sortDirection: 'desc',
+      limit: 25,
+      offset: 0,
+    });
+    expect(both.items).toHaveLength(2);
+
+    // "Critical now" narrowed to branch-a -- only one matches. branchId isn't
+    // part of any saved-view preset, so this proves explicit filters compose
+    // WITH the preset, not just override overlapping fields.
+    const narrowed = await service.listWithFilters(BUSINESS_A, {
+      savedView: 'critical_now',
+      branchId: BRANCH_A,
+      sortBy: 'createdAt',
+      sortDirection: 'desc',
+      limit: 25,
+      offset: 0,
+    });
+    expect(narrowed.items).toHaveLength(1);
+    expect(narrowed.items[0]!.branchId).toBe(BRANCH_A);
   });
 });
