@@ -19,7 +19,14 @@ export type NotificationTemplateData =
   | { eventType: 'tier_upgraded'; businessName: string; tierName: string }
   | { eventType: 'reward_redeemed'; businessName: string; rewardName: string }
   | { eventType: 'message_received'; businessName: string; preview: string }
-  | { eventType: 'message_reply_received'; businessName: string; customerLabel: string; preview: string };
+  | { eventType: 'message_reply_received'; businessName: string; customerLabel: string; preview: string }
+  | {
+      eventType: 'critical_feedback_alert';
+      businessName: string;
+      branchName: string;
+      matchedSignals: string;
+      escalated?: boolean | undefined;
+    };
 
 export interface RenderedNotification {
   subject: string;
@@ -149,5 +156,24 @@ export function renderNotification(data: NotificationTemplateData): RenderedNoti
         ),
         smsText: `New reply from ${data.customerLabel} at ${data.businessName}: "${data.preview}" -- check the Messages tab.`,
       };
+    // Deliberately no comment excerpt in either channel -- the alert exists
+    // to get a manager into the inbox fast, not to relay potentially
+    // distressing customer text via SMS/email; the full submission is one
+    // tap away in the "Critical now" saved view. `escalated` swaps the
+    // framing for the escalation-sweep resend (critical-alerts.job.ts) so a
+    // manager who already dismissed the first alert can tell this is a
+    // follow-up on something still unacknowledged, not a duplicate.
+    case 'critical_feedback_alert': {
+      const prefix = data.escalated ? 'UNACKNOWLEDGED CRITICAL ALERT' : 'CRITICAL ALERT';
+      return {
+        subject: `${prefix}: ${data.branchName} needs immediate attention`,
+        emailHtml: wrap(
+          `<p style="color:#b91c1c;font-weight:700;">${prefix}</p>` +
+            `<p>A feedback submission at <strong>${escapeHtml(data.branchName)}</strong> (${escapeHtml(data.businessName)}) was flagged as a possible safety or fraud emergency (${escapeHtml(data.matchedSignals)}).</p>` +
+            `<p>Open the "Critical now" view in your feedback inbox immediately.</p>`,
+        ),
+        smsText: `${prefix} at ${data.branchName}: possible emergency flagged (${data.matchedSignals}). Open your feedback inbox now.`,
+      };
+    }
   }
 }

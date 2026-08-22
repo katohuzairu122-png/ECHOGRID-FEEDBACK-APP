@@ -7,7 +7,8 @@
     "tier_upgraded": "Nivel mejorado",
     "reward_redeemed": "Recompensa canjeada",
     "message_received": "Nuevo mensaje del personal",
-    "message_reply_received": "El cliente respondió a un mensaje"
+    "message_reply_received": "El cliente respondió a un mensaje",
+    "critical_feedback_alert": "Alerta de comentario crítico"
   },
   "channels": {
     "email": "Correo electrónico",

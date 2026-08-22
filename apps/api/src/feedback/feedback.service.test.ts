@@ -2,6 +2,31 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { FeedbackService } from './feedback.service';
 import type { Feedback, NewFeedback } from '../repositories/feedback.repository';
 import type { QrCode } from '../repositories/qr-code.repository';
+import type { CriticalIncident, NewCriticalIncident } from '../repositories/critical-incident.repository';
+
+/** Only `create` is ever called from FeedbackService.submit -- a minimal
+ * fake, not a full CriticalIncidentRepository stand-in. */
+function createFakeCriticalIncidentRepo() {
+  const items: CriticalIncident[] = [];
+  return {
+    items,
+    async create(input: NewCriticalIncident): Promise<CriticalIncident> {
+      const item: CriticalIncident = {
+        id: crypto.randomUUID(),
+        businessId: input.businessId,
+        branchId: input.branchId,
+        feedbackId: input.feedbackId,
+        matchedSignals: input.matchedSignals,
+        acknowledgedAt: null,
+        acknowledgedBy: null,
+        escalatedAt: null,
+        createdAt: new Date(),
+      };
+      items.push(item);
+      return item;
+    },
+  };
+}
 
 /** Same fake-repo style as branch.service.test.ts. */
 function createFakeFeedbackRepo() {
@@ -40,6 +65,9 @@ function createFakeFeedbackRepo() {
         sentimentScore: input.sentimentScore ?? null,
         analysisStatus: input.analysisStatus ?? 'pending',
         analyzedAt: input.analyzedAt ?? null,
+        category: input.category ?? null,
+        urgency: input.urgency ?? null,
+        assignedTo: input.assignedTo ?? null,
         createdAt: new Date(),
         createdBy: input.createdBy ?? null,
         updatedAt: new Date(),
@@ -94,11 +122,14 @@ const QR_CODE: QrCode = {
 };
 
 describe('FeedbackService', () => {
-  let repos: { feedback: ReturnType<typeof createFakeFeedbackRepo> };
+  let repos: {
+    feedback: ReturnType<typeof createFakeFeedbackRepo>;
+    criticalIncidents: ReturnType<typeof createFakeCriticalIncidentRepo>;
+  };
   let service: FeedbackService;
 
   beforeEach(() => {
-    repos = { feedback: createFakeFeedbackRepo() };
+    repos = { feedback: createFakeFeedbackRepo(), criticalIncidents: createFakeCriticalIncidentRepo() };
     service = new FeedbackService(repos as unknown as ConstructorParameters<typeof FeedbackService>[0]);
   });
 
@@ -173,5 +204,32 @@ describe('FeedbackService', () => {
     await expect(service.remove('does-not-exist', BUSINESS_A, ACTOR)).rejects.toMatchObject({
       code: 'FEEDBACK_NOT_FOUND',
     });
+  });
+
+  it('submit stores an ordinary low rating with no urgency and no incident record', async () => {
+    const item = await service.submit(QR_CODE, { rating: 1, comment: 'Slow service and cold food.' });
+    expect(item.urgency).toBeNull();
+    expect(repos.criticalIncidents.items).toHaveLength(0);
+  });
+
+  it('submit sets P0_CRITICAL and creates an incident record for credible safety language', async () => {
+    const item = await service.submit(QR_CODE, {
+      rating: 1,
+      comment: 'A customer just collapsed and is not breathing, someone call an ambulance!',
+    });
+    expect(item.urgency).toBe('P0_CRITICAL');
+    expect(repos.criticalIncidents.items).toHaveLength(1);
+    expect(repos.criticalIncidents.items[0]).toMatchObject({
+      feedbackId: item.id,
+      businessId: BUSINESS_A,
+      branchId: BRANCH_A,
+    });
+    expect(repos.criticalIncidents.items[0]!.matchedSignals).toContain('medical_emergency');
+  });
+
+  it('submit never blocks storage on critical detection -- the row exists even for the critical path', async () => {
+    const item = await service.submit(QR_CODE, { rating: 1, comment: 'There is a fire in the kitchen!' });
+    expect(item.id).toBeTruthy();
+    expect(item.rating).toBe(1);
   });
 });

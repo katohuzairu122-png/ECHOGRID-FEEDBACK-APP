@@ -178,6 +178,29 @@ describe('renderNotification', () => {
     expect(result.emailHtml).toContain('Thanks!');
   });
 
+  it('critical_feedback_alert includes the matched signals, escaped in the email, and flips wording when escalated', () => {
+    const first = renderNotification({
+      eventType: 'critical_feedback_alert',
+      businessName: 'Test Biz',
+      branchName: '<b>Main</b> St',
+      matchedSignals: 'fire',
+    });
+    expect(first.subject).toContain('CRITICAL ALERT');
+    expect(first.subject).not.toContain('UNACKNOWLEDGED');
+    expect(first.emailHtml).toContain('&lt;b&gt;Main&lt;/b&gt; St');
+    expect(first.emailHtml).not.toContain('<b>Main</b>');
+    expect(first.smsText).toContain('fire');
+
+    const escalated = renderNotification({
+      eventType: 'critical_feedback_alert',
+      businessName: 'Test Biz',
+      branchName: 'Main St',
+      matchedSignals: 'fire',
+      escalated: true,
+    });
+    expect(escalated.subject).toContain('UNACKNOWLEDGED CRITICAL ALERT');
+  });
+
   it('every event type returns a non-empty subject, emailHtml, and smsText', () => {
     const cases = [
       { eventType: 'feedback_received' as const, businessName: 'B', branchName: 'Br', rating: 5 },
@@ -188,6 +211,7 @@ describe('renderNotification', () => {
       { eventType: 'reward_redeemed' as const, businessName: 'B', rewardName: 'R' },
       { eventType: 'message_received' as const, businessName: 'B', preview: 'Hi' },
       { eventType: 'message_reply_received' as const, businessName: 'B', customerLabel: 'C', preview: 'Hi' },
+      { eventType: 'critical_feedback_alert' as const, businessName: 'B', branchName: 'Br', matchedSignals: 'fire' },
     ];
 
     for (const data of cases) {

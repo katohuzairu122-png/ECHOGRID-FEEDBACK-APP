@@ -29,6 +29,7 @@ import { createRepositories } from './repositories';
 import { createSentimentService } from './sentiment/sentiment.service';
 import { createSummaryService } from './sentiment/summary.service';
 import { enqueueSummaryGeneration } from './sentiment/sentiment-job';
+import { enqueueEscalation } from './feedback/critical-alert-job';
 import { computePeriodRange, formatPeriodLabel, type PeriodType } from './sentiment/period';
 import { createEmailService } from './notifications/email.service';
 import { createSmsService } from './customer-auth/sms.service';
@@ -214,6 +215,38 @@ async function queue(batch: MessageBatch<PlatformJob>, env: Bindings, ctx: Execu
           // Notifications Block 2 -- same "shares this consumer, not a new
           // queue" reasoning as generate_summary above.
           await notificationDelivery.deliver(message.body);
+        } else if (message.body.type === 'escalate_critical_incident') {
+          // Automated Feedback Sorting -- the per-incident half of critical
+          // escalation; the sweep that decides WHICH incidents qualify runs
+          // in `scheduled` below. Re-notifies (escalated:true framing) then
+          // marks escalated so the same incident is never re-enqueued by a
+          // later sweep -- markEscalated's own WHERE escalatedAt IS NULL
+          // guard also makes this whole branch idempotent against an
+          // at-least-once redelivery of this exact message.
+          const incident = await repos.criticalIncidents.findById(
+            message.body.incidentId,
+            message.body.businessId,
+          );
+          if (incident && !incident.escalatedAt) {
+            const [branch, business] = await Promise.all([
+              repos.branches.findById(incident.branchId, incident.businessId),
+              repos.businesses.findById(incident.businessId),
+            ]);
+            if (branch && business) {
+              await notificationService.notifyBusinessStaff(
+                incident.businessId,
+                {
+                  eventType: 'critical_feedback_alert',
+                  businessName: business.name,
+                  branchName: branch.name,
+                  matchedSignals: incident.matchedSignals,
+                  escalated: true,
+                },
+                'feedback:manage',
+              );
+            }
+            await repos.criticalIncidents.markEscalated(incident.id);
+          }
         }
         message.ack();
       } catch (err) {
@@ -235,15 +268,29 @@ const CRON_PERIOD_MAP: Record<string, PeriodType> = {
   '0 0 1 * *': 'monthly',
 };
 
+// A P0_CRITICAL incident un­acknowledged this long gets escalated -- see
+// critical-alert-job.ts. 15 minutes against a 5-minute sweep interval means
+// an incident is checked 2-3 times before crossing the threshold, so a
+// sweep that happens to run a little late never causes a premature
+// escalation right at the boundary.
+const CRITICAL_ESCALATION_CRON = '*/5 * * * *';
+const ESCALATION_WINDOW_MINUTES = 15;
+
 /**
  * Cron consumer (wrangler.toml [triggers]) -- fires the weekly/monthly
- * automatic summary rollup. Deliberately thin: it only enqueues jobs
- * (paginating through every business so this scales past however many
- * businesses fit in one page, per "design for global scale"); the actual
- * LLM work happens in `queue` above, on the same retry/DLQ infrastructure
- * as every other background job, not a separate one-off code path.
+ * automatic summary rollup, and separately the critical-incident escalation
+ * sweep. Deliberately thin in both cases: it only enqueues jobs (paginating
+ * through every business/incident so this scales past however many fit in
+ * one page, per "design for global scale"); the actual work happens in
+ * `queue` above, on the same retry/DLQ infrastructure as every other
+ * background job, not a separate one-off code path.
  */
 async function scheduled(event: ScheduledController, env: Bindings, ctx: ExecutionContext): Promise<void> {
+  if (event.cron === CRITICAL_ESCALATION_CRON) {
+    ctx.waitUntil(sweepUnacknowledgedCriticalIncidents(env));
+    return;
+  }
+
   const periodType = CRON_PERIOD_MAP[event.cron];
   if (!periodType) {
     console.error(`Unrecognized cron expression, skipping: ${event.cron}`);
@@ -277,6 +324,22 @@ async function scheduled(event: ScheduledController, env: Bindings, ctx: Executi
     }
   } finally {
     ctx.waitUntil(close());
+  }
+}
+
+async function sweepUnacknowledgedCriticalIncidents(env: Bindings): Promise<void> {
+  const cutoff = new Date(Date.now() - ESCALATION_WINDOW_MINUTES * 60 * 1000);
+  const { db, close } = await createDb(env.HYPERDRIVE);
+  try {
+    const repos = createRepositories(db);
+    const overdue = await repos.criticalIncidents.findUnacknowledgedOlderThan(cutoff);
+    await Promise.all(
+      overdue.map((incident) =>
+        enqueueEscalation(env.JOBS, { incidentId: incident.id, businessId: incident.businessId }),
+      ),
+    );
+  } finally {
+    await close();
   }
 }
 

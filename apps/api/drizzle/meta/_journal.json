@@ -29,6 +29,20 @@
       "when": 1785978767255,
       "tag": "0003_slim_speed",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1787422945107,
+      "tag": "0004_chemical_robin_chapel",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1787424340878,
+      "tag": "0005_slimy_tempest",
+      "breakpoints": true
     }
   ]
 }

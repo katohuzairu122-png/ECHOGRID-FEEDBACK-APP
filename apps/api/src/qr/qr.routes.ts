@@ -126,6 +126,38 @@ qrRoutes.post('/:token/feedback', async (c) => {
       }),
     );
 
+    // Critical-feedback alert -- separate from the feedback_received
+    // broadcast above: this one is filtered to feedback:manage holders
+    // (Owner/Admin/Manager, not Staff), matching the spec's "alert
+    // authorized branch or business managers." Fires only when
+    // FeedbackService.submit's synchronous Level 1 detection already
+    // flagged this row P0_CRITICAL -- never waits on Level 2's async AI
+    // classification. Own fresh connection, same runInBackground reasoning
+    // as the block above.
+    if (created.urgency === 'P0_CRITICAL') {
+      c.executionCtx.waitUntil(
+        runInBackground(c.env.HYPERDRIVE, async (repos) => {
+          const [branch, business, incident] = await Promise.all([
+            repos.branches.findById(qrCode.branchId, qrCode.businessId),
+            repos.businesses.findById(qrCode.businessId),
+            repos.criticalIncidents.findByFeedbackId(created.id, qrCode.businessId),
+          ]);
+          if (!branch || !business) return;
+          const notifications = new NotificationService(repos, c.env.JOBS);
+          await notifications.notifyBusinessStaff(
+            qrCode.businessId,
+            {
+              eventType: 'critical_feedback_alert',
+              businessName: business.name,
+              branchName: branch.name,
+              matchedSignals: incident?.matchedSignals ?? 'unspecified',
+            },
+            'feedback:manage',
+          );
+        }),
+      );
+    }
+
     return ok(c, { id: created.id }, 201);
   } finally {
     c.executionCtx.waitUntil(close());

@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import type { SentimentJob } from '../sentiment/sentiment-job';
 import type { SendNotificationJob } from '../notifications/notification-job';
+import type { EscalateCriticalIncidentJob } from '../feedback/critical-alert-job';
 
 /**
  * Every job type that can travel over the shared `JOBS` queue -- grows as
@@ -12,7 +13,7 @@ import type { SendNotificationJob } from '../notifications/notification-job';
  * parameter types via normal contravariant function-parameter typing, so
  * nothing at the call sites needs to change as this union grows.
  */
-export type PlatformJob = SentimentJob | SendNotificationJob;
+export type PlatformJob = SentimentJob | SendNotificationJob | EscalateCriticalIncidentJob;
 
 /**
  * Wrangler resource + secret bindings available on `c.env` for every request.
