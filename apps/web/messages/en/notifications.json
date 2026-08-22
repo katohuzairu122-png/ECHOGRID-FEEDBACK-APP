@@ -7,7 +7,8 @@
     "tier_upgraded": "Tier upgraded",
     "reward_redeemed": "Reward redeemed",
     "message_received": "New message from staff",
-    "message_reply_received": "Customer replied to a message"
+    "message_reply_received": "Customer replied to a message",
+    "critical_feedback_alert": "Critical feedback alert"
   },
   "channels": {
     "email": "Email",

@@ -14,6 +14,7 @@ export * from './branches';
 export * from './businesses';
 export * from './qr-codes';
 export * from './feedback';
+export * from './feedback-classification';
 export * from './customer-auth';
 export * from './loyalty';
 export * from './analytics';

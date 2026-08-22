@@ -200,10 +200,14 @@ period = 60
 # per period. Business-wide only (branchId null) for now; per-branch
 # auto-summaries are a documented future extension the schema already
 # supports (feedback_summaries.branchId is nullable), not a missing feature.
+# The */5 entry is unrelated to summaries -- it's the critical-incident
+# escalation sweep (Automated Feedback Sorting), see index.ts's
+# CRITICAL_ESCALATION_CRON constant, which this literal string must match.
 [triggers]
 crons = [
   "0 0 * * 1",  # weekly -- every Monday 00:00 UTC
   "0 0 1 * *",  # monthly -- 1st of the month, 00:00 UTC
+  "*/5 * * * *",  # every 5 minutes -- critical-incident escalation sweep
 ]
 
 [observability]

@@ -62,6 +62,21 @@ export const feedback = pgTable(
     // changing this ships later (Block 5) -- the column exists from the
     // start since adding it after real rows exist would need a backfill.
     status: text('status').notNull().default('new'),
+    // Automated Feedback Sorting -- category is deliberately uncons­trained at
+    // the DB level, same reasoning as qr_codes.type: the full taxonomy isn't
+    // fixed forever (spec explicitly requires "extensible without destructive
+    // migrations"), so the known-value list lives in shared-types/code
+    // (feedback-classification.ts) instead of a CHECK constraint that a new
+    // category would otherwise force a migration to widen.
+    category: text('category'),
+    // Closed set, unlike category -- P0-P3 is a stable, fully-designed scale
+    // (see feedback-classification.ts), so a CHECK constraint is the right
+    // guard here, same reasoning as qr_codes.status.
+    urgency: text('urgency'),
+    // Plain nullable UUID with no FK to `users`, matching auditColumns'
+    // createdBy/updatedBy convention exactly (metadata, not relational
+    // integrity -- enforced at the application layer instead).
+    assignedTo: uuid('assigned_to'),
     // AI Sentiment Analytics module (added Block 1, not part of the original
     // QR Engagement schema). `sentiment` is nullable/pending until the
     // classification pipeline (Block 2) runs -- every existing row at
@@ -88,11 +103,25 @@ export const feedback = pgTable(
     // consumer's backfill/retry sweep (WHERE analysis_status = 'pending').
     index('feedback_business_sentiment_idx').on(table.businessId, table.sentiment),
     index('feedback_analysis_status_idx').on(table.analysisStatus),
+    // Inbox filtering (Automated Feedback Sorting) -- each is tenant-scoped
+    // (leads with businessId) since every inbox query is already scoped to
+    // one business first, same shape as feedback_business_sentiment_idx.
+    index('feedback_business_category_idx').on(table.businessId, table.category),
+    index('feedback_business_urgency_idx').on(table.businessId, table.urgency),
+    index('feedback_business_assigned_idx').on(table.businessId, table.assignedTo),
+    // Backs the "Critical now" saved view and the escalation sweep's own
+    // WHERE urgency = 'P0_CRITICAL' scan -- partial, since P0 rows are a
+    // small fraction of the table and a full-width index would waste space
+    // indexing the overwhelmingly common P1-P3/NULL rows for a query that
+    // never asks about them.
+    index('feedback_critical_idx')
+      .on(table.businessId, table.createdAt)
+      .where(sql`${table.urgency} = 'P0_CRITICAL'`),
     check('feedback_rating_check', sql`${table.rating} BETWEEN 1 AND 5`),
     check('feedback_status_check', sql`${table.status} IN ('new', 'reviewed')`),
     check(
       'feedback_sentiment_check',
-      sql`${table.sentiment} IS NULL OR ${table.sentiment} IN ('positive', 'neutral', 'negative')`,
+      sql`${table.sentiment} IS NULL OR ${table.sentiment} IN ('very_negative', 'negative', 'neutral', 'positive', 'very_positive', 'unknown')`,
     ),
     check(
       'feedback_sentiment_score_check',
@@ -101,6 +130,10 @@ export const feedback = pgTable(
     check(
       'feedback_analysis_status_check',
       sql`${table.analysisStatus} IN ('pending', 'completed', 'failed', 'skipped')`,
+    ),
+    check(
+      'feedback_urgency_check',
+      sql`${table.urgency} IS NULL OR ${table.urgency} IN ('P0_CRITICAL', 'P1_HIGH', 'P2_NORMAL', 'P3_LOW')`,
     ),
   ],
 );

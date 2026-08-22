@@ -10,6 +10,7 @@ import { AuditLogRepository } from './audit-log.repository';
 import { QrCodeRepository } from './qr-code.repository';
 import { FeedbackRepository } from './feedback.repository';
 import { FeedbackSummaryRepository } from './feedback-summary.repository';
+import { CriticalIncidentRepository } from './critical-incident.repository';
 import { CustomerRepository } from './customer.repository';
 import { OtpCodeRepository } from './otp-code.repository';
 import { LoyaltyTierRepository } from './loyalty-tier.repository';
@@ -36,6 +37,7 @@ export * from './audit-log.repository';
 export * from './qr-code.repository';
 export * from './feedback.repository';
 export * from './feedback-summary.repository';
+export * from './critical-incident.repository';
 export * from './customer.repository';
 export * from './otp-code.repository';
 export * from './loyalty-tier.repository';
@@ -69,6 +71,7 @@ export function createRepositories(db: Db) {
     qrCodes: new QrCodeRepository(db),
     feedback: new FeedbackRepository(db),
     feedbackSummaries: new FeedbackSummaryRepository(db),
+    criticalIncidents: new CriticalIncidentRepository(db),
     customers: new CustomerRepository(db),
     otpCodes: new OtpCodeRepository(db),
     loyaltyTiers: new LoyaltyTierRepository(db),

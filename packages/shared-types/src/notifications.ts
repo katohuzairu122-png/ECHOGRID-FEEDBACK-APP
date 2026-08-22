@@ -23,6 +23,12 @@ export const notificationEventTypeSchema = z.enum([
   'reward_redeemed',
   'message_reply_received',
   'message_received',
+  // Automated Feedback Sorting -- fires the instant Level 1 deterministic
+  // processing flags a submission P0_CRITICAL (see
+  // apps/api/src/feedback/critical-detector.ts), and again if the incident
+  // goes unacknowledged past the escalation window. Staff-facing only --
+  // there is no customer-side equivalent.
+  'critical_feedback_alert',
 ]);
 export type NotificationEventType = z.infer<typeof notificationEventTypeSchema>;
 
@@ -39,6 +45,7 @@ export const STAFF_NOTIFICATION_EVENT_TYPES: readonly NotificationEventType[] = 
   'summary_ready',
   'redemption_pending',
   'message_reply_received',
+  'critical_feedback_alert',
 ];
 export const CUSTOMER_NOTIFICATION_EVENT_TYPES: readonly NotificationEventType[] = [
   'points_earned',

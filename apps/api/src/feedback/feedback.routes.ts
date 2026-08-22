@@ -88,6 +88,42 @@ feedbackRoutes.post('/:id/reanalyze', requirePermission('feedback:manage'), asyn
   }
 });
 
+/**
+ * Stops the escalation clock on a P0_CRITICAL incident -- gated on
+ * feedback:manage, the same permission the critical alert itself is
+ * filtered to (only someone who could have received the alert can silence
+ * it). 404s both when the feedback row doesn't exist for this tenant AND
+ * when it exists but was never flagged critical -- either way there is no
+ * incident to acknowledge, and the two cases shouldn't be distinguishable
+ * to the caller (no reason to leak "that id exists but isn't critical").
+ */
+feedbackRoutes.post('/:id/acknowledge-critical', requirePermission('feedback:manage'), async (c) => {
+  const feedbackId = c.req.param('id');
+  const { db, close } = await createDb(c.env.HYPERDRIVE);
+  try {
+    const repos = createRepositories(db);
+    const incident = await repos.criticalIncidents.findByFeedbackId(feedbackId, c.get('businessId'));
+    if (!incident) {
+      throw new AppError('No critical incident found for this feedback.', 404, 'CRITICAL_INCIDENT_NOT_FOUND');
+    }
+    const acknowledged = await repos.criticalIncidents.acknowledge(incident.id, c.get('businessId'), c.get('userId'));
+
+    c.set('auditMetadata', {
+      action: 'feedback.critical_incident_acknowledged',
+      entityType: 'critical_incident',
+      entityId: incident.id,
+    });
+
+    // acknowledged is undefined if it was already acknowledged (the WHERE
+    // acknowledgedAt IS NULL guard didn't match) -- not an error, return the
+    // already-acknowledged row so a retried/double-clicked request is still
+    // a 200 with the real current state, not a spurious failure.
+    return ok(c, acknowledged ?? incident);
+  } finally {
+    c.executionCtx.waitUntil(close());
+  }
+});
+
 feedbackRoutes.delete('/:id', requirePermission('feedback:manage'), async (c) => {
   const id = c.req.param('id');
   const { db, close } = await createDb(c.env.HYPERDRIVE);
