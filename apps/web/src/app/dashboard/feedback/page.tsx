@@ -20,11 +20,11 @@ import {
  * UI-chosen page size, independent of the API's own default (50) -- fits
  * the "several cards per screen" reading pattern of this list better than
  * the API's own bulk-listing default. "Newer/Older" offset links, not
- * numbered pages: FeedbackRepository.listForBusiness has no total-count
- * query, so true page-N-of-M pagination isn't available without a backend
- * change out of scope for this block -- fetching PAGE_SIZE+1 items and
- * checking whether the extra one came back is the standard no-count-needed
- * way to know whether an "Older" link should exist.
+ * numbered pages: GET /feedback still has no total-count query (Automated
+ * Feedback Sorting's listWithFilters explicitly avoids one, see
+ * feedback.repository.ts), so true page-N-of-M pagination isn't available --
+ * the API itself now does the "fetch one extra, report hasMore" trick this
+ * page used to do client-side (see feedback.routes.ts).
  */
 const PAGE_SIZE = 20;
 
@@ -48,17 +48,16 @@ export default async function FeedbackPage({ searchParams }: FeedbackPageProps) 
 
   const feedbackQuery = new URLSearchParams({
     ...(branchId ? { branchId } : {}),
-    limit: String(PAGE_SIZE + 1),
+    limit: String(PAGE_SIZE),
     offset: String(offset),
   });
 
   const [branches, page] = await Promise.all([
     apiFetch<BranchDto[]>('/branches', { businessId: business.id }),
-    apiFetch<FeedbackDto[]>(`/feedback?${feedbackQuery}`, { businessId: business.id }),
+    apiFetch<{ items: FeedbackDto[]; hasMore: boolean }>(`/feedback?${feedbackQuery}`, { businessId: business.id }),
   ]);
 
-  const hasMore = page.length > PAGE_SIZE;
-  const items = page.slice(0, PAGE_SIZE);
+  const { items, hasMore } = page;
   const branchNames = new Map(branches.map((b) => [b.id, b.name]));
 
   const pageHref = (nextOffset: number) =>
