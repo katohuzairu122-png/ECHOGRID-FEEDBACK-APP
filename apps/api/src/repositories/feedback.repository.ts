@@ -1,4 +1,4 @@
-import { eq, and, gte, lte, ilike, sql } from 'drizzle-orm';
+import { eq, and, gte, lte, ilike, sql, inArray } from 'drizzle-orm';
 import { feedback } from '../db/schema';
 import { BaseRepository } from './base.repository';
 
@@ -19,6 +19,18 @@ const MAX_PAGE_SIZE = 200;
 // set into Worker memory. SummaryService additionally caps prompt size
 // separately (MAX_COMMENTS_IN_PROMPT); this cap protects the query itself.
 const MAX_PERIOD_ROWS = 5000;
+
+// The analytics search dashboard's sentiment filter (analytics.routes.ts)
+// still only offers the original 3 options (positive/neutral/negative) --
+// that UI's own scope, unchanged here. Without this expansion, selecting
+// "positive" there would silently stop matching 'very_positive' rows now
+// that the sentiment scale has 5 values instead of 3 (Automated Feedback
+// Sorting), a real regression to an already-shipped feature this repository
+// method must not introduce just by widening the underlying column's range.
+const SENTIMENT_SEARCH_ALIASES: Record<string, readonly string[]> = {
+  positive: ['positive', 'very_positive'],
+  negative: ['negative', 'very_negative'],
+};
 
 export class FeedbackRepository extends BaseRepository {
   async findById(id: string, businessId: string): Promise<Feedback | undefined> {
@@ -99,6 +111,11 @@ export class FeedbackRepository extends BaseRepository {
       sentimentScore?: number;
       analysisStatus: 'completed' | 'failed' | 'skipped';
       analyzedAt: Date;
+      // Automated Feedback Sorting -- category/urgency ride along on the
+      // same UPDATE as sentiment (Level 2 classification computes all
+      // three together), not a separate method/round-trip.
+      category?: string;
+      urgency?: string;
     },
   ): Promise<Feedback | undefined> {
     const [row] = await this.db
@@ -138,7 +155,7 @@ export class FeedbackRepository extends BaseRepository {
     businessId: string,
     options: {
       branchId?: string | undefined;
-      sentiment?: 'positive' | 'neutral' | 'negative' | undefined;
+      sentiment?: 'very_negative' | 'negative' | 'neutral' | 'positive' | 'very_positive' | 'unknown' | undefined;
       rating?: number | undefined;
       keyword?: string | undefined;
       from?: Date | undefined;
@@ -153,7 +170,9 @@ export class FeedbackRepository extends BaseRepository {
         eq(feedback.businessId, businessId),
         eq(feedback.isDeleted, false),
         options.branchId ? eq(feedback.branchId, options.branchId) : undefined,
-        options.sentiment ? eq(feedback.sentiment, options.sentiment) : undefined,
+        options.sentiment
+          ? inArray(feedback.sentiment, SENTIMENT_SEARCH_ALIASES[options.sentiment] ?? [options.sentiment])
+          : undefined,
         options.rating ? eq(feedback.rating, options.rating) : undefined,
         options.keyword ? ilike(feedback.comment, `%${options.keyword}%`) : undefined,
         options.from ? gte(feedback.createdAt, options.from) : undefined,
@@ -203,9 +222,18 @@ export class FeedbackRepository extends BaseRepository {
         neutral: 0,
         negative: 0,
       };
-      if (row.sentiment === 'positive') entry.positive = row.count;
-      else if (row.sentiment === 'neutral') entry.neutral = row.count;
-      else if (row.sentiment === 'negative') entry.negative = row.count;
+      // Folds the 5-value scale (very_negative/negative/neutral/positive/
+      // very_positive, Automated Feedback Sorting) into this existing
+      // 3-bucket trend chart -- the chart's own contract/UI isn't part of
+      // this change, so 'very_positive' counts into `positive` and
+      // 'very_negative' into `negative` rather than silently vanishing (the
+      // bug this fix avoids: an if/else chain checking only the original 3
+      // string literals would drop the new values' counts entirely). 5-value
+      // granularity is still fully queryable on the raw `sentiment` column
+      // itself (inbox filtering) -- only this rollup collapses it.
+      if (row.sentiment === 'positive' || row.sentiment === 'very_positive') entry.positive += row.count;
+      else if (row.sentiment === 'neutral') entry.neutral += row.count;
+      else if (row.sentiment === 'negative' || row.sentiment === 'very_negative') entry.negative += row.count;
       byBucket.set(row.bucket, entry);
     }
     return Array.from(byBucket.values());

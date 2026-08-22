@@ -7,18 +7,30 @@ function fakeAi(response: unknown) {
 }
 
 describe('SentimentClassifier.classifyText', () => {
-  it('classifies a confident POSITIVE result as positive with a positive score', async () => {
+  it('classifies a very confident POSITIVE result as very_positive with a positive score', async () => {
     const classifier = new SentimentClassifier(fakeAi([{ label: 'POSITIVE', score: 0.95 }]));
     const result = await classifier.classifyText('Loved the service!');
-    expect(result.sentiment).toBe('positive');
+    expect(result.sentiment).toBe('very_positive');
     expect(result.score).toBeGreaterThan(0);
   });
 
-  it('classifies a confident NEGATIVE result as negative with a negative score', async () => {
+  it('classifies a moderately confident POSITIVE result as positive, not very_positive', async () => {
+    const classifier = new SentimentClassifier(fakeAi([{ label: 'POSITIVE', score: 0.5 }]));
+    const result = await classifier.classifyText('Pretty good overall.');
+    expect(result.sentiment).toBe('positive');
+  });
+
+  it('classifies a very confident NEGATIVE result as very_negative with a negative score', async () => {
     const classifier = new SentimentClassifier(fakeAi([{ label: 'NEGATIVE', score: 0.9 }]));
     const result = await classifier.classifyText('Terrible wait time.');
-    expect(result.sentiment).toBe('negative');
+    expect(result.sentiment).toBe('very_negative');
     expect(result.score).toBeLessThan(0);
+  });
+
+  it('classifies a moderately confident NEGATIVE result as negative, not very_negative', async () => {
+    const classifier = new SentimentClassifier(fakeAi([{ label: 'NEGATIVE', score: 0.5 }]));
+    const result = await classifier.classifyText('Not great, honestly.');
+    expect(result.sentiment).toBe('negative');
   });
 
   it('buckets a low-confidence result as neutral even though the model picked a label -- inside the NEUTRAL_BAND, not on the label alone', async () => {
@@ -45,8 +57,8 @@ describe('SentimentClassifier.classifyText', () => {
 describe('SentimentClassifier.classifyRating', () => {
   const classifier = new SentimentClassifier(fakeAi(undefined));
 
-  it('maps 1-2 star ratings to negative', () => {
-    expect(classifier.classifyRating(1).sentiment).toBe('negative');
+  it('maps a 1-star rating to very_negative and a 2-star rating to negative', () => {
+    expect(classifier.classifyRating(1).sentiment).toBe('very_negative');
     expect(classifier.classifyRating(2).sentiment).toBe('negative');
   });
 
@@ -55,9 +67,9 @@ describe('SentimentClassifier.classifyRating', () => {
     expect(classifier.classifyRating(3).score).toBe(0);
   });
 
-  it('maps 4-5 star ratings to positive', () => {
+  it('maps a 4-star rating to positive and a 5-star rating to very_positive', () => {
     expect(classifier.classifyRating(4).sentiment).toBe('positive');
-    expect(classifier.classifyRating(5).sentiment).toBe('positive');
+    expect(classifier.classifyRating(5).sentiment).toBe('very_positive');
   });
 
   it('never calls the AI binding -- fully deterministic, no inference spent', () => {
