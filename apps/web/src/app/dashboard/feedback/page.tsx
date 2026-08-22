@@ -1,20 +1,15 @@
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
-import { getFormatter, getTranslations } from 'next-intl/server';
+import { getTranslations } from 'next-intl/server';
 import type { BranchDto, FeedbackDto } from '@echo-grid-feedback/shared-types';
 import { getActiveBusiness } from '@/lib/business';
+import { getCurrentUser } from '@/lib/platform';
 import { apiFetch } from '@/lib/api-client';
 import { BranchFilter } from './branch-filter';
-import { FeedbackActions } from './feedback-actions';
-import {
-  Badge,
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-  StarDisplay,
-} from '@/components/ui';
+import { SavedViewTabs } from './saved-view-tabs';
+import { FeedbackFilters } from './feedback-filters';
+import { FeedbackInboxList } from './feedback-inbox-list';
+import { Card, CardHeader, CardTitle, CardDescription } from '@/components/ui';
 
 /**
  * UI-chosen page size, independent of the API's own default (50) -- fits
@@ -22,49 +17,71 @@ import {
  * the API's own bulk-listing default. "Newer/Older" offset links, not
  * numbered pages: GET /feedback still has no total-count query (Automated
  * Feedback Sorting's listWithFilters explicitly avoids one, see
- * feedback.repository.ts), so true page-N-of-M pagination isn't available --
- * the API itself now does the "fetch one extra, report hasMore" trick this
- * page used to do client-side (see feedback.routes.ts).
+ * feedback.repository.ts) -- the API does the "fetch one extra, report
+ * hasMore" trick itself now (feedback.routes.ts).
  */
 const PAGE_SIZE = 20;
 
 interface FeedbackPageProps {
-  searchParams: Promise<{ branchId?: string; offset?: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}
+
+/** Flattens Next's searchParams shape (string | string[] | undefined) down
+ * to what URLSearchParams/the API filter query actually need. */
+function toArray(value: string | string[] | undefined): string[] {
+  if (!value) return [];
+  return Array.isArray(value) ? value : [value];
+}
+function toSingle(value: string | string[] | undefined): string | undefined {
+  return Array.isArray(value) ? value[0] : value;
 }
 
 export default async function FeedbackPage({ searchParams }: FeedbackPageProps) {
   const business = await getActiveBusiness();
   if (!business) redirect('/dashboard');
 
-  // i18n & Multi-Currency Block 3 -- renders in the request-resolved
-  // locale/timeZone (i18n/request.ts) instead of the server runtime's
-  // default, via the 'short' preset defined there.
-  const format = await getFormatter();
   // i18n & Multi-Currency Block 5.
   const t = await getTranslations('feedback.staff');
 
-  const { branchId, offset: offsetParam } = await searchParams;
-  const offset = Number(offsetParam) || 0;
+  const params = await searchParams;
+  const branchId = toSingle(params.branchId);
+  const savedView = toSingle(params.savedView);
+  const search = toSingle(params.search);
+  const category = toArray(params.category);
+  const urgency = toArray(params.urgency);
+  const offset = Number(toSingle(params.offset)) || 0;
 
-  const feedbackQuery = new URLSearchParams({
-    ...(branchId ? { branchId } : {}),
-    limit: String(PAGE_SIZE),
-    offset: String(offset),
-  });
+  const feedbackQuery = new URLSearchParams({ limit: String(PAGE_SIZE), offset: String(offset) });
+  if (branchId) feedbackQuery.set('branchId', branchId);
+  if (savedView) feedbackQuery.set('savedView', savedView);
+  if (search) feedbackQuery.set('search', search);
+  category.forEach((c) => feedbackQuery.append('category', c));
+  urgency.forEach((u) => feedbackQuery.append('urgency', u));
 
-  const [branches, page] = await Promise.all([
+  const [branches, page, currentUser] = await Promise.all([
     apiFetch<BranchDto[]>('/branches', { businessId: business.id }),
     apiFetch<{ items: FeedbackDto[]; hasMore: boolean }>(`/feedback?${feedbackQuery}`, { businessId: business.id }),
+    getCurrentUser(),
   ]);
 
   const { items, hasMore } = page;
   const branchNames = new Map(branches.map((b) => [b.id, b.name]));
 
-  const pageHref = (nextOffset: number) =>
-    `/dashboard/feedback?${new URLSearchParams({
-      ...(branchId ? { branchId } : {}),
-      offset: String(nextOffset),
-    })}`;
+  // Carried into SavedViewTabs/FeedbackFilters so switching a saved view or
+  // submitting the filter form never silently drops the other active
+  // filters -- every param EXCEPT offset (a new filter/view always starts
+  // back at page 1) survives into the base for the next navigation.
+  const baseParams: Record<string, string> = {};
+  if (branchId) baseParams.branchId = branchId;
+  if (savedView) baseParams.savedView = savedView;
+  if (search) baseParams.search = search;
+
+  const pageHref = (nextOffset: number) => {
+    const p = new URLSearchParams(feedbackQuery);
+    p.delete('limit');
+    p.set('offset', String(nextOffset));
+    return `/dashboard/feedback?${p}`;
+  };
 
   return (
     <div className="flex flex-col gap-6">
@@ -76,6 +93,9 @@ export default async function FeedbackPage({ searchParams }: FeedbackPageProps) 
         <BranchFilter branches={branches} selectedBranchId={branchId} />
       </div>
 
+      <SavedViewTabs activeSavedView={savedView} baseParams={baseParams} />
+      <FeedbackFilters search={search} category={category} urgency={urgency} baseParams={baseParams} />
+
       {items.length === 0 ? (
         <Card>
           <CardHeader>
@@ -84,46 +104,7 @@ export default async function FeedbackPage({ searchParams }: FeedbackPageProps) 
           </CardHeader>
         </Card>
       ) : (
-        <div className="flex flex-col gap-3">
-          {items.map((item) => (
-            <Card key={item.id}>
-              <CardContent className="flex flex-col gap-3 py-4">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex flex-col gap-1">
-                    <div className="flex items-center gap-2">
-                      <StarDisplay value={item.rating} />
-                      <Badge variant={item.status === 'new' ? 'accent' : 'neutral'}>
-                        {item.status === 'new' ? t('statusNew') : t('statusReviewed')}
-                      </Badge>
-                    </div>
-                    <p className="text-xs text-neutral-500">
-                      {branchNames.get(item.branchId) ?? t('unknownBranch')} ·{' '}
-                      {format.dateTime(new Date(item.createdAt), 'short')}
-                    </p>
-                  </div>
-                  <FeedbackActions feedbackId={item.id} status={item.status} />
-                </div>
-
-                {item.comment && <p className="text-sm text-neutral-800">{item.comment}</p>}
-
-                {item.followUpQuestion && item.followUpAnswer && (
-                  <div className="rounded-md bg-neutral-50 p-3">
-                    <p className="text-xs font-medium text-neutral-500">{item.followUpQuestion}</p>
-                    <p className="text-sm text-neutral-800">{item.followUpAnswer}</p>
-                  </div>
-                )}
-
-                {(item.customerName || item.customerEmail || item.customerPhone) && (
-                  <p className="text-xs text-neutral-500">
-                    {[item.customerName, item.customerEmail, item.customerPhone]
-                      .filter(Boolean)
-                      .join(' · ')}
-                  </p>
-                )}
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+        <FeedbackInboxList items={items} branchNames={branchNames} currentUserId={currentUser?.id} />
       )}
 
       {(offset > 0 || hasMore) && (
