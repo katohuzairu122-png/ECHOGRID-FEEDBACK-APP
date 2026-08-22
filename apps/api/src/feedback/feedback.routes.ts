@@ -78,26 +78,17 @@ feedbackRoutes.get('/', requirePermission('feedback:view'), async (c) => {
   }
 });
 
-feedbackRoutes.post('/:id/assign', requirePermission('feedback:manage'), async (c) => {
-  const body = await parseJsonBody(c.req.raw, assignFeedbackSchema);
-  const { db, close } = await createDb(c.env.HYPERDRIVE);
-  try {
-    const service = new FeedbackService(createRepositories(db));
-    const item = await service.assign(c.req.param('id'), c.get('businessId'), body.assignedTo, c.get('userId'));
-
-    c.set('auditMetadata', {
-      action: 'feedback.assigned',
-      entityType: 'feedback',
-      entityId: item.id,
-      details: { assignedTo: body.assignedTo },
-    });
-
-    return ok(c, item);
-  } finally {
-    c.executionCtx.waitUntil(close());
-  }
-});
-
+// Registered BEFORE /:id/assign below on purpose -- Hono's router matches
+// path segments in registration order when a literal ("bulk") and a
+// wildcard (":id") both fit the same position, not by specificity. With
+// the single-item route registered first, POST /feedback/bulk/assign was
+// being matched as :id="bulk" instead of reaching this handler at all
+// (caught in production verification: the resulting SQL literally had
+// `WHERE feedback.id = 'bulk'`). Same reasoning applies to /bulk/status
+// against the PATCH /:id and DELETE /:id routes further below, even though
+// those happen to use different HTTP methods today -- keeping every /bulk/*
+// route ahead of every /:id* route is the simplest rule that can't regress
+// again as more routes are added.
 feedbackRoutes.post('/bulk/assign', requirePermission('feedback:manage'), async (c) => {
   const body = await parseJsonBody(c.req.raw, bulkAssignFeedbackSchema);
   const { db, close } = await createDb(c.env.HYPERDRIVE);
@@ -131,6 +122,26 @@ feedbackRoutes.post('/bulk/status', requirePermission('feedback:manage'), async 
     });
 
     return ok(c, { updated: items.length, items });
+  } finally {
+    c.executionCtx.waitUntil(close());
+  }
+});
+
+feedbackRoutes.post('/:id/assign', requirePermission('feedback:manage'), async (c) => {
+  const body = await parseJsonBody(c.req.raw, assignFeedbackSchema);
+  const { db, close } = await createDb(c.env.HYPERDRIVE);
+  try {
+    const service = new FeedbackService(createRepositories(db));
+    const item = await service.assign(c.req.param('id'), c.get('businessId'), body.assignedTo, c.get('userId'));
+
+    c.set('auditMetadata', {
+      action: 'feedback.assigned',
+      entityType: 'feedback',
+      entityId: item.id,
+      details: { assignedTo: body.assignedTo },
+    });
+
+    return ok(c, item);
   } finally {
     c.executionCtx.waitUntil(close());
   }
