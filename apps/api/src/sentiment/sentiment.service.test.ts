@@ -166,4 +166,27 @@ describe('SentimentService.classifyAndStore', () => {
 
     expect(second.sentiment).toBe('negative');
   });
+
+  it('computes and stores category and urgency alongside sentiment', async () => {
+    const repo = createFakeFeedbackRepo([makeFeedback({ comment: 'The staff were incredibly rude to us.', rating: 1 })]);
+    vi.mocked(classifier.classifyText).mockResolvedValue({ sentiment: 'very_negative', score: -0.9 });
+    const service = new SentimentService({ feedback: repo as unknown as FeedbackRepository }, classifier);
+
+    const updated = await service.classifyAndStore('feedback-1', BUSINESS_A);
+
+    expect(updated.category).toBe('staff_conduct');
+    expect(updated.urgency).toBe('P1_HIGH');
+  });
+
+  it('never downgrades a Level 1 P0_CRITICAL urgency -- Level 2 classification only fills in category', async () => {
+    const repo = createFakeFeedbackRepo([
+      makeFeedback({ comment: 'There is a fire in the kitchen!', rating: 1, urgency: 'P0_CRITICAL' }),
+    ]);
+    vi.mocked(classifier.classifyText).mockResolvedValue({ sentiment: 'very_negative', score: -0.9 });
+    const service = new SentimentService({ feedback: repo as unknown as FeedbackRepository }, classifier);
+
+    const updated = await service.classifyAndStore('feedback-1', BUSINESS_A);
+
+    expect(updated.urgency).toBe('P0_CRITICAL');
+  });
 });

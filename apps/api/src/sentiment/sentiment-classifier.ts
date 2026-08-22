@@ -1,4 +1,12 @@
-export type SentimentLabel = 'positive' | 'neutral' | 'negative';
+// 'unknown' is enumerated (feedback-classification.ts's SENTIMENT_VALUES,
+// the DB CHECK) but never emitted by bucket() below -- a classification
+// failure leaves `sentiment` NULL, not 'unknown' (see
+// SentimentService.classifyAndStore's catch branch), so analysisStatus
+// stays the single authoritative "did this row get classified" signal
+// instead of two overlapping ones. 'unknown' exists as a legal value for a
+// future manual-override or ambiguous-case path, same forward-compatible
+// treatment notifications.ts's 'push' channel already gets in this codebase.
+export type SentimentLabel = 'very_negative' | 'negative' | 'neutral' | 'positive' | 'very_positive' | 'unknown';
 
 export interface SentimentResult {
   sentiment: SentimentLabel;
@@ -22,6 +30,11 @@ const MODEL = '@cf/huggingface/distilbert-sst-2-int8';
 // from labeled platform data yet); revisit once real classification volume
 // exists to tune against actual business feedback on accuracy.
 const NEUTRAL_BAND = 0.15;
+
+// Splits positive/negative further into the "very_" variants once the model
+// is confident, not just leaning -- 0.7 is the same "starting estimate, not
+// yet tuned against labeled platform data" caveat as NEUTRAL_BAND above.
+const STRONG_BAND = 0.7;
 
 interface WorkersAiTextClassificationResult {
   label: string;
@@ -74,8 +87,12 @@ export class SentimentClassifier {
 
   private bucket(score: number): SentimentResult {
     const clamped = Math.max(-1, Math.min(1, score));
-    const sentiment: SentimentLabel =
-      clamped > NEUTRAL_BAND ? 'positive' : clamped < -NEUTRAL_BAND ? 'negative' : 'neutral';
+    let sentiment: SentimentLabel;
+    if (clamped > STRONG_BAND) sentiment = 'very_positive';
+    else if (clamped > NEUTRAL_BAND) sentiment = 'positive';
+    else if (clamped < -STRONG_BAND) sentiment = 'very_negative';
+    else if (clamped < -NEUTRAL_BAND) sentiment = 'negative';
+    else sentiment = 'neutral';
     return { sentiment, score: Number(clamped.toFixed(4)) };
   }
 }
