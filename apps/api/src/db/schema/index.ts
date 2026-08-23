@@ -13,6 +13,7 @@ export * from './qr-codes';
 export * from './feedback';
 export * from './feedback-summaries';
 export * from './critical-incidents';
+export * from './fraud-signals';
 export * from './customers';
 export * from './otp-codes';
 export * from './loyalty-tiers';

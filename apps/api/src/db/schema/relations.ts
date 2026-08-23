@@ -13,6 +13,7 @@ import { qrCodes } from './qr-codes';
 import { feedback } from './feedback';
 import { feedbackSummaries } from './feedback-summaries';
 import { criticalIncidents } from './critical-incidents';
+import { fraudSignals } from './fraud-signals';
 import { customers } from './customers';
 import { loyaltyTiers } from './loyalty-tiers';
 import { loyaltyRewards } from './loyalty-rewards';
@@ -36,6 +37,7 @@ export const businessesRelations = relations(businesses, ({ many, one }) => ({
   feedback: many(feedback),
   feedbackSummaries: many(feedbackSummaries),
   criticalIncidents: many(criticalIncidents),
+  fraudSignals: many(fraudSignals),
   loyaltyTiers: many(loyaltyTiers),
   loyaltyRewards: many(loyaltyRewards),
   loyaltyAccounts: many(loyaltyAccounts),
@@ -58,6 +60,7 @@ export const branchesRelations = relations(branches, ({ one, many }) => ({
   feedback: many(feedback),
   feedbackSummaries: many(feedbackSummaries),
   criticalIncidents: many(criticalIncidents),
+  fraudSignals: many(fraudSignals),
 }));
 
 export const usersRelations = relations(users, ({ many }) => ({
@@ -131,6 +134,12 @@ export const criticalIncidentsRelations = relations(criticalIncidents, ({ one })
   business: one(businesses, { fields: [criticalIncidents.businessId], references: [businesses.id] }),
   branch: one(branches, { fields: [criticalIncidents.branchId], references: [branches.id] }),
   feedback: one(feedback, { fields: [criticalIncidents.feedbackId], references: [feedback.id] }),
+}));
+
+export const fraudSignalsRelations = relations(fraudSignals, ({ one }) => ({
+  business: one(businesses, { fields: [fraudSignals.businessId], references: [businesses.id] }),
+  branch: one(branches, { fields: [fraudSignals.branchId], references: [branches.id] }),
+  feedback: one(feedback, { fields: [fraudSignals.feedbackId], references: [feedback.id] }),
 }));
 
 export const customersRelations = relations(customers, ({ many }) => ({
