@@ -4,6 +4,18 @@ import { REFRESH_TOKEN_COOKIE } from '@/lib/cookies';
 // Staff sign-in pages: redirect AWAY to /dashboard if a staff refresh token
 // is already present, same as before.
 const STAFF_AUTH_PATHS = ['/login', '/signup'];
+// Account recovery (Continuing Development Block 1.6). Public, like the
+// sign-in pages -- a locked-out user has no refresh token by definition, and
+// without these entries the matcher below would 307 the reset link straight
+// to /login, making the entire recovery flow unreachable.
+//
+// Deliberately NOT part of STAFF_AUTH_PATHS despite sitting next to it: that
+// list also drives the "already signed in -> bounce to /dashboard" rule
+// below, which is wrong here. Someone resetting *because they think their
+// password is compromised* is very often still signed in on the device
+// reading the email; bouncing them to the dashboard would leave them unable
+// to finish the one thing they came to do.
+const RECOVERY_PATHS = ['/forgot-password', '/reset-password'];
 // Everything with its own, separate auth story -- never gated on the staff
 // refresh-token cookie at all. /feedback (anonymous QR feedback) and
 // /loyalty (anonymous QR check-in + SMS-OTP customer identity, a completely
@@ -39,7 +51,13 @@ const METADATA_ASSET_PATHS = [
   '/sw.js',
   '/offline.html',
 ];
-const PUBLIC_PATHS = ['/feedback', '/loyalty', ...STAFF_AUTH_PATHS, ...METADATA_ASSET_PATHS];
+const PUBLIC_PATHS = [
+  '/feedback',
+  '/loyalty',
+  ...STAFF_AUTH_PATHS,
+  ...RECOVERY_PATHS,
+  ...METADATA_ASSET_PATHS,
+];
 // The root route is the public landing page as of the Echo Grid rebrand
 // (previously an unconditional redirect to /dashboard, which is why this
 // wasn't needed before). Checked by EXACT match below, never added to

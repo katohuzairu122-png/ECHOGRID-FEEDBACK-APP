@@ -36,4 +36,14 @@ describe('LoginPage', () => {
     expect(screen.getByLabelText('Email')).toBeRequired();
     expect(screen.getByLabelText('Password')).toBeRequired();
   });
+
+  /** The entry point to the whole recovery flow -- without this link the
+   * Block 1.5 API is unreachable for the users who need it most. */
+  it('offers a route into password recovery', () => {
+    renderWithIntl(<LoginPage />);
+    expect(screen.getByRole('link', { name: 'Forgot password?' })).toHaveAttribute(
+      'href',
+      '/forgot-password',
+    );
+  });
 });

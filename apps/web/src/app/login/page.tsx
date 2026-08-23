@@ -31,7 +31,19 @@ export default function LoginPage() {
               <Input id="email" name="email" type="email" autoComplete="email" required />
             </div>
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="password">{t('passwordLabel')}</Label>
+              {/* Label and recovery link on one row -- the conventional
+                  placement, and it puts the way out directly beside the
+                  field a user is stuck on rather than below the submit
+                  button where it competes with "Sign up". */}
+              <div className="flex items-baseline justify-between gap-2">
+                <Label htmlFor="password">{t('passwordLabel')}</Label>
+                <Link
+                  href="/forgot-password"
+                  className="text-xs font-medium text-brand-700 hover:underline"
+                >
+                  {t('forgotPasswordLink')}
+                </Link>
+              </div>
               <Input
                 id="password"
                 name="password"
