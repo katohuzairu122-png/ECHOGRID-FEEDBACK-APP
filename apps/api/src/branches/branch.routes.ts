@@ -135,12 +135,11 @@ branchRoutes.get('/:id/qr-code', requirePermission('branches:view'), async (c) =
     const repos = createRepositories(db);
     await new BranchService(repos).getBranch(c.req.param('id'), c.get('businessId'));
 
-    const qrCode = await new QrCodeService(repos).getOrCreateActiveForBranch(
-      c.req.param('id'),
-      c.get('businessId'),
-      c.get('userId'),
-    );
-    return ok(c, { id: qrCode.id, token: qrCode.token, status: qrCode.status });
+    const { qrCode, token } = await new QrCodeService(repos, {
+      QR_TOKEN_SECRET: c.env.QR_TOKEN_SECRET,
+      QR_TOKEN_SECRET_PREVIOUS: c.env.QR_TOKEN_SECRET_PREVIOUS,
+    }).getOrCreateActiveForBranch(c.req.param('id'), c.get('businessId'), c.get('userId'));
+    return ok(c, { id: qrCode.id, token, status: qrCode.status });
   } finally {
     c.executionCtx.waitUntil(close());
   }
@@ -152,11 +151,10 @@ branchRoutes.post('/:id/qr-code/regenerate', requirePermission('branches:manage'
     const repos = createRepositories(db);
     await new BranchService(repos).getBranch(c.req.param('id'), c.get('businessId'));
 
-    const qrCode = await new QrCodeService(repos).regenerate(
-      c.req.param('id'),
-      c.get('businessId'),
-      c.get('userId'),
-    );
+    const { qrCode, token } = await new QrCodeService(repos, {
+      QR_TOKEN_SECRET: c.env.QR_TOKEN_SECRET,
+      QR_TOKEN_SECRET_PREVIOUS: c.env.QR_TOKEN_SECRET_PREVIOUS,
+    }).regenerate(c.req.param('id'), c.get('businessId'), c.get('userId'));
 
     c.set('auditMetadata', {
       action: 'qr_code.regenerated',
@@ -165,7 +163,7 @@ branchRoutes.post('/:id/qr-code/regenerate', requirePermission('branches:manage'
       details: { branchId: c.req.param('id') },
     });
 
-    return ok(c, { id: qrCode.id, token: qrCode.token, status: qrCode.status });
+    return ok(c, { id: qrCode.id, token, status: qrCode.status });
   } finally {
     c.executionCtx.waitUntil(close());
   }

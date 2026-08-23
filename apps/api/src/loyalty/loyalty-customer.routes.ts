@@ -80,7 +80,10 @@ loyaltyCustomerRoutes.post('/checkin', async (c) => {
   const body = await parseJsonBody(c.req.raw, checkinSchema);
   return withDb(c, async (db) => {
     const repos = createRepositories(db);
-    const qrCode = await new QrCodeService(repos).resolveToken(body.qrToken);
+    const qrCode = await new QrCodeService(repos, {
+      QR_TOKEN_SECRET: c.env.QR_TOKEN_SECRET,
+      QR_TOKEN_SECRET_PREVIOUS: c.env.QR_TOKEN_SECRET_PREVIOUS,
+    }).resolveToken(body.qrToken);
     const account = await new LoyaltyAccountService(db).recordCheckin(
       c.get('customerId'),
       qrCode.businessId,

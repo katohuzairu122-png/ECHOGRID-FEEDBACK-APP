@@ -46,19 +46,9 @@ describe.skipIf(!process.env.DATABASE_URL)('qr_codes active-per-branch uniquenes
       slug: `qr-uniqueness-branch-${crypto.randomUUID()}`,
     });
 
-    await repos.qrCodes.create({
-      businessId,
-      branchId: branch.id,
-      token: `db-constraint-test-${crypto.randomUUID()}`,
-    });
+    await repos.qrCodes.create({ businessId, branchId: branch.id });
 
-    await expect(
-      repos.qrCodes.create({
-        businessId,
-        branchId: branch.id,
-        token: `db-constraint-test-2-${crypto.randomUUID()}`,
-      }),
-    ).rejects.toThrow();
+    await expect(repos.qrCodes.create({ businessId, branchId: branch.id })).rejects.toThrow();
   });
 
   it('allows a second code for the same branch once the first is revoked -- the index is scoped to active rows only', async () => {
@@ -68,19 +58,11 @@ describe.skipIf(!process.env.DATABASE_URL)('qr_codes active-per-branch uniquenes
       slug: `qr-uniqueness-branch-2-${crypto.randomUUID()}`,
     });
 
-    const first = await repos.qrCodes.create({
-      businessId,
-      branchId: branch.id,
-      token: `db-constraint-test-3-${crypto.randomUUID()}`,
-    });
+    const first = await repos.qrCodes.create({ businessId, branchId: branch.id });
     await repos.qrCodes.revoke(first.id, businessId, businessId);
 
-    await expect(
-      repos.qrCodes.create({
-        businessId,
-        branchId: branch.id,
-        token: `db-constraint-test-4-${crypto.randomUUID()}`,
-      }),
-    ).resolves.toMatchObject({ status: 'active' });
+    await expect(repos.qrCodes.create({ businessId, branchId: branch.id })).resolves.toMatchObject({
+      status: 'active',
+    });
   });
 });

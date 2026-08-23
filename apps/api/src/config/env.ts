@@ -33,6 +33,30 @@ export interface Bindings {
    * compromises the other (see customer-auth/customer-jwt.ts). */
   CUSTOMER_JWT_SECRET: string;
 
+  /** Signs/verifies QR tokens (Continuing Development Block 3.2, qr/qr-token.ts)
+   * -- its own secret, same leak-isolation reasoning as CUSTOMER_JWT_SECRET
+   * above. */
+  QR_TOKEN_SECRET: string;
+  /** Deliberately allowed to be `undefined` -- the first secret in this
+   * interface without a guaranteed value, and deliberately so: S5.2 asks
+   * for signing-key rotation support, and rotation only means something if
+   * the outgoing secret can be ABSENT once the rotation window closes. Set
+   * only during an active QR_TOKEN_SECRET rotation (see qr-token.ts's
+   * verifyQrToken doc comment); leave unset otherwise. Not listed in
+   * [secrets].required below -- wrangler's required-check would then
+   * demand it always be set, which defeats the point.
+   *
+   * Typed as `string | undefined` on a REQUIRED key, not `?: string` --
+   * with exactOptionalPropertyTypes on (tsconfig.base.json), an optional
+   * (`?`) property can't be assigned a `string | undefined` value
+   * explicitly (only omitted entirely), which doesn't fit how this value
+   * actually flows: c.env.QR_TOKEN_SECRET_PREVIOUS is read and passed
+   * through Pick<Bindings, ...> object literals at every QrCodeService call
+   * site, not conditionally omitted. This form matches actual Workers
+   * runtime behavior too -- an unset binding reads as `undefined`, not as a
+   * genuinely absent key. */
+  QR_TOKEN_SECRET_PREVIOUS: string | undefined;
+
   /** Twilio REST API credentials (customer-auth/sms.service.ts) -- called
    * via plain fetch(), not the Twilio Node SDK, whose Workers-runtime
    * compatibility is unverified. Unused when ENVIRONMENT !== 'production'

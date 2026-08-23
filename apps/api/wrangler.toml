@@ -70,6 +70,7 @@ required = [
   "JWT_ACCESS_SECRET",
   "JWT_REFRESH_SECRET",
   "CUSTOMER_JWT_SECRET",
+  "QR_TOKEN_SECRET",
   "TWILIO_ACCOUNT_SID",
   "TWILIO_AUTH_TOKEN",
   "TWILIO_FROM_NUMBER",
@@ -78,6 +79,13 @@ required = [
   "STRIPE_SECRET_KEY",
   "STRIPE_WEBHOOK_SECRET",
 ]
+# QR_TOKEN_SECRET_PREVIOUS is a deliberately OPTIONAL secret, NOT listed
+# above -- it exists only during an active QR_TOKEN_SECRET rotation. To
+# rotate: `wrangler secret put QR_TOKEN_SECRET_PREVIOUS` with the OUTGOING
+# value, then `wrangler secret put QR_TOKEN_SECRET` with a new one; once
+# every QR token signed under the old secret has passed its (up to 365-day)
+# expiry, delete QR_TOKEN_SECRET_PREVIOUS with `wrangler secret delete`.
+# See config/env.ts and qr/qr-token.ts for how both are used.
 
 # Postgres (Neon) via Hyperdrive -- the connection string lives in Cloudflare's
 # Hyperdrive config, never in this file or in a Worker secret. Provision with:

@@ -66,7 +66,9 @@ export class FeedbackRepository extends BaseRepository {
    * No businessId/auth required -- this is the write side of the public,
    * anonymous submission flow (Block 2's POST /qr/:token/feedback). The
    * caller resolves qrCodeId/branchId/businessId from the token first
-   * (QrCodeRepository.findActiveByToken), then passes them in here.
+   * (QrCodeService.resolveToken, which verifies the signed token then
+   * calls QrCodeRepository.findActiveById -- Continuing Development
+   * Block 3.2), then passes them in here.
    */
   async create(input: NewFeedback): Promise<Feedback> {
     const [row] = await this.db.insert(feedback).values(input).returning();

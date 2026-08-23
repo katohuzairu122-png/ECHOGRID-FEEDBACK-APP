@@ -30,7 +30,10 @@ qrRoutes.get('/:token', async (c) => {
   const { db, close } = await createDb(c.env.HYPERDRIVE);
   try {
     const repos = createRepositories(db);
-    const qrCode = await new QrCodeService(repos).resolveToken(c.req.param('token'));
+    const qrCode = await new QrCodeService(repos, {
+      QR_TOKEN_SECRET: c.env.QR_TOKEN_SECRET,
+      QR_TOKEN_SECRET_PREVIOUS: c.env.QR_TOKEN_SECRET_PREVIOUS,
+    }).resolveToken(c.req.param('token'));
 
     const [branch, business] = await Promise.all([
       repos.branches.findById(qrCode.branchId, qrCode.businessId),
@@ -76,7 +79,10 @@ qrRoutes.post('/:token/follow-up-question', rateLimit('FOLLOWUP_QUESTION_RATE_LI
     // Same token-validity check every other route on this router performs --
     // keeps a revoked/expired QR code from triggering a paid Anthropic call
     // for a link nobody should be able to submit through anymore.
-    await new QrCodeService(repos).resolveToken(c.req.param('token'));
+    await new QrCodeService(repos, {
+      QR_TOKEN_SECRET: c.env.QR_TOKEN_SECRET,
+      QR_TOKEN_SECRET_PREVIOUS: c.env.QR_TOKEN_SECRET_PREVIOUS,
+    }).resolveToken(c.req.param('token'));
 
     const generator = createFollowUpQuestionGenerator(c.env.ENVIRONMENT, c.env.ANTHROPIC_API_KEY, c.env.ANTHROPIC_MODEL);
     const result = await generator.generate({ rating: body.rating, comment: body.comment });
@@ -91,7 +97,10 @@ qrRoutes.post('/:token/feedback', async (c) => {
   const { db, close } = await createDb(c.env.HYPERDRIVE);
   try {
     const repos = createRepositories(db);
-    const qrCode = await new QrCodeService(repos).resolveToken(c.req.param('token'));
+    const qrCode = await new QrCodeService(repos, {
+      QR_TOKEN_SECRET: c.env.QR_TOKEN_SECRET,
+      QR_TOKEN_SECRET_PREVIOUS: c.env.QR_TOKEN_SECRET_PREVIOUS,
+    }).resolveToken(c.req.param('token'));
     const created = await new FeedbackService(repos).submit(qrCode, body);
 
     // Fire-and-forget: classification is background work, never something
