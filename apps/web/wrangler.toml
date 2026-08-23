@@ -29,6 +29,15 @@ API_BASE_URL = "https://echo-grid-feedback-api.katohuzairu122.workers.dev"
 # "echogrid.uk, no hyphen" assumption made before the domain was purchased.
 # Bound as a Workers Custom Domain (root -> this Worker) on 2026-07-29.
 APP_URL = "https://echo-grid.uk"
+# Defensive, not a confirmed fix for anything: lib/session.ts and
+# lib/customer-session.ts set the `Secure` cookie flag based on
+# `process.env.NODE_ENV === 'production'`. Next.js's own build almost
+# certainly inlines NODE_ENV at build time regardless of this, but Workers
+# doesn't populate it automatically the way a traditional Node host does --
+# making it explicit here removes that as a variable entirely rather than
+# relying on inlining behavior nobody's verified against this exact
+# OpenNext-Cloudflare build pipeline.
+NODE_ENV = "production"
 # TEMPORARY WORKAROUND for a confirmed open upstream bug: Next.js's
 # getMiddlewareManifest() dynamic-requires middleware-manifest.json, which
 # Workers' runtime doesn't support -- every route 500'd until this was set.
