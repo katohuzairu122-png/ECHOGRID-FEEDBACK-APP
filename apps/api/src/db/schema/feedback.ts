@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, integer, real, timestamp, index, check } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, text, integer, real, boolean, timestamp, index, check } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import { auditColumns, softDeleteColumns } from './_shared';
 import { businesses } from './businesses';
@@ -56,6 +56,24 @@ export const feedback = pgTable(
     // cross-validation above also lives in code, not SQL.
     followUpQuestion: text('follow_up_question'),
     followUpAnswer: text('follow_up_answer'),
+    // Level 1 deterministic processing (Continuing Development spec S3.1/
+    // S9.1) -- see feedback/text-normalizer.ts for the exact algorithm.
+    // Nullable: a comment-less submission has no text to hash. Not used for
+    // display; it exists purely so the partial index below can answer
+    // "has this exact text been submitted at this branch before" with a
+    // plain indexed lookup instead of scanning `comment` row by row.
+    normalizedTextHash: text('normalized_text_hash'),
+    // The recorded FACT that normalizedTextHash matched an earlier row at
+    // the same business+branch, computed once at submit time. Deliberately
+    // just a boolean, not a fraud-reason-code or review-case reference --
+    // those need the fraud-signal schema (S9.1, Continuing Development
+    // Block 3) and manual-review model (Continuing Development Block 5)
+    // that don't exist yet -- named in full here since this file already
+    // uses bare "Block N" elsewhere for the original build's own numbering,
+    // a different sequence. This column is the foundation
+    // that later work reads, not the fraud decision itself; Level 1 only
+    // detects and records, it never rejects a submission (S2.9/S2.15).
+    isDuplicateText: boolean('is_duplicate_text').notNull().default(false),
     // Business-meaningful triage state, distinct from isDeleted below (which
     // is for actually removing a spam/abusive submission). Lets an owner
     // mark something seen without a full ticketing workflow. The UI for
@@ -117,6 +135,14 @@ export const feedback = pgTable(
     index('feedback_critical_idx')
       .on(table.businessId, table.createdAt)
       .where(sql`${table.urgency} = 'P0_CRITICAL'`),
+    // Backs findMostRecentByNormalizedHash's exact-duplicate lookup
+    // (FeedbackRepository) -- partial for the same reason as
+    // feedback_critical_idx above: most rows have no comment at all, or a
+    // comment whose hash is never looked up again, so indexing every NULL
+    // would waste space for zero query benefit.
+    index('feedback_duplicate_hash_idx')
+      .on(table.businessId, table.branchId, table.normalizedTextHash)
+      .where(sql`${table.normalizedTextHash} IS NOT NULL`),
     check('feedback_rating_check', sql`${table.rating} BETWEEN 1 AND 5`),
     check('feedback_status_check', sql`${table.status} IN ('new', 'reviewed')`),
     check(

@@ -74,6 +74,33 @@ export class FeedbackRepository extends BaseRepository {
     return row;
   }
 
+  /**
+   * Level 1 exact-duplicate detection (Continuing Development spec S3.1) --
+   * scoped to one branch, not the whole business: the same complaint text
+   * recurring at one branch reads as a likely repeat/templated/bot
+   * submission, while the same text appearing at two different branches of
+   * the same business is at least as plausibly a real chain-wide issue, not
+   * abuse. Returns the most recent match rather than just a boolean -- no
+   * more expensive to compute, and a concrete row is the more useful shape
+   * for the Continuing Development Block 5 fraud/review work this method
+   * sets up for.
+   */
+  async findMostRecentByNormalizedHash(
+    businessId: string,
+    branchId: string,
+    normalizedTextHash: string,
+  ): Promise<Feedback | undefined> {
+    return this.db.query.feedback.findFirst({
+      where: and(
+        eq(feedback.businessId, businessId),
+        eq(feedback.branchId, branchId),
+        eq(feedback.normalizedTextHash, normalizedTextHash),
+        eq(feedback.isDeleted, false),
+      ),
+      orderBy: (f, { desc }) => [desc(f.createdAt)],
+    });
+  }
+
   async markReviewed(id: string, businessId: string, updatedBy: string): Promise<Feedback | undefined> {
     const [row] = await this.db
       .update(feedback)

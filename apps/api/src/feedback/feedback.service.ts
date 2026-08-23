@@ -4,6 +4,7 @@ import type { QrCode } from '../repositories/qr-code.repository';
 import type { SubmitFeedbackInput, FeedbackFilterInput } from '@echo-grid-feedback/shared-types';
 import { AppError } from '../lib/errors';
 import { detectCriticalSignals } from './critical-detector';
+import { normalizeFeedbackText, hashNormalizedText } from './text-normalizer';
 import { expandSavedView } from './feedback-saved-views';
 
 export class FeedbackService {
@@ -32,6 +33,20 @@ export class FeedbackService {
     // signal (see critical-detector.ts).
     const detection = detectCriticalSignals(input.comment);
 
+    // Level 1 deterministic processing, continued -- exact-duplicate text
+    // detection (spec S3.1/S9.1). See text-normalizer.ts for why this is a
+    // plain hash-equality check, not fraud scoring: near-duplicate
+    // detection, frequency limits, and any consequence beyond recording the
+    // fact are Continuing Development Block 5 (S5.6), once the fraud-signal
+    // schema exists. A
+    // missing/empty comment never hashes -- there is no text to compare,
+    // so it can never be flagged.
+    const normalizedText = normalizeFeedbackText(input.comment);
+    const normalizedTextHash = normalizedText ? await hashNormalizedText(normalizedText) : null;
+    const priorMatch = normalizedTextHash
+      ? await this.repos.feedback.findMostRecentByNormalizedHash(qrCode.businessId, qrCode.branchId, normalizedTextHash)
+      : undefined;
+
     const created = await this.repos.feedback.create({
       businessId: qrCode.businessId,
       branchId: qrCode.branchId,
@@ -41,6 +56,8 @@ export class FeedbackService {
       // answered -- never trust a client to keep these consistent.
       followUpAnswer: input.followUpQuestion ? input.followUpAnswer : undefined,
       urgency: detection.isCritical ? 'P0_CRITICAL' : undefined,
+      normalizedTextHash: normalizedTextHash ?? undefined,
+      isDuplicateText: Boolean(priorMatch),
     } satisfies NewFeedback);
 
     // Not transaction-wrapped with the insert above (this service stays

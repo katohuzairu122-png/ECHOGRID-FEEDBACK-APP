@@ -34,6 +34,7 @@ function makeItem(overrides: Partial<FeedbackDto> = {}): FeedbackDto {
     category: 'compliment',
     urgency: 'P3_LOW',
     assignedTo: null,
+    isDuplicateText: false,
     createdAt: new Date().toISOString(),
     ...overrides,
   };

@@ -26,6 +26,8 @@ function makeFeedback(overrides: Partial<Feedback> = {}): Feedback {
     category: null,
     urgency: null,
     assignedTo: null,
+    normalizedTextHash: null,
+    isDuplicateText: false,
     createdAt: new Date(),
     createdBy: null,
     updatedAt: new Date(),

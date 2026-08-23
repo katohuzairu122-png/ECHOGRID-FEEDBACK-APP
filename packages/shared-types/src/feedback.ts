@@ -81,6 +81,13 @@ export const feedbackSchema = z.object({
   category: feedbackCategorySchema.nullable(),
   urgency: urgencySchema.nullable(),
   assignedTo: z.uuid().nullable(),
+  // Level 1 exact-duplicate detection (Continuing Development spec S3.1) --
+  // the recorded fact only; deliberately excludes the underlying
+  // normalizedTextHash, which is an internal dedup mechanism with no
+  // product meaning to a human viewer, matching this schema's existing
+  // restraint around not mirroring every DB column (audit/soft-delete
+  // columns are likewise omitted above).
+  isDuplicateText: z.boolean(),
   createdAt: z.string(),
 });
 

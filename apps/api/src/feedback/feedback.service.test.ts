@@ -68,6 +68,8 @@ function createFakeFeedbackRepo() {
         category: input.category ?? null,
         urgency: input.urgency ?? null,
         assignedTo: input.assignedTo ?? null,
+        normalizedTextHash: input.normalizedTextHash ?? null,
+        isDuplicateText: input.isDuplicateText ?? false,
         createdAt: new Date(),
         createdBy: input.createdBy ?? null,
         updatedAt: new Date(),
@@ -140,6 +142,25 @@ function createFakeFeedbackRepo() {
         updated.push(item);
       }
       return updated;
+    },
+    /** In-memory stand-in for the real query's ORDER BY createdAt DESC
+     * LIMIT 1 -- same businessId+branchId+hash scoping FeedbackService
+     * relies on for exact-duplicate detection. */
+    async findMostRecentByNormalizedHash(
+      businessId: string,
+      branchId: string,
+      normalizedTextHash: string,
+    ): Promise<Feedback | undefined> {
+      const matches = [...items.values()]
+        .filter(
+          (i) =>
+            i.businessId === businessId &&
+            i.branchId === branchId &&
+            i.normalizedTextHash === normalizedTextHash &&
+            !i.isDeleted,
+        )
+        .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+      return matches[0];
     },
     /** In-memory stand-in for FeedbackRepository.listWithFilters -- only
      * the fields this test file actually exercises are filtered on; good
@@ -309,6 +330,38 @@ describe('FeedbackService', () => {
     const item = await service.submit(QR_CODE, { rating: 1, comment: 'There is a fire in the kitchen!' });
     expect(item.id).toBeTruthy();
     expect(item.rating).toBe(1);
+  });
+
+  it('submit flags the second exact-text submission at the same branch as a duplicate, not the first', async () => {
+    const first = await service.submit(QR_CODE, { rating: 2, comment: 'Cold food and slow service.' });
+    const second = await service.submit(QR_CODE, { rating: 2, comment: 'Cold food and slow service.' });
+
+    expect(first.isDuplicateText).toBe(false);
+    expect(second.isDuplicateText).toBe(true);
+  });
+
+  it('submit treats case and whitespace differences as the same text for duplicate detection', async () => {
+    await service.submit(QR_CODE, { rating: 2, comment: 'Cold food and slow service.' });
+    const second = await service.submit(QR_CODE, { rating: 3, comment: '  COLD food   and slow service.  ' });
+
+    expect(second.isDuplicateText).toBe(true);
+  });
+
+  it('submit never flags a duplicate across different branches of the same business', async () => {
+    await service.submit(QR_CODE, { rating: 2, comment: 'Cold food and slow service.' });
+    const otherBranch = await service.submit(
+      { ...QR_CODE, branchId: 'branch-b' },
+      { rating: 2, comment: 'Cold food and slow service.' },
+    );
+
+    expect(otherBranch.isDuplicateText).toBe(false);
+  });
+
+  it('submit never flags comment-less submissions as duplicates of each other', async () => {
+    await service.submit(QR_CODE, { rating: 5 });
+    const second = await service.submit(QR_CODE, { rating: 5 });
+
+    expect(second.isDuplicateText).toBe(false);
   });
 
   it('assign sets assignedTo and throws 404 for an unknown id', async () => {
