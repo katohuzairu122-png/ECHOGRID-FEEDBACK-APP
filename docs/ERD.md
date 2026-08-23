@@ -405,6 +405,30 @@ stolen-and-replayed old token is detectable.
 
 **Indexes**: `user_id`.
 
+### `password_reset_tokens`
+
+Added in Continuing Development Block 1.5. One row per issued staff
+password-reset token, hashed at rest. Like `refresh_tokens` and `otp_codes`,
+deliberately carries **no** audit or soft-delete columns — a short-lived
+security artifact, not tenant-owned business data.
+
+| Column | Type | Constraints | Notes |
+| --- | --- | --- | --- |
+| `id` | uuid | PK, default random | |
+| `user_id` | uuid | not null, FK → `users.id`, cascade | if the account is gone, an outstanding link for it must not survive |
+| `token_hash` | text | not null | SHA-256, **not** PBKDF2 — the token is 256 bits of entropy, so there is no dictionary attack to slow down (same reasoning as `refresh_tokens`; contrast `otp_codes`, whose 6-digit code *is* guessable) |
+| `expires_at` | timestamptz | not null | 60-minute TTL — longer than an OTP's 10 minutes because email delivery is slower and users switch devices |
+| `consumed_at` | timestamptz | nullable | set on successful redemption; the guarded `WHERE consumed_at IS NULL` update is what makes a link single-use under concurrency |
+| `invalidated_at` | timestamptz | nullable | set when a token is *cancelled* rather than used — a newer reset was requested, or the password changed by another route. Kept distinct from `consumed_at` so "user redeemed a link" and "we cancelled a link" stay separable when reconstructing an incident |
+| `requested_ip` | text | nullable | captured at request time |
+| `created_at` | timestamptz | not null, default now | |
+
+No `attempts` column, unlike `otp_codes`: an attempt cap protects a guessable
+6-digit code, not a 256-bit token.
+
+**Indexes**: `user_id` (per-user invalidation sweep), `token_hash`
+(redemption lookup — the only identifier an inbound request carries).
+
 ### `qr_codes`
 
 Added in QR Engagement Block 1. A scannable public entry point into one

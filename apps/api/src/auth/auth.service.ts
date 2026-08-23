@@ -5,6 +5,9 @@ import { PASSWORD_ITERATIONS } from './password';
 import type { Pbkdf2Worker } from './pbkdf2-worker';
 import { hashToken } from './token-hash';
 import { constantTimeEqualHex } from './crypto-utils';
+import type { EmailService } from '../notifications/email.service';
+import { renderPasswordResetEmail, renderPasswordChangedEmail } from './auth-emails';
+import { generateResetToken, resetTokenExpiresAt, buildResetLink } from './password-reset';
 import {
   signAccessToken,
   signRefreshToken,
@@ -17,6 +20,11 @@ const AUTH_ERROR_STATUS = {
   INVALID_CREDENTIALS: 401,
   INVALID_REFRESH_TOKEN: 401,
   ACCOUNT_INACTIVE: 401,
+  /** 400, not 401: the caller is not failing to authenticate, they are
+   * presenting a token that is expired, already used, or unknown. A 401
+   * would invite clients to retry with credentials, which is not the fix. */
+  INVALID_RESET_TOKEN: 400,
+  USER_NOT_FOUND: 404,
 } as const;
 
 type AuthErrorCode = keyof typeof AUTH_ERROR_STATUS;
@@ -49,6 +57,37 @@ export interface LoginInput {
   ipAddress?: string | undefined;
 }
 
+export interface RequestPasswordResetInput {
+  email: string;
+  ipAddress?: string | undefined;
+}
+
+export interface ResetPasswordInput {
+  token: string;
+  newPassword: string;
+}
+
+export interface ChangePasswordInput {
+  userId: string;
+  currentPassword: string;
+  newPassword: string;
+}
+
+/**
+ * Collaborators the password-reset flow needs that the original four auth
+ * methods did not. Grouped into one optional constructor argument rather
+ * than appended as three positional parameters, so existing AuthService
+ * construction sites (auth.service.test.ts's fakes, notably) keep compiling
+ * unchanged, and so a service built without them fails loudly at the one
+ * call that needs them instead of silently no-opping.
+ */
+export interface PasswordResetDeps {
+  email: EmailService;
+  /** Public origin of apps/web, e.g. "https://echo-grid.uk" -- used to build
+   * the link in the reset email. See password-reset.ts's buildResetLink. */
+  webBaseUrl: string;
+}
+
 /**
  * Auth business logic: signup, login, refresh, logout. Constructor-injected
  * with the repository set + the two JWT secrets, so it stays framework-
@@ -64,9 +103,13 @@ export interface LoginInput {
  */
 export class AuthService {
   constructor(
-    private readonly repos: Pick<Repositories, 'users' | 'refreshTokens'>,
+    private readonly repos: Pick<
+      Repositories,
+      'users' | 'refreshTokens' | 'passwordResetTokens'
+    >,
     private readonly secrets: Pick<Bindings, 'JWT_ACCESS_SECRET' | 'JWT_REFRESH_SECRET'>,
     private readonly hasher: Pbkdf2Worker,
+    private readonly passwordReset?: PasswordResetDeps,
   ) {}
 
   async signup(input: SignupInput): Promise<AuthTokens> {
@@ -140,6 +183,176 @@ export class AuthService {
     );
     await this.repos.refreshTokens.rotate(stored.id, next.refreshTokenId);
     return next;
+  }
+
+  /**
+   * Step 1 of recovery: issue a reset token and email it.
+   *
+   * Returns void and NEVER signals whether the email matched an account.
+   * `/auth/password-reset/request` is unauthenticated and public, so a
+   * distinguishable response (or even a reliably different latency) turns it
+   * into an account-enumeration oracle -- the exact leak `login()` above
+   * already guards against by returning one error for both "no such user"
+   * and "wrong password". The route layer therefore always answers 202.
+   *
+   * Deactivated accounts are treated the same as missing ones: silently no
+   * email. Letting a suspended user restore access via the recovery flow
+   * would route around the deactivation entirely.
+   *
+   * Any outstanding token for the user is invalidated first, so requesting a
+   * second link immediately kills the first -- a user who requests twice
+   * (common when the first email is slow) should not leave two live account-
+   * takeover credentials sitting in an inbox.
+   */
+  async requestPasswordReset(input: RequestPasswordResetInput): Promise<void> {
+    const deps = this.requirePasswordResetDeps();
+    const user = await this.repos.users.findByEmail(input.email);
+
+    // Silent no-op, deliberately -- see the enumeration note above. This is
+    // the one place in this service where "not found" is not an error.
+    if (!user || user.status !== 'active') return;
+
+    await this.repos.passwordResetTokens.invalidateAllForUser(user.id);
+
+    const rawToken = generateResetToken();
+    await this.repos.passwordResetTokens.create({
+      userId: user.id,
+      // SHA-256, not PBKDF2 -- the token is 256 bits of entropy, so there is
+      // no offline dictionary attack to slow down. Same reasoning as
+      // refresh-token storage; see token-hash.ts.
+      tokenHash: await hashToken(rawToken),
+      expiresAt: resetTokenExpiresAt(),
+      requestedIp: input.ipAddress ?? null,
+    });
+
+    const { subject, html } = renderPasswordResetEmail(
+      user.fullName,
+      buildResetLink(deps.webBaseUrl, rawToken),
+    );
+    // Awaited, not fire-and-forget: a delivery failure must surface as a 5xx
+    // so the user retries, rather than a cheerful 202 followed by an email
+    // that never arrives and a support ticket nobody can diagnose. The token
+    // row is left in place on failure -- it simply expires unused.
+    await deps.email.send({ to: user.email, subject, html });
+  }
+
+  /**
+   * Step 2 of recovery: redeem a token and set a new password.
+   *
+   * Every failure mode returns the same INVALID_RESET_TOKEN error on
+   * purpose. Distinguishing "expired" from "already used" from "never
+   * existed" would tell an attacker holding a stolen link whether it is
+   * worth pursuing, and the user's next action is identical in all three
+   * cases: request a new link.
+   */
+  async resetPassword(input: ResetPasswordInput): Promise<void> {
+    const deps = this.requirePasswordResetDeps();
+    const tokenHash = await hashToken(input.token);
+    const stored = await this.repos.passwordResetTokens.findByTokenHash(tokenHash);
+
+    if (
+      !stored ||
+      stored.consumedAt ||
+      stored.invalidatedAt ||
+      stored.expiresAt < new Date()
+    ) {
+      throw new AuthError('This reset link is invalid or has expired.', 'INVALID_RESET_TOKEN');
+    }
+
+    // Re-check the account at redemption time, not just at request time: an
+    // account deactivated during the token's 60-minute life must not be
+    // recoverable with a link issued while it was still active.
+    const user = await this.repos.users.findById(stored.userId);
+    if (!user || user.status !== 'active') {
+      throw new AuthError('This account is not active.', 'ACCOUNT_INACTIVE');
+    }
+
+    // Consume BEFORE writing the new password, and honour the guarded
+    // update's result. Two concurrent redemptions of one link both pass the
+    // reads above; only the one that wins this atomic
+    // `WHERE consumed_at IS NULL` proceeds. Doing this after the password
+    // write would let both set a password, and the loser's value would win
+    // by arriving second.
+    if (!(await this.repos.passwordResetTokens.consume(stored.id))) {
+      throw new AuthError('This reset link is invalid or has expired.', 'INVALID_RESET_TOKEN');
+    }
+
+    await this.applyNewPassword(user.id, input.newPassword);
+    await this.afterPasswordChanged(user.id, user.fullName, user.email, deps.email);
+  }
+
+  /**
+   * Authenticated password change. Requires the current password even though
+   * the caller already holds a valid access token: a token in an unlocked,
+   * unattended browser should not be enough to lock the real owner out of
+   * their own account.
+   */
+  async changePassword(input: ChangePasswordInput): Promise<void> {
+    const deps = this.requirePasswordResetDeps();
+    const user = await this.repos.users.findById(input.userId);
+    if (!user) {
+      throw new AuthError('User not found.', 'USER_NOT_FOUND');
+    }
+    if (!(await this.hasher.verify(input.currentPassword, user.passwordHash))) {
+      // Same code as a failed login -- from the caller's perspective this is
+      // exactly that: a password check that did not pass.
+      throw new AuthError('Current password is incorrect.', 'INVALID_CREDENTIALS');
+    }
+    if (user.status !== 'active') {
+      throw new AuthError('This account is not active.', 'ACCOUNT_INACTIVE');
+    }
+
+    await this.applyNewPassword(user.id, input.newPassword);
+    await this.afterPasswordChanged(user.id, user.fullName, user.email, deps.email);
+  }
+
+  private async applyNewPassword(userId: string, newPassword: string): Promise<void> {
+    const passwordHash = await this.hasher.hash(newPassword, PASSWORD_ITERATIONS);
+    // updatedBy is the user themselves in both flows -- a reset is
+    // self-service, not an administrative action on someone else's account.
+    await this.repos.users.update(userId, { passwordHash }, userId);
+  }
+
+  /**
+   * Shared aftermath of any successful password change, via either route.
+   *
+   * Revoking every session is the point: without it, an attacker who already
+   * has a refresh token keeps renewing access for up to 30 days after the
+   * victim "fixed" their account, and the reset accomplishes nothing.
+   *
+   * The confirmation email is best-effort -- a Resend outage must not undo a
+   * password the user has already successfully changed, which is why this
+   * swallows a send failure while the reset email in
+   * requestPasswordReset() deliberately does not. Different failure
+   * semantics for different stakes: there, no email means no recovery; here,
+   * the recovery already succeeded.
+   */
+  private async afterPasswordChanged(
+    userId: string,
+    fullName: string,
+    email: string,
+    emailService: EmailService,
+  ): Promise<void> {
+    await this.repos.passwordResetTokens.invalidateAllForUser(userId);
+    await this.repos.refreshTokens.revokeAllForUser(userId);
+
+    const { subject, html } = renderPasswordChangedEmail(fullName);
+    try {
+      await emailService.send({ to: email, subject, html });
+    } catch {
+      // Intentionally swallowed -- see above. Not logged with the address,
+      // matching ResendEmailService's own caution about echoing recipients.
+      console.error('Password-changed confirmation email failed to send.');
+    }
+  }
+
+  /** Fails loudly when the reset collaborators were not supplied, rather
+   * than letting a misconfigured service silently skip sending mail. */
+  private requirePasswordResetDeps(): PasswordResetDeps {
+    if (!this.passwordReset) {
+      throw new Error('AuthService was constructed without password-reset dependencies.');
+    }
+    return this.passwordReset;
   }
 
   /** Idempotent: an already-invalid token is treated as "already logged out"

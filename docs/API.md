@@ -216,6 +216,94 @@ Revokes a refresh token. Idempotent — an already-invalid token is treated as
 
 ---
 
+### `POST /api/v1/auth/password-reset/request`
+
+Step 1 of staff account recovery. Issues a single-use reset token and emails
+a link to it. Public, unauthenticated, rate-limited on `AUTH_RATE_LIMITER`.
+
+**Request body**
+
+| Field | Type | Constraints |
+| --- | --- | --- |
+| `email` | string | valid email, trimmed, lowercased |
+
+**Response**: `202 Accepted`, empty body — **always**, whether or not the
+email matched an account.
+
+This is deliberate and must not be "improved" into a helpful 404. A
+distinguishable response turns this endpoint into an account-enumeration
+oracle, the same leak `POST /auth/login` avoids by returning one error for
+both "no such user" and "wrong password". Deactivated accounts are treated
+identically to missing ones — no email is sent, and the response is
+unchanged; letting a suspended user recover access here would route around
+the deactivation.
+
+Requesting a second reset invalidates any outstanding link for that account.
+
+---
+
+### `POST /api/v1/auth/password-reset/confirm`
+
+Step 2 of recovery. Redeems a token and sets a new password. Public,
+rate-limited on `AUTH_RATE_LIMITER`.
+
+**Request body**
+
+| Field | Type | Constraints |
+| --- | --- | --- |
+| `token` | string | non-empty, max 512 |
+| `newPassword` | string | min 12 characters (same rule as signup) |
+
+**Response**: `204 No Content`, empty body.
+
+Every existing session is revoked as part of the reset, so the client
+re-authenticates through `POST /auth/login` afterwards. No token pair is
+returned here on purpose — issuing one would hand a working session to
+whoever redeemed the link without them ever passing the login they just
+enabled.
+
+**Errors**
+
+| Code | Status | When |
+| --- | --- | --- |
+| `INVALID_RESET_TOKEN` | 400 | token unknown, expired, already used, or superseded — **one error for all four**, so a stolen link reveals nothing about whether it is worth pursuing |
+| `ACCOUNT_INACTIVE` | 401 | the account was deactivated after the link was issued |
+
+---
+
+### `POST /api/v1/auth/password/change`
+
+Authenticated self-service password change — the everyday counterpart to the
+recovery flow, so a user who suspects their credential is compromised can
+rotate it without going through email.
+
+**Request body**
+
+| Field | Type | Constraints |
+| --- | --- | --- |
+| `currentPassword` | string | non-empty |
+| `newPassword` | string | min 12 characters |
+
+**Response**: `204 No Content`, empty body.
+
+Requires the current password even though the caller already holds a valid
+access token: a token sitting in an unlocked, unattended browser should not
+be enough to lock the real owner out of their own account.
+
+Revokes **every** session including the caller's own, so the client must
+re-authenticate immediately afterwards. A change made because a password may
+be compromised is worthless if the compromised session survives it.
+
+**Errors**
+
+| Code | Status | When |
+| --- | --- | --- |
+| `INVALID_CREDENTIALS` | 401 | `currentPassword` did not match |
+| `ACCOUNT_INACTIVE` | 401 | account is not active |
+| `USER_NOT_FOUND` | 404 | token references a deleted user |
+
+---
+
 ### `GET /api/v1/auth/me`
 
 Returns the authenticated user's own identity, including `platformRole` if

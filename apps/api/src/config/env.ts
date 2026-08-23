@@ -89,6 +89,16 @@ export interface Bindings {
    * closed (no origins allowed) rather than silently allow everything. */
   ALLOWED_ORIGINS: string;
 
+  /** Public origin of the deployed apps/web Worker, e.g.
+   * "https://echo-grid.uk" -- used to build the link inside password-reset
+   * emails (auth/password-reset.ts's buildResetLink). [vars], not [secrets]:
+   * a public URL is not sensitive, same classification as ALLOWED_ORIGINS
+   * above. Kept as its own value rather than parsed out of ALLOWED_ORIGINS,
+   * which is a *list* of origins permitted to call the API and has no
+   * defined "primary" entry -- picking one would be guesswork that silently
+   * mails staging users a localhost link. */
+  WEB_BASE_URL: string;
+
   /** Resource bindings, provisioned with the Cloudflare CLI (see README). */
   HYPERDRIVE: Hyperdrive;
   UPLOADS: R2Bucket;

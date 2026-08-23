@@ -8,6 +8,7 @@ import { rolePermissions } from './role-permissions';
 import { userBusinessRoles } from './user-business-roles';
 import { auditLog } from './audit-log';
 import { refreshTokens } from './refresh-tokens';
+import { passwordResetTokens } from './password-reset-tokens';
 import { qrCodes } from './qr-codes';
 import { feedback } from './feedback';
 import { feedbackSummaries } from './feedback-summaries';
@@ -63,6 +64,7 @@ export const usersRelations = relations(users, ({ many }) => ({
   businessRoles: many(userBusinessRoles),
   auditLogs: many(auditLog),
   refreshTokens: many(refreshTokens),
+  passwordResetTokens: many(passwordResetTokens),
   notificationPreferences: many(notificationPreferences),
   notifications: many(notifications),
 }));
@@ -102,6 +104,10 @@ export const auditLogRelations = relations(auditLog, ({ one }) => ({
 
 export const refreshTokensRelations = relations(refreshTokens, ({ one }) => ({
   user: one(users, { fields: [refreshTokens.userId], references: [users.id] }),
+}));
+
+export const passwordResetTokensRelations = relations(passwordResetTokens, ({ one }) => ({
+  user: one(users, { fields: [passwordResetTokens.userId], references: [users.id] }),
 }));
 
 export const qrCodesRelations = relations(qrCodes, ({ one, many }) => ({

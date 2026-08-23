@@ -55,6 +55,12 @@ RESEND_FROM_ADDRESS = "Echo Grid <notifications@echo-grid.uk>"
 # this check. echo-grid.uk added alongside (not instead of) the workers.dev
 # origins so both keep working during the domain cutover.
 ALLOWED_ORIGINS = "http://localhost:3000,https://echo-grid.uk,https://echo-grid-feedback-web.katohuzairu122.workers.dev"
+# Public origin of the web Worker, used to build password-reset links
+# (auth/password-reset.ts). Deliberately a single value, not derived from
+# ALLOWED_ORIGINS above -- that is a list with no defined primary entry, and
+# guessing one would mail staging users a localhost link. Override this per
+# environment; it must point at wherever /reset-password is actually served.
+WEB_BASE_URL = "https://echo-grid.uk"
 
 # Required secrets -- set with `wrangler secret put <NAME>` (never stored here).
 # Validated automatically by `wrangler dev` / `wrangler deploy`. See .dev.vars.example

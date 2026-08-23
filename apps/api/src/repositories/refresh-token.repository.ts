@@ -40,4 +40,29 @@ export class RefreshTokenRepository extends BaseRepository {
       where: and(eq(refreshTokens.userId, userId), isNull(refreshTokens.revokedAt)),
     });
   }
+
+  /**
+   * Revokes every unrevoked session for a user in one statement. Added for
+   * the password-reset/change flows: a password change must not leave an
+   * attacker's existing session alive for the remainder of its 30-day
+   * refresh-token lifetime, which is exactly the window `refresh()`'s
+   * account-status recheck (see docs/SECURITY-REVIEW.md) was added to close
+   * for deactivation.
+   *
+   * `replacedByTokenId` is deliberately left NULL here, unlike rotate():
+   * these sessions are being killed, not superseded by a specific successor,
+   * and pointing them at an unrelated token would corrupt the rotation chain
+   * that revoked-token-reuse detection reads.
+   *
+   * Returns the number of sessions actually revoked so the caller can log or
+   * surface it ("signed out of N devices") without a second query.
+   */
+  async revokeAllForUser(userId: string): Promise<number> {
+    const rows = await this.db
+      .update(refreshTokens)
+      .set({ revokedAt: new Date() })
+      .where(and(eq(refreshTokens.userId, userId), isNull(refreshTokens.revokedAt)))
+      .returning({ id: refreshTokens.id });
+    return rows.length;
+  }
 }

@@ -8,6 +8,7 @@ export * from './role-permissions';
 export * from './user-business-roles';
 export * from './audit-log';
 export * from './refresh-tokens';
+export * from './password-reset-tokens';
 export * from './qr-codes';
 export * from './feedback';
 export * from './feedback-summaries';

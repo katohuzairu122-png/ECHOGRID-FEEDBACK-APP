@@ -4,7 +4,15 @@ import { createDb } from '../db/client';
 import { createRepositories } from '../repositories';
 import { AuthService } from './auth.service';
 import { createDurableObjectPbkdf2Worker } from './pbkdf2-worker';
-import { signupSchema, loginSchema, refreshSchema } from './auth.dto';
+import {
+  signupSchema,
+  loginSchema,
+  refreshSchema,
+  requestPasswordResetSchema,
+  resetPasswordSchema,
+  changePasswordSchema,
+} from './auth.dto';
+import { createEmailService } from '../notifications/email.service';
 import { parseJsonBody } from '../lib/validate';
 import { ok } from '../lib/response';
 import { AppError } from '../lib/errors';
@@ -30,6 +38,17 @@ async function withAuthService<T>(
       JWT_REFRESH_SECRET: c.env.JWT_REFRESH_SECRET,
     },
     createDurableObjectPbkdf2Worker(c.env.PASSWORD_HASHER),
+    {
+      // Same environment-gated factory the notifications module uses, so
+      // reset emails log to the console in dev/staging instead of spending
+      // real Resend quota -- and, more importantly, so a developer can read
+      // the reset link straight out of `wrangler dev` output.
+      email: createEmailService(c.env.ENVIRONMENT, {
+        apiKey: c.env.RESEND_API_KEY,
+        fromAddress: c.env.RESEND_FROM_ADDRESS,
+      }),
+      webBaseUrl: c.env.WEB_BASE_URL,
+    },
   );
   try {
     return await fn(service);
@@ -72,6 +91,73 @@ authRoutes.post('/refresh', async (c) => {
 authRoutes.post('/logout', async (c) => {
   const body = await parseJsonBody(c.req.raw, refreshSchema);
   await withAuthService(c, (service) => service.logout(body.refreshToken));
+  return c.body(null, 204);
+});
+
+/**
+ * Step 1 of account recovery. Always answers 202, whether or not the email
+ * matched an account -- see AuthService.requestPasswordReset for why any
+ * distinguishable response makes this an account-enumeration oracle.
+ *
+ * Carries AUTH_RATE_LIMITER, the same strict limiter as login/signup, and
+ * for a sharper reason than brute force: every accepted call sends a real
+ * email. Unlimited, this endpoint is a free mail-bomb aimed at any address
+ * an attacker knows, and it burns the platform's Resend quota doing it --
+ * the same "this request costs real money" logic behind OTP_RATE_LIMITER.
+ */
+authRoutes.post('/password-reset/request', rateLimit('AUTH_RATE_LIMITER'), async (c) => {
+  const body = await parseJsonBody(c.req.raw, requestPasswordResetSchema);
+  await withAuthService(c, (service) =>
+    service.requestPasswordReset({
+      email: body.email,
+      ipAddress: c.req.header('cf-connecting-ip'),
+    }),
+  );
+  // 202, not 200-with-a-body: the platform has accepted the request and will
+  // send mail if warranted. Deliberately no payload -- there is nothing this
+  // response can safely say about whether an account exists.
+  return c.body(null, 202);
+});
+
+/**
+ * Step 2 of account recovery. Rate-limited on the same limiter: the token is
+ * unguessable, so this is not brute-force protection, it is a cap on the
+ * PBKDF2 work an unauthenticated caller can force the Durable Object to do
+ * by submitting reset attempts.
+ *
+ * Returns 204 rather than a fresh token pair. Every session is revoked as
+ * part of the reset (AuthService.afterPasswordChanged), so the user re-logs
+ * in with their new password -- issuing tokens here would hand a working
+ * session to whoever redeemed the link without ever proving they can pass
+ * the login they just enabled.
+ */
+authRoutes.post('/password-reset/confirm', rateLimit('AUTH_RATE_LIMITER'), async (c) => {
+  const body = await parseJsonBody(c.req.raw, resetPasswordSchema);
+  await withAuthService(c, (service) =>
+    service.resetPassword({ token: body.token, newPassword: body.newPassword }),
+  );
+  return c.body(null, 204);
+});
+
+/**
+ * Authenticated self-service password change -- the everyday counterpart to
+ * the recovery flow above, and the reason a user who merely *suspects*
+ * compromise no longer has to go through email to rotate a credential.
+ *
+ * Also revokes every session, including the caller's own: the client must
+ * re-authenticate afterwards. That is the correct trade -- a change made
+ * because a password may be compromised is worthless if the compromised
+ * session survives it.
+ */
+authRoutes.post('/password/change', authenticate, async (c) => {
+  const body = await parseJsonBody(c.req.raw, changePasswordSchema);
+  await withAuthService(c, (service) =>
+    service.changePassword({
+      userId: c.get('userId'),
+      currentPassword: body.currentPassword,
+      newPassword: body.newPassword,
+    }),
+  );
   return c.body(null, 204);
 });
 

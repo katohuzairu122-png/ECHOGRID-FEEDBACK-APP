@@ -5,6 +5,7 @@ import { UserRepository } from './user.repository';
 import { RoleRepository } from './role.repository';
 import { UserBusinessRoleRepository } from './user-business-role.repository';
 import { RefreshTokenRepository } from './refresh-token.repository';
+import { PasswordResetTokenRepository } from './password-reset-token.repository';
 import { PermissionRepository } from './permission.repository';
 import { AuditLogRepository } from './audit-log.repository';
 import { QrCodeRepository } from './qr-code.repository';
@@ -32,6 +33,7 @@ export * from './user.repository';
 export * from './role.repository';
 export * from './user-business-role.repository';
 export * from './refresh-token.repository';
+export * from './password-reset-token.repository';
 export * from './permission.repository';
 export * from './audit-log.repository';
 export * from './qr-code.repository';
@@ -66,6 +68,7 @@ export function createRepositories(db: Db) {
     roles: new RoleRepository(db),
     userBusinessRoles: new UserBusinessRoleRepository(db),
     refreshTokens: new RefreshTokenRepository(db),
+    passwordResetTokens: new PasswordResetTokenRepository(db),
     permissions: new PermissionRepository(db),
     auditLog: new AuditLogRepository(db),
     qrCodes: new QrCodeRepository(db),
