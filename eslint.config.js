@@ -37,6 +37,25 @@ export default [
     },
   },
   {
+    // The service worker runs in its own global scope -- no `window`, no
+    // Node globals, and (since it's plain .js, not .ts) none of the
+    // TypeScript-lib-driven global resolution that lets the block above turn
+    // `no-undef` off. js.configs.recommended has no browser/worker globals
+    // declared for .js files, so it flags every runtime-provided identifier
+    // this file uses. Scoped narrowly to sw.js rather than a blanket
+    // browser/worker env, since it's the only non-TS, non-Node source file
+    // in the repo -- if that changes, switch to the `globals` package's
+    // `globals.serviceworker` instead of growing this object by hand.
+    files: ['apps/web/public/sw.js'],
+    languageOptions: {
+      globals: {
+        self: 'readonly',
+        caches: 'readonly',
+        fetch: 'readonly',
+      },
+    },
+  },
+  {
     ignores: [
       '**/dist/**',
       '**/.next/**',
