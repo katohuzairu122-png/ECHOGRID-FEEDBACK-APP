@@ -23,3 +23,4 @@ export * from './platform';
 export * from './users';
 export * from './billing';
 export * from './messaging';
+export * from './visits';
