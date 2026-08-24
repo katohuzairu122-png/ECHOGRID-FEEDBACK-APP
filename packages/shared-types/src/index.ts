@@ -24,3 +24,4 @@ export * from './users';
 export * from './billing';
 export * from './messaging';
 export * from './visits';
+export * from './fraud-signals';

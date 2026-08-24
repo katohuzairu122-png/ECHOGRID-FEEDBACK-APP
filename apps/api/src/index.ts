@@ -25,6 +25,7 @@ import { billingRoutes } from './billing/billing.routes';
 import { stripeWebhookRoutes } from './billing/stripe-webhook.routes';
 import { messagingRoutes } from './messaging/messaging.routes';
 import { messagingCustomerRoutes } from './messaging/messaging-customer.routes';
+import { fraudSignalRoutes } from './fraud/fraud-signal.routes';
 import { createDb } from './db/client';
 import { createRepositories } from './repositories';
 import { createSentimentService } from './sentiment/sentiment.service';
@@ -122,6 +123,10 @@ api.route('/analytics', analyticsRoutes);
 api.route('/notifications', notificationsRoutes);
 api.route('/messaging', messagingRoutes);
 api.route('/messaging/me', messagingCustomerRoutes);
+// Continuing Development Block 5.1 (S7.1 minimal manual review) -- reads
+// fraud_signals (Block 3.1), which every detector since (3.2, 4.1, 4.3.2)
+// has been writing to with no staff-facing surface until now.
+api.route('/fraud-signals', fraudSignalRoutes);
 api.route('/billing', billingRoutes);
 // Platform Admin Console (Blocks 2-3) -- cross-tenant, gated by
 // requirePlatformRole, not resolveTenantContext. Two files, one prefix each,
