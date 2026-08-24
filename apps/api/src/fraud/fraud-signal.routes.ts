@@ -86,9 +86,19 @@ fraudSignalRoutes.get('/', requirePermission('feedback:manage'), async (c) => {
  * confirmed by findById, so a repeat action is idempotent (same response
  * shape either way) instead of surfacing a confusing failure for something
  * that already happened.
+ *
+ * id is read via c.req.param('id') at each call site and passed in, rather
+ * than read from c inside this helper: a bare Context<Env> parameter carries
+ * no route-pattern type argument, so Hono can't confirm ':id' exists on the
+ * pattern and widens param('id') to string | undefined here -- this is what
+ * broke the real (non-sandbox) CI typecheck on the Block 5.1 push. At each
+ * call site c's type already carries the literal '/:id/review' /
+ * '/:id/dismiss' pattern from .post(), so param('id') resolves to a plain
+ * string there with no cast needed.
  */
 async function respondWithReviewAction(
   c: Context<Env>,
+  id: string,
   markFn: (
     repos: ReturnType<typeof createRepositories>,
     id: string,
@@ -97,7 +107,6 @@ async function respondWithReviewAction(
   ) => Promise<FraudSignal | undefined>,
   auditAction: string,
 ) {
-  const id = c.req.param('id');
   const businessId = c.get('businessId');
 
   const { db, close } = await createDb(c.env.HYPERDRIVE);
@@ -121,6 +130,7 @@ async function respondWithReviewAction(
 fraudSignalRoutes.post('/:id/review', requirePermission('feedback:manage'), (c) =>
   respondWithReviewAction(
     c,
+    c.req.param('id'),
     (repos, id, businessId, actorId) => repos.fraudSignals.markReviewed(id, businessId, actorId),
     'fraud_signal.reviewed',
   ),
@@ -129,6 +139,7 @@ fraudSignalRoutes.post('/:id/review', requirePermission('feedback:manage'), (c) 
 fraudSignalRoutes.post('/:id/dismiss', requirePermission('feedback:manage'), (c) =>
   respondWithReviewAction(
     c,
+    c.req.param('id'),
     (repos, id, businessId, actorId) => repos.fraudSignals.markDismissed(id, businessId, actorId),
     'fraud_signal.dismissed',
   ),
