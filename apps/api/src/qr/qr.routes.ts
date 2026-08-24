@@ -19,6 +19,7 @@ import {
   FEEDBACK_IP_VELOCITY,
   FEEDBACK_COOLDOWN_SECONDS,
 } from '../fraud/velocity-tracker';
+import { VisitSessionService } from '../visits/visit-session.service';
 
 /**
  * The platform's only fully anonymous write surface -- no authenticate /
@@ -182,6 +183,41 @@ qrRoutes.post('/:token/feedback', async (c) => {
         severity: 'low',
         metadata: { subjectHash: cooldown.subjectHash, windowSeconds: FEEDBACK_COOLDOWN_SECONDS },
       });
+    }
+
+    // Continuing Development Block 4.3.2 (S5.3 visit verification).
+    // Advisory only, same "signal-only" precedent as the cooldown block
+    // just above: nothing today withholds a reward on a failed or missing
+    // proof -- no reward system exists yet (S5.7/S6 are Blocks 5 and
+    // 10-14) -- so this never blocks submission, whatever the outcome.
+    // Only the FAILURE case is recorded, matching velocity/cooldown's own
+    // "log the exceptional case, stay silent otherwise" convention.
+    // Recorded against the feedback row (feedbackId: created.id), not
+    // pre-submission, for the same reason the cooldown signal above is:
+    // fraud_signals' own schema comment prefers a feedbackId when one is
+    // available. `metadata.proof` stores the code as-is, unlike
+    // device/IP -- S5.4's salted-hashing requirement is scoped to those
+    // identifying fingerprints, and a visit-session code is already
+    // plain-text everywhere else it's stored (visit_sessions.code), so
+    // there's nothing to redact and real value in a reviewer being able to
+    // see which code was attempted.
+    if (body.visitProof) {
+      const verification = await new VisitSessionService(repos).verify(
+        qrCode.businessId,
+        qrCode.branchId,
+        body.visitProof,
+      );
+      if (!verification.verified) {
+        await repos.fraudSignals.create({
+          businessId: qrCode.businessId,
+          branchId: qrCode.branchId,
+          feedbackId: created.id,
+          signalType: 'visit_verification',
+          reasonCode: verification.reasonCode ?? 'invalid_or_expired',
+          severity: 'low',
+          metadata: { proof: body.visitProof },
+        });
+      }
     }
 
     // Fire-and-forget: classification is background work, never something

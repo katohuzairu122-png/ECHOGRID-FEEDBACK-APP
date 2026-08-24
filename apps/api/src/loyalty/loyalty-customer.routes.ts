@@ -22,6 +22,7 @@ import {
   CHECKIN_IP_VELOCITY,
   CHECKIN_COOLDOWN_SECONDS,
 } from '../fraud/velocity-tracker';
+import { VisitSessionService } from '../visits/visit-session.service';
 import { LoyaltyAccountService } from './loyalty-account.service';
 import { LoyaltyRewardService } from './loyalty-reward.service';
 import { LoyaltyRedemptionService } from './loyalty-redemption.service';
@@ -122,6 +123,36 @@ loyaltyCustomerRoutes.post('/checkin', async (c) => {
         },
       });
       throw new AppError('Too many check-in attempts. Please try again later.', 429, 'VELOCITY_LIMITED');
+    }
+
+    // Continuing Development Block 4.3.2 (S5.3 visit verification). Runs
+    // once here, before the cooldown branch below (which has two different
+    // exit paths -- early return on cooldown, or fall through to
+    // recordCheckin) rather than after -- keeps this check independent of
+    // which path check-in takes instead of duplicating it in both branches
+    // or restructuring the existing cooldown return. Advisory only, same
+    // "never blocks, log only the failure" reasoning as qr.routes.ts's own
+    // feedback-submit wiring -- see that file's comment for the full
+    // reasoning (no reward system exists yet for verification to gate).
+    // feedbackId: null, matching every other fraud signal already recorded
+    // on this route -- a check-in isn't feedback, there is no row to link.
+    if (body.visitProof) {
+      const verification = await new VisitSessionService(repos).verify(
+        qrCode.businessId,
+        qrCode.branchId,
+        body.visitProof,
+      );
+      if (!verification.verified) {
+        await repos.fraudSignals.create({
+          businessId: qrCode.businessId,
+          branchId: qrCode.branchId,
+          feedbackId: null,
+          signalType: 'visit_verification',
+          reasonCode: verification.reasonCode ?? 'invalid_or_expired',
+          severity: 'low',
+          metadata: { proof: body.visitProof },
+        });
+      }
     }
 
     // Cooldown IS enforced here, unlike feedback's signal-only cooldown --

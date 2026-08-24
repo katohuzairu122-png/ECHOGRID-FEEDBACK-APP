@@ -60,6 +60,10 @@ export const checkinSchema = z.object({
   // contract as submitFeedbackSchema's field of the same name: client-
   // computed, only ever salted and hashed server-side, optional.
   deviceSignal: z.string().trim().max(256).optional(),
+  // Continuing Development Block 4.3.2 (S5.3 visit verification) -- same
+  // field/contract as submitFeedbackSchema's visitProof (feedback.ts):
+  // optional, advisory only, unstructured at this layer.
+  visitProof: z.string().trim().max(64).optional(),
 });
 
 export const redeemRewardSchema = z.object({

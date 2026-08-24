@@ -28,6 +28,14 @@ export const submitFeedbackSchema = z.object({
   // becomes a KV key or fraud-signal metadata. Optional: an older client that
   // never sends one still gets IP-level velocity protection (see qr.routes.ts).
   deviceSignal: z.string().trim().max(256).optional(),
+  // Continuing Development Block 4.3.2 (S5.3 visit verification). The code
+  // a customer types from a staff-issued visit session
+  // (visits/visit-session.routes.ts). Optional and advisory only -- see
+  // qr.routes.ts's own comment on why a failed or missing proof never
+  // blocks a submission (no reward system exists yet for verification to
+  // gate). Unstructured/opaque at this layer, same as deviceSignal --
+  // VisitSessionService.verify() does the real validation.
+  visitProof: z.string().trim().max(64).optional(),
 });
 
 export type SubmitFeedbackInput = z.infer<typeof submitFeedbackSchema>;
