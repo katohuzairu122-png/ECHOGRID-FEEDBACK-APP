@@ -49,4 +49,38 @@ export class LoyaltyTransactionRepository extends BaseRepository {
       .returning();
     return row;
   }
+
+  /**
+   * Continuing Development Block 5.2 (S5.7). Pre-check half of an explicit
+   * find-then-create dedup, called from LoyaltyAccountService.recordCheckin
+   * before it ever opens a ledger row -- deliberately NOT
+   * `onConflictDoNothing` against loyalty_transactions_checkin_visit_key.
+   * Drizzle's support for targeting a partial (WHERE-scoped) unique index
+   * from the insert builder has multiple open, version-dependent upstream
+   * bug reports, and this code has no way to be executed against a real
+   * Postgres instance before shipping -- same reasoning, same conclusion, as
+   * notification-preference.repository.ts's setPreference.
+   *
+   * The real backstop against a double reward under a genuinely concurrent
+   * race is the partial unique index itself, not this check -- a raced
+   * second insert still fails at the database; it just surfaces as a raw
+   * constraint error instead of this graceful early return. Accepted for
+   * the same reason notification preferences accepts it: the realistic
+   * trigger here is a sequential retry or replay (S5.7's actual concern --
+   * "refreshes, retries, repeated calls... must never create another
+   * reward"), not two devices scanning the same shared table code in the
+   * same millisecond.
+   */
+  async findCheckinByVisitSession(
+    loyaltyAccountId: string,
+    visitSessionId: string,
+  ): Promise<LoyaltyTransaction | undefined> {
+    return this.db.query.loyaltyTransactions.findFirst({
+      where: and(
+        eq(loyaltyTransactions.loyaltyAccountId, loyaltyAccountId),
+        eq(loyaltyTransactions.visitSessionId, visitSessionId),
+        eq(loyaltyTransactions.type, 'checkin'),
+      ),
+    });
+  }
 }

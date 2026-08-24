@@ -70,11 +70,28 @@ export class LoyaltyAccountService {
   }
 
   /** Auto-enrolls on first scan -- a customer tapping a business's QR code
-   * for the first time shouldn't need a separate "join" step. */
+   * for the first time shouldn't need a separate "join" step.
+   *
+   * `visitSessionId` is optional and only ever set by the caller when Block
+   * 4.3.2's visit verification actually succeeded on this request -- see
+   * loyalty-customer.routes.ts's checkin handler. When present, Block 5.2
+   * (S5.7 one reward per qualifying visit) enforces at most one 'checkin'
+   * reward per (visitSessionId, account) pair: checked AFTER auto-enrollment
+   * above so a brand-new member's first-ever check-in at a shared
+   * table-session code still earns normally (there is provably no prior
+   * transaction for an account that didn't exist a moment ago). When
+   * absent -- no visitProof was submitted, or verification failed -- this
+   * behaves exactly as before Block 5.2: every call earns, gated only by
+   * the existing cooldown in the route handler. That is a deliberate,
+   * bounded gap, not an oversight: verification staying advisory-only
+   * (Block 4.3.2) means a failed/exhausted proof falls back to ordinary
+   * cooldown-gated earning rather than blocking the checkin outright, the
+   * same as if no visitProof had been sent at all. */
   async recordCheckin(
     customerId: string,
     businessId: string,
     qrCodeId: string,
+    visitSessionId?: string,
   ): Promise<LoyaltyAccount> {
     return this.db.transaction(async (tx) => {
       const repos = createRepositories(tx);
@@ -84,9 +101,15 @@ export class LoyaltyAccountService {
         account = await repos.loyaltyAccounts.create({ customerId, businessId });
       }
 
+      if (visitSessionId) {
+        const already = await repos.loyaltyTransactions.findCheckinByVisitSession(account.id, visitSessionId);
+        if (already) return account;
+      }
+
       const settings = await repos.loyaltySettings.getOrCreateDefaults(businessId);
       return this.applyEarning(repos, account, 'checkin', settings.pointsPerCheckin, {
         relatedQrCodeId: qrCodeId,
+        visitSessionId,
         recordVisit: true,
       });
     });
@@ -210,6 +233,7 @@ export class LoyaltyAccountService {
     points: number,
     extra: {
       relatedQrCodeId?: string | undefined;
+      visitSessionId?: string | undefined;
       purchaseAmount?: string | undefined;
       notes?: string | undefined;
       createdBy?: string | undefined;
@@ -231,6 +255,7 @@ export class LoyaltyAccountService {
       type,
       points,
       relatedQrCodeId: extra.relatedQrCodeId ?? null,
+      visitSessionId: extra.visitSessionId ?? null,
       purchaseAmount: extra.purchaseAmount ?? null,
       notes: extra.notes ?? null,
       createdBy: extra.createdBy ?? null,

@@ -3,6 +3,7 @@ import { Client } from 'pg';
 import { buildDb } from '../../src/db/client';
 import { createRepositories } from '../../src/repositories';
 import { LoyaltyAccountService } from '../../src/loyalty/loyalty-account.service';
+import { VisitSessionService } from '../../src/visits/visit-session.service';
 
 // createdBy/actor columns are `uuid` at the schema level -- a placeholder
 // string like 'staff-actor' fails at the database, not just in spirit; these
@@ -90,6 +91,51 @@ describe.skipIf(!process.env.DATABASE_URL)('LoyaltyAccountService points engine 
     expect(after.id).toBe(before.id);
     expect(after.points).toBe(before.points + 10);
     expect(after.visitCount).toBe(before.visitCount + 1);
+  });
+
+  // Continuing Development Block 5.2 (S5.7 one reward per qualifying
+  // visit). Requires the visit_sessions table to actually exist -- see the
+  // handover note on that migration gap; these two cases will fail with a
+  // "relation does not exist" error until `pnpm db:generate` (run from
+  // apps/api) picks up visit_sessions for the first time, alongside this
+  // block's loyalty_transactions.visit_session_id column.
+
+  it('recordCheckin does not award a second reward for the same visit session and account (S5.7)', async () => {
+    const qrCode = await repos.qrCodes.create({ businessId, branchId, type: 'checkin_dedup' });
+    const session = await new VisitSessionService(repos).issue(businessId, branchId, STAFF_ACTOR_ID, {
+      ttlSeconds: 60,
+    });
+
+    const before = await repos.loyaltyAccounts.findByCustomerAndBusiness(customerId, businessId);
+    const first = await service.recordCheckin(customerId, businessId, qrCode.id, session.id);
+    expect(first.points).toBe(before!.points + 10);
+
+    // Same account, same visit session, called again -- simulates a
+    // retried/replayed request. Must return the account unchanged, not
+    // award a second 10 points.
+    const second = await service.recordCheckin(customerId, businessId, qrCode.id, session.id);
+    expect(second.points).toBe(first.points);
+    expect(second.visitCount).toBe(first.visitCount);
+  });
+
+  it('recordCheckin lets a DIFFERENT customer earn their own reward off the same shared visit session (composite key)', async () => {
+    const qrCode = await repos.qrCodes.create({ businessId, branchId, type: 'checkin_dedup_shared' });
+    // maxUses: null -- a shared table-session code, meant for many
+    // different customers, not the one-time-token flavor.
+    const session = await new VisitSessionService(repos).issue(businessId, branchId, STAFF_ACTOR_ID, {
+      ttlSeconds: 60,
+    });
+    const otherCustomer = await repos.customers.create({ phone: `+1555${Date.now()}` });
+
+    const first = await service.recordCheckin(customerId, businessId, qrCode.id, session.id);
+    const second = await service.recordCheckin(otherCustomer.id, businessId, qrCode.id, session.id);
+
+    // The composite (visitSessionId, loyaltyAccountId) key must not block
+    // a different account from claiming the same shared session -- this is
+    // the exact regression a visitSessionId-only unique index would cause.
+    expect(second.customerId).toBe(otherCustomer.id);
+    expect(second.points).toBe(10);
+    expect(second.id).not.toBe(first.id);
   });
 
   it('recordPurchase computes points from the business\'s pointsPerCurrencyUnit setting and floors the result', async () => {

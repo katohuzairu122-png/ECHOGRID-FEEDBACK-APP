@@ -136,13 +136,26 @@ loyaltyCustomerRoutes.post('/checkin', async (c) => {
     // reasoning (no reward system exists yet for verification to gate).
     // feedbackId: null, matching every other fraud signal already recorded
     // on this route -- a check-in isn't feedback, there is no row to link.
+    //
+    // Block 5.2 (S5.7) reads the verified session id out of `metadata` and
+    // carries it into recordCheckin below, for the one-reward-per-visit
+    // dedup. `metadata` is `Record<string, unknown>` by design --
+    // VisitVerificationResult is a provider-agnostic contract, see
+    // visit-verification.ts's own doc comment -- so `sessionId` is narrowed
+    // with a runtime `typeof` check rather than trusted as `string`; a
+    // future provider that omits or reshapes it just leaves visitSessionId
+    // undefined instead of throwing.
+    let visitSessionId: string | undefined;
     if (body.visitProof) {
       const verification = await new VisitSessionService(repos).verify(
         qrCode.businessId,
         qrCode.branchId,
         body.visitProof,
       );
-      if (!verification.verified) {
+      if (verification.verified) {
+        const sessionId = verification.metadata?.sessionId;
+        visitSessionId = typeof sessionId === 'string' ? sessionId : undefined;
+      } else {
         await repos.fraudSignals.create({
           businessId: qrCode.businessId,
           branchId: qrCode.branchId,
@@ -199,7 +212,12 @@ loyaltyCustomerRoutes.post('/checkin', async (c) => {
       return ok(c, existing);
     }
 
-    const account = await new LoyaltyAccountService(db).recordCheckin(customerId, qrCode.businessId, qrCode.id);
+    const account = await new LoyaltyAccountService(db).recordCheckin(
+      customerId,
+      qrCode.businessId,
+      qrCode.id,
+      visitSessionId,
+    );
     return ok(c, account);
   });
 });
