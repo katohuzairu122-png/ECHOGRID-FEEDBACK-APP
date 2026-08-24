@@ -63,11 +63,7 @@ describe.skipIf(!process.env.DATABASE_URL)('LoyaltyAccountService points engine 
   });
 
   it('recordCheckin auto-enrolls a customer with no existing account, awards the configured points, and records a visit', async () => {
-    const qrCode = await repos.qrCodes.create({
-      businessId,
-      branchId,
-      token: `checkin-test-${crypto.randomUUID()}`,
-    });
+    const qrCode = await repos.qrCodes.create({ businessId, branchId });
 
     const account = await service.recordCheckin(customerId, businessId, qrCode.id);
 
@@ -83,12 +79,7 @@ describe.skipIf(!process.env.DATABASE_URL)('LoyaltyAccountService points engine 
     // qr-code-active-uniqueness.integration.test.ts), so a second 'feedback'
     // QR for the same branch while the first is still active would violate it.
     // recordCheckin doesn't care about type; only that it's a valid active code.
-    const qrCode = await repos.qrCodes.create({
-      businessId,
-      branchId,
-      type: 'loyalty',
-      token: `checkin-test-2-${crypto.randomUUID()}`,
-    });
+    const qrCode = await repos.qrCodes.create({ businessId, branchId, type: 'loyalty' });
 
     const before = await service.getAccount(
       (await repos.loyaltyAccounts.findByCustomerAndBusiness(customerId, businessId))!.id,

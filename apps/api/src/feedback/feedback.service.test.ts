@@ -208,7 +208,6 @@ const QR_CODE: QrCode = {
   id: 'qr-1',
   businessId: BUSINESS_A,
   branchId: BRANCH_A,
-  token: 'tok123',
   type: 'feedback',
   status: 'active',
   createdAt: new Date(),
