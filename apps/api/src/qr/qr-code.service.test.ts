@@ -166,10 +166,22 @@ describe('QrCodeService', () => {
     await expect(otherService.resolveToken(token)).rejects.toMatchObject({ code: 'QR_CODE_NOT_FOUND' });
   });
 
-  it('resolveToken throws 404 for a token whose last characters were tampered with', async () => {
+  it('resolveToken throws 404 for a token whose payload segment was tampered with', async () => {
     const { token } = await service.getOrCreateActiveForBranch(BRANCH_A, BUSINESS_A, ACTOR);
-    const lastChar = token.at(-1);
-    const tampered = token.slice(0, -1) + (lastChar === 'A' ? 'B' : 'A'); // still valid base64url, guaranteed different
+    const [header, payload, signature] = token.split('.');
+    // Flip a character mid-PAYLOAD, not the token's trailing character (an
+    // earlier version of this test did that and was itself the CI failure:
+    // a base64url segment's FINAL character can carry unused low-order
+    // "padding" bits -- for this payload's byte length, 'A' vs 'B' differ
+    // only in such a bit, so a lenient decoder reconstructs the identical
+    // signature bytes and verification wrongly still succeeds. The
+    // signature is computed over the header+payload STRING, not a decoded
+    // value, so altering ANY payload character changes the HMAC input
+    // unambiguously -- no equivalent edge case here.
+    const midIndex = Math.floor((payload?.length ?? 0) / 2);
+    const flippedChar = payload?.[midIndex] === 'A' ? 'B' : 'A';
+    const tamperedPayload = `${payload?.slice(0, midIndex)}${flippedChar}${payload?.slice(midIndex + 1)}`;
+    const tampered = `${header}.${tamperedPayload}.${signature}`;
     await expect(service.resolveToken(tampered)).rejects.toMatchObject({ code: 'QR_CODE_NOT_FOUND' });
   });
 
