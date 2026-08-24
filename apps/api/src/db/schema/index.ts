@@ -28,4 +28,5 @@ export * from './subscription-plans';
 export * from './business-subscriptions';
 export * from './conversations';
 export * from './messages';
+export * from './visit-sessions';
 export * from './relations';

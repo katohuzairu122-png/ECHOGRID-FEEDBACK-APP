@@ -27,6 +27,7 @@ import { SubscriptionPlanRepository } from './subscription-plan.repository';
 import { BusinessSubscriptionRepository } from './business-subscription.repository';
 import { ConversationRepository } from './conversation.repository';
 import { MessageRepository } from './message.repository';
+import { VisitSessionRepository } from './visit-session.repository';
 
 export * from './business.repository';
 export * from './branch.repository';
@@ -56,6 +57,7 @@ export * from './subscription-plan.repository';
 export * from './business-subscription.repository';
 export * from './conversation.repository';
 export * from './message.repository';
+export * from './visit-session.repository';
 
 /**
  * Constructs one instance of every repository, sharing a single
@@ -92,6 +94,7 @@ export function createRepositories(db: Db) {
     businessSubscriptions: new BusinessSubscriptionRepository(db),
     conversations: new ConversationRepository(db),
     messages: new MessageRepository(db),
+    visitSessions: new VisitSessionRepository(db),
   };
 }
 
