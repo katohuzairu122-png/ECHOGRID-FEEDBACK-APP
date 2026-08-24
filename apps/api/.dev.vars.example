@@ -7,6 +7,17 @@ JWT_REFRESH_SECRET=replace-with-a-different-strong-random-value
 # Digital Loyalty module -- customer sessions use a separate secret from staff.
 CUSTOMER_JWT_SECRET=replace-with-a-third-strong-random-value
 
+# QR token signing (Continuing Development Block 3.2). Pre-existing gap in
+# this file, closed alongside Block 4.1's own addition below -- QR_TOKEN_SECRET
+# was already required in wrangler.toml but never had a local-dev template line.
+QR_TOKEN_SECRET=replace-with-a-fourth-strong-random-value
+# QR_TOKEN_SECRET_PREVIOUS is NOT listed here -- it's deliberately optional,
+# only set during an active rotation. See wrangler.toml's own comment on it.
+
+# Salts device/IP hashing for anti-fraud velocity + cooldown checks
+# (Continuing Development Block 4.1).
+FRAUD_DETECTION_SALT=replace-with-a-fifth-strong-random-value
+
 # Twilio (SMS OTP delivery). Unused in development/staging -- ConsoleSmsService
 # logs the code instead, so these can stay as placeholders locally.
 TWILIO_ACCOUNT_SID=replace-with-twilio-account-sid

@@ -13,6 +13,12 @@ import { createFollowUpQuestionGenerator } from '../feedback/follow-up-question-
 import { enqueueClassification } from '../sentiment/sentiment-job';
 import { NotificationService } from '../notifications/notification.service';
 import { runInBackground } from '../lib/background-db';
+import {
+  VelocityTracker,
+  FEEDBACK_DEVICE_VELOCITY,
+  FEEDBACK_IP_VELOCITY,
+  FEEDBACK_COOLDOWN_SECONDS,
+} from '../fraud/velocity-tracker';
 
 /**
  * The platform's only fully anonymous write surface -- no authenticate /
@@ -101,7 +107,82 @@ qrRoutes.post('/:token/feedback', async (c) => {
       QR_TOKEN_SECRET: c.env.QR_TOKEN_SECRET,
       QR_TOKEN_SECRET_PREVIOUS: c.env.QR_TOKEN_SECRET_PREVIOUS,
     }).resolveToken(c.req.param('token'));
+
+    // Continuing Development Block 4.1 (S5.4 device/IP velocity, S5.5
+    // cooldown) -- deliberately placed AFTER resolveToken (needs a trusted
+    // qrCode.businessId/branchId to scope fraud_signals) and BEFORE
+    // FeedbackService.submit (a velocity breach must reject before any
+    // feedback row exists, same "reject before feedback exists" precedent
+    // fraud-signals.ts's own doc comment already establishes for QR-token
+    // rejection). See fraud/velocity-tracker.ts for why this is a KV-backed
+    // layer distinct from PUBLIC_RATE_LIMITER above.
+    const velocity = new VelocityTracker(c.env.CACHE, c.env.FRAUD_DETECTION_SALT);
+    const ip = c.req.header('cf-connecting-ip') ?? 'unknown';
+
+    const breach = await velocity.checkVelocity({
+      eventType: 'feedback_submit',
+      ip,
+      deviceSignal: body.deviceSignal,
+      deviceLimits: FEEDBACK_DEVICE_VELOCITY,
+      ipLimits: FEEDBACK_IP_VELOCITY,
+    });
+    if (breach) {
+      await repos.fraudSignals.create({
+        businessId: qrCode.businessId,
+        branchId: qrCode.branchId,
+        feedbackId: null,
+        signalType: 'velocity',
+        reasonCode: `${breach.subjectType}_velocity_exceeded`,
+        severity: 'medium',
+        metadata: {
+          subjectType: breach.subjectType,
+          subjectHash: breach.subjectHash,
+          count: breach.count,
+          windowSeconds: breach.windowSeconds,
+          threshold: breach.threshold,
+        },
+      });
+      throw new AppError('Too many submissions. Please try again later.', 429, 'VELOCITY_LIMITED');
+    }
+
+    // Cooldown is signal-only for feedback (S5.5: "may be stored but must
+    // not automatically generate another reward") -- there is no reward yet
+    // to withhold, so this never blocks. Only checked when a deviceSignal
+    // was actually supplied; there is nothing meaningful to key a
+    // per-device cooldown on otherwise (IP is deliberately excluded here --
+    // an IP-only cooldown would suppress every OTHER customer on the same
+    // shared WiFi, not just the repeat submitter). Recorded against the
+    // feedback row below once it exists, not here -- see fraud_signals'
+    // own schema comment on why a signal prefers a feedbackId when one is
+    // available.
+    const cooldown = body.deviceSignal
+      ? await velocity.checkAndStartCooldown({
+          eventType: 'feedback_submit',
+          subjectValue: `${body.deviceSignal}:${qrCode.branchId}`,
+          windowSeconds: FEEDBACK_COOLDOWN_SECONDS,
+        })
+      : null;
+
     const created = await new FeedbackService(repos).submit(qrCode, body);
+
+    if (cooldown?.inCooldown) {
+      // Awaited directly on the outer `repos`, NOT backgrounded via
+      // waitUntil -- unlike the notification blocks below, which
+      // deliberately open their own fresh connection (runInBackground) for
+      // exactly this reason: this handler's own `finally` also
+      // waitUntil's this same connection's close(), and a backgrounded
+      // write here could race that close(). One small INSERT is cheap
+      // enough to just await before responding.
+      await repos.fraudSignals.create({
+        businessId: qrCode.businessId,
+        branchId: qrCode.branchId,
+        feedbackId: created.id,
+        signalType: 'cooldown',
+        reasonCode: 'feedback_cooldown',
+        severity: 'low',
+        metadata: { subjectHash: cooldown.subjectHash, windowSeconds: FEEDBACK_COOLDOWN_SECONDS },
+      });
+    }
 
     // Fire-and-forget: classification is background work, never something
     // the customer's own submit response waits on. waitUntil keeps the

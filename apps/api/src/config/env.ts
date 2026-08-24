@@ -57,6 +57,21 @@ export interface Bindings {
    * genuinely absent key. */
   QR_TOKEN_SECRET_PREVIOUS: string | undefined;
 
+  /** Salts device-signal/IP hashing for velocity + cooldown checks
+   * (Continuing Development Block 4.1, S5.4/S5.5 -- fraud/velocity-tracker.ts).
+   * Its own secret, same leak-isolation reasoning as QR_TOKEN_SECRET/
+   * CUSTOMER_JWT_SECRET above -- and needed at all only because an IP or a
+   * client-supplied device signal is low-entropy and guessable on its own;
+   * without a secret salt, an attacker could precompute hashes for the
+   * entire IPv4 space. No rotation-pair variant (unlike QR_TOKEN_SECRET):
+   * every value this salts is scoped to a KV entry with a TTL measured in
+   * minutes/hours (fraud/velocity-tracker.ts's *_COOLDOWN_SECONDS /
+   * *_VELOCITY windows), not QR_TOKEN_SECRET's 365-day signed tokens, so a
+   * rotation just means yesterday's counters age out on their own TTL --
+   * there is nothing long-lived that would need a _PREVIOUS fallback to
+   * keep verifying. */
+  FRAUD_DETECTION_SALT: string;
+
   /** Twilio REST API credentials (customer-auth/sms.service.ts) -- called
    * via plain fetch(), not the Twilio Node SDK, whose Workers-runtime
    * compatibility is unverified. Unused when ENVIRONMENT !== 'production'

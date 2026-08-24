@@ -71,6 +71,7 @@ required = [
   "JWT_REFRESH_SECRET",
   "CUSTOMER_JWT_SECRET",
   "QR_TOKEN_SECRET",
+  "FRAUD_DETECTION_SALT",
   "TWILIO_ACCOUNT_SID",
   "TWILIO_AUTH_TOKEN",
   "TWILIO_FROM_NUMBER",
@@ -86,6 +87,11 @@ required = [
 # every QR token signed under the old secret has passed its (up to 365-day)
 # expiry, delete QR_TOKEN_SECRET_PREVIOUS with `wrangler secret delete`.
 # See config/env.ts and qr/qr-token.ts for how both are used.
+#
+# FRAUD_DETECTION_SALT (Continuing Development Block 4.1, S5.4/S5.5) salts
+# device-signal/IP hashing in fraud/velocity-tracker.ts. Unlike QR_TOKEN_SECRET
+# it has no rotation-pair variant -- see config/env.ts's doc comment on this
+# field for why a rotation needs nothing more than setting a new value.
 
 # Postgres (Neon) via Hyperdrive -- the connection string lives in Cloudflare's
 # Hyperdrive config, never in this file or in a Worker secret. Provision with:

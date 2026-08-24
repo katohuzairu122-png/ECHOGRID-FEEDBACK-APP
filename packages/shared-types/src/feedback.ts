@@ -22,6 +22,12 @@ export const submitFeedbackSchema = z.object({
   // FeedbackService.submit for the "answer implies question" pairing rule.
   followUpQuestion: z.string().trim().max(500).optional(),
   followUpAnswer: z.string().trim().max(2000).optional(),
+  // Continuing Development Block 4.1 (S5.4 device velocity). Client-computed,
+  // opaque to the server beyond its raw string value -- never persisted as
+  // given, only salted and hashed (fraud/velocity-tracker.ts) before it ever
+  // becomes a KV key or fraud-signal metadata. Optional: an older client that
+  // never sends one still gets IP-level velocity protection (see qr.routes.ts).
+  deviceSignal: z.string().trim().max(256).optional(),
 });
 
 export type SubmitFeedbackInput = z.infer<typeof submitFeedbackSchema>;

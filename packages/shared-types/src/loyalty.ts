@@ -56,6 +56,10 @@ export const joinLoyaltyProgramSchema = z.object({
  * endpoint the scan lands on in apps/web. */
 export const checkinSchema = z.object({
   qrToken: z.string().min(1),
+  // Continuing Development Block 4.1 (S5.4 device velocity) -- same
+  // contract as submitFeedbackSchema's field of the same name: client-
+  // computed, only ever salted and hashed server-side, optional.
+  deviceSignal: z.string().trim().max(256).optional(),
 });
 
 export const redeemRewardSchema = z.object({

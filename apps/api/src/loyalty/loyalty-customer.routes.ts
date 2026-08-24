@@ -16,6 +16,12 @@ import { ok } from '../lib/response';
 import { AppError } from '../lib/errors';
 import { runInBackground } from '../lib/background-db';
 import { QrCodeService } from '../qr/qr-code.service';
+import {
+  VelocityTracker,
+  CHECKIN_DEVICE_VELOCITY,
+  CHECKIN_IP_VELOCITY,
+  CHECKIN_COOLDOWN_SECONDS,
+} from '../fraud/velocity-tracker';
 import { LoyaltyAccountService } from './loyalty-account.service';
 import { LoyaltyRewardService } from './loyalty-reward.service';
 import { LoyaltyRedemptionService } from './loyalty-redemption.service';
@@ -84,11 +90,85 @@ loyaltyCustomerRoutes.post('/checkin', async (c) => {
       QR_TOKEN_SECRET: c.env.QR_TOKEN_SECRET,
       QR_TOKEN_SECRET_PREVIOUS: c.env.QR_TOKEN_SECRET_PREVIOUS,
     }).resolveToken(body.qrToken);
-    const account = await new LoyaltyAccountService(db).recordCheckin(
-      c.get('customerId'),
-      qrCode.businessId,
-      qrCode.id,
-    );
+    const customerId = c.get('customerId');
+
+    // Continuing Development Block 4.1 (S5.4/S5.5). Same velocity pattern as
+    // qr.routes.ts's feedback submit -- see fraud/velocity-tracker.ts for why
+    // this is a KV layer distinct from this router's own PUBLIC_RATE_LIMITER.
+    const velocity = new VelocityTracker(c.env.CACHE, c.env.FRAUD_DETECTION_SALT);
+    const ip = c.req.header('cf-connecting-ip') ?? 'unknown';
+
+    const breach = await velocity.checkVelocity({
+      eventType: 'loyalty_checkin',
+      ip,
+      deviceSignal: body.deviceSignal,
+      deviceLimits: CHECKIN_DEVICE_VELOCITY,
+      ipLimits: CHECKIN_IP_VELOCITY,
+    });
+    if (breach) {
+      await repos.fraudSignals.create({
+        businessId: qrCode.businessId,
+        branchId: qrCode.branchId,
+        feedbackId: null,
+        signalType: 'velocity',
+        reasonCode: `${breach.subjectType}_velocity_exceeded`,
+        severity: 'medium',
+        metadata: {
+          subjectType: breach.subjectType,
+          subjectHash: breach.subjectHash,
+          count: breach.count,
+          windowSeconds: breach.windowSeconds,
+          threshold: breach.threshold,
+        },
+      });
+      throw new AppError('Too many check-in attempts. Please try again later.', 429, 'VELOCITY_LIMITED');
+    }
+
+    // Cooldown IS enforced here, unlike feedback's signal-only cooldown --
+    // see CHECKIN_COOLDOWN_SECONDS's doc comment: check-in points are real,
+    // already-live value today (unlike feedback, which has no reward yet to
+    // withhold), so a rapid repeat scan must not mint more of them. Keyed by
+    // customerId, not device -- this is the one call site with an actual
+    // verified identity (customerAuthenticate), and the real fraud pattern
+    // is "the same loyalty member scanning repeatedly," not "the same
+    // device" (a shared family device checking in two different members'
+    // accounts back to back is legitimate and must not cool either down).
+    // Scoped to branchId, not businessId (S5.5 lists branch as its own
+    // cooldown dimension) -- a customer checking in at a DIFFERENT branch of
+    // the same multi-branch business a few hours later is a genuinely
+    // separate real visit and must not be suppressed by the first branch's
+    // cooldown; only a repeat scan at the SAME branch should cool down.
+    const cooldown = await velocity.checkAndStartCooldown({
+      eventType: 'loyalty_checkin',
+      subjectValue: `${customerId}:${qrCode.branchId}`,
+      windowSeconds: CHECKIN_COOLDOWN_SECONDS,
+    });
+
+    if (cooldown.inCooldown) {
+      const existing = await repos.loyaltyAccounts.findByCustomerAndBusiness(customerId, qrCode.businessId);
+      if (!existing) {
+        // Unreachable in the normal flow -- an active cooldown can only
+        // exist once an earlier check-in REQUEST already reached the
+        // recordCheckin call below and that transaction committed,
+        // auto-enrolling this customer. Fails closed instead of silently
+        // falling through to recordCheckin (which would just award points
+        // anyway, defeating the point of the cooldown) on the narrow chance
+        // the KV cooldown key outlived a rolled-back DB transaction.
+        throw new AppError('Loyalty account not found.', 404, 'LOYALTY_ACCOUNT_NOT_FOUND');
+      }
+      await repos.fraudSignals.create({
+        businessId: qrCode.businessId,
+        branchId: qrCode.branchId,
+        feedbackId: null,
+        signalType: 'cooldown',
+        reasonCode: 'checkin_cooldown',
+        severity: 'low',
+        metadata: { customerId, windowSeconds: CHECKIN_COOLDOWN_SECONDS },
+      });
+      return ok(c, existing);
+    }
+
+    const account = await new LoyaltyAccountService(db).recordCheckin(customerId, qrCode.businessId, qrCode.id);
     return ok(c, account);
   });
 });
