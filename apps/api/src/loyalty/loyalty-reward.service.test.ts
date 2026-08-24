@@ -24,6 +24,19 @@ function createFakeRewardRepo() {
       const reward: LoyaltyReward = {
         id: crypto.randomUUID(),
         businessId: input.businessId,
+        // Block 6.1 (S6.1) fields -- same input.X ?? default pattern as
+        // every other nullable/defaulted field in this fake, mirroring the
+        // real schema's own defaults (loyalty-rewards.ts).
+        branchId: input.branchId ?? null,
+        type: input.type ?? 'points',
+        rewardValue: input.rewardValue ?? null,
+        startDate: input.startDate ?? null,
+        expiryDate: input.expiryDate ?? null,
+        maxRewardsPerDay: input.maxRewardsPerDay ?? null,
+        maxBudget: input.maxBudget ?? null,
+        limitPer: input.limitPer ?? null,
+        limitPeriodDays: input.limitPeriodDays ?? null,
+        cooldownSeconds: input.cooldownSeconds ?? null,
         name: input.name,
         description: input.description ?? null,
         pointsCost: input.pointsCost,
