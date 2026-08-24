@@ -1,0 +1,3 @@
+ALTER TABLE "loyalty_transactions" ADD COLUMN "visit_session_id" uuid;--> statement-breakpoint
+ALTER TABLE "loyalty_transactions" ADD CONSTRAINT "loyalty_transactions_visit_session_id_visit_sessions_id_fk" FOREIGN KEY ("visit_session_id") REFERENCES "public"."visit_sessions"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+CREATE UNIQUE INDEX "loyalty_transactions_checkin_visit_key" ON "loyalty_transactions" USING btree ("visit_session_id","loyalty_account_id") WHERE "loyalty_transactions"."visit_session_id" IS NOT NULL;

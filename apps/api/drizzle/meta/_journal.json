@@ -64,6 +64,20 @@
       "when": 1787525707082,
       "tag": "0008_lean_lake",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1787589927881,
+      "tag": "0009_orange_queen_noir",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1787590005277,
+      "tag": "0010_mushy_revanche",
+      "breakpoints": true
     }
   ]
 }
