@@ -18,7 +18,7 @@ function createFakeRewardRepo() {
             !r.isDeleted &&
             (options.includeInactive || r.status === 'active'),
         )
-        .sort((a, b) => a.pointsCost - b.pointsCost);
+        .sort((a, b) => (a.pointsCost ?? 0) - (b.pointsCost ?? 0)); // Block 6.2: pointsCost is nullable now (non-points types)
     },
     async create(input: NewLoyaltyReward): Promise<LoyaltyReward> {
       const reward: LoyaltyReward = {
@@ -39,7 +39,7 @@ function createFakeRewardRepo() {
         cooldownSeconds: input.cooldownSeconds ?? null,
         name: input.name,
         description: input.description ?? null,
-        pointsCost: input.pointsCost,
+        pointsCost: input.pointsCost ?? null, // Block 6.2: nullable now (non-points types)
         status: input.status ?? 'active',
         createdAt: new Date(),
         createdBy: input.createdBy ?? null,

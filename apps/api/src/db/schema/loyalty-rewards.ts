@@ -66,7 +66,17 @@ export const loyaltyRewards = pgTable(
     // (discount cap/minimum purchase, free-item substitution, voucher
     // secure token/status history) are out of scope for this block.
     type: text('type').notNull().default('points'),
-    pointsCost: integer('points_cost').notNull(),
+    // Block 6.2 correction: this was `.notNull()` with no default in Block
+    // 6.1, discovered wrong the moment 6.2 actually tried to create a
+    // non-points reward -- a discount/free_item/voucher row has no
+    // meaningful points cost, and forcing a dummy positive value through
+    // just to satisfy this column would be exactly the kind of placeholder
+    // data the project standards forbid. Nullable now, matching every
+    // other type-specific numeric column here (rewardValue, maxBudget,
+    // ...); still required at the LoyaltyRewardService layer for
+    // points-type rewards (CreateRewardInput.pointsCost: number,
+    // unchanged) -- only the schema/repository level relaxed.
+    pointsCost: integer('points_cost'),
     // Generic numeric value for non-points types -- see scoping decision 1.
     rewardValue: numeric('reward_value', { precision: 10, scale: 2 }),
     status: text('status').notNull().default('active'),
@@ -95,7 +105,10 @@ export const loyaltyRewards = pgTable(
   (table) => [
     index('loyalty_rewards_business_branch_idx').on(table.businessId, table.branchId),
     check('loyalty_rewards_status_check', sql`${table.status} IN ('active', 'inactive', 'paused')`),
-    check('loyalty_rewards_points_cost_check', sql`${table.pointsCost} > 0`),
+    check(
+      'loyalty_rewards_points_cost_check',
+      sql`${table.pointsCost} IS NULL OR ${table.pointsCost} > 0`,
+    ),
     check(
       'loyalty_rewards_type_check',
       sql`${table.type} IN ('points', 'discount', 'free_item', 'voucher')`,
