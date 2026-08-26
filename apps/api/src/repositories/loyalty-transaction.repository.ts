@@ -101,4 +101,35 @@ export class LoyaltyTransactionRepository extends BaseRepository {
       ),
     });
   }
+
+  /** Continuing Development Block 6.4 (S5.8 + S6.8 atomic limit
+   * enforcement -- "maximum rewards per day" and "maximum campaign
+   * budget"). One query, two counts, both against the
+   * same base rows (every redemption-type transaction referencing one
+   * reward). `todayCount` is scoped to UTC-calendar-day-so-far -- a known
+   * simplification: this doesn't account for a business's own timezone (a
+   * business west of UTC sees its "day" roll over during its own morning;
+   * one east of UTC sees it roll over the evening before). Correct
+   * business-timezone-aware day boundaries need a timezone source this
+   * block doesn't have wired up, and building that is a separate concern
+   * from "count today's redemptions" -- disclosed here, not silently
+   * assumed correct. `totalCount` is lifetime, not date-scoped: S6.1 lists
+   * "maximum rewards per day" and "maximum reward budget" as two separate
+   * fields, and nothing in the spec suggests budget resets. The caller
+   * (LoyaltyRedemptionService) multiplies `totalCount` by the reward's own
+   * `rewardValue` to get budget used, rather than this method summing a
+   * per-transaction value -- loyalty_transactions has no rewardValue column
+   * of its own, and doesn't need one: every redemption of the SAME reward
+   * grants the SAME value (it's a property of the catalog row, not the
+   * transaction), so count * rewardValue is the exact sum without a join. */
+  async countForLimitCheck(rewardId: string): Promise<{ todayCount: number; totalCount: number }> {
+    const [row] = await this.db
+      .select({
+        todayCount: sql<number>`count(*) filter (where ${loyaltyTransactions.createdAt} >= date_trunc('day', now()))::int`,
+        totalCount: sql<number>`count(*)::int`,
+      })
+      .from(loyaltyTransactions)
+      .where(and(eq(loyaltyTransactions.relatedRewardId, rewardId), eq(loyaltyTransactions.type, 'redemption')));
+    return { todayCount: row?.todayCount ?? 0, totalCount: row?.totalCount ?? 0 };
+  }
 }

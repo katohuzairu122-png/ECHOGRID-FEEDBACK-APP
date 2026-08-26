@@ -282,4 +282,73 @@ describe.skipIf(!process.env.DATABASE_URL)('LoyaltyRedemptionService (integratio
     const confirmed = await redemptionService.confirmRedemption(businessA, redemptionCode, branchA4.id);
     expect(confirmed.redemptionConfirmedAt).not.toBeNull();
   });
+
+  // Continuing Development Block 6.4 (S5.8 "maximum rewards per day" +
+  // S6.1 "maximum reward budget") -- checkDailyAndBudgetLimits(), shared by
+  // issue() and redeem(). maxBudget is a deliberate no-op for a
+  // 'points'-type reward (confirmed with the project owner): rewardValue is
+  // always null there, so the budget arm of the check never fires.
+
+  it('issue rejects once maxRewardsPerDay is reached for that reward (Block 6.4)', async () => {
+    const reward = await repos.loyaltyRewards.create({
+      businessId: businessA,
+      name: 'One a day',
+      type: 'voucher',
+      rewardValue: '5.00',
+      maxRewardsPerDay: 1,
+    });
+
+    await redemptionService.issue(customerId, businessA, reward.id);
+
+    await expect(redemptionService.issue(customerId, businessA, reward.id)).rejects.toMatchObject({
+      code: 'LOYALTY_REWARD_DAILY_LIMIT_REACHED',
+      status: 422,
+    });
+  });
+
+  it('issue allows redemptions up to maxBudget and rejects the one that would exceed it (Block 6.4)', async () => {
+    const reward = await repos.loyaltyRewards.create({
+      businessId: businessA,
+      name: 'Budget-capped voucher',
+      type: 'voucher',
+      rewardValue: '10.00',
+      maxBudget: '20.00', // exactly 2 issuances' worth
+    });
+
+    await redemptionService.issue(customerId, businessA, reward.id);
+    await redemptionService.issue(customerId, businessA, reward.id);
+
+    await expect(redemptionService.issue(customerId, businessA, reward.id)).rejects.toMatchObject({
+      code: 'LOYALTY_REWARD_BUDGET_EXCEEDED',
+      status: 422,
+    });
+  });
+
+  it('redeem still enforces maxRewardsPerDay for a points-type reward (Block 6.4)', async () => {
+    const reward = await repos.loyaltyRewards.create({
+      businessId: businessA,
+      name: 'Points reward, one a day',
+      pointsCost: 5,
+      maxRewardsPerDay: 1,
+    });
+
+    await redemptionService.redeem(customerId, businessA, reward.id);
+
+    await expect(redemptionService.redeem(customerId, businessA, reward.id)).rejects.toMatchObject({
+      code: 'LOYALTY_REWARD_DAILY_LIMIT_REACHED',
+      status: 422,
+    });
+  });
+
+  it('redeem does not enforce maxBudget for a points-type reward, even when maxBudget is set (Block 6.4)', async () => {
+    const reward = await repos.loyaltyRewards.create({
+      businessId: businessA,
+      name: 'Points reward with an inapplicable budget cap',
+      pointsCost: 5,
+      maxBudget: '0.01', // would reject immediately if budget applied to points -- it does not
+    });
+
+    const result = await redemptionService.redeem(customerId, businessA, reward.id);
+    expect(result.redemptionCode).toHaveLength(8);
+  });
 });

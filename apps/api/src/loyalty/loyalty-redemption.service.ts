@@ -1,6 +1,6 @@
 import type { Database } from '../db/client';
 import { createRepositories } from '../repositories';
-import type { LoyaltyTransaction } from '../repositories';
+import type { LoyaltyTransaction, LoyaltyReward } from '../repositories';
 import { AppError } from '../lib/errors';
 import { generateRedemptionCode } from './redemption-code';
 
@@ -32,6 +32,46 @@ const REDEMPTION_CODE_MAX_ATTEMPTS = 5;
 export class LoyaltyRedemptionService {
   constructor(private readonly db: Database) {}
 
+  /**
+   * Continuing Development Block 6.4 (S5.8 "maximum rewards per day" /
+   * "maximum campaign budget," enforced per S6.8 step 4, "check daily
+   * limits and campaign budget"). Shared by issue() and redeem() -- both
+   * need the identical lock-then-check sequence against the same two
+   * columns, just at a different point in two otherwise-different methods.
+   * Callers must call this AFTER their
+   * own existence/status/type checks (it assumes `reward` is already known
+   * good and already locked via loyaltyRewards.lockForUpdate) and BEFORE
+   * their code-generation loop -- throwing here must happen before any
+   * transaction row is created.
+   *
+   * maxBudget is compared against `reward.rewardValue`, which is null for
+   * every 'points'-type reward (Block 6.1's own design: rewardValue is
+   * additive alongside pointsCost, not a replacement) -- so this is a
+   * deliberate no-op for points-type rewards even when a business sets
+   * maxBudget on one, confirmed with the project owner rather than assumed.
+   * A points reward is already limited by the customer's own balance, a
+   * completely different mechanism; maxRewardsPerDay still applies to every
+   * type, since it's just a count.
+   */
+  private async checkDailyAndBudgetLimits(
+    repos: ReturnType<typeof createRepositories>,
+    reward: LoyaltyReward,
+  ): Promise<void> {
+    if (reward.maxRewardsPerDay === null && reward.maxBudget === null) return;
+
+    const { todayCount, totalCount } = await repos.loyaltyTransactions.countForLimitCheck(reward.id);
+
+    if (reward.maxRewardsPerDay !== null && todayCount >= reward.maxRewardsPerDay) {
+      throw new AppError('This reward has reached its daily limit.', 422, 'LOYALTY_REWARD_DAILY_LIMIT_REACHED');
+    }
+    if (reward.maxBudget !== null && reward.rewardValue !== null) {
+      const projectedSpend = (totalCount + 1) * Number(reward.rewardValue);
+      if (projectedSpend > Number(reward.maxBudget)) {
+        throw new AppError('This reward has reached its budget.', 422, 'LOYALTY_REWARD_BUDGET_EXCEEDED');
+      }
+    }
+  }
+
   async redeem(customerId: string, businessId: string, rewardId: string): Promise<RedemptionResult> {
     return this.db.transaction(async (tx) => {
       const repos = createRepositories(tx);
@@ -41,7 +81,13 @@ export class LoyaltyRedemptionService {
         throw new AppError('You are not enrolled in this loyalty program yet.', 404, 'LOYALTY_ACCOUNT_NOT_FOUND');
       }
 
-      const reward = await repos.loyaltyRewards.findById(rewardId, businessId);
+      // lockForUpdate, not findById, since Block 6.4: this row's lock is
+      // held for the rest of this transaction, serializing any concurrent
+      // redeem()/issue() against the SAME reward until this one commits or
+      // rolls back -- see that method's own doc comment. Identical shape/
+      // filters to findById otherwise, so this is behavior-preserving for
+      // every existing check below.
+      const reward = await repos.loyaltyRewards.lockForUpdate(rewardId, businessId);
       if (!reward || reward.status !== 'active') {
         throw new AppError('This reward is not available.', 404, 'LOYALTY_REWARD_NOT_FOUND');
       }
@@ -63,6 +109,8 @@ export class LoyaltyRedemptionService {
       if (reward.pointsCost === null) {
         throw new AppError('This reward is misconfigured (no points cost).', 500, 'LOYALTY_REWARD_MISCONFIGURED');
       }
+
+      await this.checkDailyAndBudgetLimits(repos, reward);
 
       if (account.points < reward.pointsCost) {
         throw new AppError('Not enough points for this reward.', 422, 'INSUFFICIENT_POINTS');
@@ -117,13 +165,14 @@ export class LoyaltyRedemptionService {
    * introducing it here with no real distinct behavior behind it would be
    * placeholder logic, not a feature.
    *
-   * Deliberately NOT enforcing maxBudget / maxRewardsPerDay / cooldownSeconds
-   * / limitPer here -- that enforcement is Continuing Development Block 6.3.
-   * This method only checks the reward itself is claimable right now
-   * (active, non-points, within its date window if one is set). Issuing
-   * with no budget/limit enforcement yet is a known, disclosed gap until
-   * 6.3 lands, not an oversight -- do not treat this method as safe for
-   * production traffic before 6.3 ships.
+   * Originally shipped enforcing none of branchId / maxBudget /
+   * maxRewardsPerDay / cooldownSeconds / limitPer -- deliberately, a known
+   * disclosed gap, not an oversight. Since closed incrementally: Block 6.3
+   * added branch eligibility (checked at confirmRedemption(), not here --
+   * see that method's own comment for why), Block 6.4 added
+   * maxRewardsPerDay and maxBudget (checkDailyAndBudgetLimits(), below).
+   * cooldownSeconds and limitPer/limitPeriodDays remain unenforced --
+   * still a known, disclosed gap, not yet scoped in detail.
    */
   async issue(customerId: string, businessId: string, rewardId: string): Promise<IssuanceResult> {
     return this.db.transaction(async (tx) => {
@@ -134,7 +183,9 @@ export class LoyaltyRedemptionService {
         throw new AppError('You are not enrolled in this loyalty program yet.', 404, 'LOYALTY_ACCOUNT_NOT_FOUND');
       }
 
-      const reward = await repos.loyaltyRewards.findById(rewardId, businessId);
+      // lockForUpdate, not findById -- see redeem()'s identical comment on
+      // this same call, and checkDailyAndBudgetLimits' own doc comment.
+      const reward = await repos.loyaltyRewards.lockForUpdate(rewardId, businessId);
       if (!reward || reward.status !== 'active') {
         throw new AppError('This reward is not available.', 404, 'LOYALTY_REWARD_NOT_FOUND');
       }
@@ -149,6 +200,8 @@ export class LoyaltyRedemptionService {
       if (reward.expiryDate && now > reward.expiryDate) {
         throw new AppError('This reward has expired.', 422, 'LOYALTY_REWARD_EXPIRED');
       }
+
+      await this.checkDailyAndBudgetLimits(repos, reward);
 
       // Same collision-checked code generation as redeem() -- see that
       // method's comment on REDEMPTION_CODE_MAX_ATTEMPTS.
