@@ -10,6 +10,13 @@ export interface RedemptionResult {
   remainingBalance: number;
 }
 
+/** issue()'s result -- no pointsSpent/remainingBalance, since a
+ * non-points reward doesn't touch the account's point balance at all. */
+export interface IssuanceResult {
+  redemptionCode: string;
+  reward: { id: string; name: string; type: string };
+}
+
 const REDEMPTION_CODE_MAX_ATTEMPTS = 5;
 
 /**
@@ -37,6 +44,24 @@ export class LoyaltyRedemptionService {
       const reward = await repos.loyaltyRewards.findById(rewardId, businessId);
       if (!reward || reward.status !== 'active') {
         throw new AppError('This reward is not available.', 404, 'LOYALTY_REWARD_NOT_FOUND');
+      }
+      // Continuing Development Block 6.2 (S6.2 reward types): redeem() is
+      // the points-balance path only. A discount/free_item/voucher reward
+      // isn't paid for out of the account's points -- see issue() below.
+      // Without this guard, a non-points reward would silently fall through
+      // to the pointsCost check next, which is meaningless for those types.
+      if (reward.type !== 'points') {
+        throw new AppError('Use the issue endpoint for a non-points reward.', 422, 'LOYALTY_REWARD_WRONG_TYPE');
+      }
+      // pointsCost is nullable at the schema/type level since Block 6.2's
+      // correction (non-points rewards don't have one) -- for a
+      // 'points'-type reward it must always be set by LoyaltyRewardService
+      // (CreateRewardInput.pointsCost is still required there). This is a
+      // defensive runtime guard against a row that reached this state some
+      // other way (direct DB edit, etc.), and narrows pointsCost to
+      // `number` for TypeScript for the rest of this method.
+      if (reward.pointsCost === null) {
+        throw new AppError('This reward is misconfigured (no points cost).', 500, 'LOYALTY_REWARD_MISCONFIGURED');
       }
 
       if (account.points < reward.pointsCost) {
@@ -76,13 +101,98 @@ export class LoyaltyRedemptionService {
     });
   }
 
+  /**
+   * Continuing Development Block 6.2 (S6.2 reward types, S6.7 state
+   * machine). The non-points counterpart to redeem() -- a discount/
+   * free_item/voucher reward is granted, not paid for, so no points ever
+   * move and `points` is recorded as 0 (honest: this is not a ledger event
+   * for the account's balance, just an audit-trail row).
+   *
+   * Creates the transaction row directly in issuanceStatus 'issued',
+   * skipping a separately-observable 'pending' step: S6.8's
+   * reserve-then-issue is one atomic sequence with nothing today that acts
+   * between the two, so a caller only ever sees the row after both have
+   * already happened. 'pending' stays valid in the schema for a future flow
+   * that needs that gap to be observable (e.g. an approval step) --
+   * introducing it here with no real distinct behavior behind it would be
+   * placeholder logic, not a feature.
+   *
+   * Deliberately NOT enforcing maxBudget / maxRewardsPerDay / cooldownSeconds
+   * / limitPer here -- that enforcement is Continuing Development Block 6.3.
+   * This method only checks the reward itself is claimable right now
+   * (active, non-points, within its date window if one is set). Issuing
+   * with no budget/limit enforcement yet is a known, disclosed gap until
+   * 6.3 lands, not an oversight -- do not treat this method as safe for
+   * production traffic before 6.3 ships.
+   */
+  async issue(customerId: string, businessId: string, rewardId: string): Promise<IssuanceResult> {
+    return this.db.transaction(async (tx) => {
+      const repos = createRepositories(tx);
+
+      const account = await repos.loyaltyAccounts.findByCustomerAndBusiness(customerId, businessId);
+      if (!account) {
+        throw new AppError('You are not enrolled in this loyalty program yet.', 404, 'LOYALTY_ACCOUNT_NOT_FOUND');
+      }
+
+      const reward = await repos.loyaltyRewards.findById(rewardId, businessId);
+      if (!reward || reward.status !== 'active') {
+        throw new AppError('This reward is not available.', 404, 'LOYALTY_REWARD_NOT_FOUND');
+      }
+      if (reward.type === 'points') {
+        throw new AppError('Use the redeem endpoint for a points reward.', 422, 'LOYALTY_REWARD_WRONG_TYPE');
+      }
+
+      const now = new Date();
+      if (reward.startDate && now < reward.startDate) {
+        throw new AppError('This reward is not active yet.', 422, 'LOYALTY_REWARD_NOT_STARTED');
+      }
+      if (reward.expiryDate && now > reward.expiryDate) {
+        throw new AppError('This reward has expired.', 422, 'LOYALTY_REWARD_EXPIRED');
+      }
+
+      // Same collision-checked code generation as redeem() -- see that
+      // method's comment on REDEMPTION_CODE_MAX_ATTEMPTS.
+      let code = '';
+      let created: LoyaltyTransaction | undefined;
+      for (let attempt = 0; attempt < REDEMPTION_CODE_MAX_ATTEMPTS && !created; attempt++) {
+        code = generateRedemptionCode();
+        const existing = await repos.loyaltyTransactions.findByRedemptionCode(code);
+        if (existing) continue;
+
+        created = await repos.loyaltyTransactions.create({
+          loyaltyAccountId: account.id,
+          type: 'redemption',
+          points: 0,
+          relatedRewardId: reward.id,
+          redemptionCode: code,
+          issuanceStatus: 'issued',
+        });
+      }
+      if (!created) {
+        throw new AppError('Could not generate a redemption code. Please try again.', 500, 'REDEMPTION_CODE_EXHAUSTED');
+      }
+
+      return {
+        redemptionCode: code,
+        reward: { id: reward.id, name: reward.name, type: reward.type },
+      };
+    });
+  }
+
   /** Staff-side confirmation (loyalty:manage) -- the code lookup itself
    * doubles as the tenant-scoping check, via the loyalty account's
    * businessId, since redemption_code has no businessId column of its own.
    * Who confirmed it is captured by the platform-wide audit log middleware
    * (auditMetadata set in the route handler), not a column on this table --
    * createdBy on the transaction row already belongs to the customer's
-   * original redeem() call. */
+   * original redeem()/issue() call.
+   *
+   * Continuing Development Block 6.2: also serves a campaign-type code from
+   * issue() -- the repository's confirmRedemption() atomically advances
+   * issuanceStatus 'issued' -> 'redeemed' in the same guarded update when
+   * the row has one, and is a no-op for a legacy points-type row (which
+   * never has one). No branching needed here: one confirmation path for
+   * staff regardless of which reward type is behind the code. */
   async confirmRedemption(businessId: string, code: string): Promise<LoyaltyTransaction> {
     const repos = createRepositories(this.db);
 

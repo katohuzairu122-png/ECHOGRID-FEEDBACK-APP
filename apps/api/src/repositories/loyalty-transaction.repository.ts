@@ -1,4 +1,4 @@
-import { eq, and, desc, isNull } from 'drizzle-orm';
+import { eq, and, desc, isNull, or, sql } from 'drizzle-orm';
 import { loyaltyTransactions } from '../db/schema';
 import { BaseRepository } from './base.repository';
 
@@ -40,12 +40,30 @@ export class LoyaltyTransactionRepository extends BaseRepository {
    * twice. Returns undefined for "already confirmed" exactly the same as
    * "doesn't exist"; the caller (LoyaltyRedemptionService.confirmRedemption)
    * has already ruled out "doesn't exist" via a preceding lookup, so it
-   * attributes undefined here to a lost race. */
+   * attributes undefined here to a lost race.
+   *
+   * Continuing Development Block 6.2 (S6.7): also advances issuanceStatus
+   * 'issued' -> 'redeemed' for a campaign-type row, atomically, in the same
+   * guarded update -- not a second query, which would reopen the exact race
+   * this method exists to close. The added WHERE clause
+   * (`issuanceStatus IS NULL OR issuanceStatus = 'issued'`) is a no-op for
+   * every points-type row (issuanceStatus is always NULL there, same as
+   * before this block); the CASE expression in SET leaves NULL as NULL for
+   * those rows, so this is 100% behavior-preserving for the existing flow. */
   async confirmRedemption(id: string): Promise<LoyaltyTransaction | undefined> {
     const [row] = await this.db
       .update(loyaltyTransactions)
-      .set({ redemptionConfirmedAt: new Date() })
-      .where(and(eq(loyaltyTransactions.id, id), isNull(loyaltyTransactions.redemptionConfirmedAt)))
+      .set({
+        redemptionConfirmedAt: new Date(),
+        issuanceStatus: sql`CASE WHEN ${loyaltyTransactions.issuanceStatus} = 'issued' THEN 'redeemed' ELSE ${loyaltyTransactions.issuanceStatus} END`,
+      })
+      .where(
+        and(
+          eq(loyaltyTransactions.id, id),
+          isNull(loyaltyTransactions.redemptionConfirmedAt),
+          or(isNull(loyaltyTransactions.issuanceStatus), eq(loyaltyTransactions.issuanceStatus, 'issued')),
+        ),
+      )
       .returning();
     return row;
   }

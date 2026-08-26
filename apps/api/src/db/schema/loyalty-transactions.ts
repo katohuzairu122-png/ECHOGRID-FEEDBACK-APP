@@ -43,6 +43,16 @@ export const loyaltyTransactions = pgTable(
     purchaseAmount: numeric('purchase_amount', { precision: 10, scale: 2 }), // set only for type='purchase'
     redemptionCode: text('redemption_code').unique(), // set only for type='redemption'
     redemptionConfirmedAt: timestamp('redemption_confirmed_at', { withTimezone: true }),
+    // Continuing Development Block 6.2 (S6.7 reward state machine). Only
+    // ever set for type='redemption' rows whose relatedRewardId points at a
+    // NON-'points' loyalty_rewards.type (discount/free_item/voucher) -- NULL
+    // for every points-type redemption (today's existing flow, completely
+    // unchanged) and every other transaction type. Only 'issued' and
+    // 'redeemed' are reachable today (LoyaltyRedemptionService.issue()/
+    // confirmRedemption()); 'pending'/'expired'/'reversed' are valid in the
+    // CHECK below so a later block (expiry, reversal) doesn't need a second
+    // migration just to widen this enum.
+    issuanceStatus: text('issuance_status'),
     notes: text('notes'), // free-text, e.g. for manual 'adjustment' entries
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     createdBy: uuid('created_by'), // staff actor for purchase/adjustment/redemption-confirm; NULL for customer-initiated checkin/redemption-request
@@ -73,6 +83,10 @@ export const loyaltyTransactions = pgTable(
     check(
       'loyalty_transactions_type_check',
       sql`${table.type} IN ('checkin', 'purchase', 'redemption', 'referral_bonus', 'birthday_bonus', 'adjustment')`,
+    ),
+    check(
+      'loyalty_transactions_issuance_status_check',
+      sql`${table.issuanceStatus} IS NULL OR ${table.issuanceStatus} IN ('pending', 'issued', 'redeemed', 'expired', 'reversed')`,
     ),
   ],
 );

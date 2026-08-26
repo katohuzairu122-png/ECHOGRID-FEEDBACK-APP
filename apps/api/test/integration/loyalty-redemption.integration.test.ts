@@ -103,6 +103,20 @@ describe.skipIf(!process.env.DATABASE_URL)('LoyaltyRedemptionService (integratio
     });
   });
 
+  it('redeem rejects a non-points-type reward (Block 6.2)', async () => {
+    const discount = await repos.loyaltyRewards.create({
+      businessId: businessA,
+      name: '10% off',
+      type: 'discount',
+      rewardValue: '10.00',
+    });
+
+    await expect(redemptionService.redeem(customerId, businessA, discount.id)).rejects.toMatchObject({
+      code: 'LOYALTY_REWARD_WRONG_TYPE',
+      status: 422,
+    });
+  });
+
   it('confirmRedemption marks a code confirmed exactly once, rejecting a second confirm attempt', async () => {
     const result = await redemptionService.redeem(customerId, businessA, rewardId);
 
@@ -127,6 +141,70 @@ describe.skipIf(!process.env.DATABASE_URL)('LoyaltyRedemptionService (integratio
   it('confirmRedemption 404s for a code that never existed', async () => {
     await expect(redemptionService.confirmRedemption(businessA, 'NOTAREAL')).rejects.toMatchObject({
       code: 'REDEMPTION_NOT_FOUND',
+    });
+  });
+
+  // Continuing Development Block 6.2 (S6.2 reward types, S6.7 state
+  // machine) -- issue() is the non-points counterpart to redeem() above.
+
+  it('issue grants a non-points reward without touching the account\'s points balance (Block 6.2)', async () => {
+    const voucher = await repos.loyaltyRewards.create({
+      businessId: businessA,
+      name: 'Free dessert',
+      type: 'voucher',
+      rewardValue: '5.00',
+    });
+    const before = await repos.loyaltyAccounts.findByCustomerAndBusiness(customerId, businessA);
+
+    const result = await redemptionService.issue(customerId, businessA, voucher.id);
+
+    expect(result.redemptionCode).toHaveLength(8);
+    expect(result.reward).toMatchObject({ id: voucher.id, name: 'Free dessert', type: 'voucher' });
+    const after = await repos.loyaltyAccounts.findByCustomerAndBusiness(customerId, businessA);
+    expect(after!.points).toBe(before!.points); // no balance change -- this is the whole point of the guard below
+
+    const transaction = await repos.loyaltyTransactions.findByRedemptionCode(result.redemptionCode);
+    expect(transaction).toMatchObject({ points: 0, issuanceStatus: 'issued', relatedRewardId: voucher.id });
+  });
+
+  it('issue rejects a points-type reward (Block 6.2)', async () => {
+    await expect(redemptionService.issue(customerId, businessA, rewardId)).rejects.toMatchObject({
+      code: 'LOYALTY_REWARD_WRONG_TYPE',
+      status: 422,
+    });
+  });
+
+  it('issue rejects a reward outside its active date window (Block 6.2)', async () => {
+    const notYetStarted = await repos.loyaltyRewards.create({
+      businessId: businessA,
+      name: 'Future campaign',
+      type: 'discount',
+      rewardValue: '15.00',
+      startDate: new Date(Date.now() + 86_400_000), // starts tomorrow
+    });
+
+    await expect(redemptionService.issue(customerId, businessA, notYetStarted.id)).rejects.toMatchObject({
+      code: 'LOYALTY_REWARD_NOT_STARTED',
+    });
+  });
+
+  it('confirmRedemption on an issued campaign-type code transitions issuanceStatus to redeemed, same call as the points path (Block 6.2)', async () => {
+    const freeItem = await repos.loyaltyRewards.create({
+      businessId: businessA,
+      name: 'Free item',
+      type: 'free_item',
+    });
+    const { redemptionCode } = await redemptionService.issue(customerId, businessA, freeItem.id);
+
+    const confirmed = await redemptionService.confirmRedemption(businessA, redemptionCode);
+    expect(confirmed.redemptionConfirmedAt).not.toBeNull();
+    expect(confirmed.issuanceStatus).toBe('redeemed');
+
+    // Same double-confirm guard as the points path -- one shared code path
+    // (LoyaltyTransactionRepository.confirmRedemption), not a parallel one.
+    await expect(redemptionService.confirmRedemption(businessA, redemptionCode)).rejects.toMatchObject({
+      code: 'REDEMPTION_ALREADY_CONFIRMED',
+      status: 409,
     });
   });
 });
