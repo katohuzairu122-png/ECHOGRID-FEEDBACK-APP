@@ -275,8 +275,14 @@ loyaltyRoutes.get('/redemptions/:code', requirePermission('loyalty:view'), async
 
 loyaltyRoutes.post('/redemptions/:code/confirm', requirePermission('loyalty:manage'), async (c) => {
   const businessId = c.get('businessId');
+  // Continuing Development Block 6.3 (S6.8 "eligible branch") -- optional,
+  // same as resolveTenantContext's own c.get('branchId'): set only when the
+  // confirming request carried X-Branch-Id, undefined for a business-wide
+  // staff session. See LoyaltyRedemptionService.confirmRedemption's doc
+  // comment for why this belongs here and not on redeem()/issue().
+  const branchId = c.get('branchId');
   return withDb(c, async (db) => {
-    const transaction = await new LoyaltyRedemptionService(db).confirmRedemption(businessId, c.req.param('code'));
+    const transaction = await new LoyaltyRedemptionService(db).confirmRedemption(businessId, c.req.param('code'), branchId);
     c.set('auditMetadata', { action: 'loyalty.redemption_confirmed', entityType: 'loyalty_transaction', entityId: transaction.id });
 
     // Same "after commit, not inside the service's transaction" ordering as

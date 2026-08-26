@@ -192,8 +192,24 @@ export class LoyaltyRedemptionService {
    * issuanceStatus 'issued' -> 'redeemed' in the same guarded update when
    * the row has one, and is a no-op for a legacy points-type row (which
    * never has one). No branching needed here: one confirmation path for
-   * staff regardless of which reward type is behind the code. */
-  async confirmRedemption(businessId: string, code: string): Promise<LoyaltyTransaction> {
+   * staff regardless of which reward type is behind the code.
+   *
+   * Continuing Development Block 6.3 (S6.8 "eligible branch"): `branchId` is
+   * the CONFIRMING staff member's branch context (resolveTenantContext's
+   * optional c.get('branchId'), passed in from the route) -- not a
+   * parameter threaded through redeem()/issue(). A customer redeeming from
+   * the app has no branch context to give (they aren't standing at one);
+   * a staff member confirming at the counter already does, via existing
+   * tenant-context middleware, so this reuses that instead of adding a new
+   * customer-facing contract. `reward.branchId === null` (every reward
+   * today, since nothing yet exposes a way to set it) means "any branch,"
+   * so this is a no-op against all current data -- fully backward
+   * compatible. If the reward can't be resolved (no relatedRewardId, or it
+   * has since been removed from the catalog), the branch check is skipped
+   * rather than failing the confirmation: this method isn't re-validating
+   * the reward's continued existence, only adding one more constraint on
+   * top of a redemption that was already legitimately issued. */
+  async confirmRedemption(businessId: string, code: string, branchId?: string): Promise<LoyaltyTransaction> {
     const repos = createRepositories(this.db);
 
     const transaction = await repos.loyaltyTransactions.findByRedemptionCode(code.toUpperCase());
@@ -206,6 +222,17 @@ export class LoyaltyRedemptionService {
       // Code exists, but not for THIS business -- same 404 as "not found" to
       // avoid confirming to staff that the code is valid elsewhere.
       throw new AppError('Redemption code not found.', 404, 'REDEMPTION_NOT_FOUND');
+    }
+
+    if (transaction.relatedRewardId) {
+      const reward = await repos.loyaltyRewards.findById(transaction.relatedRewardId, businessId);
+      if (reward?.branchId && reward.branchId !== branchId) {
+        throw new AppError(
+          'This reward can only be redeemed at its eligible branch.',
+          422,
+          'LOYALTY_REDEMPTION_WRONG_BRANCH',
+        );
+      }
     }
 
     if (transaction.redemptionConfirmedAt) {

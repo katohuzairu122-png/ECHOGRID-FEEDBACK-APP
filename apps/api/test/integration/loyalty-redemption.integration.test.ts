@@ -207,4 +207,79 @@ describe.skipIf(!process.env.DATABASE_URL)('LoyaltyRedemptionService (integratio
       status: 409,
     });
   });
+
+  // Continuing Development Block 6.3 (S6.8 "eligible branch") --
+  // reward.branchId scopes a reward to one specific branch; confirmRedemption
+  // checks it against the CONFIRMING staff member's branch context, not
+  // against redeem()/issue() (a customer redeeming from the app has no
+  // branch to give). Every reward used in the tests above has
+  // branchId === null (business-wide), so none of them exercise this path --
+  // these three are the only ones that do.
+
+  it('confirmRedemption rejects when the reward is branch-scoped and the confirming branch does not match (Block 6.3)', async () => {
+    const branchA1 = await repos.branches.create({
+      businessId: businessA,
+      name: 'Branch A1',
+      slug: `branch-a1-${crypto.randomUUID()}`,
+    });
+    const branchA2 = await repos.branches.create({
+      businessId: businessA,
+      name: 'Branch A2',
+      slug: `branch-a2-${crypto.randomUUID()}`,
+    });
+    const branchReward = await repos.loyaltyRewards.create({
+      businessId: businessA,
+      name: 'Branch A1 only',
+      pointsCost: 5,
+      branchId: branchA1.id,
+    });
+    const { redemptionCode } = await redemptionService.redeem(customerId, businessA, branchReward.id);
+
+    await expect(redemptionService.confirmRedemption(businessA, redemptionCode, branchA2.id)).rejects.toMatchObject({
+      code: 'LOYALTY_REDEMPTION_WRONG_BRANCH',
+      status: 422,
+    });
+  });
+
+  it('confirmRedemption rejects a branch-scoped reward when the confirming request has no branch context at all (Block 6.3)', async () => {
+    const branchA3 = await repos.branches.create({
+      businessId: businessA,
+      name: 'Branch A3',
+      slug: `branch-a3-${crypto.randomUUID()}`,
+    });
+    const branchReward = await repos.loyaltyRewards.create({
+      businessId: businessA,
+      name: 'Branch A3 only',
+      pointsCost: 5,
+      branchId: branchA3.id,
+    });
+    const { redemptionCode } = await redemptionService.redeem(customerId, businessA, branchReward.id);
+
+    // No third argument -- same as a business-wide staff session with no
+    // X-Branch-Id header. Fails closed: a branch-scoped reward requires a
+    // branch context to confirm, same reasoning as S2.16's fail-closed
+    // instruction for reward eligibility generally.
+    await expect(redemptionService.confirmRedemption(businessA, redemptionCode)).rejects.toMatchObject({
+      code: 'LOYALTY_REDEMPTION_WRONG_BRANCH',
+      status: 422,
+    });
+  });
+
+  it("confirmRedemption succeeds when the confirming branch matches the reward's eligible branch (Block 6.3)", async () => {
+    const branchA4 = await repos.branches.create({
+      businessId: businessA,
+      name: 'Branch A4',
+      slug: `branch-a4-${crypto.randomUUID()}`,
+    });
+    const branchReward = await repos.loyaltyRewards.create({
+      businessId: businessA,
+      name: 'Branch A4 only',
+      pointsCost: 5,
+      branchId: branchA4.id,
+    });
+    const { redemptionCode } = await redemptionService.redeem(customerId, businessA, branchReward.id);
+
+    const confirmed = await redemptionService.confirmRedemption(businessA, redemptionCode, branchA4.id);
+    expect(confirmed.redemptionConfirmedAt).not.toBeNull();
+  });
 });
