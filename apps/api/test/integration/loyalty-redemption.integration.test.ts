@@ -4,6 +4,7 @@ import { buildDb } from '../../src/db/client';
 import { createRepositories } from '../../src/repositories';
 import { LoyaltyAccountService } from '../../src/loyalty/loyalty-account.service';
 import { LoyaltyRedemptionService } from '../../src/loyalty/loyalty-redemption.service';
+import { generateRedemptionCode } from '../../src/loyalty/redemption-code';
 
 // createdBy/actor columns are `uuid` at the schema level -- a placeholder
 // string like STAFF_ACTOR_ID fails at the database, not just in spirit; these
@@ -350,5 +351,143 @@ describe.skipIf(!process.env.DATABASE_URL)('LoyaltyRedemptionService (integratio
 
     const result = await redemptionService.redeem(customerId, businessA, reward.id);
     expect(result.redemptionCode).toHaveLength(8);
+  });
+
+  // Continuing Development Block 6.5 (S5.5 "customer cooldown" + S6.1
+  // "one reward per ... defined period," the limitPer='period' case) --
+  // checkCooldownAndPeriodLimit(), shared by issue() and redeem(). Both
+  // rules reduce to "time since this customer's own last claim of this
+  // reward," so several of these tests seed that history directly via
+  // repos.loyaltyTransactions.create({..., createdAt: <backdated>}) rather
+  // than waiting in real time -- the same reasoning this file already
+  // relies on for direct-repository fixture setup throughout.
+
+  it('issue rejects a second claim within cooldownSeconds for the same customer (Block 6.5)', async () => {
+    const reward = await repos.loyaltyRewards.create({
+      businessId: businessA,
+      name: 'One-hour cooldown voucher',
+      type: 'voucher',
+      rewardValue: '5.00',
+      cooldownSeconds: 3600,
+    });
+
+    await redemptionService.issue(customerId, businessA, reward.id);
+
+    await expect(redemptionService.issue(customerId, businessA, reward.id)).rejects.toMatchObject({
+      code: 'LOYALTY_REWARD_COOLDOWN_ACTIVE',
+      status: 422,
+    });
+  });
+
+  it('issue allows a claim once cooldownSeconds has already elapsed (Block 6.5)', async () => {
+    const reward = await repos.loyaltyRewards.create({
+      businessId: businessA,
+      name: 'One-minute cooldown voucher',
+      type: 'voucher',
+      rewardValue: '5.00',
+      cooldownSeconds: 60,
+    });
+    const account = await repos.loyaltyAccounts.findByCustomerAndBusiness(customerId, businessA);
+    // Backdated well past the 60-second cooldown -- simulates "already
+    // claimed a while ago" without a real wait.
+    await repos.loyaltyTransactions.create({
+      loyaltyAccountId: account!.id,
+      type: 'redemption',
+      points: 0,
+      relatedRewardId: reward.id,
+      redemptionCode: generateRedemptionCode(),
+      issuanceStatus: 'issued',
+      createdAt: new Date(Date.now() - 65_000),
+    });
+
+    const result = await redemptionService.issue(customerId, businessA, reward.id);
+    expect(result.redemptionCode).toHaveLength(8);
+  });
+
+  it("issue does not apply one customer's cooldown to a different customer claiming the same reward (Block 6.5)", async () => {
+    const reward = await repos.loyaltyRewards.create({
+      businessId: businessA,
+      name: 'Shared cooldown voucher',
+      type: 'voucher',
+      rewardValue: '5.00',
+      cooldownSeconds: 3600,
+    });
+    const otherCustomer = await repos.customers.create({ phone: `+1555${Date.now()}1` });
+    await accountService.enroll({ customerId: otherCustomer.id, businessId: businessA });
+
+    await redemptionService.issue(customerId, businessA, reward.id);
+
+    // Same reward, different customer, immediately after -- this is the
+    // case that would catch a wrong implementation scoped to rewardId
+    // alone (campaign-wide, like checkDailyAndBudgetLimits) instead of
+    // (rewardId, loyaltyAccountId).
+    const result = await redemptionService.issue(otherCustomer.id, businessA, reward.id);
+    expect(result.redemptionCode).toHaveLength(8);
+  });
+
+  it('issue rejects a second claim within limitPeriodDays when limitPer is \'period\' (Block 6.5)', async () => {
+    const reward = await repos.loyaltyRewards.create({
+      businessId: businessA,
+      name: 'Monthly voucher',
+      type: 'voucher',
+      rewardValue: '5.00',
+      limitPer: 'period',
+      limitPeriodDays: 30,
+    });
+    const account = await repos.loyaltyAccounts.findByCustomerAndBusiness(customerId, businessA);
+    await repos.loyaltyTransactions.create({
+      loyaltyAccountId: account!.id,
+      type: 'redemption',
+      points: 0,
+      relatedRewardId: reward.id,
+      redemptionCode: generateRedemptionCode(),
+      issuanceStatus: 'issued',
+      createdAt: new Date(Date.now() - 5 * 86_400_000), // 5 days ago
+    });
+
+    await expect(redemptionService.issue(customerId, businessA, reward.id)).rejects.toMatchObject({
+      code: 'LOYALTY_REWARD_PERIOD_LIMIT_REACHED',
+      status: 422,
+    });
+  });
+
+  it('issue allows a claim once limitPeriodDays has already elapsed (Block 6.5)', async () => {
+    const reward = await repos.loyaltyRewards.create({
+      businessId: businessA,
+      name: 'Monthly voucher, elapsed',
+      type: 'voucher',
+      rewardValue: '5.00',
+      limitPer: 'period',
+      limitPeriodDays: 30,
+    });
+    const account = await repos.loyaltyAccounts.findByCustomerAndBusiness(customerId, businessA);
+    await repos.loyaltyTransactions.create({
+      loyaltyAccountId: account!.id,
+      type: 'redemption',
+      points: 0,
+      relatedRewardId: reward.id,
+      redemptionCode: generateRedemptionCode(),
+      issuanceStatus: 'issued',
+      createdAt: new Date(Date.now() - 31 * 86_400_000), // 31 days ago
+    });
+
+    const result = await redemptionService.issue(customerId, businessA, reward.id);
+    expect(result.redemptionCode).toHaveLength(8);
+  });
+
+  it('redeem also enforces cooldownSeconds for a points-type reward -- no type-based exception, unlike maxBudget (Block 6.5)', async () => {
+    const reward = await repos.loyaltyRewards.create({
+      businessId: businessA,
+      name: 'Points reward with a cooldown',
+      pointsCost: 5,
+      cooldownSeconds: 3600,
+    });
+
+    await redemptionService.redeem(customerId, businessA, reward.id);
+
+    await expect(redemptionService.redeem(customerId, businessA, reward.id)).rejects.toMatchObject({
+      code: 'LOYALTY_REWARD_COOLDOWN_ACTIVE',
+      status: 422,
+    });
   });
 });

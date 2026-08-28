@@ -130,6 +130,19 @@ export const loyaltyRewards = pgTable(
       'loyalty_rewards_limit_period_days_check',
       sql`${table.limitPeriodDays} IS NULL OR ${table.limitPeriodDays} > 0`,
     ),
+    // Continuing Development Block 6.5 (S5.8 + S6.8 cooldown/period-limit
+    // enforcement). limitPeriodDays is "only meaningful when limitPer =
+    // 'period'" (comment above), but that was never a DB-level guarantee --
+    // the two columns are independently nullable, so limitPer = 'period'
+    // with limitPeriodDays = NULL was a silently-representable, ambiguous
+    // state. Block 6.5 is the first block that actually reads
+    // limitPeriodDays' value, so this is the right moment to also close
+    // that gap, not scope creep into an unrelated column. Same explicit-
+    // guard style as loyalty_rewards_expiry_after_start_check below.
+    check(
+      'loyalty_rewards_limit_period_days_required_check',
+      sql`${table.limitPer} IS NULL OR ${table.limitPer} != 'period' OR ${table.limitPeriodDays} IS NOT NULL`,
+    ),
     check(
       'loyalty_rewards_cooldown_seconds_check',
       sql`${table.cooldownSeconds} IS NULL OR ${table.cooldownSeconds} >= 0`,

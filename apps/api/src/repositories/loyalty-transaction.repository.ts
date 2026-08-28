@@ -132,4 +132,30 @@ export class LoyaltyTransactionRepository extends BaseRepository {
       .where(and(eq(loyaltyTransactions.relatedRewardId, rewardId), eq(loyaltyTransactions.type, 'redemption')));
     return { todayCount: row?.todayCount ?? 0, totalCount: row?.totalCount ?? 0 };
   }
+
+  /** Continuing Development Block 6.5 (S5.5 "customer cooldown" + S6.1
+   * "one reward per ... defined period," the `limitPer: 'period'` case).
+   * Most recent redemption/issuance THIS account has of THIS specific
+   * reward -- scoped to (rewardId, loyaltyAccountId), unlike
+   * countForLimitCheck's campaign-wide (rewardId only) scope above. One
+   * row is enough to back both checks LoyaltyRedemptionService runs
+   * against it: cooldownSeconds and limitPeriodDays are both "time since
+   * this customer's last claim of this reward," just compared against two
+   * independently-configurable thresholds -- see that method's own
+   * comment. Uses the relational query API (this file's dominant idiom)
+   * rather than a raw MAX() aggregate, since "most recent matching row" is
+   * exactly what findFirst + orderBy + implicit LIMIT 1 already does. */
+  async findLastRedemptionForAccount(
+    rewardId: string,
+    loyaltyAccountId: string,
+  ): Promise<LoyaltyTransaction | undefined> {
+    return this.db.query.loyaltyTransactions.findFirst({
+      where: and(
+        eq(loyaltyTransactions.relatedRewardId, rewardId),
+        eq(loyaltyTransactions.loyaltyAccountId, loyaltyAccountId),
+        eq(loyaltyTransactions.type, 'redemption'),
+      ),
+      orderBy: desc(loyaltyTransactions.createdAt),
+    });
+  }
 }

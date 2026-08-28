@@ -72,6 +72,66 @@ export class LoyaltyRedemptionService {
     }
   }
 
+  /**
+   * Continuing Development Block 6.5 (S5.5 "customer cooldown" + S6.1 "one
+   * reward per receipt, visit or defined period" -- the `limitPer:
+   * 'period'` case only, per S6.8 step 3, "check cooldown and fraud
+   * signals"). Called BEFORE checkDailyAndBudgetLimits() (S6.8 step 4) in
+   * both issue() and redeem(), matching the spec's own step ordering.
+   * Shared by both methods, same lock-then-check shape as
+   * checkDailyAndBudgetLimits() but scoped to ONE customer's own history
+   * against this reward, not the whole campaign -- a separate method, not
+   * folded into that one, since S6.8 lists them as two distinct steps and
+   * this one needs loyaltyAccountId, which that one doesn't.
+   *
+   * cooldownSeconds and limitPer='period' both reduce to the same
+   * question -- "how long since this customer's last claim of this
+   * reward" -- so one lookup (findLastRedemptionForAccount) backs both
+   * checks; they stay two separate thresholds/error codes rather than one
+   * collapsed check, since a business can set either, both, or neither
+   * independently, and the caller benefits from knowing which specific
+   * rule was hit.
+   *
+   * No points-type exception here, unlike checkDailyAndBudgetLimits'
+   * maxBudget arm -- cooldown/period-limit aren't tied to rewardValue, so
+   * there's no analogous reason to skip them for a points-type reward;
+   * both apply to every type, same as maxRewardsPerDay.
+   *
+   * limitPer 'receipt' and 'visit' are deliberately NOT enforced here --
+   * disclosed gap, not an oversight. Both would need receipt/visit-session
+   * identity threaded into issue()/redeem()'s API contract, which neither
+   * method accepts today (confirmed by reading both signatures before
+   * writing this) -- new customer-facing API surface, unlike every check
+   * added in Blocks 6.3-6.5 so far, which all enforce against data these
+   * methods already have. Deferred to a future block, not yet scoped.
+   */
+  private async checkCooldownAndPeriodLimit(
+    repos: ReturnType<typeof createRepositories>,
+    reward: LoyaltyReward,
+    loyaltyAccountId: string,
+  ): Promise<void> {
+    if (reward.cooldownSeconds === null && reward.limitPer !== 'period') return;
+
+    const last = await repos.loyaltyTransactions.findLastRedemptionForAccount(reward.id, loyaltyAccountId);
+    if (!last) return;
+
+    const msSinceLast = Date.now() - last.createdAt.getTime();
+
+    if (reward.cooldownSeconds !== null && msSinceLast < reward.cooldownSeconds * 1000) {
+      throw new AppError('You must wait before claiming this reward again.', 422, 'LOYALTY_REWARD_COOLDOWN_ACTIVE');
+    }
+    if (reward.limitPer === 'period' && reward.limitPeriodDays !== null) {
+      const periodMs = reward.limitPeriodDays * 24 * 60 * 60 * 1000;
+      if (msSinceLast < periodMs) {
+        throw new AppError(
+          'This reward can only be claimed once per period.',
+          422,
+          'LOYALTY_REWARD_PERIOD_LIMIT_REACHED',
+        );
+      }
+    }
+  }
+
   async redeem(customerId: string, businessId: string, rewardId: string): Promise<RedemptionResult> {
     return this.db.transaction(async (tx) => {
       const repos = createRepositories(tx);
@@ -110,6 +170,7 @@ export class LoyaltyRedemptionService {
         throw new AppError('This reward is misconfigured (no points cost).', 500, 'LOYALTY_REWARD_MISCONFIGURED');
       }
 
+      await this.checkCooldownAndPeriodLimit(repos, reward, account.id);
       await this.checkDailyAndBudgetLimits(repos, reward);
 
       if (account.points < reward.pointsCost) {
@@ -170,9 +231,18 @@ export class LoyaltyRedemptionService {
    * disclosed gap, not an oversight. Since closed incrementally: Block 6.3
    * added branch eligibility (checked at confirmRedemption(), not here --
    * see that method's own comment for why), Block 6.4 added
-   * maxRewardsPerDay and maxBudget (checkDailyAndBudgetLimits(), below).
-   * cooldownSeconds and limitPer/limitPeriodDays remain unenforced --
-   * still a known, disclosed gap, not yet scoped in detail.
+   * maxRewardsPerDay and maxBudget (checkDailyAndBudgetLimits(), below),
+   * Block 6.5 added cooldownSeconds and the limitPer='period' case
+   * (checkCooldownAndPeriodLimit(), above). limitPer='receipt'/'visit'
+   * remain unenforced -- would need new API surface (receipt/visit
+   * identity isn't part of this method's contract today), still a known,
+   * disclosed gap, not yet scoped in detail. Separately: every campaign
+   * field this block and Blocks 6.1-6.4 added is enforceable here but not
+   * yet SETTABLE through the real API -- LoyaltyRewardService's
+   * CreateRewardInput/UpdateRewardInput only expose name/pointsCost/
+   * description(+status) -- see this block's own completion notes for why
+   * that's a separate, proposed next block rather than folded into this
+   * one.
    */
   async issue(customerId: string, businessId: string, rewardId: string): Promise<IssuanceResult> {
     return this.db.transaction(async (tx) => {
@@ -201,6 +271,7 @@ export class LoyaltyRedemptionService {
         throw new AppError('This reward has expired.', 422, 'LOYALTY_REWARD_EXPIRED');
       }
 
+      await this.checkCooldownAndPeriodLimit(repos, reward, account.id);
       await this.checkDailyAndBudgetLimits(repos, reward);
 
       // Same collision-checked code generation as redeem() -- see that

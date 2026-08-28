@@ -80,6 +80,22 @@ export const loyaltyTransactions = pgTable(
     uniqueIndex('loyalty_transactions_checkin_visit_key')
       .on(table.visitSessionId, table.loyaltyAccountId)
       .where(sql`${table.visitSessionId} IS NOT NULL`),
+    // Continuing Development Block 6.5 (S5.5 customer cooldown + S6.1
+    // "one reward per ... defined period"). Backs
+    // LoyaltyTransactionRepository.findLastRedemptionForAccount()'s exact
+    // access pattern: equality on (relatedRewardId, loyaltyAccountId),
+    // ORDER BY createdAt DESC LIMIT 1. Partial (relatedRewardId IS NOT
+    // NULL) for the same reason loyalty_transactions_checkin_visit_key is
+    // partial on visitSessionId immediately above -- relatedRewardId is
+    // only ever set for type='redemption' rows, so a non-partial index
+    // would carry dead weight for every checkin/purchase/bonus/adjustment
+    // row. Not unique -- a customer legitimately has many redemption rows
+    // for the same reward over time (that's the history this index exists
+    // to search), unlike the checkin-visit key above, which really is a
+    // one-time claim per (session, account) pair.
+    index('loyalty_transactions_reward_account_created_idx')
+      .on(table.relatedRewardId, table.loyaltyAccountId, table.createdAt)
+      .where(sql`${table.relatedRewardId} IS NOT NULL`),
     check(
       'loyalty_transactions_type_check',
       sql`${table.type} IN ('checkin', 'purchase', 'redemption', 'referral_bonus', 'birthday_bonus', 'adjustment')`,
