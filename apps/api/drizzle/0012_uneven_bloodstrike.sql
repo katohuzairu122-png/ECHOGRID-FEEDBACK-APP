@@ -1,0 +1,2 @@
+CREATE INDEX "loyalty_transactions_reward_account_created_idx" ON "loyalty_transactions" USING btree ("related_reward_id","loyalty_account_id","created_at") WHERE "loyalty_transactions"."related_reward_id" IS NOT NULL;--> statement-breakpoint
+ALTER TABLE "loyalty_rewards" ADD CONSTRAINT "loyalty_rewards_limit_period_days_required_check" CHECK ("loyalty_rewards"."limit_per" IS NULL OR "loyalty_rewards"."limit_per" != 'period' OR "loyalty_rewards"."limit_period_days" IS NOT NULL);

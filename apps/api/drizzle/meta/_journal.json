@@ -78,6 +78,20 @@
       "when": 1787590005277,
       "tag": "0010_mushy_revanche",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1787745477883,
+      "tag": "0011_amusing_firebrand",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1787920551793,
+      "tag": "0012_uneven_bloodstrike",
+      "breakpoints": true
     }
   ]
 }
