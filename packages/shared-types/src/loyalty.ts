@@ -193,6 +193,41 @@ export const loyaltyRewardSchema = z.object({
   cooldownSeconds: z.number().nullable(),
 });
 
+/** Block 6.7.2 (S6.3 campaign dashboard) -- GET /loyalty/rewards/:id/dashboard's
+ * response. Mirrors LoyaltyRewardService.getCampaignDashboard()'s
+ * CampaignDashboard interface
+ * (apps/api/src/loyalty/loyalty-reward.service.ts) -- two independently-
+ * defined, shape-compatible types, the same relationship
+ * redemptionResultSchema/RedemptionResult already have below, not one
+ * importing the other (that service file's own comment explains why).
+ *
+ * `reward` reuses loyaltyRewardSchema as-is -- the route returns the
+ * reward row unmodified, same as GET /rewards already does today, so
+ * rewardValue/maxBudget stay decimal STRINGS here too (the numeric
+ * column's own JSON representation, unchanged from every other reward
+ * response).
+ *
+ * `stats`'s four money/rate fields are plain NUMBERS, not that same
+ * string convention, on purpose -- unlike reward.rewardValue/maxBudget,
+ * these aren't a raw numeric-column passthrough: the service layer
+ * computes and rounds them (roundMoney(), 2dp) before this schema ever
+ * sees them, so there's no arbitrary-precision value to protect by
+ * stringifying. Two different conventions inside one response -- flagged
+ * here rather than left for a future reader to puzzle out. */
+export const campaignDashboardSchema = z.object({
+  reward: loyaltyRewardSchema,
+  stats: z.object({
+    totalCount: z.number(),
+    outstandingCount: z.number(),
+    redeemedCount: z.number(),
+    redemptionRate: z.number().nullable(),
+    budgetTotal: z.number().nullable(),
+    budgetUsed: z.number().nullable(),
+    budgetRemaining: z.number().nullable(),
+    outstandingLiability: z.number().nullable(),
+  }),
+});
+
 export const loyaltyAccountSchema = z.object({
   id: z.uuid(),
   customerId: z.uuid(),
@@ -256,6 +291,7 @@ export type CheckinInput = z.infer<typeof checkinSchema>;
 export type RedeemRewardInput = z.infer<typeof redeemRewardSchema>;
 export type LoyaltyTierDto = z.infer<typeof loyaltyTierSchema>;
 export type LoyaltyRewardDto = z.infer<typeof loyaltyRewardSchema>;
+export type CampaignDashboardDto = z.infer<typeof campaignDashboardSchema>;
 export type LoyaltyAccountDto = z.infer<typeof loyaltyAccountSchema>;
 export type LoyaltyAccountWithCustomerDto = z.infer<typeof loyaltyAccountWithCustomerSchema>;
 export type LoyaltyTransactionDto = z.infer<typeof loyaltyTransactionSchema>;

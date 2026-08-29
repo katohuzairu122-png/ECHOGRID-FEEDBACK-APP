@@ -264,6 +264,26 @@ loyaltyRoutes.delete('/rewards/:id', requirePermission('rewards:manage'), async 
   });
 });
 
+// ---- Campaign dashboard (Block 6.7.2, S6.3) --------------------------------
+
+// Read-only, gated on loyalty:view -- matches GET /rewards's own permission
+// rather than rewards:manage, since this reports on a campaign but changes
+// nothing. Returns the CampaignDashboard shape straight from the service
+// with no serialization step, same as GET /rewards above: the reward row's
+// Date/numeric-string fields already JSON-serialize correctly on their
+// own, and stats' fields are already plain numbers by the time the
+// service returns them (see campaignDashboardSchema's own comment in
+// shared-types/src/loyalty.ts for why that split exists).
+loyaltyRoutes.get('/rewards/:id/dashboard', requirePermission('loyalty:view'), async (c) => {
+  return withDb(c, async (db) => {
+    const dashboard = await new LoyaltyRewardService(createRepositories(db)).getCampaignDashboard(
+      c.req.param('id'),
+      c.get('businessId'),
+    );
+    return ok(c, dashboard);
+  });
+});
+
 // ---- Redemption confirmation (Block 4) -------------------------------------
 
 loyaltyRoutes.get('/redemptions/:code', requirePermission('loyalty:view'), async (c) => {
