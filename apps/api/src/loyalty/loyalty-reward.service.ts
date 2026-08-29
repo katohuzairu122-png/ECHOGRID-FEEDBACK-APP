@@ -1,6 +1,16 @@
 import type { Repositories, LoyaltyReward } from '../repositories';
 import { AppError } from '../lib/errors';
 
+/** Rounds a currency amount to 2 decimal places -- guards
+ * getCampaignDashboard()'s totalCount/outstandingCount * rewardValue
+ * multiplications against a plain floating-point artifact (e.g. 3 * 9.10
+ * in IEEE 754 doubles). Local to this file: nothing else in the service
+ * layer does arithmetic on a converted numeric column today, so there's
+ * no existing shared helper this could reuse instead of adding one. */
+function roundMoney(amount: number): number {
+  return Math.round(amount * 100) / 100;
+}
+
 type RewardType = 'points' | 'discount' | 'free_item' | 'voucher';
 type RewardLimitPer = 'receipt' | 'visit' | 'period';
 
@@ -47,9 +57,71 @@ export interface UpdateRewardInput extends RewardCampaignFields {
   status?: 'active' | 'inactive' | 'paused' | undefined;
 }
 
+/** Block 6.7.1 (S6.3 campaign dashboard) -- getCampaignDashboard()'s return
+ * shape. Deliberately a plain interface here, not yet a shared-types Zod
+ * schema: Block 6.7.1 is backend-only (repository + service), no route.
+ * Block 6.7.2 adds the JSON-response DTO and is expected to mirror this
+ * shape, the same way RedemptionResult (this module) and
+ * redemptionResultSchema (shared-types) already coexist as two
+ * independently-defined, shape-compatible types rather than one importing
+ * the other.
+ *
+ * budgetUsed/budgetRemaining/outstandingLiability are `number | null`, not
+ * the decimal-string convention loyaltyRewardSchema uses for rewardValue/
+ * maxBudget -- that convention exists for the numeric column's own
+ * Drizzle round-trip; these three are computed here, not stored, so there
+ * is no column type to match. Whether the eventual response DTO re-adopts
+ * the string convention for consistency with the rest of the reward
+ * payload is a Block 6.7.2 decision, not assumed here.
+ *
+ * Every money/rate field below is `null`, not `0`, whenever it isn't
+ * meaningful for this specific reward -- never a fabricated zero. */
+export interface CampaignDashboard {
+  reward: LoyaltyReward;
+  stats: {
+    totalCount: number;
+    outstandingCount: number;
+    redeemedCount: number;
+    /** null when totalCount is 0 -- no redemption activity yet is a
+     * different fact than "0% convert," and S8.1's own warning against
+     * misleading figures on too small a sample applies here too. */
+    redemptionRate: number | null;
+    /** reward.maxBudget as a plain number. Null when this campaign has no
+     * budget cap set. */
+    budgetTotal: number | null;
+    /** totalCount * reward.rewardValue -- the same math
+     * LoyaltyRedemptionService.checkDailyAndBudgetLimits() already
+     * enforces against (minus that method's own "+1": this reports spend
+     * so far, not a next-attempt projection), reused rather than a second
+     * formula that could drift from what enforcement actually does. Null
+     * for a 'points'-type reward: rewardValue is never set for that type
+     * (Block 6.1's design -- a points reward spends the account's own
+     * point balance, not a currency amount), the same condition
+     * checkDailyAndBudgetLimits already treats as a deliberate no-op for
+     * maxBudget enforcement. Rounded to 2dp via roundMoney(). */
+    budgetUsed: number | null;
+    /** budgetTotal - budgetUsed. Null whenever either side is null -- a
+     * points-type reward, or a campaign with no budget cap set, has
+     * nothing meaningful to report as "remaining." */
+    budgetRemaining: number | null;
+    /** outstandingCount * reward.rewardValue -- what's still owed if
+     * every outstanding (issued-but-not-yet-confirmed) redemption gets
+     * confirmed. Same points-type null rule as budgetUsed, and
+     * deliberately NOT extended to points-type rewards via pointsCost
+     * instead: a points redemption already debits the account's balance
+     * at redeem() time (see LoyaltyRedemptionService.redeem()), before
+     * confirmation -- the business owes nothing further once redeem() has
+     * run, so there is no real liability left to report for that type, in
+     * either unit. */
+    outstandingLiability: number | null;
+  };
+}
+
 /** Reward catalog configuration (rewards:manage) -- mirrors LoyaltyTierService's shape. */
 export class LoyaltyRewardService {
-  constructor(private readonly repos: Pick<Repositories, 'loyaltyRewards' | 'branches'>) {}
+  constructor(
+    private readonly repos: Pick<Repositories, 'loyaltyRewards' | 'branches' | 'loyaltyTransactions'>,
+  ) {}
 
   /** Customer-facing catalog and the staff config screen both call this;
    * `includeInactive` distinguishes the two (see repository doc comment). */
@@ -100,6 +172,42 @@ export class LoyaltyRewardService {
     const existing = await this.repos.loyaltyRewards.findById(id, businessId);
     if (!existing) throw new AppError('Reward not found.', 404, 'LOYALTY_REWARD_NOT_FOUND');
     await this.repos.loyaltyRewards.softDelete(id, businessId, deletedBy);
+  }
+
+  /** Continuing Development Block 6.7.1 (S6.3 campaign dashboard). Combines
+   * one reward row with LoyaltyTransactionRepository.getCampaignStats()'s
+   * counts into the shape a staff dashboard needs -- see CampaignDashboard
+   * above for what each field means and why some go null. Backend-only for
+   * this block: no route calls this yet (Block 6.7.2), so nothing outside
+   * this class's own test suite exercises it until then. */
+  async getCampaignDashboard(id: string, businessId: string): Promise<CampaignDashboard> {
+    const reward = await this.repos.loyaltyRewards.findById(id, businessId);
+    if (!reward) throw new AppError('Reward not found.', 404, 'LOYALTY_REWARD_NOT_FOUND');
+
+    const { totalCount, redeemedCount, outstandingCount } =
+      await this.repos.loyaltyTransactions.getCampaignStats(id);
+
+    const rewardValue = reward.rewardValue !== null ? Number(reward.rewardValue) : null;
+    const budgetTotal = reward.maxBudget !== null ? Number(reward.maxBudget) : null;
+    const budgetUsed = rewardValue !== null ? roundMoney(totalCount * rewardValue) : null;
+    const budgetRemaining =
+      budgetTotal !== null && budgetUsed !== null ? roundMoney(budgetTotal - budgetUsed) : null;
+    const outstandingLiability = rewardValue !== null ? roundMoney(outstandingCount * rewardValue) : null;
+    const redemptionRate = totalCount > 0 ? redeemedCount / totalCount : null;
+
+    return {
+      reward,
+      stats: {
+        totalCount,
+        outstandingCount,
+        redeemedCount,
+        redemptionRate,
+        budgetTotal,
+        budgetUsed,
+        budgetRemaining,
+        outstandingLiability,
+      },
+    };
   }
 
   /** A branch-scoped reward must be scoped to a branch that actually

@@ -133,6 +133,56 @@ export class LoyaltyTransactionRepository extends BaseRepository {
     return { todayCount: row?.todayCount ?? 0, totalCount: row?.totalCount ?? 0 };
   }
 
+  /** Continuing Development Block 6.7.1 (S6.3 campaign dashboard). Reward-
+   * scoped redemption counts, split into outstanding vs. redeemed. Same
+   * WHERE shape as countForLimitCheck() above (relatedRewardId + type =
+   * 'redemption') -- deliberately not a call to that method, since this
+   * needs the redeemed/outstanding split it doesn't return and has no use
+   * for countForLimitCheck's own todayCount. Kept as two independent
+   * methods rather than one with more optional fields, matching this
+   * file's existing style (each method describes one real caller's exact
+   * need, not a generic do-everything query).
+   *
+   * redeemedCount uses `redemptionConfirmedAt IS NOT NULL` -- the one
+   * state that's actually meaningful across BOTH reward types today. A
+   * points-type redemption transaction never gets an issuanceStatus at
+   * all (see loyalty-transactions.ts's own column comment); a non-points
+   * one gets issuanceStatus 'issued' immediately at creation (Block 6.2's
+   * issue(), skipping a separately-observable 'pending' step) and only
+   * ever advances to 'redeemed' in lockstep with this same
+   * redemptionConfirmedAt column (confirmRedemption() sets both in one
+   * guarded UPDATE). So redemptionConfirmedAt already tells the true
+   * two-state story for every reward that exists today: outstanding
+   * (requested/issued, not yet handed over) or redeemed (confirmed at the
+   * counter). 'pending' (as a state distinct from 'issued'), 'expired',
+   * and 'reversed' are valid in loyalty_transactions_issuance_status_check
+   * but no code path sets any of them yet -- deliberately not reported
+   * here rather than showing three permanent zeros dressed up as real
+   * data. Disclosed gap, not an oversight -- see this block's completion
+   * notes for how to close it if a real caller for those states shows up.
+   *
+   * outstandingCount is derived (totalCount - redeemedCount) rather than a
+   * third FILTER clause, so total = outstanding + redeemed is true by
+   * construction instead of by two independently-computed COUNTs that
+   * could in principle drift apart. */
+  async getCampaignStats(rewardId: string): Promise<{
+    totalCount: number;
+    redeemedCount: number;
+    outstandingCount: number;
+  }> {
+    const [row] = await this.db
+      .select({
+        totalCount: sql<number>`count(*)::int`,
+        redeemedCount: sql<number>`count(*) filter (where ${loyaltyTransactions.redemptionConfirmedAt} is not null)::int`,
+      })
+      .from(loyaltyTransactions)
+      .where(and(eq(loyaltyTransactions.relatedRewardId, rewardId), eq(loyaltyTransactions.type, 'redemption')));
+
+    const totalCount = row?.totalCount ?? 0;
+    const redeemedCount = row?.redeemedCount ?? 0;
+    return { totalCount, redeemedCount, outstandingCount: totalCount - redeemedCount };
+  }
+
   /** Continuing Development Block 6.5 (S5.5 "customer cooldown" + S6.1
    * "one reward per ... defined period," the `limitPer: 'period'` case).
    * Most recent redemption/issuance THIS account has of THIS specific
