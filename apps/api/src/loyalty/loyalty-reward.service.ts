@@ -1,26 +1,55 @@
 import type { Repositories, LoyaltyReward } from '../repositories';
 import { AppError } from '../lib/errors';
 
-/** create()'s shape: name/pointsCost required (matches createRewardSchema),
- * description optional. */
-export interface CreateRewardInput {
-  name: string;
-  pointsCost: number;
-  description?: string | undefined;
+type RewardType = 'points' | 'discount' | 'free_item' | 'voucher';
+type RewardLimitPer = 'receipt' | 'visit' | 'period';
+
+/** Block 6.1's ten campaign fields (the "config-API gap" closed this
+ * block), shared between create and update so neither interface repeats
+ * them. Matches createRewardSchema/updateRewardSchema's own shared
+ * `rewardCampaignFields` spread in packages/shared-types/src/loyalty.ts --
+ * keep the two in sync. No `null` variant on any field: this API can set
+ * or leave a field alone, not explicitly clear one back to NULL once set
+ * (e.g. un-scoping a branch-specific reward back to business-wide) --
+ * consistent with every other PATCH in this codebase today, not a new
+ * limitation, but a real one worth naming rather than leaving silent. */
+interface RewardCampaignFields {
+  branchId?: string | undefined;
+  type?: RewardType | undefined;
+  rewardValue?: number | undefined;
+  startDate?: string | undefined;
+  expiryDate?: string | undefined;
+  maxRewardsPerDay?: number | undefined;
+  maxBudget?: number | undefined;
+  limitPer?: RewardLimitPer | undefined;
+  limitPeriodDays?: number | undefined;
+  cooldownSeconds?: number | undefined;
 }
 
-/** update()'s shape: every field optional (matches updateRewardSchema, a
- * `.partial()` of createRewardSchema plus `status`). */
-export interface UpdateRewardInput {
+/** create()'s shape -- matches createRewardSchema exactly. Its cross-field
+ * rules (pointsCost required for a points-type reward, limitPeriodDays
+ * required when limitPer='period', expiryDate after startDate) are
+ * validated by that schema at the route layer before this is ever called;
+ * this interface only needs to describe the shape. */
+export interface CreateRewardInput extends RewardCampaignFields {
+  name: string;
+  description?: string | undefined;
+  pointsCost?: number | undefined;
+}
+
+/** update()'s shape -- matches updateRewardSchema exactly (every field
+ * optional, plus status widened to include 'paused': Block 6.1 added it
+ * to the DB CHECK but nothing could set it through the API until now). */
+export interface UpdateRewardInput extends RewardCampaignFields {
   name?: string | undefined;
   description?: string | undefined;
   pointsCost?: number | undefined;
-  status?: 'active' | 'inactive' | undefined;
+  status?: 'active' | 'inactive' | 'paused' | undefined;
 }
 
 /** Reward catalog configuration (rewards:manage) -- mirrors LoyaltyTierService's shape. */
 export class LoyaltyRewardService {
-  constructor(private readonly repos: Pick<Repositories, 'loyaltyRewards'>) {}
+  constructor(private readonly repos: Pick<Repositories, 'loyaltyRewards' | 'branches'>) {}
 
   /** Customer-facing catalog and the staff config screen both call this;
    * `includeInactive` distinguishes the two (see repository doc comment). */
@@ -33,12 +62,14 @@ export class LoyaltyRewardService {
     input: CreateRewardInput,
     createdBy: string,
   ): Promise<LoyaltyReward> {
+    await this.assertBranchBelongsToBusiness(input.branchId, businessId);
     return this.repos.loyaltyRewards.create({
       businessId,
       name: input.name,
       description: input.description,
       pointsCost: input.pointsCost,
       createdBy,
+      ...this.convertCampaignFields(input),
     });
   }
 
@@ -48,7 +79,19 @@ export class LoyaltyRewardService {
     patch: UpdateRewardInput,
     updatedBy: string,
   ): Promise<LoyaltyReward> {
-    const reward = await this.repos.loyaltyRewards.update(id, businessId, patch, updatedBy);
+    await this.assertBranchBelongsToBusiness(patch.branchId, businessId);
+    const reward = await this.repos.loyaltyRewards.update(
+      id,
+      businessId,
+      {
+        name: patch.name,
+        description: patch.description,
+        pointsCost: patch.pointsCost,
+        status: patch.status,
+        ...this.convertCampaignFields(patch),
+      },
+      updatedBy,
+    );
     if (!reward) throw new AppError('Reward not found.', 404, 'LOYALTY_REWARD_NOT_FOUND');
     return reward;
   }
@@ -57,5 +100,42 @@ export class LoyaltyRewardService {
     const existing = await this.repos.loyaltyRewards.findById(id, businessId);
     if (!existing) throw new AppError('Reward not found.', 404, 'LOYALTY_REWARD_NOT_FOUND');
     await this.repos.loyaltyRewards.softDelete(id, businessId, deletedBy);
+  }
+
+  /** A branch-scoped reward must be scoped to a branch that actually
+   * belongs to this business -- same tenant-isolation pattern
+   * summary.service.ts already uses for an optional branchId. No-op when
+   * branchId isn't provided (business-wide reward, or an update that
+   * doesn't touch branch scoping) -- new for this service, not a new
+   * pattern for the codebase. */
+  private async assertBranchBelongsToBusiness(branchId: string | undefined, businessId: string): Promise<void> {
+    if (!branchId) return;
+    const branch = await this.repos.branches.findById(branchId, businessId);
+    if (!branch) throw new AppError('Branch not found.', 404, 'BRANCH_NOT_FOUND');
+  }
+
+  /** Shared by create() and update() so the numeric/date conversions live
+   * in exactly one place. rewardValue/maxBudget: plain number in,
+   * fixed-2-decimal string out -- the `numeric` column's insert type,
+   * same conversion loyalty-account.service.ts already does for
+   * purchaseAmount. startDate/expiryDate: ISO string in, Date out -- same
+   * conversion feedback.repository.ts already does for dateFrom/dateTo.
+   * A field left out of `input` stays `undefined` here too, which
+   * Drizzle's insert/update builders treat as "don't touch this column"
+   * -- never coerced to `null`, so a partial update never silently clears
+   * a field it wasn't asked to change. */
+  private convertCampaignFields(input: RewardCampaignFields) {
+    return {
+      branchId: input.branchId,
+      type: input.type,
+      rewardValue: input.rewardValue !== undefined ? input.rewardValue.toFixed(2) : undefined,
+      startDate: input.startDate !== undefined ? new Date(input.startDate) : undefined,
+      expiryDate: input.expiryDate !== undefined ? new Date(input.expiryDate) : undefined,
+      maxRewardsPerDay: input.maxRewardsPerDay,
+      maxBudget: input.maxBudget !== undefined ? input.maxBudget.toFixed(2) : undefined,
+      limitPer: input.limitPer,
+      limitPeriodDays: input.limitPeriodDays,
+      cooldownSeconds: input.cooldownSeconds,
+    };
   }
 }

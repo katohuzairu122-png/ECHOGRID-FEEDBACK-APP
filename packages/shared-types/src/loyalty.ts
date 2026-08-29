@@ -29,14 +29,99 @@ export const createTierSchema = z.object({
 });
 export const updateTierSchema = createTierSchema.partial();
 
-export const createRewardSchema = z.object({
-  name: z.string().trim().min(1).max(100),
-  description: z.string().trim().max(1000).optional(),
-  pointsCost: z.number().int().positive(),
-});
-export const updateRewardSchema = createRewardSchema.partial().extend({
-  status: z.enum(['active', 'inactive']).optional(),
-});
+// Continuing Development Block 6.1 (S6.1 Reward Panel fields) added ten
+// campaign columns to loyalty_rewards -- schema-level only through Block
+// 6.5, since nothing at this contract layer ever accepted them (the
+// "config-API gap" flagged during Block 6.5 verification). This block
+// closes that: every field below already has a real, enforced counterpart
+// in apps/api/src/loyalty/loyalty-redemption.service.ts and a real DB
+// CHECK constraint in apps/api/src/db/schema/loyalty-rewards.ts. The
+// .refine() calls on both schemas below mirror those DB constraints (plus
+// one -- points-type needing a cost -- that only ever lived as an
+// application-level expectation, see LoyaltyRedemptionService.redeem()'s
+// LOYALTY_REWARD_MISCONFIGURED guard) so a bad request 400s with a clear
+// message instead of surfacing a raw Postgres error.
+const rewardTypeSchema = z.enum(['points', 'discount', 'free_item', 'voucher']);
+const rewardLimitPerSchema = z.enum(['receipt', 'visit', 'period']);
+const rewardStatusSchema = z.enum(['active', 'inactive', 'paused']);
+
+// Shared between create/update input so each field is defined exactly
+// once. Not shared with loyaltyRewardSchema (the response DTO further
+// below) -- rewardValue/maxBudget round-trip as decimal strings on output
+// (see that schema's own comment) but are accepted as plain numbers here,
+// converted server-side before the `numeric` column write (matches
+// recordPurchaseSchema.purchaseAmount's existing convention above).
+const rewardCampaignFields = {
+  branchId: z.uuid().optional(),
+  type: rewardTypeSchema.optional(),
+  rewardValue: z.number().positive().max(1_000_000).optional(),
+  startDate: z.iso.datetime().optional(),
+  expiryDate: z.iso.datetime().optional(),
+  maxRewardsPerDay: z.number().int().positive().optional(),
+  maxBudget: z.number().positive().max(1_000_000).optional(),
+  limitPer: rewardLimitPerSchema.optional(),
+  limitPeriodDays: z.number().int().positive().optional(),
+  cooldownSeconds: z.number().int().min(0).optional(),
+};
+
+export const createRewardSchema = z
+  .object({
+    name: z.string().trim().min(1).max(100),
+    description: z.string().trim().max(1000).optional(),
+    // Required only for a 'points'-type reward (the type's own default
+    // when omitted) -- see the refine() below. Nullable at the DB/
+    // repository level since Block 6.2 (non-points rewards don't have
+    // one), but a 'points' reward created with no cost would be
+    // unredeemable -- this stops that at creation instead of at a
+    // customer's redeem attempt.
+    pointsCost: z.number().int().positive().optional(),
+    ...rewardCampaignFields,
+  })
+  .refine((val) => (val.type ?? 'points') !== 'points' || val.pointsCost !== undefined, {
+    error: 'pointsCost is required for a points-type reward.',
+  })
+  .refine((val) => val.limitPer !== 'period' || val.limitPeriodDays !== undefined, {
+    error: 'limitPeriodDays is required when limitPer is "period".',
+  })
+  .refine(
+    (val) => {
+      const { startDate, expiryDate } = val;
+      return !startDate || !expiryDate || new Date(expiryDate) > new Date(startDate);
+    },
+    { error: 'expiryDate must be after startDate.' },
+  );
+
+// Independent object (not createRewardSchema.partial()) because a schema
+// with .refine() attached is no longer a plain ZodObject and can't be
+// .partial()'d -- see createRewardSchema's own refinements above. The
+// three refine() rules here are deliberately patch-scoped, not full-state:
+// each only fires when the patch itself is internally inconsistent (e.g.
+// explicitly switching type to 'points' without also supplying a cost in
+// that same request), never by fetching the row being patched -- the
+// service layer doesn't do that lookup either (see loyalty-reward.service
+// .ts). An ordinary partial update that never touches type/limitPer/the
+// date pair is unaffected by any of the three.
+export const updateRewardSchema = z
+  .object({
+    name: z.string().trim().min(1).max(100).optional(),
+    description: z.string().trim().max(1000).optional(),
+    pointsCost: z.number().int().positive().optional(),
+    status: rewardStatusSchema.optional(),
+    ...rewardCampaignFields,
+  })
+  .refine((val) => val.type !== 'points' || val.pointsCost !== undefined, {
+    error: 'pointsCost must be included in the same request when changing type to "points".',
+  })
+  .refine((val) => val.limitPer !== 'period' || val.limitPeriodDays !== undefined, {
+    error: 'limitPeriodDays must be included in the same request when changing limitPer to "period".',
+  })
+  .refine(
+    (val) => {
+      const { startDate, expiryDate } = val;
+      return !startDate || !expiryDate || new Date(expiryDate) > new Date(startDate);
+    },
+    { error: 'expiryDate must be after startDate.' },
+  );
 
 export const updateLoyaltySettingsSchema = z.object({
   pointsPerCheckin: z.number().int().min(0).optional(),
@@ -81,13 +166,31 @@ export const loyaltyTierSchema = z.object({
   sortOrder: z.number(),
 });
 
+// Widened alongside createRewardSchema/updateRewardSchema above (Block
+// 6.1's ten campaign columns) -- correcting a real staleness, not adding
+// new API surface: the API has always returned these columns (nothing
+// prunes the JSON response against this schema, confirmed directly --
+// it's a type used by apps/web, never a runtime validator), this DTO
+// just didn't say so. rewardValue/maxBudget are `numeric(10,2)` columns,
+// which come back as decimal strings, not numbers -- same reasoning as
+// loyaltyTransactionSchema.purchaseAmount below.
 export const loyaltyRewardSchema = z.object({
   id: z.uuid(),
   businessId: z.uuid(),
+  branchId: z.uuid().nullable(),
   name: z.string(),
   description: z.string().nullable(),
-  pointsCost: z.number(),
-  status: z.enum(['active', 'inactive']),
+  type: rewardTypeSchema,
+  pointsCost: z.number().nullable(),
+  rewardValue: z.string().nullable(),
+  status: rewardStatusSchema,
+  startDate: z.string().nullable(),
+  expiryDate: z.string().nullable(),
+  maxRewardsPerDay: z.number().nullable(),
+  maxBudget: z.string().nullable(),
+  limitPer: rewardLimitPerSchema.nullable(),
+  limitPeriodDays: z.number().nullable(),
+  cooldownSeconds: z.number().nullable(),
 });
 
 export const loyaltyAccountSchema = z.object({
