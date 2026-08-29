@@ -27,7 +27,16 @@ export function RewardCard({ reward, businessId, currentPoints }: RewardCardProp
     redeemRewardAction.bind(null, businessId),
     initialState,
   );
-  const canAfford = currentPoints >= reward.pointsCost;
+  // CI fix (Continuing Development Block 6.6): pointsCost is nullable since
+  // Block 6.1 -- non-'points'-type rewards (discount/free_item/voucher) use
+  // rewardValue instead and never get a pointsCost. loyaltyRewardSchema (the
+  // response DTO) was corrected to say so in Block 6.6, which is what
+  // surfaces this guard; every reward that exists today is points-type with
+  // a real pointsCost, so this doesn't change current behavior. A non-points
+  // reward simply can't be "afforded" through this points-based card --
+  // customer redemption UX for the other types is the still-open,
+  // already-named apps/web follow-up, not something this fix attempts.
+  const canAfford = reward.pointsCost !== null && currentPoints >= reward.pointsCost;
   // i18n & Multi-Currency Block 6.
   const t = useTranslations('loyalty.customer.rewardCard');
 
@@ -39,7 +48,9 @@ export function RewardCard({ reward, businessId, currentPoints }: RewardCardProp
             <CardTitle className="text-base">{reward.name}</CardTitle>
             {reward.description && <CardDescription>{reward.description}</CardDescription>}
           </div>
-          <Badge variant="accent">{t('points', { points: reward.pointsCost })}</Badge>
+          {reward.pointsCost !== null && (
+            <Badge variant="accent">{t('points', { points: reward.pointsCost })}</Badge>
+          )}
         </div>
 
         {state.result ? (

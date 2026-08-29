@@ -59,7 +59,11 @@ export function RewardFormDialog({ reward, trigger }: RewardFormDialogProps) {
               type="number"
               min="1"
               step="1"
-              defaultValue={reward?.pointsCost}
+              // CI fix (Block 6.6): pointsCost is nullable now (non-points
+              // reward types) -- same reasoning as reward-card.tsx's
+              // canAfford guard. ?? undefined leaves the field empty rather
+              // than passing null into an uncontrolled input's defaultValue.
+              defaultValue={reward?.pointsCost ?? undefined}
               required
             />
           </div>

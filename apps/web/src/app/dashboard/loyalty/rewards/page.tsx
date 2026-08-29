@@ -51,7 +51,9 @@ export default async function LoyaltyRewardsPage() {
                     </Badge>
                   </div>
                   <p className="text-xs text-neutral-500">
-                    {t('rewards.pointsCost', { points: reward.pointsCost })}
+                    {/* CI fix (Block 6.6): pointsCost is nullable now (non-points
+                        reward types) -- same reasoning as reward-card.tsx. */}
+                    {reward.pointsCost !== null && t('rewards.pointsCost', { points: reward.pointsCost })}
                     {reward.description ? ` · ${reward.description}` : ''}
                   </p>
                 </div>
