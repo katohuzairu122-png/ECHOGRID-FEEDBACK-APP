@@ -97,16 +97,48 @@ function createFakeRewardRepo() {
  * assertBranchBelongsToBusiness short-circuits before ever calling
  * findById in that case. */
 function createFakeBranchRepo() {
-  const validBranches = new Map<string, string>(); // branchId -> businessId
+  // branchId -> {businessId, name}. `name` is Block 6.7.4's addition (was
+  // just branchId -> businessId before) -- purely additive: every existing
+  // seed(businessId) call keeps working via the default, and no existing
+  // test reads a branch's name, only getCampaignDashboard's new tests do.
+  const validBranches = new Map<string, { businessId: string; name: string }>();
 
   return {
-    seed(businessId: string): string {
+    seed(businessId: string, name = 'Test Branch'): string {
       const id = crypto.randomUUID();
-      validBranches.set(id, businessId);
+      validBranches.set(id, { businessId, name });
       return id;
     },
     async findById(id: string, businessId: string) {
-      return validBranches.get(id) === businessId ? { id, businessId } : undefined;
+      const branch = validBranches.get(id);
+      return branch && branch.businessId === businessId ? { id, businessId, name: branch.name } : undefined;
+    },
+  };
+}
+
+/** Block 6.7.4 (S6.3 campaign dashboard tests) -- minimal fake for the one
+ * method getCampaignDashboard() actually calls, getCampaignStats(). seed()
+ * lets a test set the exact {totalCount, redeemedCount, outstandingCount} a
+ * real getCampaignStats() query would return for a reward, without
+ * reimplementing its SQL. No repository in this codebase has its own unit
+ * test today -- every real repo is Drizzle-backed and needs a real Postgres
+ * connection to test honestly (see apps/api/vitest.config.ts's own scope
+ * comment, and vitest.integration.config.ts for that tier). This fake keeps
+ * that boundary: getCampaignStats()'s own SQL is exercised for real in
+ * test/integration/loyalty-redemption.integration.test.ts (Block 6.7.4's
+ * other half), not reimplemented here. This fake only lets the SERVICE's
+ * own handling of whatever the repo returns -- budget math, the "null, not
+ * a fabricated zero" rules -- be tested in isolation, same division of
+ * responsibility createFakeBranchRepo already draws above. */
+function createFakeTransactionRepo() {
+  const stats = new Map<string, { totalCount: number; redeemedCount: number; outstandingCount: number }>();
+
+  return {
+    seed(rewardId: string, value: { totalCount: number; redeemedCount: number; outstandingCount: number }) {
+      stats.set(rewardId, value);
+    },
+    async getCampaignStats(rewardId: string) {
+      return stats.get(rewardId) ?? { totalCount: 0, redeemedCount: 0, outstandingCount: 0 };
     },
   };
 }
@@ -119,11 +151,16 @@ describe('LoyaltyRewardService', () => {
   let repos: {
     loyaltyRewards: ReturnType<typeof createFakeRewardRepo>;
     branches: ReturnType<typeof createFakeBranchRepo>;
+    loyaltyTransactions: ReturnType<typeof createFakeTransactionRepo>;
   };
   let service: LoyaltyRewardService;
 
   beforeEach(() => {
-    repos = { loyaltyRewards: createFakeRewardRepo(), branches: createFakeBranchRepo() };
+    repos = {
+      loyaltyRewards: createFakeRewardRepo(),
+      branches: createFakeBranchRepo(),
+      loyaltyTransactions: createFakeTransactionRepo(),
+    };
     service = new LoyaltyRewardService(repos as unknown as ConstructorParameters<typeof LoyaltyRewardService>[0]);
   });
 
@@ -278,5 +315,112 @@ describe('LoyaltyRewardService', () => {
     await expect(
       service.update(reward.id, BUSINESS_A, { branchId: foreignBranchId }, ACTOR),
     ).rejects.toMatchObject({ code: 'BRANCH_NOT_FOUND', status: 404 });
+  });
+
+  // Continuing Development Block 6.7.4 (S6.3 campaign dashboard tests).
+  // getCampaignDashboard() is Block 6.7.1's read-model plus Block 6.7.3's
+  // branchName amendment -- these tests are the first real coverage of
+  // either. What they verify: the null-vs-fabricated-zero rules, the budget
+  // arithmetic, and branch resolution -- all service-layer logic sitting on
+  // top of a fake getCampaignStats()/branches.findById(). Whether the real
+  // getCampaignStats() SQL itself counts correctly against actual rows is
+  // proven separately, against real Postgres, in
+  // test/integration/loyalty-redemption.integration.test.ts.
+
+  describe('getCampaignDashboard', () => {
+    it('throws 404 for a reward that does not exist', async () => {
+      await expect(service.getCampaignDashboard('does-not-exist', BUSINESS_A)).rejects.toMatchObject({
+        code: 'LOYALTY_REWARD_NOT_FOUND',
+        status: 404,
+      });
+    });
+
+    it('throws 404 for a reward that belongs to a different business (tenant isolation)', async () => {
+      const reward = await service.create(BUSINESS_A, { name: 'Business A only', pointsCost: 10 }, ACTOR);
+      await expect(service.getCampaignDashboard(reward.id, BUSINESS_B)).rejects.toMatchObject({
+        code: 'LOYALTY_REWARD_NOT_FOUND',
+        status: 404,
+      });
+    });
+
+    it('reports every budget/liability field as null for a points-type reward -- never a fabricated zero', async () => {
+      const reward = await service.create(BUSINESS_A, { name: 'Free coffee', pointsCost: 100 }, ACTOR);
+      repos.loyaltyTransactions.seed(reward.id, { totalCount: 4, redeemedCount: 1, outstandingCount: 3 });
+
+      const dashboard = await service.getCampaignDashboard(reward.id, BUSINESS_A);
+
+      expect(dashboard.stats.budgetTotal).toBeNull();
+      expect(dashboard.stats.budgetUsed).toBeNull();
+      expect(dashboard.stats.budgetRemaining).toBeNull();
+      expect(dashboard.stats.outstandingLiability).toBeNull();
+      // Activity counts and redemption rate are still real for a points
+      // reward -- only the money fields are type-gated.
+      expect(dashboard.stats.totalCount).toBe(4);
+      expect(dashboard.stats.redeemedCount).toBe(1);
+      expect(dashboard.stats.outstandingCount).toBe(3);
+      expect(dashboard.stats.redemptionRate).toBe(0.25);
+    });
+
+    it('computes budgetUsed/budgetRemaining/outstandingLiability from rewardValue, rounded to 2dp', async () => {
+      const reward = await service.create(
+        BUSINESS_A,
+        { name: '10% off', type: 'discount', rewardValue: 9.1, maxBudget: 100 },
+        ACTOR,
+      );
+      // 3 * 9.10 is a classic IEEE 754 floating-point artifact
+      // (27.299999999999997) -- this is the case roundMoney() exists for.
+      repos.loyaltyTransactions.seed(reward.id, { totalCount: 3, redeemedCount: 2, outstandingCount: 1 });
+
+      const dashboard = await service.getCampaignDashboard(reward.id, BUSINESS_A);
+
+      expect(dashboard.stats.budgetTotal).toBe(100);
+      expect(dashboard.stats.budgetUsed).toBe(27.3); // roundMoney(3 * 9.1)
+      expect(dashboard.stats.budgetRemaining).toBe(72.7); // 100 - 27.3
+      expect(dashboard.stats.outstandingLiability).toBe(9.1); // roundMoney(1 * 9.1)
+      expect(dashboard.stats.redemptionRate).toBeCloseTo(0.6667, 3);
+    });
+
+    it('leaves budgetTotal/budgetRemaining null when the reward has no maxBudget set, while still reporting budgetUsed', async () => {
+      const reward = await service.create(
+        BUSINESS_A,
+        { name: 'Free dessert', type: 'voucher', rewardValue: 5 },
+        ACTOR,
+      );
+      repos.loyaltyTransactions.seed(reward.id, { totalCount: 2, redeemedCount: 2, outstandingCount: 0 });
+
+      const dashboard = await service.getCampaignDashboard(reward.id, BUSINESS_A);
+
+      expect(dashboard.stats.budgetTotal).toBeNull();
+      expect(dashboard.stats.budgetUsed).toBe(10); // roundMoney(2 * 5) -- still meaningful with no cap set
+      expect(dashboard.stats.budgetRemaining).toBeNull(); // no cap to subtract from
+    });
+
+    it('reports redemptionRate as null (not 0) when totalCount is zero -- "no activity" is not "0% convert"', async () => {
+      const reward = await service.create(BUSINESS_A, { name: 'Untouched reward', pointsCost: 50 }, ACTOR);
+      // No seed() call -- the fake's default for an un-seeded reward is
+      // {totalCount: 0, redeemedCount: 0, outstandingCount: 0}.
+
+      const dashboard = await service.getCampaignDashboard(reward.id, BUSINESS_A);
+
+      expect(dashboard.stats.totalCount).toBe(0);
+      expect(dashboard.stats.redemptionRate).toBeNull();
+    });
+
+    it('resolves branchName for a branch-scoped reward', async () => {
+      const branchId = repos.branches.seed(BUSINESS_A, 'Downtown Branch');
+      const reward = await service.create(BUSINESS_A, { name: 'Branch-only reward', pointsCost: 10, branchId }, ACTOR);
+
+      const dashboard = await service.getCampaignDashboard(reward.id, BUSINESS_A);
+
+      expect(dashboard.branchName).toBe('Downtown Branch');
+    });
+
+    it('returns branchName null for a business-wide reward (no branchId set)', async () => {
+      const reward = await service.create(BUSINESS_A, { name: 'Business-wide reward', pointsCost: 10 }, ACTOR);
+
+      const dashboard = await service.getCampaignDashboard(reward.id, BUSINESS_A);
+
+      expect(dashboard.branchName).toBeNull();
+    });
   });
 });

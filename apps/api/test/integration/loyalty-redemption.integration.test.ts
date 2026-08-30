@@ -4,6 +4,7 @@ import { buildDb } from '../../src/db/client';
 import { createRepositories } from '../../src/repositories';
 import { LoyaltyAccountService } from '../../src/loyalty/loyalty-account.service';
 import { LoyaltyRedemptionService } from '../../src/loyalty/loyalty-redemption.service';
+import { LoyaltyRewardService } from '../../src/loyalty/loyalty-reward.service';
 import { generateRedemptionCode } from '../../src/loyalty/redemption-code';
 
 // createdBy/actor columns are `uuid` at the schema level -- a placeholder
@@ -19,12 +20,28 @@ const STAFF_ACTOR_ID = crypto.randomUUID();
  * index (loyalty_transactions_redemption_code_key) actually exists at the
  * database level, not just in LoyaltyRedemptionService's own read-before-
  * insert collision check.
+ *
+ * Continuing Development Block 6.7.4 (S6.3 campaign dashboard tests) also
+ * added LoyaltyTransactionRepository.getCampaignStats() and
+ * LoyaltyRewardService.getCampaignDashboard() coverage at the bottom of
+ * this file, rather than in loyalty-reward.integration.test.ts where
+ * LoyaltyRewardService's other integration coverage lives -- proving those
+ * two methods needs real redemption history (issue/redeem + confirmRedemption
+ * against real rows), and this file already has that fixture stack built;
+ * duplicating a second customer/account/redemption setup in the reward file
+ * just to reach the same coverage would be the same logic twice.
  */
 describe.skipIf(!process.env.DATABASE_URL)('LoyaltyRedemptionService (integration)', () => {
   let client: Client;
   let repos: ReturnType<typeof createRepositories>;
   let accountService: LoyaltyAccountService;
   let redemptionService: LoyaltyRedemptionService;
+  // Block 6.7.4 (S6.3 campaign dashboard tests) -- constructed the same way
+  // loyalty-reward.integration.test.ts does (repos, no db-only args), reused
+  // by the getCampaignDashboard cases at the bottom of this file so they can
+  // share this file's existing customer/account/points fixtures instead of
+  // standing up a parallel set.
+  let rewardService: LoyaltyRewardService;
   let businessA: string;
   let businessB: string;
   let customerId: string;
@@ -37,6 +54,7 @@ describe.skipIf(!process.env.DATABASE_URL)('LoyaltyRedemptionService (integratio
     repos = createRepositories(db);
     accountService = new LoyaltyAccountService(db);
     redemptionService = new LoyaltyRedemptionService(db);
+    rewardService = new LoyaltyRewardService(repos);
 
     const bizA = await repos.businesses.create({
       name: 'Loyalty Redemption Test Business A',
@@ -488,6 +506,155 @@ describe.skipIf(!process.env.DATABASE_URL)('LoyaltyRedemptionService (integratio
     await expect(redemptionService.redeem(customerId, businessA, reward.id)).rejects.toMatchObject({
       code: 'LOYALTY_REWARD_COOLDOWN_ACTIVE',
       status: 422,
+    });
+  });
+
+  // Continuing Development Block 6.7.4 (S6.3 campaign dashboard tests).
+  // getCampaignStats() (LoyaltyTransactionRepository, Block 6.7.1) and
+  // getCampaignDashboard() (LoyaltyRewardService, Block 6.7.1 +
+  // 6.7.3's branchName amendment) against real Postgres. The fake-repository
+  // coverage in loyalty-reward.service.test.ts already proves the service's
+  // own budget math and null-handling against a canned stats object; what
+  // only a real database can prove -- the reason this half lives here, not
+  // there -- is that getCampaignStats()'s FILTER-clause SQL actually counts
+  // confirmed vs. unconfirmed redemptions correctly against real rows, and
+  // that a real branches.name column round-trips through
+  // getCampaignDashboard() end-to-end. Uses issue() (non-points) wherever a
+  // test doesn't specifically need a points-type reward, so these don't
+  // compete with every other test in this file for the shared customerId
+  // account's points balance.
+
+  it('getCampaignStats splits real redemption rows into outstanding vs. redeemed', async () => {
+    const reward = await repos.loyaltyRewards.create({
+      businessId: businessA,
+      name: 'Stats test voucher',
+      type: 'voucher',
+      rewardValue: '5.00',
+    });
+
+    // Three separate customers, not the shared customerId -- avoids Block
+    // 6.5's per-customer cooldown/period-limit rules (this reward sets
+    // neither, but a distinct customer per claim is one less thing to
+    // reason about) rejecting the 2nd/3rd claim.
+    const codes: string[] = [];
+    for (let i = 0; i < 3; i++) {
+      const customer = await repos.customers.create({ phone: `+1555${Date.now()}${i}` });
+      await accountService.enroll({ customerId: customer.id, businessId: businessA });
+      const { redemptionCode } = await redemptionService.issue(customer.id, businessA, reward.id);
+      codes.push(redemptionCode);
+    }
+    // Confirm two of the three; leave the third outstanding.
+    await redemptionService.confirmRedemption(businessA, codes[0]!);
+    await redemptionService.confirmRedemption(businessA, codes[1]!);
+
+    const stats = await repos.loyaltyTransactions.getCampaignStats(reward.id);
+    expect(stats).toEqual({ totalCount: 3, redeemedCount: 2, outstandingCount: 1 });
+  });
+
+  it("getCampaignStats never counts a different reward's redemptions", async () => {
+    const rewardX = await repos.loyaltyRewards.create({
+      businessId: businessA,
+      name: 'Stats isolation A',
+      type: 'voucher',
+      rewardValue: '5.00',
+    });
+    const rewardY = await repos.loyaltyRewards.create({
+      businessId: businessA,
+      name: 'Stats isolation B',
+      type: 'voucher',
+      rewardValue: '5.00',
+    });
+    const customer = await repos.customers.create({ phone: `+1555${Date.now()}9` });
+    await accountService.enroll({ customerId: customer.id, businessId: businessA });
+    await redemptionService.issue(customer.id, businessA, rewardX.id);
+
+    const statsY = await repos.loyaltyTransactions.getCampaignStats(rewardY.id);
+    expect(statsY).toEqual({ totalCount: 0, redeemedCount: 0, outstandingCount: 0 });
+  });
+
+  it('getCampaignDashboard computes real budget math end-to-end for a discount-type reward', async () => {
+    const reward = await repos.loyaltyRewards.create({
+      businessId: businessA,
+      name: 'Dashboard budget test',
+      type: 'discount',
+      rewardValue: '9.10',
+      maxBudget: '100.00',
+    });
+    const customer = await repos.customers.create({ phone: `+1555${Date.now()}8` });
+    await accountService.enroll({ customerId: customer.id, businessId: businessA });
+    const { redemptionCode } = await redemptionService.issue(customer.id, businessA, reward.id);
+    await redemptionService.confirmRedemption(businessA, redemptionCode);
+
+    const dashboard = await rewardService.getCampaignDashboard(reward.id, businessA);
+
+    expect(dashboard.stats).toMatchObject({
+      totalCount: 1,
+      redeemedCount: 1,
+      outstandingCount: 0,
+      budgetTotal: 100,
+      budgetUsed: 9.1,
+      budgetRemaining: 90.9,
+      outstandingLiability: 0,
+    });
+  });
+
+  it('getCampaignDashboard reports null budget fields for a points-type reward, even with real redemption history', async () => {
+    const reward = await repos.loyaltyRewards.create({
+      businessId: businessA,
+      name: 'Dashboard points test',
+      pointsCost: 2,
+    });
+    // Explicit top-up rather than relying on whatever balance earlier tests
+    // in this file happened to leave behind -- keeps this test correct
+    // regardless of what runs before it.
+    const account = await repos.loyaltyAccounts.findByCustomerAndBusiness(customerId, businessA);
+    await accountService.adjustPoints(
+      businessA,
+      account!.id,
+      100,
+      'top up for campaign dashboard test',
+      STAFF_ACTOR_ID,
+    );
+    await redemptionService.redeem(customerId, businessA, reward.id);
+
+    const dashboard = await rewardService.getCampaignDashboard(reward.id, businessA);
+
+    expect(dashboard.stats.totalCount).toBe(1);
+    expect(dashboard.stats.budgetTotal).toBeNull();
+    expect(dashboard.stats.budgetUsed).toBeNull();
+    expect(dashboard.stats.budgetRemaining).toBeNull();
+    expect(dashboard.stats.outstandingLiability).toBeNull();
+  });
+
+  it('getCampaignDashboard resolves a real branch name for a branch-scoped reward, and null for a business-wide one', async () => {
+    const branch = await repos.branches.create({
+      businessId: businessA,
+      name: 'Dashboard Test Branch',
+      slug: `dashboard-test-branch-${crypto.randomUUID()}`,
+    });
+    const scoped = await repos.loyaltyRewards.create({
+      businessId: businessA,
+      name: 'Branch-scoped dashboard reward',
+      pointsCost: 5,
+      branchId: branch.id,
+    });
+    const businessWide = await repos.loyaltyRewards.create({
+      businessId: businessA,
+      name: 'Business-wide dashboard reward',
+      pointsCost: 5,
+    });
+
+    const scopedDashboard = await rewardService.getCampaignDashboard(scoped.id, businessA);
+    const wideDashboard = await rewardService.getCampaignDashboard(businessWide.id, businessA);
+
+    expect(scopedDashboard.branchName).toBe('Dashboard Test Branch');
+    expect(wideDashboard.branchName).toBeNull();
+  });
+
+  it('getCampaignDashboard 404s for a reward that does not exist', async () => {
+    await expect(rewardService.getCampaignDashboard(crypto.randomUUID(), businessA)).rejects.toMatchObject({
+      code: 'LOYALTY_REWARD_NOT_FOUND',
+      status: 404,
     });
   });
 });
