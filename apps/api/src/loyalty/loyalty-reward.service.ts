@@ -78,6 +78,22 @@ export interface UpdateRewardInput extends RewardCampaignFields {
  * meaningful for this specific reward -- never a fabricated zero. */
 export interface CampaignDashboard {
   reward: LoyaltyReward;
+  /** Block 6.7.3 (S6.3 "branch scope") -- resolved server-side via
+   * this.repos.branches (already a dependency since Block 6.6's branch-
+   * scoping validation), NOT a second client-side call to GET
+   * /branches/:id. That route requires branches:view -- a permission this
+   * dashboard's own loyalty:view gate does not guarantee a caller also
+   * holds (checked against role-permissions-backfill.seed.ts before
+   * choosing this design, not assumed) -- so resolving it here means
+   * anyone who can see this dashboard always sees a real branch name,
+   * never a permission error on a field they never asked to fetch
+   * separately. Null exactly when reward.branchId is null (business-
+   * wide), the same "null branchId = any branch" convention already
+   * established elsewhere (see LoyaltyRedemptionService.confirmRedemption's
+   * own comment). Also null if branchId is set but the branch itself was
+   * since deleted -- a dangling reference shouldn't break a read-only
+   * dashboard. */
+  branchName: string | null;
   stats: {
     totalCount: number;
     outstandingCount: number;
@@ -184,8 +200,11 @@ export class LoyaltyRewardService {
     const reward = await this.repos.loyaltyRewards.findById(id, businessId);
     if (!reward) throw new AppError('Reward not found.', 404, 'LOYALTY_REWARD_NOT_FOUND');
 
-    const { totalCount, redeemedCount, outstandingCount } =
-      await this.repos.loyaltyTransactions.getCampaignStats(id);
+    const [{ totalCount, redeemedCount, outstandingCount }, branch] = await Promise.all([
+      this.repos.loyaltyTransactions.getCampaignStats(id),
+      reward.branchId ? this.repos.branches.findById(reward.branchId, businessId) : Promise.resolve(undefined),
+    ]);
+    const branchName = branch?.name ?? null;
 
     const rewardValue = reward.rewardValue !== null ? Number(reward.rewardValue) : null;
     const budgetTotal = reward.maxBudget !== null ? Number(reward.maxBudget) : null;
@@ -197,6 +216,7 @@ export class LoyaltyRewardService {
 
     return {
       reward,
+      branchName,
       stats: {
         totalCount,
         outstandingCount,

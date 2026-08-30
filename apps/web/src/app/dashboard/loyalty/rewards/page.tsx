@@ -1,9 +1,10 @@
+import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
 import type { LoyaltyRewardDto } from '@echo-grid-feedback/shared-types';
 import { getActiveBusiness } from '@/lib/business';
 import { apiFetch } from '@/lib/api-client';
-import { Badge, Button, Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui';
+import { Badge, Button, buttonVariants, Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui';
 import { LoyaltySubnav } from '../loyalty-subnav';
 import { RewardFormDialog } from './reward-form-dialog';
 import { RewardRowActions } from './reward-row-actions';
@@ -58,6 +59,17 @@ export default async function LoyaltyRewardsPage() {
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
+                  {/* Continuing Development Block 6.7.3 (S6.3 campaign
+                      dashboard) -- plain <Link> styled via buttonVariants,
+                      not <Button> wrapped in <Link>: nesting a real
+                      <button> inside an <a> breaks accessible-name
+                      computation (see buttonVariants' own export comment). */}
+                  <Link
+                    href={`/dashboard/loyalty/rewards/${reward.id}`}
+                    className={buttonVariants({ variant: 'outline', size: 'sm' })}
+                  >
+                    {t('campaignDashboard.viewButton')}
+                  </Link>
                   <RewardFormDialog
                     reward={reward}
                     trigger={

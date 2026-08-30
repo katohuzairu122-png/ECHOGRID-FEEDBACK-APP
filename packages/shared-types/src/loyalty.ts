@@ -213,9 +213,18 @@ export const loyaltyRewardSchema = z.object({
  * computes and rounds them (roundMoney(), 2dp) before this schema ever
  * sees them, so there's no arbitrary-precision value to protect by
  * stringifying. Two different conventions inside one response -- flagged
- * here rather than left for a future reader to puzzle out. */
+ * here rather than left for a future reader to puzzle out.
+ *
+ * `branchName` was added while building the page that consumes this
+ * (Block 6.7.3), not part of 6.7.2's original shape -- see
+ * CampaignDashboard's own comment in loyalty-reward.service.ts for why a
+ * server-resolved name beat a second client-side branch lookup. Additive
+ * to an endpoint nothing else was consuming yet, so this amendment is
+ * safe; recorded here rather than silently presented as if it shipped
+ * with 6.7.2. */
 export const campaignDashboardSchema = z.object({
   reward: loyaltyRewardSchema,
+  branchName: z.string().nullable(),
   stats: z.object({
     totalCount: z.number(),
     outstandingCount: z.number(),
