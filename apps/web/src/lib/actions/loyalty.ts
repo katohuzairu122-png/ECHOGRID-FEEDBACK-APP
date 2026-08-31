@@ -133,6 +133,41 @@ export async function deleteTierAction(tierId: string): Promise<void> {
 
 // ---- Rewards (Block 4) ------------------------------------------------------
 
+/** Shared by createRewardAction/updateRewardAction so the FormData parsing
+ * for Continuing Development Block 6.8.1's four new fields (type, branchId,
+ * pointsCost, rewardValue) lives in exactly one place -- these two actions'
+ * bodies were already near-duplicates before this block; doubling that
+ * duplicated block's size instead of extracting would leave two copies of
+ * the same conditional-field logic to keep in sync.
+ *
+ * pointsCost/rewardValue are included only when their FormData entry is
+ * present AND non-blank -- an absent entry (the field wasn't rendered,
+ * since RewardFormDialog shows only one of the two depending on `type`) or
+ * a blank one becomes `undefined`, which JSON.stringify drops from the
+ * request body entirely. That matches the API's own "omitted key = don't
+ * touch / not provided" convention (see loyalty-reward.service.ts's
+ * convertCampaignFields comment) rather than coercing a blank field to 0.
+ *
+ * branchId sends an explicit `null` for the empty "All branches" option,
+ * not `undefined` -- the one field where an update needs to actively clear
+ * an already-set value, not just leave it alone untouched (see
+ * packages/shared-types/src/loyalty.ts's rewardCampaignFields.branchId
+ * comment for the full reasoning this was widened to accept null). */
+function buildRewardBody(formData: FormData) {
+  const rawPointsCost = formData.get('pointsCost');
+  const rawRewardValue = formData.get('rewardValue');
+  return {
+    name: String(formData.get('name') ?? ''),
+    description: String(formData.get('description') ?? '').trim() || undefined,
+    type: String(formData.get('type') ?? 'points'),
+    branchId: String(formData.get('branchId') ?? '').trim() || null,
+    pointsCost:
+      rawPointsCost !== null && String(rawPointsCost).trim() !== '' ? Number(rawPointsCost) : undefined,
+    rewardValue:
+      rawRewardValue !== null && String(rawRewardValue).trim() !== '' ? Number(rawRewardValue) : undefined,
+  };
+}
+
 export async function createRewardAction(
   _prevState: LoyaltyFormState,
   formData: FormData,
@@ -144,11 +179,7 @@ export async function createRewardAction(
     await apiFetch('/loyalty/rewards', {
       method: 'POST',
       businessId: business.id,
-      body: JSON.stringify({
-        name: String(formData.get('name') ?? ''),
-        description: String(formData.get('description') ?? '').trim() || undefined,
-        pointsCost: Number(formData.get('pointsCost')),
-      }),
+      body: JSON.stringify(buildRewardBody(formData)),
     });
   } catch (err) {
     if (err instanceof ApiError) return { error: err.message };
@@ -171,11 +202,7 @@ export async function updateRewardAction(
     await apiFetch(`/loyalty/rewards/${rewardId}`, {
       method: 'PATCH',
       businessId: business.id,
-      body: JSON.stringify({
-        name: String(formData.get('name') ?? ''),
-        description: String(formData.get('description') ?? '').trim() || undefined,
-        pointsCost: Number(formData.get('pointsCost')),
-      }),
+      body: JSON.stringify(buildRewardBody(formData)),
     });
   } catch (err) {
     if (err instanceof ApiError) return { error: err.message };

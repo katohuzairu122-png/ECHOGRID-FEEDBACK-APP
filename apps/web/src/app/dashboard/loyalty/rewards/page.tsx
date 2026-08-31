@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
-import type { LoyaltyRewardDto } from '@echo-grid-feedback/shared-types';
+import type { LoyaltyRewardDto, BranchDto } from '@echo-grid-feedback/shared-types';
 import { getActiveBusiness } from '@/lib/business';
 import { apiFetch } from '@/lib/api-client';
 import { Badge, Button, buttonVariants, Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui';
@@ -18,7 +18,20 @@ export default async function LoyaltyRewardsPage() {
 
   // Staff sees the full catalog, active and retired -- the customer-facing
   // catalog (GET /loyalty/me/rewards/:businessId) filters to active-only.
-  const rewards = await apiFetch<LoyaltyRewardDto[]>('/loyalty/rewards', { businessId: business.id });
+  //
+  // Continuing Development Block 6.8.1 (S6.1 campaign config UI) -- branches
+  // fetched alongside rewards so RewardFormDialog's new branch-scope
+  // <select> has real names to list, mirroring dashboard/feedback/page.tsx's
+  // BranchFilter precedent exactly (server-fetch, pass down as a prop, no
+  // client-side self-fetch). Safe for every role that can reach this page:
+  // rewards:manage implies branches:view for all three default roles that
+  // hold it (Owner/Admin/Manager -- confirmed against
+  // role-provisioning.service.ts before choosing this over 6.7.3's more
+  // defensive server-side-resolution pattern).
+  const [rewards, branches] = await Promise.all([
+    apiFetch<LoyaltyRewardDto[]>('/loyalty/rewards', { businessId: business.id }),
+    apiFetch<BranchDto[]>('/branches', { businessId: business.id }),
+  ]);
 
   return (
     <div className="flex flex-col gap-6">
@@ -27,7 +40,7 @@ export default async function LoyaltyRewardsPage() {
           <h1 className="text-2xl font-semibold text-neutral-900">{t('title')}</h1>
           <p className="text-sm text-neutral-500">{business.name}</p>
         </div>
-        <RewardFormDialog trigger={<Button type="button">{t('rewards.newButton')}</Button>} />
+        <RewardFormDialog branches={branches} trigger={<Button type="button">{t('rewards.newButton')}</Button>} />
       </div>
 
       <LoyaltySubnav />
@@ -72,6 +85,7 @@ export default async function LoyaltyRewardsPage() {
                   </Link>
                   <RewardFormDialog
                     reward={reward}
+                    branches={branches}
                     trigger={
                       <Button type="button" variant="outline" size="sm">
                         {t('rewards.editButton')}

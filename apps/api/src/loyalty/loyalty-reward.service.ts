@@ -18,13 +18,19 @@ type RewardLimitPer = 'receipt' | 'visit' | 'period';
  * block), shared between create and update so neither interface repeats
  * them. Matches createRewardSchema/updateRewardSchema's own shared
  * `rewardCampaignFields` spread in packages/shared-types/src/loyalty.ts --
- * keep the two in sync. No `null` variant on any field: this API can set
- * or leave a field alone, not explicitly clear one back to NULL once set
- * (e.g. un-scoping a branch-specific reward back to business-wide) --
- * consistent with every other PATCH in this codebase today, not a new
- * limitation, but a real one worth naming rather than leaving silent. */
+ * keep the two in sync. No `null` variant on the other nine fields: this
+ * API can set or leave a field alone, not explicitly clear one back to
+ * NULL once set -- consistent with every other PATCH in this codebase
+ * today, not a new limitation, but a real one worth naming rather than
+ * leaving silent. branchId is the one exception, widened in Continuing
+ * Development Block 6.8.1 (S6.1 campaign config UI): un-scoping a
+ * branch-specific reward back to business-wide is a real action the new
+ * staff UI's branch-scope <select> needs to express, and an omitted key
+ * can't express it (see convertCampaignFields' own comment below) -- so
+ * `null` now means "clear it," matching the shared-types schema's own
+ * `.nullable()` widening. */
 interface RewardCampaignFields {
-  branchId?: string | undefined;
+  branchId?: string | null | undefined;
   type?: RewardType | undefined;
   rewardValue?: number | undefined;
   startDate?: string | undefined;
@@ -235,8 +241,13 @@ export class LoyaltyRewardService {
    * summary.service.ts already uses for an optional branchId. No-op when
    * branchId isn't provided (business-wide reward, or an update that
    * doesn't touch branch scoping) -- new for this service, not a new
-   * pattern for the codebase. */
-  private async assertBranchBelongsToBusiness(branchId: string | undefined, businessId: string): Promise<void> {
+   * pattern for the codebase. Also no-op for an explicit `null` (Block
+   * 6.8.1's "clear back to business-wide" case): nothing to validate when
+   * the caller is deliberately un-scoping, not setting a branch. */
+  private async assertBranchBelongsToBusiness(
+    branchId: string | null | undefined,
+    businessId: string,
+  ): Promise<void> {
     if (!branchId) return;
     const branch = await this.repos.branches.findById(branchId, businessId);
     if (!branch) throw new AppError('Branch not found.', 404, 'BRANCH_NOT_FOUND');
@@ -251,7 +262,11 @@ export class LoyaltyRewardService {
    * A field left out of `input` stays `undefined` here too, which
    * Drizzle's insert/update builders treat as "don't touch this column"
    * -- never coerced to `null`, so a partial update never silently clears
-   * a field it wasn't asked to change. */
+   * a field it wasn't asked to change. branchId is the one field that can
+   * also arrive as an explicit `null` (Block 6.8.1): passed through
+   * unchanged below, since Drizzle writes an explicit `null` as a real
+   * column NULL -- distinct from `undefined`'s "don't touch" behavior,
+   * and exactly what "clear back to business-wide" needs. */
   private convertCampaignFields(input: RewardCampaignFields) {
     return {
       branchId: input.branchId,

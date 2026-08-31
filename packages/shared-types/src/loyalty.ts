@@ -52,7 +52,20 @@ const rewardStatusSchema = z.enum(['active', 'inactive', 'paused']);
 // converted server-side before the `numeric` column write (matches
 // recordPurchaseSchema.purchaseAmount's existing convention above).
 const rewardCampaignFields = {
-  branchId: z.uuid().optional(),
+  // Continuing Development Block 6.8.1 (S6.1 campaign config UI) widened
+  // this from z.uuid().optional() to also accept an explicit `null`.
+  // Discovered while wiring the staff-facing branch-scope <select>, not
+  // assumed: .optional() alone means an UPDATE has no way to actively
+  // clear an already-set branchId back to business-wide -- an omitted key
+  // means "don't touch this column" (see convertCampaignFields' own
+  // comment in loyalty-reward.service.ts), so sending nothing when a
+  // business owner picks "All branches" would silently leave the reward
+  // branch-scoped, contradicting their explicit choice. `null` now means
+  // "clear it"; an omitted key still means "leave it alone" -- both
+  // schemas keep working exactly as before for every caller that never
+  // sends this field. Harmless on create (null behaves identically to
+  // omitted there, nothing to clear yet).
+  branchId: z.uuid().nullable().optional(),
   type: rewardTypeSchema.optional(),
   rewardValue: z.number().positive().max(1_000_000).optional(),
   startDate: z.iso.datetime().optional(),
