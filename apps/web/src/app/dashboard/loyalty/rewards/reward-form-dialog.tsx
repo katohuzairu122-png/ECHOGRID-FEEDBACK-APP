@@ -45,6 +45,15 @@ export function RewardFormDialog({ reward, branches, trigger }: RewardFormDialog
   // union buys nothing and would only fight the plain string setLimitPer
   // receives from the select's onChange.
   const [limitPer, setLimitPer] = useState<string>(reward?.limitPer ?? '');
+  // Continuing Development Block 6.8.4 -- controlled so each field can
+  // constrain the other's HTML min/max (see the fields themselves below),
+  // mirroring server-side validation client-side instead of only finding
+  // out about an invalid range after a round trip. '' (not undefined),
+  // same reason limitPer above is '': a controlled input's value can't
+  // toggle to/from undefined without React logging an uncontrolled-to-
+  // controlled warning.
+  const [startDate, setStartDate] = useState(reward?.startDate?.slice(0, 10) ?? '');
+  const [expiryDate, setExpiryDate] = useState(reward?.expiryDate?.slice(0, 10) ?? '');
   // i18n & Multi-Currency Block 6.
   const t = useTranslations('loyalty.staff.rewardForm');
   // Continuing Development Block 6.8.2 -- reuses the value labels
@@ -160,14 +169,44 @@ export function RewardFormDialog({ reward, branches, trigger }: RewardFormDialog
               <input type="date"> requires, safe here because both this
               form and every value already in the DB were themselves
               written as a UTC midnight/end-of-day instant, so the date
-              portion alone round-trips losslessly. */}
+              portion alone round-trips losslessly.
+
+              Continuing Development Block 6.8.4 -- min/max mirror
+              createRewardSchema/updateRewardSchema's own
+              expiryDate-after-startDate refine() client-side, via the
+              controlled state above, so a bad range is caught by the
+              browser's native constraint validation (same mechanism this
+              form already relies on for `required`) instead of only
+              surfacing as a server error after a round trip. Deliberately
+              INCLUSIVE (min={startDate}, not the day after) even though
+              the server check is a strict `>`: picking the same calendar
+              date for both fields is a valid one-day campaign, not a
+              contradiction -- the start-of-day/end-of-day conversion above
+              already makes that same-day pair convert to a genuinely
+              earlier/later instant pair, so inclusive here matches the
+              server's strict check exactly rather than being a looser
+              approximation of it. */}
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="startDate">{t('startDateLabel')}</Label>
-            <Input id="startDate" name="startDate" type="date" defaultValue={reward?.startDate?.slice(0, 10)} />
+            <Input
+              id="startDate"
+              name="startDate"
+              type="date"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+              max={expiryDate || undefined}
+            />
           </div>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="expiryDate">{t('expiryDateLabel')}</Label>
-            <Input id="expiryDate" name="expiryDate" type="date" defaultValue={reward?.expiryDate?.slice(0, 10)} />
+            <Input
+              id="expiryDate"
+              name="expiryDate"
+              type="date"
+              value={expiryDate}
+              onChange={(e) => setExpiryDate(e.target.value)}
+              min={startDate || undefined}
+            />
           </div>
           {reward && (
             <div className="flex flex-col gap-1.5">
