@@ -40,6 +40,11 @@ export function RewardFormDialog({ reward, branches, trigger }: RewardFormDialog
   const [type, setType] = useState<LoyaltyRewardDto['type']>(reward?.type ?? 'points');
   // i18n & Multi-Currency Block 6.
   const t = useTranslations('loyalty.staff.rewardForm');
+  // Continuing Development Block 6.8.2 -- reuses the value labels
+  // rewards/page.tsx and the campaign dashboard already translate
+  // (loyalty.staff.rewards.active/inactive/paused) rather than adding
+  // three duplicate strings under rewardForm that could drift from those.
+  const tStatus = useTranslations('loyalty.staff.rewards');
 
   useEffect(() => {
     if (state.success) setOpen(false);
@@ -129,6 +134,50 @@ export function RewardFormDialog({ reward, branches, trigger }: RewardFormDialog
                 step="0.01"
                 defaultValue={reward?.rewardValue ?? undefined}
               />
+            </div>
+          )}
+          {/* Continuing Development Block 6.8.2 (S6.1 campaign config UI) --
+              active window. Plain date inputs, not datetime-local: every
+              existing display of these two fields (campaign dashboard's
+              dateStr helper) already formats them at day granularity, and
+              a campaign's start/end is a day-level business concept in
+              practice. The action layer (not this component) expands
+              YYYY-MM-DD to a full UTC instant before it hits the API --
+              see buildRewardBody's own comment in actions/loyalty.ts for
+              why start-of-day/end-of-day, not midnight for both. Neither
+              is `required`: both are optional at the schema level, and
+              leaving one or both blank is a normal, valid "no defined
+              start/end" campaign. reward?.startDate/.expiryDate are full
+              ISO timestamps (numeric-column-style passthrough, not a
+              date-only string) -- sliced to the date-only prefix
+              <input type="date"> requires, safe here because both this
+              form and every value already in the DB were themselves
+              written as a UTC midnight/end-of-day instant, so the date
+              portion alone round-trips losslessly. */}
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="startDate">{t('startDateLabel')}</Label>
+            <Input id="startDate" name="startDate" type="date" defaultValue={reward?.startDate?.slice(0, 10)} />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="expiryDate">{t('expiryDateLabel')}</Label>
+            <Input id="expiryDate" name="expiryDate" type="date" defaultValue={reward?.expiryDate?.slice(0, 10)} />
+          </div>
+          {reward && (
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="status">{t('statusLabel')}</Label>
+              {/* Edit-only: createRewardSchema has no status field at all
+                  (a new reward always starts however the DB default says),
+                  and there's nothing meaningful to set before the reward
+                  exists. Three options, not just the 'paused' value Block
+                  6.8.2 exists to unlock -- RewardRowActions' quick-toggle
+                  button already covers active<->inactive on its own, but a
+                  Status field that could only ever show/set one of three
+                  real values would read as broken, not minimal. */}
+              <Select id="status" name="status" defaultValue={reward.status}>
+                <option value="active">{tStatus('active')}</option>
+                <option value="inactive">{tStatus('inactive')}</option>
+                <option value="paused">{tStatus('paused')}</option>
+              </Select>
             </div>
           )}
           {state.error && (

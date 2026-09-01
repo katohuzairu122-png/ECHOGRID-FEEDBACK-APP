@@ -153,9 +153,42 @@ export async function deleteTierAction(tierId: string): Promise<void> {
  * an already-set value, not just leave it alone untouched (see
  * packages/shared-types/src/loyalty.ts's rewardCampaignFields.branchId
  * comment for the full reasoning this was widened to accept null). */
+/** Continuing Development Block 6.8.2 -- <input type="date"> only ever
+ * yields a plain YYYY-MM-DD value, but createRewardSchema/updateRewardSchema
+ * require a full ISO 8601 datetime (z.iso.datetime()). Converted here, not
+ * in the dialog, so RewardFormDialog stays a plain uncontrolled date field
+ * with no knowledge of the wire format.
+ *
+ * startDate becomes the very start of that UTC day; expiryDate the very
+ * end of it (23:59:59.999) -- checked against
+ * loyalty-redemption.service.ts's actual enforcement
+ * (`now > reward.expiryDate` blocks redemption) before picking this, not
+ * guessed: a business owner who picks Sept 30 as an end date means "valid
+ * through Sept 30," not "expires at the first instant of Sept 30" -- the
+ * same instant for both fields would make the expiry date exclusive
+ * instead of inclusive.
+ *
+ * Both instants are UTC, not the business's own local timezone -- this
+ * codebase has no per-business timezone setting anywhere yet (confirmed,
+ * not assumed, by search before choosing this), and the schema itself
+ * already requires a Z-suffixed UTC instant (z.iso.datetime() with no
+ * {offset:true}), so a UTC calendar day is the only interpretation
+ * consistent with what's already there, not a new limitation introduced
+ * by this block. Worth knowing: a business near the UTC date line could
+ * see a campaign start/end up to a day off from their own wall clock. */
+function toStartOfDayUtc(dateOnly: string): string {
+  return `${dateOnly}T00:00:00.000Z`;
+}
+function toEndOfDayUtc(dateOnly: string): string {
+  return `${dateOnly}T23:59:59.999Z`;
+}
+
 function buildRewardBody(formData: FormData) {
   const rawPointsCost = formData.get('pointsCost');
   const rawRewardValue = formData.get('rewardValue');
+  const rawStartDate = formData.get('startDate');
+  const rawExpiryDate = formData.get('expiryDate');
+  const rawStatus = formData.get('status');
   return {
     name: String(formData.get('name') ?? ''),
     description: String(formData.get('description') ?? '').trim() || undefined,
@@ -165,6 +198,18 @@ function buildRewardBody(formData: FormData) {
       rawPointsCost !== null && String(rawPointsCost).trim() !== '' ? Number(rawPointsCost) : undefined,
     rewardValue:
       rawRewardValue !== null && String(rawRewardValue).trim() !== '' ? Number(rawRewardValue) : undefined,
+    startDate:
+      rawStartDate !== null && String(rawStartDate).trim() !== ''
+        ? toStartOfDayUtc(String(rawStartDate))
+        : undefined,
+    expiryDate:
+      rawExpiryDate !== null && String(rawExpiryDate).trim() !== ''
+        ? toEndOfDayUtc(String(rawExpiryDate))
+        : undefined,
+    // Absent entirely on create (the field isn't rendered -- see
+    // RewardFormDialog's own comment on why status is edit-only), so this
+    // naturally omits itself from a create body without a separate check.
+    status: rawStatus !== null && String(rawStatus).trim() !== '' ? String(rawStatus) : undefined,
   };
 }
 

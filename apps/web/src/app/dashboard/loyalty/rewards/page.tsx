@@ -60,8 +60,22 @@ export default async function LoyaltyRewardsPage() {
                 <div>
                   <div className="flex items-center gap-2">
                     <p className="font-medium text-neutral-900">{reward.name}</p>
-                    <Badge variant={reward.status === 'active' ? 'brand' : 'neutral'}>
-                      {reward.status === 'active' ? t('rewards.active') : t('rewards.inactive')}
+                    {/* Continuing Development Block 6.8.2 -- widened from a
+                        binary active/neutral check once the edit dialog
+                        made 'paused' a real, reachable state (previously
+                        schema-only, nothing in the app could set it). Same
+                        three-way variant/label pairing as the campaign
+                        dashboard's own statusVariant/statusLabel
+                        (rewards/[id]/page.tsx), reused for consistency
+                        rather than a second independently-drifting version. */}
+                    <Badge
+                      variant={reward.status === 'active' ? 'brand' : reward.status === 'paused' ? 'warning' : 'neutral'}
+                    >
+                      {reward.status === 'active'
+                        ? t('rewards.active')
+                        : reward.status === 'paused'
+                          ? t('rewards.paused')
+                          : t('rewards.inactive')}
                     </Badge>
                   </div>
                   <p className="text-xs text-neutral-500">
