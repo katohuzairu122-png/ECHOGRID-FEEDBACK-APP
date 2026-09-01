@@ -38,6 +38,13 @@ export function RewardFormDialog({ reward, branches, trigger }: RewardFormDialog
   // controlled (name/description/pointsCost/branchId stay uncontrolled
   // defaultValue fields, same as before this block).
   const [type, setType] = useState<LoyaltyRewardDto['type']>(reward?.type ?? 'points');
+  // Continuing Development Block 6.8.3 -- drives limitPeriodDays' conditional
+  // rendering, same reason `type` above is controlled instead of a plain
+  // defaultValue field. Loosely typed (not LoyaltyRewardDto['limitPer']):
+  // only ever compared against the literal 'period' below, so the narrower
+  // union buys nothing and would only fight the plain string setLimitPer
+  // receives from the select's onChange.
+  const [limitPer, setLimitPer] = useState<string>(reward?.limitPer ?? '');
   // i18n & Multi-Currency Block 6.
   const t = useTranslations('loyalty.staff.rewardForm');
   // Continuing Development Block 6.8.2 -- reuses the value labels
@@ -180,6 +187,85 @@ export function RewardFormDialog({ reward, branches, trigger }: RewardFormDialog
               </Select>
             </div>
           )}
+          {/* Continuing Development Block 6.8.3 (S6.1 campaign config UI) --
+              limits. All five optional, none `required`; blank means "no
+              limit" for every field here, including on an edit where the
+              reward already has one set -- see buildRewardBody's own
+              comment in actions/loyalty.ts for why blank actively clears
+              rather than leaving the old value untouched, unlike
+              pointsCost/rewardValue above. */}
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="maxRewardsPerDay">{t('maxRewardsPerDayLabel')}</Label>
+            <Input
+              id="maxRewardsPerDay"
+              name="maxRewardsPerDay"
+              type="number"
+              min="1"
+              step="1"
+              defaultValue={reward?.maxRewardsPerDay ?? undefined}
+            />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="maxBudget">{t('maxBudgetLabel')}</Label>
+            <Input
+              id="maxBudget"
+              name="maxBudget"
+              type="number"
+              min="0.01"
+              step="0.01"
+              defaultValue={reward?.maxBudget ?? undefined}
+            />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="limitPer">{t('limitPerLabel')}</Label>
+            <Select
+              id="limitPer"
+              name="limitPer"
+              value={limitPer}
+              onChange={(e) => setLimitPer(e.target.value)}
+            >
+              <option value="">{t('limitPerNoneOption')}</option>
+              <option value="receipt">{t('limitPerReceipt')}</option>
+              <option value="visit">{t('limitPerVisit')}</option>
+              <option value="period">{t('limitPerPeriod')}</option>
+            </Select>
+            {/* Disclosed, not hidden: loyalty-redemption.service.ts's own
+                checkCooldownAndPeriodLimit() comment documents receipt/visit
+                as a known, deferred enforcement gap (would need receipt/
+                visit-session identity neither redeem() nor issue() accepts
+                today). Recording the config now and enforcing it later is
+                the same safe, already-established sequencing this codebase
+                used for limitPer/limitPeriodDays themselves back in Block
+                6.1 -- but a business owner picking "Once per receipt"
+                expecting real fraud protection needs to know it isn't
+                enforced yet, not discover that silently. */}
+            <p className="text-xs text-neutral-500">{t('limitPerEnforcementHint')}</p>
+          </div>
+          {limitPer === 'period' && (
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="limitPeriodDays">{t('limitPeriodDaysLabel')}</Label>
+              <Input
+                id="limitPeriodDays"
+                name="limitPeriodDays"
+                type="number"
+                min="1"
+                step="1"
+                defaultValue={reward?.limitPeriodDays ?? undefined}
+                required
+              />
+            </div>
+          )}
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="cooldownSeconds">{t('cooldownSecondsLabel')}</Label>
+            <Input
+              id="cooldownSeconds"
+              name="cooldownSeconds"
+              type="number"
+              min="0"
+              step="1"
+              defaultValue={reward?.cooldownSeconds ?? undefined}
+            />
+          </div>
           {state.error && (
             <p role="alert" className="text-sm text-danger">
               {state.error}

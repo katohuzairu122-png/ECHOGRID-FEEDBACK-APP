@@ -183,12 +183,29 @@ function toEndOfDayUtc(dateOnly: string): string {
   return `${dateOnly}T23:59:59.999Z`;
 }
 
+/** Continuing Development Block 6.8.3 -- blank/absent becomes `null`
+ * (actively clear), not `undefined` (leave alone). maxRewardsPerDay/
+ * maxBudget/limitPer/limitPeriodDays/cooldownSeconds were all widened to
+ * nullable in this block (see rewardCampaignFields' own comment in
+ * packages/shared-types/src/loyalty.ts for why): each is a standalone
+ * limit a manager sets and later removes, so an emptied field should mean
+ * "no limit," the same way emptying branchId's <select> back to "All
+ * branches" means "clear the scope" (Block 6.8.1) -- not pointsCost/
+ * rewardValue's blank-means-leave-it-alone precedent above, which exists
+ * for a different reason (those two go inert, not stale-and-wrong, when
+ * `type` changes). */
+function toNullableNumber(raw: FormDataEntryValue | null): number | null {
+  return raw !== null && String(raw).trim() !== '' ? Number(raw) : null;
+}
+
 function buildRewardBody(formData: FormData) {
   const rawPointsCost = formData.get('pointsCost');
   const rawRewardValue = formData.get('rewardValue');
   const rawStartDate = formData.get('startDate');
   const rawExpiryDate = formData.get('expiryDate');
   const rawStatus = formData.get('status');
+  const rawLimitPer = formData.get('limitPer');
+  const limitPer = rawLimitPer !== null && String(rawLimitPer).trim() !== '' ? String(rawLimitPer) : null;
   return {
     name: String(formData.get('name') ?? ''),
     description: String(formData.get('description') ?? '').trim() || undefined,
@@ -210,6 +227,21 @@ function buildRewardBody(formData: FormData) {
     // RewardFormDialog's own comment on why status is edit-only), so this
     // naturally omits itself from a create body without a separate check.
     status: rawStatus !== null && String(rawStatus).trim() !== '' ? String(rawStatus) : undefined,
+    maxRewardsPerDay: toNullableNumber(formData.get('maxRewardsPerDay')),
+    maxBudget: toNullableNumber(formData.get('maxBudget')),
+    limitPer,
+    // Forced to null (not read from the form) whenever limitPer isn't
+    // 'period', even though RewardFormDialog already unmounts this field
+    // in that case -- belt-and-suspenders against sending a stale value
+    // some other way, and it's what keeps limitPer/limitPeriodDays
+    // consistent in the same request: updateRewardSchema's refine only
+    // catches a 'period' selection missing limitPeriodDays, not a
+    // NON-'period' selection leaving a previously-set limitPeriodDays
+    // stranded in the DB (a real state the DB's own
+    // loyalty_rewards_limit_period_days_required_check would then reject) --
+    // this is what closes that gap, not the schema.
+    limitPeriodDays: limitPer === 'period' ? toNullableNumber(formData.get('limitPeriodDays')) : null,
+    cooldownSeconds: toNullableNumber(formData.get('cooldownSeconds')),
   };
 }
 

@@ -18,28 +18,31 @@ type RewardLimitPer = 'receipt' | 'visit' | 'period';
  * block), shared between create and update so neither interface repeats
  * them. Matches createRewardSchema/updateRewardSchema's own shared
  * `rewardCampaignFields` spread in packages/shared-types/src/loyalty.ts --
- * keep the two in sync. No `null` variant on the other nine fields: this
- * API can set or leave a field alone, not explicitly clear one back to
- * NULL once set -- consistent with every other PATCH in this codebase
- * today, not a new limitation, but a real one worth naming rather than
- * leaving silent. branchId is the one exception, widened in Continuing
- * Development Block 6.8.1 (S6.1 campaign config UI): un-scoping a
- * branch-specific reward back to business-wide is a real action the new
- * staff UI's branch-scope <select> needs to express, and an omitted key
- * can't express it (see convertCampaignFields' own comment below) -- so
- * `null` now means "clear it," matching the shared-types schema's own
- * `.nullable()` widening. */
+ * keep the two in sync.
+ *
+ * Six of the ten accept an explicit `null` (clear this field back to
+ * "unset"), not just omission ("leave it alone"): branchId (Block 6.8.1)
+ * and, as of Block 6.8.3, maxRewardsPerDay/maxBudget/limitPer/
+ * limitPeriodDays/cooldownSeconds. Each was widened the same way, for the
+ * same reason -- a genuine standalone setting the staff UI's edit form
+ * needs to be able to remove, where an omitted key can only mean "don't
+ * touch." The remaining four -- type, rewardValue, startDate, expiryDate
+ * -- stay omission-only: no UI need has come up yet to actively clear any
+ * of them back to NULL (rewardValue/pointsCost instead go inert-but-
+ * harmless when `type` changes away from what made them meaningful, see
+ * RewardFormDialog's own comment), not an oversight, just unneeded so
+ * far. */
 interface RewardCampaignFields {
   branchId?: string | null | undefined;
   type?: RewardType | undefined;
   rewardValue?: number | undefined;
   startDate?: string | undefined;
   expiryDate?: string | undefined;
-  maxRewardsPerDay?: number | undefined;
-  maxBudget?: number | undefined;
-  limitPer?: RewardLimitPer | undefined;
-  limitPeriodDays?: number | undefined;
-  cooldownSeconds?: number | undefined;
+  maxRewardsPerDay?: number | null | undefined;
+  maxBudget?: number | null | undefined;
+  limitPer?: RewardLimitPer | null | undefined;
+  limitPeriodDays?: number | null | undefined;
+  cooldownSeconds?: number | null | undefined;
 }
 
 /** create()'s shape -- matches createRewardSchema exactly. Its cross-field
@@ -262,11 +265,17 @@ export class LoyaltyRewardService {
    * A field left out of `input` stays `undefined` here too, which
    * Drizzle's insert/update builders treat as "don't touch this column"
    * -- never coerced to `null`, so a partial update never silently clears
-   * a field it wasn't asked to change. branchId is the one field that can
-   * also arrive as an explicit `null` (Block 6.8.1): passed through
-   * unchanged below, since Drizzle writes an explicit `null` as a real
-   * column NULL -- distinct from `undefined`'s "don't touch" behavior,
-   * and exactly what "clear back to business-wide" needs. */
+   * a field it wasn't asked to change.
+   *
+   * Six fields can also arrive as an explicit `null` (see
+   * RewardCampaignFields' own comment above for which, and why) -- every
+   * one except maxBudget is a plain passthrough below, since Drizzle
+   * already writes an explicit `null` as a real column NULL, distinct
+   * from `undefined`'s "don't touch." maxBudget needs its own three-way
+   * check instead of the same `!== undefined` guard rewardValue uses:
+   * `null.toFixed(2)` throws, so copying that guard as-is would crash on
+   * exactly the "clear the budget cap" case Block 6.8.3 exists to
+   * support, not just fail to convert it. */
   private convertCampaignFields(input: RewardCampaignFields) {
     return {
       branchId: input.branchId,
@@ -275,7 +284,8 @@ export class LoyaltyRewardService {
       startDate: input.startDate !== undefined ? new Date(input.startDate) : undefined,
       expiryDate: input.expiryDate !== undefined ? new Date(input.expiryDate) : undefined,
       maxRewardsPerDay: input.maxRewardsPerDay,
-      maxBudget: input.maxBudget !== undefined ? input.maxBudget.toFixed(2) : undefined,
+      maxBudget:
+        input.maxBudget === undefined ? undefined : input.maxBudget === null ? null : input.maxBudget.toFixed(2),
       limitPer: input.limitPer,
       limitPeriodDays: input.limitPeriodDays,
       cooldownSeconds: input.cooldownSeconds,

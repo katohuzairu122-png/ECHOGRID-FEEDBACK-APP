@@ -70,11 +70,19 @@ const rewardCampaignFields = {
   rewardValue: z.number().positive().max(1_000_000).optional(),
   startDate: z.iso.datetime().optional(),
   expiryDate: z.iso.datetime().optional(),
-  maxRewardsPerDay: z.number().int().positive().optional(),
-  maxBudget: z.number().positive().max(1_000_000).optional(),
-  limitPer: rewardLimitPerSchema.optional(),
-  limitPeriodDays: z.number().int().positive().optional(),
-  cooldownSeconds: z.number().int().min(0).optional(),
+  // Continuing Development Block 6.8.3 (S6.1 campaign config UI) widened
+  // these four plus limitPer below from .optional() to also accept an
+  // explicit `null` -- identical reasoning and identical fix as branchId's
+  // own Block 6.8.1 widening above: each is a genuine, standalone business
+  // rule a manager sets and later removes (not a value that goes inert
+  // when some sibling field changes, the way pointsCost/rewardValue do
+  // with `type`), and an omitted key can only mean "leave it alone," never
+  // "remove this limit." Harmless on create, same as branchId.
+  maxRewardsPerDay: z.number().int().positive().nullable().optional(),
+  maxBudget: z.number().positive().max(1_000_000).nullable().optional(),
+  limitPer: rewardLimitPerSchema.nullable().optional(),
+  limitPeriodDays: z.number().int().positive().nullable().optional(),
+  cooldownSeconds: z.number().int().min(0).nullable().optional(),
 };
 
 export const createRewardSchema = z
