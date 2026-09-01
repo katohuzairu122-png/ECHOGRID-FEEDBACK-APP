@@ -71,6 +71,7 @@
       "descriptionEdit": "Mettez à jour {name}.",
       "descriptionNew": "Ajoutez une récompense que les clients peuvent échanger avec des points.",
       "nameLabel": "Nom",
+      "namePlaceholder": "Café gratuit",
       "descriptionLabel": "Description (facultatif)",
       "pointsCostLabel": "Coût en points",
       "branchIdLabel": "Succursale",
@@ -102,6 +103,7 @@
     "rewardActions": {
       "deactivate": "Désactiver",
       "activate": "Activer",
+      "resume": "Reprendre",
       "delete": "Supprimer",
       "deleteConfirm": "Supprimer cette récompense ? Cette action est irréversible.",
       "deleteFailedAlert": "Impossible de supprimer cette récompense. Veuillez réessayer."

@@ -71,6 +71,7 @@
       "descriptionEdit": "Update {name}.",
       "descriptionNew": "Add a reward customers can redeem with points.",
       "nameLabel": "Name",
+      "namePlaceholder": "Free coffee",
       "descriptionLabel": "Description (optional)",
       "pointsCostLabel": "Points cost",
       "branchIdLabel": "Branch",
@@ -102,6 +103,7 @@
     "rewardActions": {
       "deactivate": "Deactivate",
       "activate": "Activate",
+      "resume": "Resume",
       "delete": "Delete",
       "deleteConfirm": "Delete this reward? This cannot be undone.",
       "deleteFailedAlert": "Could not delete this reward. Please try again."

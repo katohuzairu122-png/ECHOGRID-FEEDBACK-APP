@@ -71,6 +71,7 @@
       "descriptionEdit": "Actualiza {name}.",
       "descriptionNew": "Agrega una recompensa que los clientes puedan canjear con puntos.",
       "nameLabel": "Nombre",
+      "namePlaceholder": "Café gratis",
       "descriptionLabel": "Descripción (opcional)",
       "pointsCostLabel": "Costo en puntos",
       "branchIdLabel": "Sucursal",
@@ -102,6 +103,7 @@
     "rewardActions": {
       "deactivate": "Desactivar",
       "activate": "Activar",
+      "resume": "Reanudar",
       "delete": "Eliminar",
       "deleteConfirm": "¿Eliminar esta recompensa? Esta acción no se puede deshacer.",
       "deleteFailedAlert": "No se pudo eliminar esta recompensa. Inténtalo de nuevo."

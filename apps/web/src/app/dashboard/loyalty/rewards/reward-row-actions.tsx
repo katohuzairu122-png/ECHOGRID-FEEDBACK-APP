@@ -13,18 +13,19 @@ import { Button } from '@/components/ui';
 // theoretical -- RewardFormDialog's edit-only status <select> can now set
 // it, so this component's own "nothing produces this state yet" reasoning
 // (the version of this comment before Block 6.8.2) no longer holds. The
-// toggle button's behavior is UNCHANGED by that: it still only offers
+// toggle button's CLICK behavior is unchanged by that: it still only sends
 // active<->inactive (status === 'active' ? 'inactive' : 'active'), which
 // already does the right thing on a paused row -- not currently active, so
-// the button correctly reads "Activate" and correctly reactivates it on
-// click. Left as-is rather than adding a three-way cycle or a distinct
-// "Resume" label: the edit dialog is now the deliberate, explicit place to
-// pause a reward, and this quick-action button's job stays the fast common
-// case, same scope it already had. The one cosmetic loose end -- a paused
-// row's badge (rewards/page.tsx) is now visually distinct from inactive,
-// but this button still just says "Activate" for both -- is noted here
-// rather than silently left for a future reader to puzzle out; picking it
-// up isn't required for Block 6.8.2's own scope.
+// clicking it correctly reactivates to 'active'. Still no three-way cycle:
+// the edit dialog stays the deliberate, explicit place to pause a reward,
+// and this quick-action button's job stays the fast common case.
+//
+// Block 6.8.5 (i18n/polish pass) closed the one loose end 6.8.2 flagged
+// and deliberately deferred: the LABEL now distinguishes a paused row
+// ("Resume") from an inactive one ("Activate") below, matching the badge
+// (rewards/page.tsx) already being visually distinct between the two
+// since 6.8.2. Click behavior is identical either way -- this is a label
+// fix only, not a new code path.
 export function RewardRowActions({
   rewardId,
   status,
@@ -58,7 +59,7 @@ export function RewardRowActions({
   return (
     <div className="flex shrink-0 items-center gap-2">
       <Button type="button" variant="outline" size="sm" onClick={handleToggle} disabled={pending}>
-        {status === 'active' ? t('deactivate') : t('activate')}
+        {status === 'active' ? t('deactivate') : status === 'paused' ? t('resume') : t('activate')}
       </Button>
       <Button type="button" variant="ghost" size="sm" onClick={handleDelete} disabled={pending}>
         {t('delete')}

@@ -77,7 +77,12 @@ export function RewardFormDialog({ reward, branches, trigger }: RewardFormDialog
         <form action={formAction} className="mt-4 flex flex-col gap-4">
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="name">{t('nameLabel')}</Label>
-            <Input id="name" name="name" defaultValue={reward?.name} placeholder="Free coffee" required />
+            {/* Continuing Development Block 6.8.5 -- "Free coffee" was a
+                hardcoded English literal here since before this feature
+                (pre-existing, not introduced by Blocks 6.8.1-6.8.4), missed
+                by every prior i18n pass. Routed through the same t() every
+                other string in this dialog already uses. */}
+            <Input id="name" name="name" defaultValue={reward?.name} placeholder={t('namePlaceholder')} required />
           </div>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="description">{t('descriptionLabel')}</Label>
@@ -262,6 +267,7 @@ export function RewardFormDialog({ reward, branches, trigger }: RewardFormDialog
               name="limitPer"
               value={limitPer}
               onChange={(e) => setLimitPer(e.target.value)}
+              aria-describedby="limitPer-hint"
             >
               <option value="">{t('limitPerNoneOption')}</option>
               <option value="receipt">{t('limitPerReceipt')}</option>
@@ -278,7 +284,13 @@ export function RewardFormDialog({ reward, branches, trigger }: RewardFormDialog
                 6.1 -- but a business owner picking "Once per receipt"
                 expecting real fraud protection needs to know it isn't
                 enforced yet, not discover that silently. */}
-            <p className="text-xs text-neutral-500">{t('limitPerEnforcementHint')}</p>
+            {/* Continuing Development Block 6.8.5 -- id + the Select's
+                aria-describedby above associate this hint with the field
+                programmatically, not just visually, so a screen-reader
+                user gets it too (the hint was sighted-only through 6.8.3). */}
+            <p id="limitPer-hint" className="text-xs text-neutral-500">
+              {t('limitPerEnforcementHint')}
+            </p>
           </div>
           {limitPer === 'period' && (
             <div className="flex flex-col gap-1.5">
