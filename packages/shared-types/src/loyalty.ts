@@ -83,6 +83,17 @@ const rewardCampaignFields = {
   limitPer: rewardLimitPerSchema.nullable().optional(),
   limitPeriodDays: z.number().int().positive().nullable().optional(),
   cooldownSeconds: z.number().int().min(0).nullable().optional(),
+  // Continuing Development Block 6.9 (S6.4 minimum feedback requirements).
+  // Same clearable-standalone-setting treatment as maxRewardsPerDay/
+  // cooldownSeconds above for minCommentLength (nullable at the DB layer,
+  // so .nullable().optional() here too). requireVisitVerification is NOT
+  // nullable at the DB layer (NOT NULL DEFAULT false -- see
+  // loyalty-rewards.ts's own comment) -- there is no NULL state to
+  // round-trip, so plain .optional() only: omitted leaves it alone,
+  // `false` explicitly turns the requirement off, matching every other
+  // boolean-shaped setting's "omission means don't touch" convention.
+  minCommentLength: z.number().int().positive().nullable().optional(),
+  requireVisitVerification: z.boolean().optional(),
 };
 
 export const createRewardSchema = z
@@ -212,6 +223,10 @@ export const loyaltyRewardSchema = z.object({
   limitPer: rewardLimitPerSchema.nullable(),
   limitPeriodDays: z.number().nullable(),
   cooldownSeconds: z.number().nullable(),
+  // Continuing Development Block 6.9 (S6.4) -- see rewardCampaignFields
+  // above for the nullability reasoning behind each.
+  minCommentLength: z.number().nullable(),
+  requireVisitVerification: z.boolean(),
 });
 
 /** Block 6.7.2 (S6.3 campaign dashboard) -- GET /loyalty/rewards/:id/dashboard's

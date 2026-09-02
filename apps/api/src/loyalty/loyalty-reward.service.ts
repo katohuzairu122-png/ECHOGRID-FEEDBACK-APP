@@ -31,7 +31,15 @@ type RewardLimitPer = 'receipt' | 'visit' | 'period';
  * of them back to NULL (rewardValue/pointsCost instead go inert-but-
  * harmless when `type` changes away from what made them meaningful, see
  * RewardFormDialog's own comment), not an oversight, just unneeded so
- * far. */
+ * far.
+ *
+ * Continuing Development Block 6.9 (S6.4 minimum feedback requirements)
+ * adds two more: minCommentLength (nullable, same clear-to-null
+ * treatment as maxRewardsPerDay etc.) and requireVisitVerification
+ * (plain optional boolean, no null state -- see loyalty-rewards.ts's own
+ * comment for why). Neither is enforced yet; that's a later block (S6.4
+ * is config-only here, the same split Block 6.1 itself used for
+ * limitPer/limitPeriodDays). */
 interface RewardCampaignFields {
   branchId?: string | null | undefined;
   type?: RewardType | undefined;
@@ -43,6 +51,8 @@ interface RewardCampaignFields {
   limitPer?: RewardLimitPer | null | undefined;
   limitPeriodDays?: number | null | undefined;
   cooldownSeconds?: number | null | undefined;
+  minCommentLength?: number | null | undefined;
+  requireVisitVerification?: boolean | undefined;
 }
 
 /** create()'s shape -- matches createRewardSchema exactly. Its cross-field
@@ -289,6 +299,14 @@ export class LoyaltyRewardService {
       limitPer: input.limitPer,
       limitPeriodDays: input.limitPeriodDays,
       cooldownSeconds: input.cooldownSeconds,
+      // Continuing Development Block 6.9 -- both plain passthrough, same
+      // as maxRewardsPerDay/cooldownSeconds above: no unit conversion
+      // needed (unlike rewardValue/maxBudget's decimal-string columns or
+      // startDate/expiryDate's Date columns), and `undefined` already
+      // means "don't touch" to Drizzle's update builder without any
+      // help from this method.
+      minCommentLength: input.minCommentLength,
+      requireVisitVerification: input.requireVisitVerification,
     };
   }
 }

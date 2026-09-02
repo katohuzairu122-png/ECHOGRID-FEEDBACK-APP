@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, integer, numeric, timestamp, index, check } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, text, integer, numeric, timestamp, index, check, boolean } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import { businesses } from './businesses';
 import { branches } from './branches';
@@ -99,6 +99,33 @@ export const loyaltyRewards = pgTable(
     // receipt, visit or defined period" AND, separately, "customer
     // cooldown"). Config only, same as decision 3.
     cooldownSeconds: integer('cooldown_seconds'),
+    // Continuing Development Block 6.9 (S6.4 "minimum feedback
+    // requirements"). Two independent, business-configurable gates a
+    // reward claim's underlying feedback submission must clear before
+    // LoyaltyRedemptionService will grant it -- enforcement itself is a
+    // later block (S6.4 is config here, same "config now, enforce once a
+    // later block reads it" split this table has used since Block 6.1's
+    // own limitPer/limitPeriodDays, see scoping decision 3 above).
+    // Deliberately NOT a `minRating` column: S6.4's own text is explicit
+    // that "a required rating means a rating must be submitted... it must
+    // never require a positive rating" -- feedback.rating is already
+    // NOT NULL (every submission has one), so "rating completion" is
+    // already unconditionally satisfied by the existing schema and must
+    // stay that way. Adding a threshold column here would invite exactly
+    // the violation the spec calls out by name; there is nothing to add.
+    // NULL = no minimum, same "NULL = no rule" convention as
+    // maxRewardsPerDay/cooldownSeconds above.
+    minCommentLength: integer('min_comment_length'),
+    // NOT NULL DEFAULT false, unlike this campaign's other config
+    // columns above -- deliberate, not an inconsistency. Every nullable
+    // column above uses NULL for "no rule configured"; a boolean gate has
+    // no analogous third state to protect (false already means "not
+    // required"), so a nullable boolean here would just be an unreachable
+    // extra state application code would need to treat identically to
+    // false anyway. Matches feedback.is_duplicate_text's own
+    // NOT NULL DEFAULT false precedent (apps/api/src/db/schema/
+    // feedback.ts) -- the one other plain boolean flag in this schema.
+    requireVisitVerification: boolean('require_visit_verification').notNull().default(false),
     ...auditColumns,
     ...softDeleteColumns,
   },
@@ -146,6 +173,16 @@ export const loyaltyRewards = pgTable(
     check(
       'loyalty_rewards_cooldown_seconds_check',
       sql`${table.cooldownSeconds} IS NULL OR ${table.cooldownSeconds} >= 0`,
+    ),
+    // Continuing Development Block 6.9 (S6.4). Same "NULL or positive"
+    // shape as every other optional numeric threshold in this table
+    // (maxRewardsPerDay, limitPeriodDays) -- 0 would mean "any comment,
+    // even empty, satisfies the minimum," which is indistinguishable from
+    // not setting a minimum at all, so it's excluded the same way those
+    // columns exclude it.
+    check(
+      'loyalty_rewards_min_comment_length_check',
+      sql`${table.minCommentLength} IS NULL OR ${table.minCommentLength} > 0`,
     ),
     check(
       'loyalty_rewards_expiry_after_start_check',
