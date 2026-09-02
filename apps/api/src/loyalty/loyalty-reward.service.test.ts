@@ -37,6 +37,14 @@ function createFakeRewardRepo() {
         limitPer: input.limitPer ?? null,
         limitPeriodDays: input.limitPeriodDays ?? null,
         cooldownSeconds: input.cooldownSeconds ?? null,
+        // Block 6.9 (S6.4) fields -- same input.X ?? default pattern as the
+        // Block 6.1 group above. Missing this literal is exactly the bug
+        // class documented in the "Block 6.1 CI-failure note": a hand-typed
+        // `LoyaltyReward` object literal must carry every column the real
+        // schema (`$inferSelect`) now has, even a nullable one, with an
+        // explicit `null` rather than an omitted key.
+        minCommentLength: input.minCommentLength ?? null,
+        requireVisitVerification: input.requireVisitVerification ?? false,
         name: input.name,
         description: input.description ?? null,
         pointsCost: input.pointsCost ?? null, // Block 6.2: nullable now (non-points types)
