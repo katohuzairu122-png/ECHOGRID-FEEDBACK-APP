@@ -1,0 +1,3 @@
+ALTER TABLE "loyalty_rewards" ADD COLUMN "min_comment_length" integer;--> statement-breakpoint
+ALTER TABLE "loyalty_rewards" ADD COLUMN "require_visit_verification" boolean DEFAULT false NOT NULL;--> statement-breakpoint
+ALTER TABLE "loyalty_rewards" ADD CONSTRAINT "loyalty_rewards_min_comment_length_check" CHECK ("loyalty_rewards"."min_comment_length" IS NULL OR "loyalty_rewards"."min_comment_length" > 0);

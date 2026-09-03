@@ -1,0 +1,4 @@
+DROP INDEX "loyalty_transactions_checkin_visit_key";--> statement-breakpoint
+ALTER TABLE "loyalty_transactions" ADD COLUMN "feedback_id" uuid;--> statement-breakpoint
+ALTER TABLE "loyalty_transactions" ADD CONSTRAINT "loyalty_transactions_feedback_id_feedback_id_fk" FOREIGN KEY ("feedback_id") REFERENCES "public"."feedback"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+CREATE UNIQUE INDEX "loyalty_transactions_checkin_visit_key" ON "loyalty_transactions" USING btree ("visit_session_id","loyalty_account_id") WHERE "loyalty_transactions"."visit_session_id" IS NOT NULL AND "loyalty_transactions"."type" = 'checkin';
