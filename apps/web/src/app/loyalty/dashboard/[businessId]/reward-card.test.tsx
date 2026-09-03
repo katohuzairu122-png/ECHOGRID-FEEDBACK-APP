@@ -29,6 +29,12 @@ const REWARD: LoyaltyRewardDto = {
   limitPer: null,
   limitPeriodDays: null,
   cooldownSeconds: null,
+  // Continuing Development Block 6.9 (S6.4) fields -- no rule configured,
+  // same "not part of this fixture's scenario" defaults as the sibling
+  // limit fields above. See reward-form-dialog.test.tsx's DISCOUNT_REWARD
+  // for the matching fixture (kept in sync per that file's own comment).
+  minCommentLength: null,
+  requireVisitVerification: false,
 };
 
 describe('RewardCard', () => {

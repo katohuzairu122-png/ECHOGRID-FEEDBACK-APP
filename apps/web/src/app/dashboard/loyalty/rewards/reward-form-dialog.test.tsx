@@ -76,6 +76,12 @@ const DISCOUNT_REWARD: LoyaltyRewardDto = {
   limitPer: 'period',
   limitPeriodDays: 30,
   cooldownSeconds: null,
+  // Continuing Development Block 6.9 (S6.4) fields -- no rule configured,
+  // same "not part of this fixture's scenario" defaults as the sibling
+  // limit fields above. Kept in sync with reward-card.test.tsx's REWARD
+  // per this fixture's own "Same fixture shape as..." comment.
+  minCommentLength: null,
+  requireVisitVerification: false,
 };
 
 describe('RewardFormDialog', () => {
