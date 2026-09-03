@@ -3,6 +3,7 @@ import {
   joinLoyaltyProgramSchema,
   checkinSchema,
   redeemRewardSchema,
+  issueRewardSchema,
   updateNotificationPreferencesSchema,
   CUSTOMER_NOTIFICATION_EVENT_TYPES,
 } from '@echo-grid-feedback/shared-types';
@@ -245,7 +246,15 @@ loyaltyCustomerRoutes.post('/accounts/:businessId/redeem', async (c) => {
   const body = await parseJsonBody(c.req.raw, redeemRewardSchema);
   const businessId = c.req.param('businessId');
   return withDb(c, async (db) => {
-    const result = await new LoyaltyRedemptionService(db).redeem(c.get('customerId'), businessId, body.rewardId);
+    // Continuing Development Block 2 -- feedbackId/visitProof/branchId are
+    // all optional (RedemptionReferenceInput's own default {} covers a
+    // request that sends none of them), so this widening is backward
+    // compatible with every existing caller.
+    const result = await new LoyaltyRedemptionService(db).redeem(c.get('customerId'), businessId, body.rewardId, {
+      feedbackId: body.feedbackId,
+      visitProof: body.visitProof,
+      branchId: body.branchId,
+    });
 
     // Notify STAFF, not the customer -- a staff member needs to know a code
     // is waiting to be confirmed at the counter. Same "after the redeem()
@@ -255,6 +264,56 @@ loyaltyCustomerRoutes.post('/accounts/:businessId/redeem', async (c) => {
     // permission filter narrows this broadcast. Uses its own fresh
     // connection (runInBackground), not the outer `repos` -- see that
     // helper's doc comment for why reusing it races withDb's own close().
+    c.executionCtx.waitUntil(
+      runInBackground(c.env.HYPERDRIVE, async (repos) => {
+        const [reward, business] = await Promise.all([
+          repos.loyaltyRewards.findById(body.rewardId, businessId),
+          repos.businesses.findById(businessId),
+        ]);
+        if (!reward || !business) return;
+        const notifications = new NotificationService(repos, c.env.JOBS);
+        await notifications.notifyBusinessStaff(businessId, {
+          eventType: 'redemption_pending',
+          businessName: business.name,
+          rewardName: reward.name,
+          redemptionCode: result.redemptionCode,
+        });
+      }),
+    );
+
+    return ok(c, result, 201);
+  });
+});
+
+/**
+ * Continuing Development Block 2 (S6.4 prerequisite -- the Block 6.9
+ * roadmap item calling this "the issue endpoint" assumed it already existed;
+ * reading this file end to end confirmed it didn't. Closing that gap is
+ * necessary, not optional, for "thread a reference into the issue endpoint"
+ * to mean anything real -- the same kind of disclosed widening Block 6.9
+ * itself made when it went from schema-only to full config-API wiring).
+ *
+ * Mirrors /redeem immediately above exactly -- schema validation via
+ * issueRewardSchema (redeemRewardSchema's non-points sibling), the identical
+ * feedbackId/visitProof/branchId passthrough, and the identical staff
+ * notification block, reusing 'redemption_pending' as the eventType rather
+ * than inventing a new one: confirmRedemption() is already the SAME staff-
+ * side confirmation step for both reward kinds (see that method's own Block
+ * 6.2 comment -- "one confirmation path for staff regardless of which
+ * reward type is behind the code"), so from staff's perspective this is the
+ * identical action ("a code is waiting to be confirmed at the counter") and
+ * warrants the identical notification, not a parallel type.
+ */
+loyaltyCustomerRoutes.post('/accounts/:businessId/issue', async (c) => {
+  const body = await parseJsonBody(c.req.raw, issueRewardSchema);
+  const businessId = c.req.param('businessId');
+  return withDb(c, async (db) => {
+    const result = await new LoyaltyRedemptionService(db).issue(c.get('customerId'), businessId, body.rewardId, {
+      feedbackId: body.feedbackId,
+      visitProof: body.visitProof,
+      branchId: body.branchId,
+    });
+
     c.executionCtx.waitUntil(
       runInBackground(c.env.HYPERDRIVE, async (repos) => {
         const [reward, business] = await Promise.all([

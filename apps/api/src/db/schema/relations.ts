@@ -183,6 +183,14 @@ export const loyaltyTransactionsRelations = relations(loyaltyTransactions, ({ on
     fields: [loyaltyTransactions.relatedQrCodeId],
     references: [qrCodes.id],
   }),
+  // Continuing Development Block 2 -- the new feedbackId FK (S6.4
+  // prerequisite). Same one(feedback, ...) shape as fraudSignalsRelations/
+  // criticalIncidentsRelations above already use for their own feedbackId
+  // columns.
+  feedback: one(feedback, {
+    fields: [loyaltyTransactions.feedbackId],
+    references: [feedback.id],
+  }),
 }));
 
 export const loyaltySettingsRelations = relations(loyaltySettings, ({ one }) => ({

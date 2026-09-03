@@ -4,6 +4,7 @@ import { loyaltyAccounts } from './loyalty-accounts';
 import { loyaltyRewards } from './loyalty-rewards';
 import { qrCodes } from './qr-codes';
 import { visitSessions } from './visit-sessions';
+import { feedback } from './feedback';
 
 /**
  * Append-only points ledger, mirroring `audit_log`'s design -- the source
@@ -34,12 +35,30 @@ export const loyaltyTransactions = pgTable(
     relatedQrCodeId: uuid('related_qr_code_id').references(() => qrCodes.id, {
       onDelete: 'set null',
     }), // set only for type='checkin'
-    // set only for type='checkin', and only when visit verification (Block
-    // 4.3.2) actually succeeded on that request -- see the partial unique
-    // index below (Block 5.2, S5.7 one reward per qualifying visit)
+    // Originally "set only for type='checkin'" (Block 4.3.2/5.2). Continuing
+    // Development Block 2 (S6.1 limitPer='visit' prerequisite) widened this:
+    // also settable for type='redemption', when the customer's redeem()/
+    // issue() call supplies a visitProof that verifies successfully (see
+    // LoyaltyRedemptionService.resolveRedemptionReferences). Still only ever
+    // set when verification actually succeeded on that request -- see the
+    // partial unique index below (Block 5.2, S5.7 one reward per qualifying
+    // visit; Block 2's own note there on why it's now type-scoped).
     visitSessionId: uuid('visit_session_id').references(() => visitSessions.id, {
       onDelete: 'set null',
     }),
+    // Continuing Development Block 2 (S6.4 minimum feedback requirements
+    // prerequisite). Set only for type='redemption', and only when the
+    // customer's redeem()/issue() call supplies a feedbackId that resolves
+    // to a real row in THIS business (see resolveRedemptionReferences' own
+    // comment for why an unresolved id is silently dropped rather than
+    // rejected). Nullable: most redemptions won't reference specific
+    // feedback -- this column only becomes load-bearing once a future block
+    // enforces loyalty_rewards.minCommentLength against the linked row's
+    // comment. onDelete 'set null', matching relatedRewardId/
+    // relatedQrCodeId/visitSessionId's identical convention on this same
+    // table -- this ledger row's own existence must never depend on whether
+    // a since-deleted feedback row still exists.
+    feedbackId: uuid('feedback_id').references(() => feedback.id, { onDelete: 'set null' }),
     purchaseAmount: numeric('purchase_amount', { precision: 10, scale: 2 }), // set only for type='purchase'
     redemptionCode: text('redemption_code').unique(), // set only for type='redemption'
     redemptionConfirmedAt: timestamp('redemption_confirmed_at', { withTimezone: true }),
@@ -72,14 +91,22 @@ export const loyaltyTransactions = pgTable(
     // code. This composite key instead blocks only a single account from
     // claiming the same visit session twice, while leaving every other
     // account free to claim their own first checkin against it.
-    // IS NOT NULL-scoped only (no explicit type='checkin' clause) --
-    // matches loyalty_transactions_redemption_code_key's own precedent
-    // immediately above: visitSessionId is only ever populated for
-    // type='checkin' by the same application-level convention
-    // redemptionCode already relies on for type='redemption'.
+    // Originally IS NOT NULL-scoped only, relying on the application-level
+    // convention that visitSessionId was populated for type='checkin' rows
+    // alone. Continuing Development Block 2 breaks that convention on
+    // purpose (visitSessionId is now also set on type='redemption' rows --
+    // see that column's own comment above), which would otherwise make this
+    // index wrongly block a customer's second reward claim against a visit
+    // session they'd already used for check-in: same visitSessionId, same
+    // loyaltyAccountId, two legitimately different transaction types. The
+    // added `type = 'checkin'` clause restores this index to its original,
+    // still-correct intent (one checkin reward per qualifying visit per
+    // account) without also constraining redemption rows, which have no
+    // such one-per-visit rule today. Found and fixed here, before it could
+    // ship as a live bug -- not discovered via a later failure.
     uniqueIndex('loyalty_transactions_checkin_visit_key')
       .on(table.visitSessionId, table.loyaltyAccountId)
-      .where(sql`${table.visitSessionId} IS NOT NULL`),
+      .where(sql`${table.visitSessionId} IS NOT NULL AND ${table.type} = 'checkin'`),
     // Continuing Development Block 6.5 (S5.5 customer cooldown + S6.1
     // "one reward per ... defined period"). Backs
     // LoyaltyTransactionRepository.findLastRedemptionForAccount()'s exact

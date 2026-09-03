@@ -183,9 +183,57 @@ export const checkinSchema = z.object({
   visitProof: z.string().trim().max(64).optional(),
 });
 
-export const redeemRewardSchema = z.object({
-  rewardId: z.uuid(),
-});
+// Continuing Development Block 2 (S6.1 limitPer='visit' + S6.4 minimum
+// feedback requirements -- both need a feedback/visit reference threaded
+// through redeem()/issue() before either can be enforced; this block only
+// threads it, enforcement is a separate future block). Shared between
+// redeemRewardSchema and issueRewardSchema below, same "define the fields
+// once, spread into each schema" convention as rewardCampaignFields above --
+// the two schemas stay independently-defined objects (not one derived from
+// the other) since a .refine()'d schema can't be .partial()'d/extended the
+// same way, matching createRewardSchema/updateRewardSchema's own precedent.
+//
+// All three fields optional: a redeem()/issue() call with none of them
+// behaves exactly as before this block (fully backward compatible).
+// feedbackId is validated for existence + tenant scope server-side
+// (LoyaltyRedemptionService.resolveRedemptionReferences) -- no format
+// beyond being a UUID is meaningful here. visitProof mirrors checkinSchema's
+// field of the same name exactly (optional, advisory only, unstructured at
+// this layer -- see that schema's own comment). branchId is new API
+// surface: unlike checkin/feedback, redeem()/issue() have no QR scan to
+// resolve a branchId from, so a visitProof needs the client to say which
+// branch it's being claimed at.
+const redemptionReferenceFields = {
+  feedbackId: z.uuid().optional(),
+  visitProof: z.string().trim().max(64).optional(),
+  branchId: z.uuid().optional(),
+};
+
+export const redeemRewardSchema = z
+  .object({
+    rewardId: z.uuid(),
+    ...redemptionReferenceFields,
+  })
+  .refine((val) => !val.visitProof || val.branchId !== undefined, {
+    error: 'branchId is required when visitProof is provided.',
+  });
+
+/** Continuing Development Block 2 -- the non-points counterpart to
+ * redeemRewardSchema, backing the new POST /loyalty/me/accounts/:businessId/
+ * issue route. Same shape/refine as redeemRewardSchema above (both wrap
+ * LoyaltyRedemptionService methods that now share one
+ * RedemptionReferenceInput parameter) -- kept as a separate export rather
+ * than reusing redeemRewardSchema by reference, matching this file's
+ * existing RedemptionResult/IssuanceResult response-type separation
+ * (see issuanceResultSchema below). */
+export const issueRewardSchema = z
+  .object({
+    rewardId: z.uuid(),
+    ...redemptionReferenceFields,
+  })
+  .refine((val) => !val.visitProof || val.branchId !== undefined, {
+    error: 'branchId is required when visitProof is provided.',
+  });
 
 // ---- Response DTOs ---------------------------------------------------
 
@@ -297,12 +345,23 @@ export const loyaltyAccountWithCustomerSchema = loyaltyAccountSchema.extend({
   }),
 });
 
+// Continuing Development Block 2 added visitSessionId/feedbackId below --
+// correcting a real staleness, not adding new API surface, same reasoning
+// as loyaltyRewardSchema's own Block 6.1 widening comment above: the API
+// has always returned every column on the row (nothing prunes the JSON
+// response against this schema), this DTO just didn't say so. visitSessionId
+// specifically predates this block (Block 5.2) and was already missing here
+// before Block 2 touched this file -- fixed in the same edit as the new
+// feedbackId field since both are the identical kind of one-line, same-DTO
+// gap, not a separate, unrelated change.
 export const loyaltyTransactionSchema = z.object({
   id: z.uuid(),
   loyaltyAccountId: z.uuid(),
   type: z.enum(['checkin', 'purchase', 'redemption', 'referral_bonus', 'birthday_bonus', 'adjustment']),
   points: z.number(),
   relatedRewardId: z.uuid().nullable(),
+  visitSessionId: z.uuid().nullable(),
+  feedbackId: z.uuid().nullable(),
   purchaseAmount: z.string().nullable(),
   redemptionCode: z.string().nullable(),
   redemptionConfirmedAt: z.string().nullable(),
@@ -324,6 +383,25 @@ export const redemptionResultSchema = z.object({
   remainingBalance: z.number(),
 });
 
+/** Continuing Development Block 2 -- response DTO for the new POST
+ * /loyalty/me/accounts/:businessId/issue route. Mirrors
+ * LoyaltyRedemptionService's own IssuanceResult interface exactly (same
+ * independently-defined, shape-compatible relationship
+ * redemptionResultSchema/RedemptionResult already have with redeem() above,
+ * not one importing the other -- see CampaignDashboardDto's own comment
+ * further up for why this file follows that pattern). `type` uses
+ * rewardTypeSchema rather than a bare z.string() -- strictly more precise
+ * than the service's own `type: string` field, matching loyaltyRewardSchema.
+ * type's identical choice above; additive precision, not a behavior change. */
+export const issuanceResultSchema = z.object({
+  redemptionCode: z.string(),
+  reward: z.object({
+    id: z.uuid(),
+    name: z.string(),
+    type: rewardTypeSchema,
+  }),
+});
+
 export type RecordPurchaseInput = z.infer<typeof recordPurchaseSchema>;
 export type AdjustPointsInput = z.infer<typeof adjustPointsSchema>;
 export type CreateTierInput = z.infer<typeof createTierSchema>;
@@ -334,6 +412,7 @@ export type UpdateLoyaltySettingsInput = z.infer<typeof updateLoyaltySettingsSch
 export type JoinLoyaltyProgramInput = z.infer<typeof joinLoyaltyProgramSchema>;
 export type CheckinInput = z.infer<typeof checkinSchema>;
 export type RedeemRewardInput = z.infer<typeof redeemRewardSchema>;
+export type IssueRewardInput = z.infer<typeof issueRewardSchema>;
 export type LoyaltyTierDto = z.infer<typeof loyaltyTierSchema>;
 export type LoyaltyRewardDto = z.infer<typeof loyaltyRewardSchema>;
 export type CampaignDashboardDto = z.infer<typeof campaignDashboardSchema>;
@@ -342,3 +421,4 @@ export type LoyaltyAccountWithCustomerDto = z.infer<typeof loyaltyAccountWithCus
 export type LoyaltyTransactionDto = z.infer<typeof loyaltyTransactionSchema>;
 export type LoyaltySettingsDto = z.infer<typeof loyaltySettingsSchema>;
 export type RedemptionResult = z.infer<typeof redemptionResultSchema>;
+export type IssuanceResultDto = z.infer<typeof issuanceResultSchema>;

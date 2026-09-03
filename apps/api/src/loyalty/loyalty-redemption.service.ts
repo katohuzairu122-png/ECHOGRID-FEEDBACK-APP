@@ -3,6 +3,7 @@ import { createRepositories } from '../repositories';
 import type { LoyaltyTransaction, LoyaltyReward } from '../repositories';
 import { AppError } from '../lib/errors';
 import { generateRedemptionCode } from './redemption-code';
+import { VisitSessionService } from '../visits/visit-session.service';
 
 export interface RedemptionResult {
   redemptionCode: string;
@@ -15,6 +16,18 @@ export interface RedemptionResult {
 export interface IssuanceResult {
   redemptionCode: string;
   reward: { id: string; name: string; type: string };
+}
+
+/** Continuing Development Block 2 (S6.1 limitPer='visit' + S6.4 minimum
+ * feedback requirements -- both blocked on redeem()/issue() having no way to
+ * receive a feedback/visit reference at all; see resolveRedemptionReferences'
+ * own comment below). Shared by redeem() and issue(); every field optional
+ * and defaulted to `{}` at both call sites, so an existing caller that
+ * passes none of them is completely unaffected by this block. */
+export interface RedemptionReferenceInput {
+  feedbackId?: string | undefined;
+  visitProof?: string | undefined;
+  branchId?: string | undefined;
 }
 
 const REDEMPTION_CODE_MAX_ATTEMPTS = 5;
@@ -98,12 +111,21 @@ export class LoyaltyRedemptionService {
    * both apply to every type, same as maxRewardsPerDay.
    *
    * limitPer 'receipt' and 'visit' are deliberately NOT enforced here --
-   * disclosed gap, not an oversight. Both would need receipt/visit-session
-   * identity threaded into issue()/redeem()'s API contract, which neither
-   * method accepts today (confirmed by reading both signatures before
-   * writing this) -- new customer-facing API surface, unlike every check
-   * added in Blocks 6.3-6.5 so far, which all enforce against data these
-   * methods already have. Deferred to a future block, not yet scoped.
+   * disclosed gap, not an oversight, unlike every check added in Blocks
+   * 6.3-6.5, which all enforce against data these methods already had.
+   * Originally both would have needed receipt/visit-session identity
+   * threaded into issue()/redeem()'s API contract first, which neither
+   * method accepted at the time. Continuing Development Block 2 built that
+   * threading for visit-session identity specifically (visitProof +
+   * branchId, resolved via resolveRedemptionReferences() below into
+   * visitSessionId on the created row) -- but deliberately did not also add
+   * an enforcement check here, since checking it is a distinct, separately-
+   * scoped concern from merely having it available to check. This method
+   * still doesn't consult visitSessionId at all; a future block adds that
+   * consultation. limitPer='receipt' has no threaded identity to check yet
+   * either way -- no receipt/POS verification mechanism exists anywhere in
+   * this codebase (visit-verification.ts's own doc comment), so that half
+   * of this gap is unchanged and still not yet scoped in detail.
    */
   private async checkCooldownAndPeriodLimit(
     repos: ReturnType<typeof createRepositories>,
@@ -132,7 +154,89 @@ export class LoyaltyRedemptionService {
     }
   }
 
-  async redeem(customerId: string, businessId: string, rewardId: string): Promise<RedemptionResult> {
+  /**
+   * Continuing Development Block 2 (S6.1 limitPer='visit', S6.4 minimum
+   * feedback requirements -- the plumbing prerequisite both need). Shared by
+   * redeem() and issue(): resolves the two optional reference fields
+   * redeemRewardSchema/issueRewardSchema now accept into what actually gets
+   * persisted on the created loyalty_transactions row. Neither input is
+   * required, and neither ever blocks the redemption/issuance. Enforcing
+   * minCommentLength/requireVisitVerification/limitPer='visit' against what
+   * gets resolved here is explicitly OUT of scope for this block -- this
+   * method only threads the references through; a future block decides what
+   * to require of them.
+   *
+   * feedbackId: validated for existence + tenant scope only
+   * (FeedbackRepository.findById already checks both, plus isDeleted). An id
+   * that doesn't resolve -- wrong business, deleted, or simply doesn't exist
+   * -- is silently dropped (null, same as if the field had never been sent)
+   * rather than failing the whole redemption over what could just as easily
+   * be a stale client-side id as a deliberate spoof. Deliberately NOT logged
+   * as a fraud signal, unlike visitProof below: an unresolved foreign-key
+   * reference isn't one of this codebase's existing fraud-signal categories
+   * (velocity, duplicate text, forged token, failed visit verification --
+   * all abuse PATTERNS, not "this id didn't resolve"), and inventing a new
+   * one here would be scope beyond what this block was asked to do ("thread
+   * a reference"). A real abuse pattern around this, if one shows up, is a
+   * separately-scoped detector, not a silent addition to this method.
+   *
+   * visitProof + branchId: mirrors loyalty-customer.routes.ts's own inline
+   * check-in verification block exactly -- same VisitSessionService.verify()
+   * call, same fraud signal on failure, same advisory-only "never blocks"
+   * outcome. Duplicated rather than extracted into a helper shared across
+   * both files, matching how checkDailyAndBudgetLimits/
+   * checkCooldownAndPeriodLimit above are this file's own local private
+   * helpers rather than reaching into another module. branchId is REQUIRED
+   * alongside visitProof (enforced by the shared-types .refine(), defense-in-
+   * depth guarded again below) because redeem()/issue() have no QR scan to
+   * resolve a branchId from the way checkin/feedback do -- there is no
+   * server-derived branchId to fall back on here, so the client must say
+   * which branch it's claiming the reward at. A wrong/foreign branchId isn't
+   * separately rejected -- VisitSessionService.verify() already returns
+   * verified: false for a session that doesn't belong to the given
+   * businessId/branchId (see that method's own "defense in depth" comment),
+   * so it naturally falls into the same advisory-failure path as an
+   * invalid/expired proof.
+   */
+  private async resolveRedemptionReferences(
+    repos: ReturnType<typeof createRepositories>,
+    businessId: string,
+    input: RedemptionReferenceInput,
+  ): Promise<{ feedbackId: string | null; visitSessionId: string | null }> {
+    let feedbackId: string | null = null;
+    if (input.feedbackId) {
+      const feedbackRow = await repos.feedback.findById(input.feedbackId, businessId);
+      if (feedbackRow) feedbackId = feedbackRow.id;
+    }
+
+    let visitSessionId: string | null = null;
+    if (input.visitProof && input.branchId) {
+      const verification = await new VisitSessionService(repos).verify(businessId, input.branchId, input.visitProof);
+      if (verification.verified) {
+        const sessionId = verification.metadata?.sessionId;
+        visitSessionId = typeof sessionId === 'string' ? sessionId : null;
+      } else {
+        await repos.fraudSignals.create({
+          businessId,
+          branchId: input.branchId,
+          feedbackId: null,
+          signalType: 'visit_verification',
+          reasonCode: verification.reasonCode ?? 'invalid_or_expired',
+          severity: 'low',
+          metadata: { proof: input.visitProof },
+        });
+      }
+    }
+
+    return { feedbackId, visitSessionId };
+  }
+
+  async redeem(
+    customerId: string,
+    businessId: string,
+    rewardId: string,
+    references: RedemptionReferenceInput = {},
+  ): Promise<RedemptionResult> {
     return this.db.transaction(async (tx) => {
       const repos = createRepositories(tx);
 
@@ -177,6 +281,14 @@ export class LoyaltyRedemptionService {
         throw new AppError('Not enough points for this reward.', 422, 'INSUFFICIENT_POINTS');
       }
 
+      // Continuing Development Block 2 -- resolved after every blocking
+      // guard above has passed (matches checkDailyAndBudgetLimits' own
+      // "throwing must happen before any transaction row is created"
+      // ordering), so a redemption that was always going to fail on
+      // cooldown/budget/points never pays for a feedback lookup or a visit-
+      // session verification call it won't use.
+      const refs = await this.resolveRedemptionReferences(repos, businessId, references);
+
       // Collision odds against the 32^8 alphabet are astronomically low, but
       // the unique index (loyalty_transactions_redemption_code_key) is the
       // real backstop -- this loop just avoids surfacing a raw DB conflict
@@ -196,6 +308,8 @@ export class LoyaltyRedemptionService {
           points: -reward.pointsCost,
           relatedRewardId: reward.id,
           redemptionCode: code,
+          feedbackId: refs.feedbackId,
+          visitSessionId: refs.visitSessionId,
         });
       }
       if (!created) {
@@ -233,18 +347,34 @@ export class LoyaltyRedemptionService {
    * see that method's own comment for why), Block 6.4 added
    * maxRewardsPerDay and maxBudget (checkDailyAndBudgetLimits(), below),
    * Block 6.5 added cooldownSeconds and the limitPer='period' case
-   * (checkCooldownAndPeriodLimit(), above). limitPer='receipt'/'visit'
-   * remain unenforced -- would need new API surface (receipt/visit
-   * identity isn't part of this method's contract today), still a known,
-   * disclosed gap, not yet scoped in detail. Separately: every campaign
-   * field this block and Blocks 6.1-6.4 added is enforceable here but not
-   * yet SETTABLE through the real API -- LoyaltyRewardService's
+   * (checkCooldownAndPeriodLimit(), above).
+   *
+   * limitPer='receipt'/'visit' remain UNENFORCED here -- still a known,
+   * disclosed gap -- but Continuing Development Block 2 corrected the
+   * now-stale reason given for that: visit identity (a customer-supplied
+   * visitProof + branchId, verified via VisitSessionService, same as
+   * check-in) IS now part of this method's contract, threaded through via
+   * resolveRedemptionReferences() above and persisted as visitSessionId on
+   * the created row. What Block 2 deliberately did NOT do is check that
+   * value against limitPer='visit' or reject a call that omits it --
+   * enforcement is a separate future block's scope, this one only threads
+   * the reference. limitPer='receipt' has no comparable path at all: no
+   * receipt/POS verification mechanism exists anywhere in this codebase
+   * (visit-verification.ts's own doc comment), so there is still nothing
+   * for a client to even supply -- that gap is unchanged by this block.
+   * Separately: every campaign field Blocks 6.1-6.4 added is enforceable
+   * here but not yet SETTABLE through the real API -- LoyaltyRewardService's
    * CreateRewardInput/UpdateRewardInput only expose name/pointsCost/
-   * description(+status) -- see this block's own completion notes for why
+   * description(+status) -- see Block 6.9's own completion notes for why
    * that's a separate, proposed next block rather than folded into this
    * one.
    */
-  async issue(customerId: string, businessId: string, rewardId: string): Promise<IssuanceResult> {
+  async issue(
+    customerId: string,
+    businessId: string,
+    rewardId: string,
+    references: RedemptionReferenceInput = {},
+  ): Promise<IssuanceResult> {
     return this.db.transaction(async (tx) => {
       const repos = createRepositories(tx);
 
@@ -274,6 +404,10 @@ export class LoyaltyRedemptionService {
       await this.checkCooldownAndPeriodLimit(repos, reward, account.id);
       await this.checkDailyAndBudgetLimits(repos, reward);
 
+      // Continuing Development Block 2 -- see redeem()'s identical call for
+      // why this runs here, after every blocking guard above.
+      const refs = await this.resolveRedemptionReferences(repos, businessId, references);
+
       // Same collision-checked code generation as redeem() -- see that
       // method's comment on REDEMPTION_CODE_MAX_ATTEMPTS.
       let code = '';
@@ -290,6 +424,8 @@ export class LoyaltyRedemptionService {
           relatedRewardId: reward.id,
           redemptionCode: code,
           issuanceStatus: 'issued',
+          feedbackId: refs.feedbackId,
+          visitSessionId: refs.visitSessionId,
         });
       }
       if (!created) {
