@@ -30,6 +30,17 @@ export interface RedemptionReferenceInput {
   branchId?: string | undefined;
 }
 
+/** Continuing Development Block 3 -- resolveRedemptionReferences' own
+ * return shape, pulled out as a named type once a second and third caller
+ * (checkMinimumFeedbackRequirements, checkVisitLimit below) needed to
+ * accept it too, rather than repeating the same inline object-literal
+ * type three times. */
+interface ResolvedRedemptionReferences {
+  feedbackId: string | null;
+  visitSessionId: string | null;
+  feedbackComment: string | null;
+}
+
 const REDEMPTION_CODE_MAX_ATTEMPTS = 5;
 
 /**
@@ -120,12 +131,19 @@ export class LoyaltyRedemptionService {
    * branchId, resolved via resolveRedemptionReferences() below into
    * visitSessionId on the created row) -- but deliberately did not also add
    * an enforcement check here, since checking it is a distinct, separately-
-   * scoped concern from merely having it available to check. This method
-   * still doesn't consult visitSessionId at all; a future block adds that
-   * consultation. limitPer='receipt' has no threaded identity to check yet
-   * either way -- no receipt/POS verification mechanism exists anywhere in
-   * this codebase (visit-verification.ts's own doc comment), so that half
-   * of this gap is unchanged and still not yet scoped in detail.
+   * scoped concern from merely having it available to check.
+   *
+   * Continuing Development Block 3 closed the limitPer='visit' half, in a
+   * NEW sibling method, checkVisitLimit() below, rather than by teaching
+   * THIS method to also consult visitSessionId -- see checkVisitLimit's own
+   * comment for why it doesn't reduce to the same "time since last claim"
+   * question cooldownSeconds/limitPer='period' share, which is the whole
+   * reason those two live in one method together. This method itself is
+   * otherwise unchanged by Block 3. limitPer='receipt' still has no
+   * threaded identity to check -- no receipt/POS verification mechanism
+   * exists anywhere in this codebase (visit-verification.ts's own doc
+   * comment), so that half of the original gap is unchanged and still not
+   * yet scoped in detail.
    */
   private async checkCooldownAndPeriodLimit(
     repos: ReturnType<typeof createRepositories>,
@@ -160,11 +178,20 @@ export class LoyaltyRedemptionService {
    * redeem() and issue(): resolves the two optional reference fields
    * redeemRewardSchema/issueRewardSchema now accept into what actually gets
    * persisted on the created loyalty_transactions row. Neither input is
-   * required, and neither ever blocks the redemption/issuance. Enforcing
+   * required, and this method itself never blocks the redemption/issuance --
+   * that remains true after Block 3. Enforcing
    * minCommentLength/requireVisitVerification/limitPer='visit' against what
-   * gets resolved here is explicitly OUT of scope for this block -- this
-   * method only threads the references through; a future block decides what
-   * to require of them.
+   * gets resolved here was explicitly OUT of scope for Block 2 -- that
+   * block only threaded the references through. Continuing Development
+   * Block 3 is the future block referenced above: it added
+   * checkMinimumFeedbackRequirements() and checkVisitLimit() (both below,
+   * called from redeem()/issue() right after this method resolves their
+   * input), which enforce those three rules against exactly what gets
+   * resolved here. This method grew one new field on its return value
+   * (feedbackComment, so the new minCommentLength check doesn't need a
+   * second feedback lookup) but its own resolution behavior is otherwise
+   * unchanged -- see feedbackId/visitProof's own paragraphs below, both
+   * still accurate as written.
    *
    * feedbackId: validated for existence + tenant scope only
    * (FeedbackRepository.findById already checks both, plus isDeleted). An id
@@ -202,11 +229,15 @@ export class LoyaltyRedemptionService {
     repos: ReturnType<typeof createRepositories>,
     businessId: string,
     input: RedemptionReferenceInput,
-  ): Promise<{ feedbackId: string | null; visitSessionId: string | null }> {
+  ): Promise<ResolvedRedemptionReferences> {
     let feedbackId: string | null = null;
+    let feedbackComment: string | null = null;
     if (input.feedbackId) {
       const feedbackRow = await repos.feedback.findById(input.feedbackId, businessId);
-      if (feedbackRow) feedbackId = feedbackRow.id;
+      if (feedbackRow) {
+        feedbackId = feedbackRow.id;
+        feedbackComment = feedbackRow.comment;
+      }
     }
 
     let visitSessionId: string | null = null;
@@ -228,7 +259,152 @@ export class LoyaltyRedemptionService {
       }
     }
 
-    return { feedbackId, visitSessionId };
+    return { feedbackId, visitSessionId, feedbackComment };
+  }
+
+  /**
+   * Continuing Development Block 3 (S6.4 "minimum feedback requirements" --
+   * the enforcement resolveRedemptionReferences' own doc comment named as
+   * explicitly out of scope for Block 2, and checkCooldownAndPeriodLimit's
+   * own doc comment named as a future block's job). Two independent gates,
+   * both fail closed per S2.16 ("fail closed... when eligibility... cannot
+   * complete") rather than treating "can't verify" as "passes":
+   *
+   * minCommentLength: requires a resolved feedbackId (see
+   * resolveRedemptionReferences above) whose feedback.comment is at least
+   * minCommentLength characters after trimming. No feedbackId resolved at
+   * all -- omitted, or supplied but didn't resolve (wrong business,
+   * deleted, doesn't exist; resolveRedemptionReferences already silently
+   * drops those to null rather than rejecting there, since an unresolved
+   * id wasn't blocking in Block 2) -- is treated identically to "comment
+   * too short," since there's no comment to measure either way.
+   *
+   * DISCLOSED LIMITATION, not silently glossed over: feedback submission
+   * is deliberately anonymous -- no customerId/loyaltyAccountId column
+   * exists on the feedback table at all (feedback.ts's own doc comment;
+   * Block 6.9's Option A/B decision explicitly refused to weaken this).
+   * There is therefore no structural way to verify a supplied feedbackId
+   * was actually written by the customer redeeming right now, as opposed
+   * to any other customer's feedback at the same business --
+   * resolveRedemptionReferences only ever checks existence + tenant scope
+   * (Block 2), because ownership isn't a checkable fact in this schema.
+   * In practice this makes minCommentLength closer to an honor-system
+   * content nudge than an airtight guarantee: a customer who knows or is
+   * handed a long-enough feedbackId from the same business can satisfy
+   * this gate without having written a word of it themselves. Closing
+   * this for real would need a new correlation mechanism (e.g. a
+   * short-lived signed token handed back at feedback-submission time and
+   * required again at redeem time, proving "same browser session," not
+   * "same real person") -- a separately-scoped feature this block does
+   * not invent unasked, per S2's "do not invent APIs." requireVisitVerification
+   * below does NOT share this weakness -- see its own paragraph.
+   *
+   * requireVisitVerification: requires visitSessionId to be non-null (set
+   * only when resolveRedemptionReferences' own VisitSessionService.verify()
+   * call returned verified: true) -- omitted, or supplied but failed
+   * verification, are indistinguishable here, matching
+   * resolveRedemptionReferences' own enumeration-resistant design (both
+   * already collapse to visitSessionId staying null there). Unlike a
+   * feedbackId, a visitProof requires possession of an actual staff-issued
+   * code that VisitSessionService.verify() consumes atomically (single-use)
+   * or scopes to one active session (table session) -- not a
+   * guessable/reusable identifier -- so this gate does not share
+   * minCommentLength's ownership weakness above.
+   *
+   * No repository access needed -- everything here was already fetched by
+   * resolveRedemptionReferences, so this stays synchronous rather than
+   * manufacturing an unnecessary Promise.
+   */
+  private checkMinimumFeedbackRequirements(reward: LoyaltyReward, refs: ResolvedRedemptionReferences): void {
+    if (reward.minCommentLength !== null) {
+      // feedbackComment is only ever non-null when feedbackId also resolved
+      // (resolveRedemptionReferences sets both together or neither), so
+      // this one expression correctly covers "no feedback reference at
+      // all" and "resolved but comment is NULL/empty" alike -- both are 0.
+      const commentLength = (refs.feedbackComment ?? '').trim().length;
+      if (commentLength < reward.minCommentLength) {
+        throw new AppError(
+          `This reward requires feedback with a comment of at least ${reward.minCommentLength} characters.`,
+          422,
+          'LOYALTY_REWARD_COMMENT_TOO_SHORT',
+        );
+      }
+    }
+
+    if (reward.requireVisitVerification && refs.visitSessionId === null) {
+      throw new AppError('This reward requires a verified visit to claim.', 422, 'LOYALTY_REWARD_VISIT_REQUIRED');
+    }
+  }
+
+  /**
+   * Continuing Development Block 3 (S6.1 "one reward per visit," the
+   * limitPer='visit' case checkCooldownAndPeriodLimit's own doc comment
+   * named as a future block's job). Deliberately NOT folded into
+   * checkCooldownAndPeriodLimit above: that method's own justification for
+   * merging cooldownSeconds/limitPer='period' into one lookup is that both
+   * reduce to "how long since this customer's last claim" --
+   * limitPer='visit' doesn't reduce to that question at all (it's "has
+   * THIS SPECIFIC visit already claimed this reward," an existence check
+   * against one id, not a recency comparison against a timestamp), so
+   * folding it in would undercut that method's own stated reason for being
+   * one method instead of two.
+   *
+   * Fails closed when limitPer='visit' but no visitSessionId resolved (no
+   * visitProof supplied, or it failed verification) -- per S2.16, there is
+   * no visit identity to scope a "one per visit" rule against, so letting
+   * the claim through would silently mean "unlimited" instead of enforcing
+   * anything. This makes limitPer='visit' functionally also require a
+   * verified visit, independent of and in addition to the separate
+   * requireVisitVerification flag checked in
+   * checkMinimumFeedbackRequirements above -- a business can set either,
+   * both (redundant, harmless), or neither. Both paths share the
+   * LOYALTY_REWARD_VISIT_REQUIRED code: from the client's point of view the
+   * remedy is identical either way ("supply a valid visitProof +
+   * branchId"), and the reward's own config (already visible via
+   * GET /rewards) already explains which rule is asking for it.
+   *
+   * Scoped by (rewardId, loyaltyAccountId, visitSessionId), matching
+   * findCheckinByVisitSession's (Block 5.2) account+session pairing --
+   * blocks the SAME account from claiming the SAME reward twice on one
+   * visit, but a different account sharing the same table-session code can
+   * still claim it once, same reasoning Block 5.2 established for check-in
+   * dedup on a shared code. Also scoped by rewardId (unlike
+   * findCheckinByVisitSession, since check-in has no reward concept) so
+   * two different limitPer='visit' rewards stay independently claimable on
+   * the same visit, matching S6.1's own per-campaign framing of this
+   * limit.
+   *
+   * Concurrency note: this method's own existence check is not itself the
+   * race-safe backstop -- two concurrent claims of the SAME reward on the
+   * SAME visit are serialized by the reward row lock redeem()/issue()
+   * already hold via loyaltyRewards.lockForUpdate() (same reliance
+   * checkCooldownAndPeriodLimit/checkDailyAndBudgetLimits above already
+   * have on that same lock, not a new assumption this method introduces).
+   */
+  private async checkVisitLimit(
+    repos: ReturnType<typeof createRepositories>,
+    reward: LoyaltyReward,
+    loyaltyAccountId: string,
+    visitSessionId: string | null,
+  ): Promise<void> {
+    if (reward.limitPer !== 'visit') return;
+
+    if (visitSessionId === null) {
+      throw new AppError('This reward requires a verified visit to claim.', 422, 'LOYALTY_REWARD_VISIT_REQUIRED');
+    }
+
+    const existing = await repos.loyaltyTransactions.findRedemptionByVisitSession(
+      reward.id,
+      loyaltyAccountId,
+      visitSessionId,
+    );
+    if (existing) {
+      throw new AppError(
+        'This reward has already been claimed for this visit.',
+        422,
+        'LOYALTY_REWARD_VISIT_LIMIT_REACHED',
+      );
+    }
   }
 
   async redeem(
@@ -288,6 +464,14 @@ export class LoyaltyRedemptionService {
       // cooldown/budget/points never pays for a feedback lookup or a visit-
       // session verification call it won't use.
       const refs = await this.resolveRedemptionReferences(repos, businessId, references);
+
+      // Continuing Development Block 3 -- both gate on data refs just
+      // resolved, so they run immediately after it, same reasoning as
+      // resolveRedemptionReferences' own positioning here: a call that was
+      // always going to fail for an unrelated reason (cooldown/budget/
+      // points, all checked above) never pays for these checks either.
+      this.checkMinimumFeedbackRequirements(reward, refs);
+      await this.checkVisitLimit(repos, reward, account.id, refs.visitSessionId);
 
       // Collision odds against the 32^8 alphabet are astronomically low, but
       // the unique index (loyalty_transactions_redemption_code_key) is the
@@ -349,19 +533,21 @@ export class LoyaltyRedemptionService {
    * Block 6.5 added cooldownSeconds and the limitPer='period' case
    * (checkCooldownAndPeriodLimit(), above).
    *
-   * limitPer='receipt'/'visit' remain UNENFORCED here -- still a known,
-   * disclosed gap -- but Continuing Development Block 2 corrected the
-   * now-stale reason given for that: visit identity (a customer-supplied
-   * visitProof + branchId, verified via VisitSessionService, same as
-   * check-in) IS now part of this method's contract, threaded through via
-   * resolveRedemptionReferences() above and persisted as visitSessionId on
-   * the created row. What Block 2 deliberately did NOT do is check that
-   * value against limitPer='visit' or reject a call that omits it --
-   * enforcement is a separate future block's scope, this one only threads
-   * the reference. limitPer='receipt' has no comparable path at all: no
-   * receipt/POS verification mechanism exists anywhere in this codebase
-   * (visit-verification.ts's own doc comment), so there is still nothing
-   * for a client to even supply -- that gap is unchanged by this block.
+   * limitPer='visit' was UNENFORCED through Block 2 -- that block only
+   * threaded visit identity (a customer-supplied visitProof + branchId,
+   * verified via VisitSessionService, same as check-in) into this method's
+   * contract via resolveRedemptionReferences() above, persisted as
+   * visitSessionId on the created row, without checking that value against
+   * limitPer='visit' or requireVisitVerification. Continuing Development
+   * Block 3 closed both: checkMinimumFeedbackRequirements() enforces
+   * requireVisitVerification (plus minCommentLength, S6.4's other
+   * "minimum feedback requirement"), checkVisitLimit() enforces
+   * limitPer='visit' -- both called right after resolveRedemptionReferences()
+   * below, see their own doc comments. limitPer='receipt' still has no
+   * comparable path: no receipt/POS verification mechanism exists anywhere
+   * in this codebase (visit-verification.ts's own doc comment), so there
+   * is still nothing for a client to even supply -- that half of the gap
+   * is unchanged.
    * Separately: every campaign field Blocks 6.1-6.4 added is enforceable
    * here but not yet SETTABLE through the real API -- LoyaltyRewardService's
    * CreateRewardInput/UpdateRewardInput only expose name/pointsCost/
@@ -407,6 +593,11 @@ export class LoyaltyRedemptionService {
       // Continuing Development Block 2 -- see redeem()'s identical call for
       // why this runs here, after every blocking guard above.
       const refs = await this.resolveRedemptionReferences(repos, businessId, references);
+
+      // Continuing Development Block 3 -- see redeem()'s identical pair of
+      // calls for why these run here, right after refs resolves.
+      this.checkMinimumFeedbackRequirements(reward, refs);
+      await this.checkVisitLimit(repos, reward, account.id, refs.visitSessionId);
 
       // Same collision-checked code generation as redeem() -- see that
       // method's comment on REDEMPTION_CODE_MAX_ATTEMPTS.

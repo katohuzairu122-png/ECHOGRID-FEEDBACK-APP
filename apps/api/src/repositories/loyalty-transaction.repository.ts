@@ -208,4 +208,34 @@ export class LoyaltyTransactionRepository extends BaseRepository {
       orderBy: desc(loyaltyTransactions.createdAt),
     });
   }
+
+  /** Continuing Development Block 3 (S6.1 "one reward per visit," the
+   * limitPer='visit' case) -- the counterpart to findLastRedemptionForAccount
+   * above's limitPer='period' case, but an EXISTENCE check against one
+   * specific visit session rather than a recency comparison against a
+   * timestamp -- different enough a question that it doesn't fit that
+   * method's own "one lookup backs two time-based thresholds" justification;
+   * see checkVisitLimit's own comment in loyalty-redemption.service.ts for
+   * why this is a separate method/query rather than folded in there.
+   *
+   * Scoped to (relatedRewardId, loyaltyAccountId, visitSessionId) -- the
+   * same account+session pairing findCheckinByVisitSession above
+   * established for check-in dedup (Block 5.2: blocks the same account
+   * from using a shared table-session code twice, but not a different
+   * account sharing it), plus relatedRewardId so two different
+   * limitPer='visit' rewards stay independently claimable on one visit. */
+  async findRedemptionByVisitSession(
+    rewardId: string,
+    loyaltyAccountId: string,
+    visitSessionId: string,
+  ): Promise<LoyaltyTransaction | undefined> {
+    return this.db.query.loyaltyTransactions.findFirst({
+      where: and(
+        eq(loyaltyTransactions.relatedRewardId, rewardId),
+        eq(loyaltyTransactions.loyaltyAccountId, loyaltyAccountId),
+        eq(loyaltyTransactions.visitSessionId, visitSessionId),
+        eq(loyaltyTransactions.type, 'redemption'),
+      ),
+    });
+  }
 }
