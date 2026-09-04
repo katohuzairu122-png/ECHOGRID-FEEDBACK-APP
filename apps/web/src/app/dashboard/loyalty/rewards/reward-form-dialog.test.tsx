@@ -84,6 +84,35 @@ const DISCOUNT_REWARD: LoyaltyRewardDto = {
   requireVisitVerification: false,
 };
 
+// New fixture for Block 4/Block 5 (S6.4 minimum feedback requirements) --
+// a full literal, same convention as DISCOUNT_REWARD above, not a spread:
+// this file's existing fixtures are always fully spelled out, not derived
+// from another one. type: 'points' rather than reusing DISCOUNT_REWARD's
+// non-points shape -- minCommentLength/requireVisitVerification's own
+// rendering doesn't depend on type at all, so keeping this fixture on the
+// simpler points path avoids any incidental coupling to the type-driven
+// pointsCost/rewardValue tests above.
+const MIN_FEEDBACK_REWARD: LoyaltyRewardDto = {
+  id: 'reward-3',
+  businessId: 'business-1',
+  branchId: null,
+  name: 'Verified visit voucher',
+  description: null,
+  type: 'points',
+  pointsCost: 50,
+  rewardValue: null,
+  status: 'active',
+  startDate: null,
+  expiryDate: null,
+  maxRewardsPerDay: null,
+  maxBudget: null,
+  limitPer: null,
+  limitPeriodDays: null,
+  cooldownSeconds: null,
+  minCommentLength: 25,
+  requireVisitVerification: true,
+};
+
 describe('RewardFormDialog', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -238,6 +267,49 @@ describe('RewardFormDialog', () => {
 
     fireEvent.change(screen.getByLabelText('Expiry date'), { target: { value: '2026-09-30' } });
     expect(startInput).toHaveAttribute('max', '2026-09-30');
+  });
+
+  // Continuing Development Block 5 of the S6.4 roadmap (test coverage for
+  // Block 4) -- minCommentLength and requireVisitVerification, added to
+  // this dialog in Block 4. Both always render (unlike pointsCost/
+  // rewardValue/limitPeriodDays/status above, which are conditional), so
+  // these check default-vs-pre-filled VALUE, not presence/absence.
+
+  it('create mode: minCommentLength has no forced value, and requireVisitVerification defaults to unchecked', async () => {
+    const user = userEvent.setup();
+    renderWithIntl(<RewardFormDialog branches={BRANCHES} trigger={<button>+ New reward</button>} />);
+    await user.click(screen.getByRole('button', { name: '+ New reward' }));
+
+    // Direct .value check, not toHaveValue(null) -- unambiguous for an
+    // empty number input regardless of the exact jest-dom matcher
+    // semantics for that case.
+    expect((screen.getByLabelText('Minimum comment length') as HTMLInputElement).value).toBe('');
+    expect(screen.getByLabelText('Require visit verification')).not.toBeChecked();
+  });
+
+  it('edit mode: minCommentLength and requireVisitVerification are both pre-filled from the reward', async () => {
+    const user = userEvent.setup();
+    renderWithIntl(
+      <RewardFormDialog reward={MIN_FEEDBACK_REWARD} branches={BRANCHES} trigger={<button>Edit</button>} />,
+    );
+    await user.click(screen.getByRole('button', { name: 'Edit' }));
+
+    // toHaveValue(<number>) on a numeric input -- same matcher shape already
+    // proven in this file (Reward value/Period length above), not a new
+    // pattern.
+    expect(screen.getByLabelText('Minimum comment length')).toHaveValue(25);
+    expect(screen.getByLabelText('Require visit verification')).toBeChecked();
+  });
+
+  it("associates the minCommentLength hint with the input via aria-describedby -- same pattern Block 6.8.5 established for limitPer's hint", async () => {
+    const user = userEvent.setup();
+    renderWithIntl(<RewardFormDialog branches={BRANCHES} trigger={<button>+ New reward</button>} />);
+    await user.click(screen.getByRole('button', { name: '+ New reward' }));
+
+    const input = screen.getByLabelText('Minimum comment length');
+    const describedById = input.getAttribute('aria-describedby');
+    expect(describedById).toBeTruthy();
+    expect(document.getElementById(describedById as string)).toHaveTextContent(/anonymously/i);
   });
 
   // Regression guard: five blocks of new fields layered onto this dialog

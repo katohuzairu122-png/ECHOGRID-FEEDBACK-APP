@@ -6,6 +6,7 @@ import { LoyaltyAccountService } from '../../src/loyalty/loyalty-account.service
 import { LoyaltyRedemptionService } from '../../src/loyalty/loyalty-redemption.service';
 import { LoyaltyRewardService } from '../../src/loyalty/loyalty-reward.service';
 import { generateRedemptionCode } from '../../src/loyalty/redemption-code';
+import { VisitSessionService } from '../../src/visits/visit-session.service';
 
 // createdBy/actor columns are `uuid` at the schema level -- a placeholder
 // string like STAFF_ACTOR_ID fails at the database, not just in spirit; these
@@ -508,6 +509,465 @@ describe.skipIf(!process.env.DATABASE_URL)('LoyaltyRedemptionService (integratio
       status: 422,
     });
   });
+
+  // Continuing Development Block 5 of the S6.4 roadmap (test coverage for
+  // Blocks 2-4) -- Block 2 group first: resolveRedemptionReferences(),
+  // shared by issue()/redeem(). Block 2 itself never blocks a redemption;
+  // these prove the two reference fields resolve onto the created
+  // transaction row correctly (or silently no-op) rather than proving any
+  // enforcement -- see the Block 3 group below for the actual gating
+  // tests. issue() (non-points) is used throughout, same reasoning as the
+  // Block 6.7.4 group below: these don't compete with every other test in
+  // this file for the shared customerId account's points balance.
+
+  it('issue resolves a valid feedbackId onto the created transaction row (Block 2)', async () => {
+    const branch = await repos.branches.create({
+      businessId: businessA,
+      name: 'Block 2 feedback branch',
+      slug: `block-2-feedback-${crypto.randomUUID()}`,
+    });
+    const qrCode = await repos.qrCodes.create({ businessId: businessA, branchId: branch.id });
+    const fb = await repos.feedback.create({
+      businessId: businessA,
+      branchId: branch.id,
+      qrCodeId: qrCode.id,
+      rating: 5,
+      comment: 'Great service, very fast!',
+    });
+    const reward = await repos.loyaltyRewards.create({
+      businessId: businessA,
+      name: 'Block 2 feedback-ref voucher',
+      type: 'voucher',
+      rewardValue: '5.00',
+    });
+
+    const { redemptionCode } = await redemptionService.issue(customerId, businessA, reward.id, {
+      feedbackId: fb.id,
+    });
+
+    const transaction = await repos.loyaltyTransactions.findByRedemptionCode(redemptionCode);
+    expect(transaction!.feedbackId).toBe(fb.id);
+  });
+
+  it('issue silently drops an unresolvable feedbackId rather than blocking the redemption (Block 2)', async () => {
+    const reward = await repos.loyaltyRewards.create({
+      businessId: businessA,
+      name: 'Block 2 bad feedback-ref voucher',
+      type: 'voucher',
+      rewardValue: '5.00',
+    });
+
+    // A random UUID stands in for both "doesn't exist" and "wrong
+    // business" -- resolveRedemptionReferences' existence + tenant-scope
+    // check (FeedbackRepository.findById) collapses both to the identical
+    // "unresolved" outcome, so one case proves both rather than
+    // duplicating this test for a second tenant.
+    const { redemptionCode } = await redemptionService.issue(customerId, businessA, reward.id, {
+      feedbackId: crypto.randomUUID(),
+    });
+
+    const transaction = await repos.loyaltyTransactions.findByRedemptionCode(redemptionCode);
+    expect(transaction!.feedbackId).toBeNull();
+  });
+
+  it('issue resolves a valid visitProof+branchId to a real visitSessionId on the created row (Block 2)', async () => {
+    const branch = await repos.branches.create({
+      businessId: businessA,
+      name: 'Block 2 visit branch',
+      slug: `block-2-visit-${crypto.randomUUID()}`,
+    });
+    const session = await new VisitSessionService(repos).issue(businessA, branch.id, STAFF_ACTOR_ID, {
+      ttlSeconds: 3600,
+      maxUses: 1,
+    });
+    const reward = await repos.loyaltyRewards.create({
+      businessId: businessA,
+      name: 'Block 2 visit-ref voucher',
+      type: 'voucher',
+      rewardValue: '5.00',
+    });
+
+    const { redemptionCode } = await redemptionService.issue(customerId, businessA, reward.id, {
+      visitProof: session.code,
+      branchId: branch.id,
+    });
+
+    const transaction = await repos.loyaltyTransactions.findByRedemptionCode(redemptionCode);
+    expect(transaction!.visitSessionId).toBe(session.id);
+  });
+
+  it('issue does not block on an invalid visitProof -- advisory only, logs a fraud signal instead (Block 2)', async () => {
+    const branch = await repos.branches.create({
+      businessId: businessA,
+      name: 'Block 2 invalid-visit branch',
+      slug: `block-2-invalid-visit-${crypto.randomUUID()}`,
+    });
+    const reward = await repos.loyaltyRewards.create({
+      businessId: businessA,
+      name: 'Block 2 invalid-visit voucher',
+      type: 'voucher',
+      rewardValue: '5.00',
+    });
+
+    const { redemptionCode } = await redemptionService.issue(customerId, businessA, reward.id, {
+      visitProof: 'NOT-A-REAL-CODE',
+      branchId: branch.id,
+    });
+
+    const transaction = await repos.loyaltyTransactions.findByRedemptionCode(redemptionCode);
+    expect(transaction!.visitSessionId).toBeNull();
+
+    const signals = await repos.fraudSignals.listOpenForBusiness(businessA, { branchId: branch.id });
+    expect(signals).toContainEqual(expect.objectContaining({ signalType: 'visit_verification', feedbackId: null }));
+  });
+
+  it('issue leaves visitSessionId null when visitProof is supplied with no branchId -- branchId is required to even attempt verification (Block 2)', async () => {
+    const reward = await repos.loyaltyRewards.create({
+      businessId: businessA,
+      name: 'Block 2 no-branch voucher',
+      type: 'voucher',
+      rewardValue: '5.00',
+    });
+
+    // The .refine() that rejects this combination at the API boundary
+    // lives on redeemRewardSchema/issueRewardSchema (the Zod layer), not
+    // inside LoyaltyRedemptionService -- this test calls the service
+    // directly, so it proves the service's own defense-in-depth behavior
+    // (silently skip verification, same as omitting both fields) rather
+    // than route-level validation, matching how this whole file exercises
+    // the service layer, not the HTTP layer.
+    const { redemptionCode } = await redemptionService.issue(customerId, businessA, reward.id, {
+      visitProof: 'SOME-CODE',
+    });
+
+    const transaction = await repos.loyaltyTransactions.findByRedemptionCode(redemptionCode);
+    expect(transaction!.visitSessionId).toBeNull();
+  });
+
+  it(
+    'a redemption can record the SAME visitSessionId a checkin already used -- ' +
+      "the Block 2 unique-index fix (loyalty_transactions_checkin_visit_key narrowed to type='checkin')",
+    async () => {
+      const branch = await repos.branches.create({
+        businessId: businessA,
+        name: 'Block 2 index-fix branch',
+        slug: `block-2-index-fix-${crypto.randomUUID()}`,
+      });
+      // maxUses: null -- a shared table session, claimed twice below
+      // (checkin + redemption), same as the checkin-dedup fixtures in
+      // loyalty-points-engine.integration.test.ts.
+      const session = await new VisitSessionService(repos).issue(businessA, branch.id, STAFF_ACTOR_ID, {
+        ttlSeconds: 3600,
+        maxUses: null,
+      });
+      const account = await repos.loyaltyAccounts.findByCustomerAndBusiness(customerId, businessA);
+      // Seed the checkin row directly -- QR checkin itself is
+      // LoyaltyAccountService's own concern (loyalty-points-engine's test
+      // suite), not this file's; only the shared unique index matters here.
+      await repos.loyaltyTransactions.create({
+        loyaltyAccountId: account!.id,
+        type: 'checkin',
+        points: 10,
+        visitSessionId: session.id,
+      });
+      const reward = await repos.loyaltyRewards.create({
+        businessId: businessA,
+        name: 'Block 2 index-fix voucher',
+        type: 'voucher',
+        rewardValue: '5.00',
+      });
+
+      // Before the Block 2 fix, this insert would have hit
+      // loyalty_transactions_checkin_visit_key (then unscoped by type) and
+      // failed with a raw unique-constraint violation -- this call
+      // succeeding at all is the real proof the narrowed index works, not
+      // just the returned visitSessionId value below.
+      const { redemptionCode } = await redemptionService.issue(customerId, businessA, reward.id, {
+        visitProof: session.code,
+        branchId: branch.id,
+      });
+
+      const transaction = await repos.loyaltyTransactions.findByRedemptionCode(redemptionCode);
+      expect(transaction!.visitSessionId).toBe(session.id);
+    },
+  );
+
+  // Continuing Development Block 5 of the S6.4 roadmap, Block 3 group:
+  // checkMinimumFeedbackRequirements() and checkVisitLimit(), both called
+  // from issue()/redeem() right after resolveRedemptionReferences()
+  // resolves their input. issue() proves the gate logic itself; one
+  // additional redeem() case at the end confirms the same checks are
+  // wired into that method too, matching the "prove the shared logic once
+  // via issue(), spot-check redeem() separately" precedent the Block 6.4
+  // and Block 6.5 groups above already established for this file.
+
+  it('issue rejects a redemption whose linked feedback comment is shorter than minCommentLength (Block 3)', async () => {
+    const branch = await repos.branches.create({
+      businessId: businessA,
+      name: 'Block 3 short-comment branch',
+      slug: `block-3-short-${crypto.randomUUID()}`,
+    });
+    const qrCode = await repos.qrCodes.create({ businessId: businessA, branchId: branch.id });
+    const fb = await repos.feedback.create({
+      businessId: businessA,
+      branchId: branch.id,
+      qrCodeId: qrCode.id,
+      rating: 5,
+      comment: 'Good',
+    });
+    const reward = await repos.loyaltyRewards.create({
+      businessId: businessA,
+      name: 'Block 3 comment-gated voucher',
+      type: 'voucher',
+      rewardValue: '5.00',
+      minCommentLength: 20,
+    });
+
+    await expect(
+      redemptionService.issue(customerId, businessA, reward.id, { feedbackId: fb.id }),
+    ).rejects.toMatchObject({ code: 'LOYALTY_REWARD_COMMENT_TOO_SHORT', status: 422 });
+  });
+
+  it('issue allows a redemption whose linked feedback comment meets minCommentLength (Block 3)', async () => {
+    const branch = await repos.branches.create({
+      businessId: businessA,
+      name: 'Block 3 long-comment branch',
+      slug: `block-3-long-${crypto.randomUUID()}`,
+    });
+    const qrCode = await repos.qrCodes.create({ businessId: businessA, branchId: branch.id });
+    const fb = await repos.feedback.create({
+      businessId: businessA,
+      branchId: branch.id,
+      qrCodeId: qrCode.id,
+      rating: 5,
+      comment: 'This place has genuinely great coffee and even better service.',
+    });
+    const reward = await repos.loyaltyRewards.create({
+      businessId: businessA,
+      name: 'Block 3 comment-gated voucher, satisfied',
+      type: 'voucher',
+      rewardValue: '5.00',
+      minCommentLength: 20,
+    });
+
+    const result = await redemptionService.issue(customerId, businessA, reward.id, { feedbackId: fb.id });
+    expect(result.redemptionCode).toHaveLength(8);
+  });
+
+  it('issue rejects when minCommentLength is configured but no feedbackId was resolved at all (Block 3)', async () => {
+    const reward = await repos.loyaltyRewards.create({
+      businessId: businessA,
+      name: 'Block 3 comment-required, no feedback',
+      type: 'voucher',
+      rewardValue: '5.00',
+      minCommentLength: 1,
+    });
+
+    await expect(redemptionService.issue(customerId, businessA, reward.id)).rejects.toMatchObject({
+      code: 'LOYALTY_REWARD_COMMENT_TOO_SHORT',
+      status: 422,
+    });
+  });
+
+  it('issue rejects when requireVisitVerification is set and no verified visit is attached (Block 3)', async () => {
+    const reward = await repos.loyaltyRewards.create({
+      businessId: businessA,
+      name: 'Block 3 visit-required voucher',
+      type: 'voucher',
+      rewardValue: '5.00',
+      requireVisitVerification: true,
+    });
+
+    await expect(redemptionService.issue(customerId, businessA, reward.id)).rejects.toMatchObject({
+      code: 'LOYALTY_REWARD_VISIT_REQUIRED',
+      status: 422,
+    });
+  });
+
+  it('issue allows a requireVisitVerification reward when a real verified visit is attached (Block 3)', async () => {
+    const branch = await repos.branches.create({
+      businessId: businessA,
+      name: 'Block 3 visit-verified branch',
+      slug: `block-3-visit-verified-${crypto.randomUUID()}`,
+    });
+    const session = await new VisitSessionService(repos).issue(businessA, branch.id, STAFF_ACTOR_ID, {
+      ttlSeconds: 3600,
+      maxUses: 1,
+    });
+    const reward = await repos.loyaltyRewards.create({
+      businessId: businessA,
+      name: 'Block 3 visit-required voucher, satisfied',
+      type: 'voucher',
+      rewardValue: '5.00',
+      requireVisitVerification: true,
+    });
+
+    const result = await redemptionService.issue(customerId, businessA, reward.id, {
+      visitProof: session.code,
+      branchId: branch.id,
+    });
+    expect(result.redemptionCode).toHaveLength(8);
+  });
+
+  it(
+    "issue rejects a limitPer='visit' reward when no verified visit is attached -- " +
+      'fails closed, same code as requireVisitVerification (Block 3)',
+    async () => {
+      const reward = await repos.loyaltyRewards.create({
+        businessId: businessA,
+        name: 'Block 3 visit-limited voucher',
+        type: 'voucher',
+        rewardValue: '5.00',
+        limitPer: 'visit',
+      });
+
+      await expect(redemptionService.issue(customerId, businessA, reward.id)).rejects.toMatchObject({
+        code: 'LOYALTY_REWARD_VISIT_REQUIRED',
+        status: 422,
+      });
+    },
+  );
+
+  it(
+    "issue rejects a second claim of the SAME limitPer='visit' reward on the SAME visit " +
+      'session by the SAME account (Block 3)',
+    async () => {
+      const branch = await repos.branches.create({
+        businessId: businessA,
+        name: 'Block 3 visit-dedup branch',
+        slug: `block-3-visit-dedup-${crypto.randomUUID()}`,
+      });
+      // maxUses: null -- both claims below must successfully VERIFY the
+      // same proof; the rejection under test has to come from
+      // checkVisitLimit()'s own existence check, not from the visit
+      // session itself running out of uses.
+      const session = await new VisitSessionService(repos).issue(businessA, branch.id, STAFF_ACTOR_ID, {
+        ttlSeconds: 3600,
+        maxUses: null,
+      });
+      const reward = await repos.loyaltyRewards.create({
+        businessId: businessA,
+        name: 'Block 3 visit-limited voucher, dedup',
+        type: 'voucher',
+        rewardValue: '5.00',
+        limitPer: 'visit',
+      });
+
+      await redemptionService.issue(customerId, businessA, reward.id, {
+        visitProof: session.code,
+        branchId: branch.id,
+      });
+
+      await expect(
+        redemptionService.issue(customerId, businessA, reward.id, {
+          visitProof: session.code,
+          branchId: branch.id,
+        }),
+      ).rejects.toMatchObject({ code: 'LOYALTY_REWARD_VISIT_LIMIT_REACHED', status: 422 });
+    },
+  );
+
+  it(
+    "issue allows a DIFFERENT limitPer='visit' reward to be claimed on the same visit session -- " +
+      'scoped by (rewardId, account, session), not session alone (Block 3)',
+    async () => {
+      const branch = await repos.branches.create({
+        businessId: businessA,
+        name: 'Block 3 visit-dedup-scope branch',
+        slug: `block-3-visit-dedup-scope-${crypto.randomUUID()}`,
+      });
+      const session = await new VisitSessionService(repos).issue(businessA, branch.id, STAFF_ACTOR_ID, {
+        ttlSeconds: 3600,
+        maxUses: null,
+      });
+      const rewardX = await repos.loyaltyRewards.create({
+        businessId: businessA,
+        name: 'Block 3 visit-limited voucher X',
+        type: 'voucher',
+        rewardValue: '5.00',
+        limitPer: 'visit',
+      });
+      const rewardY = await repos.loyaltyRewards.create({
+        businessId: businessA,
+        name: 'Block 3 visit-limited voucher Y',
+        type: 'voucher',
+        rewardValue: '5.00',
+        limitPer: 'visit',
+      });
+
+      await redemptionService.issue(customerId, businessA, rewardX.id, {
+        visitProof: session.code,
+        branchId: branch.id,
+      });
+
+      // This is the case that would catch a wrong implementation scoped to
+      // (loyaltyAccountId, visitSessionId) alone, without rewardId.
+      const result = await redemptionService.issue(customerId, businessA, rewardY.id, {
+        visitProof: session.code,
+        branchId: branch.id,
+      });
+      expect(result.redemptionCode).toHaveLength(8);
+    },
+  );
+
+  it(
+    "issue allows a DIFFERENT account to claim the same limitPer='visit' reward on a shared " +
+      'table-session code (Block 3)',
+    async () => {
+      const branch = await repos.branches.create({
+        businessId: businessA,
+        name: 'Block 3 visit-dedup-shared branch',
+        slug: `block-3-visit-dedup-shared-${crypto.randomUUID()}`,
+      });
+      const session = await new VisitSessionService(repos).issue(businessA, branch.id, STAFF_ACTOR_ID, {
+        ttlSeconds: 3600,
+        maxUses: null,
+      });
+      const reward = await repos.loyaltyRewards.create({
+        businessId: businessA,
+        name: 'Block 3 visit-limited voucher, shared session',
+        type: 'voucher',
+        rewardValue: '5.00',
+        limitPer: 'visit',
+      });
+      const otherCustomer = await repos.customers.create({ phone: `+1555${Date.now()}2` });
+      await accountService.enroll({ customerId: otherCustomer.id, businessId: businessA });
+
+      await redemptionService.issue(customerId, businessA, reward.id, {
+        visitProof: session.code,
+        branchId: branch.id,
+      });
+
+      // Same reward, same shared session code, DIFFERENT customer -- this
+      // is the case that would catch a wrong implementation scoped to
+      // (rewardId, visitSessionId) alone, without loyaltyAccountId,
+      // matching the same cross-customer-isolation reasoning the Block 6.5
+      // group above already established for this file's cooldown tests.
+      const result = await redemptionService.issue(otherCustomer.id, businessA, reward.id, {
+        visitProof: session.code,
+        branchId: branch.id,
+      });
+      expect(result.redemptionCode).toHaveLength(8);
+    },
+  );
+
+  it(
+    'redeem also enforces requireVisitVerification for a points-type reward -- ' +
+      'confirms the same shared checks issue() uses are wired into redeem() too (Block 3)',
+    async () => {
+      const reward = await repos.loyaltyRewards.create({
+        businessId: businessA,
+        name: 'Block 3 visit-required points reward',
+        pointsCost: 5,
+        requireVisitVerification: true,
+      });
+
+      await expect(redemptionService.redeem(customerId, businessA, reward.id)).rejects.toMatchObject({
+        code: 'LOYALTY_REWARD_VISIT_REQUIRED',
+        status: 422,
+      });
+    },
+  );
 
   // Continuing Development Block 6.7.4 (S6.3 campaign dashboard tests).
   // getCampaignStats() (LoyaltyTransactionRepository, Block 6.7.1) and
