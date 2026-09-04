@@ -196,7 +196,17 @@ describe('RewardFormDialog', () => {
     const select = screen.getByLabelText('Redemption limit');
     const describedById = select.getAttribute('aria-describedby');
     expect(describedById).toBeTruthy();
-    expect(document.getElementById(describedById as string)).toHaveTextContent(/period limit is enforced/i);
+    // Continuing Development Block 4 of the S6.4 roadmap -- the hint text
+    // itself changed (Block 3 of the same roadmap started enforcing
+    // limitPer='visit' too, so the old "only the period limit is enforced"
+    // wording became inaccurate; see en/loyalty.json's limitPerEnforcementHint).
+    // Loosened from the old exact-wording regex to /enforced today/i: this
+    // test's own job (per the comment above) is confirming the hint text is
+    // programmatically associated via aria-describedby, not pinning the
+    // precise enforcement wording -- a tighter regex would just repeat the
+    // same brittleness that broke here once 'visit' joined 'period' as
+    // enforced.
+    expect(document.getElementById(describedById as string)).toHaveTextContent(/enforced today/i);
   });
 
   // Block 6.8.4 -- startDate/expiryDate cross-constrain via HTML min/max.

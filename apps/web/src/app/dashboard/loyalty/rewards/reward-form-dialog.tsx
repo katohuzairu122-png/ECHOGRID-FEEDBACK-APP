@@ -15,6 +15,7 @@ import {
   Input,
   Label,
   Select,
+  Switch,
 } from '@/components/ui';
 
 const initialState: LoyaltyFormState = {};
@@ -315,6 +316,69 @@ export function RewardFormDialog({ reward, branches, trigger }: RewardFormDialog
               min="0"
               step="1"
               defaultValue={reward?.cooldownSeconds ?? undefined}
+            />
+          </div>
+          {/* Continuing Development Block 4 of the S6.4 roadmap (minimum
+              feedback requirements -- staff UI). Both fields already
+              round-trip through the API/DTO layer (Block 6.9) and have been
+              enforced against every redeem()/issue() call (Block 3 of this
+              same roadmap) since before this block existed -- this is the
+              first pass that lets a business owner actually set them,
+              rather than only via a direct repository call the way every
+              integration test seeding this data still does. Appended after
+              cooldownSeconds, before the submit row, matching this file's
+              own established incremental-append placement (6.8.1's fields,
+              then 6.8.2's, then 6.8.3's) -- nothing above is reordered. */}
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="minCommentLength">{t('minCommentLengthLabel')}</Label>
+            {/* Blank = no minimum, same clear-to-null convention as
+                maxRewardsPerDay/cooldownSeconds above -- toNullableNumber in
+                actions/loyalty.ts already handles this field identically,
+                nothing new needed there beyond reading it. Hint text
+                discloses a real limitation directly to the person setting
+                this, not just in code comments: feedback has no customer/
+                account foreign key at all (deliberately anonymous
+                submission -- see LoyaltyRedemptionService's own Block 3
+                note), so this can only ever be a content nudge, never proof
+                the redeeming customer wrote that specific feedback. Same
+                id+aria-describedby hint association Block 6.8.5 established
+                for limitPer below. */}
+            <Input
+              id="minCommentLength"
+              name="minCommentLength"
+              type="number"
+              min="1"
+              step="1"
+              defaultValue={reward?.minCommentLength ?? undefined}
+              aria-describedby="minCommentLength-hint"
+            />
+            <p id="minCommentLength-hint" className="text-xs text-neutral-500">
+              {t('minCommentLengthHint')}
+            </p>
+          </div>
+          <div className="flex items-center justify-between gap-4">
+            <Label htmlFor="requireVisitVerification">{t('requireVisitVerificationLabel')}</Label>
+            {/* NOT NULL DEFAULT false at the DB layer (unlike every other
+                field in this form) -- see rewardCampaignFields' own Block
+                6.9 comment in packages/shared-types/src/loyalty.ts: no third
+                "unset" state to represent, so a plain boolean control is
+                correct here where every field above needs a
+                blank-means-untouched state. Switch (defaultChecked + name,
+                uncontrolled), not a raw checkbox or a third Select option --
+                matches plan-form-dialog.tsx's isActive/isDefaultTrial
+                fields, the closest existing *FormDialog precedent for a
+                plain boolean toggle in this codebase, both in markup shape
+                (sibling Label htmlFor + Switch id, not nested -- Switch's
+                own doc comment warns against wrapping it inside Label) and
+                in how the value is read back:
+                formData.get('requireVisitVerification') === 'on' in
+                buildRewardBody (actions/loyalty.ts) matches that same
+                precedent and settings-form.tsx's emailEnabled/smsEnabled
+                fields exactly, not a new convention. */}
+            <Switch
+              id="requireVisitVerification"
+              name="requireVisitVerification"
+              defaultChecked={reward?.requireVisitVerification ?? false}
             />
           </div>
           {state.error && (

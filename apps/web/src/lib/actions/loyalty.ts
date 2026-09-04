@@ -242,6 +242,19 @@ function buildRewardBody(formData: FormData) {
     // this is what closes that gap, not the schema.
     limitPeriodDays: limitPer === 'period' ? toNullableNumber(formData.get('limitPeriodDays')) : null,
     cooldownSeconds: toNullableNumber(formData.get('cooldownSeconds')),
+    // Continuing Development Block 4 of the S6.4 roadmap -- minCommentLength
+    // reuses toNullableNumber, same clear-to-null convention as
+    // maxRewardsPerDay/cooldownSeconds above (both fields go through the
+    // exact same nullable-int shape at every layer since Block 6.9).
+    // requireVisitVerification reads a Switch's checkbox state the same way
+    // platform-billing.ts's isActive/isDefaultTrial and notifications.ts's
+    // emailEnabled/smsEnabled already do -- 'on' when checked, otherwise
+    // absent from FormData entirely, so `=== 'on'` is both the established
+    // convention and the only correct check (a raw truthy/Boolean() coercion
+    // would treat the string 'off' as true, which native checkboxes never
+    // actually send, but is worth avoiding on principle).
+    minCommentLength: toNullableNumber(formData.get('minCommentLength')),
+    requireVisitVerification: formData.get('requireVisitVerification') === 'on',
   };
 }
 
