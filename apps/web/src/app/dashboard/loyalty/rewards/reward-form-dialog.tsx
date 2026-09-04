@@ -271,7 +271,30 @@ export function RewardFormDialog({ reward, branches, trigger }: RewardFormDialog
               aria-describedby="limitPer-hint"
             >
               <option value="">{t('limitPerNoneOption')}</option>
-              <option value="receipt">{t('limitPerReceipt')}</option>
+              {/* Cheap fix (2026-09-04), not a new block of the S6.4 roadmap
+                  -- that roadmap is closed as of Block 5. disabled, not
+                  removed: a native <option disabled> can still be the
+                  shown/submitted value when it's already selected, so a
+                  reward already saved with limitPer='receipt' keeps
+                  displaying and resubmitting that value correctly on edit
+                  (see RECEIPT_LIMITED_REWARD in this component's test
+                  file), but no one can newly choose it from today onward.
+                  Closes the silent no-op trap this option was before this
+                  fix: loyalty-redemption.service.ts's checkVisitLimit()/
+                  checkCooldownAndPeriodLimit() doc comments both say the
+                  same thing verbatim -- "no receipt/POS verification
+                  mechanism exists anywhere in this codebase"
+                  (visit-verification.ts's own doc comment, originally) --
+                  so there was, and still is, nothing for this option to be
+                  enforced against. The existing limitPerEnforcementHint
+                  text just below already discloses this; no new copy
+                  needed. See the "limitPer='receipt' aside" note in the
+                  spec doc for the larger, deliberately-not-scoped
+                  POS/receipt-integration question this fix doesn't answer
+                  -- and isn't intended to. */}
+              <option value="receipt" disabled>
+                {t('limitPerReceipt')}
+              </option>
               <option value="visit">{t('limitPerVisit')}</option>
               <option value="period">{t('limitPerPeriod')}</option>
             </Select>

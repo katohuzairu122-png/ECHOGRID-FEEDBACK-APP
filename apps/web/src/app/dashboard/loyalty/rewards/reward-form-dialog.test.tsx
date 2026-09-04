@@ -113,6 +113,34 @@ const MIN_FEEDBACK_REWARD: LoyaltyRewardDto = {
   requireVisitVerification: true,
 };
 
+// New fixture for the limitPer='receipt' cheap fix (2026-09-04) -- proves
+// a reward already saved with the now-disabled option still displays and
+// would resubmit it correctly (see the "edit mode" test below). Full
+// literal, same convention as DISCOUNT_REWARD/MIN_FEEDBACK_REWARD above;
+// points-type like MIN_FEEDBACK_REWARD, for the same reason its own
+// comment gives -- keeps this fixture off the type-driven pointsCost/
+// rewardValue branch entirely, since that's not what it's testing.
+const RECEIPT_LIMITED_REWARD: LoyaltyRewardDto = {
+  id: 'reward-4',
+  businessId: 'business-1',
+  branchId: null,
+  name: 'Free pastry with purchase',
+  description: null,
+  type: 'points',
+  pointsCost: 20,
+  rewardValue: null,
+  status: 'active',
+  startDate: null,
+  expiryDate: null,
+  maxRewardsPerDay: null,
+  maxBudget: null,
+  limitPer: 'receipt',
+  limitPeriodDays: null,
+  cooldownSeconds: null,
+  minCommentLength: null,
+  requireVisitVerification: false,
+};
+
 describe('RewardFormDialog', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -212,6 +240,30 @@ describe('RewardFormDialog', () => {
     await user.click(screen.getByRole('button', { name: 'Edit' }));
 
     expect(screen.getByLabelText('Period length (days)')).toHaveValue(30);
+  });
+
+  // Cheap fix (2026-09-04) -- limitPer='receipt' has no receipt/POS
+  // identity to enforce it against (see the component's own comment on
+  // this option); disabled so no one can newly select a limit that
+  // silently does nothing, without breaking a reward that already has it
+  // saved.
+
+  it('the "Once per receipt" option is present but disabled -- can\'t be newly selected', async () => {
+    const user = userEvent.setup();
+    renderWithIntl(<RewardFormDialog branches={BRANCHES} trigger={<button>+ New reward</button>} />);
+    await user.click(screen.getByRole('button', { name: '+ New reward' }));
+
+    expect(screen.getByRole('option', { name: 'Once per receipt' })).toBeDisabled();
+  });
+
+  it("edit mode: a reward already saved with limitPer='receipt' still shows it selected", async () => {
+    const user = userEvent.setup();
+    renderWithIntl(
+      <RewardFormDialog reward={RECEIPT_LIMITED_REWARD} branches={BRANCHES} trigger={<button>Edit</button>} />,
+    );
+    await user.click(screen.getByRole('button', { name: 'Edit' }));
+
+    expect(screen.getByLabelText('Redemption limit')).toHaveValue('receipt');
   });
 
   // Block 6.8.5 -- the enforcement hint is programmatically associated,
