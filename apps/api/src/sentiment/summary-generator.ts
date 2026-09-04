@@ -12,9 +12,28 @@ export interface SummaryGenerationInput {
   comments: string[];
 }
 
+/**
+ * S4.2 "record model, prompt version, input size, output size, cost
+ * estimate" -- carried on every result so SummaryService can log it without
+ * needing its own copy of pricing/model knowledge (that stays here, next to
+ * the code that actually knows which model made the call and what it
+ * returned). ConsoleSummaryGenerator reports real, honest zeros -- it never
+ * calls the real API, so it genuinely costs nothing -- rather than omitting
+ * usage, so a dev/staging summary still writes a complete (harmless)
+ * ai_usage_log row instead of SummaryService needing an `if` to skip it.
+ */
+export interface SummaryGenerationUsage {
+  model: string;
+  promptVersion: string;
+  inputTokens: number;
+  outputTokens: number;
+  costEstimateUsd: number;
+}
+
 export interface SummaryGenerationResult {
   summary: string;
   recommendations: string;
+  usage: SummaryGenerationUsage;
 }
 
 /**
@@ -26,6 +45,44 @@ export interface SummaryGenerationResult {
  */
 export interface SummaryGenerator {
   generate(input: SummaryGenerationInput): Promise<SummaryGenerationResult>;
+}
+
+/** Bump whenever buildPrompt's template changes materially (wording,
+ * structure, what data it includes) -- recorded on every ai_usage_log row
+ * (S4.2 "record ... prompt version") so a cost or output-quality shift can
+ * be traced back to which prompt version produced it. */
+export const PROMPT_VERSION = 'summary-v1';
+
+/**
+ * Per-million-token USD pricing for models this codebase might set
+ * ANTHROPIC_MODEL to. Sourced from Anthropic's own pricing page
+ * (platform.claude.com/docs/en/about-claude/pricing, confirmed 2026-09-04):
+ * claude-sonnet-5 is $2/M input tokens and $10/M output tokens -- the
+ * standard (non-promotional) rate as of that date. Re-confirm against
+ * Anthropic's docs before adding a new model here, same "don't hard-code
+ * without checking" discipline wrangler.toml's own ANTHROPIC_MODEL comment
+ * already asks for when that value changes.
+ */
+const MODEL_PRICING_USD_PER_MILLION_TOKENS: Record<string, { input: number; output: number }> = {
+  'claude-sonnet-5': { input: 2, output: 10 },
+};
+
+/**
+ * Computes a real dollar estimate from Anthropic's own reported token usage
+ * (S4.2 "cost estimate"). Throws for an unrecognized model instead of
+ * silently estimating $0 -- an unpriced model would otherwise make
+ * SummaryService's spend-limit check blind to real spend, which is worse
+ * than a loud failure telling whoever changed ANTHROPIC_MODEL to add a
+ * pricing entry above first.
+ */
+export function calculateCostUsd(model: string, inputTokens: number, outputTokens: number): number {
+  const pricing = MODEL_PRICING_USD_PER_MILLION_TOKENS[model];
+  if (!pricing) {
+    throw new Error(
+      `No pricing entry for Anthropic model "${model}" -- add one to MODEL_PRICING_USD_PER_MILLION_TOKENS (summary-generator.ts) before using this model, so cost tracking and the spend-limit check stay accurate.`,
+    );
+  }
+  return (inputTokens / 1_000_000) * pricing.input + (outputTokens / 1_000_000) * pricing.output;
 }
 
 const SUMMARY_MARKER = 'SUMMARY:';
@@ -61,7 +118,11 @@ function buildPrompt(input: SummaryGenerationInput): string {
   ].join('\n');
 }
 
-function parseModelOutput(text: string): SummaryGenerationResult {
+/** Just the two text fields -- usage/cost isn't computed from the model's
+ * text output, so it has no place in this function's return value (the
+ * caller, AnthropicSummaryGenerator.generate, assembles the full
+ * SummaryGenerationResult separately once it also has data.usage in hand). */
+function parseModelOutput(text: string): Pick<SummaryGenerationResult, 'summary' | 'recommendations'> {
   const recIndex = text.indexOf(RECOMMENDATIONS_MARKER);
   const summaryIndex = text.indexOf(SUMMARY_MARKER);
 
@@ -108,13 +169,36 @@ export class AnthropicSummaryGenerator implements SummaryGenerator {
       throw new Error(`Anthropic API request failed with status ${response.status}`);
     }
 
-    const data = (await response.json()) as { content?: { type: string; text?: string }[] };
+    const data = (await response.json()) as {
+      content?: { type: string; text?: string }[];
+      usage?: { input_tokens: number; output_tokens: number };
+    };
     const text = data.content?.find((block) => block.type === 'text')?.text;
     if (!text) {
       throw new Error('Anthropic API returned no text content.');
     }
+    if (!data.usage) {
+      // Should never happen on a 2xx Messages API response -- treated as an
+      // error rather than defaulting to 0 tokens, which would silently
+      // understate real spend to the caller's spend-limit check instead of
+      // failing loudly.
+      throw new Error('Anthropic API returned no usage data.');
+    }
 
-    return parseModelOutput(text);
+    const { summary, recommendations } = parseModelOutput(text);
+    const { input_tokens: inputTokens, output_tokens: outputTokens } = data.usage;
+
+    return {
+      summary,
+      recommendations,
+      usage: {
+        model: this.model,
+        promptVersion: PROMPT_VERSION,
+        inputTokens,
+        outputTokens,
+        costEstimateUsd: calculateCostUsd(this.model, inputTokens, outputTokens),
+      },
+    };
   }
 }
 
@@ -128,6 +212,9 @@ export class ConsoleSummaryGenerator implements SummaryGenerator {
     return {
       summary: `[DEV MODE] ${input.feedbackCount} submissions this period (${input.positiveCount} positive, ${input.neutralCount} neutral, ${input.negativeCount} negative). Real AI summaries are generated only when ANTHROPIC_API_KEY is configured in production.`,
       recommendations: '[DEV MODE] Configure ANTHROPIC_API_KEY in production to see real recommendations.',
+      // Real, honest zeros -- this path never calls the real API, so it
+      // genuinely costs nothing (see SummaryGenerationUsage's doc comment).
+      usage: { model: 'console-dev-fallback', promptVersion: PROMPT_VERSION, inputTokens: 0, outputTokens: 0, costEstimateUsd: 0 },
     };
   }
 }

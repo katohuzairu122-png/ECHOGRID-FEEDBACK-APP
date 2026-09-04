@@ -165,12 +165,14 @@ async function queue(batch: MessageBatch<PlatformJob>, env: Bindings, ctx: Execu
   try {
     const repos = createRepositories(db);
     const sentimentService = createSentimentService(repos, env.AI);
-    const summaryService = createSummaryService(
-      repos,
-      env.ENVIRONMENT,
-      env.ANTHROPIC_API_KEY,
-      env.ANTHROPIC_MODEL,
-    );
+    const summaryService = createSummaryService(repos, env.ENVIRONMENT, env.ANTHROPIC_API_KEY, env.ANTHROPIC_MODEL, {
+      // S4.2 spend-limit guardrails (Continuing Development S4, Block 1) --
+      // raw wrangler [vars] are strings; parsed here, the one call site,
+      // matching how ALLOWED_ORIGINS is also parsed at its point of use
+      // rather than in config/env.ts.
+      dailyLimitUsd: Number(env.ANTHROPIC_DAILY_SPEND_LIMIT_USD),
+      monthlyLimitUsd: Number(env.ANTHROPIC_MONTHLY_SPEND_LIMIT_USD),
+    });
     const notificationDelivery = new NotificationDeliveryService(
       repos,
       createEmailService(env.ENVIRONMENT, {

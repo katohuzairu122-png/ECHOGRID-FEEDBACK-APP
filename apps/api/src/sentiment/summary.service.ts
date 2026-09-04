@@ -1,6 +1,11 @@
 import type { Repositories } from '../repositories';
 import type { FeedbackSummary } from '../repositories/feedback-summary.repository';
-import { createSummaryGenerator, type SummaryGenerator } from './summary-generator';
+import {
+  createSummaryGenerator,
+  PROMPT_VERSION,
+  type SummaryGenerationResult,
+  type SummaryGenerator,
+} from './summary-generator';
 import { formatPeriodLabel } from './period';
 import { AppError } from '../lib/errors';
 
@@ -12,12 +17,29 @@ export interface GenerateSummaryOptions {
   periodEnd: Date;
 }
 
+/** S4.2 daily/monthly Anthropic spend-limit thresholds, in USD. Platform-wide
+ * (not per-business) -- see AiUsageLogRepository.totalCostSince's doc comment
+ * for why. Sourced from wrangler.toml's ANTHROPIC_DAILY_SPEND_LIMIT_USD /
+ * ANTHROPIC_MONTHLY_SPEND_LIMIT_USD [vars] via createSummaryService. */
+export interface SpendLimits {
+  dailyLimitUsd: number;
+  monthlyLimitUsd: number;
+}
+
 // Caps how many raw comments get sent to the LLM per generation, regardless
 // of how much feedback a period contains -- a deliberate cost/latency
 // guardrail on an external paid API call, not a product-facing limit (see
 // "never hard-code limits," which is about business-configurable behavior
 // like point rates, not this kind of infrastructure safety valve).
 const MAX_COMMENTS_IN_PROMPT = 100;
+
+function startOfUtcDay(now: Date): Date {
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+}
+
+function startOfUtcMonth(now: Date): Date {
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+}
 
 /**
  * Orchestrates one period's summary: pulls classified feedback
@@ -27,8 +49,20 @@ const MAX_COMMENTS_IN_PROMPT = 100;
  */
 export class SummaryService {
   constructor(
-    private readonly repos: Pick<Repositories, 'feedback' | 'feedbackSummaries' | 'businesses' | 'branches'>,
+    private readonly repos: Pick<
+      Repositories,
+      'feedback' | 'feedbackSummaries' | 'businesses' | 'branches' | 'aiUsageLog'
+    >,
     private readonly generator: SummaryGenerator,
+    /** The configured ANTHROPIC_MODEL, independent of the generator's own
+     * internal copy -- needed for 'blocked'/'failed' ai_usage_log rows,
+     * where no SummaryGenerationResult (and so no result.usage.model) ever
+     * exists to read it from. A successful call still logs
+     * result.usage.model instead of this field -- see enforceSpendLimit's
+     * and the catch block's doc comments below for why the two can
+     * legitimately differ (dev/staging's ConsoleSummaryGenerator). */
+    private readonly model: string,
+    private readonly spendLimits: SpendLimits,
   ) {}
 
   async generateForPeriod(options: GenerateSummaryOptions): Promise<FeedbackSummary> {
@@ -39,6 +73,13 @@ export class SummaryService {
 
     const branch = branchId ? await this.repos.branches.findById(branchId, businessId) : undefined;
     if (branchId && !branch) throw new AppError('Branch not found.', 404, 'BRANCH_NOT_FOUND');
+
+    // S4.2 spend-limit check -- after existence checks (a bad businessId/
+    // branchId should 404, not be masked by an unrelated spend block) but
+    // before any feedback is read or the generator is called, so a blocked
+    // attempt never does the work of building a prompt it isn't allowed to
+    // send.
+    await this.enforceSpendLimit(options);
 
     const items = await this.repos.feedback.listForPeriod(businessId, {
       branchId,
@@ -55,15 +96,57 @@ export class SummaryService {
       .filter((c): c is string => Boolean(c))
       .slice(0, MAX_COMMENTS_IN_PROMPT);
 
-    const result = await this.generator.generate({
-      businessName: business.name,
-      branchName: branch?.name,
-      periodLabel: formatPeriodLabel(periodStart, periodEnd),
-      feedbackCount: items.length,
-      positiveCount,
-      neutralCount,
-      negativeCount,
-      comments,
+    let result: SummaryGenerationResult;
+    try {
+      result = await this.generator.generate({
+        businessName: business.name,
+        branchName: branch?.name,
+        periodLabel: formatPeriodLabel(periodStart, periodEnd),
+        feedbackCount: items.length,
+        positiveCount,
+        neutralCount,
+        negativeCount,
+        comments,
+      });
+    } catch (err) {
+      // this.model, not result.usage.model -- no result exists to read it
+      // from; this.model is what the attempt actually used (or would have,
+      // for a request that failed before Anthropic responded).
+      await this.repos.aiUsageLog.record({
+        businessId,
+        branchId: branchId ?? null,
+        callSite: 'summary_generation',
+        model: this.model,
+        promptVersion: PROMPT_VERSION,
+        periodType,
+        periodStart,
+        periodEnd,
+        inputTokens: null,
+        outputTokens: null,
+        costEstimateUsd: null,
+        status: 'failed',
+      });
+      throw err;
+    }
+
+    // result.usage.model/.promptVersion, not this.model/PROMPT_VERSION --
+    // what the generator that actually ran reports about itself (in
+    // dev/staging, ConsoleSummaryGenerator honestly reports
+    // 'console-dev-fallback' and zero cost rather than this.model, which
+    // was configured but never actually called).
+    await this.repos.aiUsageLog.record({
+      businessId,
+      branchId: branchId ?? null,
+      callSite: 'summary_generation',
+      model: result.usage.model,
+      promptVersion: result.usage.promptVersion,
+      periodType,
+      periodStart,
+      periodEnd,
+      inputTokens: result.usage.inputTokens,
+      outputTokens: result.usage.outputTokens,
+      costEstimateUsd: result.usage.costEstimateUsd,
+      status: 'success',
     });
 
     return this.repos.feedbackSummaries.create({
@@ -80,16 +163,63 @@ export class SummaryService {
       recommendations: result.recommendations,
     });
   }
+
+  /**
+   * S4.2's daily/monthly spend-limit requirement. Writes its own 'blocked'
+   * ai_usage_log row before throwing -- the only status this service ever
+   * records without calling the generator at all -- so a business whose
+   * summary silently stopped appearing has a visible, queryable reason on
+   * this table (WHERE status = 'blocked') instead of just a gap where a
+   * feedback_summaries row should be. Throws a 429 AppError, exactly like
+   * BUSINESS_NOT_FOUND/BRANCH_NOT_FOUND above -- caught the same generic way
+   * by whichever caller invoked generateForPeriod (today, always the queue
+   * consumer's per-message catch/retry in index.ts; a limit that's still
+   * exceeded after 3 retries reaches the DLQ, which is the correct outcome
+   * for a systemic "budget exhausted" condition, not a silently-dropped job).
+   */
+  private async enforceSpendLimit(options: GenerateSummaryOptions): Promise<void> {
+    const now = new Date();
+    const [dailySpend, monthlySpend] = await Promise.all([
+      this.repos.aiUsageLog.totalCostSince(startOfUtcDay(now)),
+      this.repos.aiUsageLog.totalCostSince(startOfUtcMonth(now)),
+    ]);
+
+    if (dailySpend < this.spendLimits.dailyLimitUsd && monthlySpend < this.spendLimits.monthlyLimitUsd) {
+      return;
+    }
+
+    await this.repos.aiUsageLog.record({
+      businessId: options.businessId,
+      branchId: options.branchId ?? null,
+      callSite: 'summary_generation',
+      model: this.model,
+      promptVersion: PROMPT_VERSION,
+      periodType: options.periodType,
+      periodStart: options.periodStart,
+      periodEnd: options.periodEnd,
+      inputTokens: null,
+      outputTokens: null,
+      costEstimateUsd: null,
+      status: 'blocked',
+    });
+
+    throw new AppError(
+      'Anthropic spend limit reached; summary generation is temporarily blocked.',
+      429,
+      'AI_SPEND_LIMIT_EXCEEDED',
+    );
+  }
 }
 
 /** Convenience factory mirroring createSentimentService -- builds the
  * environment-appropriate generator (real Anthropic vs. dev console) so
  * callers (queue consumer, analytics.routes.ts) don't wire that up themselves. */
 export function createSummaryService(
-  repos: Pick<Repositories, 'feedback' | 'feedbackSummaries' | 'businesses' | 'branches'>,
+  repos: Pick<Repositories, 'feedback' | 'feedbackSummaries' | 'businesses' | 'branches' | 'aiUsageLog'>,
   environment: 'development' | 'staging' | 'production',
   apiKey: string,
   model: string,
+  spendLimits: SpendLimits,
 ): SummaryService {
-  return new SummaryService(repos, createSummaryGenerator(environment, apiKey, model));
+  return new SummaryService(repos, createSummaryGenerator(environment, apiKey, model), model, spendLimits);
 }

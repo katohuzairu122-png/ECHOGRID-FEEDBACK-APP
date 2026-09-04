@@ -12,6 +12,7 @@ export * from './password-reset-tokens';
 export * from './qr-codes';
 export * from './feedback';
 export * from './feedback-summaries';
+export * from './ai-usage-log';
 export * from './critical-incidents';
 export * from './fraud-signals';
 export * from './customers';

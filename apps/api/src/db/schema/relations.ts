@@ -12,6 +12,7 @@ import { passwordResetTokens } from './password-reset-tokens';
 import { qrCodes } from './qr-codes';
 import { feedback } from './feedback';
 import { feedbackSummaries } from './feedback-summaries';
+import { aiUsageLog } from './ai-usage-log';
 import { criticalIncidents } from './critical-incidents';
 import { fraudSignals } from './fraud-signals';
 import { customers } from './customers';
@@ -36,6 +37,7 @@ export const businessesRelations = relations(businesses, ({ many, one }) => ({
   qrCodes: many(qrCodes),
   feedback: many(feedback),
   feedbackSummaries: many(feedbackSummaries),
+  aiUsageLogs: many(aiUsageLog),
   criticalIncidents: many(criticalIncidents),
   fraudSignals: many(fraudSignals),
   loyaltyTiers: many(loyaltyTiers),
@@ -59,6 +61,7 @@ export const branchesRelations = relations(branches, ({ one, many }) => ({
   qrCodes: many(qrCodes),
   feedback: many(feedback),
   feedbackSummaries: many(feedbackSummaries),
+  aiUsageLogs: many(aiUsageLog),
   criticalIncidents: many(criticalIncidents),
   fraudSignals: many(fraudSignals),
 }));
@@ -128,6 +131,11 @@ export const feedbackRelations = relations(feedback, ({ one }) => ({
 export const feedbackSummariesRelations = relations(feedbackSummaries, ({ one }) => ({
   business: one(businesses, { fields: [feedbackSummaries.businessId], references: [businesses.id] }),
   branch: one(branches, { fields: [feedbackSummaries.branchId], references: [branches.id] }),
+}));
+
+export const aiUsageLogRelations = relations(aiUsageLog, ({ one }) => ({
+  business: one(businesses, { fields: [aiUsageLog.businessId], references: [businesses.id] }),
+  branch: one(branches, { fields: [aiUsageLog.branchId], references: [branches.id] }),
 }));
 
 export const criticalIncidentsRelations = relations(criticalIncidents, ({ one }) => ({

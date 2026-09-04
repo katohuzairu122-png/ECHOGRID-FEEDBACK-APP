@@ -91,6 +91,15 @@ export interface Bindings {
    * Anthropic's docs (docs.claude.com) before setting this in production;
    * not hard-coded here since model identifiers change over time. */
   ANTHROPIC_MODEL: string;
+  /** S4.2 daily/monthly Anthropic spend-limit guardrails (Continuing
+   * Development S4, Block 1) -- read and parsed with Number() at the one
+   * call site (index.ts's queue consumer, building SummaryService's
+   * SpendLimits) rather than pre-parsed here, same "Bindings are raw
+   * wrangler values" convention ALLOWED_ORIGINS already follows. See
+   * wrangler.toml's own comment on these two for the reasoning behind the
+   * current default values. */
+  ANTHROPIC_DAILY_SPEND_LIMIT_USD: string;
+  ANTHROPIC_MONTHLY_SPEND_LIMIT_USD: string;
 
   /** Resend API (Notifications Block 2) -- transactional email delivery,
    * called via plain fetch(), same SDK-avoidance reasoning as Twilio/

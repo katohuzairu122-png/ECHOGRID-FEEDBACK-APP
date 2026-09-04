@@ -11,6 +11,7 @@ import { AuditLogRepository } from './audit-log.repository';
 import { QrCodeRepository } from './qr-code.repository';
 import { FeedbackRepository } from './feedback.repository';
 import { FeedbackSummaryRepository } from './feedback-summary.repository';
+import { AiUsageLogRepository } from './ai-usage-log.repository';
 import { CriticalIncidentRepository } from './critical-incident.repository';
 import { FraudSignalRepository } from './fraud-signal.repository';
 import { CustomerRepository } from './customer.repository';
@@ -41,6 +42,7 @@ export * from './audit-log.repository';
 export * from './qr-code.repository';
 export * from './feedback.repository';
 export * from './feedback-summary.repository';
+export * from './ai-usage-log.repository';
 export * from './critical-incident.repository';
 export * from './fraud-signal.repository';
 export * from './customer.repository';
@@ -78,6 +80,7 @@ export function createRepositories(db: Db) {
     qrCodes: new QrCodeRepository(db),
     feedback: new FeedbackRepository(db),
     feedbackSummaries: new FeedbackSummaryRepository(db),
+    aiUsageLog: new AiUsageLogRepository(db),
     criticalIncidents: new CriticalIncidentRepository(db),
     fraudSignals: new FraudSignalRepository(db),
     customers: new CustomerRepository(db),
