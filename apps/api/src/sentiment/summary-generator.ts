@@ -6,9 +6,11 @@ export interface SummaryGenerationInput {
   positiveCount: number;
   neutralCount: number;
   negativeCount: number;
-  /** Comment text only, already capped by the caller (SummaryService) --
-   * this module doesn't know or enforce the cap, keeping the cost/prompt-size
-   * guardrail in one place. */
+  /** Comment text only, already capped AND PII-redacted by the caller
+   * (SummaryService, via sentiment/redaction.ts's redactComment -- S4.1/S4.2,
+   * Block 2) -- this module doesn't know or enforce either guarantee,
+   * keeping both the cost/prompt-size and the privacy guardrail in one
+   * place (the caller). */
   comments: string[];
 }
 

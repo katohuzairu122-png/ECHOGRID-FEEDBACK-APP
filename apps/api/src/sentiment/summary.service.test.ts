@@ -357,3 +357,35 @@ describe('SummaryService.generateForPeriod -- usage logging (S4.2)', () => {
     expect(repos.feedbackSummaries.create).not.toHaveBeenCalled();
   });
 });
+
+describe('SummaryService.generateForPeriod -- PII redaction (S4.1/S4.2, Block 2)', () => {
+  const periodStart = new Date('2026-07-01T00:00:00.000Z');
+  const periodEnd = new Date('2026-07-08T00:00:00.000Z');
+
+  it('redacts a generic email/phone pattern before it reaches the generator', async () => {
+    const items = [makeFeedback({ comment: 'reach me at jane@example.com or 555-123-4567' })];
+    const repos = createFakeRepos({ items, business: BUSINESS });
+    const generator = fakeGenerator();
+    const service = new SummaryService(repos, generator, TEST_MODEL, PERMISSIVE_SPEND_LIMITS);
+
+    await service.generateForPeriod({ businessId: BUSINESS_A, periodType: 'weekly', periodStart, periodEnd });
+
+    const call = vi.mocked(generator.generate).mock.calls[0]![0] as SummaryGenerationInput;
+    expect(call.comments).toEqual(['reach me at [email redacted] or [phone redacted]']);
+  });
+
+  it("redacts this row's own customerName/customerEmail/customerPhone when restated in its comment, using that row's fields (not another row's)", async () => {
+    const items = [
+      makeFeedback({ comment: 'Hi, John Smith here, loved it!', customerName: 'John Smith' }),
+      makeFeedback({ comment: 'Jane Doe was not happy.', customerName: 'Jane Doe' }),
+    ];
+    const repos = createFakeRepos({ items, business: BUSINESS });
+    const generator = fakeGenerator();
+    const service = new SummaryService(repos, generator, TEST_MODEL, PERMISSIVE_SPEND_LIMITS);
+
+    await service.generateForPeriod({ businessId: BUSINESS_A, periodType: 'weekly', periodStart, periodEnd });
+
+    const call = vi.mocked(generator.generate).mock.calls[0]![0] as SummaryGenerationInput;
+    expect(call.comments).toEqual(['Hi, [redacted] here, loved it!', '[redacted] was not happy.']);
+  });
+});

@@ -7,6 +7,7 @@ import {
   type SummaryGenerator,
 } from './summary-generator';
 import { formatPeriodLabel } from './period';
+import { redactComment } from './redaction';
 import { AppError } from '../lib/errors';
 
 export interface GenerateSummaryOptions {
@@ -91,8 +92,17 @@ export class SummaryService {
     const neutralCount = items.filter((i) => i.sentiment === 'neutral').length;
     const negativeCount = items.filter((i) => i.sentiment === 'negative').length;
 
+    // S4.1/S4.2 (Block 2) -- redacted before this row's own comment/name/
+    // email/phone context is lost by flattening to a plain string[] below.
+    // redactComment's generic email/phone patterns run regardless; the
+    // known-identifiers pass additionally strips THIS row's own submitter
+    // info if it's restated in the comment text (see redaction.ts's doc
+    // comment for what this does and deliberately does not attempt).
     const comments = items
-      .map((i) => i.comment?.trim())
+      .map((i) => {
+        const trimmed = i.comment?.trim();
+        return trimmed ? redactComment(trimmed, [i.customerName, i.customerEmail, i.customerPhone]) : undefined;
+      })
       .filter((c): c is string => Boolean(c))
       .slice(0, MAX_COMMENTS_IN_PROMPT);
 
