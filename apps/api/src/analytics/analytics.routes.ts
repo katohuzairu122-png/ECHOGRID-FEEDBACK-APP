@@ -76,7 +76,10 @@ analyticsRoutes.get('/summaries', requirePermission('analytics:view'), async (c)
     const service = new AnalyticsService(createRepositories(db));
     const items = await service.listSummaries(c.get('businessId'), {
       branchId: url.searchParams.get('branchId') ?? c.get('branchId'),
-      periodType: periodType === 'weekly' || periodType === 'monthly' ? periodType : undefined,
+      periodType:
+        periodType === 'daily' || periodType === 'weekly' || periodType === 'monthly'
+          ? periodType
+          : undefined,
       limit: Number(url.searchParams.get('limit')) || undefined,
       offset: Number(url.searchParams.get('offset')) || undefined,
     });
@@ -90,7 +93,7 @@ analyticsRoutes.get('/summaries', requirePermission('analytics:view'), async (c)
  * On-demand summary generation -- gated by analytics:manage (not
  * analytics:view) since this incurs a real Anthropic API call on every
  * invocation, unlike every GET above. Accepts only a canned periodType
- * (weekly/monthly), not an arbitrary date range -- see shared-types'
+ * (daily/weekly/monthly), not an arbitrary date range -- see shared-types'
  * generateSummarySchema for why. Returns 202: the job is enqueued, not
  * completed, by the time this responds (SummaryService runs async in the
  * queue consumer).

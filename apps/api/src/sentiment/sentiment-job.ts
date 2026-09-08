@@ -25,7 +25,7 @@ export interface GenerateSummaryJob {
   type: 'generate_summary';
   businessId: string;
   branchId?: string | undefined;
-  periodType: 'weekly' | 'monthly';
+  periodType: 'daily' | 'weekly' | 'monthly';
   periodStart: string;
   periodEnd: string;
 }
@@ -52,8 +52,8 @@ export async function enqueueClassification(
  * Enqueues one summary-generation job. Called both by the manual
  * `POST /analytics/summaries/generate` endpoint (Block 4, an explicit staff
  * action) and by the `scheduled` cron handler (Block 3, automatic
- * weekly/monthly rollups) -- one code path for both triggers so they can
- * never drift in what a "summary generation" job actually contains.
+ * daily/weekly/monthly rollups) -- one code path for both triggers so they
+ * can never drift in what a "summary generation" job actually contains.
  */
 export async function enqueueSummaryGeneration(
   queue: Queue<SentimentJob>,

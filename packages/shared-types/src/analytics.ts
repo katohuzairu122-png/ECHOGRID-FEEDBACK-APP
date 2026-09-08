@@ -5,8 +5,8 @@ import { z } from 'zod';
  * searchable feedback, and AI-generated period summaries. Read-only from the
  * frontend's perspective except `generateSummarySchema`, the one action that
  * costs real Anthropic API money, so it's intentionally the narrowest
- * request shape here (a canned weekly/monthly period, not an arbitrary date
- * range -- see analytics.routes.ts for why).
+ * request shape here (a canned daily/weekly/monthly period, not an arbitrary
+ * date range -- see analytics.routes.ts for why).
  */
 
 export const sentimentTrendPointSchema = z.object({
@@ -21,7 +21,7 @@ export const feedbackSummaryDtoSchema = z.object({
   id: z.uuid(),
   businessId: z.uuid(),
   branchId: z.uuid().nullable(),
-  periodType: z.enum(['weekly', 'monthly']),
+  periodType: z.enum(['daily', 'weekly', 'monthly']),
   periodStart: z.string(),
   periodEnd: z.string(),
   feedbackCount: z.number().int().min(0),
@@ -37,13 +37,13 @@ export type FeedbackSummaryDto = z.infer<typeof feedbackSummaryDtoSchema>;
 /**
  * On-demand generation request -- deliberately just `periodType` (+ optional
  * branchId), reusing the exact same computePeriodRange() logic the
- * automatic weekly/monthly cron uses, rather than accepting an arbitrary
- * date range. An open date-range parameter here would let a single request
- * trigger an unbounded-size, unbounded-cost Anthropic call; the trend/search
- * endpoints below are the free-range query surface, this is not.
+ * automatic daily/weekly/monthly cron uses, rather than accepting an
+ * arbitrary date range. An open date-range parameter here would let a single
+ * request trigger an unbounded-size, unbounded-cost Anthropic call; the
+ * trend/search endpoints below are the free-range query surface, this is not.
  */
 export const generateSummarySchema = z.object({
   branchId: z.uuid().optional(),
-  periodType: z.enum(['weekly', 'monthly']),
+  periodType: z.enum(['daily', 'weekly', 'monthly']),
 });
 export type GenerateSummaryInput = z.infer<typeof generateSummarySchema>;

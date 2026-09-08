@@ -1,4 +1,4 @@
-export type PeriodType = 'weekly' | 'monthly';
+export type PeriodType = 'daily' | 'weekly' | 'monthly';
 
 /**
  * Computes a [start, end) window ending at `now` (default: call time) --
@@ -13,7 +13,9 @@ export function computePeriodRange(
   const periodEnd = new Date(now);
   const periodStart = new Date(now);
 
-  if (periodType === 'weekly') {
+  if (periodType === 'daily') {
+    periodStart.setUTCDate(periodStart.getUTCDate() - 1);
+  } else if (periodType === 'weekly') {
     periodStart.setUTCDate(periodStart.getUTCDate() - 7);
   } else {
     periodStart.setUTCMonth(periodStart.getUTCMonth() - 1);

@@ -19,7 +19,14 @@ type Translator = Awaited<ReturnType<typeof getTranslations>>;
 function formatPeriod(summary: FeedbackSummaryDto, format: Formatter, t: Translator): string {
   const start = format.dateTime(new Date(summary.periodStart), 'short');
   const end = format.dateTime(new Date(summary.periodEnd), 'short');
-  const label = summary.periodType === 'weekly' ? t('weekly') : t('monthly');
+  // Direct key lookup, not a ternary -- periodType's value IS the
+  // translation key for all three periods ('daily'/'weekly'/'monthly' all
+  // have a matching key in every locale's analytics.json summariesList
+  // namespace). Found and fixed while widening periodType (S4.1 roadmap
+  // Block 3): the previous two-way ternary treated anything not 'weekly'
+  // as 'monthly', which would have silently mislabeled every daily summary
+  // as "Monthly" the moment the daily cadence started producing rows.
+  const label = t(summary.periodType);
   return `${label}: ${start} – ${end}`;
 }
 

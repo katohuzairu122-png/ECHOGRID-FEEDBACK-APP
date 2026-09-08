@@ -13,6 +13,7 @@
   },
   "summaryGenerator": {
     "periodAriaLabel": "Période du résumé",
+    "daily": "Quotidien",
     "weekly": "Hebdomadaire",
     "monthly": "Mensuel",
     "queuing": "Mise en file…",
@@ -22,6 +23,7 @@
   },
   "summariesList": {
     "empty": "Aucun résumé IA pour le moment. Générez-en un ci-dessus une fois qu'il y a des avis à résumer.",
+    "daily": "Quotidien",
     "weekly": "Hebdomadaire",
     "monthly": "Mensuel",
     "positive": "{count} positifs",

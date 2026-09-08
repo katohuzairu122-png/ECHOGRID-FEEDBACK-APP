@@ -13,6 +13,7 @@
   },
   "summaryGenerator": {
     "periodAriaLabel": "Summary period",
+    "daily": "Daily",
     "weekly": "Weekly",
     "monthly": "Monthly",
     "queuing": "Queuing…",
@@ -22,6 +23,7 @@
   },
   "summariesList": {
     "empty": "No AI summaries yet. Generate one above once there's feedback to summarize.",
+    "daily": "Daily",
     "weekly": "Weekly",
     "monthly": "Monthly",
     "positive": "{count} positive",

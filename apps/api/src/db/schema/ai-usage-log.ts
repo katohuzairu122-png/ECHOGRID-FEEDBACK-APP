@@ -49,8 +49,8 @@ export const aiUsageLog = pgTable(
     callSite: text('call_site').notNull(),
     model: text('model').notNull(),
     promptVersion: text('prompt_version').notNull(),
-    // Same weekly/monthly-only constraint as feedback_summaries.periodType --
-    // widen both together if/when a daily cadence ships (S4.1 roadmap Block 3).
+    // Same daily/weekly/monthly constraint as feedback_summaries.periodType --
+    // widened together for the daily cadence (S4.1 roadmap Block 3).
     periodType: text('period_type').notNull(),
     periodStart: timestamp('period_start', { withTimezone: true }).notNull(),
     periodEnd: timestamp('period_end', { withTimezone: true }).notNull(),
@@ -73,7 +73,7 @@ export const aiUsageLog = pgTable(
       .where(sql`${table.status} = 'success'`),
     index('ai_usage_log_business_created_idx').on(table.businessId, table.createdAt),
     check('ai_usage_log_status_check', sql`${table.status} IN ('success', 'failed', 'blocked')`),
-    check('ai_usage_log_period_type_check', sql`${table.periodType} IN ('weekly', 'monthly')`),
+    check('ai_usage_log_period_type_check', sql`${table.periodType} IN ('daily', 'weekly', 'monthly')`),
     check('ai_usage_log_period_range_check', sql`${table.periodEnd} > ${table.periodStart}`),
   ],
 );

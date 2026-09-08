@@ -50,18 +50,27 @@ ANTHROPIC_MODEL = "claude-sonnet-5"
 # visible 'blocked' ai_usage_log row and throws, rather than silently
 # retrying forever) once either is reached.
 #
-# Defaults sized off actual current call volume: weekly + monthly cron
-# summaries only (no daily cadence yet -- S4.1 roadmap Block 3), one
+# Defaults sized off call volume BEFORE the daily cadence shipped (S4.1
+# roadmap Block 3, 2026-09-08): weekly + monthly cron summaries only, one
 # Anthropic call per business per cron fire, ~1-2K input tokens + ~300-500
 # output tokens per call at today's MAX_COMMENTS_IN_PROMPT=100 cap. At
 # claude-sonnet-5's $2/M input + $10/M output token pricing (platform.claude.com/docs,
-# confirmed 2026-09-04) that's well under a cent per call -- $10/day and
-# $150/month gives real headroom for growth (roughly 1,000+ summary calls/day
-# before the daily limit engages) while still acting as a genuine circuit
-# breaker against a runaway bug (a retry loop, a cron misfire) rather than
-# real organic usage. These are reasoned starting estimates, not measured
-# production numbers -- revisit both once real business/branch counts and
-# actual ai_usage_log spend are known.
+# confirmed 2026-09-04) that's well under a cent per call, so $10/day and
+# $150/month still comfortably cover the circuit-breaker case (a retry loop,
+# a cron misfire).
+#
+# NOT RE-SIZED for the daily cadence -- flagging rather than silently
+# changing a spend cap. Every business now draws an Anthropic call every
+# day (previously only on Mondays / the 1st), so what used to be an
+# occasional peak day for ANTHROPIC_DAILY_SPEND_LIMIT_USD is now the
+# everyday baseline; the real per-day headroom before it engages is
+# meaningfully smaller than the "~1,000+ calls/day" estimate this comment
+# used to give (that estimate assumed at most 2x a business's per-call cost
+# per day, only on a Monday that also lands on the 1st -- now every day is
+# at least 1x that cost, all businesses, before weekly/monthly are even
+# added on top). Re-sizing needs real business/branch counts this codebase
+# doesn't have; revisit both limits against actual ai_usage_log spend now
+# that daily is live.
 ANTHROPIC_DAILY_SPEND_LIMIT_USD = "10"
 ANTHROPIC_MONTHLY_SPEND_LIMIT_USD = "150"
 # Resend sender identity (Notifications Block 2) -- non-secret, one
@@ -245,6 +254,7 @@ period = 60
 # CRITICAL_ESCALATION_CRON constant, which this literal string must match.
 [triggers]
 crons = [
+  "0 0 * * *",  # daily -- every day 00:00 UTC (S4.1 roadmap Block 3)
   "0 0 * * 1",  # weekly -- every Monday 00:00 UTC
   "0 0 1 * *",  # monthly -- 1st of the month, 00:00 UTC
   "*/5 * * * *",  # every 5 minutes -- critical-incident escalation sweep

@@ -13,7 +13,7 @@ import { AppError } from '../lib/errors';
 export interface GenerateSummaryOptions {
   businessId: string;
   branchId?: string | undefined;
-  periodType: 'weekly' | 'monthly';
+  periodType: 'daily' | 'weekly' | 'monthly';
   periodStart: Date;
   periodEnd: Date;
 }

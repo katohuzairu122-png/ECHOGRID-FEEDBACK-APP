@@ -69,7 +69,7 @@ export class AnalyticsService {
 
   async listSummaries(
     businessId: string,
-    options: { branchId?: string | undefined; periodType?: 'weekly' | 'monthly' | undefined; limit?: number | undefined; offset?: number | undefined } = {},
+    options: { branchId?: string | undefined; periodType?: 'daily' | 'weekly' | 'monthly' | undefined; limit?: number | undefined; offset?: number | undefined } = {},
   ): Promise<FeedbackSummary[]> {
     return this.repos.feedbackSummaries.listForBusiness(businessId, options);
   }

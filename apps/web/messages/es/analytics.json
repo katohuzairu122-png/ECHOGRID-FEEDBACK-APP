@@ -13,6 +13,7 @@
   },
   "summaryGenerator": {
     "periodAriaLabel": "Período del resumen",
+    "daily": "Diario",
     "weekly": "Semanal",
     "monthly": "Mensual",
     "queuing": "Encolando…",
@@ -22,6 +23,7 @@
   },
   "summariesList": {
     "empty": "Aún no hay resúmenes de IA. Genera uno arriba una vez que haya comentarios que resumir.",
+    "daily": "Diario",
     "weekly": "Semanal",
     "monthly": "Mensual",
     "positive": "{count} positivos",

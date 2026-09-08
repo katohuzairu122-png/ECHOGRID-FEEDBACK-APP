@@ -60,7 +60,7 @@ export const feedbackSummaries = pgTable(
     index('feedback_summaries_branch_period_idx').on(table.branchId, table.periodStart),
     check(
       'feedback_summaries_period_type_check',
-      sql`${table.periodType} IN ('weekly', 'monthly')`,
+      sql`${table.periodType} IN ('daily', 'weekly', 'monthly')`,
     ),
     check('feedback_summaries_period_range_check', sql`${table.periodEnd} > ${table.periodStart}`),
     check('feedback_summaries_counts_check', sql`${table.feedbackCount} >= 0`),

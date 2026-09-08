@@ -22,7 +22,7 @@ interface SummaryGeneratorProps {
  * non-destructive action.
  */
 export function SummaryGenerator({ branchId }: SummaryGeneratorProps) {
-  const [periodType, setPeriodType] = useState<'weekly' | 'monthly'>('weekly');
+  const [periodType, setPeriodType] = useState<'daily' | 'weekly' | 'monthly'>('weekly');
   const [queued, setQueued] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
@@ -46,10 +46,11 @@ export function SummaryGenerator({ branchId }: SummaryGeneratorProps) {
     <div className="flex flex-col gap-2 border-b border-neutral-200 pb-4 sm:flex-row sm:items-center sm:gap-3">
       <select
         value={periodType}
-        onChange={(e) => setPeriodType(e.target.value as 'weekly' | 'monthly')}
+        onChange={(e) => setPeriodType(e.target.value as 'daily' | 'weekly' | 'monthly')}
         aria-label={t('periodAriaLabel')}
         className="h-9 rounded-md border border-neutral-300 bg-white px-3 text-sm text-neutral-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600"
       >
+        <option value="daily">{t('daily')}</option>
         <option value="weekly">{t('weekly')}</option>
         <option value="monthly">{t('monthly')}</option>
       </select>

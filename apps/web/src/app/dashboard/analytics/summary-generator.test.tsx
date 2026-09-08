@@ -54,6 +54,19 @@ describe('SummaryGenerator', () => {
     );
   });
 
+  it('switches to daily when selected before submitting (S4.1 roadmap Block 3)', async () => {
+    const user = userEvent.setup();
+    vi.mocked(generateSummaryAction).mockResolvedValue(undefined);
+
+    render(<SummaryGenerator />);
+    await user.selectOptions(screen.getByLabelText('Summary period'), 'daily');
+    await user.click(screen.getByRole('button', { name: 'Generate summary' }));
+
+    await waitFor(() =>
+      expect(generateSummaryAction).toHaveBeenCalledWith({ periodType: 'daily', branchId: undefined }),
+    );
+  });
+
   it('shows a "queued" confirmation on success, not a completed summary -- generation is async', async () => {
     const user = userEvent.setup();
     vi.mocked(generateSummaryAction).mockResolvedValue(undefined);

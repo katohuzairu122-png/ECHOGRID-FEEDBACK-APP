@@ -133,4 +133,15 @@ describe('AnalyticsService.listSummaries', () => {
       periodType: 'weekly',
     });
   });
+
+  it('passes a daily periodType through unchanged (S4.1 roadmap Block 3)', async () => {
+    const repos = createFakeRepos();
+    const service = new AnalyticsService(repos);
+
+    await service.listSummaries(BUSINESS_A, { periodType: 'daily' });
+
+    expect(repos.feedbackSummaries.listForBusiness).toHaveBeenCalledWith(BUSINESS_A, {
+      periodType: 'daily',
+    });
+  });
 });

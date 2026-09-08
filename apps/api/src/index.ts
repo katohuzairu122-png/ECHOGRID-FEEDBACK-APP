@@ -277,6 +277,7 @@ async function queue(batch: MessageBatch<PlatformJob>, env: Bindings, ctx: Execu
 }
 
 const CRON_PERIOD_MAP: Record<string, PeriodType> = {
+  '0 0 * * *': 'daily',
   '0 0 * * 1': 'weekly',
   '0 0 1 * *': 'monthly',
 };
@@ -290,13 +291,20 @@ const CRITICAL_ESCALATION_CRON = '*/5 * * * *';
 const ESCALATION_WINDOW_MINUTES = 15;
 
 /**
- * Cron consumer (wrangler.toml [triggers]) -- fires the weekly/monthly
+ * Cron consumer (wrangler.toml [triggers]) -- fires the daily/weekly/monthly
  * automatic summary rollup, and separately the critical-incident escalation
  * sweep. Deliberately thin in both cases: it only enqueues jobs (paginating
  * through every business/incident so this scales past however many fit in
  * one page, per "design for global scale"); the actual work happens in
  * `queue` above, on the same retry/DLQ infrastructure as every other
  * background job, not a separate one-off code path.
+ *
+ * A day that matches more than one registered cron expression (e.g. every
+ * Monday matches both "0 0 * * *" and "0 0 * * 1") correctly fires this
+ * function once per matching expression, as separate invocations each with
+ * their own `event.cron` -- not a conflict, and not de-duplicated: a Monday
+ * genuinely produces both a daily and a weekly feedback_summaries row, by
+ * design (S4.1 roadmap Block 3).
  */
 async function scheduled(event: ScheduledController, env: Bindings, ctx: ExecutionContext): Promise<void> {
   if (event.cron === CRITICAL_ESCALATION_CRON) {

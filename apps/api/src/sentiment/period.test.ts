@@ -4,6 +4,12 @@ import { computePeriodRange, formatPeriodLabel } from './period';
 const FIXED_NOW = new Date('2026-07-09T12:00:00.000Z');
 
 describe('computePeriodRange', () => {
+  it('daily: periodStart is exactly 1 day before periodEnd', () => {
+    const { periodStart, periodEnd } = computePeriodRange('daily', FIXED_NOW);
+    expect(periodEnd.toISOString()).toBe(FIXED_NOW.toISOString());
+    expect(periodStart.toISOString()).toBe('2026-07-08T12:00:00.000Z');
+  });
+
   it('weekly: periodStart is exactly 7 days before periodEnd', () => {
     const { periodStart, periodEnd } = computePeriodRange('weekly', FIXED_NOW);
     expect(periodEnd.toISOString()).toBe(FIXED_NOW.toISOString());
