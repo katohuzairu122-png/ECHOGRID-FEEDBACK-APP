@@ -37,6 +37,7 @@ import { createEmailService } from './notifications/email.service';
 import { createSmsService } from './customer-auth/sms.service';
 import { NotificationDeliveryService } from './notifications/notification-delivery.service';
 import { NotificationService } from './notifications/notification.service';
+import { computeRetryDelaySeconds } from './lib/backoff';
 
 // Durable Object classes must be exported from the Worker's main module for
 // wrangler to find them (see wrangler.toml's durable_objects.bindings /
@@ -159,6 +160,13 @@ app.route('/api/v1', api);
  * hiccup, DB connection drop, email/SMS provider outage), not classification
  * or delivery errors, which are already handled and acked as "processed,
  * marked failed."
+ *
+ * S4 roadmap Block 6 (S4.3 "retry with bounded exponential backoff") --
+ * retry() now passes an explicit, growing delaySeconds (lib/backoff.ts)
+ * instead of retrying immediately with Cloudflare Queues' bare default.
+ * Applies uniformly to every job type through this one shared catch block,
+ * not just generate_summary's Anthropic calls -- see this block's own
+ * completion notes for why a per-job-type schedule isn't justified today.
  */
 async function queue(batch: MessageBatch<PlatformJob>, env: Bindings, ctx: ExecutionContext): Promise<void> {
   const { db, close } = await createDb(env.HYPERDRIVE);
@@ -266,9 +274,10 @@ async function queue(batch: MessageBatch<PlatformJob>, env: Bindings, ctx: Execu
         console.error('Background job failed:', {
           messageId: message.id,
           jobType: message.body.type,
+          attempt: message.attempts,
           error: err instanceof Error ? err.message : err,
         });
-        message.retry();
+        message.retry({ delaySeconds: computeRetryDelaySeconds(message.attempts) });
       }
     }
   } finally {
