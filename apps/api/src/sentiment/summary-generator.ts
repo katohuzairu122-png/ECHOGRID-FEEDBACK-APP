@@ -22,6 +22,35 @@ export interface PreviousPeriodComparison {
   negativeCount: number;
 }
 
+/** S4 roadmap Block 5 "cross-domain aggregates" -- critical_incidents has
+ * no natural breakdown dimension the way fraud severity/loyalty type do
+ * (matchedSignals is free-text, comma-joined keyword tokens, not a closed
+ * set worth bucketing); count plus how many are still unacknowledged is
+ * the actionable operational signal instead. */
+export interface CriticalIncidentsSummary {
+  count: number;
+  unacknowledgedCount: number;
+}
+
+/** severityBreakdown reuses the same LabeledCount/computeBreakdown
+ * convention as categoryBreakdown/urgencyBreakdown -- severity is a
+ * small, closed, CHECK-constrained scale (low/medium/high), the same
+ * class of field. */
+export interface FraudSignalsSummary {
+  count: number;
+  severityBreakdown: LabeledCount[];
+}
+
+/** Always business-wide, never branch-scoped -- loyalty_transactions has
+ * no branchId of its own (see LoyaltyTransactionRepository
+ * .listForBusinessPeriod's own comment for why). buildPrompt labels this
+ * explicitly so a branch-scoped summary doesn't read as if this figure
+ * were also branch-scoped. */
+export interface LoyaltyActivitySummary {
+  count: number;
+  typeBreakdown: LabeledCount[];
+}
+
 export interface SummaryGenerationInput {
   businessName: string;
   branchName?: string | undefined;
@@ -45,6 +74,15 @@ export interface SummaryGenerationInput {
   urgencyBreakdown: LabeledCount[];
   /** S4.1 "changes from previous periods". */
   previousPeriod: PreviousPeriodComparison;
+  /** S4.1 "cross-domain content (critical incidents/loyalty/fraud)" (S4
+   * roadmap Block 5). Same business/branch scope as categoryBreakdown/
+   * urgencyBreakdown above. */
+  criticalIncidents: CriticalIncidentsSummary;
+  /** Same scope as criticalIncidents above. */
+  fraudSignals: FraudSignalsSummary;
+  /** Business-wide, not branch-scoped -- see LoyaltyActivitySummary's own
+   * doc comment for why. */
+  loyaltyActivity: LoyaltyActivitySummary;
 }
 
 /**
@@ -87,8 +125,10 @@ export interface SummaryGenerator {
  * (S4.2 "record ... prompt version") so a cost or output-quality shift can
  * be traced back to which prompt version produced it. Bumped to v2 for S4
  * roadmap Block 4 (category/urgency breakdowns + period-over-period
- * comparison added to the prompt body). */
-export const PROMPT_VERSION = 'summary-v2';
+ * comparison added to the prompt body); bumped to v3 for Block 5
+ * (critical incident/fraud signal/loyalty activity cross-domain content
+ * added to the prompt body). */
+export const PROMPT_VERSION = 'summary-v3';
 
 /**
  * Per-million-token USD pricing for models this codebase might set
@@ -166,6 +206,22 @@ export function buildPrompt(input: SummaryGenerationInput): string {
     `${prev.neutralCount} neutral previously (now ${input.neutralCount}), ${prev.negativeCount} negative ` +
     `previously (now ${input.negativeCount}).`;
 
+  const ci = input.criticalIncidents;
+  const criticalIncidentsLine =
+    ci.count === 0
+      ? 'Critical incidents: none this period.'
+      : `Critical incidents: ${ci.count} this period (${ci.unacknowledgedCount} unacknowledged).`;
+  const fs = input.fraudSignals;
+  const fraudSignalsLine =
+    fs.count === 0
+      ? 'Fraud signals: none this period.'
+      : `Fraud signals: ${fs.count} this period, by severity: ${formatCounts(fs.severityBreakdown)}.`;
+  const la = input.loyaltyActivity;
+  const loyaltyActivityLine =
+    la.count === 0
+      ? 'Loyalty activity (business-wide, not branch-scoped): none this period.'
+      : `Loyalty activity (business-wide, not branch-scoped): ${la.count} transactions this period, by type: ${formatCounts(la.typeBreakdown)}.`;
+
   return [
     `You are a customer experience analyst for ${scope}.`,
     `Period: ${input.periodLabel}.`,
@@ -173,11 +229,14 @@ export function buildPrompt(input: SummaryGenerationInput): string {
     categoryLine,
     urgencyLine,
     comparisonLine,
+    criticalIncidentsLine,
+    fraudSignalsLine,
+    loyaltyActivityLine,
     '',
     'Customer comments this period:',
     commentBlock,
     '',
-    'Write a concise, factual summary of what customers are saying (2-4 sentences, no speculation beyond what the comments support), followed by 2-5 specific, actionable recommendations for the business owner. Use the category, urgency, and previous-period figures above to note meaningful patterns or changes when relevant -- do not force a comparison the data does not support (e.g. a small sample or a brand-new period with nothing prior).',
+    'Write a concise, factual summary of what customers are saying (2-4 sentences, no speculation beyond what the comments support), followed by 2-5 specific, actionable recommendations for the business owner. Use the category, urgency, and previous-period figures above to note meaningful patterns or changes when relevant -- do not force a comparison the data does not support (e.g. a small sample or a brand-new period with nothing prior). If there are unacknowledged critical incidents or notable fraud activity this period, call them out explicitly as urgent operational items rather than folding them quietly into the general summary.',
     'Respond in exactly this format, with no other text:',
     `${SUMMARY_MARKER} <summary prose>`,
     `${RECOMMENDATIONS_MARKER} <one recommendation per line, no numbering>`,

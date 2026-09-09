@@ -1,9 +1,14 @@
-import { eq, and, desc, isNull, or, sql } from 'drizzle-orm';
-import { loyaltyTransactions } from '../db/schema';
+import { eq, and, desc, isNull, or, sql, gte, lte } from 'drizzle-orm';
+import { loyaltyTransactions, loyaltyAccounts } from '../db/schema';
 import { BaseRepository } from './base.repository';
 
 export type LoyaltyTransaction = typeof loyaltyTransactions.$inferSelect;
 export type NewLoyaltyTransaction = typeof loyaltyTransactions.$inferInsert;
+
+// Mirrors FeedbackRepository's identical safety cap and rationale -- a
+// defensive bound on SummaryService's period sweep (S4 roadmap Block 5
+// "cross-domain aggregates"), not a product-facing limit.
+const MAX_PERIOD_ROWS = 5000;
 
 export class LoyaltyTransactionRepository extends BaseRepository {
   async create(input: NewLoyaltyTransaction): Promise<LoyaltyTransaction> {
@@ -237,5 +242,42 @@ export class LoyaltyTransactionRepository extends BaseRepository {
         eq(loyaltyTransactions.type, 'redemption'),
       ),
     });
+  }
+
+  /**
+   * S4 roadmap Block 5 "cross-domain aggregates". Business-wide only --
+   * unlike feedback/critical_incidents/fraud_signals, loyalty_transactions
+   * has no branchId of its own (a customer's loyalty membership is with
+   * the business, not a specific branch -- see loyalty_accounts.ts's own
+   * comment on why). There is no meaningful per-branch scoping to offer
+   * here; SummaryService always requests the whole business's loyalty
+   * activity regardless of which branch a summary is otherwise scoped to,
+   * and buildPrompt labels the figure as business-wide so it doesn't read
+   * as if it were also branch-scoped.
+   *
+   * Joins to loyalty_accounts because that's the one place businessId
+   * actually lives on this side of the schema -- loyaltyTransactions
+   * itself has no businessId column, only loyaltyAccountId. Deliberately
+   * NOT filtered on loyalty_accounts.isDeleted: this table's own doc
+   * comment calls it "append-only... a ledger entry is never removed," and
+   * a transaction that genuinely happened shouldn't retroactively vanish
+   * from a past period's aggregate just because the account was suspended
+   * or closed afterward.
+   */
+  async listForBusinessPeriod(businessId: string, options: { from: Date; to: Date }): Promise<LoyaltyTransaction[]> {
+    const rows = await this.db
+      .select({ transaction: loyaltyTransactions })
+      .from(loyaltyTransactions)
+      .innerJoin(loyaltyAccounts, eq(loyaltyTransactions.loyaltyAccountId, loyaltyAccounts.id))
+      .where(
+        and(
+          eq(loyaltyAccounts.businessId, businessId),
+          gte(loyaltyTransactions.createdAt, options.from),
+          lte(loyaltyTransactions.createdAt, options.to),
+        ),
+      )
+      .orderBy(desc(loyaltyTransactions.createdAt))
+      .limit(MAX_PERIOD_ROWS);
+    return rows.map((r) => r.transaction);
   }
 }

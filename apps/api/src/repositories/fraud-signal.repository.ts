@@ -1,4 +1,4 @@
-import { eq, and } from 'drizzle-orm';
+import { eq, and, gte, lte } from 'drizzle-orm';
 import { fraudSignals } from '../db/schema';
 import { BaseRepository } from './base.repository';
 
@@ -7,6 +7,10 @@ export type NewFraudSignal = typeof fraudSignals.$inferInsert;
 
 const DEFAULT_PAGE_SIZE = 50;
 const MAX_PAGE_SIZE = 200;
+// Mirrors FeedbackRepository's identical safety cap and rationale -- a
+// defensive bound on SummaryService's period sweep (S4 roadmap Block 5
+// "cross-domain aggregates"), not a product-facing limit.
+const MAX_PERIOD_ROWS = 5000;
 
 /**
  * Write/read surface for the fraud-signal log (Continuing Development
@@ -82,5 +86,28 @@ export class FraudSignalRepository extends BaseRepository {
       .where(and(eq(fraudSignals.id, id), eq(fraudSignals.businessId, businessId), eq(fraudSignals.status, 'open')))
       .returning();
     return row;
+  }
+
+  /** S4 roadmap Block 5 "cross-domain aggregates" -- same shape/rationale
+   * as CriticalIncidentRepository.listForPeriod, filtered on `detectedAt`
+   * (this table's equivalent of createdAt) rather than a status filter --
+   * every signal from the period, open/reviewed/dismissed alike, since a
+   * summary should reflect what was actually detected, not just what's
+   * still outstanding. Backed by fraud_signals_business_branch_detected_idx
+   * (businessId, branchId, detectedAt), an exact match for this query. */
+  async listForPeriod(
+    businessId: string,
+    options: { branchId?: string | undefined; from: Date; to: Date },
+  ): Promise<FraudSignal[]> {
+    return this.db.query.fraudSignals.findMany({
+      where: and(
+        eq(fraudSignals.businessId, businessId),
+        options.branchId ? eq(fraudSignals.branchId, options.branchId) : undefined,
+        gte(fraudSignals.detectedAt, options.from),
+        lte(fraudSignals.detectedAt, options.to),
+      ),
+      limit: MAX_PERIOD_ROWS,
+      orderBy: (fs, { desc }) => [desc(fs.detectedAt)],
+    });
   }
 }

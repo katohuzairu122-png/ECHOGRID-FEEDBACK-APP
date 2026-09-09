@@ -23,6 +23,9 @@ function makeInput(overrides: Partial<SummaryGenerationInput> = {}): SummaryGene
       neutralCount: 1,
       negativeCount: 1,
     },
+    criticalIncidents: { count: 0, unacknowledgedCount: 0 },
+    fraudSignals: { count: 0, severityBreakdown: [] },
+    loyaltyActivity: { count: 0, typeBreakdown: [] },
     ...overrides,
   };
 }
@@ -136,5 +139,66 @@ describe('buildPrompt (S4 roadmap Block 4 -- category/urgency + period-over-peri
   it('instructs the model not to force a comparison the data does not support', () => {
     const prompt = buildPrompt(makeInput());
     expect(prompt).toMatch(/do not force a comparison/i);
+  });
+});
+
+describe('buildPrompt (S4 roadmap Block 5 -- cross-domain aggregates)', () => {
+  it('renders a nonzero critical incident count with its unacknowledged count', () => {
+    const prompt = buildPrompt(makeInput({ criticalIncidents: { count: 3, unacknowledgedCount: 1 } }));
+    expect(prompt).toContain('Critical incidents: 3 this period (1 unacknowledged).');
+  });
+
+  it('renders "none this period" for critical incidents when the count is zero, not "0 this period (0 unacknowledged)"', () => {
+    const prompt = buildPrompt(makeInput({ criticalIncidents: { count: 0, unacknowledgedCount: 0 } }));
+    expect(prompt).toContain('Critical incidents: none this period.');
+    expect(prompt).not.toContain('Critical incidents: 0 this period');
+  });
+
+  it('renders a nonzero fraud signal count with its severity breakdown', () => {
+    const prompt = buildPrompt(
+      makeInput({
+        fraudSignals: {
+          count: 5,
+          severityBreakdown: [
+            { label: 'high', count: 2 },
+            { label: 'low', count: 3 },
+          ],
+        },
+      }),
+    );
+    expect(prompt).toContain('Fraud signals: 5 this period, by severity: high (2), low (3).');
+  });
+
+  it('renders "none this period" for fraud signals when the count is zero', () => {
+    const prompt = buildPrompt(makeInput({ fraudSignals: { count: 0, severityBreakdown: [] } }));
+    expect(prompt).toContain('Fraud signals: none this period.');
+  });
+
+  it('renders a nonzero loyalty activity count with its type breakdown, explicitly labeled business-wide', () => {
+    const prompt = buildPrompt(
+      makeInput({
+        loyaltyActivity: {
+          count: 12,
+          typeBreakdown: [
+            { label: 'checkin', count: 8 },
+            { label: 'redemption', count: 4 },
+          ],
+        },
+      }),
+    );
+    expect(prompt).toContain(
+      'Loyalty activity (business-wide, not branch-scoped): 12 transactions this period, by type: checkin (8), redemption (4).',
+    );
+  });
+
+  it('renders "none this period" for loyalty activity when the count is zero, still labeled business-wide', () => {
+    const prompt = buildPrompt(makeInput({ loyaltyActivity: { count: 0, typeBreakdown: [] } }));
+    expect(prompt).toContain('Loyalty activity (business-wide, not branch-scoped): none this period.');
+  });
+
+  it('instructs the model to call out unacknowledged critical incidents or notable fraud activity as urgent', () => {
+    const prompt = buildPrompt(makeInput());
+    expect(prompt).toMatch(/unacknowledged critical incidents/i);
+    expect(prompt).toMatch(/call them out explicitly as urgent operational items/i);
   });
 });

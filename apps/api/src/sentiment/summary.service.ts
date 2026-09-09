@@ -1,5 +1,4 @@
 import type { Repositories } from '../repositories';
-import type { Feedback } from '../repositories/feedback.repository';
 import type { FeedbackSummary } from '../repositories/feedback-summary.repository';
 import {
   createSummaryGenerator,
@@ -45,17 +44,21 @@ function startOfUtcMonth(now: Date): Date {
 }
 
 /**
- * S4.1 "sentiment/category/urgency distributions" (S4 roadmap Block 4) --
- * non-zero buckets only, sorted by count descending. `null` (not yet
- * classified by the async Level 2 pipeline -- feedback-classifier.ts --
- * or never classified for a comment-less rating-only submission) becomes
- * an explicit 'unclassified' bucket instead of being silently dropped, so
- * a slow-classifying period (especially a fresh daily one, S4.1 roadmap
- * Block 3) doesn't quietly understate itself to the LLM -- every item in
- * `items` is accounted for in exactly one bucket, and the bucket counts
- * always sum to items.length.
+ * Generic over T (S4 roadmap Block 5 -- originally Feedback-only for
+ * category/urgency, widened to also bucket FraudSignal.severity and
+ * LoyaltyTransaction.type, same shape). Non-zero buckets only, sorted by
+ * count descending. `null` becomes an explicit 'unclassified' bucket
+ * instead of being silently dropped, so a slow-classifying period
+ * (feedback.category/urgency: not yet reached by the async Level 2
+ * pipeline -- feedback-classifier.ts) doesn't quietly understate itself to
+ * the LLM -- every item in `items` is accounted for in exactly one bucket,
+ * and the bucket counts always sum to items.length. FraudSignal.severity
+ * and LoyaltyTransaction.type are both NOT NULL columns, so 'unclassified'
+ * never actually appears for those two callers -- keyOf's return type stays
+ * `string | null` anyway so this one function still covers all three,
+ * rather than a near-duplicate non-nullable variant for two of them.
  */
-function computeBreakdown(items: Feedback[], keyOf: (item: Feedback) => string | null): LabeledCount[] {
+function computeBreakdown<T>(items: T[], keyOf: (item: T) => string | null): LabeledCount[] {
   const counts = new Map<string, number>();
   for (const item of items) {
     const key = keyOf(item) ?? 'unclassified';
@@ -76,7 +79,14 @@ export class SummaryService {
   constructor(
     private readonly repos: Pick<
       Repositories,
-      'feedback' | 'feedbackSummaries' | 'businesses' | 'branches' | 'aiUsageLog'
+      | 'feedback'
+      | 'feedbackSummaries'
+      | 'businesses'
+      | 'branches'
+      | 'aiUsageLog'
+      | 'criticalIncidents'
+      | 'fraudSignals'
+      | 'loyaltyTransactions'
     >,
     private readonly generator: SummaryGenerator,
     /** The configured ANTHROPIC_MODEL, independent of the generator's own
@@ -106,11 +116,35 @@ export class SummaryService {
     // send.
     await this.enforceSpendLimit(options);
 
-    const items = await this.repos.feedback.listForPeriod(businessId, {
-      branchId,
-      from: periodStart,
-      to: periodEnd,
-    });
+    // S4.1 "changes from previous periods" (S4 roadmap Block 4) -- same
+    // business/branch scope, same duration, the immediately-prior window.
+    const previousRange = computePreviousPeriodRange(periodStart, periodEnd);
+
+    // All five reads are independent of each other (none needs another's
+    // result), so they run concurrently instead of as five sequential
+    // round-trips -- S4 roadmap Block 5 adds three more reads to what
+    // Block 4 already fetched here one at a time, and paying for that
+    // latency serially would only get worse as more cross-domain sources
+    // are added later. Array position, not named destructuring off an
+    // object, preserves the exact call order existing tests already
+    // assert on for feedback.listForPeriod (current period first, then
+    // previous) -- Promise.all still invokes each array element
+    // synchronously, in order, before awaiting any of them, so this is
+    // 100% behavior-preserving for that ordering.
+    const [items, previousItems, criticalIncidentRows, fraudSignalRows, loyaltyTransactionRows] = await Promise.all([
+      this.repos.feedback.listForPeriod(businessId, { branchId, from: periodStart, to: periodEnd }),
+      this.repos.feedback.listForPeriod(businessId, {
+        branchId,
+        from: previousRange.periodStart,
+        to: previousRange.periodEnd,
+      }),
+      this.repos.criticalIncidents.listForPeriod(businessId, { branchId, from: periodStart, to: periodEnd }),
+      this.repos.fraudSignals.listForPeriod(businessId, { branchId, from: periodStart, to: periodEnd }),
+      // Business-wide, never branchId-scoped -- see
+      // LoyaltyTransactionRepository.listForBusinessPeriod's own comment
+      // for why loyalty activity has no per-branch dimension to scope to.
+      this.repos.loyaltyTransactions.listForBusinessPeriod(businessId, { from: periodStart, to: periodEnd }),
+    ]);
 
     const positiveCount = items.filter((i) => i.sentiment === 'positive').length;
     const neutralCount = items.filter((i) => i.sentiment === 'neutral').length;
@@ -122,23 +156,27 @@ export class SummaryService {
     const categoryBreakdown = computeBreakdown(items, (i) => i.category);
     const urgencyBreakdown = computeBreakdown(items, (i) => i.urgency);
 
-    // S4.1 "changes from previous periods" (S4 roadmap Block 4) -- same
-    // business/branch scope, same duration, the immediately-prior window.
-    // Reuses listForPeriod rather than a new aggregate-only repository
-    // method -- simplest robust option for this block; doubles feedback
-    // reads per generation, disclosed in this block's own delivery note.
-    const previousRange = computePreviousPeriodRange(periodStart, periodEnd);
-    const previousItems = await this.repos.feedback.listForPeriod(businessId, {
-      branchId,
-      from: previousRange.periodStart,
-      to: previousRange.periodEnd,
-    });
     const previousPeriod = {
       periodLabel: formatPeriodLabel(previousRange.periodStart, previousRange.periodEnd),
       feedbackCount: previousItems.length,
       positiveCount: previousItems.filter((i) => i.sentiment === 'positive').length,
       neutralCount: previousItems.filter((i) => i.sentiment === 'neutral').length,
       negativeCount: previousItems.filter((i) => i.sentiment === 'negative').length,
+    };
+
+    // S4.1 "cross-domain content (critical incidents/loyalty/fraud)" (S4
+    // roadmap Block 5).
+    const criticalIncidents = {
+      count: criticalIncidentRows.length,
+      unacknowledgedCount: criticalIncidentRows.filter((ci) => ci.acknowledgedAt === null).length,
+    };
+    const fraudSignals = {
+      count: fraudSignalRows.length,
+      severityBreakdown: computeBreakdown(fraudSignalRows, (signal) => signal.severity),
+    };
+    const loyaltyActivity = {
+      count: loyaltyTransactionRows.length,
+      typeBreakdown: computeBreakdown(loyaltyTransactionRows, (transaction) => transaction.type),
     };
 
     // S4.1/S4.2 (Block 2) -- redacted before this row's own comment/name/
@@ -169,6 +207,9 @@ export class SummaryService {
         categoryBreakdown,
         urgencyBreakdown,
         previousPeriod,
+        criticalIncidents,
+        fraudSignals,
+        loyaltyActivity,
       });
     } catch (err) {
       // this.model, not result.usage.model -- no result exists to read it
@@ -277,7 +318,17 @@ export class SummaryService {
  * environment-appropriate generator (real Anthropic vs. dev console) so
  * callers (queue consumer, analytics.routes.ts) don't wire that up themselves. */
 export function createSummaryService(
-  repos: Pick<Repositories, 'feedback' | 'feedbackSummaries' | 'businesses' | 'branches' | 'aiUsageLog'>,
+  repos: Pick<
+    Repositories,
+    | 'feedback'
+    | 'feedbackSummaries'
+    | 'businesses'
+    | 'branches'
+    | 'aiUsageLog'
+    | 'criticalIncidents'
+    | 'fraudSignals'
+    | 'loyaltyTransactions'
+  >,
   environment: 'development' | 'staging' | 'production',
   apiKey: string,
   model: string,

@@ -11,6 +11,9 @@ import type {
 import type { AiUsageLog, AiUsageLogRepository, NewAiUsageLog } from '../repositories/ai-usage-log.repository';
 import type { Business, BusinessRepository } from '../repositories/business.repository';
 import type { Branch, BranchRepository } from '../repositories/branch.repository';
+import type { CriticalIncident, CriticalIncidentRepository } from '../repositories/critical-incident.repository';
+import type { FraudSignal, FraudSignalRepository } from '../repositories/fraud-signal.repository';
+import type { LoyaltyTransaction, LoyaltyTransactionRepository } from '../repositories/loyalty-transaction.repository';
 
 const BUSINESS_A = 'business-a';
 const BRANCH_A = 'branch-a';
@@ -56,6 +59,62 @@ function makeFeedback(overrides: Partial<Feedback> = {}): Feedback {
   };
 }
 
+// S4 roadmap Block 5 -- three more makeX() builders, same "only the field(s)
+// this test cares about are overridden" convention as makeFeedback() above.
+function makeCriticalIncident(overrides: Partial<CriticalIncident> = {}): CriticalIncident {
+  return {
+    id: crypto.randomUUID(),
+    businessId: BUSINESS_A,
+    branchId: BRANCH_A,
+    feedbackId: crypto.randomUUID(),
+    matchedSignals: 'fire, emergency',
+    acknowledgedAt: null,
+    acknowledgedBy: null,
+    escalatedAt: null,
+    createdAt: new Date(),
+    ...overrides,
+  };
+}
+
+function makeFraudSignal(overrides: Partial<FraudSignal> = {}): FraudSignal {
+  return {
+    id: crypto.randomUUID(),
+    businessId: BUSINESS_A,
+    branchId: BRANCH_A,
+    feedbackId: null,
+    signalType: 'velocity',
+    reasonCode: 'device_velocity_exceeded',
+    severity: 'low',
+    status: 'open',
+    metadata: null,
+    detectedAt: new Date(),
+    reviewedAt: null,
+    reviewedBy: null,
+    ...overrides,
+  };
+}
+
+function makeLoyaltyTransaction(overrides: Partial<LoyaltyTransaction> = {}): LoyaltyTransaction {
+  return {
+    id: crypto.randomUUID(),
+    loyaltyAccountId: crypto.randomUUID(),
+    type: 'checkin',
+    points: 10,
+    relatedRewardId: null,
+    relatedQrCodeId: null,
+    visitSessionId: null,
+    feedbackId: null,
+    purchaseAmount: null,
+    redemptionCode: null,
+    redemptionConfirmedAt: null,
+    issuanceStatus: null,
+    notes: null,
+    createdAt: new Date(),
+    createdBy: null,
+    ...overrides,
+  };
+}
+
 const FAKE_USAGE = {
   model: TEST_MODEL,
   promptVersion: PROMPT_VERSION,
@@ -85,6 +144,15 @@ function createFakeRepos(options: {
    * previousPeriod/categoryBreakdown/urgencyBreakdown, so they're
    * unaffected. */
   previousItems?: Feedback[];
+  /** S4 roadmap Block 5 -- critical incidents/fraud signals/loyalty
+   * transactions for the current period. All three default to [], so every
+   * pre-existing test below (and every Block 4 test, which doesn't pass
+   * these either) gets real, empty cross-domain data rather than an error,
+   * and none of them assert on criticalIncidents/fraudSignals/
+   * loyaltyActivity, so they're unaffected. */
+  criticalIncidentRows?: CriticalIncident[];
+  fraudSignalRows?: FraudSignal[];
+  loyaltyTransactionRows?: LoyaltyTransaction[];
   /** Canned totals for the two totalCostSince calls enforceSpendLimit makes,
    * in the order it makes them (daily, then monthly) -- see
    * SummaryService.enforceSpendLimit's `Promise.all([daily, monthly])`.
@@ -121,6 +189,18 @@ function createFakeRepos(options: {
     branches: {
       findById: vi.fn().mockResolvedValue(options.branch),
     } as unknown as BranchRepository,
+    // S4 roadmap Block 5 -- one call per generateForPeriod invocation each
+    // (unlike feedback.listForPeriod's two), so a plain mockResolvedValue
+    // is enough; no Once-chaining needed.
+    criticalIncidents: {
+      listForPeriod: vi.fn().mockResolvedValue(options.criticalIncidentRows ?? []),
+    } as unknown as CriticalIncidentRepository,
+    fraudSignals: {
+      listForPeriod: vi.fn().mockResolvedValue(options.fraudSignalRows ?? []),
+    } as unknown as FraudSignalRepository,
+    loyaltyTransactions: {
+      listForBusinessPeriod: vi.fn().mockResolvedValue(options.loyaltyTransactionRows ?? []),
+    } as unknown as LoyaltyTransactionRepository,
     aiUsageLog: {
       totalCostSince: vi
         .fn()
@@ -534,5 +614,130 @@ describe('SummaryService.generateForPeriod -- category/urgency breakdown + previ
     });
     expect(call.categoryBreakdown).toEqual([]);
     expect(call.urgencyBreakdown).toEqual([]);
+  });
+});
+
+describe('SummaryService.generateForPeriod -- cross-domain aggregates (S4 roadmap Block 5)', () => {
+  const periodStart = new Date('2026-07-01T00:00:00.000Z');
+  const periodEnd = new Date('2026-07-08T00:00:00.000Z');
+
+  it('computes critical incident count and unacknowledged count, passed through to the generator', async () => {
+    const criticalIncidentRows = [
+      makeCriticalIncident({ acknowledgedAt: null }),
+      makeCriticalIncident({ acknowledgedAt: new Date() }),
+      makeCriticalIncident({ acknowledgedAt: null }),
+    ];
+    const repos = createFakeRepos({ items: [], business: BUSINESS, criticalIncidentRows });
+    const generator = fakeGenerator();
+    const service = new SummaryService(repos, generator, TEST_MODEL, PERMISSIVE_SPEND_LIMITS);
+
+    await service.generateForPeriod({ businessId: BUSINESS_A, periodType: 'weekly', periodStart, periodEnd });
+
+    const call = vi.mocked(generator.generate).mock.calls[0]![0] as SummaryGenerationInput;
+    expect(call.criticalIncidents).toEqual({ count: 3, unacknowledgedCount: 2 });
+  });
+
+  it('computes fraud signal count and severity breakdown, passed through to the generator', async () => {
+    const fraudSignalRows = [
+      makeFraudSignal({ severity: 'high' }),
+      makeFraudSignal({ severity: 'high' }),
+      makeFraudSignal({ severity: 'low' }),
+    ];
+    const repos = createFakeRepos({ items: [], business: BUSINESS, fraudSignalRows });
+    const generator = fakeGenerator();
+    const service = new SummaryService(repos, generator, TEST_MODEL, PERMISSIVE_SPEND_LIMITS);
+
+    await service.generateForPeriod({ businessId: BUSINESS_A, periodType: 'weekly', periodStart, periodEnd });
+
+    const call = vi.mocked(generator.generate).mock.calls[0]![0] as SummaryGenerationInput;
+    expect(call.fraudSignals).toEqual({
+      count: 3,
+      severityBreakdown: [
+        { label: 'high', count: 2 },
+        { label: 'low', count: 1 },
+      ],
+    });
+  });
+
+  it('computes loyalty activity count and type breakdown, passed through to the generator', async () => {
+    const loyaltyTransactionRows = [
+      makeLoyaltyTransaction({ type: 'checkin' }),
+      makeLoyaltyTransaction({ type: 'checkin' }),
+      makeLoyaltyTransaction({ type: 'redemption' }),
+    ];
+    const repos = createFakeRepos({ items: [], business: BUSINESS, loyaltyTransactionRows });
+    const generator = fakeGenerator();
+    const service = new SummaryService(repos, generator, TEST_MODEL, PERMISSIVE_SPEND_LIMITS);
+
+    await service.generateForPeriod({ businessId: BUSINESS_A, periodType: 'weekly', periodStart, periodEnd });
+
+    const call = vi.mocked(generator.generate).mock.calls[0]![0] as SummaryGenerationInput;
+    expect(call.loyaltyActivity).toEqual({
+      count: 3,
+      typeBreakdown: [
+        { label: 'checkin', count: 2 },
+        { label: 'redemption', count: 1 },
+      ],
+    });
+  });
+
+  it('scopes critical incidents and fraud signals to the same branch as the current period, when a branchId is given', async () => {
+    const repos = createFakeRepos({ items: [], business: BUSINESS, branch: BRANCH });
+    const generator = fakeGenerator();
+    const service = new SummaryService(repos, generator, TEST_MODEL, PERMISSIVE_SPEND_LIMITS);
+
+    await service.generateForPeriod({
+      businessId: BUSINESS_A,
+      branchId: BRANCH_A,
+      periodType: 'weekly',
+      periodStart,
+      periodEnd,
+    });
+
+    expect(repos.criticalIncidents.listForPeriod).toHaveBeenCalledWith(BUSINESS_A, {
+      branchId: BRANCH_A,
+      from: periodStart,
+      to: periodEnd,
+    });
+    expect(repos.fraudSignals.listForPeriod).toHaveBeenCalledWith(BUSINESS_A, {
+      branchId: BRANCH_A,
+      from: periodStart,
+      to: periodEnd,
+    });
+  });
+
+  it('fetches loyalty activity business-wide, with no branchId, even when the summary itself is branch-scoped', async () => {
+    const repos = createFakeRepos({ items: [], business: BUSINESS, branch: BRANCH });
+    const generator = fakeGenerator();
+    const service = new SummaryService(repos, generator, TEST_MODEL, PERMISSIVE_SPEND_LIMITS);
+
+    await service.generateForPeriod({
+      businessId: BUSINESS_A,
+      branchId: BRANCH_A,
+      periodType: 'weekly',
+      periodStart,
+      periodEnd,
+    });
+
+    // No branchId key at all -- loyalty_transactions has no branch
+    // dimension to scope to (see
+    // LoyaltyTransactionRepository.listForBusinessPeriod's own comment).
+    expect(repos.loyaltyTransactions.listForBusinessPeriod).toHaveBeenCalledWith(BUSINESS_A, {
+      from: periodStart,
+      to: periodEnd,
+    });
+  });
+
+  it('defaults to real zeros/empty breakdowns for all three domains when nothing was flagged this period', async () => {
+    const repos = createFakeRepos({ items: [], business: BUSINESS });
+    const generator = fakeGenerator();
+    const service = new SummaryService(repos, generator, TEST_MODEL, PERMISSIVE_SPEND_LIMITS);
+
+    await service.generateForPeriod({ businessId: BUSINESS_A, periodType: 'weekly', periodStart, periodEnd });
+
+    const call = vi.mocked(generator.generate).mock.calls[0]![0] as SummaryGenerationInput;
+    expect(call.criticalIncidents).toEqual({ count: 0, unacknowledgedCount: 0 });
+    expect(call.fraudSignals).toEqual({ count: 0, severityBreakdown: [] });
+    expect(call.loyaltyActivity).toEqual({ count: 0, typeBreakdown: [] });
   });
 });
