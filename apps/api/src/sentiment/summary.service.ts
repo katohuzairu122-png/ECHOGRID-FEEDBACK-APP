@@ -1,12 +1,14 @@
 import type { Repositories } from '../repositories';
+import type { Feedback } from '../repositories/feedback.repository';
 import type { FeedbackSummary } from '../repositories/feedback-summary.repository';
 import {
   createSummaryGenerator,
   PROMPT_VERSION,
+  type LabeledCount,
   type SummaryGenerationResult,
   type SummaryGenerator,
 } from './summary-generator';
-import { formatPeriodLabel } from './period';
+import { computePreviousPeriodRange, formatPeriodLabel } from './period';
 import { redactComment } from './redaction';
 import { AppError } from '../lib/errors';
 
@@ -40,6 +42,28 @@ function startOfUtcDay(now: Date): Date {
 
 function startOfUtcMonth(now: Date): Date {
   return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+}
+
+/**
+ * S4.1 "sentiment/category/urgency distributions" (S4 roadmap Block 4) --
+ * non-zero buckets only, sorted by count descending. `null` (not yet
+ * classified by the async Level 2 pipeline -- feedback-classifier.ts --
+ * or never classified for a comment-less rating-only submission) becomes
+ * an explicit 'unclassified' bucket instead of being silently dropped, so
+ * a slow-classifying period (especially a fresh daily one, S4.1 roadmap
+ * Block 3) doesn't quietly understate itself to the LLM -- every item in
+ * `items` is accounted for in exactly one bucket, and the bucket counts
+ * always sum to items.length.
+ */
+function computeBreakdown(items: Feedback[], keyOf: (item: Feedback) => string | null): LabeledCount[] {
+  const counts = new Map<string, number>();
+  for (const item of items) {
+    const key = keyOf(item) ?? 'unclassified';
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  return Array.from(counts.entries())
+    .map(([label, count]) => ({ label, count }))
+    .sort((a, b) => b.count - a.count);
 }
 
 /**
@@ -92,6 +116,31 @@ export class SummaryService {
     const neutralCount = items.filter((i) => i.sentiment === 'neutral').length;
     const negativeCount = items.filter((i) => i.sentiment === 'negative').length;
 
+    // S4.1 "sentiment/category/urgency distributions" (S4 roadmap Block 4)
+    // -- computed from the same `items` this period already fetched, no
+    // extra query needed.
+    const categoryBreakdown = computeBreakdown(items, (i) => i.category);
+    const urgencyBreakdown = computeBreakdown(items, (i) => i.urgency);
+
+    // S4.1 "changes from previous periods" (S4 roadmap Block 4) -- same
+    // business/branch scope, same duration, the immediately-prior window.
+    // Reuses listForPeriod rather than a new aggregate-only repository
+    // method -- simplest robust option for this block; doubles feedback
+    // reads per generation, disclosed in this block's own delivery note.
+    const previousRange = computePreviousPeriodRange(periodStart, periodEnd);
+    const previousItems = await this.repos.feedback.listForPeriod(businessId, {
+      branchId,
+      from: previousRange.periodStart,
+      to: previousRange.periodEnd,
+    });
+    const previousPeriod = {
+      periodLabel: formatPeriodLabel(previousRange.periodStart, previousRange.periodEnd),
+      feedbackCount: previousItems.length,
+      positiveCount: previousItems.filter((i) => i.sentiment === 'positive').length,
+      neutralCount: previousItems.filter((i) => i.sentiment === 'neutral').length,
+      negativeCount: previousItems.filter((i) => i.sentiment === 'negative').length,
+    };
+
     // S4.1/S4.2 (Block 2) -- redacted before this row's own comment/name/
     // email/phone context is lost by flattening to a plain string[] below.
     // redactComment's generic email/phone patterns run regardless; the
@@ -117,6 +166,9 @@ export class SummaryService {
         neutralCount,
         negativeCount,
         comments,
+        categoryBreakdown,
+        urgencyBreakdown,
+        previousPeriod,
       });
     } catch (err) {
       // this.model, not result.usage.model -- no result exists to read it

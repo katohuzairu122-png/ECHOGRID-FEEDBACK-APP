@@ -1,3 +1,27 @@
+/** Shared shape for both categoryBreakdown and urgencyBreakdown below --
+ * the two are structurally identical (a label plus a count), so one type
+ * covers both rather than two near-duplicate interfaces (S4 roadmap
+ * Block 4). */
+export interface LabeledCount {
+  label: string;
+  count: number;
+}
+
+/** Same-scope (business/branch), same-duration window immediately before
+ * this period -- always real counts, never a sentinel "no data" value: a
+ * period with genuinely zero prior feedback (e.g. a brand-new branch's
+ * first day) is accurately represented as zeros, not specially flagged.
+ * The LLM is instructed (see buildPrompt) not to force a comparison
+ * narrative the numbers don't support, which covers this case without
+ * needing a separate "no previous period" state here. */
+export interface PreviousPeriodComparison {
+  periodLabel: string;
+  feedbackCount: number;
+  positiveCount: number;
+  neutralCount: number;
+  negativeCount: number;
+}
+
 export interface SummaryGenerationInput {
   businessName: string;
   branchName?: string | undefined;
@@ -12,6 +36,15 @@ export interface SummaryGenerationInput {
    * keeping both the cost/prompt-size and the privacy guardrail in one
    * place (the caller). */
   comments: string[];
+  /** S4.1 "sentiment/category/urgency distributions" -- non-zero buckets
+   * only, sorted by count descending (SummaryService.computeBreakdown).
+   * An empty array is a genuine "nothing classified yet," not an omission
+   * -- buildPrompt renders it as such rather than a blank line. */
+  categoryBreakdown: LabeledCount[];
+  /** Same non-zero/sorted convention as categoryBreakdown. */
+  urgencyBreakdown: LabeledCount[];
+  /** S4.1 "changes from previous periods". */
+  previousPeriod: PreviousPeriodComparison;
 }
 
 /**
@@ -52,8 +85,10 @@ export interface SummaryGenerator {
 /** Bump whenever buildPrompt's template changes materially (wording,
  * structure, what data it includes) -- recorded on every ai_usage_log row
  * (S4.2 "record ... prompt version") so a cost or output-quality shift can
- * be traced back to which prompt version produced it. */
-export const PROMPT_VERSION = 'summary-v1';
+ * be traced back to which prompt version produced it. Bumped to v2 for S4
+ * roadmap Block 4 (category/urgency breakdowns + period-over-period
+ * comparison added to the prompt body). */
+export const PROMPT_VERSION = 'summary-v2';
 
 /**
  * Per-million-token USD pricing for models this codebase might set
@@ -98,22 +133,51 @@ const RECOMMENDATIONS_MARKER = 'RECOMMENDATIONS:';
  * already documented on `feedback_summaries.recommendations` in the Block 1
  * schema comment.
  */
-function buildPrompt(input: SummaryGenerationInput): string {
+/** `"label (count)"`, comma-joined -- shared rendering for both
+ * categoryBreakdown and urgencyBreakdown (S4 roadmap Block 4). */
+function formatCounts(items: LabeledCount[]): string {
+  return items.map((item) => `${item.label} (${item.count})`).join(', ');
+}
+
+/** Exported (was private) as of S4 roadmap Block 4 specifically so its new
+ * category/urgency/period-over-period content is directly unit-testable
+ * without mocking `fetch` -- see summary-generator.test.ts. Still a pure
+ * function with no side effects; AnthropicSummaryGenerator.generate is the
+ * only real caller. */
+export function buildPrompt(input: SummaryGenerationInput): string {
   const scope = input.branchName ? `${input.businessName} (${input.branchName} branch)` : input.businessName;
   const commentBlock =
     input.comments.length > 0
       ? input.comments.map((c, i) => `${i + 1}. "${c}"`).join('\n')
       : '(No written comments this period -- ratings only.)';
 
+  const categoryLine =
+    input.categoryBreakdown.length > 0
+      ? `Category breakdown: ${formatCounts(input.categoryBreakdown)}.`
+      : 'Category breakdown: no classified feedback this period.';
+  const urgencyLine =
+    input.urgencyBreakdown.length > 0
+      ? `Urgency breakdown: ${formatCounts(input.urgencyBreakdown)}.`
+      : 'Urgency breakdown: no classified feedback this period.';
+  const prev = input.previousPeriod;
+  const comparisonLine =
+    `Compared to the previous period (${prev.periodLabel}): ${prev.feedbackCount} submissions previously ` +
+    `(now ${input.feedbackCount}), ${prev.positiveCount} positive previously (now ${input.positiveCount}), ` +
+    `${prev.neutralCount} neutral previously (now ${input.neutralCount}), ${prev.negativeCount} negative ` +
+    `previously (now ${input.negativeCount}).`;
+
   return [
     `You are a customer experience analyst for ${scope}.`,
     `Period: ${input.periodLabel}.`,
     `Feedback volume: ${input.feedbackCount} submissions (${input.positiveCount} positive, ${input.neutralCount} neutral, ${input.negativeCount} negative).`,
+    categoryLine,
+    urgencyLine,
+    comparisonLine,
     '',
     'Customer comments this period:',
     commentBlock,
     '',
-    'Write a concise, factual summary of what customers are saying (2-4 sentences, no speculation beyond what the comments support), followed by 2-5 specific, actionable recommendations for the business owner.',
+    'Write a concise, factual summary of what customers are saying (2-4 sentences, no speculation beyond what the comments support), followed by 2-5 specific, actionable recommendations for the business owner. Use the category, urgency, and previous-period figures above to note meaningful patterns or changes when relevant -- do not force a comparison the data does not support (e.g. a small sample or a brand-new period with nothing prior).',
     'Respond in exactly this format, with no other text:',
     `${SUMMARY_MARKER} <summary prose>`,
     `${RECOMMENDATIONS_MARKER} <one recommendation per line, no numbering>`,

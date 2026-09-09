@@ -29,3 +29,22 @@ export function formatPeriodLabel(periodStart: Date, periodEnd: Date): string {
   const fmt = (d: Date) => d.toISOString().slice(0, 10);
   return `${fmt(periodStart)} to ${fmt(periodEnd)}`;
 }
+
+/**
+ * The immediately-preceding window of the same duration as
+ * [periodStart, periodEnd) -- e.g. for a week-long period, the 7 days right
+ * before it, with no gap and no overlap (previous periodEnd === this
+ * periodStart exactly). Duration-based, not PeriodType-based, so it stays
+ * correct for any period shape without needing to know which cadence
+ * produced it (S4.1 "changes from previous periods", S4 roadmap Block 4).
+ */
+export function computePreviousPeriodRange(
+  periodStart: Date,
+  periodEnd: Date,
+): { periodStart: Date; periodEnd: Date } {
+  const durationMs = periodEnd.getTime() - periodStart.getTime();
+  return {
+    periodStart: new Date(periodStart.getTime() - durationMs),
+    periodEnd: new Date(periodStart.getTime()),
+  };
+}

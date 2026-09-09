@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { computePeriodRange, formatPeriodLabel } from './period';
+import { computePeriodRange, computePreviousPeriodRange, formatPeriodLabel } from './period';
 
 const FIXED_NOW = new Date('2026-07-09T12:00:00.000Z');
 
@@ -34,6 +34,39 @@ describe('computePeriodRange', () => {
     const now = new Date(FIXED_NOW);
     computePeriodRange('monthly', now);
     expect(now.toISOString()).toBe(FIXED_NOW.toISOString());
+  });
+});
+
+describe('computePreviousPeriodRange', () => {
+  it('weekly: returns the 7 days immediately before periodStart, same duration', () => {
+    const current = computePeriodRange('weekly', FIXED_NOW);
+    const previous = computePreviousPeriodRange(current.periodStart, current.periodEnd);
+
+    expect(previous.periodEnd.toISOString()).toBe(current.periodStart.toISOString());
+    expect(previous.periodStart.toISOString()).toBe('2026-06-25T12:00:00.000Z');
+  });
+
+  it('daily: returns the 1 day immediately before periodStart', () => {
+    const current = computePeriodRange('daily', FIXED_NOW);
+    const previous = computePreviousPeriodRange(current.periodStart, current.periodEnd);
+
+    expect(previous.periodEnd.toISOString()).toBe(current.periodStart.toISOString());
+    expect(previous.periodStart.toISOString()).toBe('2026-07-07T12:00:00.000Z');
+  });
+
+  it('is contiguous with the current period -- no gap and no overlap', () => {
+    const current = { periodStart: new Date('2026-07-02T12:00:00.000Z'), periodEnd: FIXED_NOW };
+    const previous = computePreviousPeriodRange(current.periodStart, current.periodEnd);
+
+    expect(previous.periodEnd.getTime()).toBe(current.periodStart.getTime());
+  });
+
+  it('does not mutate the arguments passed in', () => {
+    const periodStart = new Date('2026-07-02T12:00:00.000Z');
+    const periodEnd = new Date(FIXED_NOW);
+    computePreviousPeriodRange(periodStart, periodEnd);
+    expect(periodStart.toISOString()).toBe('2026-07-02T12:00:00.000Z');
+    expect(periodEnd.toISOString()).toBe(FIXED_NOW.toISOString());
   });
 });
 

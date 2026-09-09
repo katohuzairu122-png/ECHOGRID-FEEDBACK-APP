@@ -78,6 +78,13 @@ function createFakeRepos(options: {
   items: Feedback[];
   business: Business;
   branch?: Branch | undefined;
+  /** S4 roadmap Block 4 -- feedback for the immediately-preceding period,
+   * returned by listForPeriod's 2nd call (see below). Defaults to []: every
+   * pre-existing test below that doesn't pass this gets a real, empty
+   * previous period rather than an error, and none of them assert on
+   * previousPeriod/categoryBreakdown/urgencyBreakdown, so they're
+   * unaffected. */
+  previousItems?: Feedback[];
   /** Canned totals for the two totalCostSince calls enforceSpendLimit makes,
    * in the order it makes them (daily, then monthly) -- see
    * SummaryService.enforceSpendLimit's `Promise.all([daily, monthly])`.
@@ -90,7 +97,16 @@ function createFakeRepos(options: {
   const usageLogRows: NewAiUsageLog[] = [];
   return {
     feedback: {
-      listForPeriod: vi.fn().mockResolvedValue(options.items),
+      // 1st call: the current period (generateForPeriod's `items`). 2nd
+      // call: the previous period (S4 roadmap Block 4's `previousItems`) --
+      // same chained-mock pattern as totalCostSince below (daily, then
+      // monthly). generateForPeriod calls listForPeriod exactly twice per
+      // invocation, so every test below gets exactly these two queued
+      // results regardless of whether it cares about the 2nd one.
+      listForPeriod: vi
+        .fn()
+        .mockResolvedValueOnce(options.items)
+        .mockResolvedValueOnce(options.previousItems ?? []),
     } as unknown as FeedbackRepository,
     feedbackSummaries: {
       create: vi.fn().mockImplementation(async (input: NewFeedbackSummary) => {
@@ -132,6 +148,25 @@ const BUSINESS: Business = {
   deletedAt: null,
   deletedBy: null,
 } as Business;
+
+// S4 roadmap Block 4 -- needed so tests can pass a resolving branchId
+// (generateForPeriod throws BRANCH_NOT_FOUND otherwise) to check that the
+// previous-period fetch is scoped to the same branch as the current one.
+const BRANCH: Branch = {
+  id: BRANCH_A,
+  businessId: BUSINESS_A,
+  name: 'Test Branch',
+  slug: 'test-branch',
+  timezone: 'UTC',
+  status: 'active',
+  createdAt: new Date(),
+  createdBy: null,
+  updatedAt: new Date(),
+  updatedBy: null,
+  isDeleted: false,
+  deletedAt: null,
+  deletedBy: null,
+} as Branch;
 
 describe('SummaryService.generateForPeriod', () => {
   const periodStart = new Date('2026-07-01T00:00:00.000Z');
@@ -387,5 +422,117 @@ describe('SummaryService.generateForPeriod -- PII redaction (S4.1/S4.2, Block 2)
 
     const call = vi.mocked(generator.generate).mock.calls[0]![0] as SummaryGenerationInput;
     expect(call.comments).toEqual(['Hi, [redacted] here, loved it!', '[redacted] was not happy.']);
+  });
+});
+
+describe('SummaryService.generateForPeriod -- category/urgency breakdown + previous period (S4 roadmap Block 4)', () => {
+  const periodStart = new Date('2026-07-01T00:00:00.000Z');
+  const periodEnd = new Date('2026-07-08T00:00:00.000Z');
+
+  it('computes category/urgency breakdowns from `items`, sorted by count descending, with an "unclassified" bucket for null', async () => {
+    const items = [
+      makeFeedback({ category: 'product_quality', urgency: 'P1_HIGH' }),
+      makeFeedback({ category: 'product_quality', urgency: 'P1_HIGH' }),
+      makeFeedback({ category: 'product_quality', urgency: 'P1_HIGH' }),
+      makeFeedback({ category: 'staff_conduct', urgency: 'P1_HIGH' }),
+      makeFeedback({ category: 'staff_conduct', urgency: null }),
+      makeFeedback({ category: null, urgency: null }),
+    ];
+    const repos = createFakeRepos({ items, business: BUSINESS });
+    const generator = fakeGenerator();
+    const service = new SummaryService(repos, generator, TEST_MODEL, PERMISSIVE_SPEND_LIMITS);
+
+    await service.generateForPeriod({ businessId: BUSINESS_A, periodType: 'weekly', periodStart, periodEnd });
+
+    const call = vi.mocked(generator.generate).mock.calls[0]![0] as SummaryGenerationInput;
+    // 6 items total -- every bucket's counts must sum back to items.length,
+    // confirming no item was silently dropped instead of bucketed as
+    // 'unclassified'.
+    expect(call.categoryBreakdown).toEqual([
+      { label: 'product_quality', count: 3 },
+      { label: 'staff_conduct', count: 2 },
+      { label: 'unclassified', count: 1 },
+    ]);
+    expect(call.urgencyBreakdown).toEqual([
+      { label: 'P1_HIGH', count: 4 },
+      { label: 'unclassified', count: 2 },
+    ]);
+  });
+
+  it('fetches the previous period from the same business/branch scope, using the immediately-preceding window', async () => {
+    const items = [makeFeedback()];
+    const previousItems = [makeFeedback()];
+    const repos = createFakeRepos({ items, business: BUSINESS, branch: BRANCH, previousItems });
+    const generator = fakeGenerator();
+    const service = new SummaryService(repos, generator, TEST_MODEL, PERMISSIVE_SPEND_LIMITS);
+
+    await service.generateForPeriod({
+      businessId: BUSINESS_A,
+      branchId: BRANCH_A,
+      periodType: 'weekly',
+      periodStart,
+      periodEnd,
+    });
+
+    // Exactly 2 calls -- catches an accidental 3rd query as readily as a
+    // missing 2nd one.
+    expect(repos.feedback.listForPeriod).toHaveBeenCalledTimes(2);
+    expect(repos.feedback.listForPeriod).toHaveBeenNthCalledWith(1, BUSINESS_A, {
+      branchId: BRANCH_A,
+      from: periodStart,
+      to: periodEnd,
+    });
+    // computePreviousPeriodRange(periodStart, periodEnd) for this 7-day
+    // window: periodEnd becomes periodStart (2026-07-01), and periodStart
+    // moves back by the same 7-day duration (to 2026-06-24) -- see
+    // period.test.ts's own 'weekly' case for the same arithmetic.
+    expect(repos.feedback.listForPeriod).toHaveBeenNthCalledWith(2, BUSINESS_A, {
+      branchId: BRANCH_A,
+      from: new Date('2026-06-24T00:00:00.000Z'),
+      to: new Date('2026-07-01T00:00:00.000Z'),
+    });
+  });
+
+  it('passes real previous-period counts and label through to the generator, not a placeholder', async () => {
+    const items = [makeFeedback({ sentiment: 'positive' })];
+    const previousItems = [
+      makeFeedback({ sentiment: 'positive' }),
+      makeFeedback({ sentiment: 'positive' }),
+      makeFeedback({ sentiment: 'neutral' }),
+      makeFeedback({ sentiment: 'negative' }),
+    ];
+    const repos = createFakeRepos({ items, business: BUSINESS, previousItems });
+    const generator = fakeGenerator();
+    const service = new SummaryService(repos, generator, TEST_MODEL, PERMISSIVE_SPEND_LIMITS);
+
+    await service.generateForPeriod({ businessId: BUSINESS_A, periodType: 'weekly', periodStart, periodEnd });
+
+    const call = vi.mocked(generator.generate).mock.calls[0]![0] as SummaryGenerationInput;
+    expect(call.previousPeriod).toEqual({
+      periodLabel: '2026-06-24 to 2026-07-01',
+      feedbackCount: 4,
+      positiveCount: 2,
+      neutralCount: 1,
+      negativeCount: 1,
+    });
+  });
+
+  it('defaults to a real, empty previous period (all-zero counts) when the caller does not supply previousItems, and to empty breakdowns when the current period has no feedback', async () => {
+    const repos = createFakeRepos({ items: [], business: BUSINESS });
+    const generator = fakeGenerator();
+    const service = new SummaryService(repos, generator, TEST_MODEL, PERMISSIVE_SPEND_LIMITS);
+
+    await service.generateForPeriod({ businessId: BUSINESS_A, periodType: 'weekly', periodStart, periodEnd });
+
+    const call = vi.mocked(generator.generate).mock.calls[0]![0] as SummaryGenerationInput;
+    expect(call.previousPeriod).toEqual({
+      periodLabel: '2026-06-24 to 2026-07-01',
+      feedbackCount: 0,
+      positiveCount: 0,
+      neutralCount: 0,
+      negativeCount: 0,
+    });
+    expect(call.categoryBreakdown).toEqual([]);
+    expect(call.urgencyBreakdown).toEqual([]);
   });
 });
