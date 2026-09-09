@@ -21,3 +21,9 @@ blob-report/
 
 # Next.js generated types
 apps/web/next-env.d.ts
+
+# git bundles -- delivery artifacts from the Continuing Development
+# workflow (each approved block ships as a *.bundle at the repo root
+# alongside its commit); intentionally untracked, not repository hygiene
+# debt.
+*.bundle
