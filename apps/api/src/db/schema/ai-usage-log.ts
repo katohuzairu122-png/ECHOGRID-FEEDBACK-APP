@@ -6,10 +6,26 @@ import { branches } from './branches';
 /**
  * Per-call cost/usage ledger for Anthropic API calls (S4.2 Privacy and cost
  * controls) -- one row per attempt, whether it actually reached Anthropic or
- * not. Append-only, same pattern as `feedback_summaries`/`loyalty_transactions`/
- * `audit_log`: no updatedAt, no soft-delete, a correction is a new row.
+ * not. Append-only in spirit, same pattern as `feedback_summaries`/
+ * `loyalty_transactions`/`audit_log` -- a correction is a new row, not an
+ * edit to an old one's substantive facts -- with ONE deliberate exception
+ * (S4 roadmap Block 7, S4.3 "mark processing pending or failed"): a
+ * 'pending' row is updated in place, once, to its final 'success'/'failed'
+ * outcome (AiUsageLogRepository.resolve). That is not "correcting history"
+ * the way the append-only rule guards against -- it is the SAME attempt
+ * reaching its real conclusion, and `resolvedAt` (below) records when that
+ * happened without losing `createdAt`'s own "when this attempt began."
  *
- * `status` captures all three outcomes an aggregation-run attempt can have:
+ * `status` captures the four states an aggregation-run attempt can be in:
+ *   - 'pending' -- an attempt has started (SummaryService.generateForPeriod
+ *     passed its spend-limit check and began the real work) but has not
+ *     yet concluded either way. Written first, before any Anthropic call or
+ *     even the feedback/cross-domain reads that build its prompt, so an
+ *     attempt that never reaches either outcome below (e.g. this Worker
+ *     invocation is killed mid-flight) is still visible as a stuck
+ *     'pending' row instead of leaving no trace anywhere -- the exact gap
+ *     this block closes. `resolvedAt` stays NULL for as long as a row is
+ *     genuinely pending.
  *   - 'success' -- Anthropic responded; inputTokens/outputTokens/
  *     costEstimateUsd are all real numbers from the API's own `usage` block.
  *   - 'failed' -- the call was attempted but the response never came back
@@ -18,10 +34,15 @@ import { branches } from './branches';
  *     request.
  *   - 'blocked' -- SummaryService's spend-limit check rejected the call
  *     before it was ever made (see summary.service.ts's enforceSpendLimit) --
- *     every token/cost column is NULL because nothing was sent.
+ *     every token/cost column is NULL because nothing was sent. Written
+ *     directly as a terminal row, never via a 'pending' row first -- a
+ *     blocked attempt never starts the work 'pending' represents.
  * Only 'success' rows carry a non-NULL costEstimateUsd, so the daily/monthly
  * spend-limit query (AiUsageLogRepository.totalCostSince) is a plain SUM
- * with a `status = 'success'` filter and nothing more elaborate.
+ * with a `status = 'success'` filter and nothing more elaborate --
+ * 'pending' rows are excluded by that same filter automatically, so a
+ * still-in-flight attempt can never be double-counted or miscounted as
+ * spend.
  *
  * `callSite` is open text, not CHECK-constrained -- same reasoning as
  * feedback.category/fraud_signals.signalType: 'summary_generation' is the
@@ -59,6 +80,14 @@ export const aiUsageLog = pgTable(
     costEstimateUsd: real('cost_estimate_usd'),
     status: text('status').notNull(),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    // S4 roadmap Block 7 -- NULL while status='pending'; set the one time a
+    // row transitions to 'success'/'failed' via AiUsageLogRepository.resolve.
+    // Always NULL for 'blocked' rows (never pending, never resolved -- see
+    // this table's own doc comment above), and for every 'success'/'failed'
+    // row written before this block shipped (there is no way to backfill a
+    // resolution time that was never recorded; NULL is the honest value,
+    // not a fabricated guess).
+    resolvedAt: timestamp('resolved_at', { withTimezone: true }),
   },
   (table) => [
     // Backs totalCostSince's WHERE status = 'success' AND created_at >= X --
@@ -67,12 +96,26 @@ export const aiUsageLog = pgTable(
     // Partial, same reasoning as fraud_signals_business_open_idx/
     // critical_incidents_unacknowledged_idx: successful rows are the
     // overwhelming majority in steady state, but the query only ever cares
-    // about them, never about 'failed'/'blocked' rows.
+    // about them, never about 'failed'/'blocked'/'pending' rows.
     index('ai_usage_log_success_created_idx')
       .on(table.createdAt)
       .where(sql`${table.status} = 'success'`),
     index('ai_usage_log_business_created_idx').on(table.businessId, table.createdAt),
-    check('ai_usage_log_status_check', sql`${table.status} IN ('success', 'failed', 'blocked')`),
+    // Backs an operational "find stuck attempts" query (WHERE status =
+    // 'pending' AND created_at < some cutoff) -- S4 roadmap Block 7 makes
+    // this the first time such a query is even possible; no code path
+    // queries it automatically yet (no scheduled sweep exists for stale
+    // pending rows, unlike e.g. sweepUnacknowledgedCriticalIncidents --
+    // flagged as a natural follow-up, not implemented speculatively here).
+    // Partial for the same reason as the two indexes above: pending rows
+    // are rare and short-lived in steady state.
+    index('ai_usage_log_pending_created_idx')
+      .on(table.createdAt)
+      .where(sql`${table.status} = 'pending'`),
+    check(
+      'ai_usage_log_status_check',
+      sql`${table.status} IN ('pending', 'success', 'failed', 'blocked')`,
+    ),
     check('ai_usage_log_period_type_check', sql`${table.periodType} IN ('daily', 'weekly', 'monthly')`),
     check('ai_usage_log_period_range_check', sql`${table.periodEnd} > ${table.periodStart}`),
   ],

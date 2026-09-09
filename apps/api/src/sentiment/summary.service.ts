@@ -116,6 +116,29 @@ export class SummaryService {
     // send.
     await this.enforceSpendLimit(options);
 
+    // S4 roadmap Block 7 (S4.3 "mark processing pending or failed") -- a
+    // 'pending' row exists in ai_usage_log from this point until this
+    // function either returns or throws, covering both the reads below and
+    // the actual Anthropic call, so an attempt that starts but never
+    // reaches either resolve() call (e.g. this Worker invocation is killed
+    // mid-flight) is still visible as a stuck 'pending' row instead of
+    // leaving no trace anywhere. Captured as its own variable, not
+    // re-queried, so both resolve() calls below update this exact row.
+    const pendingLog = await this.repos.aiUsageLog.record({
+      businessId,
+      branchId: branchId ?? null,
+      callSite: 'summary_generation',
+      model: this.model,
+      promptVersion: PROMPT_VERSION,
+      periodType,
+      periodStart,
+      periodEnd,
+      inputTokens: null,
+      outputTokens: null,
+      costEstimateUsd: null,
+      status: 'pending',
+    });
+
     // S4.1 "changes from previous periods" (S4 roadmap Block 4) -- same
     // business/branch scope, same duration, the immediately-prior window.
     const previousRange = computePreviousPeriodRange(periodStart, periodEnd);
@@ -212,44 +235,38 @@ export class SummaryService {
         loyaltyActivity,
       });
     } catch (err) {
-      // this.model, not result.usage.model -- no result exists to read it
-      // from; this.model is what the attempt actually used (or would have,
-      // for a request that failed before Anthropic responded).
-      await this.repos.aiUsageLog.record({
-        businessId,
-        branchId: branchId ?? null,
-        callSite: 'summary_generation',
+      // S4 roadmap Block 7 -- resolve() the same pending row from above,
+      // not a second record(). this.model, not result.usage.model -- no
+      // result exists to read it from; this.model is what the attempt
+      // actually used (or would have, for a request that failed before
+      // Anthropic responded) -- same values already recorded at pending
+      // time, re-passed since resolve() takes a full, uniform payload.
+      await this.repos.aiUsageLog.resolve(pendingLog.id, {
+        status: 'failed',
         model: this.model,
         promptVersion: PROMPT_VERSION,
-        periodType,
-        periodStart,
-        periodEnd,
         inputTokens: null,
         outputTokens: null,
         costEstimateUsd: null,
-        status: 'failed',
       });
       throw err;
     }
 
-    // result.usage.model/.promptVersion, not this.model/PROMPT_VERSION --
-    // what the generator that actually ran reports about itself (in
-    // dev/staging, ConsoleSummaryGenerator honestly reports
+    // S4 roadmap Block 7 -- resolve() the same pending row, not a second
+    // record(). result.usage.model/.promptVersion, not this.model/
+    // PROMPT_VERSION -- what the generator that actually ran reports about
+    // itself (in dev/staging, ConsoleSummaryGenerator honestly reports
     // 'console-dev-fallback' and zero cost rather than this.model, which
-    // was configured but never actually called).
-    await this.repos.aiUsageLog.record({
-      businessId,
-      branchId: branchId ?? null,
-      callSite: 'summary_generation',
+    // was configured but never actually called), correcting what pending
+    // time could only guess at (the configured model, not necessarily the
+    // one that actually ran).
+    await this.repos.aiUsageLog.resolve(pendingLog.id, {
+      status: 'success',
       model: result.usage.model,
       promptVersion: result.usage.promptVersion,
-      periodType,
-      periodStart,
-      periodEnd,
       inputTokens: result.usage.inputTokens,
       outputTokens: result.usage.outputTokens,
       costEstimateUsd: result.usage.costEstimateUsd,
-      status: 'success',
     });
 
     return this.repos.feedbackSummaries.create({

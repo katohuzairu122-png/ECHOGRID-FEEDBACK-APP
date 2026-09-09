@@ -162,7 +162,11 @@ function createFakeRepos(options: {
   monthlySpendUsd?: number;
 }) {
   const created: unknown[] = [];
-  const usageLogRows: NewAiUsageLog[] = [];
+  // S4 roadmap Block 7 -- typed as AiUsageLog[] (real rows, with an id),
+  // not NewAiUsageLog[] (raw insert input): resolve() below needs to find
+  // and mutate an existing entry by id, mirroring the real repository's
+  // record()-then-update-in-place behavior.
+  const usageLogRows: AiUsageLog[] = [];
   return {
     feedback: {
       // 1st call: the current period (generateForPeriod's `items`). 2nd
@@ -206,10 +210,36 @@ function createFakeRepos(options: {
         .fn()
         .mockResolvedValueOnce(options.dailySpendUsd ?? 0)
         .mockResolvedValueOnce(options.monthlySpendUsd ?? 0),
+      // S4 roadmap Block 7 -- record() and resolve() share this same
+      // backing array. resolve() mutates an existing entry in place rather
+      // than pushing a new one, mirroring a real UPDATE: one attempt is
+      // always exactly one row, whether it's 'blocked' outright, still
+      // 'pending', or has since been resolve()d to 'success'/'failed'.
       record: vi.fn().mockImplementation(async (input: NewAiUsageLog) => {
-        usageLogRows.push(input);
-        return { id: crypto.randomUUID(), createdAt: new Date(), ...input } as AiUsageLog;
+        const row = { id: crypto.randomUUID(), createdAt: new Date(), resolvedAt: null, ...input } as AiUsageLog;
+        usageLogRows.push(row);
+        return row;
       }),
+      resolve: vi.fn().mockImplementation(
+        async (
+          id: string,
+          updates: {
+            status: 'success' | 'failed';
+            model: string;
+            promptVersion: string;
+            inputTokens: number | null;
+            outputTokens: number | null;
+            costEstimateUsd: number | null;
+          },
+        ) => {
+          // Same `WHERE status = 'pending'` guard the real repository's
+          // UPDATE applies -- resolving an already-resolved row is a no-op.
+          const row = usageLogRows.find((r) => r.id === id && r.status === 'pending');
+          if (!row) return undefined;
+          Object.assign(row, updates, { resolvedAt: new Date() });
+          return row;
+        },
+      ),
     } as unknown as AiUsageLogRepository,
     created,
     usageLogRows,
@@ -470,6 +500,95 @@ describe('SummaryService.generateForPeriod -- usage logging (S4.2)', () => {
     ]);
     // A failed generation must never still create a feedback_summaries row.
     expect(repos.feedbackSummaries.create).not.toHaveBeenCalled();
+  });
+});
+
+describe('SummaryService.generateForPeriod -- pending/failed job status (S4 roadmap Block 7)', () => {
+  const periodStart = new Date('2026-07-01T00:00:00.000Z');
+  const periodEnd = new Date('2026-07-08T00:00:00.000Z');
+
+  it('writes a "pending" row before calling the generator, then resolves that same row to "success" -- not a second row', async () => {
+    const repos = createFakeRepos({ items: [makeFeedback()], business: BUSINESS });
+    // Captured synchronously the instant generate() is invoked, before it
+    // resolves -- proves the pending row exists BEFORE the attempt
+    // concludes, not just "eventually, somewhere in the final state" (which
+    // the existing "usage logging" tests above don't actually distinguish
+    // from this new pending-first behavior on their own).
+    let pendingRowAtGenerateTime: unknown;
+    const generator: SummaryGenerator = {
+      generate: vi.fn().mockImplementation(async () => {
+        pendingRowAtGenerateTime = { ...repos.usageLogRows[0] };
+        return { summary: 'Fake summary.', recommendations: 'Fake rec.', usage: FAKE_USAGE };
+      }),
+    };
+    const service = new SummaryService(repos, generator, TEST_MODEL, PERMISSIVE_SPEND_LIMITS);
+
+    await service.generateForPeriod({ businessId: BUSINESS_A, periodType: 'weekly', periodStart, periodEnd });
+
+    expect(pendingRowAtGenerateTime).toMatchObject({
+      businessId: BUSINESS_A,
+      branchId: null,
+      callSite: 'summary_generation',
+      status: 'pending',
+      model: TEST_MODEL,
+      promptVersion: PROMPT_VERSION,
+      inputTokens: null,
+      outputTokens: null,
+      costEstimateUsd: null,
+      resolvedAt: null,
+    });
+    // Exactly one row total, and it's the SAME row (same id) now resolved
+    // to 'success' with real usage -- not a second row appended alongside
+    // the pending one.
+    expect(repos.usageLogRows).toHaveLength(1);
+    expect(repos.usageLogRows[0]!.id).toBe((pendingRowAtGenerateTime as { id: string }).id);
+    expect(repos.usageLogRows[0]).toMatchObject({
+      status: 'success',
+      model: FAKE_USAGE.model,
+      promptVersion: FAKE_USAGE.promptVersion,
+      inputTokens: FAKE_USAGE.inputTokens,
+      outputTokens: FAKE_USAGE.outputTokens,
+      costEstimateUsd: FAKE_USAGE.costEstimateUsd,
+    });
+    expect(repos.usageLogRows[0]!.resolvedAt).not.toBeNull();
+  });
+
+  it('resolves the same pending row to "failed" (not a second row) when the generator throws', async () => {
+    const repos = createFakeRepos({ items: [makeFeedback()], business: BUSINESS });
+    const failingGenerator: SummaryGenerator = {
+      generate: vi.fn().mockRejectedValue(new Error('Anthropic API request failed with status 500')),
+    };
+    const service = new SummaryService(repos, failingGenerator, TEST_MODEL, PERMISSIVE_SPEND_LIMITS);
+
+    await expect(
+      service.generateForPeriod({ businessId: BUSINESS_A, periodType: 'weekly', periodStart, periodEnd }),
+    ).rejects.toThrow('Anthropic API request failed with status 500');
+
+    expect(repos.usageLogRows).toHaveLength(1);
+    expect(repos.usageLogRows[0]).toMatchObject({
+      status: 'failed',
+      model: TEST_MODEL,
+      promptVersion: PROMPT_VERSION,
+      inputTokens: null,
+      outputTokens: null,
+      costEstimateUsd: null,
+    });
+    expect(repos.usageLogRows[0]!.resolvedAt).not.toBeNull();
+  });
+
+  it('never writes a "pending" row at all when the spend limit blocks generation -- enforceSpendLimit runs first', async () => {
+    const repos = createFakeRepos({ items: [makeFeedback()], business: BUSINESS, dailySpendUsd: 10 });
+    const service = new SummaryService(repos, fakeGenerator(), TEST_MODEL, { dailyLimitUsd: 10, monthlyLimitUsd: 1000 });
+
+    await expect(
+      service.generateForPeriod({ businessId: BUSINESS_A, periodType: 'weekly', periodStart, periodEnd }),
+    ).rejects.toThrow();
+
+    // Exactly the one 'blocked' row from enforceSpendLimit -- no separate
+    // 'pending' row was ever written, since a blocked attempt never starts
+    // the work 'pending' represents.
+    expect(repos.usageLogRows).toHaveLength(1);
+    expect(repos.usageLogRows[0]!.status).toBe('blocked');
   });
 });
 
