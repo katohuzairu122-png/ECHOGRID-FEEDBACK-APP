@@ -3,6 +3,7 @@ import { FeedbackService } from './feedback.service';
 import type { Feedback, NewFeedback } from '../repositories/feedback.repository';
 import type { QrCode } from '../repositories/qr-code.repository';
 import type { CriticalIncident, NewCriticalIncident } from '../repositories/critical-incident.repository';
+import type { ClassifyFeedbackInput } from '@echo-grid-feedback/shared-types';
 
 /** Only `create` is ever called from FeedbackService.submit -- a minimal
  * fake, not a full CriticalIncidentRepository stand-in. */
@@ -99,7 +100,7 @@ function createFakeFeedbackRepo() {
     async classifyManually(
       id: string,
       businessId: string,
-      patch: { category?: string; urgency?: string; sentiment?: string },
+      patch: ClassifyFeedbackInput,
       updatedBy: string,
     ): Promise<Feedback | undefined> {
       const item = items.get(id);

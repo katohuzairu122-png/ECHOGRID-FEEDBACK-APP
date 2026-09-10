@@ -1,7 +1,7 @@
 import { eq, ne, and, gte, lte, ilike, sql, inArray, isNull, isNotNull, asc, desc } from 'drizzle-orm';
 import { feedback } from '../db/schema';
 import { BaseRepository } from './base.repository';
-import type { FeedbackFilterInput } from '@echo-grid-feedback/shared-types';
+import type { FeedbackFilterInput, ClassifyFeedbackInput } from '@echo-grid-feedback/shared-types';
 
 export type Feedback = typeof feedback.$inferSelect;
 export type NewFeedback = typeof feedback.$inferInsert;
@@ -193,7 +193,12 @@ export class FeedbackRepository extends BaseRepository {
   async classifyManually(
     id: string,
     businessId: string,
-    patch: { category?: string; urgency?: string; sentiment?: string },
+    // ClassifyFeedbackInput rather than a hand-written optional-field object:
+    // the route hands this straight through from classifyFeedbackSchema, and
+    // under exactOptionalPropertyTypes a locally-restated `{ category?: string }`
+    // is NOT compatible with the schema's inferred `{ category?: X | undefined }`.
+    // Naming the shared contract keeps the three layers from drifting again.
+    patch: ClassifyFeedbackInput,
     updatedBy: string,
   ): Promise<Feedback | undefined> {
     const [row] = await this.db

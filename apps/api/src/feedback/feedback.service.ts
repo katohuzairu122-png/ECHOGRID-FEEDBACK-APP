@@ -1,7 +1,11 @@
 import type { Repositories } from '../repositories';
 import type { Feedback, NewFeedback } from '../repositories/feedback.repository';
 import type { QrCode } from '../repositories/qr-code.repository';
-import type { SubmitFeedbackInput, FeedbackFilterInput } from '@echo-grid-feedback/shared-types';
+import type {
+  SubmitFeedbackInput,
+  FeedbackFilterInput,
+  ClassifyFeedbackInput,
+} from '@echo-grid-feedback/shared-types';
 import { AppError } from '../lib/errors';
 import { detectCriticalSignals } from './critical-detector';
 import { normalizeFeedbackText, hashNormalizedText } from './text-normalizer';
@@ -159,7 +163,7 @@ export class FeedbackService {
   async classifyManually(
     id: string,
     businessId: string,
-    patch: { category?: string; urgency?: string; sentiment?: string },
+    patch: ClassifyFeedbackInput,
     updatedBy: string,
   ): Promise<Feedback> {
     if (patch.category === undefined && patch.urgency === undefined && patch.sentiment === undefined) {
