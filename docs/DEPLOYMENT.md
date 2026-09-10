@@ -218,25 +218,54 @@ Go/no-go checklist before calling a deploy done:
 ## Continuous Deployment (Optional)
 
 `.github/workflows/ci-cd.yml` automates Step 6 (and only Step 6) once wired
-up: on every push/PR it typechecks and runs both apps' fast unit test suites;
-on push to `main` (after that check passes) it deploys API then web, in the
-same order as the manual commands above. It deliberately does **not** run
-Steps 1–5 or 7 — resource provisioning, secrets, Stripe setup, migrations,
-and CORS origins all stay manual, deliberate steps, not something a merge to
-`main` should trigger silently.
+up: on every push/PR it checks for migration drift, typechecks, and runs both
+apps' fast unit test suites; on push to `main` (after that check passes) it
+deploys API then web, in the same order as the manual commands above. It
+deliberately does **not** run Steps 1–5 or 7 — resource provisioning,
+secrets, Stripe setup, migrations, and CORS origins all stay manual,
+deliberate steps, not something a merge to `main` should trigger silently.
 
-**Two prerequisites this repo does not currently have:**
+### The migration drift check
 
-1. A GitHub remote. This project has no `.git` directory yet — the workflow
-   file is inert until you run `git init`, create a GitHub repository, and
-   push.
-2. Two repository secrets (GitHub repo → Settings → Secrets and variables →
-   Actions): `CLOUDFLARE_API_TOKEN` (Cloudflare dashboard → My Profile → API
-   Tokens → Create Token → "Edit Cloudflare Workers" template) and
-   `CLOUDFLARE_ACCOUNT_ID` (Cloudflare dashboard → Workers & Pages → Account
-   ID, right sidebar).
+The `Migrations up to date -- API` step runs
+`pnpm --filter @echo-grid-feedback/api db:check`
+(`apps/api/scripts/check-migrations-current.mjs`) and **fails the build when
+`src/db/schema/` has changes that no migration in `apps/api/drizzle/`
+accounts for.**
 
-Until both exist, keep deploying with Step 6's manual commands.
+It exists because nothing else in this pipeline can catch that. Typecheck
+passes — the schema is valid TypeScript either way. The unit tests pass —
+they run against fake repositories and never open a database connection. So
+a schema change with no migration deploys cleanly and then fails at runtime
+on every query touching the new column or constraint. That is exactly how
+Block 7 of the Continuing Development work reached production with the S4
+aggregation pipeline broken.
+
+The check runs a real `drizzle-kit generate` and fails if it would write
+anything, so it can never disagree with Drizzle's own diffing. It needs no
+database (`generate` diffs the schema against `drizzle/meta/*_snapshot.json`;
+only `migrate`/`push`/`studio` connect), and it restores `apps/api/drizzle/`
+byte-for-byte afterwards, so it is safe to run locally on a dirty branch:
+
+```bash
+pnpm --filter @echo-grid-feedback/api db:check
+```
+
+When it fails, the fix is to generate the missing migration and commit it —
+then apply it with `db:migrate` as its own deliberate step, per Step 4.
+The check verifies the migration *exists in the repo*; it does not and cannot
+verify it has been *applied to the database*.
+
+**One prerequisite still outstanding:**
+
+Two repository secrets (GitHub repo → Settings → Secrets and variables →
+Actions): `CLOUDFLARE_API_TOKEN` (Cloudflare dashboard → My Profile → API
+Tokens → Create Token → "Edit Cloudflare Workers" template) and
+`CLOUDFLARE_ACCOUNT_ID` (Cloudflare dashboard → Workers & Pages → Account
+ID, right sidebar).
+
+Until both exist, the `verify` job runs but the two deploy jobs fail
+authentication — keep deploying with Step 6's manual commands.
 
 ## Rollback
 

@@ -50,6 +50,15 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # First real check on purpose: it is the cheapest one here (no database,
+      # no compile) and it catches the one failure class the rest of this job
+      # is blind to. Typecheck and the unit tests both pass happily when a
+      # schema change has no migration -- the tests use fake repositories and
+      # never touch Postgres -- which is exactly how Block 7 reached
+      # production with a missing migration. See the script's header.
+      - name: Migrations up to date -- API
+        run: pnpm --filter @echo-grid-feedback/api db:check
+
       - name: Typecheck API
         run: pnpm --filter @echo-grid-feedback/api typecheck
 

@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit",
     "types": "wrangler types",
     "db:generate": "drizzle-kit generate",
+    "db:check": "node scripts/check-migrations-current.mjs",
     "db:migrate": "drizzle-kit migrate",
     "db:studio": "drizzle-kit studio",
     "db:seed": "tsx src/db/seed/permissions.seed.ts",
