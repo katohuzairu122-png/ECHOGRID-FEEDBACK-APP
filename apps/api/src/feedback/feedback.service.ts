@@ -138,6 +138,45 @@ export class FeedbackService {
     return updated;
   }
 
+  /**
+   * Continuing Development S4 Block 10 (S4.3 "allow authorized manual
+   * classification"). Applies a human's classification and moves the row to
+   * the terminal 'manual' analysis state.
+   *
+   * Rejects a patch with no fields set rather than treating it as a
+   * successful no-op: an empty body almost always means a client bug or a
+   * mis-built form, and silently answering 200 while flipping the row to
+   * 'manual' would mark it handled without anyone having actually
+   * classified it -- the row then leaves the "Unclassified" saved view with
+   * every field still null, which is worse than the stuck row it replaced.
+   *
+   * Every field stays independently optional above that floor: correcting
+   * only the urgency on an otherwise well-classified row is a normal
+   * action, and forcing the caller to re-send category and sentiment
+   * unchanged would invite them to overwrite good values with stale ones
+   * read from a page they opened minutes ago.
+   */
+  async classifyManually(
+    id: string,
+    businessId: string,
+    patch: { category?: string; urgency?: string; sentiment?: string },
+    updatedBy: string,
+  ): Promise<Feedback> {
+    if (patch.category === undefined && patch.urgency === undefined && patch.sentiment === undefined) {
+      throw new AppError(
+        'Provide at least one of category, urgency or sentiment.',
+        400,
+        'EMPTY_CLASSIFICATION',
+      );
+    }
+
+    const updated = await this.repos.feedback.classifyManually(id, businessId, patch, updatedBy);
+    if (!updated) {
+      throw new AppError('Feedback not found.', 404, 'FEEDBACK_NOT_FOUND');
+    }
+    return updated;
+  }
+
   async remove(id: string, businessId: string, deletedBy: string): Promise<void> {
     const existing = await this.repos.feedback.findById(id, businessId);
     if (!existing) {

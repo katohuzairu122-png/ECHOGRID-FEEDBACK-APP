@@ -802,6 +802,62 @@ consumer, same as the original submission-time classification.
 
 ---
 
+### `POST /api/v1/feedback/:id/classify`
+
+Authorized manual classification (Continuing Development S4 Block 10, S4.3).
+Lets a human set `category`/`urgency`/`sentiment` directly — both to correct
+a wrong AI call and to rescue a row the pipeline repeatedly failed on, which
+is the case the spec names. Requires `feedback:manage`, same reasoning as
+`/reanalyze` above.
+
+**When to use this instead of `/reanalyze`:** `/reanalyze` re-runs the
+machine and is right for a transient failure. This endpoint is right when
+re-running would just fail again, or would return the same wrong answer.
+
+**Headers**: `Authorization` + `X-Business-Id` required.
+
+**Request body** — every field optional, but **at least one required**.
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| `category` | string | one of the known categories; open taxonomy, validated in code not SQL |
+| `urgency` | string | `P0_CRITICAL \| P1_HIGH \| P2_NORMAL \| P3_LOW` |
+| `sentiment` | string | `very_negative \| negative \| neutral \| positive \| very_positive \| unknown` |
+
+Omitted fields are left untouched — correcting only the urgency on an
+otherwise well-classified row is a normal action, and requiring the caller to
+re-send the rest would invite overwriting good values with stale ones read
+from a page opened minutes earlier.
+
+**Response `200`**: the updated feedback row.
+
+Two side effects worth knowing:
+
+- **`analysisStatus` becomes `'manual'`**, not `'completed'`. `completed`
+  asserts the automated pipeline ran and succeeded, which for a
+  hand-classified row is usually false. Keeping them distinct is also what
+  moves the row out of the "Unclassified" saved view
+  (`analysisStatus IN ('pending','failed')`) instead of stranding it there.
+- **`sentimentScore` is nulled whenever `sentiment` is supplied.** The score
+  is a model-confidence signal and a human judgment has none; leaving a stale
+  score beside a corrected label would leave the two disagreeing and feed a
+  fabricated confidence into the analytics trend chart.
+
+Once a row is `'manual'`, the automated pipeline can no longer overwrite it —
+`FeedbackRepository.updateSentiment` is guarded on
+`analysis_status != 'manual'`, so a later `/reanalyze`, queue retry or
+backfill cannot silently replace the human's judgment. Re-classifying
+manually is still allowed: a correction of a correction is legitimate, and
+`audit_log` records each one.
+
+**Errors**: `EMPTY_CLASSIFICATION` (400 — no fields supplied),
+`MISSING_BUSINESS_CONTEXT` (400), `UNAUTHENTICATED` (401),
+`NOT_A_MEMBER` (403), `PERMISSION_DENIED` (403), `FEEDBACK_NOT_FOUND` (404).
+
+**Audit**: records `feedback.classified_manually`.
+
+---
+
 ### `GET /api/v1/businesses/:id/public`
 
 **Fully public.** Name-only lookup so a customer-facing page (no staff

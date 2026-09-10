@@ -87,7 +87,12 @@ export const feedbackSchema = z.object({
   // shared type never drifts from what the API actually returns.
   sentiment: sentimentSchema.nullable(),
   sentimentScore: z.number().nullable(),
-  analysisStatus: z.enum(['pending', 'completed', 'failed', 'skipped']),
+  // 'manual' -- an authorized human classified this by hand (Continuing
+  // Development S4 Block 10). Deliberately distinct from 'completed', which
+  // asserts the automated pipeline ran and succeeded; see the DB schema's
+  // own note for why collapsing the two would hide how often the classifier
+  // actually works.
+  analysisStatus: z.enum(['pending', 'completed', 'failed', 'skipped', 'manual']),
   analyzedAt: z.string().nullable(),
   // Automated Feedback Sorting -- all three nullable/pending until Level 2
   // classification runs (category/urgency) or a manager assigns it, same
@@ -140,7 +145,7 @@ export const feedbackFilterSchema = z.object({
   urgency: z.array(urgencySchema).optional(),
   sentiment: z.array(sentimentSchema).optional(),
   status: z.array(z.enum(['new', 'reviewed'])).optional(),
-  analysisStatus: z.array(z.enum(['pending', 'completed', 'failed', 'skipped'])).optional(),
+  analysisStatus: z.array(z.enum(['pending', 'completed', 'failed', 'skipped', 'manual'])).optional(),
   assignedTo: z.uuid().optional(),
   unassigned: z.boolean().optional(),
   // True: an AI follow-up question was asked but the customer hasn't

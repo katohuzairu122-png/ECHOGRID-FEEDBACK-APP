@@ -5,6 +5,7 @@ import {
   assignFeedbackSchema,
   bulkAssignFeedbackSchema,
   bulkUpdateFeedbackStatusSchema,
+  classifyFeedbackSchema,
   type FeedbackFilterInput,
 } from '@echo-grid-feedback/shared-types';
 import type { Bindings } from '../config/env';
@@ -191,6 +192,51 @@ feedbackRoutes.post('/:id/reanalyze', requirePermission('feedback:manage'), asyn
     }
     await enqueueClassification(c.env.JOBS, existing.id, existing.businessId);
     return ok(c, { id: existing.id, analysisStatus: existing.analysisStatus }, 202);
+  } finally {
+    c.executionCtx.waitUntil(close());
+  }
+});
+
+/**
+ * Continuing Development S4 Block 10 (S4.3 "allow authorized manual
+ * classification"). Lets an authorized human set category/urgency/sentiment
+ * directly -- both to correct a wrong AI call and to rescue a row the
+ * pipeline repeatedly failed on, which is the case the spec names.
+ *
+ * Its own route rather than an extension of PATCH /:id: that endpoint is
+ * deliberately narrow (updateFeedbackStatusSchema is a single
+ * z.literal('reviewed'), because a business must never be able to edit a
+ * customer's rating or comment after the fact). Widening it into a general
+ * patcher to carry classification would erode a boundary that exists on
+ * purpose, so this sits alongside /assign, /reanalyze and
+ * /acknowledge-critical instead.
+ *
+ * Distinct from POST /:id/reanalyze, which re-runs the machine: reanalyze
+ * is the right tool when the classifier hit a transient failure, this one
+ * when re-running it would just fail again or produce the same wrong
+ * answer. Gated on feedback:manage for the reason reanalyze already
+ * documents -- triaging a submission's analysis state is the same
+ * supervisory action as marking it reviewed, not a distinct capability.
+ */
+feedbackRoutes.post('/:id/classify', requirePermission('feedback:manage'), async (c) => {
+  const body = await parseJsonBody(c.req.raw, classifyFeedbackSchema);
+  const { db, close } = await createDb(c.env.HYPERDRIVE);
+  try {
+    const service = new FeedbackService(createRepositories(db));
+    const item = await service.classifyManually(
+      c.req.param('id'),
+      c.get('businessId'),
+      body,
+      c.get('userId'),
+    );
+
+    c.set('auditMetadata', {
+      action: 'feedback.classified_manually',
+      entityType: 'feedback',
+      entityId: item.id,
+    });
+
+    return ok(c, item);
   } finally {
     c.executionCtx.waitUntil(close());
   }

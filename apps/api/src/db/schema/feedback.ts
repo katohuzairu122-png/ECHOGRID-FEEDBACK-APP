@@ -109,7 +109,31 @@ export const feedback = pgTable(
     // evolve without a migration).
     sentiment: text('sentiment'),
     sentimentScore: real('sentiment_score'),
+    // 'manual' (Continuing Development S4 Block 10, S4.3 "allow authorized
+    // manual classification") is a fifth terminal state alongside
+    // completed/failed/skipped: an authorized human set category/urgency/
+    // sentiment by hand, either to correct a wrong AI call or to rescue a
+    // row the pipeline repeatedly failed on.
+    //
+    // Deliberately its own value rather than reusing 'completed', for the
+    // same reason ai_usage_log distinguishes 'abandoned' from 'failed':
+    // 'completed' asserts that automated analysis ran and succeeded, which
+    // for a manually-classified row is false -- often the automation failed
+    // outright, which is why a human intervened. Collapsing them would make
+    // "how often does the classifier actually work" unanswerable, and that
+    // number is the one worth watching.
+    //
+    // It also has to be distinct from 'failed' for a product reason: the
+    // "Unclassified" saved view is defined as analysis_status IN
+    // ('pending','failed') (feedback-saved-views.ts), so leaving a
+    // hand-classified row at 'failed' would strand it in that view forever
+    // -- resolving exactly the queue the human just worked through.
     analysisStatus: text('analysis_status').notNull().default('pending'),
+    // Set by both paths: the queue consumer on completion/failure, and the
+    // manual override on classification. "When analysis reached a terminal
+    // state" is true of both, so this needs no manual-specific twin --
+    // `analysisStatus = 'manual'` already records which path got there, and
+    // `updatedBy` plus audit_log record who.
     analyzedAt: timestamp('analyzed_at', { withTimezone: true }),
     ...auditColumns,
     ...softDeleteColumns,
@@ -155,7 +179,7 @@ export const feedback = pgTable(
     ),
     check(
       'feedback_analysis_status_check',
-      sql`${table.analysisStatus} IN ('pending', 'completed', 'failed', 'skipped')`,
+      sql`${table.analysisStatus} IN ('pending', 'completed', 'failed', 'skipped', 'manual')`,
     ),
     check(
       'feedback_urgency_check',

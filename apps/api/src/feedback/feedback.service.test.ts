@@ -93,6 +93,29 @@ function createFakeFeedbackRepo() {
       item.updatedAt = new Date();
       return item;
     },
+    // Continuing Development S4 Block 10. Mirrors the real repository's
+    // behaviour that the service's own tests depend on: the terminal
+    // 'manual' status, and nulling sentimentScore whenever sentiment is set.
+    async classifyManually(
+      id: string,
+      businessId: string,
+      patch: { category?: string; urgency?: string; sentiment?: string },
+      updatedBy: string,
+    ): Promise<Feedback | undefined> {
+      const item = items.get(id);
+      if (!item || item.businessId !== businessId || item.isDeleted) return undefined;
+      if (patch.category !== undefined) item.category = patch.category;
+      if (patch.urgency !== undefined) item.urgency = patch.urgency;
+      if (patch.sentiment !== undefined) {
+        item.sentiment = patch.sentiment;
+        item.sentimentScore = null;
+      }
+      item.analysisStatus = 'manual';
+      item.analyzedAt = new Date();
+      item.updatedBy = updatedBy;
+      item.updatedAt = new Date();
+      return item;
+    },
     async softDelete(id: string, businessId: string, deletedBy: string): Promise<void> {
       const item = items.get(id);
       if (item && item.businessId === businessId) {
@@ -440,5 +463,114 @@ describe('FeedbackService', () => {
     });
     expect(narrowed.items).toHaveLength(1);
     expect(narrowed.items[0]!.branchId).toBe(BRANCH_A);
+  });
+
+  // --- Manual classification (Continuing Development S4 Block 10, S4.3) ---
+
+  /** Rows are created through submit() like every other test here, then
+   * nudged into the precondition state directly -- the fake's create()
+   * stores and returns the same object reference, so mutating it is exactly
+   * what a prior pipeline run would have left behind. */
+  async function seedClassified(patch: Partial<Feedback> = {}) {
+    const item = await service.submit(QR_CODE, { rating: 3, comment: 'Something went wrong.' });
+    Object.assign(item, patch);
+    return item;
+  }
+
+  it('classifyManually sets the fields a human supplied and marks the row terminal-manual', async () => {
+    const item = await seedClassified({ analysisStatus: 'failed' });
+
+    const updated = await service.classifyManually(
+      item.id,
+      BUSINESS_A,
+      { category: 'staff_conduct', urgency: 'P1_HIGH' },
+      ACTOR,
+    );
+
+    expect(updated.category).toBe('staff_conduct');
+    expect(updated.urgency).toBe('P1_HIGH');
+    // 'manual', never 'completed' -- the automated pipeline did not succeed
+    // here, it failed, which is precisely why a human stepped in.
+    expect(updated.analysisStatus).toBe('manual');
+    expect(updated.analyzedAt).not.toBeNull();
+    expect(updated.updatedBy).toBe(ACTOR);
+  });
+
+  /** The "Unclassified" saved view is analysisStatus IN ('pending','failed')
+   * (feedback-saved-views.ts) -- a hand-classified row that kept 'failed'
+   * would sit in that queue forever, the very queue the human just worked
+   * through. */
+  it("moves the row out of the Unclassified saved view's status set", async () => {
+    const item = await seedClassified({ analysisStatus: 'failed' });
+
+    const updated = await service.classifyManually(item.id, BUSINESS_A, { category: 'pricing' }, ACTOR);
+
+    expect(['pending', 'failed']).not.toContain(updated.analysisStatus);
+  });
+
+  it('nulls sentimentScore when a human overrides sentiment -- a human judgment carries no model confidence', async () => {
+    const item = await seedClassified({
+      sentiment: 'positive',
+      sentimentScore: 0.92,
+      analysisStatus: 'completed',
+    });
+
+    const updated = await service.classifyManually(item.id, BUSINESS_A, { sentiment: 'negative' }, ACTOR);
+
+    expect(updated.sentiment).toBe('negative');
+    // A stale 0.92 beside a 'negative' label would leave score and label
+    // disagreeing -- which feedback.ts's schema comment says must never
+    // happen -- and would feed a fabricated confidence to the trend chart.
+    expect(updated.sentimentScore).toBeNull();
+  });
+
+  it('leaves sentimentScore alone when the patch does not touch sentiment', async () => {
+    const item = await seedClassified({
+      sentiment: 'positive',
+      sentimentScore: 0.92,
+      analysisStatus: 'completed',
+    });
+
+    const updated = await service.classifyManually(item.id, BUSINESS_A, { urgency: 'P3_LOW' }, ACTOR);
+
+    expect(updated.sentimentScore).toBe(0.92);
+    expect(updated.sentiment).toBe('positive');
+  });
+
+  it('accepts a single field -- correcting only the urgency is a normal action', async () => {
+    const item = await seedClassified({ category: 'pricing', analysisStatus: 'completed' });
+
+    const updated = await service.classifyManually(item.id, BUSINESS_A, { urgency: 'P0_CRITICAL' }, ACTOR);
+
+    expect(updated.urgency).toBe('P0_CRITICAL');
+    // Untouched fields must survive: forcing a caller to re-send them would
+    // invite overwriting good values with stale ones read minutes earlier.
+    expect(updated.category).toBe('pricing');
+  });
+
+  it('rejects an empty patch rather than silently marking the row handled', async () => {
+    const item = await seedClassified({ analysisStatus: 'failed' });
+
+    await expect(service.classifyManually(item.id, BUSINESS_A, {}, ACTOR)).rejects.toMatchObject({
+      code: 'EMPTY_CLASSIFICATION',
+      status: 400,
+    });
+    // And the row must be left exactly as it was -- still stuck, not
+    // quietly flipped to 'manual' with nothing actually classified.
+    expect(item.analysisStatus).toBe('failed');
+  });
+
+  it('throws 404 for an unknown id', async () => {
+    await expect(
+      service.classifyManually('does-not-exist', BUSINESS_A, { category: 'pricing' }, ACTOR),
+    ).rejects.toMatchObject({ code: 'FEEDBACK_NOT_FOUND', status: 404 });
+  });
+
+  it("throws 404 for another business's row -- tenant isolation", async () => {
+    const item = await seedClassified({});
+
+    await expect(
+      service.classifyManually(item.id, 'business-b', { category: 'pricing' }, ACTOR),
+    ).rejects.toMatchObject({ code: 'FEEDBACK_NOT_FOUND', status: 404 });
   });
 });

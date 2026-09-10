@@ -134,6 +134,13 @@
       "when": 1788965495566,
       "tag": "0018_ai_usage_log_abandoned_status",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1788965555566,
+      "tag": "0019_feedback_manual_analysis_status",
+      "breakpoints": true
     }
   ]
 }

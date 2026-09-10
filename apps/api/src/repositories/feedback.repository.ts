@@ -1,4 +1,4 @@
-import { eq, and, gte, lte, ilike, sql, inArray, isNull, isNotNull, asc, desc } from 'drizzle-orm';
+import { eq, ne, and, gte, lte, ilike, sql, inArray, isNull, isNotNull, asc, desc } from 'drizzle-orm';
 import { feedback } from '../db/schema';
 import { BaseRepository } from './base.repository';
 import type { FeedbackFilterInput } from '@echo-grid-feedback/shared-types';
@@ -151,7 +151,62 @@ export class FeedbackRepository extends BaseRepository {
     const [row] = await this.db
       .update(feedback)
       .set(patch)
-      .where(and(eq(feedback.id, id), eq(feedback.businessId, businessId)))
+      // Continuing Development S4 Block 10 (S4.3): never overwrite a row an
+      // authorized human has already classified by hand. Without this
+      // guard the manual override is cosmetic -- POST /:id/reanalyze, a
+      // queue retry, or any future backfill sweep would silently replace
+      // the human's judgment with the very automated result they stepped in
+      // to correct, and nothing would record that it happened.
+      //
+      // Enforced here rather than in the service so it holds for every
+      // caller of this method, present and future -- the queue consumer is
+      // the only one today, but a backfill script is exactly the kind of
+      // thing that gets written later and forgets.
+      .where(
+        and(
+          eq(feedback.id, id),
+          eq(feedback.businessId, businessId),
+          ne(feedback.analysisStatus, 'manual'),
+        ),
+      )
+      .returning();
+    return row;
+  }
+
+  /**
+   * Continuing Development S4 Block 10 (S4.3 "allow authorized manual
+   * classification"). Applies a human's category/urgency/sentiment call and
+   * moves the row to the terminal 'manual' analysis state.
+   *
+   * `sentimentScore` is explicitly nulled whenever `sentiment` is set, never
+   * left at whatever the model last produced: the score is a model
+   * confidence signal, and a human judgment has none. Leaving a stale score
+   * beside a corrected label would leave the two disagreeing -- exactly what
+   * feedback.ts's schema comment says must never happen -- and would feed a
+   * fabricated confidence into the analytics trend chart that reads it.
+   *
+   * Unguarded on the current status on purpose, unlike updateSentiment
+   * above: re-classifying an already-manually-classified row is a correction
+   * of a correction, which is legitimate. The audit trail (audit_log, via
+   * the route's auditMetadata) is what records that it happened.
+   */
+  async classifyManually(
+    id: string,
+    businessId: string,
+    patch: { category?: string; urgency?: string; sentiment?: string },
+    updatedBy: string,
+  ): Promise<Feedback | undefined> {
+    const [row] = await this.db
+      .update(feedback)
+      .set({
+        ...patch,
+        ...(patch.sentiment !== undefined ? { sentimentScore: null } : {}),
+        analysisStatus: 'manual',
+        analyzedAt: new Date(),
+        updatedBy,
+        updatedAt: new Date(),
+      })
+      .where(and(eq(feedback.id, id), eq(feedback.businessId, businessId), eq(feedback.isDeleted, false)))
       .returning();
     return row;
   }
