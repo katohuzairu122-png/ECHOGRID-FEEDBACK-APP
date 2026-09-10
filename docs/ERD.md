@@ -788,6 +788,48 @@ exclusively by `POST /webhooks/stripe`'s `customer.subscription.*` handler.
 `stripe_customer_id`; on `stripe_subscription_id`; on `status` (supports the
 platform-admin subscription list's status filter without a full scan).
 
+### `ai_usage_log`
+
+Added in Continuing Development S4 (S4.2 privacy and cost controls). One row
+per Anthropic API attempt, whether or not it reached Anthropic. Append-only
+in spirit, with one deliberate exception: a `pending` row is updated in place
+exactly once to its terminal outcome.
+
+| Column | Type | Constraints | Notes |
+| --- | --- | --- | --- |
+| `id` | uuid | PK, default random | |
+| `business_id` | uuid | not null, FK → `businesses.id`, cascade | |
+| `branch_id` | uuid | nullable, FK → `branches.id`, cascade | NULL for a business-wide run |
+| `call_site` | text | not null, no check | open text — `summary_generation` is the only value today, but the follow-up-question generator is a second Anthropic caller this could extend to cover without a migration |
+| `model`, `prompt_version` | text | not null | on success, corrected to what the generator that actually ran reports about itself |
+| `period_type` | text | not null, check | `daily \| weekly \| monthly` |
+| `period_start`, `period_end` | timestamptz | not null, check `end > start` | denormalized rather than FK to `feedback_summaries` — a blocked/failed attempt has no summary row to point at |
+| `input_tokens`, `output_tokens`, `cost_estimate_usd` | integer / integer / real | nullable | non-NULL only on `success`; never estimated for any other status |
+| `status` | text | not null, check | see the five values below |
+| `created_at` | timestamptz | not null, default now | when the attempt *began* |
+| `resolved_at` | timestamptz | nullable | when it reached a terminal state; NULL while `pending`, always NULL for `blocked`, and NULL for rows written before this column existed (a resolution time that was never recorded cannot be backfilled) |
+
+**Statuses:**
+
+| Value | Meaning |
+| --- | --- |
+| `pending` | attempt started; written before any read or API call, so an invocation killed mid-flight still leaves a trace |
+| `success` | Anthropic responded; token/cost columns hold real values from its own `usage` block |
+| `failed` | the call was attempted and no usable response came back — no tokens billed |
+| `blocked` | the spend-limit check rejected it before anything was sent; never passes through `pending` |
+| `abandoned` | a `pending` row that never reported an outcome within 30 minutes, swept to terminal by `sweepStalePendingAiUsage`. **Distinct from `failed` on purpose:** `failed` asserts no tokens were billed, which for an abandoned row would be a guess — the invocation may have died before, during, or after a billed response. Operationally they point at different culprits: `failed` at Anthropic, `abandoned` at our own Workers |
+
+**Spend accounting:** `totalCostSince` sums `cost_estimate_usd` filtered to
+`status = 'success'` only. `abandoned` rows therefore contribute nothing, so
+real spend can be under-counted by whatever those attempts cost — an
+accepted, documented residual risk, taken deliberately over writing an
+invented cost into a ledger the spend limit treats as fact. The sweep logs
+its count so the size of that gap stays observable.
+
+**Indexes**: partial on `created_at WHERE status = 'success'` (backs the
+hot spend-limit query); on `(business_id, created_at)`; partial on
+`created_at WHERE status = 'pending'` (backs the stale-attempt sweep).
+
 ## Migrations & Seeding
 
 Schema changes flow through `drizzle-kit`: `pnpm db:generate` writes SQL under

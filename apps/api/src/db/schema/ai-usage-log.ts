@@ -37,6 +37,33 @@ import { branches } from './branches';
  *     every token/cost column is NULL because nothing was sent. Written
  *     directly as a terminal row, never via a 'pending' row first -- a
  *     blocked attempt never starts the work 'pending' represents.
+ *   - 'abandoned' (S4 roadmap Block 9) -- a 'pending' row that never
+ *     reported an outcome within STALE_PENDING_MINUTES, swept to a terminal
+ *     state by sweepStalePendingAiUsage (index.ts). Deliberately its own
+ *     status rather than reusing 'failed': 'failed' asserts the specific
+ *     fact that the call was attempted and no usable response came back, so
+ *     no tokens were billed. For an abandoned row that assertion would be a
+ *     guess -- the invocation died somewhere between writing this row and
+ *     resolving it, and from the outside there is no way to tell whether it
+ *     died before the Anthropic call, during it, or after a response was
+ *     already billed but before resolve() ran. The two also mean different
+ *     things operationally: a spike in 'failed' points at Anthropic being
+ *     unhealthy, a spike in 'abandoned' points at this Worker being killed
+ *     mid-flight (CPU limit, eviction, deploy). Collapsing them would lose
+ *     exactly the signal that distinguishes "their problem" from "ours".
+ *
+ *     Every token/cost column stays NULL on an abandoned row, for the same
+ *     reason resolvedAt stays NULL on pre-Block-7 rows: an unknown value is
+ *     recorded as unknown, never fabricated. The honest consequence is that
+ *     an abandoned attempt which DID reach Anthropic contributes nothing to
+ *     totalCostSince, so real spend can be under-counted by however much
+ *     those attempts actually cost. That is a known, accepted residual risk
+ *     of this design -- the alternative (estimating a cost for a call whose
+ *     outcome is unknown) would put invented numbers into the ledger that
+ *     the spend limit then treats as fact, which is worse than a bounded
+ *     undercount. The sweep logs how many rows it abandons precisely so the
+ *     size of that undercount is observable rather than silent; a sustained
+ *     non-zero count is the signal to investigate, not to widen the limit.
  * Only 'success' rows carry a non-NULL costEstimateUsd, so the daily/monthly
  * spend-limit query (AiUsageLogRepository.totalCostSince) is a plain SUM
  * with a `status = 'success'` filter and nothing more elaborate --
@@ -114,7 +141,7 @@ export const aiUsageLog = pgTable(
       .where(sql`${table.status} = 'pending'`),
     check(
       'ai_usage_log_status_check',
-      sql`${table.status} IN ('pending', 'success', 'failed', 'blocked')`,
+      sql`${table.status} IN ('pending', 'success', 'failed', 'blocked', 'abandoned')`,
     ),
     check('ai_usage_log_period_type_check', sql`${table.periodType} IN ('daily', 'weekly', 'monthly')`),
     check('ai_usage_log_period_range_check', sql`${table.periodEnd} > ${table.periodStart}`),

@@ -1,4 +1,4 @@
-import { and, eq, gte, sql } from 'drizzle-orm';
+import { and, eq, gte, lt, sql } from 'drizzle-orm';
 import { aiUsageLog } from '../db/schema';
 import { BaseRepository } from './base.repository';
 
@@ -62,6 +62,44 @@ export class AiUsageLogRepository extends BaseRepository {
       .where(and(eq(aiUsageLog.id, id), eq(aiUsageLog.status, 'pending')))
       .returning();
     return row;
+  }
+
+  /**
+   * S4 roadmap Block 9 (S4.3). Sweeps every 'pending' row older than
+   * `cutoff` to the terminal 'abandoned' state, returning how many it
+   * moved.
+   *
+   * Without this, a row written 'pending' by an invocation that is then
+   * killed mid-flight stays 'pending' forever: resolve() is only ever
+   * called from inside the same generateForPeriod call that wrote the row,
+   * so nothing else in the system will ever touch it again. A queue retry
+   * does not help either -- it re-invokes generateForPeriod from scratch,
+   * which writes a *fresh* pending row (see resolve()'s own note above)
+   * rather than adopting the orphaned one.
+   *
+   * Guarded on `status = 'pending'` as well as the cutoff, so this can
+   * never overwrite a row that already reached 'success'/'failed'/'blocked'
+   * -- same one-way-transition idiom as resolve() and
+   * CriticalIncidentRepository.acknowledge. `resolvedAt` is set here for the
+   * same reason resolve() sets it: it records when the attempt reached a
+   * terminal state, which for an abandoned row is when the sweep noticed,
+   * not when the work stopped (unknowable). `createdAt` still holds when
+   * the attempt began, so the gap between the two is legible.
+   *
+   * Deliberately a single bulk UPDATE rather than the read-then-enqueue-
+   * per-row shape sweepUnacknowledgedCriticalIncidents uses: that sweep
+   * has real per-incident work to dispatch (a notification), whereas this
+   * one is pure bookkeeping with no downstream job, so paging rows into
+   * the Worker only to write each one back would be strictly more moving
+   * parts for the same result.
+   */
+  async abandonStalePending(cutoff: Date): Promise<number> {
+    const rows = await this.db
+      .update(aiUsageLog)
+      .set({ status: 'abandoned', resolvedAt: new Date() })
+      .where(and(eq(aiUsageLog.status, 'pending'), lt(aiUsageLog.createdAt, cutoff)))
+      .returning({ id: aiUsageLog.id });
+    return rows.length;
   }
 
   /**

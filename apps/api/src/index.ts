@@ -300,6 +300,30 @@ const CRITICAL_ESCALATION_CRON = '*/5 * * * *';
 const ESCALATION_WINDOW_MINUTES = 15;
 
 /**
+ * S4 roadmap Block 9 (S4.3) -- how long an ai_usage_log row may sit
+ * 'pending' before the sweep below treats it as abandoned.
+ *
+ * Deliberately its own constant rather than reusing
+ * ESCALATION_WINDOW_MINUTES above, despite both being "15-ish minute"
+ * windows on the same cron: that one encodes how long a *human* may take to
+ * acknowledge an incident, this one how long a *machine* attempt could
+ * still plausibly be in flight. They would drift apart for entirely
+ * unrelated reasons, and sharing a constant would silently couple a
+ * staffing decision to an infrastructure timeout.
+ *
+ * 30 minutes is roughly two orders of magnitude beyond any legitimate
+ * attempt: generateForPeriod is five concurrent reads plus one Anthropic
+ * call, and Cloudflare's own wall-clock ceiling for an invocation is far
+ * below this anyway -- so a row this old cannot still be running, whatever
+ * happened to it. Erring long costs only detection latency (the sweep runs
+ * every 5 minutes regardless); erring short would risk marking a live
+ * attempt abandoned and then having it resolve() afterwards, which the
+ * `status = 'pending'` guard would reject, leaving a real success recorded
+ * as abandoned and its cost permanently missing from the ledger.
+ */
+const STALE_PENDING_MINUTES = 30;
+
+/**
  * Cron consumer (wrangler.toml [triggers]) -- fires the daily/weekly/monthly
  * automatic summary rollup, and separately the critical-incident escalation
  * sweep. Deliberately thin in both cases: it only enqueues jobs (paginating
@@ -317,7 +341,14 @@ const ESCALATION_WINDOW_MINUTES = 15;
  */
 async function scheduled(event: ScheduledController, env: Bindings, ctx: ExecutionContext): Promise<void> {
   if (event.cron === CRITICAL_ESCALATION_CRON) {
+    // Two independent sweeps share this cron rather than registering a
+    // fourth trigger -- both are cheap, neither depends on the other, and
+    // "every 5 minutes" is already the right cadence for each. They are
+    // deliberately NOT awaited together in one waitUntil: a failure in
+    // either must not prevent the other from running, and Promise.all
+    // would short-circuit on the first rejection.
     ctx.waitUntil(sweepUnacknowledgedCriticalIncidents(env));
+    ctx.waitUntil(sweepStalePendingAiUsage(env));
     return;
   }
 
@@ -354,6 +385,46 @@ async function scheduled(event: ScheduledController, env: Bindings, ctx: Executi
     }
   } finally {
     ctx.waitUntil(close());
+  }
+}
+
+/**
+ * S4 roadmap Block 9 (S4.3 "mark processing pending or failed"). Moves
+ * ai_usage_log rows that have been 'pending' longer than
+ * STALE_PENDING_MINUTES to the terminal 'abandoned' state.
+ *
+ * Block 7 made a killed-mid-flight attempt *visible* as a stuck 'pending'
+ * row instead of leaving no trace; nothing yet made it *terminal*, which
+ * this closes. Until now such a row stayed pending forever -- resolve() is
+ * only reachable from inside the very invocation that died, and a queue
+ * retry writes a fresh row rather than adopting the orphan.
+ *
+ * The count is logged rather than merely discarded because it is the only
+ * observable measure of how much spend the ledger may be under-counting
+ * (see ai-usage-log.ts's 'abandoned' note for why the cost itself is left
+ * NULL rather than estimated). A steady zero is the expected state; a
+ * sustained non-zero count means invocations are dying mid-flight and is
+ * worth investigating on its own, independently of the summaries it
+ * affects.
+ *
+ * No throw on failure: this runs inside waitUntil on a 5-minute cron, so a
+ * transient database error simply means the next run picks up the same
+ * rows -- they are, by definition, not going anywhere.
+ */
+async function sweepStalePendingAiUsage(env: Bindings): Promise<void> {
+  const cutoff = new Date(Date.now() - STALE_PENDING_MINUTES * 60 * 1000);
+  const { db, close } = await createDb(env.HYPERDRIVE);
+  try {
+    const abandoned = await createRepositories(db).aiUsageLog.abandonStalePending(cutoff);
+    if (abandoned > 0) {
+      // Counts only -- no business/branch identifiers, matching this
+      // codebase's existing caution about what reaches logs.
+      console.warn(
+        `Abandoned ${abandoned} ai_usage_log row(s) still pending after ${STALE_PENDING_MINUTES} minutes.`,
+      );
+    }
+  } finally {
+    await close();
   }
 }
 
