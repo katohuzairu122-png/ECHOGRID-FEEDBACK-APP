@@ -2,6 +2,7 @@
   "name": "@echo-grid-feedback/api",
   "version": "0.1.0",
   "private": true,
+  "license": "UNLICENSED",
   "type": "module",
   "scripts": {
     "dev": "wrangler dev",

@@ -5,6 +5,7 @@
   "type": "module",
   "description": "Enterprise Customer Experience Platform: QR-based feedback, loyalty, and sentiment analytics.",
   "license": "UNLICENSED",
+  "author": "INFINICUS LLC (trading as Echo Grid)",
   "packageManager": "pnpm@11.9.0",
   "engines": {
     "node": ">=22.0.0",

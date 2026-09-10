@@ -1,0 +1,20 @@
+Copyright (c) 2026 INFINICUS LLC (trading as Echo Grid).
+All rights reserved.
+
+This software and its source code are the proprietary and confidential
+property of INFINICUS LLC. No licence, express or implied, is granted to any
+person or entity by the mere fact of this repository being accessible.
+
+No part of this software may be used, copied, modified, merged, published,
+distributed, sublicensed, sold, or disclosed to any third party, in source or
+binary form, without the prior written permission of INFINICUS LLC.
+
+Unauthorised use or reproduction is a violation of applicable copyright law.
+
+For licensing enquiries, contact INFINICUS LLC.
+
+---
+
+Third-party dependencies retain their own licences. This notice covers only
+the original work in this repository, not the contents of node_modules or any
+other separately-licensed component it depends on.
