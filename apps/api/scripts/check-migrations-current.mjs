@@ -88,19 +88,60 @@ function snapshotDir(dir) {
  * Bash); reading the package's declared bin and handing it to process.execPath
  * works identically everywhere. */
 function resolveDrizzleKitBin() {
-  const require = createRequire(import.meta.url);
+  // Located on disk rather than via require.resolve('drizzle-kit/package.json').
+  // drizzle-kit ships an "exports" map that does not list "./package.json", so
+  // that call throws ERR_PACKAGE_PATH_NOT_EXPORTED -- Node enforces the export
+  // map for bare specifiers even when the file plainly exists. Walking
+  // node_modules directly sidesteps the export map entirely, and also picks up
+  // a root-hoisted install as well as apps/api's own.
+  const searched = [];
   let pkgPath;
-  try {
-    pkgPath = require.resolve('drizzle-kit/package.json');
-  } catch {
-    fail('Cannot resolve drizzle-kit. Run `pnpm install` first.');
+
+  for (let dir = API_ROOT; ; dir = path.dirname(dir)) {
+    const candidate = path.join(dir, 'node_modules', 'drizzle-kit', 'package.json');
+    searched.push(candidate);
+    if (fs.existsSync(candidate)) {
+      pkgPath = candidate;
+      break;
+    }
+    if (path.dirname(dir) === dir) break; // filesystem root
+  }
+
+  // Last resort: resolve the package's main entry (which the export map DOES
+  // allow) and walk back up to the package.json sitting beside it. Covers
+  // exotic layouts -- custom store paths, Yarn PnP-style resolution -- that a
+  // plain node_modules walk would miss.
+  if (!pkgPath) {
+    try {
+      let dir = path.dirname(createRequire(import.meta.url).resolve('drizzle-kit'));
+      for (;;) {
+        const candidate = path.join(dir, 'package.json');
+        if (fs.existsSync(candidate) && JSON.parse(fs.readFileSync(candidate, 'utf8')).name === 'drizzle-kit') {
+          pkgPath = candidate;
+          break;
+        }
+        if (path.dirname(dir) === dir) break;
+        dir = path.dirname(dir);
+      }
+    } catch {
+      // fall through to the failure below
+    }
+  }
+
+  if (!pkgPath) {
+    fail(`Cannot locate drizzle-kit. Run \`pnpm install\` first.\nLooked for:\n${searched.map((p) => `  ${p}`).join('\n')}`);
   }
 
   const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
-  const bin = typeof pkg.bin === 'string' ? pkg.bin : pkg.bin?.['drizzle-kit'] ?? Object.values(pkg.bin ?? {})[0];
+  const bin = typeof pkg.bin === 'string' ? pkg.bin : (pkg.bin?.['drizzle-kit'] ?? Object.values(pkg.bin ?? {})[0]);
   if (!bin) fail(`drizzle-kit ${pkg.version} declares no bin entry; cannot run generate.`);
 
-  return path.resolve(path.dirname(pkgPath), bin);
+  const binPath = path.resolve(path.dirname(pkgPath), bin);
+  if (!fs.existsSync(binPath)) {
+    fail(`drizzle-kit ${pkg.version} declares bin "${bin}" but ${binPath} does not exist.`);
+  }
+
+  return binPath;
 }
 
 /** Put drizzle/ back exactly as it was found, whatever generate did to it. */
