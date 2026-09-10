@@ -120,6 +120,13 @@
       "when": 1788880643108,
       "tag": "0016_volatile_dakota_north",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1788965435566,
+      "tag": "0017_wonderful_silver_sable",
+      "breakpoints": true
     }
   ]
 }
