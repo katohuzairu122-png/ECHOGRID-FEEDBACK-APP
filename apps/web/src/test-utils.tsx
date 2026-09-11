@@ -1,6 +1,8 @@
 import type { ReactElement } from 'react';
 import { render, type RenderOptions } from '@testing-library/react';
 import { NextIntlClientProvider } from 'next-intl';
+import { DEFAULT_TIMEZONE } from '@echo-grid-feedback/shared-types';
+import { formats } from './i18n/formats';
 import en from '../messages/en/common.json';
 import enDashboard from '../messages/en/dashboard.json';
 import enAuth from '../messages/en/auth.json';
@@ -44,7 +46,12 @@ const messages = {
  * exactly as they do at runtime instead of throwing "no context found."
  * Existing tests that don't touch translated components can keep using
  * plain render() from @testing-library/react; only components that call a
- * next-intl hook (directly or via a child) need this.
+ * next-intl hook (directly or via a child) need this. Passes the same
+ * `formats` object as i18n/request.ts (imported from the shared
+ * i18n/formats.ts module) so format.dateTime(date, 'short'/'shortDateTime')
+ * calls work under test instead of throwing MISSING_FORMAT, and the same
+ * DEFAULT_TIMEZONE fallback request.ts uses so format.dateTime doesn't
+ * also warn ENVIRONMENT_FALLBACK for a missing timeZone.
  *
  * The returned `rerender` re-wraps whatever element it's given in the same
  * provider rather than returning RTL's raw one -- RTL's real rerender()
@@ -56,7 +63,7 @@ const messages = {
  */
 export function renderWithIntl(ui: ReactElement, options?: RenderOptions) {
   const wrap = (element: ReactElement) => (
-    <NextIntlClientProvider locale="en" messages={messages}>
+    <NextIntlClientProvider locale="en" timeZone={DEFAULT_TIMEZONE} messages={messages} formats={formats}>
       {element}
     </NextIntlClientProvider>
   );
