@@ -35,4 +35,11 @@ describe('expandSavedView', () => {
   it('positive_feedback filters to positive sentiment', () => {
     expect(expandSavedView('positive_feedback')).toEqual({ sentiment: ['very_positive', 'positive'] });
   });
+
+  it('suspected_fraud filters to rows with an open fraud signal, and nothing else', () => {
+    // The "and nothing else" matters: pairing it with a status or sentiment
+    // filter would hide flagged rows a colleague had already triaged as
+    // feedback, which is not the same thing as clearing the suspicion.
+    expect(expandSavedView('suspected_fraud')).toEqual({ hasOpenFraudSignal: true });
+  });
 });

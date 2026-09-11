@@ -7,9 +7,9 @@ type SavedView = NonNullable<FeedbackFilterInput['savedView']>;
  * applied server-side (feedback.service.ts) before the rest of the caller's
  * own filters -- a saved view is a starting preset, not an override, so a
  * caller can still narrow further (e.g. "Critical now" AND a specific
- * branchId). Only the 7 saved views backed by real data today are
+ * branchId). Only the 8 saved views backed by real data today are
  * representable -- see feedbackFilterSchema's own comment (shared-types)
- * for which three the spec asks for that aren't implementable yet.
+ * for which of the spec's remaining views aren't implementable yet.
  */
 export function expandSavedView(view: SavedView): Partial<FeedbackFilterInput> {
   switch (view) {
@@ -27,5 +27,11 @@ export function expandSavedView(view: SavedView): Partial<FeedbackFilterInput> {
       return { status: ['reviewed'] };
     case 'positive_feedback':
       return { sentiment: ['very_positive', 'positive'] };
+    // Continuing Development S5-B. Deliberately NOT combined with a status
+    // or sentiment filter: suspicion is orthogonal to triage state, and a
+    // reviewer opening this view wants everything still flagged, including
+    // rows a colleague already marked reviewed as feedback.
+    case 'suspected_fraud':
+      return { hasOpenFraudSignal: true };
   }
 }

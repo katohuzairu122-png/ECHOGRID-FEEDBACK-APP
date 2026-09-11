@@ -1,5 +1,5 @@
 import { eq, ne, and, gte, lte, ilike, sql, inArray, isNull, isNotNull, asc, desc } from 'drizzle-orm';
-import { feedback } from '../db/schema';
+import { feedback, fraudSignals } from '../db/schema';
 import { BaseRepository } from './base.repository';
 import type { FeedbackFilterInput, ClassifyFeedbackInput } from '@echo-grid-feedback/shared-types';
 
@@ -399,6 +399,22 @@ export class FeedbackRepository extends BaseRepository {
       filters.unassigned ? isNull(feedback.assignedTo) : undefined,
       filters.followUpRequired
         ? and(isNotNull(feedback.followUpQuestion), isNull(feedback.followUpAnswer))
+        : undefined,
+      // Continuing Development S5-B (S5.6 manual-review routing). A
+      // correlated EXISTS rather than a join: a feedback row can carry
+      // several open signals (duplicate text AND a velocity breach are
+      // independent findings -- see fraud_signals' schema comment), and a
+      // join would return that row once per signal, silently corrupting both
+      // the page size and hasMore. EXISTS also short-circuits on the first
+      // match instead of gathering all of them.
+      //
+      // Scoped on feedbackId + status only, no businessId: the outer query is
+      // already business-scoped and fraud_signals.feedback_id is an FK to
+      // that very row, so adding it would be redundant and would push the
+      // planner toward fraud_signals_business_open_idx when the far more
+      // selective fraud_signals_feedback_idx is the right index here.
+      filters.hasOpenFraudSignal
+        ? sql`EXISTS (SELECT 1 FROM ${fraudSignals} WHERE ${fraudSignals.feedbackId} = ${feedback.id} AND ${fraudSignals.status} = 'open')`
         : undefined,
       filters.search ? ilike(feedback.comment, `%${filters.search}%`) : undefined,
       filters.dateFrom ? gte(feedback.createdAt, new Date(filters.dateFrom)) : undefined,

@@ -128,11 +128,13 @@ export type FeedbackDto = z.infer<typeof feedbackSchema>;
  * feedback.routes.ts's SAVED_VIEWS) rather than a persisted per-user
  * customization -- see that file's comment for why.
  *
- * Only 7 of the spec's 11 named saved views are represented here --
- * "Reward pending," "Suspected fraud," and "Manual review" need a reward/
- * fraud/review data model that doesn't exist yet (later slices), and
- * "Branch comparison" is a whole analytics view, not a feedback filter.
- * Faking those three as filters that always return nothing would be worse
+ * 8 of the spec's 11 named saved views are represented here. "Suspected
+ * fraud" joined the list in Continuing Development S5-B, once fraud_signals
+ * had both a detector writing to it and an open/reviewed/dismissed lifecycle
+ * for "suspected" to actually mean something. Still absent: "Reward pending"
+ * and "Manual review" (no reward or review-case model yet), and "Branch
+ * comparison", which is a whole analytics view rather than a feedback
+ * filter. Faking those as filters that always return nothing would be worse
  * than omitting them.
  */
 export const feedbackFilterSchema = z.object({
@@ -145,6 +147,7 @@ export const feedbackFilterSchema = z.object({
       'unclassified',
       'recently_resolved',
       'positive_feedback',
+      'suspected_fraud',
     ])
     .optional(),
   branchId: z.uuid().optional(),
@@ -159,6 +162,18 @@ export const feedbackFilterSchema = z.object({
   // answered it yet (followUpQuestion set, followUpAnswer still null) --
   // doesn't map onto any of the fields above, so it's its own flag.
   followUpRequired: z.boolean().optional(),
+  // True: this feedback row has at least one fraud_signals row still in
+  // 'open' status (Continuing Development S5-B, spec S5.6's manual-review
+  // routing). Deliberately "has an OPEN signal", not "has ever had one" --
+  // the point of the view is a work queue, so a signal a reviewer already
+  // reviewed or dismissed must drop out of it.
+  //
+  // Detector-agnostic on purpose: duplicate text, velocity breaches,
+  // cooldown hits and failed visit verification all land in the same table,
+  // and a staff member triaging suspicion does not want a separate tab per
+  // detector. Filtering to one signalType can be added when there is a real
+  // need; starting narrow would just have to be widened again.
+  hasOpenFraudSignal: z.boolean().optional(),
   search: z.string().trim().max(500).optional(),
   dateFrom: z.iso.datetime().optional(),
   dateTo: z.iso.datetime().optional(),

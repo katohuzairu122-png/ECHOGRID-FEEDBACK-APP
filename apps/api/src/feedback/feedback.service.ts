@@ -137,6 +137,7 @@ export class FeedbackService {
       sentiment: explicit.sentiment ?? preset.sentiment,
       analysisStatus: explicit.analysisStatus ?? preset.analysisStatus,
       followUpRequired: explicit.followUpRequired ?? preset.followUpRequired,
+      hasOpenFraudSignal: explicit.hasOpenFraudSignal ?? preset.hasOpenFraudSignal,
     };
 
     return this.repos.feedback.listWithFilters(businessId, merged);

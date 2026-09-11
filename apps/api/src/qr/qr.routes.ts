@@ -19,6 +19,12 @@ import {
   FEEDBACK_IP_VELOCITY,
   FEEDBACK_COOLDOWN_SECONDS,
 } from '../fraud/velocity-tracker';
+import {
+  shouldRaiseDuplicateTextSignal,
+  duplicateTextSeverity,
+  DUPLICATE_TEXT_SIGNAL_TYPE,
+  DUPLICATE_TEXT_REASON_CODE,
+} from '../fraud/duplicate-text-signal';
 import { VisitSessionService } from '../visits/visit-session.service';
 
 /**
@@ -182,6 +188,41 @@ qrRoutes.post('/:token/feedback', async (c) => {
         reasonCode: 'feedback_cooldown',
         severity: 'low',
         metadata: { subjectHash: cooldown.subjectHash, windowSeconds: FEEDBACK_COOLDOWN_SECONDS },
+      });
+    }
+
+    // Continuing Development S5-B (S5.6 "fraud reason codes and
+    // manual-review routing"). S5-A recorded HOW OFTEN this exact text has
+    // been submitted at this branch; this is the first code to act on it.
+    //
+    // Raised here rather than inside FeedbackService.submit for the same
+    // reason the cooldown block above is: the service stays Repositories-
+    // shaped around only `feedback`/`criticalIncidents` so its unit tests
+    // keep using in-memory fakes (see feedback.service.ts's own note), and
+    // this route already owns the "signal against the row that was just
+    // created" pattern for two other detectors.
+    //
+    // Awaited on the outer `repos` for the reason spelled out in the
+    // cooldown block: this handler's `finally` waitUntil's this connection's
+    // close(), so a backgrounded write could race it.
+    if (shouldRaiseDuplicateTextSignal(created.duplicateTextCount)) {
+      await repos.fraudSignals.create({
+        businessId: qrCode.businessId,
+        branchId: qrCode.branchId,
+        feedbackId: created.id,
+        signalType: DUPLICATE_TEXT_SIGNAL_TYPE,
+        reasonCode: DUPLICATE_TEXT_REASON_CODE,
+        severity: duplicateTextSeverity(created.duplicateTextCount),
+        // normalizedTextHash, never the comment itself: it lets a reviewer
+        // group every signal sharing one piece of text without this
+        // append-only log holding a second copy of customer prose (S4.2's
+        // data-minimization principle, applied to fraud metadata too). The
+        // comment is one join away on the feedback row if a reviewer needs
+        // to read it.
+        metadata: {
+          duplicateTextCount: created.duplicateTextCount,
+          normalizedTextHash: created.normalizedTextHash,
+        },
       });
     }
 

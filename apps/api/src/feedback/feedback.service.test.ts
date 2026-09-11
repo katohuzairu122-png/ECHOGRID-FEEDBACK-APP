@@ -32,8 +32,15 @@ function createFakeCriticalIncidentRepo() {
 /** Same fake-repo style as branch.service.test.ts. */
 function createFakeFeedbackRepo() {
   const items = new Map<string, Feedback>();
+  /** Stands in for the real query's correlated EXISTS against fraud_signals
+   * (Continuing Development S5-B). Fraud signals live in their own table and
+   * are written by qr.routes.ts, not by FeedbackService, so this fake models
+   * only the one thing the service's saved-view merge depends on: whether a
+   * given feedback row currently has an open signal. */
+  const openFraudSignalFeedbackIds = new Set<string>();
 
   return {
+    openFraudSignalFeedbackIds,
     async findById(id: string, businessId: string): Promise<Feedback | undefined> {
       const item = items.get(id);
       return item && item.businessId === businessId && !item.isDeleted ? item : undefined;
@@ -222,6 +229,7 @@ function createFakeFeedbackRepo() {
         assignedTo?: string;
         unassigned?: boolean;
         followUpRequired?: boolean;
+        hasOpenFraudSignal?: boolean;
         limit?: number;
         offset?: number;
       },
@@ -236,6 +244,7 @@ function createFakeFeedbackRepo() {
       if (filters.assignedTo) all = all.filter((i) => i.assignedTo === filters.assignedTo);
       if (filters.unassigned) all = all.filter((i) => i.assignedTo === null);
       if (filters.followUpRequired) all = all.filter((i) => i.followUpQuestion && !i.followUpAnswer);
+      if (filters.hasOpenFraudSignal) all = all.filter((i) => openFraudSignalFeedbackIds.has(i.id));
 
       const limit = filters.limit ?? 25;
       const offset = filters.offset ?? 0;
@@ -545,6 +554,48 @@ describe('FeedbackService', () => {
     });
     expect(narrowed.items).toHaveLength(1);
     expect(narrowed.items[0]!.branchId).toBe(BRANCH_A);
+  });
+
+  it('listWithFilters suspected_fraud returns only rows carrying an open fraud signal', async () => {
+    // Continuing Development S5-B. Both rows are ordinary feedback; only one
+    // has been flagged. A saved view that returned both would be useless,
+    // and one that returned neither would hide the queue entirely -- the
+    // failure modes on either side of this are what the test pins down.
+    const flagged = await service.submit(QR_CODE, { rating: 5, comment: 'Absolutely wonderful, best in town.' });
+    await service.submit(QR_CODE, { rating: 4, comment: 'Pleasant enough, would come again sometime.' });
+    repos.feedback.openFraudSignalFeedbackIds.add(flagged.id);
+
+    const suspected = await service.listWithFilters(BUSINESS_A, {
+      savedView: 'suspected_fraud',
+      sortBy: 'createdAt',
+      sortDirection: 'desc',
+      limit: 25,
+      offset: 0,
+    });
+
+    expect(suspected.items).toHaveLength(1);
+    expect(suspected.items[0]!.id).toBe(flagged.id);
+  });
+
+  it('listWithFilters suspected_fraud is orthogonal to feedback triage state', async () => {
+    // A flagged row stays in the view after staff mark the FEEDBACK
+    // reviewed: reviewing a customer's comment is not the same act as
+    // clearing the suspicion, which happens on the fraud signal itself
+    // (POST /fraud-signals/:id/review|dismiss).
+    const flagged = await service.submit(QR_CODE, { rating: 5, comment: 'Absolutely wonderful, best in town.' });
+    repos.feedback.openFraudSignalFeedbackIds.add(flagged.id);
+    await service.markReviewed(flagged.id, BUSINESS_A, ACTOR);
+
+    const suspected = await service.listWithFilters(BUSINESS_A, {
+      savedView: 'suspected_fraud',
+      sortBy: 'createdAt',
+      sortDirection: 'desc',
+      limit: 25,
+      offset: 0,
+    });
+
+    expect(suspected.items).toHaveLength(1);
+    expect(suspected.items[0]!.status).toBe('reviewed');
   });
 
   // --- Manual classification (Continuing Development S4 Block 10, S4.3) ---

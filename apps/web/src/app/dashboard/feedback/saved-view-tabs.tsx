@@ -10,6 +10,10 @@ const SAVED_VIEWS = [
   'unclassified',
   'recently_resolved',
   'positive_feedback',
+  // Continuing Development S5-B. Last in the row on purpose: it is a
+  // specialist triage view, not part of the everyday sentiment/urgency
+  // sweep the tabs before it cover.
+  'suspected_fraud',
 ] as const;
 
 interface SavedViewTabsProps {

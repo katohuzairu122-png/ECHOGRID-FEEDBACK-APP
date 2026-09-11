@@ -23,7 +23,8 @@
       "follow_up_required": "Follow-up needed",
       "unclassified": "Unclassified",
       "recently_resolved": "Recently resolved",
-      "positive_feedback": "Positive"
+      "positive_feedback": "Positive",
+      "suspected_fraud": "Suspected fraud"
     },
     "searchLabel": "Search comments",
     "searchPlaceholder": "Search feedback text...",

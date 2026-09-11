@@ -23,7 +23,8 @@
       "follow_up_required": "Suivi requis",
       "unclassified": "Non classés",
       "recently_resolved": "Résolus récemment",
-      "positive_feedback": "Positifs"
+      "positive_feedback": "Positifs",
+      "suspected_fraud": "Fraude suspectée"
     },
     "searchLabel": "Rechercher dans les commentaires",
     "searchPlaceholder": "Rechercher un texte d'avis...",
