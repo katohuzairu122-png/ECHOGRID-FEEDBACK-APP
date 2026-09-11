@@ -79,6 +79,8 @@ function createFakeFeedbackRepo() {
         normalizedTextHash: input.normalizedTextHash ?? null,
         isDuplicateText: input.isDuplicateText ?? false,
         duplicateTextCount: input.duplicateTextCount ?? 0,
+        deviceHash: input.deviceHash ?? null,
+        nearDuplicateCount: input.nearDuplicateCount ?? 0,
         createdAt: new Date(),
         createdBy: input.createdBy ?? null,
         updatedAt: new Date(),
@@ -193,6 +195,30 @@ function createFakeFeedbackRepo() {
         )
         .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
       return matches[0];
+    },
+    /** In-memory stand-in for the real query (Continuing Development S5-C):
+     * this device's most recent comments at this branch, newest first, capped
+     * by the caller's own limit. Returns just the comment text, same
+     * projection the real query selects. */
+    async listRecentCommentsForDevice(
+      businessId: string,
+      branchId: string,
+      deviceHash: string,
+      since: Date,
+      limit: number,
+    ): Promise<(string | null)[]> {
+      return [...items.values()]
+        .filter(
+          (i) =>
+            i.businessId === businessId &&
+            i.branchId === branchId &&
+            i.deviceHash === deviceHash &&
+            !i.isDeleted &&
+            i.createdAt >= since,
+        )
+        .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+        .slice(0, limit)
+        .map((i) => i.comment);
     },
     /** In-memory stand-in for the real COUNT(*) query (Continuing
      * Development S5-A) -- same business+branch+hash scoping and isDeleted
@@ -415,6 +441,95 @@ describe('FeedbackService', () => {
 
     expect(second.isDuplicateText).toBe(false);
     expect(second.duplicateTextCount).toBe(0);
+  });
+
+  // Continuing Development S5-C (spec S5.6) -- device-gated near-duplicate
+  // scoring. The gate is the substance: text similarity alone was measured
+  // unusable at this comment length (see fraud/near-duplicate.ts).
+
+  const DEVICE_A = 'device-hash-aaa';
+  const DEVICE_B = 'device-hash-bbb';
+  const TEMPLATE = 'Great service at Camden, absolutely loved the burger, will be back!';
+  const REFILLED = 'Great service at Oxford, absolutely loved the burger, will be back!';
+
+  it('submit counts a refilled template from the same device as a near-duplicate', async () => {
+    const first = await service.submit(QR_CODE, { rating: 5, comment: TEMPLATE }, { deviceHash: DEVICE_A });
+    const second = await service.submit(QR_CODE, { rating: 5, comment: REFILLED }, { deviceHash: DEVICE_A });
+
+    expect(first.nearDuplicateCount).toBe(0);
+    expect(second.nearDuplicateCount).toBe(1);
+    // Not an EXACT duplicate -- the text differs -- so S5-A's counter stays
+    // at zero. The two detectors measure different things on the same row.
+    expect(second.duplicateTextCount).toBe(0);
+  });
+
+  it('submit never scores a near-duplicate across different devices', async () => {
+    // The whole point of the gate. Two strangers writing near-identical
+    // praise is the false-positive class that made text-only scoring
+    // unusable, and it must produce nothing at all.
+    await service.submit(QR_CODE, { rating: 5, comment: TEMPLATE }, { deviceHash: DEVICE_A });
+    const other = await service.submit(QR_CODE, { rating: 5, comment: REFILLED }, { deviceHash: DEVICE_B });
+
+    expect(other.nearDuplicateCount).toBe(0);
+  });
+
+  it('submit scores nothing when the client sent no device signal', async () => {
+    await service.submit(QR_CODE, { rating: 5, comment: TEMPLATE });
+    const second = await service.submit(QR_CODE, { rating: 5, comment: REFILLED });
+
+    expect(second.deviceHash).toBeNull();
+    expect(second.nearDuplicateCount).toBe(0);
+  });
+
+  it('submit accumulates the near-duplicate count as a device repeats itself', async () => {
+    await service.submit(QR_CODE, { rating: 5, comment: TEMPLATE }, { deviceHash: DEVICE_A });
+    await service.submit(QR_CODE, { rating: 5, comment: REFILLED }, { deviceHash: DEVICE_A });
+    const third = await service.submit(
+      QR_CODE,
+      { rating: 5, comment: 'Great service at Bristol, absolutely loved the burger, will be back!' },
+      { deviceHash: DEVICE_A },
+    );
+
+    // A rising count is what lets the fraud signal's severity distinguish a
+    // coincidence from a campaign.
+    expect(third.nearDuplicateCount).toBe(2);
+  });
+
+  it('submit keeps the near-duplicate scan scoped to one branch', async () => {
+    await service.submit(QR_CODE, { rating: 5, comment: TEMPLATE }, { deviceHash: DEVICE_A });
+    const otherBranch = await service.submit(
+      { ...QR_CODE, branchId: 'branch-b' },
+      { rating: 5, comment: REFILLED },
+      { deviceHash: DEVICE_A },
+    );
+
+    expect(otherBranch.nearDuplicateCount).toBe(0);
+  });
+
+  it('submit stores the device hash it was given, and never a raw signal', async () => {
+    const item = await service.submit(
+      QR_CODE,
+      { rating: 4, comment: TEMPLATE, deviceSignal: 'raw-device-fingerprint' },
+      { deviceHash: DEVICE_A },
+    );
+
+    // The service is handed an already-salted hash; the raw deviceSignal from
+    // the request body must never reach the column (S5.4).
+    expect(item.deviceHash).toBe(DEVICE_A);
+    expect(item.deviceHash).not.toBe('raw-device-fingerprint');
+  });
+
+  it('submit ignores unrelated comments from the same device', async () => {
+    await service.submit(QR_CODE, { rating: 5, comment: TEMPLATE }, { deviceHash: DEVICE_A });
+    const unrelated = await service.submit(
+      QR_CODE,
+      { rating: 2, comment: 'Parking was impossible and the queue went out the door.' },
+      { deviceHash: DEVICE_A },
+    );
+
+    // One device legitimately leaves feedback more than once; only NEAR-
+    // IDENTICAL text is the signal.
+    expect(unrelated.nearDuplicateCount).toBe(0);
   });
 
   // Continuing Development S5-A (spec S5.6) -- the distinctiveness floor and

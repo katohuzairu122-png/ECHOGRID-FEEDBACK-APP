@@ -25,6 +25,12 @@ import {
   DUPLICATE_TEXT_SIGNAL_TYPE,
   DUPLICATE_TEXT_REASON_CODE,
 } from '../fraud/duplicate-text-signal';
+import {
+  shouldRaiseNearDuplicateSignal,
+  nearDuplicateSeverity,
+  NEAR_DUPLICATE_SIGNAL_TYPE,
+  NEAR_DUPLICATE_REASON_CODE,
+} from '../fraud/near-duplicate';
 import { VisitSessionService } from '../visits/visit-session.service';
 
 /**
@@ -170,7 +176,14 @@ qrRoutes.post('/:token/feedback', async (c) => {
         })
       : null;
 
-    const created = await new FeedbackService(repos).submit(qrCode, body);
+    // Continuing Development S5-C. Hashed here rather than inside the
+    // service because hashing needs the velocity salt from the environment,
+    // and the same salted value already keys the KV velocity counters above
+    // -- one hashing convention, not two. Only meaningful when the client
+    // actually sent a deviceSignal.
+    const deviceHash = body.deviceSignal ? await velocity.hashSubject(body.deviceSignal) : undefined;
+
+    const created = await new FeedbackService(repos).submit(qrCode, body, { deviceHash });
 
     if (cooldown?.inCooldown) {
       // Awaited directly on the outer `repos`, NOT backgrounded via
@@ -222,6 +235,35 @@ qrRoutes.post('/:token/feedback', async (c) => {
         metadata: {
           duplicateTextCount: created.duplicateTextCount,
           normalizedTextHash: created.normalizedTextHash,
+        },
+      });
+    }
+
+    // Continuing Development S5-C (S5.6 near-duplicate + repeated-template
+    // detection). Suppressed when the exact-text signal above already fired:
+    // an exact duplicate is also, trivially, a near-duplicate, and two
+    // fraud_signals rows describing one finding would double-count the
+    // review queue S5-B just created. The exact signal is the more specific
+    // of the two, so it wins.
+    if (
+      !shouldRaiseDuplicateTextSignal(created.duplicateTextCount) &&
+      shouldRaiseNearDuplicateSignal(created.nearDuplicateCount)
+    ) {
+      await repos.fraudSignals.create({
+        businessId: qrCode.businessId,
+        branchId: qrCode.branchId,
+        feedbackId: created.id,
+        signalType: NEAR_DUPLICATE_SIGNAL_TYPE,
+        reasonCode: NEAR_DUPLICATE_REASON_CODE,
+        severity: nearDuplicateSeverity(created.nearDuplicateCount),
+        // The salted device hash, never the raw signal, and no comment text
+        // -- a reviewer needs to know WHICH device repeated itself and how
+        // often, and can read the comments from the feedback rows themselves
+        // (S4.2 data minimization, same rule the duplicate-text signal
+        // follows).
+        metadata: {
+          nearDuplicateCount: created.nearDuplicateCount,
+          deviceHash: created.deviceHash,
         },
       });
     }

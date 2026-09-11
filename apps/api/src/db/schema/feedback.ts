@@ -92,6 +92,31 @@ export const feedback = pgTable(
     // so they are never compared, so the honest count is zero rather than
     // unknown.
     duplicateTextCount: integer('duplicate_text_count').notNull().default(0),
+    // Continuing Development S5-C. The SALTED SHA-256 of the client's
+    // deviceSignal (VelocityTracker.hashSubject), never the raw signal --
+    // S5.4's "avoid permanent raw fingerprints" applies to what is persisted,
+    // and this is the same already-hashed value the KV velocity counters key
+    // on, not a second convention.
+    //
+    // Exists so near-duplicate text scoring has a submitter correlate to gate
+    // on. Text similarity alone was measured unusable at this comment length
+    // (honest pairs scoring 0.857 against templates at 0.500 -- the ranges
+    // invert; see fraud/near-duplicate.ts and the project's
+    // s5c-near-duplicate-finding.md). "Same device, near-identical text" is
+    // evidence; "similar text" alone is just people.
+    //
+    // Nullable: an older client, or one that sends no deviceSignal, still
+    // gets every other control. A QR_TOKEN/velocity salt rotation makes old
+    // hashes stop matching new ones, which degrades this detector to "no
+    // correlate" rather than breaking it -- an acceptable, arguably desirable
+    // property for a retained identifier.
+    deviceHash: text('device_hash'),
+    // Continuing Development S5-C. How many of this device's own recent
+    // comments at this branch were near-duplicates of this one, counted once
+    // at submit time. Same point-in-time-fact reasoning as
+    // duplicateTextCount above, and 0 whenever there was no deviceHash, no
+    // comment, or nothing to compare against.
+    nearDuplicateCount: integer('near_duplicate_count').notNull().default(0),
     // Business-meaningful triage state, distinct from isDeleted below (which
     // is for actually removing a spam/abusive submission). Lets an owner
     // mark something seen without a full ticketing workflow. The UI for
@@ -185,6 +210,16 @@ export const feedback = pgTable(
     index('feedback_duplicate_hash_idx')
       .on(table.businessId, table.branchId, table.normalizedTextHash)
       .where(sql`${table.normalizedTextHash} IS NOT NULL`),
+    // Continuing Development S5-C. Backs
+    // FeedbackRepository.listRecentCommentsForDevice -- the candidate lookup
+    // for near-duplicate scoring. Partial for the same reason as the
+    // duplicate-hash index directly above: most rows have no deviceHash at
+    // all, so indexing every NULL would cost space for no query benefit.
+    // createdAt is included because the lookup is always "this device's most
+    // recent N", never an unbounded scan of its history.
+    index('feedback_device_recent_idx')
+      .on(table.businessId, table.branchId, table.deviceHash, table.createdAt)
+      .where(sql`${table.deviceHash} IS NOT NULL`),
     check('feedback_rating_check', sql`${table.rating} BETWEEN 1 AND 5`),
     check('feedback_status_check', sql`${table.status} IN ('new', 'reviewed')`),
     check(

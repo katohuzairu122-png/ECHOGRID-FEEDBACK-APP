@@ -143,6 +143,44 @@ export class FeedbackRepository extends BaseRepository {
     return row?.count ?? 0;
   }
 
+  /**
+   * Continuing Development S5-C. This device's most recent comments at this
+   * branch -- the candidate set for near-duplicate scoring.
+   *
+   * Returns only the comment text, not whole rows: the scorer needs nothing
+   * else, and a bounded projection keeps a hot submit-path query from pulling
+   * 20 full feedback rows through Hyperdrive to discard every other column.
+   *
+   * `limit` is required, not defaulted, for the same reason
+   * countByNormalizedHash requires `since`: this runs synchronously inside a
+   * customer's submit, so the caller must state its own bound rather than
+   * inherit one. Backed by feedback_device_recent_idx, an exact match for
+   * these four columns.
+   */
+  async listRecentCommentsForDevice(
+    businessId: string,
+    branchId: string,
+    deviceHash: string,
+    since: Date,
+    limit: number,
+  ): Promise<(string | null)[]> {
+    const rows = await this.db
+      .select({ comment: feedback.comment })
+      .from(feedback)
+      .where(
+        and(
+          eq(feedback.businessId, businessId),
+          eq(feedback.branchId, branchId),
+          eq(feedback.deviceHash, deviceHash),
+          eq(feedback.isDeleted, false),
+          gte(feedback.createdAt, since),
+        ),
+      )
+      .orderBy(desc(feedback.createdAt))
+      .limit(limit);
+    return rows.map((row) => row.comment);
+  }
+
   async markReviewed(id: string, businessId: string, updatedBy: string): Promise<Feedback | undefined> {
     const [row] = await this.db
       .update(feedback)

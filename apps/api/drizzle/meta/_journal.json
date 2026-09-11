@@ -148,6 +148,13 @@
       "when": 1788965615566,
       "tag": "0020_feedback_duplicate_text_count",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1788965675566,
+      "tag": "0021_feedback_device_near_duplicate",
+      "breakpoints": true
     }
   ]
 }

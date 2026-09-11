@@ -114,6 +114,17 @@ export const feedbackSchema = z.object({
   // is unremarkable, thirty is a template. 0 whenever the comment was too
   // short to be compared at all (see the API's MIN_DISTINCTIVE_LENGTH).
   duplicateTextCount: z.number().int().min(0),
+  // Continuing Development S5-C (S5.6 near-duplicate detection) -- how many
+  // of the SAME DEVICE's recent comments at this branch were near-duplicates
+  // of this one. 0 when the client sent no device signal, or the comment was
+  // empty, or nothing matched.
+  //
+  // `deviceHash` is deliberately NOT exposed here, matching this schema's
+  // existing restraint around normalizedTextHash: it is an internal fraud
+  // correlate with no product meaning to a viewer, and a salted submitter
+  // identifier does not belong in a response body just because it exists on
+  // the row.
+  nearDuplicateCount: z.number().int().min(0),
   createdAt: z.string(),
 });
 

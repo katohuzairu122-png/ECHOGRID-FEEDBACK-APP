@@ -10,6 +10,7 @@ import { AppError } from '../lib/errors';
 import { detectCriticalSignals } from './critical-detector';
 import { normalizeFeedbackText, hashNormalizedText, isDistinctiveEnoughToCompare } from './text-normalizer';
 import { expandSavedView } from './feedback-saved-views';
+import { countNearDuplicates, NEAR_DUPLICATE_CANDIDATE_LIMIT } from '../fraud/near-duplicate';
 
 /**
  * Continuing Development S5-A. Window for the duplicate-text frequency count
@@ -42,7 +43,20 @@ export class FeedbackService {
    * because there isn't one; the qrCode itself is what authorizes the
    * write and supplies the tenant scoping.
    */
-  async submit(qrCode: QrCode, input: SubmitFeedbackInput): Promise<Feedback> {
+  /**
+   * @param context.deviceHash Continuing Development S5-C. The SALTED device
+   * hash, computed by the caller (qr.routes.ts, via
+   * VelocityTracker.hashSubject) rather than here: this service stays
+   * Repositories-shaped so its unit tests keep using in-memory fakes, and
+   * hashing needs the velocity salt from the environment. Absent when the
+   * client sent no deviceSignal, which simply means no near-duplicate
+   * correlate for this submission.
+   */
+  async submit(
+    qrCode: QrCode,
+    input: SubmitFeedbackInput,
+    context: { deviceHash?: string | undefined } = {},
+  ): Promise<Feedback> {
     // Level 1 deterministic processing (Automated Feedback Sorting) -- a
     // synchronous keyword scan, never a model call, so a credible safety
     // emergency gets P0_CRITICAL the instant this row is stored, not
@@ -83,6 +97,31 @@ export class FeedbackService {
         )
       : 0;
 
+    // S5-C: near-duplicate scoring, gated on the device rather than run
+    // against the branch at large. Text similarity alone was measured
+    // unusable at this comment length -- honest pairs outscored real
+    // templates -- so the gate is what makes the number mean anything. See
+    // fraud/near-duplicate.ts for the measurements.
+    //
+    // Reuses DUPLICATE_LOOKBACK_MS: a second window constant for the same
+    // "how far back does repetition still count" question would be two
+    // numbers to keep in step for no gain. Scored against the comment text
+    // of this device's own recent submissions, so it is skipped entirely
+    // when there is no device correlate or no comment to compare.
+    const nearDuplicateCount =
+      context.deviceHash && input.comment
+        ? countNearDuplicates(
+            input.comment,
+            await this.repos.feedback.listRecentCommentsForDevice(
+              qrCode.businessId,
+              qrCode.branchId,
+              context.deviceHash,
+              new Date(Date.now() - DUPLICATE_LOOKBACK_MS),
+              NEAR_DUPLICATE_CANDIDATE_LIMIT,
+            ),
+          )
+        : 0;
+
     const created = await this.repos.feedback.create({
       businessId: qrCode.businessId,
       branchId: qrCode.branchId,
@@ -95,6 +134,8 @@ export class FeedbackService {
       normalizedTextHash: normalizedTextHash ?? undefined,
       isDuplicateText: duplicateTextCount > 0,
       duplicateTextCount,
+      ...(context.deviceHash ? { deviceHash: context.deviceHash } : {}),
+      nearDuplicateCount,
     } satisfies NewFeedback);
 
     // Not transaction-wrapped with the insert above (this service stays
