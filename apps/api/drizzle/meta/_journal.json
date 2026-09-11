@@ -141,6 +141,13 @@
       "when": 1788965555566,
       "tag": "0019_feedback_manual_analysis_status",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1788965615566,
+      "tag": "0020_feedback_duplicate_text_count",
+      "breakpoints": true
     }
   ]
 }

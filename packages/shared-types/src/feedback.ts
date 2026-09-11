@@ -107,6 +107,13 @@ export const feedbackSchema = z.object({
   // restraint around not mirroring every DB column (audit/soft-delete
   // columns are likewise omitted above).
   isDuplicateText: z.boolean(),
+  // Continuing Development S5-A (S5.6 frequency checks) -- how many earlier
+  // submissions at the same branch carried this exact normalized text, within
+  // a bounded lookback window, at the moment this one arrived. Exposed
+  // alongside the boolean because they answer different questions: one repeat
+  // is unremarkable, thirty is a template. 0 whenever the comment was too
+  // short to be compared at all (see the API's MIN_DISTINCTIVE_LENGTH).
+  duplicateTextCount: z.number().int().min(0),
   createdAt: z.string(),
 });
 

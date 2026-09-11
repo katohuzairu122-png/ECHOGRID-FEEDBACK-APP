@@ -8,8 +8,22 @@ import type {
 } from '@echo-grid-feedback/shared-types';
 import { AppError } from '../lib/errors';
 import { detectCriticalSignals } from './critical-detector';
-import { normalizeFeedbackText, hashNormalizedText } from './text-normalizer';
+import { normalizeFeedbackText, hashNormalizedText, isDistinctiveEnoughToCompare } from './text-normalizer';
 import { expandSavedView } from './feedback-saved-views';
+
+/**
+ * Continuing Development S5-A. Window for the duplicate-text frequency count
+ * (spec S5.6). Bounded rather than all-time so the number means "how often
+ * recently", not "how long has this business been a customer" -- see
+ * FeedbackRepository.countByNormalizedHash on why the window is mandatory.
+ *
+ * 30 days is wide enough to catch a templated campaign that paces itself to
+ * stay under the 10-minute device/IP velocity limits
+ * (fraud/velocity-tracker.ts), and narrow enough that a phrase a regular
+ * genuinely reuses across seasons does not accumulate forever.
+ */
+const DUPLICATE_LOOKBACK_DAYS = 30;
+const DUPLICATE_LOOKBACK_MS = DUPLICATE_LOOKBACK_DAYS * 24 * 60 * 60 * 1000;
 
 export class FeedbackService {
   constructor(private readonly repos: Pick<Repositories, 'feedback' | 'criticalIncidents'>) {}
@@ -39,17 +53,35 @@ export class FeedbackService {
 
     // Level 1 deterministic processing, continued -- exact-duplicate text
     // detection (spec S3.1/S9.1). See text-normalizer.ts for why this is a
-    // plain hash-equality check, not fraud scoring: near-duplicate
-    // detection, frequency limits, and any consequence beyond recording the
-    // fact are Continuing Development Block 5 (S5.6), once the fraud-signal
-    // schema exists. A
-    // missing/empty comment never hashes -- there is no text to compare,
-    // so it can never be flagged.
+    // plain hash-equality check, not fraud scoring: near-duplicate scoring
+    // and any CONSEQUENCE beyond recording the fact (fraud reason codes,
+    // manual-review routing, reward blocking) remain S5-B/S5-C. Frequency is
+    // now recorded here rather than deferred -- see duplicateTextCount below.
+    // A missing/empty comment never hashes -- there is no text to compare,
+    // so it can never be flagged. Recording only, never rejecting
+    // (S2.9/S2.15: never lose real customer feedback).
+    // S5-A: the distinctiveness floor gates HASHING, not just flagging, so a
+    // short common phrase leaves no hash behind for anything downstream to
+    // misread as a duplicate. See text-normalizer.ts's MIN_DISTINCTIVE_LENGTH
+    // for why "Great service!" must not collide with the next customer who
+    // writes it.
     const normalizedText = normalizeFeedbackText(input.comment);
-    const normalizedTextHash = normalizedText ? await hashNormalizedText(normalizedText) : null;
-    const priorMatch = normalizedTextHash
-      ? await this.repos.feedback.findMostRecentByNormalizedHash(qrCode.businessId, qrCode.branchId, normalizedTextHash)
-      : undefined;
+    const normalizedTextHash = isDistinctiveEnoughToCompare(normalizedText)
+      ? await hashNormalizedText(normalizedText)
+      : null;
+
+    // Counted, not merely detected (spec S5.6 "frequency checks"): one repeat
+    // is unremarkable and thirty is a template, and S5-B's fraud-signal
+    // routing needs to tell those apart. Costs the same single indexed query
+    // the previous existence lookup did.
+    const duplicateTextCount = normalizedTextHash
+      ? await this.repos.feedback.countByNormalizedHash(
+          qrCode.businessId,
+          qrCode.branchId,
+          normalizedTextHash,
+          new Date(Date.now() - DUPLICATE_LOOKBACK_MS),
+        )
+      : 0;
 
     const created = await this.repos.feedback.create({
       businessId: qrCode.businessId,
@@ -61,7 +93,8 @@ export class FeedbackService {
       followUpAnswer: input.followUpQuestion ? input.followUpAnswer : undefined,
       urgency: detection.isCritical ? 'P0_CRITICAL' : undefined,
       normalizedTextHash: normalizedTextHash ?? undefined,
-      isDuplicateText: Boolean(priorMatch),
+      isDuplicateText: duplicateTextCount > 0,
+      duplicateTextCount,
     } satisfies NewFeedback);
 
     // Not transaction-wrapped with the insert above (this service stays

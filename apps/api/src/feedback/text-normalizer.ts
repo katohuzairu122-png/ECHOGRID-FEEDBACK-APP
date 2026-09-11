@@ -7,10 +7,11 @@
  * already documents for P0 detection).
  *
  * Deliberately narrow: this only ever catches an EXACT normalized match.
- * Near-duplicate scoring, submission frequency/velocity, cooldowns, and any
- * fraud consequence (reason codes, manual-review routing, reward blocking)
- * are explicitly later work -- spec S5.6 / Continuing Development roadmap
- * Block 5 -- once the fraud-signal schema and reward/campaign model exist.
+ * Near-duplicate scoring and any fraud consequence (reason codes,
+ * manual-review routing, reward blocking) are still later work -- spec
+ * S5.6, Continuing Development blocks S5-B and S5-C. Submission frequency
+ * IS now counted (S5-A): see FeedbackService.submit and
+ * FeedbackRepository.countByNormalizedHash.
  * (Named in full: this codebase already uses bare "Block N" elsewhere for
  * the original build's own, different numbering.) This module only
  * ever answers "have we seen this exact text at this branch before," and
@@ -35,6 +36,47 @@ export function normalizeFeedbackText(comment: string | null | undefined): strin
   if (!comment) return null;
   const collapsed = comment.trim().toLowerCase().replace(/\s+/g, ' ');
   return collapsed.length > 0 ? collapsed : null;
+}
+
+/**
+ * Continuing Development S5-A. Minimum normalized length before a comment is
+ * distinctive enough that two identical copies are evidence of anything.
+ *
+ * This is spec S5.6's "protection against rejecting legitimate short common
+ * phrases", and without it exact-hash matching is actively wrong: "Great
+ * service!" normalizes to 13 characters, so the second honest customer to
+ * write it at a branch collides with the first. Hashing is skipped entirely
+ * below this floor rather than hashing-then-ignoring, so no later consumer
+ * can rediscover the column and draw the same false conclusion -- a stored
+ * `normalizedTextHash` now means "this text was distinctive enough to
+ * compare", which is a property worth being able to rely on.
+ *
+ * 20 characters, chosen conservatively: it clears the common one- and
+ * two-word pleasantries ("great service", "very good, thanks", "loved it")
+ * while a genuine complaint or templated bot submission is comfortably
+ * longer. Erring long is the cheap direction -- a missed duplicate is still
+ * covered by device/IP velocity (fraud/velocity-tracker.ts), whereas a false
+ * one accuses a real customer of fraud for praising the business.
+ *
+ * Worth re-deriving from real comment-length distribution once there is
+ * enough production data to look at; this is a defensible default, not a
+ * measured one.
+ */
+export const MIN_DISTINCTIVE_LENGTH = 20;
+
+/**
+ * Kept separate from normalizeFeedbackText rather than folded into it:
+ * normalization answers "what is the comparable form of this text", this
+ * answers "is comparing it meaningful at all". Collapsing the two would mean
+ * a function called `normalize` silently applying a fraud policy, and would
+ * leave no way to normalize text for any other purpose without inheriting
+ * that policy.
+ *
+ * A type predicate so callers get `string` narrowing straight into
+ * hashNormalizedText without a non-null assertion.
+ */
+export function isDistinctiveEnoughToCompare(normalized: string | null): normalized is string {
+  return normalized !== null && normalized.length >= MIN_DISTINCTIVE_LENGTH;
 }
 
 /**

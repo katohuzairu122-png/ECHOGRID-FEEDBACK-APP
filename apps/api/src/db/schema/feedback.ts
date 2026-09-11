@@ -74,6 +74,24 @@ export const feedback = pgTable(
     // that later work reads, not the fraud decision itself; Level 1 only
     // detects and records, it never rejects a submission (S2.9/S2.15).
     isDuplicateText: boolean('is_duplicate_text').notNull().default(false),
+    // Continuing Development S5-A (spec S5.6 "frequency checks"). How many
+    // EARLIER non-deleted submissions at this same business+branch carried
+    // this exact normalized text, counted once at submit time over a bounded
+    // lookback window (feedback.service.ts's DUPLICATE_LOOKBACK_DAYS).
+    //
+    // Stored rather than derived on read because it is a point-in-time fact:
+    // recounting next week answers a different question, since more matches
+    // may have arrived since. `isDuplicateText` above is exactly
+    // `duplicateTextCount > 0` -- kept as its own column rather than dropped
+    // because it is what the existing partial index and inbox filtering are
+    // shaped around, and a boolean and a rate are different questions: one
+    // repeat is unremarkable, thirty in a day is a template.
+    //
+    // 0 for a comment-less submission and for any comment below
+    // text-normalizer.ts's MIN_DISTINCTIVE_LENGTH -- those are never hashed,
+    // so they are never compared, so the honest count is zero rather than
+    // unknown.
+    duplicateTextCount: integer('duplicate_text_count').notNull().default(0),
     // Business-meaningful triage state, distinct from isDeleted below (which
     // is for actually removing a spam/abusive submission). Lets an owner
     // mark something seen without a full ticketing workflow. The UI for

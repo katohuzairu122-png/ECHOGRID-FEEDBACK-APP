@@ -71,6 +71,7 @@ function createFakeFeedbackRepo() {
         assignedTo: input.assignedTo ?? null,
         normalizedTextHash: input.normalizedTextHash ?? null,
         isDuplicateText: input.isDuplicateText ?? false,
+        duplicateTextCount: input.duplicateTextCount ?? 0,
         createdAt: new Date(),
         createdBy: input.createdBy ?? null,
         updatedAt: new Date(),
@@ -185,6 +186,25 @@ function createFakeFeedbackRepo() {
         )
         .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
       return matches[0];
+    },
+    /** In-memory stand-in for the real COUNT(*) query (Continuing
+     * Development S5-A) -- same business+branch+hash scoping and isDeleted
+     * exclusion as findMostRecentByNormalizedHash above, plus the mandatory
+     * `since` window the real signature requires. */
+    async countByNormalizedHash(
+      businessId: string,
+      branchId: string,
+      normalizedTextHash: string,
+      since: Date,
+    ): Promise<number> {
+      return [...items.values()].filter(
+        (i) =>
+          i.businessId === businessId &&
+          i.branchId === branchId &&
+          i.normalizedTextHash === normalizedTextHash &&
+          !i.isDeleted &&
+          i.createdAt >= since,
+      ).length;
     },
     /** In-memory stand-in for FeedbackRepository.listWithFilters -- only
      * the fields this test file actually exercises are filtered on; good
@@ -385,6 +405,67 @@ describe('FeedbackService', () => {
     const second = await service.submit(QR_CODE, { rating: 5 });
 
     expect(second.isDuplicateText).toBe(false);
+    expect(second.duplicateTextCount).toBe(0);
+  });
+
+  // Continuing Development S5-A (spec S5.6) -- the distinctiveness floor and
+  // frequency counting.
+
+  it('submit never flags two customers who write the same short pleasantry', async () => {
+    // "great service!" is 14 normalized characters, under MIN_DISTINCTIVE_LENGTH.
+    // Before S5-A this flagged the second honest customer as a duplicate.
+    await service.submit(QR_CODE, { rating: 5, comment: 'Great service!' });
+    const second = await service.submit(QR_CODE, { rating: 5, comment: 'Great service!' });
+
+    expect(second.isDuplicateText).toBe(false);
+    expect(second.duplicateTextCount).toBe(0);
+  });
+
+  it('submit stores no hash at all for a comment below the distinctiveness floor', async () => {
+    // Gating HASHING rather than only flagging is the point: with no hash on
+    // the row, no later consumer can rediscover it and draw the conclusion
+    // this block exists to prevent.
+    const item = await service.submit(QR_CODE, { rating: 5, comment: 'Lovely, thanks' });
+
+    expect(item.normalizedTextHash).toBeNull();
+  });
+
+  it('submit counts how many earlier submissions carried the same text, not just whether any did', async () => {
+    const comment = 'The service here was extremely slow today.';
+    const first = await service.submit(QR_CODE, { rating: 2, comment });
+    const second = await service.submit(QR_CODE, { rating: 2, comment });
+    const third = await service.submit(QR_CODE, { rating: 2, comment });
+
+    // One repeat is unremarkable; a rising count is what distinguishes a
+    // template from a coincidence, and is what S5-B will route on.
+    expect(first.duplicateTextCount).toBe(0);
+    expect(second.duplicateTextCount).toBe(1);
+    expect(third.duplicateTextCount).toBe(2);
+    expect(third.isDuplicateText).toBe(true);
+  });
+
+  it('submit keeps the duplicate count scoped to one branch', async () => {
+    const comment = 'The service here was extremely slow today.';
+    await service.submit(QR_CODE, { rating: 2, comment });
+    await service.submit(QR_CODE, { rating: 2, comment });
+    const otherBranch = await service.submit({ ...QR_CODE, branchId: 'branch-b' }, { rating: 2, comment });
+
+    // Same text at a different branch is at least as plausibly a real
+    // chain-wide issue as abuse -- see FeedbackRepository's own comment.
+    expect(otherBranch.duplicateTextCount).toBe(0);
+    expect(otherBranch.isDuplicateText).toBe(false);
+  });
+
+  it('submit keeps isDuplicateText and duplicateTextCount consistent with each other', async () => {
+    const comment = 'Placed an order and waited over an hour for it.';
+    const first = await service.submit(QR_CODE, { rating: 1, comment });
+    const second = await service.submit(QR_CODE, { rating: 1, comment });
+
+    // isDuplicateText is exactly duplicateTextCount > 0 -- the two columns
+    // must never disagree, since the inbox filters on one and S5-B will
+    // decide on the other.
+    expect(first.isDuplicateText).toBe(first.duplicateTextCount > 0);
+    expect(second.isDuplicateText).toBe(second.duplicateTextCount > 0);
   });
 
   it('assign sets assignedTo and throws 404 for an unknown id', async () => {

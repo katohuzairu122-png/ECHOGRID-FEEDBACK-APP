@@ -103,6 +103,46 @@ export class FeedbackRepository extends BaseRepository {
     });
   }
 
+  /**
+   * Continuing Development S5-A (spec S5.6 "frequency checks"). How many
+   * earlier submissions at this branch carry this exact normalized text.
+   *
+   * Same business+branch scoping and same isDeleted exclusion as
+   * findMostRecentByNormalizedHash above -- see that method's comment for
+   * why duplicate detection is per-branch and not per-business.
+   *
+   * `since` is required rather than optional: an unbounded count grows
+   * without limit as the table ages, so the same templated attack would
+   * score differently depending only on how long the business has been a
+   * customer. A caller must state the window it means.
+   *
+   * Uses the core query builder because the relational API has no aggregate
+   * form; `count(*)` comes back as a string over the wire, hence the ::int.
+   * Served by feedback_duplicate_hash_idx -- the three equality columns are
+   * selective enough that filtering the handful of surviving rows by
+   * createdAt does not justify widening that index.
+   */
+  async countByNormalizedHash(
+    businessId: string,
+    branchId: string,
+    normalizedTextHash: string,
+    since: Date,
+  ): Promise<number> {
+    const [row] = await this.db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(feedback)
+      .where(
+        and(
+          eq(feedback.businessId, businessId),
+          eq(feedback.branchId, branchId),
+          eq(feedback.normalizedTextHash, normalizedTextHash),
+          eq(feedback.isDeleted, false),
+          gte(feedback.createdAt, since),
+        ),
+      );
+    return row?.count ?? 0;
+  }
+
   async markReviewed(id: string, businessId: string, updatedBy: string): Promise<Feedback | undefined> {
     const [row] = await this.db
       .update(feedback)
