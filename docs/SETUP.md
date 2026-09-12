@@ -310,6 +310,20 @@ pnpm test:integration   # needs DATABASE_URL pointed at a real (scratch/dev) Pos
 pnpm test:workers       # needs real wrangler.toml binding IDs, not placeholders
 ```
 
+`test:integration` also runs in CI now, against a throwaway `postgres:16`
+service container that the workflow migrates and seeds from scratch (see
+`.github/workflows/ci-cd.yml`). Two consequences worth knowing:
+
+- **It gates merges.** A failing integration test now blocks a PR, where
+  previously the suite was invisible to CI.
+- **CI proves the migration chain replays on an empty database**, which
+  `db:check` cannot — that only proves `drizzle/` matches
+  `src/db/schema/`, not that the SQL runs in order from nothing.
+
+Locally, keep pointing `DATABASE_URL` at a scratch database. These suites
+write real rows and clean up by soft-delete only, so they accumulate there.
+`test:workers` remains local-only — see the workflow's note on why.
+
 Frontend (`apps/web`), added in Branch Mgmt Block 6:
 
 ```bash

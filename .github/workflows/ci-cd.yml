@@ -1,11 +1,21 @@
 name: CI/CD
 
 # Runs on every push/PR (verify only) and deploys both apps on push to main
-# (verify must pass first). Deliberately does NOT run database migrations --
-# pnpm db:migrate has no down-migration/rollback tooling wired up (see
+# (verify must pass first).
+#
+# MIGRATIONS: still deliberately NOT run against any real database. pnpm
+# db:migrate has no down-migration/rollback tooling wired up (see
 # docs/DEPLOYMENT.md's Rollback section), so an unreviewed schema change
-# firing automatically on every merge is a real risk this project isn't
-# ready to take on yet. Migrations stay a manual, deliberate step.
+# firing automatically on every merge against production stays a risk this
+# project isn't taking. That policy is unchanged.
+#
+# What the verify job now does migrate is an EMPTY, EPHEMERAL postgres
+# service container that exists for the life of one job and is discarded
+# with it. There is nothing in it to roll back and nothing to lose, so the
+# rollback objection does not apply. It exists so the integration suite --
+# which holds every transactional money invariant in the platform and which
+# CI previously did not run at all -- actually gates a merge. Do not read
+# the migrate step below as the production policy having been relaxed.
 #
 # Prerequisites this workflow assumes but cannot set up itself:
 #   1. This repo is pushed to GitHub (it isn't yet as of this commit).
@@ -35,6 +45,46 @@ jobs:
   verify:
     name: Typecheck & Test
     runs-on: ubuntu-latest
+    # The integration tier adds a few minutes; 20 bounds a hung job instead
+    # of letting it sit on GitHub's 6-hour default.
+    timeout-minutes: 20
+
+    services:
+      # Pinned to 16 to match the Neon compute this schema actually runs on.
+      # Confirm with `SELECT version()` against Neon before bumping -- a CI
+      # container on a different major than production can green-light
+      # behaviour that differs there (planner choices, and anything touching
+      # collation or JSON functions most of all).
+      postgres:
+        image: postgres:16
+        env:
+          # Not secrets. This container is reachable only from this job's
+          # network namespace, holds nothing but throwaway fixtures, and is
+          # destroyed when the job ends. Moving these into repository
+          # secrets would add ceremony and hide what the job connects to.
+          POSTGRES_USER: echogrid
+          POSTGRES_PASSWORD: echogrid
+          POSTGRES_DB: echogrid_test
+        ports:
+          - 5432:5432
+        # Without a healthcheck, steps start the instant the container is
+        # created and race Postgres' own init, which fails intermittently
+        # rather than cleanly.
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    # Job-scoped so the migrate, seed and integration steps all see it. No
+    # sslmode parameter on purpose: the service container terminates plain
+    # TCP, and `pg` only negotiates TLS when asked. The db:check step below
+    # also inherits this and is unaffected -- drizzle-kit generate diffs
+    # against the snapshot files and never opens a connection (see that
+    # script's header).
+    env:
+      DATABASE_URL: postgresql://echogrid:echogrid@localhost:5432/echogrid_test
+
     steps:
       - uses: actions/checkout@v4
 
@@ -66,14 +116,46 @@ jobs:
         run: pnpm --filter @echo-grid-feedback/web typecheck
 
       - name: Unit tests -- API
-        # Fast tier only (fake repositories, no external deps) -- deliberately
-        # NOT test:integration (needs a real Postgres) or test:workers (needs
-        # real Cloudflare binding IDs, which CI doesn't have). Both stay
-        # manual/local per docs/SETUP.md's Testing section.
+        # Fast tier (fake repositories, no external deps) -- runs before the
+        # integration tier below so a logic error reports in seconds rather
+        # than after a database spin-up.
+        #
+        # test:workers is still not here. It runs under Miniflare against
+        # this project's own wrangler.toml, whose Hyperdrive binding has no
+        # localConnectionString (deliberately -- that file is tracked, see
+        # its comment), so the Workers tier cannot reach a database at all.
+        # The service container above makes that solvable now, via
+        # wrangler's local-connection-string override, but it needs
+        # verifying against this wrangler version first -- own change.
         run: pnpm --filter @echo-grid-feedback/api test
 
       - name: Unit tests -- web
         run: pnpm --filter @echo-grid-feedback/web test
+
+      # ---- integration tier -------------------------------------------
+      # Last on purpose: it is the slowest step and the only one needing a
+      # database, so every cheaper failure class above reports first.
+      #
+      # Applies all 22 migrations to the empty service container from
+      # scratch. This doubles as a real check that the migration chain is
+      # replayable end-to-end on a fresh database -- db:check only proves
+      # drizzle/ matches src/db/schema/, not that the SQL actually runs in
+      # order. A migration that only works against an already-populated
+      # database fails here.
+      - name: Apply migrations -- ephemeral CI database
+        run: pnpm --filter @echo-grid-feedback/api db:migrate
+
+      # The permission catalog is platform-defined, not tenant-created, and
+      # RoleProvisioningService.seedDefaultRoles resolves role grants
+      # against it -- so permission-resolution and billing-permissions both
+      # fail on an unseeded database. Only this seed is needed: the others
+      # bootstrap a platform admin, a plan catalog, or backfill existing
+      # businesses, and no integration test touches any of those.
+      - name: Seed permission catalog
+        run: pnpm --filter @echo-grid-feedback/api db:seed
+
+      - name: Integration tests -- API (real Postgres)
+        run: pnpm --filter @echo-grid-feedback/api test:integration
 
   deploy-api:
     name: Deploy API to Cloudflare Workers

@@ -13,12 +13,25 @@ export default defineConfig({
   test: {
     include: ['test/integration/**/*.test.ts'],
     environment: 'node',
-    // Each file opens its own real Postgres connection in beforeAll; running
-    // all 6 files in parallel (Vitest's default) opened 6+ simultaneous
-    // connections to Neon's serverless compute and reliably produced
-    // ETIMEDOUT/ENETUNREACH errors. Serial execution avoids the connection
-    // storm. Cold-start latency on top of that also exceeded the 5s/10s
-    // defaults for the first query in a file -- raised alongside it.
+    // Serial for TWO independent reasons. The first is historical: each file
+    // opens its own real Postgres connection in beforeAll, and running them
+    // in parallel against Neon's serverless compute opened 6+ simultaneous
+    // connections and reliably produced ETIMEDOUT/ENETUNREACH. A local or
+    // CI-container Postgres removes that one entirely.
+    //
+    // The second survives the move and is the reason this must STAY false:
+    // ai-usage-stale-pending.integration.test.ts asserts on PLATFORM-WIDE
+    // queries -- abandonStalePending(cutoff) returns a count of every stale
+    // row in the table regardless of business, and totalCostSince(since) is
+    // likewise unscoped. Another file writing ai_usage_log rows concurrently
+    // changes those numbers, so parallelism would make that suite flaky in a
+    // way that looks like a real regression. Scoping those assertions to the
+    // suite's own business is the prerequisite for re-enabling this; the
+    // connection limit no longer is.
+    //
+    // Cold-start latency also exceeded the 5s/10s timeout defaults for the
+    // first query in a file against Neon -- raised alongside it, and
+    // harmless when the database is local.
     fileParallelism: false,
     testTimeout: 30000,
     hookTimeout: 30000,
