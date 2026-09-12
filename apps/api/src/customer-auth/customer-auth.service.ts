@@ -104,7 +104,20 @@ export class CustomerAuthService {
       await this.repos.otpCodes.incrementAttempts(active.id);
       throw new CustomerAuthError('Code is invalid or has expired.', 'OTP_INVALID');
     }
-    await this.repos.otpCodes.markConsumed(active.id);
+    // Guarded consume: markConsumed now returns false when the row was
+    // already consumed between findActiveForPhone above and here, which is
+    // exactly the window two concurrent verifications of one code raced
+    // through. Losing that race must not issue a second session, so the
+    // loser is told the same thing every other invalid path says.
+    //
+    // Same generic message and code as a wrong or expired code, on purpose:
+    // "this code was just used by someone else" is not information a caller
+    // should be able to distinguish, and OTP_INVALID already covers every
+    // reason a code will not work.
+    const consumed = await this.repos.otpCodes.markConsumed(active.id);
+    if (!consumed) {
+      throw new CustomerAuthError('Code is invalid or has expired.', 'OTP_INVALID');
+    }
 
     let customer = await this.repos.customers.findByPhone(phone);
     if (!customer) {

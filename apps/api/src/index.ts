@@ -287,11 +287,35 @@ async function queue(batch: MessageBatch<PlatformJob>, env: Bindings, ctx: Execu
   }
 }
 
+/**
+ * The daily trigger, named because two unrelated jobs now key off it: the
+ * daily feedback summary below, and the otp_codes prune. Declared once so
+ * the map entry and the prune's own check cannot drift apart -- a class of
+ * bug this file is already exposed to, since every one of these strings
+ * must match wrangler.toml's [triggers] exactly or the work silently stops
+ * happening with no failed request to notice.
+ */
+const DAILY_CRON = '0 0 * * *';
+
 const CRON_PERIOD_MAP: Record<string, PeriodType> = {
-  '0 0 * * *': 'daily',
+  [DAILY_CRON]: 'daily',
   '0 0 * * 1': 'weekly',
   '0 0 1 * *': 'monthly',
 };
+
+/**
+ * How long a terminal otp_codes row is kept before the daily prune deletes
+ * it (Continuing Development, audit P1-4).
+ *
+ * Nothing in the login flow needs a row older than minutes: the request
+ * cooldown window is 60 seconds and a code expires in 10 minutes
+ * (customer-auth/otp.ts). Seven days is retained purely for abuse
+ * investigation -- "how many codes did this number request last week" is
+ * the question the audit's SMS-bombing finding raises, and it is
+ * unanswerable once the rows are gone. Shorten it freely; the only cost of
+ * a smaller window is that visibility.
+ */
+const OTP_RETENTION_DAYS = 7;
 
 // A P0_CRITICAL incident un­acknowledged this long gets escalated -- see
 // critical-alert-job.ts. 15 minutes against a 5-minute sweep interval means
@@ -352,6 +376,14 @@ async function scheduled(event: ScheduledController, env: Bindings, ctx: Executi
     ctx.waitUntil(sweepUnacknowledgedCriticalIncidents(env));
     ctx.waitUntil(sweepStalePendingAiUsage(env));
     return;
+  }
+
+  if (event.cron === DAILY_CRON) {
+    // Shares the daily trigger rather than registering a fifth one, the
+    // same reasoning the two 5-minute sweeps above already use. Its own
+    // waitUntil, not awaited with the summary work below: a prune failure
+    // must not stop summaries generating, and vice versa.
+    ctx.waitUntil(pruneOldOtpCodes(env));
   }
 
   const periodType = CRON_PERIOD_MAP[event.cron];
@@ -424,6 +456,32 @@ async function sweepStalePendingAiUsage(env: Bindings): Promise<void> {
       console.warn(
         `Abandoned ${abandoned} ai_usage_log row(s) still pending after ${STALE_PENDING_MINUTES} minutes.`,
       );
+    }
+  } finally {
+    await close();
+  }
+}
+
+/**
+ * Deletes otp_codes rows past OTP_RETENTION_DAYS.
+ *
+ * The table had no delete path anywhere in src/ and grew one row per OTP
+ * request forever, on the customer-login hot path (audit P1-4). This is the
+ * codebase's only hard delete -- see the repository method for why a soft
+ * delete is not available or wanted for this table.
+ *
+ * No throw on failure, matching sweepStalePendingAiUsage: this runs inside
+ * waitUntil on a cron, and rows that were not deleted today are deleted
+ * tomorrow. Logs a count only -- never a phone number, matching this
+ * codebase's existing caution about what reaches logs.
+ */
+async function pruneOldOtpCodes(env: Bindings): Promise<void> {
+  const cutoff = new Date(Date.now() - OTP_RETENTION_DAYS * 24 * 60 * 60 * 1000);
+  const { db, close } = await createDb(env.HYPERDRIVE);
+  try {
+    const deleted = await createRepositories(db).otpCodes.deleteCreatedBefore(cutoff);
+    if (deleted > 0) {
+      console.log(`Pruned ${deleted} otp_codes row(s) older than ${OTP_RETENTION_DAYS} days.`);
     }
   } finally {
     await close();

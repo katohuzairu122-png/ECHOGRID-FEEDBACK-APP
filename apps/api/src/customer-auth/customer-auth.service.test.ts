@@ -70,9 +70,15 @@ function createFakeRepos() {
         const row = otpCodes.get(id);
         if (row) row.attempts += 1;
       },
+      /** Mirrors the real repository's guarded UPDATE: only an unconsumed
+       * row can be consumed, and the return value says whether this call
+       * was the one that did it. A fake that always returned true would
+       * make the lost-race branch in verifyOtp unreachable. */
       async markConsumed(id: string) {
         const row = otpCodes.get(id);
-        if (row) row.consumedAt = new Date();
+        if (!row || row.consumedAt) return false;
+        row.consumedAt = new Date();
+        return true;
       },
     },
   };
@@ -198,4 +204,24 @@ describe('CustomerAuthService', () => {
     await service.verifyOtp(PHONE, extractCode(sms.lastMessage!));
     expect(sendSpy).toHaveBeenCalledTimes(1);
   });
+
+  it('rejects a verification that LOSES the consume race, instead of issuing a second session', async () => {
+    // The production race markConsumed's guard closes: findActiveForPhone
+    // read an unconsumed row, the code checked out, and between those two
+    // steps a concurrent request consumed it. Before the guard, both
+    // requests got a customer session from one SMS code.
+    //
+    // Forced rather than raced, because a fake cannot be genuinely
+    // concurrent: markConsumed answering false IS the losing case, and the
+    // real guarded UPDATE is what produces that answer (see
+    // otp-code-lifecycle.integration.test.ts, which exercises it against
+    // Postgres).
+    await service.requestOtp(PHONE);
+    const code = extractCode(sms.lastMessage!);
+
+    repos.otpCodes.markConsumed = async () => false;
+
+    await expect(service.verifyOtp(PHONE, code)).rejects.toMatchObject({ code: 'OTP_INVALID' });
+  });
+
 });
