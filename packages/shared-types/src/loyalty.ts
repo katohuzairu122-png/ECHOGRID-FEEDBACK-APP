@@ -14,8 +14,46 @@ export const recordPurchaseSchema = z.object({
   purchaseAmount: z.number().positive().max(1_000_000),
 });
 
+/**
+ * Bound on a single manual points adjustment, in either direction.
+ *
+ * Until this existed, `points` had no magnitude limit at all -- only "not
+ * zero" -- while the sibling `recordPurchaseSchema` above already capped at
+ * 1,000,000. That asymmetry mattered because `POST /loyalty/accounts/:id/adjust`
+ * requires only `loyalty:manage`, which role-provisioning grants to Staff.
+ * So the lowest-privilege staff role could mint an unbounded, redeemable
+ * balance in one request.
+ *
+ * 100,000 is a bound, not a policy. It is deliberately far above any
+ * plausible correction -- the earning defaults are 10 points per check-in,
+ * 50 for a referral, 100 for a birthday, so this is ~10,000 check-ins'
+ * worth -- and far below anything that could distort a balance
+ * meaningfully. Erring generous is the cheap direction: a rejected
+ * legitimate adjustment is a support ticket, an unbounded one is a
+ * liability the business has to honour.
+ *
+ * It also protects the column. `loyalty_accounts.points` is a Postgres
+ * `integer`, so the only ceiling before this was 2,147,483,647 -- beyond
+ * which the insert fails with an out-of-range error rather than anything a
+ * caller could interpret. A value just under it succeeded and made the
+ * balance meaningless.
+ *
+ * What this does NOT decide: whether Staff should reach this route at all.
+ * Moving it behind `rewards:manage` (as `PATCH /loyalty/settings` already
+ * is) would match the reasoning role-provisioning.service.ts gives for
+ * withholding that permission, but it is a product call about what a
+ * counter-staff member can fix without a manager -- not a fix to smuggle in
+ * behind a bounds check.
+ */
+export const MAX_POINTS_ADJUSTMENT = 100_000;
+
 export const adjustPointsSchema = z.object({
-  points: z.number().int().refine((v) => v !== 0, { error: 'Adjustment cannot be zero.' }),
+  points: z
+    .number()
+    .int()
+    .min(-MAX_POINTS_ADJUSTMENT)
+    .max(MAX_POINTS_ADJUSTMENT)
+    .refine((v) => v !== 0, { error: 'Adjustment cannot be zero.' }),
   notes: z.string().trim().max(500).optional(),
 });
 

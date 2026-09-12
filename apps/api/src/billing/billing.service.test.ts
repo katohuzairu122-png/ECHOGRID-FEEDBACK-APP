@@ -144,6 +144,14 @@ function makeSubscription(overrides: Partial<BusinessSubscriptionWithPlan> = {})
   };
 }
 
+/**
+ * The allow-list the two redirect-validating methods now require. Matches
+ * the origin every INPUT fixture below already used, so these tests keep
+ * asserting what they asserted before -- the origin check is exercised on
+ * its own in lib/allowed-origins.test.ts rather than duplicated here.
+ */
+const ALLOWED_ORIGINS = ['https://app.example.com'];
+
 describe('BillingService', () => {
   describe('listPlans', () => {
     it('strips Stripe price IDs from every plan', async () => {
@@ -256,7 +264,7 @@ describe('BillingService', () => {
       );
 
       await expect(
-        service.createCheckoutSession('business-1', 'owner@example.com', INPUT),
+        service.createCheckoutSession('business-1', 'owner@example.com', INPUT, ALLOWED_ORIGINS),
       ).rejects.toMatchObject({ code: 'PLAN_NOT_FOUND', status: 404 });
     });
 
@@ -268,7 +276,7 @@ describe('BillingService', () => {
       );
 
       await expect(
-        service.createCheckoutSession('business-1', 'owner@example.com', { ...INPUT, planId: INACTIVE_PLAN.id }),
+        service.createCheckoutSession('business-1', 'owner@example.com', { ...INPUT, planId: INACTIVE_PLAN.id }, ALLOWED_ORIGINS),
       ).rejects.toMatchObject({ code: 'PLAN_NOT_FOUND', status: 404 });
     });
 
@@ -287,7 +295,7 @@ describe('BillingService', () => {
           ...INPUT,
           planId: MONTHLY_ONLY_PLAN.id,
           interval: 'year',
-        }),
+        }, ALLOWED_ORIGINS),
       ).rejects.toMatchObject({ code: 'PLAN_NOT_PURCHASABLE', status: 422 });
     });
 
@@ -301,7 +309,7 @@ describe('BillingService', () => {
         stripe,
       );
 
-      await service.createCheckoutSession('business-1', 'owner@example.com', INPUT);
+      await service.createCheckoutSession('business-1', 'owner@example.com', INPUT, ALLOWED_ORIGINS);
 
       expect(checkoutCalls[0]!.customer_email).toBe('owner@example.com');
       expect(checkoutCalls[0]!.customer).toBeUndefined();
@@ -322,7 +330,7 @@ describe('BillingService', () => {
         stripe,
       );
 
-      await service.createCheckoutSession('business-1', 'owner@example.com', INPUT);
+      await service.createCheckoutSession('business-1', 'owner@example.com', INPUT, ALLOWED_ORIGINS);
 
       expect(checkoutCalls[0]!.customer).toBe('cus_existing');
       expect(checkoutCalls[0]!.customer_email).toBeUndefined();
@@ -338,7 +346,7 @@ describe('BillingService', () => {
         stripe,
       );
 
-      await service.createCheckoutSession('business-1', 'owner@example.com', { ...INPUT, interval: 'year' });
+      await service.createCheckoutSession('business-1', 'owner@example.com', { ...INPUT, interval: 'year' }, ALLOWED_ORIGINS);
 
       expect(checkoutCalls[0]!.line_items?.[0]).toMatchObject({ price: PURCHASABLE_PLAN.stripePriceIdYearly });
     });
@@ -354,7 +362,7 @@ describe('BillingService', () => {
       );
 
       await expect(
-        service.createCheckoutSession('business-1', 'owner@example.com', INPUT),
+        service.createCheckoutSession('business-1', 'owner@example.com', INPUT, ALLOWED_ORIGINS),
       ).rejects.toMatchObject({ code: 'STRIPE_SESSION_ERROR', status: 500 });
     });
 
@@ -368,7 +376,7 @@ describe('BillingService', () => {
         stripe,
       );
 
-      await expect(service.createCheckoutSession('business-1', 'owner@example.com', INPUT)).resolves.toEqual({
+      await expect(service.createCheckoutSession('business-1', 'owner@example.com', INPUT, ALLOWED_ORIGINS)).resolves.toEqual({
         url: 'https://checkout.stripe.com/abc',
       });
     });
@@ -388,7 +396,7 @@ describe('BillingService', () => {
         stripe,
       );
 
-      await expect(service.createPortalSession('business-1', INPUT)).rejects.toMatchObject({
+      await expect(service.createPortalSession('business-1', INPUT, ALLOWED_ORIGINS)).rejects.toMatchObject({
         code: 'NO_STRIPE_CUSTOMER',
         status: 422,
       });
@@ -401,7 +409,7 @@ describe('BillingService', () => {
         stripe,
       );
 
-      await expect(service.createPortalSession('business-none', INPUT)).rejects.toMatchObject({
+      await expect(service.createPortalSession('business-none', INPUT, ALLOWED_ORIGINS)).rejects.toMatchObject({
         code: 'NO_STRIPE_CUSTOMER',
       });
     });
@@ -417,10 +425,98 @@ describe('BillingService', () => {
         stripe,
       );
 
-      await expect(service.createPortalSession('business-1', INPUT)).resolves.toEqual({
+      await expect(service.createPortalSession('business-1', INPUT, ALLOWED_ORIGINS)).resolves.toEqual({
         url: 'https://billing.stripe.com/xyz',
       });
       expect(portalCalls[0]).toMatchObject({ customer: 'cus_existing', return_url: INPUT.returnUrl });
+    });
+  });
+  /**
+   * Wiring only. lib/allowed-origins.test.ts exhausts the origin-comparison
+   * rules (suffix attacks, scheme and port changes, embedded credentials,
+   * non-http schemes, the empty-list fail-closed case). What those tests
+   * cannot show is that these two methods actually call it, for every URL
+   * they forward to Stripe -- which is the part that would silently regress.
+   */
+  describe('redirect-origin validation', () => {
+    const OUTSIDE = 'https://attacker.example/collect';
+
+    function serviceWithPurchasablePlan() {
+      const { stripe, checkoutCalls, portalCalls } = createFakeStripe();
+      const service = new BillingService(
+        {
+          subscriptionPlans: createFakePlanRepo([PURCHASABLE_PLAN]),
+          businessSubscriptions: createFakeSubscriptionRepo([]),
+        },
+        stripe,
+      );
+      return { service, checkoutCalls, portalCalls };
+    }
+
+    it('rejects a successUrl outside the allow-list', async () => {
+      const { service } = serviceWithPurchasablePlan();
+      await expect(
+        service.createCheckoutSession(
+          'business-1',
+          'owner@example.com',
+          {
+            planId: PURCHASABLE_PLAN.id,
+            interval: 'month' as const,
+            successUrl: OUTSIDE,
+            cancelUrl: 'https://app.example.com/billing?canceled=1',
+          },
+          ALLOWED_ORIGINS,
+        ),
+      ).rejects.toMatchObject({ code: 'REDIRECT_ORIGIN_NOT_ALLOWED', status: 422 });
+    });
+
+    it('rejects a cancelUrl outside the allow-list -- both URLs are checked, not just the first', async () => {
+      // The cancel path is reached by a user who abandoned checkout, which is
+      // if anything the more attractive moment to redirect someone hostile.
+      const { service } = serviceWithPurchasablePlan();
+      await expect(
+        service.createCheckoutSession(
+          'business-1',
+          'owner@example.com',
+          {
+            planId: PURCHASABLE_PLAN.id,
+            interval: 'month' as const,
+            successUrl: 'https://app.example.com/billing?success=1',
+            cancelUrl: OUTSIDE,
+          },
+          ALLOWED_ORIGINS,
+        ),
+      ).rejects.toMatchObject({ code: 'REDIRECT_ORIGIN_NOT_ALLOWED', status: 422 });
+    });
+
+    it('never reaches Stripe when a redirect URL is refused', async () => {
+      // Rejecting after the session was created would leave an orphaned
+      // Checkout Session on the Stripe account for every probe.
+      const { service, checkoutCalls } = serviceWithPurchasablePlan();
+      await expect(
+        service.createCheckoutSession(
+          'business-1',
+          'owner@example.com',
+          {
+            planId: PURCHASABLE_PLAN.id,
+            interval: 'month' as const,
+            successUrl: OUTSIDE,
+            cancelUrl: OUTSIDE,
+          },
+          ALLOWED_ORIGINS,
+        ),
+      ).rejects.toMatchObject({ code: 'REDIRECT_ORIGIN_NOT_ALLOWED' });
+      expect(checkoutCalls).toHaveLength(0);
+    });
+
+    it('rejects a portal returnUrl outside the allow-list, before the subscription lookup', async () => {
+      // Refused for a business with NO Stripe customer: if the returnUrl
+      // check ran second, this would answer NO_STRIPE_CUSTOMER instead and
+      // the validation would be unreachable on the commonest path.
+      const { service } = serviceWithPurchasablePlan();
+      await expect(
+        service.createPortalSession('business-1', { returnUrl: OUTSIDE }, ALLOWED_ORIGINS),
+      ).rejects.toMatchObject({ code: 'REDIRECT_ORIGIN_NOT_ALLOWED', status: 422 });
     });
   });
 });

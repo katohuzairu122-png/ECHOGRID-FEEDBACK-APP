@@ -4,6 +4,7 @@ import type { AuthVariables } from './authenticate';
 import { createDb } from '../db/client';
 import { createRepositories } from '../repositories';
 import { AuthorizationService } from '../rbac/authorization.service';
+import { assertBusinessIsUsable } from '../rbac/business-access';
 import { AppError } from '../lib/errors';
 
 export type TenantVariables = {
@@ -45,6 +46,18 @@ export const resolveTenantContext = createMiddleware<{
     if (membership.length === 0) {
       throw new AppError('You do not have access to this business.', 403, 'NOT_A_MEMBER');
     }
+
+    // Order is load-bearing: membership FIRST, then status. Reversed, any
+    // authenticated user could tell "this business exists and is suspended"
+    // apart from "no such business" for an id they have no relationship
+    // with. By running second, this only ever answers a confirmed member.
+    //
+    // Costs one primary-key lookup per tenant request. Accepted: it is the
+    // only place a suspended or soft-deleted business can be stopped on the
+    // staff surface, and the alternative -- caching status in KV or folding
+    // it into the membership query -- trades a clear boundary for a stale
+    // one. See rbac/business-access.ts for what the statuses mean.
+    assertBusinessIsUsable(await repos.businesses.findById(businessId));
 
     const effectivePermissions = await authz.getEffectivePermissions(
       c.get('userId'),

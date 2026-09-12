@@ -4,6 +4,7 @@ import { secureHeaders } from 'hono/secure-headers';
 import { requestId } from 'hono/request-id';
 import type { Bindings, PlatformJob } from './config/env';
 import { errorHandler } from './lib/error-handler';
+import { parseAllowedOrigins } from './lib/allowed-origins';
 import { rateLimit } from './middleware/rate-limit';
 import { auditTrail } from './middleware/audit';
 import { authRoutes } from './auth/auth.routes';
@@ -92,11 +93,12 @@ api.use(
     // 2026-07-11) -- this is NOT evaluated once at startup, so it always
     // reflects the currently-deployed value. Fails closed (empty allow-list,
     // not "allow everything") if ALLOWED_ORIGINS is ever unset.
+    // Parsing moved to lib/allowed-origins.ts once the billing redirect
+    // validator became a second consumer of this same list. Two independent
+    // parsers of one security-relevant config value is a hole waiting to
+    // open: an origin this layer rejects but that validator accepts.
     origin: (origin, c) => {
-      const allowed = (c.env.ALLOWED_ORIGINS ?? '')
-        .split(',')
-        .map((o: string) => o.trim())
-        .filter(Boolean);
+      const allowed = parseAllowedOrigins(c.env.ALLOWED_ORIGINS);
       return allowed.includes(origin) ? origin : null;
     },
     allowHeaders: ['Content-Type', 'Authorization', 'X-Business-Id', 'X-Branch-Id'],

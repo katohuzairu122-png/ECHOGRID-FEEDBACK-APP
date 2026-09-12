@@ -3,6 +3,7 @@ import type { Repositories } from '../repositories';
 import type { SubscriptionPlan, BusinessSubscriptionWithPlan } from '../repositories';
 import type { CreateCheckoutSessionInput, CreatePortalSessionInput } from '@echo-grid-feedback/shared-types';
 import { AppError } from '../lib/errors';
+import { assertRedirectOriginAllowed } from '../lib/allowed-origins';
 
 /** getSubscription()'s return shape -- the repository row with Stripe
  * identifiers swapped for the one derived boolean the frontend needs. See
@@ -82,11 +83,27 @@ export class BillingService {
    * checkout) rather than letting Stripe mint a new one each time, so a
    * business's payment history stays under one Stripe Customer record.
    */
+  /**
+   * @param allowedOrigins the platform's ALLOWED_ORIGINS list, parsed by the
+   * caller. Passed per-call rather than injected into the constructor so the
+   * two methods that need it declare it, and the two that do not (listPlans,
+   * getSubscription) keep their existing construction unchanged at all four
+   * call sites in billing.routes.ts.
+   */
   async createCheckoutSession(
     businessId: string,
     userEmail: string,
     input: CreateCheckoutSessionInput,
+    allowedOrigins: readonly string[],
   ): Promise<{ url: string }> {
+    // Before the plan lookup: a redirect URL pointing somewhere it must not
+    // is a malformed request, and answering that without first reading the
+    // plan keeps the cheapest rejection first. Both URLs are checked --
+    // cancel_url is reached by a user who abandoned checkout, which is if
+    // anything the more attractive moment to redirect someone hostile.
+    assertRedirectOriginAllowed(input.successUrl, allowedOrigins, 'successUrl');
+    assertRedirectOriginAllowed(input.cancelUrl, allowedOrigins, 'cancelUrl');
+
     const plan = await this.repos.subscriptionPlans.findById(input.planId);
     if (!plan || !plan.isActive) {
       throw new AppError('Plan not found.', 404, 'PLAN_NOT_FOUND');
@@ -131,7 +148,13 @@ export class BillingService {
    * still card-less on the free trial) has nothing to manage there, so this
    * throws rather than opening an empty/broken portal session.
    */
-  async createPortalSession(businessId: string, input: CreatePortalSessionInput): Promise<{ url: string }> {
+  async createPortalSession(
+    businessId: string,
+    input: CreatePortalSessionInput,
+    allowedOrigins: readonly string[],
+  ): Promise<{ url: string }> {
+    assertRedirectOriginAllowed(input.returnUrl, allowedOrigins, 'returnUrl');
+
     const subscription = await this.repos.businessSubscriptions.findByBusiness(businessId);
     if (!subscription?.stripeCustomerId) {
       throw new AppError(

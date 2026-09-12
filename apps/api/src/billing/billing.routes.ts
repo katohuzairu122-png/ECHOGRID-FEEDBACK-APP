@@ -11,6 +11,7 @@ import { ok } from '../lib/response';
 import { AppError } from '../lib/errors';
 import { createCheckoutSessionSchema, createPortalSessionSchema } from '@echo-grid-feedback/shared-types';
 import { createStripeClient } from './stripe-client';
+import { parseAllowedOrigins } from '../lib/allowed-origins';
 import { BillingService } from './billing.service';
 
 type Env = {
@@ -59,7 +60,12 @@ billingRoutes.post('/checkout', requirePermission('billing:manage'), async (c) =
     }
 
     const service = new BillingService(repos, createStripeClient(c.env.STRIPE_SECRET_KEY));
-    const result = await service.createCheckoutSession(c.get('businessId'), user.email, body);
+    const result = await service.createCheckoutSession(
+      c.get('businessId'),
+      user.email,
+      body,
+      parseAllowedOrigins(c.env.ALLOWED_ORIGINS),
+    );
 
     c.set('auditMetadata', {
       action: 'subscription.checkout_started',
@@ -78,7 +84,11 @@ billingRoutes.post('/portal', requirePermission('billing:manage'), async (c) => 
   const { db, close } = await createDb(c.env.HYPERDRIVE);
   try {
     const service = new BillingService(createRepositories(db), createStripeClient(c.env.STRIPE_SECRET_KEY));
-    const result = await service.createPortalSession(c.get('businessId'), body);
+    const result = await service.createPortalSession(
+      c.get('businessId'),
+      body,
+      parseAllowedOrigins(c.env.ALLOWED_ORIGINS),
+    );
     return ok(c, result);
   } finally {
     c.executionCtx.waitUntil(close());
