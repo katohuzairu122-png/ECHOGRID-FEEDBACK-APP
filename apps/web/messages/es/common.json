@@ -10,6 +10,11 @@
     "loading": "Cargando...",
     "retry": "Reintentar"
   },
+  "error": {
+    "title": "Algo ha ido mal",
+    "description": "Esta página no se ha cargado. Puede ser un problema temporal: vuelve a intentarlo o inténtalo de nuevo en unos minutos.",
+    "reference": "Referencia {digest}: indícala si contactas con el soporte."
+  },
   "status": {
     "error": "Ha ocurrido un error.",
     "success": "Guardado correctamente."

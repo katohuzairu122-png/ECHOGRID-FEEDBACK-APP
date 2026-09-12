@@ -10,6 +10,11 @@
     "loading": "Chargement...",
     "retry": "Réessayer"
   },
+  "error": {
+    "title": "Une erreur est survenue",
+    "description": "Cette page n'a pas pu se charger. Le problème est peut-être temporaire : réessayez, ou revenez dans un moment.",
+    "reference": "Référence {digest} — mentionnez-la si vous contactez le support."
+  },
   "status": {
     "error": "Une erreur s'est produite.",
     "success": "Enregistré avec succès."

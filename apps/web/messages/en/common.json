@@ -10,6 +10,11 @@
     "loading": "Loading...",
     "retry": "Retry"
   },
+  "error": {
+    "title": "Something went wrong",
+    "description": "This page didn't load. It may be a temporary problem — try again, or come back in a moment.",
+    "reference": "Reference {digest} — quote this if you contact support."
+  },
   "status": {
     "error": "Something went wrong.",
     "success": "Saved successfully."
