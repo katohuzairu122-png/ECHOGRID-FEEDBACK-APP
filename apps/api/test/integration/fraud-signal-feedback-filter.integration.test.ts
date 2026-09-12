@@ -8,30 +8,41 @@ import type { FeedbackFilterInput } from '@echo-grid-feedback/shared-types';
  * Verifies Continuing Development S5-B's `hasOpenFraudSignal` filter -- the
  * "Suspected fraud" saved view -- against a real database. This is the one
  * part of S5-B that neither typecheck nor a fake-repository unit test can
- * reach, for two independent reasons:
+ * reach, and it is not a hypothetical gap: the first version of the filter
+ * was broken, and this file is what found it.
  *
- *  1. The condition is a RAW `sql` template, not a typed drizzle operator
- *     (see FeedbackRepository.listWithFilters). Nothing type-checks the
- *     inside of a raw template, and it is interpolated into a query built
- *     by drizzle's RELATIONAL query builder (`db.query.feedback.findMany`),
- *     which is free to alias the target table. If the builder renders the
- *     outer FROM as anything other than a relation reachable as
- *     `"feedback"`, the correlated `${feedback.id}` reference resolves to
- *     nothing and Postgres raises 42P01 ("missing FROM-clause entry") at
- *     runtime -- a 500 on the saved view, invisible until someone opens the
- *     tab. Only executing the query can tell us. The first test below
- *     exists to answer exactly that question, and it is why this file was
- *     written before anyone clicked the tab in production.
+ * WHAT WAS BROKEN
+ * ---------------------------------------------------------------------
+ * S5-B shipped the condition as a raw `sql` template holding a CORRELATED
+ * subquery:
  *
- *  2. The fake repository in feedback.service.test.ts implements the filter
- *     as a JavaScript `Set.has` over ids it was handed. That is a faithful
- *     model of the INTENT and a useless model of the SQL -- it cannot
- *     express a correlated subquery, a status column, or row multiplicity.
+ *   sql`EXISTS (SELECT 1 FROM ${fraudSignals}
+ *               WHERE ${fraudSignals.feedbackId} = ${feedback.id} ...)`
  *
- * Test 5 ("two open signals") is the reason EXISTS was chosen over a join
- * and is the case a join would silently corrupt: a joined row would come
- * back once per matching signal, inflating the page and breaking `hasMore`.
- * A fake cannot fail that test; a real database can.
+ * Nothing type-checks the inside of a raw template, and this one was
+ * interpolated into a query built by drizzle's RELATIONAL query builder
+ * (`db.query.feedback.findMany`), which aliases its target table. The
+ * hand-written `${feedback.id}` did not resolve against that alias, and
+ * Postgres raised 42P01 ("missing FROM-clause entry") -- a 500 on the saved
+ * view, invisible until a human opened the tab. Fixed in "Fix fraud-signal
+ * feedback filter aliasing" by building the subquery through the query
+ * builder so drizzle emits references that match its own outer query.
+ *
+ * Only executing the query could have told us. Typecheck passed on the
+ * broken version; so did every unit test.
+ *
+ * WHY A FAKE CANNOT SUBSTITUTE
+ * ---------------------------------------------------------------------
+ * The fake repository in feedback.service.test.ts implements this filter as
+ * a JavaScript `Set.has` over ids it was handed. A faithful model of the
+ * INTENT and a useless model of the SQL: it cannot express a subquery, a
+ * status column, row multiplicity, or tenant scoping.
+ *
+ * Test 5 ("two open signals") is why this is a semi-join and not a join: a
+ * joined row comes back once per matching signal, inflating the page and
+ * breaking `hasMore`. Test 8 covers the businessId scoping that keeps the
+ * subquery bounded to one tenant. A fake cannot fail either; a real
+ * database can.
  */
 describe.skipIf(!process.env.DATABASE_URL)('feedback hasOpenFraudSignal filter (integration)', () => {
   let client: Client;
@@ -48,6 +59,11 @@ describe.skipIf(!process.env.DATABASE_URL)('feedback hasOpenFraudSignal filter (
   let withReviewedSignalId: string;
   let withDismissedSignalId: string;
   let withTwoOpenSignalsId: string;
+
+  /** A SECOND tenant, with its own flagged feedback. Exists only so test 8
+   * can prove this business's results never include it. */
+  let otherBusinessId: string;
+  let otherBusinessFlaggedId: string;
 
   /**
    * listWithFilters takes the POST-parse filter shape, where the four
@@ -147,6 +163,43 @@ describe.skipIf(!process.env.DATABASE_URL)('feedback hasOpenFraudSignal filter (
       reasonCode: 'device_submission_rate_exceeded',
       severity: 'medium',
     });
+
+    // A second tenant carrying its own OPEN signal. The subquery that backs
+    // this filter is scoped on businessId; without a foreign tenant in the
+    // table at all, that scoping would be untested and its removal would go
+    // unnoticed.
+    const otherBusiness = await repos.businesses.create({
+      name: 'Fraud Signal Filter Other Tenant',
+      slug: `fraud-filter-other-${crypto.randomUUID()}`,
+    });
+    otherBusinessId = otherBusiness.id;
+
+    const otherBranch = await repos.branches.create({
+      businessId: otherBusinessId,
+      name: 'Other Main',
+      slug: `fraud-filter-other-branch-${crypto.randomUUID()}`,
+    });
+    const otherQr = await repos.qrCodes.create({
+      businessId: otherBusinessId,
+      branchId: otherBranch.id,
+    });
+    const otherFeedback = await repos.feedback.create({
+      businessId: otherBusinessId,
+      branchId: otherBranch.id,
+      qrCodeId: otherQr.id,
+      rating: 1,
+      comment: 'another tenant, flagged',
+    });
+    otherBusinessFlaggedId = otherFeedback.id;
+
+    await repos.fraudSignals.create({
+      businessId: otherBusinessId,
+      branchId: otherBranch.id,
+      feedbackId: otherBusinessFlaggedId,
+      signalType: 'duplicate_text',
+      reasonCode: 'repeated_exact_text',
+      severity: 'low',
+    });
   });
 
   afterAll(async () => {
@@ -155,14 +208,16 @@ describe.skipIf(!process.env.DATABASE_URL)('feedback hasOpenFraudSignal filter (
     // hard-deletes the business itself -- point DATABASE_URL at a
     // scratch/dev database only.
     await repos.businesses.softDelete(businessId, businessId);
+    await repos.businesses.softDelete(otherBusinessId, otherBusinessId);
     await client.end();
   });
 
-  it('executes at all -- the correlated EXISTS resolves against the relational query builder\'s FROM clause', async () => {
-    // Deliberately the first and simplest assertion in the file: if drizzle
-    // aliases `feedback` in a way that breaks the `${feedback.id}`
-    // correlation, this line throws 42P01 and every test below is noise.
-    // Asserting only "it returned rows" keeps the failure unambiguous.
+  it('executes at all -- the subquery resolves against the relational query builder\'s own aliasing', async () => {
+    // Deliberately the first and simplest assertion in the file, and the one
+    // that actually fired: on the original raw-`sql` correlated EXISTS this
+    // line threw 42P01 and every test below was noise. Asserting only "it
+    // returned rows" keeps that failure unambiguous -- a broken query cannot
+    // be mistaken for a wrong result.
     const result = await repos.feedback.listWithFilters(businessId, baseFilters({ hasOpenFraudSignal: true }));
     expect(Array.isArray(result.items)).toBe(true);
   });
@@ -193,7 +248,7 @@ describe.skipIf(!process.env.DATABASE_URL)('feedback hasOpenFraudSignal filter (
     expect(ids).not.toContain(withDismissedSignalId);
   });
 
-  it('returns a row carrying TWO open signals exactly once -- the reason this is EXISTS and not a join', async () => {
+  it('returns a row carrying TWO open signals exactly once -- the reason this is a semi-join and not a join', async () => {
     const { items } = await repos.feedback.listWithFilters(
       businessId,
       baseFilters({ hasOpenFraudSignal: true }),
@@ -228,7 +283,7 @@ describe.skipIf(!process.env.DATABASE_URL)('feedback hasOpenFraudSignal filter (
 
   it('composes with another filter rather than replacing it -- a text search narrows the flagged set', async () => {
     // Both flagged rows carry an open signal; only one of them contains
-    // this phrase, so the result proves the raw `sql` condition is ANDed
+    // this phrase, so the result proves the subquery condition is ANDed
     // alongside its siblings rather than built in a way that drops them out
     // of the `and(...conditions)` list.
     const { items } = await repos.feedback.listWithFilters(
@@ -255,5 +310,32 @@ describe.skipIf(!process.env.DATABASE_URL)('feedback hasOpenFraudSignal filter (
     );
     expect(fullPage.items).toHaveLength(2);
     expect(fullPage.hasMore).toBe(false);
+  });
+
+  it("is scoped per tenant in both directions -- neither business sees the other's flagged feedback", async () => {
+    // Deliberately NO branchId here, unlike every test above. baseFilters()
+    // always sets one, and the other tenant lives in a different branch, so
+    // with it the BRANCH filter would do the excluding and the businessId
+    // scoping would go untested. Dropping it leaves businessId as the only
+    // thing separating the two tenants -- which is the point.
+    const unscopedByBranch: Omit<FeedbackFilterInput, 'savedView'> = {
+      hasOpenFraudSignal: true,
+      sortBy: 'createdAt',
+      sortDirection: 'desc',
+      limit: 100,
+      offset: 0,
+    };
+
+    const mine = await repos.feedback.listWithFilters(businessId, unscopedByBranch);
+    const mineIds = mine.items.map((i) => i.id);
+    expect(mineIds).toContain(withOpenSignalId);
+    expect(mineIds).not.toContain(otherBusinessFlaggedId);
+
+    // The mirror matters as much as the exclusion. The subquery backing this
+    // filter is itself scoped on businessId; a wrong value there would not
+    // leak anything, it would silently return NOTHING for the tenant whose
+    // signals are real. Only querying as the other business catches that.
+    const theirs = await repos.feedback.listWithFilters(otherBusinessId, unscopedByBranch);
+    expect(theirs.items.map((i) => i.id)).toEqual([otherBusinessFlaggedId]);
   });
 });

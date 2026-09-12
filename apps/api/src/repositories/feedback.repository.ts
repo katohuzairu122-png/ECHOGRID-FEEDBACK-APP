@@ -438,27 +438,57 @@ export class FeedbackRepository extends BaseRepository {
       filters.followUpRequired
         ? and(isNotNull(feedback.followUpQuestion), isNull(feedback.followUpAnswer))
         : undefined,
-      // Continuing Development S5-B (S5.6 manual-review routing). Use an IN
+      // Continuing Development S5-B (S5.6 manual-review routing). An IN
       // subquery rather than a join: a feedback row can carry several open
       // signals (duplicate text AND a velocity breach are independent
       // findings -- see fraud_signals' schema comment), and a join would
       // return that row once per signal, silently corrupting both the page
-      // size and hasMore. Building the subquery independently also prevents
-      // the relational query builder from remapping fraudSignals columns to
-      // the outer feedback alias.
+      // size and hasMore. A semi-join returns each outer row once, which is
+      // what this needs.
       //
-      // Scoped on feedbackId + status only, no businessId: the outer query is
-      // already business-scoped and fraud_signals.feedback_id is an FK to
-      // that very row, so adding it would be redundant and would push the
-      // planner toward fraud_signals_business_open_idx when the far more
-      // selective fraud_signals_feedback_idx is the right index here.
+      // NOT a correlated `EXISTS` written as a raw sql template, which is
+      // what shipped first and did not work. This query is built by drizzle's
+      // RELATIONAL query builder (db.query.feedback.findMany), which aliases
+      // its target table -- a hand-written `${feedback.id}` reference inside a
+      // raw template does not resolve against that alias and Postgres raises
+      // 42P01 at runtime. Building the subquery through the query builder
+      // instead lets drizzle emit whatever references actually match the
+      // outer query. See test/integration/fraud-signal-feedback-filter --
+      // the first test there exists to catch exactly this, and did.
+      //
+      // Scoped on businessId as well as status, and that scoping is
+      // load-bearing rather than redundant. Without it this subquery
+      // materialises every open signal's feedback_id across EVERY business on
+      // the platform before the semi-join -- correct (feedback.id is a
+      // globally unique PK, and the outer query is business-scoped, so no
+      // other tenant's row can match) but sized by total platform fraud
+      // volume instead of this tenant's. With it, the equality on businessId
+      // is the leading column of fraud_signals_business_open_idx, the partial
+      // index built for exactly this "open signals for one business" shape.
+      //
+      // An earlier version of this comment argued the opposite -- that
+      // businessId should be omitted to keep the planner on
+      // fraud_signals_feedback_idx. That was sound for the correlated EXISTS,
+      // where the correlation had already narrowed to one feedback row. It is
+      // not sound here: this form performs no feedbackId lookup at all, so
+      // fraud_signals_feedback_idx cannot be used either way.
+      //
+      // CAUTION for the inverse filter. fraud_signals.feedback_id is
+      // NULLABLE by design (a forged or expired QR token is rejected before
+      // any feedback row exists to link to -- see the schema's own note), so
+      // this subquery can yield NULLs. A positive IN is unaffected: a row
+      // either matches a real id or it does not. `NOT IN` is NOT safe --
+      // `x NOT IN (..., NULL)` is never TRUE in SQL, so a "no open signals"
+      // view written that way would silently return ZERO rows forever.
+      // Express the inverse as NOT EXISTS, or add `isNotNull(feedbackId)` to
+      // the subquery.
       filters.hasOpenFraudSignal
         ? inArray(
             feedback.id,
             this.db
               .select({ feedbackId: fraudSignals.feedbackId })
               .from(fraudSignals)
-              .where(eq(fraudSignals.status, 'open')),
+              .where(and(eq(fraudSignals.businessId, businessId), eq(fraudSignals.status, 'open'))),
           )
         : undefined,
       filters.search ? ilike(feedback.comment, `%${filters.search}%`) : undefined,
