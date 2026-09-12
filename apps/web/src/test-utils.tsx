@@ -1,6 +1,8 @@
 import type { ReactElement } from 'react';
 import { render, type RenderOptions } from '@testing-library/react';
 import { NextIntlClientProvider } from 'next-intl';
+import { DEFAULT_TIMEZONE } from '@echo-grid-feedback/shared-types';
+import { formats } from '@/i18n/formats';
 import en from '../messages/en/common.json';
 import enDashboard from '../messages/en/dashboard.json';
 import enAuth from '../messages/en/auth.json';
@@ -56,7 +58,18 @@ const messages = {
  */
 export function renderWithIntl(ui: ReactElement, options?: RenderOptions) {
   const wrap = (element: ReactElement) => (
-    <NextIntlClientProvider locale="en" messages={messages}>
+    // `formats` and `timeZone` mirror what i18n/request.ts supplies at
+    // runtime. Both were missing before, with two distinct consequences:
+    //
+    //  - Without `formats`, every `format.dateTime(d, 'short')` under test
+    //    threw IntlError MISSING_FORMAT to stderr and fell back to
+    //    String(date). Tests asserted against a rendering the real app never
+    //    produces, and deleting 'short' from i18n/formats.ts would not have
+    //    failed a single test. See i18n/formats.test.tsx.
+    //  - Without `timeZone`, next-intl falls back to the MACHINE's zone, so a
+    //    date assertion could pass on a developer's laptop and fail in CI (or
+    //    the reverse) for no reason connected to the code under test.
+    <NextIntlClientProvider locale="en" timeZone={DEFAULT_TIMEZONE} messages={messages} formats={formats}>
       {element}
     </NextIntlClientProvider>
   );

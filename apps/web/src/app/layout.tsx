@@ -4,6 +4,7 @@ import { NextIntlClientProvider } from 'next-intl';
 import { getLocale, getMessages } from 'next-intl/server';
 import { APP_URL } from '@/lib/app-url';
 import { PwaServiceWorkerRegistration } from '@/components/pwa-service-worker-registration';
+import { formats } from '@/i18n/formats';
 import './globals.css';
 
 // Poppins is not a variable font on Google Fonts, so specific weights must
@@ -67,7 +68,12 @@ export default async function RootLayout({
   return (
     <html lang={locale} className={poppins.variable}>
       <body>
-        <NextIntlClientProvider locale={locale} messages={messages}>
+        {/* `formats` passed explicitly rather than relied on being inherited
+            from i18n/request.ts through the server context. Same reasoning as
+            wrangler.toml's explicit NODE_ENV: inheritance here probably works,
+            but "probably" is not worth a silent fallback to String(date)
+            across 18 call sites, and the prop costs nothing. */}
+        <NextIntlClientProvider locale={locale} messages={messages} formats={formats}>
           {children}
         </NextIntlClientProvider>
         <PwaServiceWorkerRegistration />

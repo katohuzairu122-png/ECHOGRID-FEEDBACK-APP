@@ -4,6 +4,7 @@ import { resolveSupportedLocale, type QrResolveDto } from '@echo-grid-feedback/s
 import { publicApiFetch } from '@/lib/public-api-client';
 import { ApiError } from '@/lib/api-client';
 import { loadMessages } from '@/i18n/load-messages';
+import { formats } from '@/i18n/formats';
 import { FeedbackForm } from './feedback-form';
 
 interface FeedbackLandingPageProps {
@@ -44,7 +45,7 @@ export default async function FeedbackLandingPage({ params }: FeedbackLandingPag
   const messages = await loadMessages(locale);
 
   return (
-    <NextIntlClientProvider locale={locale} messages={messages}>
+    <NextIntlClientProvider locale={locale} messages={messages} formats={formats}>
       <FeedbackForm token={token} branchName={qr.branchName} businessName={qr.businessName} />
     </NextIntlClientProvider>
   );

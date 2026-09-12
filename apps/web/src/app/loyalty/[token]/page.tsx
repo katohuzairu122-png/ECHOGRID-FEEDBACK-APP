@@ -5,6 +5,7 @@ import { publicApiFetch } from '@/lib/public-api-client';
 import { ApiError } from '@/lib/api-client';
 import { hasCustomerSession } from '@/lib/customer-session';
 import { loadMessages } from '@/i18n/load-messages';
+import { formats } from '@/i18n/formats';
 import { CheckinPanel } from './checkin-panel';
 
 interface LoyaltyCheckinPageProps {
@@ -40,7 +41,7 @@ export default async function LoyaltyCheckinPage({ params }: LoyaltyCheckinPageP
   const messages = await loadMessages(locale);
 
   return (
-    <NextIntlClientProvider locale={locale} messages={messages}>
+    <NextIntlClientProvider locale={locale} messages={messages} formats={formats}>
       <CheckinPanel
         token={token}
         branchName={qr.branchName}

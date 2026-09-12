@@ -4,6 +4,7 @@ import { DEFAULT_LOCALE, DEFAULT_TIMEZONE, resolveSupportedLocale } from '@echo-
 import { getActiveBusinessQuiet } from '@/lib/business';
 import { hasSession } from '@/lib/session';
 import { loadMessages } from './load-messages';
+import { formats } from './formats';
 
 /**
  * Root-level locale/timezone resolution (i18n & Multi-Currency Block 2).
@@ -52,17 +53,9 @@ export default getRequestConfig(async () => {
     timeZone,
     messages: await loadMessages(locale),
     // Named presets (i18n & Multi-Currency Block 3) so every date-rendering
-    // call site shares one definition instead of repeating raw Intl options
-    // -- see the getFormatter() usage in loyalty/dashboard/[businessId]/
-    // page.tsx, dashboard/feedback/page.tsx, dashboard/loyalty/page.tsx,
-    // dashboard/analytics/{summaries-list,search/page}.tsx, and
-    // dashboard/notifications/notification-log.tsx (the one 'shortDateTime'
-    // caller -- a send log where the time genuinely matters).
-    formats: {
-      dateTime: {
-        short: { dateStyle: 'medium' },
-        shortDateTime: { dateStyle: 'medium', timeStyle: 'short' },
-      },
-    },
+    // call site shares one definition instead of repeating raw Intl options.
+    // Lives in ./formats.ts rather than inline here so the test harness can
+    // import the SAME object -- see that file for the drift this closes.
+    formats,
   };
 });
