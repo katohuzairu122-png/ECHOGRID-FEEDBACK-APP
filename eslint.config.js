@@ -52,6 +52,25 @@ export default [
         self: 'readonly',
         caches: 'readonly',
         fetch: 'readonly',
+        // Added after CI run #107 failed on `'Response' is not defined` at
+        // sw.js:69. That line is the `?? new Response(LAST_RESORT_HTML, ...)`
+        // fallback added in the repo-hygiene sweep -- so the reference
+        // arrived with a change made while `pnpm lint` still ran nowhere,
+        // and stayed invisible until the step that runs it landed.
+        //
+        // A CONFIG GAP, NOT A CODE BUG. `Response` is a real
+        // ServiceWorkerGlobalScope global; the offline fallback works (see
+        // src/sw.test.ts, which drives that exact branch). What was wrong is
+        // that this hand-maintained list did not name it.
+        //
+        // Which is the argument for the `globals` package that the comment
+        // above has now predicted twice: this list needed extending the
+        // first time anything checked it. `pnpm add -D -w globals`, then
+        // `globals.serviceworker` here and `globals.node` on the .mjs block,
+        // replaces both hand-written sets with ones that cannot fall behind.
+        // Left as one line rather than a dependency + lockfile change in a
+        // patch whose job was to make CI green.
+        Response: 'readonly',
       },
     },
   },
