@@ -183,7 +183,31 @@ qrRoutes.post('/:token/feedback', async (c) => {
     // actually sent a deviceSignal.
     const deviceHash = body.deviceSignal ? await velocity.hashSubject(body.deviceSignal) : undefined;
 
-    const created = await new FeedbackService(repos).submit(qrCode, body, { deviceHash });
+    // Continuing Development (audit P1-3). FeedbackService.submit writes the
+    // feedback row and, for a detected safety emergency, its
+    // critical_incidents row -- and that pair has to be atomic. A crash
+    // between the two drops a credible safety emergency with nothing to
+    // recover it from.
+    //
+    // The transaction is opened HERE, and the service is handed
+    // transaction-scoped repositories, rather than the service owning it.
+    // That keeps FeedbackService Repositories-shaped -- its 42 unit tests go
+    // on using in-memory fakes, with no constructor change -- while the two
+    // writes inside it commit or roll back together. Making the service
+    // Database-shaped like LoyaltyAccountService was the alternative, and it
+    // would have moved that entire body of coverage to the integration tier
+    // in exchange for no additional guarantee.
+    //
+    // Wraps ONLY submit(), deliberately. Everything below -- fraud signals,
+    // notifications, classification -- stays on the outer `repos`, outside
+    // the transaction. That is not an oversight: fraud_signals is an
+    // append-only detection log, and a signal written inside a rollback-able
+    // transaction can erase its own evidence. That is precisely the defect
+    // the audit found in LoyaltyRedemptionService (P1-5), and this is the
+    // shape that avoids repeating it.
+    const created = await db.transaction(async (tx) =>
+      new FeedbackService(createRepositories(tx)).submit(qrCode, body, { deviceHash }),
+    );
 
     if (cooldown?.inCooldown) {
       // Awaited directly on the outer `repos`, NOT backgrounded via

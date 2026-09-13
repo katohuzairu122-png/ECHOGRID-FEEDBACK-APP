@@ -138,14 +138,29 @@ export class FeedbackService {
       nearDuplicateCount,
     } satisfies NewFeedback);
 
-    // Not transaction-wrapped with the insert above (this service stays
-    // Repositories-shaped, not Database-shaped, so its unit tests can keep
-    // using the fake in-memory repo convention -- see feedback.service.test.ts).
-    // Both statements run synchronously in the same request with nothing
-    // async in between, so the crash window this leaves open is narrow; the
-    // critical-escalation sweep (critical-alerts.job.ts) additionally
-    // backstops it by re-scanning for P0_CRITICAL feedback with no incident
-    // row, so a gap here is self-healing, not silent data loss.
+    // ATOMIC WITH THE INSERT ABOVE, but not by this method's own doing:
+    // the caller passes transaction-scoped repositories, so both writes
+    // commit or roll back together. qr.routes.ts opens that transaction
+    // around this call and explains why the boundary lives there; this
+    // service stays Repositories-shaped so its unit tests keep using
+    // in-memory fakes.
+    //
+    // That is a contract, so it is worth stating plainly: a caller that
+    // hands this method non-transactional repositories gets two
+    // independent writes and can lose the incident row on a crash between
+    // them. There is one production caller and it wraps the call.
+    //
+    // WHAT THIS COMMENT USED TO CLAIM, AND WHY IT WAS WRONG. It said the
+    // pair needed no transaction because "the critical-escalation sweep
+    // additionally backstops it by re-scanning for P0_CRITICAL feedback
+    // with no incident row, so a gap here is self-healing, not silent data
+    // loss." No such re-scan exists. The only sweep (index.ts ->
+    // criticalIncidents.findUnacknowledgedOlderThan) reads
+    // critical_incidents rows that are ALREADY THERE, so it can escalate an
+    // unacknowledged incident but can never notice a missing one. The gap
+    // was real, permanent, and silent -- and a comment asserting otherwise
+    // is what kept anyone from looking. Do not reintroduce that claim
+    // without the sweep to back it.
     if (detection.isCritical) {
       await this.repos.criticalIncidents.create({
         businessId: qrCode.businessId,
