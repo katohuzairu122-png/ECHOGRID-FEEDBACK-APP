@@ -56,6 +56,35 @@ export default [
     },
   },
   {
+    /**
+     * Node-run .mjs scripts. `no-undef` is turned off for .ts/.tsx above
+     * because TypeScript resolves globals itself, but these files get no
+     * such treatment: flat config declares only ES built-ins by default, so
+     * `process` (15 uses in check-migrations-current.mjs) and `URL` are
+     * flagged as undefined and `eslint .` fails at error level.
+     *
+     * That is why this block exists now rather than earlier: `pnpm lint` was
+     * defined but never wired into CI, so nothing ever ran it to find out.
+     * It is a prerequisite for the lint step this change adds to the
+     * workflow, not a cleanup.
+     *
+     * Hand-declared, following the precedent sw.js's block below sets -- and
+     * this is the second hand-declared block, which is the point that block's
+     * own comment names as the moment to switch to the `globals` package
+     * (globals.node / globals.serviceworker) instead. Not done here because
+     * it is a new dependency and a pnpm-lock.yaml change, which deserves to
+     * be its own decision rather than a side effect of a CI patch.
+     */
+    files: ['**/*.mjs'],
+    languageOptions: {
+      globals: {
+        process: 'readonly',
+        console: 'readonly',
+        URL: 'readonly',
+      },
+    },
+  },
+  {
     ignores: [
       '**/dist/**',
       '**/.next/**',

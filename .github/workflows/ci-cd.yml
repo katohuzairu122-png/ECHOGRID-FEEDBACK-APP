@@ -38,6 +38,18 @@ on:
   pull_request:
     branches: [main]
 
+# One run per branch at a time.
+#
+# cancel-in-progress is deliberately conditional. Superseding a PR run is
+# free -- the older commit's result is no longer interesting. Superseding a
+# PUSH TO MAIN is not: a cancel landing between deploy-api and deploy-web
+# leaves the API on new code and the frontend on old, which is the exact
+# split this workflow's build gate below exists to prevent. So main pushes
+# queue and each completes; only PR runs get cancelled.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 env:
   NODE_VERSION: '22'
 
@@ -109,6 +121,18 @@ jobs:
       - name: Migrations up to date -- API
         run: pnpm --filter @echo-grid-feedback/api db:check
 
+      # Defined in package.json since the repo was set up and never run by
+      # anything, which is how apps/api/scripts/*.mjs accumulated `no-undef`
+      # errors nobody saw (fixed in eslint.config.js in this same change).
+      #
+      # Note what this does and does not gate: no-unused-vars,
+      # consistent-type-imports and no-console are all WARN level in
+      # eslint.config.js, so `eslint .` exits 0 on them and they will not
+      # fail a build. Only error-level rules do. Promoting any of those to
+      # error is a separate decision with its own cleanup.
+      - name: Lint
+        run: pnpm lint
+
       - name: Typecheck API
         run: pnpm --filter @echo-grid-feedback/api typecheck
 
@@ -133,8 +157,14 @@ jobs:
         run: pnpm --filter @echo-grid-feedback/web test
 
       # ---- integration tier -------------------------------------------
-      # Last on purpose: it is the slowest step and the only one needing a
-      # database, so every cheaper failure class above reports first.
+      # After the fast tier and before the builds. It was last when it
+      # arrived; measurement moved it -- the whole tier costs 28 seconds in
+      # CI against the service container (against remote Neon it is minutes,
+      # which is what made it look expensive), so the two build steps below
+      # are now the slowest thing in this job and belong after it.
+      #
+      # Still the only step needing a database, so everything above it
+      # reports without one.
       #
       # Applies all 22 migrations to the empty service container from
       # scratch. This doubles as a real check that the migration chain is
@@ -157,11 +187,37 @@ jobs:
       - name: Integration tests -- API (real Postgres)
         run: pnpm --filter @echo-grid-feedback/api test:integration
 
+      # ---- build gate ---------------------------------------------------
+      # The gap this closes: deploy-api ran as soon as verify passed, and
+      # deploy-web only discovered a broken build afterwards -- leaving a
+      # live API on new code and a live frontend on old, with nothing in the
+      # pipeline that could have caught it. Building both here means neither
+      # deploys unless both compile.
+      #
+      # Last in the job, after the 28-second integration tier: these are the
+      # slowest steps, and a compile error is the failure class every check
+      # above is already more likely to surface first.
+      - name: Build API (wrangler dry run)
+        run: pnpm --filter @echo-grid-feedback/api build
+
+      # `next build`, which is what apps/web's build script runs. Worth being
+      # precise about the residual gap: deploy-web runs
+      # `opennextjs-cloudflare build`, a further packaging step on top of
+      # this one, so an OpenNext-specific packaging failure still lands after
+      # deploy-api has shipped. Closing that completely means running the
+      # OpenNext build here too, which roughly doubles this job again --
+      # deliberately not taken, since compile and type errors are the failure
+      # class that actually occurs and this catches them.
+      - name: Build web (next build)
+        run: pnpm --filter @echo-grid-feedback/web build
+
   deploy-api:
     name: Deploy API to Cloudflare Workers
     runs-on: ubuntu-latest
     needs: verify
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    # A wrangler deploy that hangs should fail, not occupy a runner for six hours.
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
 
@@ -193,6 +249,8 @@ jobs:
     # deploying web first would briefly point it at a stale API version).
     needs: [verify, deploy-api]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    # A wrangler deploy that hangs should fail, not occupy a runner for six hours.
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
 
