@@ -333,6 +333,27 @@ pnpm test:e2e     # Playwright -- needs both dev servers running (playwright.con
                   # starts them for you) and a real database with migrations + pnpm db:seed applied
 ```
 
+There is also `pnpm test:e2e:remote`, which runs the same specs against an
+already-deployed site rather than a local stack. **It requires `E2E_BASE_URL`
+and has no default**, and it refuses the production hosts outright:
+
+```bash
+E2E_BASE_URL=https://your-staging-deployment.example pnpm test:e2e:remote
+```
+
+That is not ceremony. This project has **no staging environment** — there is
+one Cloudflare Workers deployment and one Neon database — and the specs each
+perform a real signup, create a real business on a real public slug, and
+submit real feedback, cleaning none of it up (every table here is
+soft-delete-only). Submitted feedback also bills Anthropic against a
+*platform-wide* daily spend limit, so a run can consume budget real
+businesses' summaries are then refused for. `apps/web/e2e/base-url.ts` holds
+the guard and the override, if you have decided to accept that.
+
+Provisioning a real staging environment — a second Neon branch plus an
+`[env.staging]` block in both `wrangler.toml` files — is what would make this
+command routinely useful.
+
 Full explanation of what each tier covers, and why the split falls where it
 does, is in the root `README.md`'s Testing sections. Run `pnpm test` (in
 whichever app you're changing) first — it's the tier guaranteed not to need

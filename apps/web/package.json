@@ -11,7 +11,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "test:e2e:remote": "playwright test --config playwright.remote.config.ts"
   },
   "dependencies": {
     "next": "^16.2.0",
