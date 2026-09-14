@@ -1,6 +1,11 @@
 import { eq, ne, and, gte, lte, ilike, sql, inArray, isNull, isNotNull, asc, desc } from 'drizzle-orm';
 import { feedback, fraudSignals } from '../db/schema';
 import { BaseRepository } from './base.repository';
+import {
+  addSentimentToPolarityCounts,
+  sentimentPolarity,
+  SENTIMENT_VALUES_BY_POLARITY,
+} from '@echo-grid-feedback/shared-types';
 import type { FeedbackFilterInput, ClassifyFeedbackInput } from '@echo-grid-feedback/shared-types';
 
 export type Feedback = typeof feedback.$inferSelect;
@@ -28,10 +33,15 @@ const MAX_PERIOD_ROWS = 5000;
 // that the sentiment scale has 5 values instead of 3 (Automated Feedback
 // Sorting), a real regression to an already-shipped feature this repository
 // method must not introduce just by widening the underlying column's range.
-const SENTIMENT_SEARCH_ALIASES: Record<string, readonly string[]> = {
-  positive: ['positive', 'very_positive'],
-  negative: ['negative', 'very_negative'],
-};
+function expandSentimentFilter(value: string): readonly string[] {
+  const polarity = sentimentPolarity(value);
+  // Only the three bucket NAMES expand. An exact 5-scale value
+  // ('very_positive') has a polarity too, but selecting it must match
+  // itself, not its whole bucket -- otherwise the inbox's own 5-value
+  // filter would silently widen.
+  if (polarity === null || polarity !== value) return [value];
+  return SENTIMENT_VALUES_BY_POLARITY[polarity];
+}
 
 export class FeedbackRepository extends BaseRepository {
   async findById(id: string, businessId: string): Promise<Feedback | undefined> {
@@ -339,7 +349,7 @@ export class FeedbackRepository extends BaseRepository {
         eq(feedback.isDeleted, false),
         options.branchId ? eq(feedback.branchId, options.branchId) : undefined,
         options.sentiment
-          ? inArray(feedback.sentiment, SENTIMENT_SEARCH_ALIASES[options.sentiment] ?? [options.sentiment])
+          ? inArray(feedback.sentiment, expandSentimentFilter(options.sentiment))
           : undefined,
         options.rating ? eq(feedback.rating, options.rating) : undefined,
         options.keyword ? ilike(feedback.comment, `%${options.keyword}%`) : undefined,
@@ -390,18 +400,15 @@ export class FeedbackRepository extends BaseRepository {
         neutral: 0,
         negative: 0,
       };
-      // Folds the 5-value scale (very_negative/negative/neutral/positive/
-      // very_positive, Automated Feedback Sorting) into this existing
-      // 3-bucket trend chart -- the chart's own contract/UI isn't part of
-      // this change, so 'very_positive' counts into `positive` and
-      // 'very_negative' into `negative` rather than silently vanishing (the
-      // bug this fix avoids: an if/else chain checking only the original 3
-      // string literals would drop the new values' counts entirely). 5-value
-      // granularity is still fully queryable on the raw `sentiment` column
-      // itself (inbox filtering) -- only this rollup collapses it.
-      if (row.sentiment === 'positive' || row.sentiment === 'very_positive') entry.positive += row.count;
-      else if (row.sentiment === 'neutral') entry.neutral += row.count;
-      else if (row.sentiment === 'negative' || row.sentiment === 'very_negative') entry.negative += row.count;
+      // Folds the 5-value scale into this chart's 3 buckets. `weight` is
+      // row.count because these rows are already GROUP BY-aggregated.
+      //
+      // This was a hand-written if/else chain until audit P2-1 found the
+      // same rollup written a third time in summary.service.ts and gotten
+      // wrong there. 5-value granularity is still fully queryable on the raw
+      // `sentiment` column (inbox filtering) -- only this rollup collapses
+      // it, and now via the same function every other rollup uses.
+      addSentimentToPolarityCounts(entry, row.sentiment, row.count);
       byBucket.set(row.bucket, entry);
     }
     return Array.from(byBucket.values());

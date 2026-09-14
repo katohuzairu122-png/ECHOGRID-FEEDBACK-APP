@@ -1,0 +1,29 @@
+{
+  // Typechecks everything tsconfig.json deliberately leaves out (audit
+  // P3-6). The main project's `include` is "src/**/*.ts" -- correct, because
+  // that is what wrangler deploys -- which meant the 11 integration suites,
+  // 4 Workers suites, 3 vitest configs and drizzle.config.ts were never
+  // typechecked by anything. Those 15 suites gate merges, so a repository
+  // method changing its signature broke them SILENTLY: `pnpm typecheck`
+  // stayed green and the failure only appeared when the suite ran, attached
+  // to whichever PR happened to be next.
+  //
+  // A SECOND PROJECT, NOT A WIDER `include`, for two reasons:
+  //  1. src runs in the Workers runtime; these files run in Node (integration,
+  //     configs) and Miniflare (test/workers). They are allowed to diverge on
+  //     lib/types later without either one dragging the other along.
+  //  2. `tsc --noEmit` over src is what gates the deployable artifact. Keeping
+  //     it a separate invocation means a test-only type error is reported as
+  //     a test-only type error instead of looking like the build is broken.
+  //
+  // Both run in sequence from the package's `typecheck` script, so CI and a
+  // local `pnpm typecheck` cover both with no extra step to remember.
+  "extends": "./tsconfig.json",
+  "include": [
+    "test/**/*.ts",
+    "vitest.config.ts",
+    "vitest.integration.config.ts",
+    "vitest.workers.config.ts",
+    "drizzle.config.ts"
+  ]
+}

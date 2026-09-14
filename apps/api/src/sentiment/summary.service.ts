@@ -1,3 +1,4 @@
+import { countSentimentPolarities } from '@echo-grid-feedback/shared-types';
 import type { Repositories } from '../repositories';
 import type { FeedbackSummary } from '../repositories/feedback-summary.repository';
 import {
@@ -169,9 +170,17 @@ export class SummaryService {
       this.repos.loyaltyTransactions.listForBusinessPeriod(businessId, { from: periodStart, to: periodEnd }),
     ]);
 
-    const positiveCount = items.filter((i) => i.sentiment === 'positive').length;
-    const neutralCount = items.filter((i) => i.sentiment === 'neutral').length;
-    const negativeCount = items.filter((i) => i.sentiment === 'negative').length;
+    // Folds the 5-value scale into the 3 buckets this summary's contract
+    // exposes (audit P2-1). Previously three `=== 'positive'`-style filters
+    // that matched only the original 3 literals, so every 'very_positive'
+    // and 'very_negative' row counted as nothing -- understating both ends
+    // in the persisted summary AND in the prompt handed to the LLM, which
+    // then described a period it had been given wrong numbers for. The
+    // three counts do not sum to items.length by design; unclassified and
+    // 'unknown' rows belong to no bucket, and `feedbackCount` below is the
+    // total.
+    const { positive: positiveCount, neutral: neutralCount, negative: negativeCount } =
+      countSentimentPolarities(items);
 
     // S4.1 "sentiment/category/urgency distributions" (S4 roadmap Block 4)
     // -- computed from the same `items` this period already fetched, no
@@ -179,12 +188,17 @@ export class SummaryService {
     const categoryBreakdown = computeBreakdown(items, (i) => i.category);
     const urgencyBreakdown = computeBreakdown(items, (i) => i.urgency);
 
+    // Same fold as the current period above -- and it has to be the same
+    // one, because these two are subtracted from each other to produce the
+    // "changes from previous period" narrative. Counting the two windows on
+    // different scales would report a swing that never happened.
+    const previousCounts = countSentimentPolarities(previousItems);
     const previousPeriod = {
       periodLabel: formatPeriodLabel(previousRange.periodStart, previousRange.periodEnd),
       feedbackCount: previousItems.length,
-      positiveCount: previousItems.filter((i) => i.sentiment === 'positive').length,
-      neutralCount: previousItems.filter((i) => i.sentiment === 'neutral').length,
-      negativeCount: previousItems.filter((i) => i.sentiment === 'negative').length,
+      positiveCount: previousCounts.positive,
+      neutralCount: previousCounts.neutral,
+      negativeCount: previousCounts.negative,
     };
 
     // S4.1 "cross-domain content (critical incidents/loyalty/fraud)" (S4

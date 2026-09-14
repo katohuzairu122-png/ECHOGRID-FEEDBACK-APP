@@ -1,7 +1,8 @@
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { getFormatter, getTranslations } from 'next-intl/server';
-import type { BranchDto, FeedbackDto } from '@echo-grid-feedback/shared-types';
+import { sentimentPolarity } from '@echo-grid-feedback/shared-types';
+import type { BranchDto, FeedbackDto, SentimentPolarity } from '@echo-grid-feedback/shared-types';
 import { getActiveBusiness } from '@/lib/business';
 import { apiFetch } from '@/lib/api-client';
 import { SearchFilters } from './search-filters';
@@ -29,18 +30,28 @@ interface SearchPageProps {
   }>;
 }
 
-function sentimentBadgeVariant(sentiment: FeedbackDto['sentiment']): 'success' | 'danger' | 'neutral' {
-  if (sentiment === 'positive') return 'success';
-  if (sentiment === 'negative') return 'danger';
-  return 'neutral';
-}
-
-/** sentiment is a closed 3-value enum ('positive'|'neutral'|'negative'),
- * matching analytics.json's search.{positive,neutral,negative} keys 1:1
- * (i18n & Multi-Currency Block 7). */
-function sentimentLabelKey(sentiment: NonNullable<FeedbackDto['sentiment']>): string {
-  return sentiment;
-}
+/**
+ * Badge styling per sentiment BUCKET, not per stored value (audit P2-1).
+ *
+ * The previous version compared `sentiment` directly against 'positive' /
+ * 'negative' under a comment asserting it was "a closed 3-value enum". That
+ * stopped being true when Automated Feedback Sorting widened the scale to
+ * five: FeedbackDto.sentiment is `sentimentSchema.nullable()`, i.e. the full
+ * six-member union. So a 5-star rave stored as 'very_positive' fell through
+ * to 'neutral' and rendered grey -- and, worse, the label key was passed to
+ * t() verbatim, and analytics.json's search block has only positive/
+ * neutral/negative, so the badge showed a missing-translation error rather
+ * than a word.
+ *
+ * Keyed by SentimentPolarity so those three keys and these three variants
+ * are the same three things by construction, and 'unknown'/unclassified
+ * rows render no badge at all rather than a defaulted one.
+ */
+const SENTIMENT_BADGE_VARIANT: Record<SentimentPolarity, 'success' | 'danger' | 'neutral'> = {
+  positive: 'success',
+  negative: 'danger',
+  neutral: 'neutral',
+};
 
 /**
  * A separate page from /dashboard/analytics (not a third stacked section
@@ -129,15 +140,21 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
         </Card>
       ) : (
         <div className="flex flex-col gap-3">
-          {items.map((item) => (
+          {items.map((item) => {
+            // Resolved once per row: null covers not-yet-analyzed,
+            // unclassified, and 'unknown' -- all of which mean "no bucket",
+            // so no badge. The bucket name doubles as the analytics.json
+            // message key, which is why t() can take it directly.
+            const polarity =
+              item.analysisStatus === 'completed' ? sentimentPolarity(item.sentiment) : null;
+
+            return (
             <Card key={item.id}>
               <CardContent className="flex flex-col gap-3 py-4">
                 <div className="flex flex-wrap items-center gap-2">
                   <StarDisplay value={item.rating} />
-                  {item.analysisStatus === 'completed' && item.sentiment && (
-                    <Badge variant={sentimentBadgeVariant(item.sentiment)}>
-                      {t(sentimentLabelKey(item.sentiment))}
-                    </Badge>
+                  {polarity && (
+                    <Badge variant={SENTIMENT_BADGE_VARIANT[polarity]}>{t(polarity)}</Badge>
                   )}
                   <Badge variant={item.status === 'new' ? 'accent' : 'neutral'}>
                     {item.status === 'new' ? t('statusNew') : t('statusReviewed')}
@@ -157,7 +174,8 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
                 )}
               </CardContent>
             </Card>
-          ))}
+            );
+          })}
         </div>
       )}
 
