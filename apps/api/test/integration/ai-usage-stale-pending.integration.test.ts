@@ -125,13 +125,26 @@ describe.skipIf(!process.env.DATABASE_URL)('ai_usage_log stale-pending sweep (in
     // established precedent to inherit, and an explicit shape keeps this
     // readable besides.
     const rows = after.rows as Array<{ id: string; status: string; cost_estimate_usd: string | null }>;
-    const byId = Object.fromEntries(rows.map((r) => [r.id, r]));
-    expect(byId[succeeded.id].status).toBe('success');
-    expect(byId[failed.id].status).toBe('failed');
-    expect(byId[blocked.id].status).toBe('blocked');
+    const byId = new Map(rows.map((r) => [r.id, r]));
+
+    // Throws rather than returning undefined, and NOT `byId[id]?.status`
+    // (audit P3-6, noUncheckedIndexedAccess). A missing row means the sweep
+    // DELETED a terminal row instead of leaving it alone -- a far worse
+    // outcome than the wrong status. Optional chaining would report that as
+    // `undefined !== 'success'`, which reads like a status mismatch and
+    // sends the next person looking in the wrong place.
+    const row = (id: string) => {
+      const found = byId.get(id);
+      if (!found) throw new Error(`Expected ai_usage_log row ${id} to still exist after the sweep.`);
+      return found;
+    };
+
+    expect(row(succeeded.id).status).toBe('success');
+    expect(row(failed.id).status).toBe('failed');
+    expect(row(blocked.id).status).toBe('blocked');
     // The success row's recorded cost must survive the sweep untouched --
     // clobbering it would corrupt the spend ledger the limit reads from.
-    expect(Number(byId[succeeded.id].cost_estimate_usd)).toBeCloseTo(0.42);
+    expect(Number(row(succeeded.id).cost_estimate_usd)).toBeCloseTo(0.42);
   });
 
   it('returns 0 when there is nothing stale to sweep, rather than throwing', async () => {

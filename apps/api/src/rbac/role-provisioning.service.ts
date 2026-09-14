@@ -7,7 +7,31 @@ import type { Repositories } from '../repositories';
  * schema comment on roles.ts for why there is no shared/global role
  * concept). Owner is the only role that can delete the business.
  */
-const DEFAULT_ROLES: Record<string, string[]> = {
+/**
+ * The four role names seeded for every business, as a tuple so the type
+ * below is derived from it rather than restated.
+ *
+ * WHY THIS IS EXPORTED AND TYPED (audit P3-6)
+ * DEFAULT_ROLES used to be `Record<string, string[]>`, which widened the
+ * KEY type to `string`. That made seedDefaultRoles return
+ * `Record<string, string>`, so `roleIds.Owner` was `string | undefined` for
+ * every caller, and each one had to guard a lookup that cannot actually
+ * miss. Three integration suites simply did not guard -- invisible until
+ * tsconfig.test.json first typechecked them, and latent: had the seed ever
+ * failed to create a role, those suites would have inserted `undefined` as
+ * a foreign key and reported a confusing database error instead of a clear
+ * "role was not provisioned".
+ *
+ * Narrowing the key type is a strictly narrower return type, so existing
+ * callers keep typechecking. BusinessService's runtime `if (!ownerRoleId)`
+ * guard is deliberately KEPT: the accumulator below is built with a type
+ * assertion, and a runtime backstop on a foreign key is worth more than the
+ * two lines it costs.
+ */
+export const DEFAULT_ROLE_NAMES = ['Owner', 'Admin', 'Manager', 'Staff'] as const;
+export type DefaultRoleName = (typeof DEFAULT_ROLE_NAMES)[number];
+
+const DEFAULT_ROLES: Record<DefaultRoleName, string[]> = {
   Owner: [
     'team:invite',
     'team:remove',
@@ -126,9 +150,13 @@ export class RoleProvisioningService {
   constructor(private readonly repos: Pick<Repositories, 'roles' | 'permissions'>) {}
 
   /** Returns a map of role name -> role id, so the caller can grant one
-   * (typically Owner) to the business's creator. */
-  async seedDefaultRoles(businessId: string, createdBy: string): Promise<Record<string, string>> {
-    const roleIds: Record<string, string> = {};
+   * (typically Owner) to the business's creator. Keyed by DefaultRoleName
+   * rather than `string`, so `roleIds.Owner` is a `string` and not a
+   * maybe-missing lookup every caller has to re-guard. */
+  async seedDefaultRoles(businessId: string, createdBy: string): Promise<Record<DefaultRoleName, string>> {
+    // Assertion justified by the loop below iterating DEFAULT_ROLE_NAMES
+    // exhaustively -- every key is assigned before this is returned.
+    const roleIds = {} as Record<DefaultRoleName, string>;
 
     // Loaded once and reused across all 4 roles -- looking each key up
     // individually (as this used to) means a DB round trip per permission
@@ -139,7 +167,10 @@ export class RoleProvisioningService {
     const catalog = await this.repos.permissions.listAll();
     const permissionIdByKey = new Map(catalog.map((p) => [p.key, p.id]));
 
-    for (const [name, permissionKeys] of Object.entries(DEFAULT_ROLES)) {
+    // Iterates the tuple, not Object.entries, so TypeScript can see every
+    // key of the returned record is populated. Same order, same behaviour.
+    for (const name of DEFAULT_ROLE_NAMES) {
+      const permissionKeys = DEFAULT_ROLES[name];
       const role = await this.repos.roles.create({ businessId, name, isSystem: true, createdBy });
       roleIds[name] = role.id;
 

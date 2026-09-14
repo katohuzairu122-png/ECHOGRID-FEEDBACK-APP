@@ -108,7 +108,11 @@ function eventPayload(id = 'evt_test_1'): string {
   });
 }
 
-function post(body: string, headers: Record<string, string> = {}): Promise<Response> {
+// `async`, not a plain function returning the call directly: Hono types
+// app.request() as `Response | Promise<Response>` (it resolves synchronously
+// when no handler in the chain is async), and an async function normalises
+// either into the Promise<Response> every caller here awaits.
+async function post(body: string, headers: Record<string, string> = {}): Promise<Response> {
   return app.request(
     '/webhooks/stripe',
     { method: 'POST', body, headers: { 'content-type': 'application/json', ...headers } },
