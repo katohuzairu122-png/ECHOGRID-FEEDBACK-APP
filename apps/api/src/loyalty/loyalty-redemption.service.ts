@@ -3,6 +3,7 @@ import { createRepositories } from '../repositories';
 import type { LoyaltyTransaction, LoyaltyReward } from '../repositories';
 import { AppError } from '../lib/errors';
 import { generateRedemptionCode } from './redemption-code';
+import { wouldExceedBudget } from './budget-limit';
 import { VisitSessionService } from '../visits/visit-session.service';
 
 export interface RedemptionResult {
@@ -85,14 +86,30 @@ export class LoyaltyRedemptionService {
 
     const { todayCount, totalCount } = await repos.loyaltyTransactions.countForLimitCheck(reward.id);
 
+    // Integer comparison, no float involved: `todayCount` is claims already
+    // made, so at the limit the next one is refused. Deliberately a
+    // different shape from the budget check below -- that one projects one
+    // more claim's SPEND, this one just counts.
     if (reward.maxRewardsPerDay !== null && todayCount >= reward.maxRewardsPerDay) {
       throw new AppError('This reward has reached its daily limit.', 422, 'LOYALTY_REWARD_DAILY_LIMIT_REACHED');
     }
-    if (reward.maxBudget !== null && reward.rewardValue !== null) {
-      const projectedSpend = (totalCount + 1) * Number(reward.rewardValue);
-      if (projectedSpend > Number(reward.maxBudget)) {
-        throw new AppError('This reward has reached its budget.', 422, 'LOYALTY_REWARD_BUDGET_EXCEEDED');
-      }
+
+    // Was `(totalCount + 1) * Number(rewardValue) > Number(maxBudget)`,
+    // i.e. raw IEEE 754 doubles, which disagreed with exact decimal
+    // arithmetic on five of ten realistic value/budget pairs -- refusing
+    // claims that exactly fit (12 x 8.30 = 99.60000000000001 > 99.60) and,
+    // in the other direction, admitting claims that overspend. See
+    // budget-limit.ts for the measurements and for why integer cents is
+    // exact here rather than merely better. Behaviour for a null
+    // rewardValue (points-type rewards) is unchanged and asserted.
+    if (
+      wouldExceedBudget({
+        alreadyIssued: totalCount,
+        rewardValue: reward.rewardValue,
+        maxBudget: reward.maxBudget,
+      })
+    ) {
+      throw new AppError('This reward has reached its budget.', 422, 'LOYALTY_REWARD_BUDGET_EXCEEDED');
     }
   }
 

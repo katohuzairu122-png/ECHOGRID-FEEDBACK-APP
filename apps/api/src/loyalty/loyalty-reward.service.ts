@@ -4,9 +4,23 @@ import { AppError } from '../lib/errors';
 /** Rounds a currency amount to 2 decimal places -- guards
  * getCampaignDashboard()'s totalCount/outstandingCount * rewardValue
  * multiplications against a plain floating-point artifact (e.g. 3 * 9.10
- * in IEEE 754 doubles). Local to this file: nothing else in the service
- * layer does arithmetic on a converted numeric column today, so there's
- * no existing shared helper this could reuse instead of adding one. */
+ * in IEEE 754 doubles).
+ *
+ * CORRECTED: this comment used to claim "nothing else in the service layer
+ * does arithmetic on a converted numeric column today". That was not true
+ * when written -- LoyaltyRedemptionService.checkDailyAndBudgetLimits did
+ * exactly that, on these same two columns, and without any equivalent
+ * guard, so the READ path here reported money correctly while the WRITE
+ * guard that decides whether to spend it was wrong (audit P0-5).
+ *
+ * That guard now uses loyalty/budget-limit.ts, which compares integer
+ * CENTS rather than rounding floats -- exact for numeric(10,2) rather than
+ * merely closer. This function stays as-is on purpose: it is a display
+ * concern (producing a number for a dashboard), not a decision boundary,
+ * and its own test asserts budgetUsed === 27.3 for 3 x 9.10. Rounding is
+ * the right answer for presentation and the wrong answer for enforcement.
+ * Kept local to this file for that reason, not for the reason claimed
+ * above. */
 function roundMoney(amount: number): number {
   return Math.round(amount * 100) / 100;
 }
