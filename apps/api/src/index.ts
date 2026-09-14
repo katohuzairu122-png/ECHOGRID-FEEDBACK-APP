@@ -39,6 +39,7 @@ import { createSmsService } from './customer-auth/sms.service';
 import { NotificationDeliveryService } from './notifications/notification-delivery.service';
 import { NotificationService } from './notifications/notification.service';
 import { computeRetryDelaySeconds } from './lib/backoff';
+import { notifyOps, alertOnFailure } from './lib/ops-alert';
 
 // Durable Object classes must be exported from the Worker's main module for
 // wrangler to find them (see wrangler.toml's durable_objects.bindings /
@@ -170,7 +171,62 @@ app.route('/api/v1', api);
  * not just generate_summary's Anthropic calls -- see this block's own
  * completion notes for why a per-job-type schedule isn't justified today.
  */
+/**
+ * The dead-letter queue's name, which MUST match wrangler.toml's
+ * [[queues.consumers]] entry exactly. Same drift hazard as the cron strings
+ * below: a rename in one place and this branch silently never runs again.
+ */
+const DEAD_LETTER_QUEUE = 'echo-grid-feedback-jobs-dlq';
+
+/**
+ * Consumes the dead-letter queue (audit P3-3).
+ *
+ * wrangler.toml declared `dead_letter_queue` from the start and nothing ever
+ * consumed it, so a job that exhausted its 3 retries landed there and sat --
+ * no consumer, no alarm, nothing logged. docs/OPERATIONS.md prescribed
+ * "inspect the dashboard", which means a systemic failure (a Workers AI
+ * outage, a database at capacity) was discovered only when somebody happened
+ * to look.
+ *
+ * Alerts per message, then acks. Acking DISCARDS the message, which is the
+ * deliberate choice: the alternative is leaving it to redeliver forever
+ * against a handler that has already failed four times. The alert carries
+ * the job type, id and attempt count, so it is the record -- which is why
+ * the payload matters and the alert is not just a count.
+ *
+ * Opens NO database connection. It is reached before the main consumer's
+ * createDb() on purpose: this path exists for the case where the database is
+ * the thing that is broken.
+ */
+async function handleDeadLetterBatch(batch: MessageBatch<PlatformJob>, env: Bindings): Promise<void> {
+  for (const message of batch.messages) {
+    await notifyOps(env, {
+      event: 'queue.dead_letter',
+      severity: 'critical',
+      message: `A ${message.body.type} job exhausted its retries and was dead-lettered.`,
+      // Ids and discriminants only -- job payloads carry businessId,
+      // feedbackId and notification ids, never customer prose. See
+      // lib/ops-alert.ts on why that boundary matters for this path.
+      detail: {
+        messageId: message.id,
+        jobType: message.body.type,
+        attempts: message.attempts,
+        body: message.body,
+      },
+    });
+    message.ack();
+  }
+}
+
 async function queue(batch: MessageBatch<PlatformJob>, env: Bindings, ctx: ExecutionContext): Promise<void> {
+  // Both queues are bound to this one handler, so the batch says which it
+  // came from. Checked first, before createDb: the dead-letter path must
+  // work when the database is what failed.
+  if (batch.queue === DEAD_LETTER_QUEUE) {
+    await handleDeadLetterBatch(batch, env);
+    return;
+  }
+
   const { db, close } = await createDb(env.HYPERDRIVE);
   try {
     const repos = createRepositories(db);
@@ -373,8 +429,32 @@ async function scheduled(event: ScheduledController, env: Bindings, ctx: Executi
     // deliberately NOT awaited together in one waitUntil: a failure in
     // either must not prevent the other from running, and Promise.all
     // would short-circuit on the first rejection.
-    ctx.waitUntil(sweepUnacknowledgedCriticalIncidents(env));
-    ctx.waitUntil(sweepStalePendingAiUsage(env));
+    // Wrapped so a rejection becomes a named alert instead of an unhandled
+    // rejection: waitUntil does not report one anywhere a human would see.
+    ctx.waitUntil(
+      alertOnFailure(
+        env,
+        {
+          event: 'cron.critical_escalation_sweep_failed',
+          severity: 'critical',
+          message: 'The critical-incident escalation sweep failed. P0 incidents may not be escalating.',
+          detail: { cron: event.cron },
+        },
+        () => sweepUnacknowledgedCriticalIncidents(env),
+      ),
+    );
+    ctx.waitUntil(
+      alertOnFailure(
+        env,
+        {
+          event: 'cron.stale_ai_usage_sweep_failed',
+          severity: 'warning',
+          message: 'The stale-pending ai_usage_log sweep failed.',
+          detail: { cron: event.cron },
+        },
+        () => sweepStalePendingAiUsage(env),
+      ),
+    );
     return;
   }
 
@@ -383,12 +463,34 @@ async function scheduled(event: ScheduledController, env: Bindings, ctx: Executi
     // same reasoning the two 5-minute sweeps above already use. Its own
     // waitUntil, not awaited with the summary work below: a prune failure
     // must not stop summaries generating, and vice versa.
-    ctx.waitUntil(pruneOldOtpCodes(env));
+    ctx.waitUntil(
+      alertOnFailure(
+        env,
+        {
+          event: 'cron.otp_prune_failed',
+          severity: 'warning',
+          message: 'The otp_codes prune failed. The table will keep growing until it succeeds.',
+          detail: { cron: event.cron },
+        },
+        () => pruneOldOtpCodes(env),
+      ),
+    );
   }
 
   const periodType = CRON_PERIOD_MAP[event.cron];
   if (!periodType) {
-    console.error(`Unrecognized cron expression, skipping: ${event.cron}`);
+    // Critical, not a log line. This can only happen if wrangler.toml's
+    // [triggers] and CRON_PERIOD_MAP above have drifted apart -- at which
+    // point summary generation has silently stopped for every business,
+    // with no failed request and no non-2xx anywhere to notice (audit
+    // P3-4). Awaited rather than backgrounded: there is nothing else left
+    // for this invocation to do.
+    await notifyOps(env, {
+      event: 'cron.unrecognized_expression',
+      severity: 'critical',
+      message: 'A cron fired that this Worker does not recognise. Summary generation may have stopped.',
+      detail: { cron: event.cron, known: Object.keys(CRON_PERIOD_MAP) },
+    });
     return;
   }
 

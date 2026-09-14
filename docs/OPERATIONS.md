@@ -20,16 +20,34 @@ duplicate it.
 - **Health check**: `GET /health` on the API (unauthenticated, outside all
   middleware) — wire this into whatever uptime monitor you use (Cloudflare's
   own, UptimeRobot, etc.). Returns `{ status: 'ok', environment, timestamp }`.
-- **Not yet configured** (needs Cloudflare dashboard access, not a code
-  change): explicit alert rules. Cloudflare supports notifications on Worker
-  error-rate thresholds, CPU time, and queue backlog — none are provisioned
-  yet. Minimum recommended before production: alert on 5xx rate, queue DLQ
-  depth > 0, and Hyperdrive connection failures.
-- **Third-party error tracking** (e.g. Sentry): not integrated. Cloudflare
-  Workers Logs covers "what broke," but has no grouping/alerting/trend view
-  across incidents the way a dedicated error tracker does. Consider adding
-  before production if incident volume justifies it — out of scope for this
-  release candidate.
+- **Background-work alerts**: `OPS_ALERT_WEBHOOK_URL` (optional secret, set
+  via `npx wrangler secret put OPS_ALERT_WEBHOOK_URL`). When set, three
+  classes of silent failure are announced to it — a job reaching the
+  dead-letter queue, a cron sweep rejecting, and a cron firing that the
+  Worker does not recognise. Point it at a Slack or Discord incoming
+  webhook, a vendor ingest endpoint, or a Worker of your own: the payload
+  carries `text` (Slack), `content` (Discord) and structured
+  `event`/`severity`/`detail` fields, so one URL works for any of them.
+  See `apps/api/src/lib/ops-alert.ts`.
+  - **Unset is a supported state, not a broken one.** Every alert also goes
+    to `console.error` unconditionally, which is where it went before this
+    existed. Setting the secret is the whole improvement; nothing breaks
+    without it.
+  - The alert never throws and never retries. A destination that is down
+    costs one extra log line, not a second incident.
+- **Still not configured** (needs Cloudflare dashboard access, not a code
+  change): Cloudflare's own notification rules on Worker error-rate
+  thresholds, CPU time, and queue backlog. Worth adding on top of the
+  webhook above for the failure classes application code cannot see —
+  a Worker that fails to start, or 5xx from the edge before any handler
+  runs.
+- **Third-party error tracking** (e.g. Sentry): still not integrated as an
+  SDK, deliberately. A Worker on the free plan has a 10ms CPU budget per
+  invocation — this project already moved PBKDF2 into a Durable Object to
+  live within it — so an instrumentation SDK is a poor trade for what was
+  actually missing, which was notification rather than grouping. If grouping
+  and trend analysis become worth it later, point `OPS_ALERT_WEBHOOK_URL` at
+  the vendor's ingest endpoint rather than adding a client library.
 
 ## Database backup & restore
 
@@ -72,12 +90,26 @@ rollback isn't also the first attempt.
   gracefully to a `failed` status on the affected row rather than throwing
   — the DLQ exists to surface *systemic* failures (e.g. a Workers AI or
   Anthropic outage across many messages), not routine per-item errors.
-- **Operational action on a non-empty DLQ**: inspect via
-  `npx wrangler queues consumer <name>` tooling or the Cloudflare dashboard,
-  diagnose the systemic cause (provider outage vs. a code bug), fix or wait
-  out the cause, then either replay the DLQ'd messages (if the provider
-  outage is resolved) or discard them if they represent a fixed bug's
-  already-dead work.
+- **The DLQ now has a consumer** (`wrangler.toml`'s second
+  `[[queues.consumers]]`, handled by `index.ts`'s `handleDeadLetterBatch`).
+  Until it did, the queue was declared and nothing read it: a job that
+  exhausted its 3 retries landed there and sat, with no consumer, no alarm
+  and nothing logged.
+- **What the consumer does**: alerts per message (job type, message id,
+  attempt count and the job body — ids and discriminants only, never
+  customer prose), then **acks**. Acking discards the message, which is the
+  deliberate trade: the alternative is redelivering forever to a handler
+  that has already failed four times. **The alert is therefore the record** —
+  keep it, because the message itself is gone.
+- It opens no database connection, on purpose: this path has to work when
+  the database is the thing that broke.
+- **Operational action on a dead-letter alert**: diagnose the systemic cause
+  (provider outage vs. a code bug) from the alert's `jobType` and `body`.
+  The work itself is not recoverable from the queue, but most of it is
+  reconstructible — a `classify_feedback` job's row is still in `feedback`
+  with `analysis_status = 'failed'` and can be re-enqueued; a
+  `generate_summary` period can be regenerated from the dashboard. A
+  `send_notification` job is the one that is genuinely lost.
 
 ## Secret rotation procedure
 

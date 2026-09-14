@@ -147,6 +147,30 @@ export interface Bindings {
    * mails staging users a localhost link. */
   WEB_BASE_URL: string;
 
+  /**
+   * Where background-work failures are announced (lib/ops-alert.ts). A
+   * Slack or Discord incoming webhook, a vendor ingest endpoint, or a
+   * Worker of your own -- one payload shape serves all three.
+   *
+   * OPTIONAL, and typed `string | undefined` on a required key for the same
+   * reason QR_TOKEN_SECRET_PREVIOUS is: an unset Workers binding reads as
+   * `undefined` rather than an absent key, and with
+   * exactOptionalPropertyTypes a `?:` property could not be passed through
+   * the `Pick<Bindings, ...>` object literals notifyOps' callers use.
+   *
+   * Deliberately NOT in wrangler.toml's [secrets].required: the platform
+   * must run without it. Unset, every alert still reaches Workers Logs via
+   * console.error -- which is exactly where it went before this existed, so
+   * leaving it unset is no worse than the status quo and setting it is the
+   * whole improvement.
+   *
+   * A secret rather than a [vars] entry even though it is "just a URL": a
+   * webhook URL IS the credential for its destination -- anyone holding it
+   * can post to your incident channel. That makes it unlike ALLOWED_ORIGINS
+   * and WEB_BASE_URL, which are public facts about the deployment.
+   */
+  OPS_ALERT_WEBHOOK_URL: string | undefined;
+
   /** Resource bindings, provisioned with the Cloudflare CLI (see README). */
   HYPERDRIVE: Hyperdrive;
   UPLOADS: R2Bucket;

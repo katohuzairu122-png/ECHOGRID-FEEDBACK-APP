@@ -117,6 +117,18 @@ required = [
 # expiry, delete QR_TOKEN_SECRET_PREVIOUS with `wrangler secret delete`.
 # See config/env.ts and qr/qr-token.ts for how both are used.
 #
+# OPS_ALERT_WEBHOOK_URL is likewise OPTIONAL and deliberately not in the
+# required list above -- the platform must run without it. Set it to a Slack
+# or Discord incoming webhook, a vendor ingest endpoint, or a Worker of your
+# own, and background-work failures (dead-lettered jobs, failed cron sweeps,
+# a cron this Worker does not recognise) are announced there:
+#   npx wrangler secret put OPS_ALERT_WEBHOOK_URL
+# Unset, every one of those still reaches Workers Logs via console.error --
+# which is exactly where it went before, so leaving it unset is no worse than
+# the status quo and setting it is the whole improvement. A secret rather
+# than a [vars] entry because a webhook URL IS the credential for its
+# destination. See src/lib/ops-alert.ts.
+#
 # FRAUD_DETECTION_SALT (Continuing Development Block 4.1, S5.4/S5.5) salts
 # device-signal/IP hashing in fraud/velocity-tracker.ts. Unlike QR_TOKEN_SECRET
 # it has no rotation-pair variant -- see config/env.ts's doc comment on this
@@ -183,6 +195,24 @@ max_retries = 3
 # visible/inspectable rather than silently absorbed by that per-row fallback.
 # Provision with: npx wrangler queues create echo-grid-feedback-jobs-dlq
 dead_letter_queue = "echo-grid-feedback-jobs-dlq"
+
+# The DLQ's own consumer, which did not exist until now: the queue was
+# declared above from the start and nothing read it, so a job that exhausted
+# its retries landed there and sat -- no consumer, no alarm, nothing logged
+# (audit P3-3). Routed to the same `queue` export, which branches on
+# batch.queue; see index.ts's DEAD_LETTER_QUEUE constant, whose string must
+# match the name below exactly.
+#
+# No dead_letter_queue of its own, deliberately -- a DLQ for the DLQ is
+# somewhere else for a message to go unread. The handler alerts and acks, so
+# the alert is the record.
+[[queues.consumers]]
+queue = "echo-grid-feedback-jobs-dlq"
+max_batch_size = 10
+# 1, not 3: the handler only alerts and acks, so a failure here means the
+# alerting path itself is unavailable. One retry covers a transient blip;
+# more would just delay the next batch behind a message nothing can process.
+max_retries = 1
 
 # Workers AI -- native binding, not a provisioned resource with an ID (no
 # `wrangler ai create` step). Powers per-item sentiment classification only
