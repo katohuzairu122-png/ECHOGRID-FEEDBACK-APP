@@ -39,6 +39,45 @@ export class FeedbackSummaryRepository extends BaseRepository {
     });
   }
 
+  /**
+   * The most recent summary already stored for one exact period, or
+   * undefined. Backs SummaryService.generateForPeriod's idempotency guard
+   * (audit P2-2): a queue retry of work that already succeeded must not pay
+   * Anthropic a second time.
+   *
+   * `branchId: undefined` means the BUSINESS-WIDE rollup and matches on
+   * `IS NULL`, not `= NULL` -- the same distinction listForBusiness above
+   * already makes, and the reason this is a hand-built predicate rather
+   * than a spread of the options object. `eq(branchId, null)` compiles to
+   * `= NULL`, which is never true in SQL, so it would silently match
+   * nothing and the guard would never fire on the most common case.
+   *
+   * Ordered by createdAt descending, not periodStart: this table is an
+   * append-only ledger (see the schema comment), so a deliberately
+   * regenerated period has several rows for the same periodStart and the
+   * newest is the one in force.
+   */
+  async findLatestForPeriod(
+    businessId: string,
+    options: {
+      branchId?: string | undefined;
+      periodType: 'daily' | 'weekly' | 'monthly';
+      periodStart: Date;
+    },
+  ): Promise<FeedbackSummary | undefined> {
+    return this.db.query.feedbackSummaries.findFirst({
+      where: and(
+        eq(feedbackSummaries.businessId, businessId),
+        options.branchId
+          ? eq(feedbackSummaries.branchId, options.branchId)
+          : isNull(feedbackSummaries.branchId),
+        eq(feedbackSummaries.periodType, options.periodType),
+        eq(feedbackSummaries.periodStart, options.periodStart),
+      ),
+      orderBy: desc(feedbackSummaries.createdAt),
+    });
+  }
+
   async findById(id: string, businessId: string): Promise<FeedbackSummary | undefined> {
     return this.db.query.feedbackSummaries.findFirst({
       where: and(eq(feedbackSummaries.id, id), eq(feedbackSummaries.businessId, businessId)),

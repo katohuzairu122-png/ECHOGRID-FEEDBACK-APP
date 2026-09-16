@@ -276,6 +276,15 @@ async function queue(batch: MessageBatch<PlatformJob>, env: Bindings, ctx: Execu
             periodType: message.body.periodType,
             periodStart,
             periodEnd,
+            // Passed explicitly even though it is the default (audit P2-2).
+            // This is the call site where the money consequence lives: the
+            // notifyBusinessStaff call below and the ack() after it are in
+            // this same try/catch, whose handler is message.retry(), so
+            // before this guard a notification failure re-ran the whole
+            // generation and paid Anthropic again. A reader of this file
+            // should be able to see that retries are idempotent without
+            // going to look up a default.
+            onExisting: 'reuse',
           });
 
           // Notifications Block 3 -- fires only after generateForPeriod has

@@ -18,6 +18,23 @@ export interface GenerateSummaryOptions {
   periodType: 'daily' | 'weekly' | 'monthly';
   periodStart: Date;
   periodEnd: Date;
+  /**
+   * What to do when this exact period has already been summarised
+   * (audit P2-2).
+   *
+   * 'reuse' (the DEFAULT) returns the stored summary and does no work: no
+   * spend check, no ai_usage_log row, and above all no Anthropic call.
+   * 'append' regenerates and adds a new row, which is the append-only
+   * ledger behaviour feedback-summaries.ts's schema comment describes and
+   * deliberately wants for a manual re-run.
+   *
+   * The default is 'reuse' because the queue consumer is the only
+   * production caller today and its retries are automatic: defaulting the
+   * other way means a new automatic caller added later silently pays twice.
+   * A deliberate regeneration is a human action and can afford to be
+   * explicit. Fail safe on cost; make the expensive path opt in.
+   */
+  onExisting?: 'reuse' | 'append' | undefined;
 }
 
 /** S4.2 daily/monthly Anthropic spend-limit thresholds, in USD. Platform-wide
@@ -109,6 +126,44 @@ export class SummaryService {
 
     const branch = branchId ? await this.repos.branches.findById(branchId, businessId) : undefined;
     if (branchId && !branch) throw new AppError('Branch not found.', 404, 'BRANCH_NOT_FOUND');
+
+    // IDEMPOTENCY GUARD (audit P2-2). Placed here deliberately: BEFORE the
+    // spend check, before the 'pending' ai_usage_log row, and above all
+    // before the Anthropic call -- a retry of work that already succeeded
+    // must do NO work, not cheaper work. A pending row alone would pollute
+    // the spend ledger and give the stale-pending sweep something to
+    // abandon; a spend check alone would still consume budget on a period
+    // already paid for.
+    //
+    // THE WINDOW THIS CLOSES, in index.ts's consumer: generateForPeriod
+    // returns (money spent, row inserted), then notifyBusinessStaff runs,
+    // then message.ack(). Those three are in ONE try/catch whose handler is
+    // message.retry(). notifyBusinessStaff is an N+1 at 5-6 queries per
+    // recipient (audit P2-8), i.e. the most failure-prone step in the
+    // block -- and it sits downstream of the expensive, already-completed
+    // part. One failure there re-ran the whole generation: a second
+    // Anthropic charge and a second summary row, for a period that had
+    // succeeded outright.
+    //
+    // ai-usage-log.repository.ts already documented the mechanism twice
+    // ("a queue retry re-invokes generateForPeriod from scratch, which
+    // writes a fresh 'pending' row") -- as an observation about orphaned
+    // rows. What it did not connect was the Anthropic charge attached to it.
+    //
+    // WHY NOT THE UNIQUE INDEX the audit proposed: see this method's
+    // dedicated note in the audit doc. Briefly -- it would forbid the
+    // deliberate regeneration the schema is designed for, it would not fire
+    // on a NULL branchId (SQL UNIQUE treats NULLs as distinct, and NULL
+    // means business-wide, the common case), and it could not prevent the
+    // charge anyway, which happens before the insert.
+    if ((options.onExisting ?? 'reuse') === 'reuse') {
+      const existing = await this.repos.feedbackSummaries.findLatestForPeriod(businessId, {
+        branchId,
+        periodType,
+        periodStart,
+      });
+      if (existing) return existing;
+    }
 
     // S4.2 spend-limit check -- after existence checks (a bad businessId/
     // branchId should 404, not be masked by an unrelated spend block) but

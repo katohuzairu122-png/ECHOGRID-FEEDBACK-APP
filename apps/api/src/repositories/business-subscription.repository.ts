@@ -128,16 +128,51 @@ export class BusinessSubscriptionRepository extends BaseRepository {
    * JS string (avoiding silent precision loss past Number.MAX_SAFE_INTEGER)
    * -- explicitly Number()'d below since MRR in cents will never realistically
    * approach that boundary and the DTO contract is a plain number.
+   *
+   * TWO DEFECTS FIXED HERE (audit P2-4). Both were silent, and both made the
+   * two numbers this method returns disagree with each other -- which for a
+   * platform dashboard is worse than either being merely imprecise, because
+   * "N active subscriptions, $X MRR" invites the reader to divide.
+   *
+   * 1. `price_yearly_cents` IS NULLABLE (schema/subscription-plans.ts: only
+   *    price_monthly_cents is notNull, correctly -- a plan may offer monthly
+   *    only). Nothing constrains a subscription's billing_interval against
+   *    its plan's available prices, so `billing_interval = 'year'` on a plan
+   *    with no yearly price is reachable. The old CASE then yielded NULL,
+   *    and SUM SKIPS NULL while COUNT(*) COUNTS THE ROW -- so that
+   *    subscription vanished from the money and stayed in the headcount,
+   *    with nothing anywhere saying so. Now COALESCEd to the plan's monthly
+   *    price, which is notNull, so every counted subscription is also
+   *    priced. That is an estimate for a misconfigured plan, but MRR is an
+   *    estimate, and no row is dropped.
+   *
+   * 2. `price_yearly_cents / 12` was INTEGER DIVISION, truncating toward
+   *    zero PER ROW BEFORE the SUM, so the error accumulated with
+   *    subscriber count and always downward. A $299/yr plan is 29900/12 =
+   *    2491.67, truncated to 2491; across three such subscribers MRR read
+   *    7473 instead of 7475. Now the division is `::numeric` (exact), the
+   *    SUM is over exact values, and ROUND happens ONCE at the end --
+   *    rounding per row and then summing would itself re-introduce an
+   *    accumulating error, in the other direction.
+   *
+   * A NULL billing_interval falls to the monthly branch, and deliberately:
+   * SQL three-valued logic makes `NULL = 'year'` neither true nor false, so
+   * CASE takes ELSE. The column is nullable (subscriptions created before
+   * an interval is known), monthly is the conservative reading, and this
+   * comment exists so that stays a decision rather than an accident.
    */
   async calculateMrr(): Promise<{ mrrCents: number; activeSubscriptionCount: number }> {
     const [result] = await this.db
       .select({
-        mrrCents: sql<string>`COALESCE(SUM(
+        mrrCents: sql<string>`COALESCE(ROUND(SUM(
           CASE WHEN ${businessSubscriptions.billingInterval} = 'year'
-            THEN ${subscriptionPlans.priceYearlyCents} / 12
-            ELSE ${subscriptionPlans.priceMonthlyCents}
+            THEN COALESCE(
+              ${subscriptionPlans.priceYearlyCents}::numeric / 12,
+              ${subscriptionPlans.priceMonthlyCents}::numeric
+            )
+            ELSE ${subscriptionPlans.priceMonthlyCents}::numeric
           END
-        ), 0)`,
+        )), 0)`,
         activeSubscriptionCount: sql<string>`COUNT(*)`,
       })
       .from(businessSubscriptions)

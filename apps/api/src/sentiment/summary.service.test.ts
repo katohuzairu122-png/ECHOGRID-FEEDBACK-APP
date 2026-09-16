@@ -156,6 +156,10 @@ function createFakeRepos(options: {
   criticalIncidentRows?: CriticalIncident[];
   fraudSignalRows?: FraudSignal[];
   loyaltyTransactionRows?: LoyaltyTransaction[];
+  /** A summary already stored for the requested period (audit P2-2).
+   * Defaults to undefined -- "nothing generated yet" -- so every
+   * pre-existing test below still runs the full generation path. */
+  existingSummary?: FeedbackSummary | undefined;
   /** Canned totals for the two totalCostSince calls enforceSpendLimit makes,
    * in the order it makes them (daily, then monthly) -- see
    * SummaryService.enforceSpendLimit's `Promise.all([daily, monthly])`.
@@ -189,6 +193,11 @@ function createFakeRepos(options: {
         created.push(row);
         return row as FeedbackSummary;
       }),
+      // Required by generateForPeriod's P2-2 idempotency guard. Defaults to
+      // "nothing stored yet" so every pre-existing test in this file keeps
+      // exercising the full generation path unchanged; the reuse behaviour
+      // has its own describe block, which overrides this.
+      findLatestForPeriod: vi.fn().mockResolvedValue(options.existingSummary),
     } as unknown as FeedbackSummaryRepository,
     businesses: {
       findById: vi.fn().mockResolvedValue(options.business),
@@ -861,5 +870,187 @@ describe('SummaryService.generateForPeriod -- cross-domain aggregates (S4 roadma
     expect(call.criticalIncidents).toEqual({ count: 0, unacknowledgedCount: 0 });
     expect(call.fraudSignals).toEqual({ count: 0, severityBreakdown: [] });
     expect(call.loyaltyActivity).toEqual({ count: 0, typeBreakdown: [] });
+  });
+});
+
+/**
+ * Audit P2-2 -- a queue retry must not pay Anthropic twice.
+ *
+ * THE WINDOW, in index.ts's consumer: generateForPeriod returns (money
+ * spent, row inserted), then notifyBusinessStaff runs, then message.ack().
+ * All three sit in ONE try/catch whose handler is message.retry(), and
+ * notifyBusinessStaff is an N+1 at 5-6 queries per recipient (P2-8) --
+ * the most failure-prone step in the block, downstream of the expensive
+ * already-completed one. A single failure there re-ran the whole
+ * generation.
+ *
+ * The audit proposed a unique index. These tests assert the behaviour that
+ * an index could not have produced: the generator is never INVOKED. An
+ * index constrains the INSERT, which happens after the money is already
+ * spent, so it would have converted a duplicate into an exception -- which
+ * this consumer's catch turns into another retry, another charge, and
+ * eventually a dead-letter alert for work that had actually succeeded.
+ */
+describe('SummaryService.generateForPeriod -- retry idempotency (P2-2)', () => {
+  const periodStart = new Date('2026-07-01T00:00:00.000Z');
+  const periodEnd = new Date('2026-07-08T00:00:00.000Z');
+
+  const existing = {
+    id: 'already-generated',
+    businessId: BUSINESS_A,
+    branchId: null,
+    periodType: 'weekly',
+    periodStart,
+    periodEnd,
+    feedbackCount: 4,
+    positiveCount: 2,
+    neutralCount: 1,
+    negativeCount: 1,
+    summary: 'The summary this business was already told.',
+    recommendations: 'Do the thing.',
+    createdAt: new Date(),
+    createdBy: null,
+  } as FeedbackSummary;
+
+  it('returns the stored summary without calling the generator', async () => {
+    // THE test. An Anthropic call is the cost; not making one is the fix.
+    const repos = createFakeRepos({ items: [], business: BUSINESS, existingSummary: existing });
+    const generator = fakeGenerator();
+    const service = new SummaryService(repos, generator, TEST_MODEL, PERMISSIVE_SPEND_LIMITS);
+
+    const result = await service.generateForPeriod({
+      businessId: BUSINESS_A,
+      periodType: 'weekly',
+      periodStart,
+      periodEnd,
+    });
+
+    expect(generator.generate).not.toHaveBeenCalled();
+    expect(result).toBe(existing);
+  });
+
+  it('writes no second summary row', async () => {
+    const repos = createFakeRepos({ items: [], business: BUSINESS, existingSummary: existing });
+    const service = new SummaryService(repos, fakeGenerator(), TEST_MODEL, PERMISSIVE_SPEND_LIMITS);
+
+    await service.generateForPeriod({ businessId: BUSINESS_A, periodType: 'weekly', periodStart, periodEnd });
+
+    expect(repos.feedbackSummaries.create).not.toHaveBeenCalled();
+  });
+
+  it('records no ai_usage_log row at all', async () => {
+    // The guard sits BEFORE the 'pending' insert on purpose. A pending row
+    // for work that is not happening pollutes the spend ledger and gives
+    // the stale-pending sweep (P0-1's integration suite) something to
+    // abandon an hour later, for an attempt that never ran.
+    const repos = createFakeRepos({ items: [], business: BUSINESS, existingSummary: existing });
+    const service = new SummaryService(repos, fakeGenerator(), TEST_MODEL, PERMISSIVE_SPEND_LIMITS);
+
+    await service.generateForPeriod({ businessId: BUSINESS_A, periodType: 'weekly', periodStart, periodEnd });
+
+    expect(repos.aiUsageLog.record).not.toHaveBeenCalled();
+  });
+
+  it('consumes no spend budget', async () => {
+    // Also before enforceSpendLimit: a period already paid for must not
+    // count twice against a PLATFORM-WIDE daily limit that every other
+    // business's summaries draw on.
+    const repos = createFakeRepos({ items: [], business: BUSINESS, existingSummary: existing });
+    const service = new SummaryService(repos, fakeGenerator(), TEST_MODEL, PERMISSIVE_SPEND_LIMITS);
+
+    await service.generateForPeriod({ businessId: BUSINESS_A, periodType: 'weekly', periodStart, periodEnd });
+
+    expect(repos.aiUsageLog.totalCostSince).not.toHaveBeenCalled();
+  });
+
+  it('reads no feedback -- it does not even build the prompt', async () => {
+    const repos = createFakeRepos({ items: [], business: BUSINESS, existingSummary: existing });
+    const service = new SummaryService(repos, fakeGenerator(), TEST_MODEL, PERMISSIVE_SPEND_LIMITS);
+
+    await service.generateForPeriod({ businessId: BUSINESS_A, periodType: 'weekly', periodStart, periodEnd });
+
+    expect(repos.feedback.listForPeriod).not.toHaveBeenCalled();
+  });
+
+  it('looks the period up with the exact scope it was asked for', async () => {
+    // branchId undefined must reach the repository as undefined, which is
+    // what makes it resolve to IS NULL rather than = NULL -- the business-
+    // wide case, and the most common one. If this were passed as null or
+    // omitted differently the guard would silently never fire.
+    const repos = createFakeRepos({ items: [], business: BUSINESS, existingSummary: existing });
+    const service = new SummaryService(repos, fakeGenerator(), TEST_MODEL, PERMISSIVE_SPEND_LIMITS);
+
+    await service.generateForPeriod({ businessId: BUSINESS_A, periodType: 'weekly', periodStart, periodEnd });
+
+    expect(repos.feedbackSummaries.findLatestForPeriod).toHaveBeenCalledWith(BUSINESS_A, {
+      branchId: undefined,
+      periodType: 'weekly',
+      periodStart,
+    });
+  });
+
+  it('scopes the lookup to a branch when one was requested', async () => {
+    const repos = createFakeRepos({ items: [], business: BUSINESS, branch: BRANCH, existingSummary: existing });
+    const service = new SummaryService(repos, fakeGenerator(), TEST_MODEL, PERMISSIVE_SPEND_LIMITS);
+
+    await service.generateForPeriod({
+      businessId: BUSINESS_A,
+      branchId: BRANCH_A,
+      periodType: 'weekly',
+      periodStart,
+      periodEnd,
+    });
+
+    expect(repos.feedbackSummaries.findLatestForPeriod).toHaveBeenCalledWith(BUSINESS_A, {
+      branchId: BRANCH_A,
+      periodType: 'weekly',
+      periodStart,
+    });
+  });
+
+  it("still generates when onExisting is 'append' -- the deliberate re-run", async () => {
+    // The append-only ledger the schema comment describes must keep
+    // working. This is why the fix is not a unique index: an index would
+    // make this case impossible, and it is a feature.
+    const repos = createFakeRepos({ items: [], business: BUSINESS, existingSummary: existing });
+    const generator = fakeGenerator();
+    const service = new SummaryService(repos, generator, TEST_MODEL, PERMISSIVE_SPEND_LIMITS);
+
+    await service.generateForPeriod({
+      businessId: BUSINESS_A,
+      periodType: 'weekly',
+      periodStart,
+      periodEnd,
+      onExisting: 'append',
+    });
+
+    expect(generator.generate).toHaveBeenCalledOnce();
+    expect(repos.feedbackSummaries.create).toHaveBeenCalledOnce();
+  });
+
+  it('generates normally when nothing is stored for the period', async () => {
+    // The first, and overwhelmingly most common, run. Guards against a
+    // guard that fires when it should not.
+    const repos = createFakeRepos({ items: [], business: BUSINESS });
+    const generator = fakeGenerator();
+    const service = new SummaryService(repos, generator, TEST_MODEL, PERMISSIVE_SPEND_LIMITS);
+
+    await service.generateForPeriod({ businessId: BUSINESS_A, periodType: 'weekly', periodStart, periodEnd });
+
+    expect(generator.generate).toHaveBeenCalledOnce();
+    expect(repos.feedbackSummaries.create).toHaveBeenCalledOnce();
+  });
+
+  it('404s for an unknown business before consulting the guard', async () => {
+    // Existence checks stay first, so BUSINESS_NOT_FOUND / BRANCH_NOT_FOUND
+    // semantics are exactly as before this change.
+    const repos = createFakeRepos({ items: [], business: undefined as unknown as Business, existingSummary: existing });
+    const service = new SummaryService(repos, fakeGenerator(), TEST_MODEL, PERMISSIVE_SPEND_LIMITS);
+
+    await expect(
+      service.generateForPeriod({ businessId: BUSINESS_A, periodType: 'weekly', periodStart, periodEnd }),
+    ).rejects.toThrow(/not found/i);
+
+    expect(repos.feedbackSummaries.findLatestForPeriod).not.toHaveBeenCalled();
   });
 });
