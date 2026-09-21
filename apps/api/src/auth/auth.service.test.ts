@@ -487,6 +487,97 @@ describe('AuthService', () => {
     ).resolves.toMatchObject({ accessToken: expect.any(String) });
   });
 
+  /** Block 1K: a full happy-path regression check covering BOTH cleanup
+   * effects together, not just refresh revocation -- the existing test
+   * above never had a reset token in flight to invalidate. */
+  it('changePassword invalidates outstanding reset tokens AND revokes sessions when both succeed', async () => {
+    const { rawToken } = await signupAndRequestReset('bothok@example.com');
+    const live = await service.login({
+      email: 'bothok@example.com',
+      password: 'original-password-1',
+    });
+    const user = await repos.users.findByEmail('bothok@example.com');
+
+    await service.changePassword({
+      userId: user!.id,
+      currentPassword: 'original-password-1',
+      newPassword: 'brand-new-password-1',
+    });
+
+    await expect(
+      service.resetPassword({ token: rawToken, newPassword: 'irrelevant-password-1' }),
+    ).rejects.toMatchObject({ code: 'INVALID_RESET_TOKEN' });
+    await expect(service.refresh(live.refreshToken)).rejects.toMatchObject({
+      code: 'INVALID_REFRESH_TOKEN',
+    });
+  });
+
+  /**
+   * Block 1K security-invariant test: once the password itself has changed,
+   * a failure in the (comparatively low-stakes) reset-token cleanup step
+   * must not be able to prevent the security-critical one -- session
+   * revocation -- from having already happened. This is the exact
+   * production failure shape the Block 1 investigation traced (an
+   * invalidateAllForUser() failure silently leaving refresh_tokens
+   * untouched), reproduced here without a database.
+   */
+  it('still revokes every session even when password-reset-token invalidation fails', async () => {
+    await service.signup({
+      email: 'resetfail@example.com',
+      password: 'original-password-1',
+      fullName: 'C',
+    });
+    const live = await service.login({
+      email: 'resetfail@example.com',
+      password: 'original-password-1',
+    });
+    const user = await repos.users.findByEmail('resetfail@example.com');
+
+    repos.passwordResetTokens.invalidateAllForUser = async () => {
+      throw new Error('password_reset_tokens unavailable');
+    };
+
+    // The failure still surfaces -- this does not silently succeed -- but
+    // by the time it rejects, revocation must already have happened.
+    await expect(
+      service.changePassword({
+        userId: user!.id,
+        currentPassword: 'original-password-1',
+        newPassword: 'brand-new-password-1',
+      }),
+    ).rejects.toThrow('password_reset_tokens unavailable');
+
+    await expect(service.refresh(live.refreshToken)).rejects.toMatchObject({
+      code: 'INVALID_REFRESH_TOKEN',
+    });
+  });
+
+  /** The mirror case: a failure in the security-critical step itself must
+   * still be surfaced as a failure, never swallowed into a false "success"
+   * that would leave the caller believing sessions were revoked when they
+   * were not. */
+  it('surfaces a failure in refresh-token revocation rather than reporting false success', async () => {
+    await service.signup({
+      email: 'revokefail@example.com',
+      password: 'original-password-1',
+      fullName: 'C',
+    });
+    await service.login({ email: 'revokefail@example.com', password: 'original-password-1' });
+    const user = await repos.users.findByEmail('revokefail@example.com');
+
+    repos.refreshTokens.revokeAllForUser = async () => {
+      throw new Error('refresh_tokens unavailable');
+    };
+
+    await expect(
+      service.changePassword({
+        userId: user!.id,
+        currentPassword: 'original-password-1',
+        newPassword: 'brand-new-password-1',
+      }),
+    ).rejects.toThrow('refresh_tokens unavailable');
+  });
+
   /** A confirmation-email outage must not undo a password the user has
    * already successfully changed -- the deliberate asymmetry with
    * requestPasswordReset, where a send failure does surface. */

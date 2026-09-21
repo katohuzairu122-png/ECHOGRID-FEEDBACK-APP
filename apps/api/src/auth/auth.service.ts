@@ -318,7 +318,19 @@ export class AuthService {
    *
    * Revoking every session is the point: without it, an attacker who already
    * has a refresh token keeps renewing access for up to 30 days after the
-   * victim "fixed" their account, and the reset accomplishes nothing.
+   * victim "fixed" their account, and the reset accomplishes nothing. That
+   * makes revokeAllForUser() the one security-critical step here -- it runs
+   * FIRST, deliberately, not because it's more "important" in a general
+   * sense but because the invariant this function exists to uphold
+   * ("once the password itself has changed, no existing session survives")
+   * must hold even if something else below it fails. Cancelling outstanding
+   * password-reset links is real cleanup, worth doing and worth failing
+   * loudly if it can't be done, but a failure there must never be able to
+   * take revocation down with it -- which is exactly what happened when
+   * this ran in the other order (see the Block 1 production investigation).
+   * This is a reorder, not a try/catch: a genuine failure in either step
+   * still propagates to the caller same as before, it just can no longer
+   * prevent the other one from having already happened.
    *
    * The confirmation email is best-effort -- a Resend outage must not undo a
    * password the user has already successfully changed, which is why this
@@ -333,8 +345,8 @@ export class AuthService {
     email: string,
     emailService: EmailService,
   ): Promise<void> {
-    await this.repos.passwordResetTokens.invalidateAllForUser(userId);
     await this.repos.refreshTokens.revokeAllForUser(userId);
+    await this.repos.passwordResetTokens.invalidateAllForUser(userId);
 
     const { subject, html } = renderPasswordChangedEmail(fullName);
     try {
