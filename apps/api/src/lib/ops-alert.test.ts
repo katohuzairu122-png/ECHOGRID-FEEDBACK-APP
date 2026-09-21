@@ -1,5 +1,39 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { notifyOps, alertOnFailure, OPS_ALERT_SERVICE } from './ops-alert';
+import { notifyOps, alertOnFailure, extractSafeDiagnostics, OPS_ALERT_SERVICE } from './ops-alert';
+
+/**
+ * Mimics node-postgres's DatabaseError shape without pulling in `pg` --
+ * own enumerable string properties, no getters, matching what
+ * pg-protocol's parser.js actually assigns (Block 1B investigation).
+ */
+class FakeDatabaseError extends Error {
+  code?: string;
+  detail?: string;
+  hint?: string;
+  constraint?: string;
+  schema?: string;
+  table?: string;
+  column?: string;
+  constructor(message: string, fields: Partial<FakeDatabaseError> = {}) {
+    super(message);
+    this.name = 'error';
+    Object.assign(this, fields);
+  }
+}
+
+/** Mimics drizzle-orm's DrizzleQueryError (drizzle-orm/errors.js): its own
+ * `.message` embeds the query AND bound parameter values, and the real
+ * driver error rides on `.cause`. */
+class FakeDrizzleQueryError extends Error {
+  query: string;
+  params: unknown;
+  constructor(query: string, params: unknown, cause: unknown) {
+    super(`Failed query: ${query}\nparams: ${params}`);
+    this.query = query;
+    this.params = params;
+    this.cause = cause;
+  }
+}
 
 /**
  * The properties that make this path safe to call from inside a failure
@@ -10,6 +44,115 @@ import { notifyOps, alertOnFailure, OPS_ALERT_SERVICE } from './ops-alert';
  * them wrong turns one incident into two -- a cron sweep that failed, plus
  * an unhandled rejection from the code reporting it.
  */
+describe('extractSafeDiagnostics', () => {
+  it('returns undefined for a normal Error with no cause', () => {
+    // The common case -- most throws in this codebase are plain Errors.
+    // Nothing to add beyond the message the caller already logs separately.
+    expect(extractSafeDiagnostics(new Error('database unreachable'))).toBeUndefined();
+  });
+
+  it('returns undefined for a non-Error throw', () => {
+    expect(extractSafeDiagnostics('a bare string')).toBeUndefined();
+    expect(extractSafeDiagnostics({ code: '23505' })).toBeUndefined();
+  });
+
+  it('extracts name and message from a plain Error cause', () => {
+    const err = new Error('outer wrapper', { cause: new Error('inner reason') });
+    expect(extractSafeDiagnostics(err)).toEqual({ name: 'Error', message: 'inner reason' });
+  });
+
+  it('extracts SQLSTATE/constraint/schema/table from a database-like cause', () => {
+    // The exact shape Block 1B found: DrizzleQueryError wrapping the real
+    // driver error on .cause.
+    const dbError = new FakeDatabaseError('duplicate key value violates unique constraint "ai_usage_log_pkey"', {
+      code: '23505',
+      detail: 'Key (id)=(1) already exists.',
+      constraint: 'ai_usage_log_pkey',
+      schema: 'public',
+      table: 'ai_usage_log',
+    });
+    const wrapped = new FakeDrizzleQueryError(
+      'update "ai_usage_log" set "status" = $1 where "status" = $2',
+      'abandoned,pending',
+      dbError,
+    );
+
+    expect(extractSafeDiagnostics(wrapped)).toEqual({
+      name: 'error',
+      message: 'duplicate key value violates unique constraint "ai_usage_log_pkey"',
+      code: '23505',
+      constraint: 'ai_usage_log_pkey',
+      schema: 'public',
+      table: 'ai_usage_log',
+      // detail is set on dbError above (deliberately, see the next test) yet
+      // must not appear here: hint/column/detail all omitted -- hint/column
+      // because FakeDatabaseError never set them, detail because it is not
+      // in SAFE_DIAGNOSTIC_KEYS at all, regardless of whether it's present.
+    });
+  });
+
+  it('never emits detail or hint, even when the cause carries real-looking sensitive values', () => {
+    // The user-directed hardening this test locks in: PostgreSQL's own
+    // `detail`/`hint` fields are free text Postgres composes from the
+    // actual row/key data in the failure -- a unique-violation's `detail`
+    // routinely echoes the conflicting value back verbatim. Both fields are
+    // excluded from SAFE_DIAGNOSTIC_KEYS entirely, not filtered by content,
+    // so this holds regardless of what they contain.
+    const dbError = new FakeDatabaseError('duplicate key value violates unique constraint "users_email_key"', {
+      code: '23505',
+      detail: 'Key (email)=(customer@example.com) already exists.',
+      hint: 'Sensitive example value',
+      constraint: 'users_email_key',
+      schema: 'public',
+      table: 'users',
+    });
+    const wrapped = new FakeDrizzleQueryError('insert into "users" ("email") values ($1)', 'customer@example.com', dbError);
+
+    const result = extractSafeDiagnostics(wrapped);
+    expect(result).toEqual({
+      name: 'error',
+      message: 'duplicate key value violates unique constraint "users_email_key"',
+      code: '23505',
+      constraint: 'users_email_key',
+      schema: 'public',
+      table: 'users',
+    });
+    expect(result).not.toHaveProperty('detail');
+    expect(result).not.toHaveProperty('hint');
+    expect(JSON.stringify(result)).not.toContain('customer@example.com');
+    expect(JSON.stringify(result)).not.toContain('Sensitive example value');
+  });
+
+  it('never emits unapproved properties, even when the cause carries them', () => {
+    class SuspiciousCause extends Error {
+      code = '08006';
+      // None of these are in the whitelist and must never appear in output,
+      // however sensitive-looking or ordinary they are.
+      connectionString = 'postgresql://user:hunter2@host/db';
+      authorization = 'Bearer secret-token';
+      stack_override_attempt = 'not real, just checking key-by-key extraction';
+      requestBody = { email: 'customer@example.com' };
+    }
+    const err = new Error('outer', { cause: new SuspiciousCause('connection terminated') });
+
+    const result = extractSafeDiagnostics(err);
+    expect(result).toEqual({ name: 'Error', message: 'connection terminated', code: '08006' });
+    expect(result).not.toHaveProperty('connectionString');
+    expect(result).not.toHaveProperty('authorization');
+    expect(result).not.toHaveProperty('requestBody');
+    expect(JSON.stringify(result)).not.toContain('hunter2');
+    expect(JSON.stringify(result)).not.toContain('secret-token');
+  });
+
+  it('stops at a bounded depth rather than looping on a circular cause chain', () => {
+    const a: Error & { cause?: unknown } = new Error('a');
+    const b: Error & { cause?: unknown } = new Error('b');
+    a.cause = b;
+    b.cause = a; // circular
+    expect(() => extractSafeDiagnostics(a)).not.toThrow();
+  });
+});
+
 describe('notifyOps', () => {
   let consoleError: ReturnType<typeof vi.spyOn>;
   let fetchMock: ReturnType<typeof vi.fn>;
@@ -179,5 +322,43 @@ describe('alertOnFailure', () => {
     });
 
     expect(consoleError.mock.calls[0]?.[1]).toEqual({ error: 'a bare string' });
+  });
+
+  it('strips bound parameter values from a DrizzleQueryError-shaped message, keeping the query text', async () => {
+    // Block 1B: drizzle-orm's own wrapper message is "Failed query:
+    // <sql>\nparams: <values>" -- the values can be anything a query binds,
+    // including customer content. Only the SQL shape should survive.
+    await alertOnFailure(
+      ENV,
+      { event: 'cron.stale_ai_usage_sweep_failed', severity: 'warning', message: 'm' },
+      async () => {
+        throw new FakeDrizzleQueryError(
+          'update "ai_usage_log" set "status" = $1 where "status" = $2',
+          'abandoned,customer@example.com',
+          new FakeDatabaseError('column "status" is of type text but expression is of type integer', {
+            code: '42804',
+          }),
+        );
+      },
+    );
+
+    const detail = consoleError.mock.calls[0]?.[1] as Record<string, unknown>;
+    expect(detail.error).toBe('Failed query: update "ai_usage_log" set "status" = $1 where "status" = $2');
+    expect(JSON.stringify(detail)).not.toContain('customer@example.com');
+    expect(detail.cause).toEqual({
+      name: 'error',
+      message: 'column "status" is of type text but expression is of type integer',
+      code: '42804',
+    });
+  });
+
+  it('includes cause diagnostics only when the thrown error actually has one', async () => {
+    await alertOnFailure(ENV, { event: 'cron.x', severity: 'warning', message: 'm' }, async () => {
+      throw new Error('plain failure, no cause');
+    });
+
+    const detail = consoleError.mock.calls[0]?.[1] as Record<string, unknown>;
+    expect(detail).toEqual({ error: 'plain failure, no cause' });
+    expect(detail).not.toHaveProperty('cause');
   });
 });

@@ -62,6 +62,81 @@ const DELIVERY_TIMEOUT_MS = 3000;
 
 export const OPS_ALERT_SERVICE = 'echo-grid-feedback-api';
 
+/**
+ * Standard PostgreSQL error fields (see node-postgres's DatabaseError /
+ * pg-protocol's parser.js), never anything that could carry a connection
+ * string, a credential, a stack trace, or bound query parameter values.
+ *
+ * Deliberately excludes `detail` and `hint` even though pg-protocol sets
+ * them alongside the fields below: both are free-text diagnostic messages
+ * Postgres composes from the actual row/key data involved in the failure --
+ * a unique-violation's `detail` reads like `Key (email)=(x@example.com)
+ * already exists.`, echoing the real value back. `constraint`/`schema`/
+ * `table`/`column` are identifiers (names defined in this codebase's own
+ * schema files, not user data) and stay in scope; `detail`/`hint` do not,
+ * by explicit decision, not oversight.
+ */
+const SAFE_DIAGNOSTIC_KEYS = ['name', 'message', 'code', 'constraint', 'schema', 'table', 'column'] as const;
+
+export type SafeErrorDiagnostics = Partial<Record<(typeof SAFE_DIAGNOSTIC_KEYS)[number], string>>;
+
+/** Bounded so a pathological/circular `.cause` chain can't loop forever --
+ * in practice drizzle-orm's DrizzleQueryError wraps exactly one level
+ * (the raw driver error), so this is generous headroom, not a tuned limit. */
+const MAX_CAUSE_DEPTH = 5;
+
+/**
+ * Walks an Error's `.cause` chain (Block 1B: this is where drizzle-orm's
+ * DrizzleQueryError keeps the real driver/Postgres error -- its own
+ * `.message` is just "Failed query: <sql>\nparams: <params>", which is what
+ * `alertOnFailure` was logging before this existed) and returns only the
+ * whitelisted, known-safe fields from the deepest cause reached.
+ *
+ * Deliberately starts at `err.cause`, not `err` itself -- the top-level
+ * error's own message is already captured separately by the caller, and a
+ * bare `Error` with no `.cause` (the common case in tests and for
+ * non-database failures) correctly yields `undefined` here rather than a
+ * redundant copy of information already logged.
+ *
+ * Never returns a stack trace or an arbitrary object dump: only the named
+ * fields above, and only when they're actually strings.
+ */
+export function extractSafeDiagnostics(err: unknown): SafeErrorDiagnostics | undefined {
+  if (!(err instanceof Error)) return undefined;
+
+  let current: unknown = err.cause;
+  let found: SafeErrorDiagnostics | undefined;
+
+  for (let depth = 0; depth < MAX_CAUSE_DEPTH && current instanceof Error; depth++) {
+    const diag: SafeErrorDiagnostics = {};
+    for (const key of SAFE_DIAGNOSTIC_KEYS) {
+      const value = (current as unknown as Record<string, unknown>)[key];
+      if (typeof value === 'string' && value.length > 0) {
+        diag[key] = value;
+      }
+    }
+    if (Object.keys(diag).length > 0) found = diag;
+    current = current.cause;
+  }
+
+  return found;
+}
+
+/**
+ * drizzle-orm's DrizzleQueryError embeds the query text AND the actual
+ * bound parameter VALUES in one message string: "Failed query:
+ * <sql>\nparams: <values>" (drizzle-orm/errors.js). The SQL shape is safe
+ * to log (structure, not data); the parameter values are not -- depending
+ * on which query failed, they can be a token hash, an email address, or
+ * feedback content. Strips everything from the params delimiter onward,
+ * leaving the query text intact.
+ */
+const DRIZZLE_PARAMS_SUFFIX = /\nparams:[\s\S]*$/;
+
+function sanitizeErrorMessage(message: string): string {
+  return message.replace(DRIZZLE_PARAMS_SUFFIX, '');
+}
+
 export async function notifyOps(
   env: Pick<Bindings, 'ENVIRONMENT' | 'OPS_ALERT_WEBHOOK_URL'>,
   alert: OpsAlert,
@@ -133,11 +208,13 @@ export async function alertOnFailure<T>(
   try {
     return await work();
   } catch (err) {
+    const cause = extractSafeDiagnostics(err);
     await notifyOps(env, {
       ...alert,
       detail: {
         ...(alert.detail ?? {}),
-        error: err instanceof Error ? err.message : String(err),
+        error: sanitizeErrorMessage(err instanceof Error ? err.message : String(err)),
+        ...(cause ? { cause } : {}),
       },
     });
     return undefined;
