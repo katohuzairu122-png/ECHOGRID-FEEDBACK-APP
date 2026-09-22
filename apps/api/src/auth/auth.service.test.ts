@@ -82,10 +82,10 @@ function createFakeRepos() {
       },
       async rotate(id: string, replacedByTokenId: string) {
         const row = refreshTokens.get(id);
-        if (row) {
-          row.revokedAt = new Date();
-          row.replacedByTokenId = replacedByTokenId;
-        }
+        if (row == null || row.revokedAt != null) return false;
+        row.revokedAt = new Date();
+        row.replacedByTokenId = replacedByTokenId;
+        return true;
       },
       async revoke(id: string) {
         const row = refreshTokens.get(id);
@@ -247,6 +247,37 @@ describe('AuthService', () => {
     await expect(service.refresh(second.refreshToken)).resolves.toMatchObject({
       accessToken: expect.any(String),
     });
+  });
+
+  it('allows only one concurrent rotation of the same refresh token', async () => {
+    const first = await service.signup({
+      email: 'concurrent-refresh@example.com',
+      password: 'password-123',
+      fullName: 'C',
+    });
+
+    const results = await Promise.allSettled([
+      service.refresh(first.refreshToken),
+      service.refresh(first.refreshToken),
+    ]);
+
+    const fulfilled = results.filter((result) => result.status === 'fulfilled');
+    const rejected = results.filter((result) => result.status === 'rejected');
+
+    expect(fulfilled).toHaveLength(1);
+    expect(rejected).toHaveLength(1);
+
+    if (rejected[0]?.status === 'rejected') {
+      expect(rejected[0].reason).toMatchObject({
+        code: 'INVALID_REFRESH_TOKEN',
+      });
+    }
+
+    if (fulfilled[0]?.status === 'fulfilled') {
+      await expect(service.refresh(fulfilled[0].value.refreshToken)).resolves.toMatchObject({
+        accessToken: expect.any(String),
+      });
+    }
   });
 
   it('refresh rejects a valid token once the account is deactivated -- a suspended user cannot keep renewing an existing session', async () => {

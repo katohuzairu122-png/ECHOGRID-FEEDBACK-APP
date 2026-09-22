@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { sign } from 'hono/jwt';
 import { signAccessToken, signRefreshToken, verifyAccessToken, verifyRefreshToken } from './jwt';
 
 const SECRET = 'test-secret-do-not-use-in-production';
@@ -16,6 +17,22 @@ describe('access tokens', () => {
     const token = await signAccessToken('user-123', SECRET);
     await expect(verifyAccessToken(token, OTHER_SECRET)).rejects.toThrow();
   });
+
+  it('rejects an expired access token even when signed with the correct secret', async () => {
+    const now = Math.floor(Date.now() / 1000);
+    const token = await sign(
+      {
+        sub: 'user-123',
+        type: 'access',
+        iat: now - 120,
+        exp: now - 60,
+      },
+      SECRET,
+      'HS256',
+    );
+
+    await expect(verifyAccessToken(token, SECRET)).rejects.toThrow();
+  });
 });
 
 describe('refresh tokens', () => {
@@ -25,6 +42,28 @@ describe('refresh tokens', () => {
     expect(payload.sub).toBe('user-123');
     expect(payload.jti).toBe('token-id-abc');
     expect(payload.type).toBe('refresh');
+  });
+
+  it('rejects a refresh token signed with a different secret', async () => {
+    const { token } = await signRefreshToken('user-123', 'token-id', SECRET);
+    await expect(verifyRefreshToken(token, OTHER_SECRET)).rejects.toThrow();
+  });
+
+  it('rejects an expired refresh token even when signed with the correct secret', async () => {
+    const now = Math.floor(Date.now() / 1000);
+    const token = await sign(
+      {
+        sub: 'user-123',
+        jti: 'expired-token-id',
+        type: 'refresh',
+        iat: now - 120,
+        exp: now - 60,
+      },
+      SECRET,
+      'HS256',
+    );
+
+    await expect(verifyRefreshToken(token, SECRET)).rejects.toThrow();
   });
 
   it('returns an expiresAt roughly 30 days out', async () => {

@@ -181,7 +181,13 @@ export class AuthService {
       stored.userAgent ?? undefined,
       stored.ipAddress ?? undefined,
     );
-    await this.repos.refreshTokens.rotate(stored.id, next.refreshTokenId);
+    const rotated = await this.repos.refreshTokens.rotate(stored.id, next.refreshTokenId);
+    if (rotated === false) {
+      // Another request consumed this refresh token first. The replacement
+      // created above must not remain as a second live session.
+      await this.repos.refreshTokens.revoke(next.refreshTokenId);
+      throw new AuthError('Refresh token is invalid or expired.', 'INVALID_REFRESH_TOKEN');
+    }
     return next;
   }
 

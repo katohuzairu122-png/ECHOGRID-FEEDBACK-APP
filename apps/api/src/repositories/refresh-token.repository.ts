@@ -18,11 +18,13 @@ export class RefreshTokenRepository extends BaseRepository {
 
   /** Marks a token used-and-superseded by the token issued in its place
    * (rotation), rather than a plain revoke, so the chain stays auditable. */
-  async rotate(id: string, replacedByTokenId: string): Promise<void> {
-    await this.db
+  async rotate(id: string, replacedByTokenId: string): Promise<boolean> {
+    const rows = await this.db
       .update(refreshTokens)
       .set({ revokedAt: new Date(), replacedByTokenId })
-      .where(eq(refreshTokens.id, id));
+      .where(and(eq(refreshTokens.id, id), isNull(refreshTokens.revokedAt)))
+      .returning({ id: refreshTokens.id });
+    return rows.length > 0;
   }
 
   async revoke(id: string): Promise<void> {
