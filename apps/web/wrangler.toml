@@ -59,3 +59,24 @@ binding = "ASSETS"
 
 [observability]
 enabled = true
+# =============================================================================
+# STAGING (finish roadmap F1). Deploy with `pnpm run deploy:staging`.
+#
+# Everything above this line is production and is unchanged by adding
+# staging. [vars] are not inherited into an environment, so all four are
+# redeclared below with the same meaning as production's.
+# =============================================================================
+[env.staging]
+name = "echo-grid-feedback-web-staging"
+workers_dev = true
+routes = []
+
+[env.staging.vars]
+API_BASE_URL = "https://echo-grid-feedback-api-staging.katohuzairu122.workers.dev"
+APP_URL = "https://echo-grid-feedback-web-staging.katohuzairu122.workers.dev"
+NODE_ENV = "production"
+NEXT_PRIVATE_MINIMAL_MODE = "1"
+
+[env.staging.assets]
+directory = ".open-next/assets"
+binding = "ASSETS"

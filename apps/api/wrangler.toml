@@ -295,3 +295,112 @@ enabled = true
 
 [dev]
 port = 8787
+
+[env.staging]
+name = "echo-grid-feedback-api-staging"
+workers_dev = true
+routes = []
+
+[env.staging.vars]
+ENVIRONMENT = "staging"
+ANTHROPIC_MODEL = "claude-sonnet-5"
+ANTHROPIC_DAILY_SPEND_LIMIT_USD = "1"
+ANTHROPIC_MONTHLY_SPEND_LIMIT_USD = "10"
+RESEND_FROM_ADDRESS = "Echo Grid Staging <notifications@echo-grid.uk>"
+ALLOWED_ORIGINS = "https://echo-grid-feedback-web-staging.katohuzairu122.workers.dev"
+WEB_BASE_URL = "https://echo-grid-feedback-web-staging.katohuzairu122.workers.dev"
+
+[env.staging.secrets]
+required = [
+  "JWT_ACCESS_SECRET",
+  "JWT_REFRESH_SECRET",
+  "CUSTOMER_JWT_SECRET",
+  "QR_TOKEN_SECRET",
+  "FRAUD_DETECTION_SALT",
+  "TWILIO_ACCOUNT_SID",
+  "TWILIO_AUTH_TOKEN",
+  "TWILIO_FROM_NUMBER",
+  "ANTHROPIC_API_KEY",
+  "RESEND_API_KEY",
+  "STRIPE_SECRET_KEY",
+  "STRIPE_WEBHOOK_SECRET",
+]
+
+[[env.staging.durable_objects.bindings]]
+name = "PASSWORD_HASHER"
+class_name = "PasswordHasherDurableObject"
+
+[[env.staging.hyperdrive]]
+binding = "HYPERDRIVE"
+id = "fdf777957ac54455aca7ecaa1f12f5bf"
+
+[[env.staging.r2_buckets]]
+binding = "UPLOADS"
+bucket_name = "echo-grid-feedback-uploads-staging"
+
+[[env.staging.kv_namespaces]]
+binding = "CACHE"
+id = "7bdbf46be91e4865aa0bc7044b306d78"
+
+[[env.staging.queues.producers]]
+binding = "JOBS"
+queue = "echo-grid-feedback-jobs-staging"
+
+[[env.staging.queues.consumers]]
+queue = "echo-grid-feedback-jobs-staging"
+max_batch_size = 10
+max_retries = 3
+dead_letter_queue = "echo-grid-feedback-jobs-dlq-staging"
+
+[[env.staging.queues.consumers]]
+queue = "echo-grid-feedback-jobs-dlq-staging"
+max_batch_size = 10
+max_retries = 1
+
+[env.staging.ai]
+binding = "AI"
+
+[[env.staging.ratelimits]]
+name = "AUTH_RATE_LIMITER"
+namespace_id = "2001"
+[env.staging.ratelimits.simple]
+limit = 10
+period = 60
+
+[[env.staging.ratelimits]]
+name = "API_RATE_LIMITER"
+namespace_id = "2002"
+[env.staging.ratelimits.simple]
+limit = 300
+period = 60
+
+[[env.staging.ratelimits]]
+name = "PUBLIC_RATE_LIMITER"
+namespace_id = "2003"
+[env.staging.ratelimits.simple]
+limit = 20
+period = 60
+
+[[env.staging.ratelimits]]
+name = "OTP_RATE_LIMITER"
+namespace_id = "2004"
+[env.staging.ratelimits.simple]
+limit = 3
+period = 60
+
+[[env.staging.ratelimits]]
+name = "FOLLOWUP_QUESTION_RATE_LIMITER"
+namespace_id = "2005"
+[env.staging.ratelimits.simple]
+limit = 5
+period = 60
+[env.staging.triggers]
+crons = [
+  "0 0 * * *",
+  "0 0 * * 1",
+  "0 0 1 * *",
+  "*/5 * * * *",
+]
+
+[env.staging.observability]
+enabled = true
