@@ -396,9 +396,6 @@ limit = 5
 period = 60
 [env.staging.triggers]
 crons = [
-  "0 0 * * *",
-  "0 0 * * 1",
-  "0 0 1 * *",
   "*/5 * * * *",
 ]
 
