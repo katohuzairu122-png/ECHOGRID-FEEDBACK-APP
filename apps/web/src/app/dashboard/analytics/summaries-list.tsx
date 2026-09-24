@@ -16,7 +16,7 @@ type Translator = Awaited<ReturnType<typeof getTranslations>>;
  * to re-resolve the same request-scoped formatter once per summary card.
  * `t` (Block 7) follows the same threading reasoning.
  */
-function formatPeriod(summary: FeedbackSummaryDto, format: Formatter, t: Translator): string {
+function formatPeriod(summary: FeedbackSummaryDto, format: Formatter, t: Translator) {
   const start = format.dateTime(new Date(summary.periodStart), 'short');
   const end = format.dateTime(new Date(summary.periodEnd), 'short');
   // Direct key lookup, not a ternary -- periodType's value IS the
@@ -27,7 +27,11 @@ function formatPeriod(summary: FeedbackSummaryDto, format: Formatter, t: Transla
   // as 'monthly', which would have silently mislabeled every daily summary
   // as "Monthly" the moment the daily cadence started producing rows.
   const label = t(summary.periodType);
-  return `${label}: ${start} – ${end}`;
+  return (
+    <>
+      {label}: <bdi dir="ltr">{start}</bdi> – <bdi dir="ltr">{end}</bdi>
+    </>
+  );
 }
 
 interface SummariesListProps {
@@ -58,7 +62,12 @@ export async function SummariesList({ summaries }: SummariesListProps) {
   return (
     <div className="flex flex-col gap-3">
       {summaries.map((summary) => {
-        const recommendations = summary.recommendations
+        // Older fallback rows were persisted before production AI was configured.
+        // Keep the record intact, but never expose internal configuration text.
+        const isDevFallback =
+          summary.summary.startsWith('[DEV MODE]') ||
+          summary.recommendations.startsWith('[DEV MODE]');
+        const recommendations = (isDevFallback ? '' : summary.recommendations)
           .split('\n')
           .map((line) => line.replace(/^[-*\d.\s]+/, '').trim())
           .filter(Boolean);
@@ -74,14 +83,20 @@ export async function SummariesList({ summaries }: SummariesListProps) {
                   <Badge variant="danger">{t('negative', { count: summary.negativeCount })}</Badge>
                 </div>
               </div>
-              <CardDescription>{t('feedbackCount', { count: summary.feedbackCount })}</CardDescription>
+              <CardDescription>
+                {t('feedbackCount', { count: summary.feedbackCount })}
+              </CardDescription>
             </CardHeader>
             <CardContent className="flex flex-col gap-3">
-              <p className="text-sm text-neutral-800">{summary.summary}</p>
+              <p dir="auto" className="text-sm text-neutral-800">
+                {isDevFallback ? t('unavailable') : summary.summary}
+              </p>
               {recommendations.length > 0 && (
-                <ul className="list-disc pl-5 text-sm text-neutral-700">
+                <ul dir="auto" className="list-disc ps-5 text-sm text-neutral-700">
                   {recommendations.map((rec, i) => (
-                    <li key={i}>{rec}</li>
+                    <li dir="auto" key={i}>
+                      {rec}
+                    </li>
                   ))}
                 </ul>
               )}

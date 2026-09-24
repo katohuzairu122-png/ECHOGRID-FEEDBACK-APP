@@ -72,6 +72,20 @@
     "cancelsOn": "Cancels {date}.",
     "renewsOn": "Renews {date}.",
     "plans": {
+      "catalog": {
+        "starter": {
+          "name": "Starter",
+          "description": "For a single location getting started with customer feedback."
+        },
+        "growth": {
+          "name": "Growth",
+          "description": "For multi-location businesses that need AI-powered insights."
+        },
+        "enterprise": {
+          "name": "Enterprise",
+          "description": "Unlimited branches and team members, with custom branding."
+        }
+      },
       "currentPlan": "Current plan",
       "perMonth": "mo",
       "unlimitedBranches": "Unlimited branches",
@@ -79,7 +93,7 @@
       "unlimitedUsers": "Unlimited team members",
       "limitedUsers": "Up to {count} team {count, plural, one {member} other {members}}",
       "subscribeMonthly": "Subscribe monthly",
-      "subscribeYearly": "Subscribe yearly ({price})",
+      "subscribeYearly": "Subscribe yearly",
       "starting": "Starting…"
     }
   }

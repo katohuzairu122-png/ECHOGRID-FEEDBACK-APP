@@ -35,6 +35,18 @@ describe('loadMessages', () => {
     }
   });
 
+  it.each(SUPPORTED_LOCALES)('includes analytics and billing display keys for "%s"', async (locale) => {
+    const messages = await loadMessages(locale);
+    for (const key of ['empty', 'ariaLabel', 'positive', 'neutral', 'negative']) {
+      expect(messages.analytics).toHaveProperty(`page.chart.${key}`);
+    }
+    expect(messages.analytics).toHaveProperty('summariesList.unavailable');
+    for (const key of ['starter', 'growth', 'enterprise']) {
+      expect(messages.dashboard).toHaveProperty(`billing.plans.catalog.${key}.name`);
+      expect(messages.dashboard).toHaveProperty(`billing.plans.catalog.${key}.description`);
+    }
+  });
+
   it('returns no namespaces beyond the expected set', async () => {
     const messages = await loadMessages(SUPPORTED_LOCALES[0]);
     expect(Object.keys(messages).sort()).toEqual([...EXPECTED_NAMESPACES].sort());

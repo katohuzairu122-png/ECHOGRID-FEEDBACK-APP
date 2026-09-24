@@ -5,7 +5,14 @@
     "trendTitle": "Tendance de sentiment",
     "trendDescription": "30 derniers jours, jour par jour",
     "summariesTitle": "Résumés IA",
-    "summariesDescription": "Résumés générés automatiquement avec des recommandations concrètes"
+    "summariesDescription": "Résumés générés automatiquement avec des recommandations concrètes",
+    "chart": {
+      "empty": "Aucune donnée pour cette période pour le moment.",
+      "ariaLabel": "Évolution des sentiments dans le temps",
+      "positive": "Positif",
+      "neutral": "Neutre",
+      "negative": "Négatif"
+    }
   },
   "branchFilter": {
     "ariaLabel": "Filtrer par succursale",
@@ -23,6 +30,7 @@
   },
   "summariesList": {
     "empty": "Aucun résumé IA pour le moment. Générez-en un ci-dessus une fois qu'il y a des avis à résumer.",
+    "unavailable": "Aucune analyse IA n'est disponible pour cette période.",
     "daily": "Quotidien",
     "weekly": "Hebdomadaire",
     "monthly": "Mensuel",

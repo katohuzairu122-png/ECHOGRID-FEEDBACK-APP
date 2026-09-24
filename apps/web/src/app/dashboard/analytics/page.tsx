@@ -60,7 +60,11 @@ export default async function AnalyticsPage({ searchParams }: AnalyticsPageProps
         </div>
         <div className="flex items-center gap-4">
           <Link
-            href={branchId ? `/dashboard/analytics/search?branchId=${branchId}` : '/dashboard/analytics/search'}
+            href={
+              branchId
+                ? `/dashboard/analytics/search?branchId=${branchId}`
+                : '/dashboard/analytics/search'
+            }
             className="text-sm font-medium text-brand-700 hover:underline"
           >
             {t('searchFeedback')}
@@ -75,7 +79,16 @@ export default async function AnalyticsPage({ searchParams }: AnalyticsPageProps
           <CardDescription>{t('trendDescription')}</CardDescription>
         </CardHeader>
         <CardContent>
-          <SentimentTrendChart points={trend} />
+          <SentimentTrendChart
+            points={trend}
+            labels={{
+              empty: t('chart.empty'),
+              ariaLabel: t('chart.ariaLabel'),
+              positive: t('chart.positive'),
+              neutral: t('chart.neutral'),
+              negative: t('chart.negative'),
+            }}
+          />
         </CardContent>
       </Card>
 

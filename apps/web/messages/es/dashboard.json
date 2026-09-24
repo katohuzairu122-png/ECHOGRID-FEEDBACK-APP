@@ -72,6 +72,20 @@
     "cancelsOn": "Se cancela el {date}.",
     "renewsOn": "Se renueva el {date}.",
     "plans": {
+      "catalog": {
+        "starter": {
+          "name": "Inicio",
+          "description": "Para un único local que comienza a recoger opiniones de sus clientes."
+        },
+        "growth": {
+          "name": "Crecimiento",
+          "description": "Para negocios con varias ubicaciones que necesitan información impulsada por IA."
+        },
+        "enterprise": {
+          "name": "Empresa",
+          "description": "Sucursales y miembros del equipo ilimitados, con marca personalizada."
+        }
+      },
       "currentPlan": "Plan actual",
       "perMonth": "mes",
       "unlimitedBranches": "Sucursales ilimitadas",
@@ -79,7 +93,7 @@
       "unlimitedUsers": "Miembros del equipo ilimitados",
       "limitedUsers": "Hasta {count} {count, plural, one {miembro} other {miembros}} del equipo",
       "subscribeMonthly": "Suscribirse mensualmente",
-      "subscribeYearly": "Suscribirse anualmente ({price})",
+      "subscribeYearly": "Suscribirse anualmente",
       "starting": "Iniciando…"
     }
   }

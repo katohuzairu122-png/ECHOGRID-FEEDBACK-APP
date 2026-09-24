@@ -1,3 +1,5 @@
+import type { Locale } from '@echo-grid-feedback/shared-types';
+
 /** Shared shape for both categoryBreakdown and urgencyBreakdown below --
  * the two are structurally identical (a label plus a count), so one type
  * covers both rather than two near-duplicate interfaces (S4 roadmap
@@ -52,6 +54,7 @@ export interface LoyaltyActivitySummary {
 }
 
 export interface SummaryGenerationInput {
+  locale: Locale;
   businessName: string;
   branchName?: string | undefined;
   periodLabel: string;
@@ -127,8 +130,9 @@ export interface SummaryGenerator {
  * roadmap Block 4 (category/urgency breakdowns + period-over-period
  * comparison added to the prompt body); bumped to v3 for Block 5
  * (critical incident/fraud signal/loyalty activity cross-domain content
- * added to the prompt body). */
-export const PROMPT_VERSION = 'summary-v3';
+ * added to the prompt body); bumped to v4 when the business locale became
+ * an explicit output-language instruction. */
+export const PROMPT_VERSION = 'summary-v4';
 
 /**
  * Per-million-token USD pricing for models this codebase might set
@@ -164,6 +168,18 @@ export function calculateCostUsd(model: string, inputTokens: number, outputToken
 
 const SUMMARY_MARKER = 'SUMMARY:';
 const RECOMMENDATIONS_MARKER = 'RECOMMENDATIONS:';
+const OUTPUT_LANGUAGE: Record<Locale, string> = {
+  en: 'English',
+  es: 'Spanish',
+  fr: 'French',
+  ar: 'Modern Standard Arabic',
+};
+const PARSE_FAILURE_MESSAGE: Record<Locale, string> = {
+  en: '(The AI response could not be parsed into recommendations. See summary above.)',
+  es: '(No se pudieron separar las recomendaciones de la respuesta. Consulta el resumen anterior.)',
+  fr: '(Les recommandations n’ont pas pu être extraites de la réponse. Voir le résumé ci-dessus.)',
+  ar: '(تعذّر فصل التوصيات عن استجابة الذكاء الاصطناعي. راجع الملخص أعلاه.)',
+};
 
 /**
  * Plain-text section markers instead of a JSON response format -- a stray
@@ -185,7 +201,9 @@ function formatCounts(items: LabeledCount[]): string {
  * function with no side effects; AnthropicSummaryGenerator.generate is the
  * only real caller. */
 export function buildPrompt(input: SummaryGenerationInput): string {
-  const scope = input.branchName ? `${input.businessName} (${input.branchName} branch)` : input.businessName;
+  const scope = input.branchName
+    ? `${input.businessName} (${input.branchName} branch)`
+    : input.businessName;
   const commentBlock =
     input.comments.length > 0
       ? input.comments.map((c, i) => `${i + 1}. "${c}"`).join('\n')
@@ -236,6 +254,7 @@ export function buildPrompt(input: SummaryGenerationInput): string {
     'Customer comments this period:',
     commentBlock,
     '',
+    `Write the summary and each recommendation in ${OUTPUT_LANGUAGE[input.locale]}, regardless of the language of the source data. Preserve business names and customer quotes verbatim. Keep the exact English section markers SUMMARY: and RECOMMENDATIONS: so the response can be parsed.`,
     'Write a concise, factual summary of what customers are saying (2-4 sentences, no speculation beyond what the comments support), followed by 2-5 specific, actionable recommendations for the business owner. Use the category, urgency, and previous-period figures above to note meaningful patterns or changes when relevant -- do not force a comparison the data does not support (e.g. a small sample or a brand-new period with nothing prior). If there are unacknowledged critical incidents or notable fraud activity this period, call them out explicitly as urgent operational items rather than folding them quietly into the general summary.',
     'Respond in exactly this format, with no other text:',
     `${SUMMARY_MARKER} <summary prose>`,
@@ -247,7 +266,10 @@ export function buildPrompt(input: SummaryGenerationInput): string {
  * text output, so it has no place in this function's return value (the
  * caller, AnthropicSummaryGenerator.generate, assembles the full
  * SummaryGenerationResult separately once it also has data.usage in hand). */
-function parseModelOutput(text: string): Pick<SummaryGenerationResult, 'summary' | 'recommendations'> {
+function parseModelOutput(
+  text: string,
+  locale: Locale,
+): Pick<SummaryGenerationResult, 'summary' | 'recommendations'> {
   const recIndex = text.indexOf(RECOMMENDATIONS_MARKER);
   const summaryIndex = text.indexOf(SUMMARY_MARKER);
 
@@ -258,7 +280,7 @@ function parseModelOutput(text: string): Pick<SummaryGenerationResult, 'summary'
     // might mistake for "no recommendations."
     return {
       summary: text.trim(),
-      recommendations: '(The AI response could not be parsed into recommendations. See summary above.)',
+      recommendations: PARSE_FAILURE_MESSAGE[locale],
     };
   }
 
@@ -310,7 +332,7 @@ export class AnthropicSummaryGenerator implements SummaryGenerator {
       throw new Error('Anthropic API returned no usage data.');
     }
 
-    const { summary, recommendations } = parseModelOutput(text);
+    const { summary, recommendations } = parseModelOutput(text, input.locale);
     const { input_tokens: inputTokens, output_tokens: outputTokens } = data.usage;
 
     return {
@@ -336,10 +358,17 @@ export class ConsoleSummaryGenerator implements SummaryGenerator {
     );
     return {
       summary: `[DEV MODE] ${input.feedbackCount} submissions this period (${input.positiveCount} positive, ${input.neutralCount} neutral, ${input.negativeCount} negative). Real AI summaries are generated only when ANTHROPIC_API_KEY is configured in production.`,
-      recommendations: '[DEV MODE] Configure ANTHROPIC_API_KEY in production to see real recommendations.',
+      recommendations:
+        '[DEV MODE] Configure ANTHROPIC_API_KEY in production to see real recommendations.',
       // Real, honest zeros -- this path never calls the real API, so it
       // genuinely costs nothing (see SummaryGenerationUsage's doc comment).
-      usage: { model: 'console-dev-fallback', promptVersion: PROMPT_VERSION, inputTokens: 0, outputTokens: 0, costEstimateUsd: 0 },
+      usage: {
+        model: 'console-dev-fallback',
+        promptVersion: PROMPT_VERSION,
+        inputTokens: 0,
+        outputTokens: 0,
+        costEstimateUsd: 0,
+      },
     };
   }
 }
