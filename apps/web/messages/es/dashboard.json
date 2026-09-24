@@ -38,7 +38,15 @@
     "timezoneHint": "Nombre de zona horaria IANA.",
     "submit": "Guardar configuración",
     "submitPending": "Guardando…",
-    "success": "Configuración guardada."
+    "success": "Configuración guardada.",
+    "securityTitle": "Seguridad",
+    "securityDescription": "Cambia la contraseña de tu cuenta. Se cerrará tu sesión en todos los dispositivos después del cambio.",
+    "currentPasswordLabel": "Contraseña actual",
+    "newPasswordLabel": "Nueva contraseña",
+    "confirmPasswordLabel": "Confirmar nueva contraseña",
+    "passwordHint": "Usa al menos 12 caracteres.",
+    "changePasswordSubmit": "Cambiar contraseña",
+    "changePasswordPending": "Cambiando…"
   },
   "impersonationBanner": {
     "label": "Suplantación activa —",

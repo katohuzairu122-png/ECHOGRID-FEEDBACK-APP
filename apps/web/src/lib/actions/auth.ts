@@ -2,7 +2,7 @@
 
 import { redirect } from 'next/navigation';
 import { setSession, getRefreshToken, clearSession } from '@/lib/session';
-import { API_BASE_URL } from '@/lib/api-client';
+import { API_BASE_URL, apiFetch, ApiError } from '@/lib/api-client';
 
 export interface AuthActionState {
   error?: string;
@@ -109,7 +109,10 @@ async function callEmptyBodyAuthEndpoint(
   const result = (await response.json().catch(() => null)) as {
     error?: { message?: string };
   } | null;
-  return { error: result?.error?.message ?? 'Something went wrong. Please try again.' };
+
+  return {
+    error: result?.error?.message ?? 'Something went wrong. Please try again.',
+  };
 }
 
 /**
@@ -130,7 +133,10 @@ export async function requestPasswordResetAction(
 ): Promise<PasswordResetActionState> {
   const email = String(formData.get('email') ?? '');
 
-  const result = await callEmptyBodyAuthEndpoint('password-reset/request', { email });
+  const result = await callEmptyBodyAuthEndpoint('password-reset/request', {
+    email,
+  });
+
   if (result.error) return { error: result.error };
 
   return { submitted: true };
@@ -164,9 +170,67 @@ export async function resetPasswordAction(
     token,
     newPassword,
   });
+
   if (result.error) return { error: result.error };
 
   return { success: true };
+}
+
+/**
+ * Changes the password for the currently authenticated user.
+ *
+ * Unlike password recovery, this endpoint requires the current authenticated
+ * session, so it must go through apiFetch() rather than the unauthenticated
+ * callEmptyBodyAuthEndpoint() helper. apiFetch() attaches the access token
+ * and performs the repository's normal refresh/retry handling.
+ *
+ * A successful password change revokes every refresh session in the API.
+ * Once the API confirms success, the local cookies are therefore cleared as
+ * well and the user is sent back to login. Failed password-change attempts
+ * deliberately leave the current session untouched.
+ */
+export interface ChangePasswordActionState {
+  error?: string;
+}
+
+export async function changePasswordAction(
+  _prevState: ChangePasswordActionState,
+  formData: FormData,
+): Promise<ChangePasswordActionState> {
+  const currentPassword = String(formData.get('currentPassword') ?? '');
+  const newPassword = String(formData.get('newPassword') ?? '');
+  const confirmPassword = String(formData.get('confirmPassword') ?? '');
+
+  // Server-side validation is required even though the eventual form also
+  // performs this check in the browser: Server Actions can be invoked
+  // without rendering the client component first.
+  if (newPassword !== confirmPassword) {
+    return { error: 'Passwords do not match.' };
+  }
+
+  try {
+    await apiFetch<void>('/auth/password/change', {
+      method: 'POST',
+      body: JSON.stringify({
+        currentPassword,
+        newPassword,
+      }),
+    });
+  } catch (err) {
+    if (err instanceof ApiError) {
+      return { error: err.message };
+    }
+
+    return {
+      error: 'Something went wrong. Please try again.',
+    };
+  }
+
+  // The API has now changed the password and revoked every refresh session.
+  // Clear the corresponding local cookies so the browser cannot retain a
+  // stale session that can no longer be refreshed.
+  await clearSession();
+  redirect('/login');
 }
 
 /**
@@ -176,6 +240,7 @@ export async function resetPasswordAction(
  */
 export async function logoutAction(): Promise<void> {
   const refreshToken = await getRefreshToken();
+
   if (refreshToken) {
     await fetch(`${API_BASE_URL}/api/v1/auth/logout`, {
       method: 'POST',
@@ -183,6 +248,7 @@ export async function logoutAction(): Promise<void> {
       body: JSON.stringify({ refreshToken }),
     }).catch(() => null);
   }
+
   await clearSession();
   redirect('/login');
 }

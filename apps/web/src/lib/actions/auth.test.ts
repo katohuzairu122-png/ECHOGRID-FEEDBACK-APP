@@ -4,10 +4,12 @@ const {
   getRefreshTokenMock,
   clearSessionMock,
   redirectMock,
+  apiFetchMock,
 } = vi.hoisted(() => ({
   getRefreshTokenMock: vi.fn(),
   clearSessionMock: vi.fn(),
   redirectMock: vi.fn(),
+  apiFetchMock: vi.fn(),
 }));
 
 vi.mock('@/lib/session', () => ({
@@ -20,11 +22,29 @@ vi.mock('next/navigation', () => ({
   redirect: redirectMock,
 }));
 
-vi.mock('@/lib/api-client', () => ({
-  API_BASE_URL: 'https://api.example.test',
-}));
+vi.mock('@/lib/api-client', () => {
+  class MockApiError extends Error {
+    status: number;
+    code: string | undefined;
 
+    constructor(message: string, status: number, code?: string) {
+      super(message);
+      this.name = 'ApiError';
+      this.status = status;
+      this.code = code;
+    }
+  }
+
+  return {
+    API_BASE_URL: 'https://api.example.test',
+    apiFetch: apiFetchMock,
+    ApiError: MockApiError,
+  };
+});
+
+import { ApiError } from '@/lib/api-client';
 import {
+  changePasswordAction,
   logoutAction,
   requestPasswordResetAction,
   resetPasswordAction,
@@ -159,5 +179,84 @@ describe('password recovery actions', () => {
     ).resolves.toEqual({
       error: 'This reset link is invalid or has expired.',
     });
+  });
+});
+
+describe('changePasswordAction', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('rejects mismatched new passwords before calling the API', async () => {
+    const formData = new FormData();
+    formData.set('currentPassword', 'current-password-123');
+    formData.set('newPassword', 'new-password-123');
+    formData.set('confirmPassword', 'different-password-123');
+
+    await expect(
+      changePasswordAction({}, formData),
+    ).resolves.toEqual({
+      error: 'Passwords do not match.',
+    });
+
+    expect(apiFetchMock).not.toHaveBeenCalled();
+    expect(clearSessionMock).not.toHaveBeenCalled();
+    expect(redirectMock).not.toHaveBeenCalled();
+  });
+
+  it('sends the current and new passwords to the authenticated API endpoint', async () => {
+    apiFetchMock.mockResolvedValue(undefined);
+
+    const formData = new FormData();
+    formData.set('currentPassword', 'current-password-123');
+    formData.set('newPassword', 'brand-new-password-123');
+    formData.set('confirmPassword', 'brand-new-password-123');
+
+    await changePasswordAction({}, formData);
+
+    expect(apiFetchMock).toHaveBeenCalledWith(
+      '/auth/password/change',
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          currentPassword: 'current-password-123',
+          newPassword: 'brand-new-password-123',
+        }),
+      },
+    );
+  });
+
+  it('clears the local session and redirects to login after a successful password change', async () => {
+    apiFetchMock.mockResolvedValue(undefined);
+
+    const formData = new FormData();
+    formData.set('currentPassword', 'current-password-123');
+    formData.set('newPassword', 'brand-new-password-123');
+    formData.set('confirmPassword', 'brand-new-password-123');
+
+    await changePasswordAction({}, formData);
+
+    expect(clearSessionMock).toHaveBeenCalledOnce();
+    expect(redirectMock).toHaveBeenCalledWith('/login');
+  });
+
+  it('surfaces an API error without clearing the existing session', async () => {
+    apiFetchMock.mockRejectedValue(
+      new ApiError('Current password is incorrect.', 401, 'INVALID_CREDENTIALS'),
+    );
+
+    const formData = new FormData();
+    formData.set('currentPassword', 'wrong-current-password');
+    formData.set('newPassword', 'brand-new-password-123');
+    formData.set('confirmPassword', 'brand-new-password-123');
+
+    await expect(
+      changePasswordAction({}, formData),
+    ).resolves.toEqual({
+      error: 'Current password is incorrect.',
+    });
+
+    expect(clearSessionMock).not.toHaveBeenCalled();
+    expect(redirectMock).not.toHaveBeenCalled();
   });
 });

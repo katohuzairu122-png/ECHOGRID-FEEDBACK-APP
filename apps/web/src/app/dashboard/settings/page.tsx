@@ -3,6 +3,7 @@ import { getTranslations } from 'next-intl/server';
 import { getActiveBusiness } from '@/lib/business';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui';
 import { SettingsForm } from './settings-form';
+import { ChangePasswordForm } from './change-password-form';
 
 /**
  * Business settings -- name and locale/currency/timezone defaults (i18n &
@@ -32,6 +33,16 @@ export default async function BusinessSettingsPage() {
         </CardHeader>
         <CardContent>
           <SettingsForm business={business} />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>{t('securityTitle')}</CardTitle>
+          <CardDescription>{t('securityDescription')}</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <ChangePasswordForm />
         </CardContent>
       </Card>
     </div>

@@ -38,7 +38,15 @@
     "timezoneHint": "IANA timezone name.",
     "submit": "Save settings",
     "submitPending": "Saving…",
-    "success": "Settings saved."
+    "success": "Settings saved.",
+    "securityTitle": "Security",
+    "securityDescription": "Change your account password. You will be signed out on every device after the change.",
+    "currentPasswordLabel": "Current password",
+    "newPasswordLabel": "New password",
+    "confirmPasswordLabel": "Confirm new password",
+    "passwordHint": "Use at least 12 characters.",
+    "changePasswordSubmit": "Change password",
+    "changePasswordPending": "Changing…"
   },
   "impersonationBanner": {
     "label": "Impersonating —",

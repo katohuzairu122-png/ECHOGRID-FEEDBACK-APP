@@ -38,7 +38,15 @@
     "timezoneHint": "Nom de fuseau horaire IANA.",
     "submit": "Enregistrer les paramètres",
     "submitPending": "Enregistrement…",
-    "success": "Paramètres enregistrés."
+    "success": "Paramètres enregistrés.",
+    "securityTitle": "Sécurité",
+    "securityDescription": "Modifiez le mot de passe de votre compte. Vous serez déconnecté de tous les appareils après la modification.",
+    "currentPasswordLabel": "Mot de passe actuel",
+    "newPasswordLabel": "Nouveau mot de passe",
+    "confirmPasswordLabel": "Confirmer le nouveau mot de passe",
+    "passwordHint": "Utilisez au moins 12 caractères.",
+    "changePasswordSubmit": "Modifier le mot de passe",
+    "changePasswordPending": "Modification…"
   },
   "impersonationBanner": {
     "label": "Emprunt d'identité —",
