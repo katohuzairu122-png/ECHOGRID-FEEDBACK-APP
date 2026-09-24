@@ -1,0 +1,183 @@
+{
+  "nav": {
+    "brand": "إدارة المنصة",
+    "directory": "الدليل",
+    "auditLog": "سجل التدقيق",
+    "billing": "الفوترة",
+    "backToDashboard": "العودة إلى لوحة التحكم",
+    "logout": "تسجيل الخروج",
+    "roleLabels": {
+      "support": "الدعم",
+      "billing": "الفوترة",
+      "admin": "المسؤول"
+    }
+  },
+  "accessDenied": {
+    "title": "يلزم الوصول كمسؤول للمنصة",
+    "description": "لا يملك حسابك صلاحية الوصول إلى لوحة إدارة المنصة.",
+    "backToDashboard": "العودة إلى لوحة التحكم"
+  },
+  "home": {
+    "title": "نظرة عامة على المنصة",
+    "description": "أدوات مشتركة بين الأنشطة التجارية للدعم والفوترة وإدارة المنصة.",
+    "recentBusinessesTitle": "الأنشطة التجارية المنشأة مؤخرًا",
+    "recentBusinessesDescription": "أحدث 5 أنشطة تجارية تم إنشاؤها على المنصة.",
+    "empty": "لا توجد أنشطة تجارية بعد.",
+    "statusLabels": {
+      "active": "نشط",
+      "suspended": "معلّق",
+      "archived": "مؤرشف"
+    }
+  },
+  "businesses": {
+    "title": "دليل الأنشطة التجارية",
+    "description": "جميع الأنشطة التجارية على المنصة، مع إمكانية البحث والتصفية.",
+    "emptyTitle": "لم يتم العثور على أنشطة تجارية",
+    "emptyDescription": "جرّب بحثًا مختلفًا أو امسح عامل تصفية الحالة.",
+    "newer": "الأحدث",
+    "older": "الأقدم",
+    "filters": {
+      "searchLabel": "بحث",
+      "searchPlaceholder": "الاسم أو معرّف URL",
+      "statusLabel": "الحالة",
+      "anyStatus": "أي حالة",
+      "statusActive": "نشط",
+      "statusSuspended": "معلّق",
+      "statusArchived": "مؤرشف",
+      "apply": "تطبيق"
+    },
+    "detail": {
+      "backToDirectory": "العودة إلى الدليل →",
+      "overviewTitle": "نظرة عامة",
+      "legalNameLabel": "الاسم القانوني",
+      "industryLabel": "القطاع",
+      "localeLabel": "اللغة الافتراضية",
+      "currencyLabel": "العملة الافتراضية",
+      "timezoneLabel": "المنطقة الزمنية الافتراضية",
+      "createdLabel": "تاريخ الإنشاء",
+      "notSet": "غير محدد",
+      "teamTitle": "الفريق",
+      "teamDescription": "جميع الأشخاص الذين لديهم صلاحية دور نشطة في هذا النشاط التجاري.",
+      "teamEmpty": "لا يوجد أعضاء في الفريق بعد.",
+      "viewAuditLog": "عرض سجل التدقيق لهذا النشاط التجاري ←",
+      "statusForm": {
+        "title": "تغيير الحالة",
+        "description": "يؤدي تعليق النشاط التجاري فورًا إلى منع الموظفين من تسجيل الدخول وحظر الصفحات الموجّهة للعملاء لهذا النشاط.",
+        "statusLabel": "الحالة",
+        "statusActive": "نشط",
+        "statusSuspended": "معلّق",
+        "statusArchived": "مؤرشف",
+        "reasonLabel": "السبب (اختياري)",
+        "reasonPlaceholder": "مثال: عدم السداد، مخالفة شروط الخدمة",
+        "submit": "حفظ الحالة",
+        "saving": "جارٍ الحفظ…",
+        "success": "تم تحديث الحالة."
+      },
+      "impersonate": {
+        "button": "انتحال الهوية",
+        "title": "انتحال هوية {name}",
+        "description": "سترى لوحة التحكم تمامًا كما يراها هذا الشخص لمدة تصل إلى 30 دقيقة. يتم تسجيل هذا الإجراء، بما في ذلك في سجل التدقيق الخاص بهذا النشاط التجاري.",
+        "reasonLabel": "السبب (مطلوب)",
+        "reasonPlaceholder": "مثال: التحقيق في تذكرة دعم",
+        "cancel": "إلغاء",
+        "confirm": "بدء انتحال الهوية",
+        "starting": "جارٍ البدء…"
+      }
+    }
+  },
+  "auditLog": {
+    "title": "سجل التدقيق",
+    "description": "جميع الإجراءات المسجلة عبر كل الأنشطة التجارية على المنصة.",
+    "emptyTitle": "لم يتم العثور على سجلات",
+    "emptyDescription": "جرّب توسيع عوامل التصفية أو مسحها.",
+    "newer": "الأحدث",
+    "older": "الأقدم",
+    "systemActor": "النظام",
+    "impersonatedBadge": "تم انتحال الهوية",
+    "filters": {
+      "businessIdLabel": "معرّف النشاط التجاري",
+      "businessIdPlaceholder": "UUID",
+      "actorUserIdLabel": "معرّف المستخدم المنفّذ",
+      "actorUserIdPlaceholder": "UUID",
+      "entityTypeLabel": "نوع الكيان",
+      "entityTypePlaceholder": "مثال: business",
+      "actionLabel": "الإجراء",
+      "actionPlaceholder": "مثال: business.status_changed_by_platform",
+      "fromLabel": "من",
+      "toLabel": "إلى",
+      "apply": "تطبيق"
+    }
+  },
+  "billing": {
+    "subscriptions": {
+      "title": "الفوترة",
+      "description": "اشتراكات جميع الأنشطة التجارية على المنصة، مع الإيرادات الشهرية المتكررة.",
+      "managePlans": "إدارة الخطط ←",
+      "mrrLabel": "{count, plural, one {# اشتراك نشط} other {# اشتراكات نشطة}}",
+      "emptyTitle": "لم يتم العثور على اشتراكات",
+      "emptyDescription": "جرّب مسح عامل تصفية الحالة.",
+      "trialEndsOn": "تنتهي الفترة التجريبية في {date}",
+      "renewsOn": "يتم التجديد في {date}",
+      "newer": "الأحدث",
+      "older": "الأقدم",
+      "status": {
+        "trialing": "فترة تجريبية",
+        "active": "نشط",
+        "past_due": "متأخر السداد",
+        "incomplete": "غير مكتمل",
+        "canceled": "ملغى",
+        "incomplete_expired": "منتهي الصلاحية",
+        "unpaid": "غير مدفوع"
+      },
+      "filters": {
+        "statusLabel": "الحالة",
+        "anyStatus": "أي حالة",
+        "statusTrialing": "فترة تجريبية",
+        "statusActive": "نشط",
+        "statusPastDue": "متأخر السداد",
+        "statusIncomplete": "غير مكتمل",
+        "statusCanceled": "ملغى",
+        "statusIncompleteExpired": "منتهي الصلاحية",
+        "statusUnpaid": "غير مدفوع",
+        "apply": "تطبيق"
+      }
+    },
+    "plans": {
+      "backToBilling": "العودة إلى الفوترة →",
+      "title": "دليل الخطط",
+      "description": "الخطط التي يمكن للأنشطة التجارية الاشتراك فيها.",
+      "newButton": "خطة جديدة",
+      "editButton": "تعديل",
+      "defaultTrialBadge": "التجربة الافتراضية",
+      "inactiveBadge": "غير نشطة",
+      "perMonth": "شهر",
+      "perYear": "سنة",
+      "noStripePriceWarning": "لم يتم تعيين سعر Stripe"
+    },
+    "planForm": {
+      "titleNew": "خطة جديدة",
+      "titleEdit": "تعديل {name}",
+      "descriptionNew": "أضف خطة جديدة إلى الدليل.",
+      "descriptionEdit": "حدّث أسعار {name} أو حدودها أو إعدادات Stripe.",
+      "keyLabel": "المفتاح",
+      "keyImmutableHint": "لا يمكن تغيير المفتاح بعد الإنشاء.",
+      "nameLabel": "الاسم",
+      "descriptionLabel": "الوصف",
+      "priceMonthlyLabel": "السعر الشهري (USD)",
+      "priceYearlyLabel": "السعر السنوي (USD)",
+      "currencyLabel": "العملة",
+      "stripePriceIdMonthlyLabel": "معرّف سعر Stripe الشهري",
+      "stripePriceIdYearlyLabel": "معرّف سعر Stripe السنوي",
+      "maxBranchesLabel": "الحد الأقصى للفروع",
+      "maxUsersLabel": "الحد الأقصى لأعضاء الفريق",
+      "unlimitedPlaceholder": "غير محدود",
+      "sortOrderLabel": "ترتيب العرض",
+      "isActiveLabel": "نشطة (متاحة للشراء)",
+      "isDefaultTrialLabel": "خطة التجربة الافتراضية",
+      "cancel": "إلغاء",
+      "saving": "جارٍ الحفظ…",
+      "create": "إنشاء الخطة",
+      "saveChanges": "حفظ التغييرات"
+    }
+  }
+}

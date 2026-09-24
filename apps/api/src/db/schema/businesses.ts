@@ -39,7 +39,7 @@ export const businesses = pgTable(
     // it is enforced independently at the DB layer for defense in depth.
     check(
       'businesses_default_locale_check',
-      sql`${table.defaultLocale} IN ('en', 'es', 'fr')`,
+      sql`${table.defaultLocale} IN ('en', 'es', 'fr', 'ar')`,
     ),
   ],
 );

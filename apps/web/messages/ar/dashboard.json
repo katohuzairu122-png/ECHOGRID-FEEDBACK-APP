@@ -1,0 +1,86 @@
+{
+  "nav": {
+    "branches": "الفروع",
+    "feedback": "الملاحظات",
+    "loyalty": "الولاء",
+    "messages": "الرسائل",
+    "analytics": "التحليلات",
+    "notifications": "الإشعارات",
+    "settings": "الإعدادات",
+    "billing": "الفوترة",
+    "logout": "تسجيل الخروج"
+  },
+  "home": {
+    "branchesTitle": "الفروع",
+    "branchesDescription": "إدارة المواقع التي يقدّم فيها العملاء ملاحظاتهم.",
+    "viewBranches": "عرض الفروع",
+    "platformAdminTitle": "لوحة إدارة المنصة",
+    "platformAdminDescription": "لديك صلاحية مسؤول المنصة. يمكنك إدارة الأنشطة التجارية ومراجعة سجل التدقيق عبر جميع المستأجرين والمزيد.",
+    "viewPlatformAdmin": "فتح لوحة الإدارة"
+  },
+  "createBusiness": {
+    "title": "أنشئ نشاطك التجاري",
+    "description": "لقد سجلت الدخول ولكنك لست ضمن أي نشاط تجاري بعد — أنشئ نشاطًا للمتابعة.",
+    "nameLabel": "اسم النشاط التجاري",
+    "slugLabel": "معرّف URL",
+    "slugHint": "استخدم الأحرف الإنجليزية الصغيرة والأرقام والشرطات فقط.",
+    "submit": "إنشاء نشاط تجاري",
+    "submitPending": "جارٍ الإنشاء…"
+  },
+  "settings": {
+    "title": "الإعدادات",
+    "generalTitle": "عام",
+    "generalDescription": "اسم العرض لنشاطك التجاري واللغة والعملة والمنطقة الزمنية الافتراضية. تُطبّق هذه الإعدادات على لوحة التحكم وجميع الصفحات الموجّهة للعملاء، بما في ذلك تسجيل الوصول عبر QR ونماذج الملاحظات ومكافآت الولاء.",
+    "nameLabel": "اسم النشاط التجاري",
+    "languageLabel": "اللغة",
+    "currencyLabel": "العملة",
+    "timezoneLabel": "المنطقة الزمنية",
+    "timezoneHint": "اسم المنطقة الزمنية وفق معيار IANA.",
+    "submit": "حفظ الإعدادات",
+    "submitPending": "جارٍ الحفظ…",
+    "success": "تم حفظ الإعدادات.",
+    "securityTitle": "الأمان",
+    "securityDescription": "غيّر كلمة مرور حسابك. سيتم تسجيل خروجك من جميع الأجهزة بعد تغييرها.",
+    "currentPasswordLabel": "كلمة المرور الحالية",
+    "newPasswordLabel": "كلمة المرور الجديدة",
+    "confirmPasswordLabel": "تأكيد كلمة المرور الجديدة",
+    "passwordHint": "استخدم 12 حرفًا على الأقل.",
+    "changePasswordSubmit": "تغيير كلمة المرور",
+    "changePasswordPending": "جارٍ تغيير كلمة المرور…"
+  },
+  "impersonationBanner": {
+    "label": "انتحال الهوية —",
+    "viewingAs": "أنت تعرض الحساب باسم {name} ({email}).",
+    "stop": "إيقاف انتحال الهوية"
+  },
+  "billing": {
+    "title": "الفوترة",
+    "manageBilling": "إدارة الفوترة",
+    "openingPortal": "جارٍ الفتح…",
+    "plansTitle": "الخطط",
+    "plansDescription": "يمكنك تغيير الخطة في أي وقت — وتدخل خطتك الجديدة حيز التنفيذ فورًا.",
+    "status": {
+      "trialing": "فترة تجريبية",
+      "active": "نشط",
+      "past_due": "متأخر السداد",
+      "incomplete": "غير مكتمل",
+      "canceled": "ملغى",
+      "incomplete_expired": "منتهي الصلاحية",
+      "unpaid": "غير مدفوع"
+    },
+    "trialEndsOn": "تنتهي الفترة التجريبية في {date}.",
+    "cancelsOn": "يتم الإلغاء في {date}.",
+    "renewsOn": "يتم التجديد في {date}.",
+    "plans": {
+      "currentPlan": "الخطة الحالية",
+      "perMonth": "شهريًا",
+      "unlimitedBranches": "فروع غير محدودة",
+      "limitedBranches": "حتى {count} {count, plural, one {فرع} other {فروع}}",
+      "unlimitedUsers": "أعضاء فريق غير محدودين",
+      "limitedUsers": "حتى {count} {count, plural, one {عضو في الفريق} other {أعضاء في الفريق}}",
+      "subscribeMonthly": "اشتراك شهري",
+      "subscribeYearly": "اشتراك سنوي ({price})",
+      "starting": "جارٍ البدء…"
+    }
+  }
+}

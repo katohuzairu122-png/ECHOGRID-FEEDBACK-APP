@@ -7,7 +7,7 @@ export interface SelectProps extends React.SelectHTMLAttributes<HTMLSelectElemen
  * Native <select> primitive (i18n & Multi-Currency Block 3's settings form
  * is the first caller -- locale/currency pickers over small, closed option
  * sets). Deliberately not a custom-styled combobox: every option set this
- * component serves today (3 locales, ~20 common currencies) is short
+ * component serves today (4 locales, ~20 common currencies) is short
  * enough that the platform-native picker (search-as-you-type on desktop,
  * a proper wheel/sheet on mobile) is better UX than a hand-rolled one,
  * and it comes with correct keyboard/screen-reader behavior for free.

@@ -102,9 +102,9 @@ const HIGH_SEVERITY_AT = 8;
  * differed. Punctuation must be gone before anything similarity-based
  * compares two comments.
  *
- * Unicode-aware (\p{L}/\p{N}) rather than [a-z0-9]: this app ships in
- * en/es/fr, and stripping accented letters would mangle French and Spanish
- * comments into different token sets than their unaccented twins.
+ * Unicode-aware (\p{L}/\p{N}) rather than [a-z0-9]: supported locales
+ * include accented Latin text and Arabic, so non-ASCII letters must remain
+ * intact for reliable token comparison.
  */
 export function comparisonTokens(text: string | null | undefined): Set<string> {
   if (!text) return new Set();

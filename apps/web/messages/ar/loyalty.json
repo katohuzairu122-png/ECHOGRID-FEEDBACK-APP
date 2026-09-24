@@ -1,0 +1,229 @@
+{
+  "staff": {
+    "title": "الولاء",
+    "subnav": {
+      "accounts": "الحسابات",
+      "tiers": "المستويات",
+      "rewards": "المكافآت",
+      "redeem": "تأكيد الاستبدال",
+      "settings": "الإعدادات"
+    },
+    "accounts": {
+      "emptyTitle": "لا يوجد أعضاء في برنامج الولاء بعد",
+      "emptyDescription": "سيظهر هنا العملاء الذين يسجلون الوصول عبر رمز QR الخاص بالفرع.",
+      "visits": "{count} زيارة",
+      "lastVisit": "آخر زيارة {date}",
+      "noVisits": "لا توجد زيارات بعد",
+      "suspended": "معلّق",
+      "message": "رسالة"
+    },
+    "accountDialog": {
+      "manageTrigger": "إدارة",
+      "description": "سجّل عملية شراء أو أجرِ تعديلًا يدويًا على النقاط.",
+      "purchaseTab": "شراء",
+      "adjustTab": "تعديل",
+      "purchaseAmountLabel": "مبلغ الشراء",
+      "recording": "جارٍ التسجيل…",
+      "recordPurchase": "تسجيل عملية الشراء",
+      "pointsLabel": "النقاط (استخدم قيمة سالبة للخصم)",
+      "reasonLabel": "السبب (اختياري)",
+      "saving": "جارٍ الحفظ…",
+      "saveAdjustment": "حفظ التعديل"
+    },
+    "tiers": {
+      "newButton": "مستوى جديد",
+      "emptyTitle": "لا توجد مستويات بعد",
+      "emptyDescription": "تكافئ المستويات العملاء الذين يتجاوزون حدًا معينًا من النقاط — مثل المستوى الفضي عند 100 نقطة والذهبي عند 500 نقطة.",
+      "minPoints": "{points}+ نقطة",
+      "editButton": "تعديل"
+    },
+    "tierForm": {
+      "titleEdit": "تعديل المستوى",
+      "titleNew": "مستوى جديد",
+      "descriptionEdit": "تحديث {name}.",
+      "descriptionNew": "أضف مستوى ولاء يفتحه العملاء عند كسب النقاط.",
+      "nameLabel": "الاسم",
+      "minPointsLabel": "الحد الأدنى للنقاط",
+      "benefitsLabel": "المزايا (اختياري)",
+      "cancel": "إلغاء",
+      "saving": "جارٍ الحفظ…",
+      "saveChanges": "حفظ التغييرات",
+      "create": "إنشاء المستوى"
+    },
+    "deleteTier": {
+      "button": "حذف",
+      "confirm": "هل تريد حذف المستوى \"{name}\"؟ لا يمكن التراجع عن هذا الإجراء.",
+      "failedAlert": "تعذر حذف هذا المستوى. يرجى المحاولة مرة أخرى."
+    },
+    "rewards": {
+      "newButton": "مكافأة جديدة",
+      "emptyTitle": "لا توجد مكافآت بعد",
+      "emptyDescription": "أضف مكافآت يمكن للعملاء استبدال نقاطهم بها — مثل منتج مجاني أو خصم وغير ذلك.",
+      "active": "نشطة",
+      "inactive": "غير نشطة",
+      "paused": "متوقفة مؤقتًا",
+      "pointsCost": "{points} نقطة",
+      "editButton": "تعديل"
+    },
+    "rewardForm": {
+      "titleEdit": "تعديل المكافأة",
+      "titleNew": "مكافأة جديدة",
+      "descriptionEdit": "تحديث {name}.",
+      "descriptionNew": "أضف مكافأة يمكن للعملاء استبدال نقاطهم بها.",
+      "nameLabel": "الاسم",
+      "namePlaceholder": "قهوة مجانية",
+      "descriptionLabel": "الوصف (اختياري)",
+      "pointsCostLabel": "تكلفة النقاط",
+      "branchIdLabel": "الفرع",
+      "branchIdAllOption": "جميع الفروع",
+      "typeLabel": "نوع المكافأة",
+      "typePoints": "نقاط",
+      "typeDiscount": "خصم",
+      "typeFreeItem": "منتج مجاني",
+      "typeVoucher": "قسيمة",
+      "rewardValueLabel": "قيمة المكافأة",
+      "startDateLabel": "تاريخ البدء",
+      "expiryDateLabel": "تاريخ الانتهاء",
+      "statusLabel": "الحالة",
+      "maxRewardsPerDayLabel": "الحد الأقصى لعمليات الاستبدال يوميًا",
+      "maxBudgetLabel": "حد الميزانية",
+      "limitPerLabel": "حد الاستبدال",
+      "limitPerNoneOption": "بدون حد",
+      "limitPerReceipt": "مرة واحدة لكل إيصال",
+      "limitPerVisit": "مرة واحدة لكل زيارة",
+      "limitPerPeriod": "مرة واحدة لكل فترة",
+      "limitPerEnforcementHint": "يتم حاليًا تطبيق حدود الزيارة والفترة — أما حدود الإيصال فيتم حفظها ولكنها لا تُطبق بعد.",
+      "limitPeriodDaysLabel": "مدة الفترة (بالأيام)",
+      "cooldownSecondsLabel": "فترة الانتظار بين عمليات الاستبدال (بالثواني)",
+      "minCommentLengthLabel": "الحد الأدنى لطول التعليق",
+      "minCommentLengthHint": "هذا تشجيع على تقديم محتوى مفيد وليس إثباتًا لهوية الكاتب — تُرسل الملاحظات دون الكشف عن الهوية، لذلك لا يمكن التحقق ممن كتبها.",
+      "requireVisitVerificationLabel": "طلب التحقق من الزيارة",
+      "cancel": "إلغاء",
+      "saving": "جارٍ الحفظ…",
+      "saveChanges": "حفظ التغييرات",
+      "create": "إنشاء المكافأة"
+    },
+    "rewardActions": {
+      "deactivate": "إلغاء التنشيط",
+      "activate": "تنشيط",
+      "resume": "استئناف",
+      "delete": "حذف",
+      "deleteConfirm": "هل تريد حذف هذه المكافأة؟ لا يمكن التراجع عن هذا الإجراء.",
+      "deleteFailedAlert": "تعذر حذف هذه المكافأة. يرجى المحاولة مرة أخرى."
+    },
+    "campaignDashboard": {
+      "backLink": "العودة إلى المكافآت →",
+      "viewButton": "لوحة التحكم",
+      "budgetHeading": "الميزانية",
+      "budgetUsedOf": "تم استخدام {used} من {total}",
+      "budgetUsedNoCap": "تم استخدام {used} (لم يتم تحديد حد للميزانية)",
+      "budgetNotApplicable": "هذا النوع من المكافآت لا يحتوي على قيمة مالية لتتبعها.",
+      "outstandingLiabilityLabel": "الالتزامات المستحقة",
+      "activityHeading": "النشاط",
+      "outstanding": "مستحقة",
+      "redeemed": "تم الاستبدال",
+      "redemptionRateLabel": "معدل الاستبدال",
+      "redemptionRateNoData": "لا توجد عمليات استبدال بعد",
+      "scopeHeading": "النطاق",
+      "scopeOneBranch": "محدودة بفرع {branchName}",
+      "scopeAllBranches": "جميع الفروع",
+      "termsHeading": "الشروط",
+      "termsNone": "لم يتم إعداد أي قيود.",
+      "termValidWindow": "صالحة من {start} إلى {end}",
+      "termValidFrom": "صالحة ابتداءً من {start}",
+      "termValidUntil": "صالحة حتى {end}",
+      "termLimitPerReceipt": "الحد مرة واحدة لكل إيصال",
+      "termLimitPerVisit": "الحد مرة واحدة لكل زيارة",
+      "termLimitPerPeriod": "الحد مرة واحدة لكل فترة مدتها {days} يومًا",
+      "termCooldown": "فترة انتظار {seconds} ثانية بين عمليات الاستبدال",
+      "termMaxPerDay": "الحد الأقصى {count} من عمليات الاستبدال يوميًا",
+      "previewHeading": "معاينة العميل"
+    },
+    "redeem": {
+      "title": "تأكيد عملية استبدال",
+      "description": "أدخل الرمز الذي يعرضه العميل لتسليمه مكافأته."
+    },
+    "redeemForm": {
+      "codeLabel": "رمز الاستبدال",
+      "lookingUp": "جارٍ البحث…",
+      "lookUp": "بحث",
+      "pointsRedeemed": "تم استبدال {points} نقطة",
+      "codePrefix": "الرمز {code}",
+      "confirmed": "تم التأكيد",
+      "confirming": "جارٍ التأكيد…",
+      "confirmHandoff": "تأكيد تسليم المكافأة",
+      "confirmError": "تعذر تأكيد عملية الاستبدال هذه."
+    },
+    "settings": {
+      "sectionTitle": "معدلات كسب النقاط",
+      "sectionDescription": "كيفية كسب العملاء للنقاط في هذا النشاط التجاري. تنطبق التغييرات على الأنشطة المستقبلية فقط.",
+      "pointsPerCheckinLabel": "النقاط لكل تسجيل وصول",
+      "pointsPerCurrencyLabel": "النقاط لكل {currency} يتم إنفاقها",
+      "referralBonusLabel": "مكافأة الإحالة",
+      "birthdayBonusLabel": "مكافأة عيد الميلاد",
+      "saved": "تم حفظ الإعدادات.",
+      "saving": "جارٍ الحفظ…",
+      "save": "حفظ الإعدادات"
+    }
+  },
+  "customer": {
+    "shell": {
+      "brand": "مكافآتي",
+      "logout": "تسجيل الخروج"
+    },
+    "login": {
+      "title": "تسجيل الدخول إلى برنامج الولاء",
+      "codeSentDescription": "أدخل الرمز الذي أرسلناه إلى {phone}.",
+      "phoneDescription": "أدخل رقم هاتفك لكسب النقاط واستبدالها.",
+      "phoneLabel": "رقم الهاتف",
+      "phoneHint": "أدخل رمز الدولة، مثل +1 للولايات المتحدة.",
+      "sending": "جارٍ الإرسال…",
+      "sendCode": "إرسال الرمز",
+      "codeLabel": "رمز التحقق",
+      "verifying": "جارٍ التحقق…",
+      "verify": "تحقق"
+    },
+    "myRewards": {
+      "title": "مكافآتي",
+      "emptyTitle": "لا توجد بطاقات ولاء بعد",
+      "emptyDescription": "امسح رمز QR الخاص بالنشاط التجاري وسجّل الوصول لبدء كسب النقاط.",
+      "visits": "{count} زيارة",
+      "businessFallback": "النشاط التجاري"
+    },
+    "businessDashboard": {
+      "messages": "الرسائل",
+      "notificationPreferences": "تفضيلات الإشعارات ←",
+      "points": "{points} نقطة",
+      "progressToNextTier": "متبقي {remaining} نقطة للوصول إلى {tierName}",
+      "topTierReached": "تم الوصول إلى أعلى مستوى",
+      "rewardsHeading": "المكافآت",
+      "recentActivityHeading": "النشاط الأخير"
+    },
+    "rewardCard": {
+      "points": "{points} نقطة",
+      "showCode": "اعرض هذا الرمز على الموظف",
+      "redeeming": "جارٍ الاستبدال…",
+      "redeem": "استبدال",
+      "notEnoughPoints": "النقاط غير كافية"
+    },
+    "checkin": {
+      "checkedInTitle": "تم تسجيل وصولك!",
+      "points": "{points} نقطة",
+      "viewRewards": "عرض مكافآتي ←",
+      "welcome": "مرحبًا بك في {branchName}",
+      "subtitle": "{businessName} · سجّل الوصول لكسب نقاط الولاء",
+      "checkingIn": "جارٍ تسجيل الوصول…",
+      "checkIn": "تسجيل الوصول",
+      "signInToCheckIn": "سجّل الدخول لتسجيل الوصول",
+      "genericError": "حدث خطأ ما. يرجى المحاولة مرة أخرى."
+    },
+    "messages": {
+      "title": "الرسائل",
+      "emptyTitle": "لا توجد رسائل بعد",
+      "emptyDescription": "عندما يرسل لك الموظفون رسالة، ستظهر هنا.",
+      "replyPlaceholder": "اكتب ردًا…",
+      "sending": "جارٍ الإرسال…",
+      "send": "إرسال"
+    }
+  }
+}

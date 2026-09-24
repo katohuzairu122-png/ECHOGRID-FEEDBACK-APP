@@ -1,0 +1,44 @@
+{
+  "title": "الفروع",
+  "newButton": "+ فرع جديد",
+  "emptyTitle": "لا توجد فروع بعد",
+  "emptyDescription": "أضف فرعك الأول لبدء جمع ملاحظات العملاء فيه.",
+  "qrButton": "رمز QR",
+  "editButton": "تعديل",
+  "form": {
+    "titleEdit": "تعديل الفرع",
+    "titleNew": "فرع جديد",
+    "descriptionEdit": "حدّث تفاصيل {name}.",
+    "descriptionNew": "أضف فرعًا إلى هذا النشاط التجاري.",
+    "nameLabel": "الاسم",
+    "slugLabel": "معرّف URL",
+    "addressLine1Label": "سطر العنوان 1",
+    "addressLine2Label": "سطر العنوان 2",
+    "cityLabel": "المدينة",
+    "stateProvinceLabel": "الولاية/المحافظة",
+    "postalCodeLabel": "الرمز البريدي",
+    "countryCodeLabel": "رمز الدولة",
+    "timezoneLabel": "المنطقة الزمنية",
+    "cancel": "إلغاء",
+    "saving": "جارٍ الحفظ…",
+    "saveChanges": "حفظ التغييرات",
+    "create": "إنشاء فرع"
+  },
+  "delete": {
+    "button": "حذف",
+    "deleting": "جارٍ الحذف…",
+    "confirm": "هل تريد حذف \"{name}\"؟ سيتوقف عن الظهور في التطبيق فورًا.",
+    "failedAlert": "تعذر حذف هذا الفرع. يرجى المحاولة مرة أخرى."
+  },
+  "qr": {
+    "title": "رمز QR",
+    "loading": "جارٍ التحميل…",
+    "downloadButton": "تنزيل SVG",
+    "regenerateButton": "إعادة إنشاء الرمز",
+    "working": "جارٍ التنفيذ…",
+    "close": "إغلاق",
+    "loadError": "تعذر تحميل رمز QR هذا. يرجى المحاولة مرة أخرى.",
+    "regenerateConfirm": "هل تريد إعادة إنشاء رمز QR هذا؟ سيتوقف الرمز الحالي عن العمل فورًا، وسيتعين استبدال أي نسخ مطبوعة منه.",
+    "regenerateError": "تعذر إعادة إنشاء رمز QR هذا. يرجى المحاولة مرة أخرى."
+  }
+}

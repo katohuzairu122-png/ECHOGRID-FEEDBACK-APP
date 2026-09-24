@@ -1,0 +1,67 @@
+{
+  "page": {
+    "title": "التحليلات",
+    "searchFeedback": "البحث في الملاحظات ←",
+    "trendTitle": "اتجاه المشاعر",
+    "trendDescription": "آخر 30 يومًا، يومًا بيوم",
+    "summariesTitle": "ملخصات الذكاء الاصطناعي",
+    "summariesDescription": "نظرات عامة مُنشأة تلقائيًا مع توصيات قابلة للتنفيذ"
+  },
+  "branchFilter": {
+    "ariaLabel": "التصفية حسب الفرع",
+    "allBranches": "جميع الفروع"
+  },
+  "summaryGenerator": {
+    "periodAriaLabel": "فترة الملخص",
+    "daily": "يومي",
+    "weekly": "أسبوعي",
+    "monthly": "شهري",
+    "queuing": "جارٍ الإضافة إلى قائمة الانتظار…",
+    "generate": "إنشاء ملخص",
+    "queued": "تمت الإضافة إلى قائمة الانتظار — قد يستغرق ذلك بعض الوقت. حدّث الصفحة بعد قليل لرؤية الملخص.",
+    "error": "تعذرت إضافة ملخص جديد إلى قائمة الانتظار. يرجى المحاولة مرة أخرى."
+  },
+  "summariesList": {
+    "empty": "لا توجد ملخصات بالذكاء الاصطناعي بعد. أنشئ ملخصًا أعلاه بعد توفر ملاحظات يمكن تلخيصها.",
+    "daily": "يومي",
+    "weekly": "أسبوعي",
+    "monthly": "شهري",
+    "positive": "{count} إيجابي",
+    "neutral": "{count} محايد",
+    "negative": "{count} سلبي",
+    "feedbackCount": "{count} من عناصر الملاحظات"
+  },
+  "search": {
+    "backToOverview": "العودة إلى النظرة العامة →",
+    "title": "البحث في الملاحظات",
+    "emptyTitle": "لا توجد ملاحظات مطابقة",
+    "emptyDescription": "جرّب توسيع نطاق التاريخ أو إزالة أحد عوامل التصفية.",
+    "unknownBranch": "فرع غير معروف",
+    "positive": "إيجابي",
+    "neutral": "محايد",
+    "negative": "سلبي",
+    "statusNew": "جديد",
+    "statusReviewed": "تمت المراجعة",
+    "newer": "الأحدث →",
+    "older": "← الأقدم"
+  },
+  "searchFilters": {
+    "branchLabel": "الفرع",
+    "keywordLabel": "البحث في التعليقات",
+    "sentimentLabel": "المشاعر",
+    "ratingLabel": "التقييم",
+    "rangeLabel": "النطاق الزمني",
+    "allBranches": "جميع الفروع",
+    "any": "الكل",
+    "positive": "إيجابي",
+    "neutral": "محايد",
+    "negative": "سلبي",
+    "starSingular": "{n} نجمة",
+    "starPlural": "{n} نجوم",
+    "range7": "آخر 7 أيام",
+    "range30": "آخر 30 يومًا",
+    "range90": "آخر 90 يومًا",
+    "range365": "العام الماضي",
+    "search": "بحث"
+  }
+}

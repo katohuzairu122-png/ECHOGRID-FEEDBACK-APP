@@ -24,13 +24,19 @@ describe('comparisonTokens', () => {
   it('de-duplicates repeated words', () => {
     expect(comparisonTokens('great great great service')).toEqual(new Set(['great', 'service']));
   });
-
   it('keeps accented letters intact', () => {
-    // en/es/fr ship together; stripping accents would give "café" and "cafe"
-    // different token sets and quietly mis-score French and Spanish comments.
-    expect(comparisonTokens('Café très agréable')).toEqual(new Set(['café', 'très', 'agréable']));
+    // Supported locales include accented Latin text and Arabic; Unicode
+    // letters must remain intact so multilingual comments are scored reliably.
+    expect(comparisonTokens('Café très agréable')).toEqual(
+      new Set(['café', 'très', 'agréable']),
+    );
   });
 
+  it('keeps Arabic letters intact', () => {
+    expect(comparisonTokens('خدمة ممتازة جداً')).toEqual(
+      new Set(['خدمة', 'ممتازة', 'جدا']),
+    );
+  });
   it('returns an empty set for null, undefined and punctuation-only input', () => {
     expect(comparisonTokens(null).size).toBe(0);
     expect(comparisonTokens(undefined).size).toBe(0);

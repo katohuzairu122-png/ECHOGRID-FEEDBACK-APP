@@ -17,6 +17,7 @@ describe('resolveSupportedLocale', () => {
     expect(resolveSupportedLocale('en')).toBe('en');
     expect(resolveSupportedLocale('es')).toBe('es');
     expect(resolveSupportedLocale('fr')).toBe('fr');
+    expect(resolveSupportedLocale('ar')).toBe('ar');
   });
 
   it('falls back to the default locale for an unsupported language tag', () => {

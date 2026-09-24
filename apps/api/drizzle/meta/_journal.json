@@ -162,6 +162,13 @@
       "when": 1789242463219,
       "tag": "0022_aberrant_lady_mastermind",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1790195239069,
+      "tag": "0023_yielding_sheva_callister",
+      "breakpoints": true
     }
   ]
 }

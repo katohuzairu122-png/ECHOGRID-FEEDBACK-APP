@@ -1,0 +1,2 @@
+ALTER TABLE "businesses" DROP CONSTRAINT "businesses_default_locale_check";--> statement-breakpoint
+ALTER TABLE "businesses" ADD CONSTRAINT "businesses_default_locale_check" CHECK ("businesses"."default_locale" IN ('en', 'es', 'fr', 'ar'));

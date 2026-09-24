@@ -66,7 +66,7 @@ export default async function RootLayout({
   const [locale, messages] = await Promise.all([getLocale(), getMessages()]);
 
   return (
-    <html lang={locale} className={poppins.variable}>
+    <html lang={locale} dir={locale === 'ar' ? 'rtl' : 'ltr'} className={poppins.variable}>
       <body>
         {/* `formats` passed explicitly rather than relied on being inherited
             from i18n/request.ts through the server context. Same reasoning as

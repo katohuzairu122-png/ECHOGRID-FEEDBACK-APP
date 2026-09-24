@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 /**
  * Languages the platform has translation files for (i18n & Multi-Currency
- * Block 2 ships messages/en, messages/es, messages/fr). Deliberately a
+ * Block 2 ships messages/en, messages/es, messages/fr, messages/ar). Deliberately a
  * closed enum, not a freeform BCP-47 string: default_locale drives both
  * Intl formatting (which would accept almost any tag) AND UI string lookup
  * (which only resolves for languages we've actually translated) -- allowing
@@ -11,7 +11,7 @@ import { z } from 'zod';
  * offering the option. Grow this list only in lockstep with adding a real
  * messages/<locale> directory (Block 2 onward).
  */
-export const SUPPORTED_LOCALES = ['en', 'es', 'fr'] as const;
+export const SUPPORTED_LOCALES = ['en', 'es', 'fr', 'ar'] as const;
 
 export const DEFAULT_LOCALE: (typeof SUPPORTED_LOCALES)[number] = 'en';
 
@@ -33,6 +33,7 @@ export const LOCALE_LABELS: Record<Locale, string> = {
   en: 'English',
   es: 'Español',
   fr: 'Français',
+  ar: 'العربية',
 };
 
 /**
