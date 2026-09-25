@@ -23,7 +23,13 @@ describe('DashboardMobileNav', () => {
 
   it('prefetches destinations when opened and closes immediately when a link is selected', () => {
     const { container } = render(
-      <DashboardMobileNav items={items} menuLabel="Dashboard navigation" logoutLabel="Log out" />,
+      <DashboardMobileNav
+        items={items}
+        menuLabel="Dashboard navigation"
+        logoutLabel="Log out"
+        installLabel="Install app"
+        installIosHint="Use Add to Home Screen"
+      />,
     );
     const details = container.querySelector('details');
     expect(details).not.toBeNull();
