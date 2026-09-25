@@ -38,9 +38,9 @@ const refreshRequests = new Map<string, Promise<RefreshResult>>();
  * The one place authenticated server-side code calls the Hono API from
  * (login/signup/logout call the API directly instead -- see
  * lib/actions/auth.ts -- since they don't have a token yet). Attaches the
- * access-token cookie as a Bearer token and, on a 401 while a token was
- * present, transparently refreshes once and retries -- callers never see a
- * spurious failure just because 15 minutes passed. If the refresh itself
+ * access-token cookie as a Bearer token and, on a 401, transparently
+ * refreshes once and retries -- including when the 15-minute access cookie
+ * has already disappeared while the 30-day refresh cookie remains. If the refresh itself
  * fails (refresh token also invalid/expired), clears the session and lets
  * the original 401 surface as an ApiError; callers (Server Components,
  * Server Actions) are responsible for redirecting to /login on a 401 they
@@ -55,7 +55,7 @@ export async function apiFetch<T>(
 
   const response = await callApi(path, init, accessToken, businessId, branchId);
 
-  if (response.status !== 401 || !accessToken) {
+  if (response.status !== 401) {
     return parseEnvelope<T>(response);
   }
 
