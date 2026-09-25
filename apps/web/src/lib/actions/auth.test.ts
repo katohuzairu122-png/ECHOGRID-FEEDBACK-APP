@@ -1,19 +1,19 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const {
-  getRefreshTokenMock,
+  getRefreshTokenForLogoutMock,
   clearSessionMock,
   redirectMock,
   apiFetchMock,
 } = vi.hoisted(() => ({
-  getRefreshTokenMock: vi.fn(),
+  getRefreshTokenForLogoutMock: vi.fn(),
   clearSessionMock: vi.fn(),
   redirectMock: vi.fn(),
   apiFetchMock: vi.fn(),
 }));
 
 vi.mock('@/lib/session', () => ({
-  getRefreshToken: getRefreshTokenMock,
+  getRefreshTokenForLogout: getRefreshTokenForLogoutMock,
   clearSession: clearSessionMock,
   setSession: vi.fn(),
 }));
@@ -57,7 +57,7 @@ describe('logoutAction', () => {
   });
 
   it('preserves the local session when the logout request cannot reach the API', async () => {
-    getRefreshTokenMock.mockResolvedValue('refresh-token');
+    getRefreshTokenForLogoutMock.mockResolvedValue('refresh-token');
     vi.mocked(fetch).mockRejectedValue(new Error('network failure'));
 
     await expect(logoutAction()).rejects.toThrow(
@@ -76,7 +76,7 @@ describe('logoutAction', () => {
   });
 
   it('preserves the local session when the API does not confirm revocation', async () => {
-    getRefreshTokenMock.mockResolvedValue('refresh-token');
+    getRefreshTokenForLogoutMock.mockResolvedValue('refresh-token');
     vi.mocked(fetch).mockResolvedValue(new Response(null, { status: 503 }));
 
     await expect(logoutAction()).rejects.toThrow(
@@ -88,7 +88,7 @@ describe('logoutAction', () => {
   });
 
   it('clears the local session and redirects after revocation succeeds', async () => {
-    getRefreshTokenMock.mockResolvedValue('refresh-token');
+    getRefreshTokenForLogoutMock.mockResolvedValue('refresh-token');
     vi.mocked(fetch).mockResolvedValue(new Response(null, { status: 204 }));
 
     await logoutAction();
@@ -98,13 +98,41 @@ describe('logoutAction', () => {
   });
 
   it('clears the local session without calling the API when no refresh token exists', async () => {
-    getRefreshTokenMock.mockResolvedValue(null);
+    getRefreshTokenForLogoutMock.mockResolvedValue(null);
 
     await logoutAction();
 
     expect(fetch).not.toHaveBeenCalled();
     expect(clearSessionMock).toHaveBeenCalledOnce();
     expect(redirectMock).toHaveBeenCalledWith('/login');
+  });
+
+  it('revokes the stashed administrator credential before ending impersonation', async () => {
+    getRefreshTokenForLogoutMock.mockResolvedValue('stashed-admin-refresh-token');
+    vi.mocked(fetch).mockResolvedValue(new Response(null, { status: 204 }));
+
+    await logoutAction();
+
+    expect(fetch).toHaveBeenCalledWith(
+      'https://api.example.test/api/v1/auth/logout',
+      expect.objectContaining({
+        body: JSON.stringify({ refreshToken: 'stashed-admin-refresh-token' }),
+      }),
+    );
+    expect(clearSessionMock).toHaveBeenCalledOnce();
+    expect(redirectMock).toHaveBeenCalledWith('/login');
+  });
+
+  it('preserves the impersonation and administrator stash when revocation fails', async () => {
+    getRefreshTokenForLogoutMock.mockResolvedValue('stashed-admin-refresh-token');
+    vi.mocked(fetch).mockResolvedValue(new Response(null, { status: 503 }));
+
+    await expect(logoutAction()).rejects.toThrow(
+      'Unable to sign out safely. Please try again.',
+    );
+
+    expect(clearSessionMock).not.toHaveBeenCalled();
+    expect(redirectMock).not.toHaveBeenCalled();
   });
 });
 

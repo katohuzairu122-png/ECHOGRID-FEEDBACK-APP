@@ -1,7 +1,7 @@
 'use server';
 
 import { redirect } from 'next/navigation';
-import { setSession, getRefreshToken, clearSession } from '@/lib/session';
+import { setSession, getRefreshTokenForLogout, clearSession } from '@/lib/session';
 import { API_BASE_URL, apiFetch, ApiError } from '@/lib/api-client';
 
 export interface AuthActionState {
@@ -240,7 +240,7 @@ export async function changePasswordAction(
  * the cookie on failure so the same logout action can safely be retried.
  */
 export async function logoutAction(): Promise<void> {
-  const refreshToken = await getRefreshToken();
+  const refreshToken = await getRefreshTokenForLogout();
 
   if (refreshToken) {
     let response: Response;

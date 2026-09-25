@@ -56,6 +56,17 @@ export async function getRefreshToken(): Promise<string | undefined> {
   return store.get(REFRESH_TOKEN_COOKIE)?.value;
 }
 
+/** Returns the real credential to revoke on logout. During impersonation the
+ * active refresh cookie is a sentinel, so reliable logout must use the
+ * administrator refresh token held in the protected stash. */
+export async function getRefreshTokenForLogout(): Promise<string | undefined> {
+  const store = await cookies();
+  if (store.has(IMPERSONATING_COOKIE)) {
+    return store.get(ADMIN_REFRESH_TOKEN_COOKIE)?.value ?? store.get(REFRESH_TOKEN_COOKIE)?.value;
+  }
+  return store.get(REFRESH_TOKEN_COOKIE)?.value;
+}
+
 /**
  * Presence-only check for Server Components (e.g. the root page and the
  * dashboard layout) -- fast, no network call. Actual token validity is
