@@ -16,6 +16,10 @@ interface ApiEnvelope<T> {
 }
 
 type RefreshedTokens = { accessToken: string; refreshToken: string };
+type RefreshResult =
+  | { kind: 'refreshed'; tokens: RefreshedTokens }
+  | { kind: 'rotated-elsewhere' }
+  | { kind: 'failed' };
 
 /**
  * A dashboard render can start several apiFetch calls together. When the
@@ -28,7 +32,7 @@ type RefreshedTokens = { accessToken: string; refreshToken: string };
  * scope lets concurrent RSC/API calls handled by the same Worker isolate
  * share the in-flight rotation without retaining session tokens afterward.
  */
-const refreshRequests = new Map<string, Promise<RefreshedTokens | null>>();
+const refreshRequests = new Map<string, Promise<RefreshResult>>();
 
 /**
  * The one place authenticated server-side code calls the Hono API from
@@ -56,12 +60,16 @@ export async function apiFetch<T>(
   }
 
   const refreshed = await refreshSession();
-  if (!refreshed) {
-    await clearSession();
+  if (refreshed.kind !== 'refreshed') {
+    // A concurrent request handled by another Worker isolate may have won
+    // the same rotation and already written a valid cookie pair. Its losing
+    // sibling must not delete those cookies. Genuinely invalid/expired
+    // sessions still take the existing clear-and-login path.
+    if (refreshed.kind === 'failed') await clearSession();
     return parseEnvelope<T>(response); // surfaces the original 401
   }
 
-  const retried = await callApi(path, init, refreshed.accessToken, businessId, branchId);
+  const retried = await callApi(path, init, refreshed.tokens.accessToken, businessId, branchId);
   return parseEnvelope<T>(retried);
 }
 
@@ -81,9 +89,9 @@ async function callApi(
   return fetch(`${API_BASE_URL}/api/v1${path}`, { ...init, headers });
 }
 
-async function refreshSession(): Promise<{ accessToken: string } | null> {
+async function refreshSession(): Promise<RefreshResult> {
   const refreshToken = await getRefreshToken();
-  if (!refreshToken) return null;
+  if (!refreshToken) return { kind: 'failed' };
 
   let request = refreshRequests.get(refreshToken);
   if (!request) {
@@ -96,25 +104,28 @@ async function refreshSession(): Promise<{ accessToken: string } | null> {
   }
 
   const tokens = await request;
-  if (!tokens) return null;
+  if (tokens.kind !== 'refreshed') return tokens;
 
   // Each caller writes the same rotated pair to its own response context.
   // This matters when Cloudflare coalesces work in one isolate but the calls
   // originated from separate RSC requests.
-  await setSession(tokens);
-  return { accessToken: tokens.accessToken };
+  await setSession(tokens.tokens);
+  return tokens;
 }
 
-async function requestRefreshedTokens(refreshToken: string): Promise<RefreshedTokens | null> {
+async function requestRefreshedTokens(refreshToken: string): Promise<RefreshResult> {
   const response = await fetch(`${API_BASE_URL}/api/v1/auth/refresh`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ refreshToken }),
   });
-  if (!response.ok) return null;
-
   const body = (await response.json()) as ApiEnvelope<RefreshedTokens>;
-  return body.data ?? null;
+  if (!response.ok) {
+    return body.error?.code === 'REFRESH_TOKEN_ROTATED'
+      ? { kind: 'rotated-elsewhere' }
+      : { kind: 'failed' };
+  }
+  return body.data ? { kind: 'refreshed', tokens: body.data } : { kind: 'failed' };
 }
 
 /**

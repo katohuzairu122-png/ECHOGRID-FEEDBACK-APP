@@ -137,6 +137,7 @@ function createFakeRepos() {
     },
     // Exposed so tests can assert on issued tokens without reaching through
     // the repository fakes' public surface.
+    _rawRefreshTokens: refreshTokens,
     _rawResetTokens: passwordResetTokens,
   };
 }
@@ -241,7 +242,7 @@ describe('AuthService', () => {
     // The old, now-rotated token must be rejected -- this is what catches a
     // stolen-and-replayed refresh token.
     await expect(service.refresh(first.refreshToken)).rejects.toMatchObject({
-      code: 'INVALID_REFRESH_TOKEN',
+      code: 'REFRESH_TOKEN_ROTATED',
     });
 
     await expect(service.refresh(second.refreshToken)).resolves.toMatchObject({
@@ -269,7 +270,7 @@ describe('AuthService', () => {
 
     if (rejected[0]?.status === 'rejected') {
       expect(rejected[0].reason).toMatchObject({
-        code: 'INVALID_REFRESH_TOKEN',
+        code: 'REFRESH_TOKEN_ROTATED',
       });
     }
 
@@ -278,6 +279,25 @@ describe('AuthService', () => {
         accessToken: expect.any(String),
       });
     }
+  });
+
+  it('treats a rotated token as an ordinary invalid replay after the concurrency grace window', async () => {
+    const first = await service.signup({
+      email: 'stale-replay@example.com',
+      password: 'password-123',
+      fullName: 'S',
+    });
+    await service.refresh(first.refreshToken);
+
+    const rotated = [...repos._rawRefreshTokens.values()].find(
+      (row) => row.replacedByTokenId != null,
+    );
+    expect(rotated).toBeDefined();
+    rotated!.revokedAt = new Date(Date.now() - 11_000);
+
+    await expect(service.refresh(first.refreshToken)).rejects.toMatchObject({
+      code: 'INVALID_REFRESH_TOKEN',
+    });
   });
 
   it('refresh rejects a valid token once the account is deactivated -- a suspended user cannot keep renewing an existing session', async () => {

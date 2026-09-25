@@ -74,4 +74,58 @@ describe('apiFetch session refresh', () => {
     });
     expect(clearSessionMock).not.toHaveBeenCalled();
   });
+
+  it('does not clear cookies when another Worker isolate already rotated the token', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string | URL | Request) => {
+        if (String(input).endsWith('/api/v1/auth/refresh')) {
+          return Response.json(
+            {
+              success: false,
+              error: {
+                code: 'REFRESH_TOKEN_ROTATED',
+                message: 'Refresh token was already rotated by a concurrent request.',
+              },
+            },
+            { status: 409 },
+          );
+        }
+        return Response.json(
+          { success: false, error: { code: 'INVALID_TOKEN', message: 'Expired.' } },
+          { status: 401 },
+        );
+      }),
+    );
+
+    await expect(apiFetch('/branches')).rejects.toMatchObject({ status: 401 });
+
+    expect(setSessionMock).not.toHaveBeenCalled();
+    expect(clearSessionMock).not.toHaveBeenCalled();
+  });
+
+  it('still clears cookies when refresh is genuinely invalid', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string | URL | Request) => {
+        if (String(input).endsWith('/api/v1/auth/refresh')) {
+          return Response.json(
+            {
+              success: false,
+              error: { code: 'INVALID_REFRESH_TOKEN', message: 'Invalid.' },
+            },
+            { status: 401 },
+          );
+        }
+        return Response.json(
+          { success: false, error: { code: 'INVALID_TOKEN', message: 'Expired.' } },
+          { status: 401 },
+        );
+      }),
+    );
+
+    await expect(apiFetch('/branches')).rejects.toMatchObject({ status: 401 });
+
+    expect(clearSessionMock).toHaveBeenCalledOnce();
+  });
 });

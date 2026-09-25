@@ -19,6 +19,7 @@ const AUTH_ERROR_STATUS = {
   EMAIL_TAKEN: 409,
   INVALID_CREDENTIALS: 401,
   INVALID_REFRESH_TOKEN: 401,
+  REFRESH_TOKEN_ROTATED: 409,
   ACCOUNT_INACTIVE: 401,
   /** 400, not 401: the caller is not failing to authenticate, they are
    * presenting a token that is expired, already used, or unknown. A 401
@@ -26,6 +27,12 @@ const AUTH_ERROR_STATUS = {
   INVALID_RESET_TOKEN: 400,
   USER_NOT_FOUND: 404,
 } as const;
+
+// A second web request can reach another Worker isolate with the same cookie
+// while the first request is rotating it. Distinguish only that brief race
+// from a later replay, so the losing response does not erase the winner's
+// newly written cookies. Replays outside this window remain ordinary 401s.
+const CONCURRENT_REFRESH_GRACE_MS = 10_000;
 
 type AuthErrorCode = keyof typeof AUTH_ERROR_STATUS;
 
@@ -158,11 +165,23 @@ export class AuthService {
     const payload = await this.verifyRefreshTokenOrThrow(rawRefreshToken);
     const stored = await this.repos.refreshTokens.findById(payload.jti);
 
-    if (!stored || stored.revokedAt || stored.expiresAt < new Date()) {
+    if (!stored || stored.expiresAt < new Date()) {
       throw new AuthError('Refresh token is invalid or expired.', 'INVALID_REFRESH_TOKEN');
     }
     const incomingHash = await hashToken(rawRefreshToken);
     if (!constantTimeEqualHex(incomingHash, stored.tokenHash)) {
+      throw new AuthError('Refresh token is invalid or expired.', 'INVALID_REFRESH_TOKEN');
+    }
+    if (stored.revokedAt) {
+      const wasJustRotated =
+        stored.replacedByTokenId != null &&
+        Date.now() - stored.revokedAt.getTime() <= CONCURRENT_REFRESH_GRACE_MS;
+      if (wasJustRotated) {
+        throw new AuthError(
+          'Refresh token was already rotated by a concurrent request.',
+          'REFRESH_TOKEN_ROTATED',
+        );
+      }
       throw new AuthError('Refresh token is invalid or expired.', 'INVALID_REFRESH_TOKEN');
     }
 
@@ -186,7 +205,10 @@ export class AuthService {
       // Another request consumed this refresh token first. The replacement
       // created above must not remain as a second live session.
       await this.repos.refreshTokens.revoke(next.refreshTokenId);
-      throw new AuthError('Refresh token is invalid or expired.', 'INVALID_REFRESH_TOKEN');
+      throw new AuthError(
+        'Refresh token was already rotated by a concurrent request.',
+        'REFRESH_TOKEN_ROTATED',
+      );
     }
     return next;
   }
