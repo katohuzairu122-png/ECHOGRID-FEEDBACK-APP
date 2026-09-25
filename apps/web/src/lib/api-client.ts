@@ -15,6 +15,21 @@ interface ApiEnvelope<T> {
   error?: { code: string; message: string; details?: unknown };
 }
 
+type RefreshedTokens = { accessToken: string; refreshToken: string };
+
+/**
+ * A dashboard render can start several apiFetch calls together. When the
+ * access token has just expired, every call receives 401 and reaches the
+ * refresh endpoint with the same rotating refresh token. Only the first
+ * rotation can succeed; without this lock, a losing call clears the valid
+ * session created by the winner.
+ *
+ * The key is removed as soon as the request settles. Keeping this at module
+ * scope lets concurrent RSC/API calls handled by the same Worker isolate
+ * share the in-flight rotation without retaining session tokens afterward.
+ */
+const refreshRequests = new Map<string, Promise<RefreshedTokens | null>>();
+
 /**
  * The one place authenticated server-side code calls the Hono API from
  * (login/signup/logout call the API directly instead -- see
@@ -70,6 +85,27 @@ async function refreshSession(): Promise<{ accessToken: string } | null> {
   const refreshToken = await getRefreshToken();
   if (!refreshToken) return null;
 
+  let request = refreshRequests.get(refreshToken);
+  if (!request) {
+    request = requestRefreshedTokens(refreshToken);
+    refreshRequests.set(refreshToken, request);
+    void request.then(
+      () => refreshRequests.delete(refreshToken),
+      () => refreshRequests.delete(refreshToken),
+    );
+  }
+
+  const tokens = await request;
+  if (!tokens) return null;
+
+  // Each caller writes the same rotated pair to its own response context.
+  // This matters when Cloudflare coalesces work in one isolate but the calls
+  // originated from separate RSC requests.
+  await setSession(tokens);
+  return { accessToken: tokens.accessToken };
+}
+
+async function requestRefreshedTokens(refreshToken: string): Promise<RefreshedTokens | null> {
   const response = await fetch(`${API_BASE_URL}/api/v1/auth/refresh`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -77,11 +113,8 @@ async function refreshSession(): Promise<{ accessToken: string } | null> {
   });
   if (!response.ok) return null;
 
-  const body = (await response.json()) as ApiEnvelope<{ accessToken: string; refreshToken: string }>;
-  if (!body.data) return null;
-
-  await setSession(body.data);
-  return { accessToken: body.data.accessToken };
+  const body = (await response.json()) as ApiEnvelope<RefreshedTokens>;
+  return body.data ?? null;
 }
 
 /**
