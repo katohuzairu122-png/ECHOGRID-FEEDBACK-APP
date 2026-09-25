@@ -1,4 +1,4 @@
-import { eq, and, isNull } from 'drizzle-orm';
+import { eq, and, gt, isNull } from 'drizzle-orm';
 import { passwordResetTokens } from '../db/schema';
 import { BaseRepository } from './base.repository';
 
@@ -34,10 +34,10 @@ export class PasswordResetTokenRepository extends BaseRepository {
   }
 
   /**
-   * Marks a token as actually redeemed. Guarded on `consumed_at IS NULL` --
-   * the DB row, not a value read earlier -- so two concurrent redemptions of
-   * the same link cannot both succeed. Returns false when the update matched
-   * nothing, which the caller must treat as "already used."
+   * Marks a token as actually redeemed. Every lifecycle condition is checked
+   * atomically against the DB row so concurrent redemption, invalidation, or
+   * expiry cannot race the earlier service-layer read. Returns false when the
+   * update matched nothing, which the caller treats as an invalid link.
    *
    * This is the same check-then-act fix applied to
    * `loyalty-transaction.repository.ts`'s confirmRedemption in the Phase 8
@@ -46,10 +46,18 @@ export class PasswordResetTokenRepository extends BaseRepository {
    * twice.
    */
   async consume(id: string): Promise<boolean> {
+    const consumedAt = new Date();
     const rows = await this.db
       .update(passwordResetTokens)
-      .set({ consumedAt: new Date() })
-      .where(and(eq(passwordResetTokens.id, id), isNull(passwordResetTokens.consumedAt)))
+      .set({ consumedAt })
+      .where(
+        and(
+          eq(passwordResetTokens.id, id),
+          isNull(passwordResetTokens.consumedAt),
+          isNull(passwordResetTokens.invalidatedAt),
+          gt(passwordResetTokens.expiresAt, consumedAt),
+        ),
+      )
       .returning({ id: passwordResetTokens.id });
     return rows.length > 0;
   }

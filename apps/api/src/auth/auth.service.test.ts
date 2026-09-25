@@ -118,12 +118,12 @@ function createFakeRepos() {
       async findByTokenHash(tokenHash: string) {
         return [...passwordResetTokens.values()].find((t) => t.tokenHash === tokenHash);
       },
-      // Mirrors the repository's guarded `WHERE consumed_at IS NULL` update
-      // -- returning false on an already-consumed row is the behaviour the
-      // concurrent-redemption test below depends on.
+      // Mirrors every lifecycle guard in the repository's atomic update.
       async consume(id: string) {
         const row = passwordResetTokens.get(id);
-        if (!row || row.consumedAt) return false;
+        if (!row || row.consumedAt || row.invalidatedAt || row.expiresAt <= new Date()) {
+          return false;
+        }
         row.consumedAt = new Date();
         return true;
       },
@@ -435,6 +435,41 @@ describe('AuthService', () => {
 
     expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
     expect(results.filter((r) => r.status === 'rejected')).toHaveLength(1);
+  });
+
+  it('rejects a link invalidated after lookup but before atomic consumption', async () => {
+    const { rawToken } = await signupAndRequestReset('invalidation-race@example.com');
+    const consume = repos.passwordResetTokens.consume;
+    repos.passwordResetTokens.consume = async (id: string) => {
+      repos._rawResetTokens.get(id)!.invalidatedAt = new Date();
+      return consume(id);
+    };
+
+    await expect(
+      service.resetPassword({ token: rawToken, newPassword: 'brand-new-password-1' }),
+    ).rejects.toMatchObject({ code: 'INVALID_RESET_TOKEN' });
+    await expect(
+      service.login({
+        email: 'invalidation-race@example.com',
+        password: 'original-password-1',
+      }),
+    ).resolves.toMatchObject({ accessToken: expect.any(String) });
+  });
+
+  it('rejects a link that expires after lookup but before atomic consumption', async () => {
+    const { rawToken } = await signupAndRequestReset('expiry-race@example.com');
+    const consume = repos.passwordResetTokens.consume;
+    repos.passwordResetTokens.consume = async (id: string) => {
+      repos._rawResetTokens.get(id)!.expiresAt = new Date(Date.now() - 1);
+      return consume(id);
+    };
+
+    await expect(
+      service.resetPassword({ token: rawToken, newPassword: 'brand-new-password-1' }),
+    ).rejects.toMatchObject({ code: 'INVALID_RESET_TOKEN' });
+    await expect(
+      service.login({ email: 'expiry-race@example.com', password: 'original-password-1' }),
+    ).resolves.toMatchObject({ accessToken: expect.any(String) });
   });
 
   it('rejects an expired reset token', async () => {
