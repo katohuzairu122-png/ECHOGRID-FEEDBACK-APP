@@ -1,6 +1,8 @@
 {
   "nav": {
     "menu": "Navigation du tableau de bord",
+    "installApp": "Installer l’application",
+    "installIosHint": "Pour installer Echo Grid, touchez Partager, puis Sur l’écran d’accueil.",
     "branches": "Succursales",
     "feedback": "Avis",
     "loyalty": "Fidélité",
