@@ -56,11 +56,13 @@ describe('logoutAction', () => {
     vi.stubGlobal('fetch', vi.fn());
   });
 
-  it('clears the local session and redirects when upstream logout fails', async () => {
+  it('preserves the local session when the logout request cannot reach the API', async () => {
     getRefreshTokenMock.mockResolvedValue('refresh-token');
     vi.mocked(fetch).mockRejectedValue(new Error('network failure'));
 
-    await logoutAction();
+    await expect(logoutAction()).rejects.toThrow(
+      'Unable to sign out safely. Please try again.',
+    );
 
     expect(fetch).toHaveBeenCalledWith(
       'https://api.example.test/api/v1/auth/logout',
@@ -69,6 +71,28 @@ describe('logoutAction', () => {
         body: JSON.stringify({ refreshToken: 'refresh-token' }),
       }),
     );
+    expect(clearSessionMock).not.toHaveBeenCalled();
+    expect(redirectMock).not.toHaveBeenCalled();
+  });
+
+  it('preserves the local session when the API does not confirm revocation', async () => {
+    getRefreshTokenMock.mockResolvedValue('refresh-token');
+    vi.mocked(fetch).mockResolvedValue(new Response(null, { status: 503 }));
+
+    await expect(logoutAction()).rejects.toThrow(
+      'Unable to sign out safely. Please try again.',
+    );
+
+    expect(clearSessionMock).not.toHaveBeenCalled();
+    expect(redirectMock).not.toHaveBeenCalled();
+  });
+
+  it('clears the local session and redirects after revocation succeeds', async () => {
+    getRefreshTokenMock.mockResolvedValue('refresh-token');
+    vi.mocked(fetch).mockResolvedValue(new Response(null, { status: 204 }));
+
+    await logoutAction();
+
     expect(clearSessionMock).toHaveBeenCalledOnce();
     expect(redirectMock).toHaveBeenCalledWith('/login');
   });

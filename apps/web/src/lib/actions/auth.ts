@@ -234,19 +234,29 @@ export async function changePasswordAction(
 }
 
 /**
- * Best-effort upstream revoke: the local session is cleared regardless of
- * whether the API call succeeds, so a network blip never traps a user in a
- * logged-in-looking state they can't escape.
+ * Revokes the server-side refresh token before clearing its local cookie.
+ * Reporting success after a network or API failure would leave a usable
+ * 30-day credential behind while telling the user they had signed out. Keep
+ * the cookie on failure so the same logout action can safely be retried.
  */
 export async function logoutAction(): Promise<void> {
   const refreshToken = await getRefreshToken();
 
   if (refreshToken) {
-    await fetch(`${API_BASE_URL}/api/v1/auth/logout`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ refreshToken }),
-    }).catch(() => null);
+    let response: Response;
+    try {
+      response = await fetch(`${API_BASE_URL}/api/v1/auth/logout`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refreshToken }),
+      });
+    } catch {
+      throw new Error('Unable to sign out safely. Please try again.');
+    }
+
+    if (!response.ok) {
+      throw new Error('Unable to sign out safely. Please try again.');
+    }
   }
 
   await clearSession();
