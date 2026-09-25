@@ -1,13 +1,17 @@
 'use client';
 
 import { useActionState } from 'react';
-import { useTranslations } from 'next-intl';
-import { SUPPORTED_LOCALES, LOCALE_LABELS, type BusinessDto } from '@echo-grid-feedback/shared-types';
+import { useLocale, useTranslations } from 'next-intl';
+import {
+  SUPPORTED_LOCALES,
+  LOCALE_LABELS,
+  type BusinessDto,
+} from '@echo-grid-feedback/shared-types';
 import {
   updateBusinessSettingsAction,
   type BusinessSettingsFormState,
 } from '@/lib/actions/business';
-import { COMMON_CURRENCIES } from '@/lib/currencies';
+import { getCurrencyOptions } from '@/lib/currencies';
 import { Button, Input, Label, Select } from '@/components/ui';
 
 const initialState: BusinessSettingsFormState = {};
@@ -20,6 +24,8 @@ export function SettingsForm({ business }: { business: BusinessDto }) {
   // convention every real-world language switcher uses, not a translated
   // string this component owns.
   const t = useTranslations('dashboard.settings');
+  const locale = useLocale();
+  const currencies = getCurrencyOptions(locale, business.defaultCurrency);
 
   return (
     <form action={formAction} className="flex flex-col gap-4">
@@ -31,7 +37,12 @@ export function SettingsForm({ business }: { business: BusinessDto }) {
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="defaultLocale">{t('languageLabel')}</Label>
-          <Select id="defaultLocale" name="defaultLocale" defaultValue={business.defaultLocale} required>
+          <Select
+            id="defaultLocale"
+            name="defaultLocale"
+            defaultValue={business.defaultLocale}
+            required
+          >
             {SUPPORTED_LOCALES.map((locale) => (
               <option key={locale} value={locale}>
                 {LOCALE_LABELS[locale]}
@@ -48,7 +59,7 @@ export function SettingsForm({ business }: { business: BusinessDto }) {
             defaultValue={business.defaultCurrency}
             required
           >
-            {COMMON_CURRENCIES.map((currency) => (
+            {currencies.map((currency) => (
               <option key={currency.code} value={currency.code}>
                 {currency.label}
               </option>
