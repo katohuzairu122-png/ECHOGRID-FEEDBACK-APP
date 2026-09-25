@@ -1,13 +1,16 @@
 import { describe, it, expect } from 'vitest';
 import { NextRequest } from 'next/server';
 import { middleware } from './middleware';
-import { REFRESH_TOKEN_COOKIE } from '@/lib/cookies';
+import { ACCESS_TOKEN_COOKIE, REFRESH_TOKEN_COOKIE } from '@/lib/cookies';
 
 const ORIGIN = 'https://app.test';
 
 function request(pathname: string, { signedIn = false } = {}) {
   const req = new NextRequest(new URL(pathname, ORIGIN));
-  if (signedIn) req.cookies.set(REFRESH_TOKEN_COOKIE, 'a-refresh-token');
+  if (signedIn) {
+    req.cookies.set(ACCESS_TOKEN_COOKIE, 'an-access-token');
+    req.cookies.set(REFRESH_TOKEN_COOKIE, 'a-refresh-token');
+  }
   return req;
 }
 
@@ -53,6 +56,13 @@ describe('middleware — account recovery paths', () => {
 
   it('still bounces a signed-in user away from /login', () => {
     expect(redirectTarget(middleware(request('/login', { signedIn: true })))).toBe('/dashboard');
+  });
+
+  it('allows /login when only a refresh cookie remains, preventing a redirect loop', () => {
+    const req = request('/login');
+    req.cookies.set(REFRESH_TOKEN_COOKIE, 'a-refresh-token');
+
+    expect(redirectTarget(middleware(req))).toBeNull();
   });
 
   it('still gates a protected route for a signed-out visitor', () => {
