@@ -301,8 +301,6 @@ Worth reading before a real launch, not just this runbook:
 - Stripe `apiVersion` pinned in code but never independently confirmed
   against Stripe's current dashboard
 - MRR reporting assumes a single currency — no FX conversion
-- Suspended/deactivated staff accounts keep a still-valid access token on
-  ordinary business routes until it naturally expires (15 min)
 - No automated E2E coverage of the Stripe Checkout/webhook flow — Step 8
   above is currently the only verification this module gets before you rely
   on it for real

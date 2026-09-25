@@ -27,14 +27,10 @@ export type PlatformVariables = {
  * restricted to ['billing'] does not automatically admit 'admin'. Routes
  * that should admit multiple tiers list them out, e.g. ['billing', 'admin'].
  *
- * Also re-checks user.status === 'active' as defense in depth: platform
- * routes are the highest-blast-radius surface in the system (cross-tenant
- * data, impersonation, billing), so this middleware holds a stricter bar
- * than `authenticate` alone, which does not check status today. Known gap to
- * track, not fixed here: a suspended/deactivated user's still-valid access
- * token remains accepted by ordinary business routes (authenticate never
- * checks status either) -- out of scope for this block since it touches
- * shared auth behavior, not something platform-admin-specific.
+ * Also re-checks user.status === 'active' as defense in depth: authenticate
+ * now enforces account state globally, while this middleware keeps the same
+ * invariant beside its fresh platform-role lookup on the highest-blast-radius
+ * routes (cross-tenant data, impersonation, and billing).
  */
 export function requirePlatformRole(allowedRoles: PlatformRole[]) {
   return createMiddleware<{

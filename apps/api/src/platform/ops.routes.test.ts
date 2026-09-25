@@ -149,13 +149,13 @@ describe('POST /platform/ops/test-alert -- authorization', () => {
   });
 
   it('rejects a platform admin whose account is not active', async () => {
-    // requirePlatformRole re-checks status as defence in depth (authenticate
-    // does not). Asserted here so that property is not quietly lost.
+    // authenticate now rejects inactive identities globally, before the
+    // platform-role middleware's matching defense-in-depth check.
     asUser({ platformRole: 'admin', status: 'suspended' });
     const response = await callTestAlert({ token: await signAccessToken(ADMIN_USER_ID, JWT_SECRET) });
 
-    expect(response.status).toBe(403);
-    expect(await errorCodeOf(response)).toBe('PLATFORM_ACCESS_DENIED');
+    expect(response.status).toBe(401);
+    expect(await errorCodeOf(response)).toBe('UNAUTHENTICATED');
   });
 
   it('accepts a platform ADMIN', async () => {
