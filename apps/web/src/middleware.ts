@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server';
-import { REFRESH_TOKEN_COOKIE } from '@/lib/cookies';
+import { ACCESS_TOKEN_COOKIE, REFRESH_TOKEN_COOKIE } from '@/lib/cookies';
 
 // Staff sign-in pages: redirect AWAY to /dashboard if a staff refresh token
 // is already present, same as before.
@@ -85,14 +85,20 @@ const ROOT_PATH = '/';
  */
 export function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
-  const isPublicPath = pathname === ROOT_PATH || PUBLIC_PATHS.some((path) => pathname.startsWith(path));
+  const isPublicPath =
+    pathname === ROOT_PATH || PUBLIC_PATHS.some((path) => pathname.startsWith(path));
   const isStaffAuthPath = STAFF_AUTH_PATHS.some((path) => pathname.startsWith(path));
+  const hasAccessToken = request.cookies.has(ACCESS_TOKEN_COOKIE);
   const hasRefreshToken = request.cookies.has(REFRESH_TOKEN_COOKIE);
 
   if (!isPublicPath && !hasRefreshToken) {
     return NextResponse.redirect(new URL('/login', request.url));
   }
-  if (isStaffAuthPath && hasRefreshToken) {
+  // Only bounce away from login when the immediately usable cookie pair is
+  // present. A refresh-only cookie is the normal state after the 15-minute
+  // access cookie expires; redirecting it to a dashboard request that may
+  // reject the stale refresh token creates /dashboard <-> /login loops.
+  if (isStaffAuthPath && hasAccessToken && hasRefreshToken) {
     return NextResponse.redirect(new URL('/dashboard', request.url));
   }
   return NextResponse.next();
