@@ -3,6 +3,7 @@ import { getTranslations } from 'next-intl/server';
 import { logoutAction } from '@/lib/actions/auth';
 import { Button } from '@/components/ui';
 import { Logo } from '@/components/brand';
+import { DashboardMobileNav } from './dashboard-mobile-nav';
 
 const NAV_ITEMS = [
   ['branches', '/dashboard/branches'],
@@ -54,51 +55,11 @@ export async function DashboardNav() {
             </Button>
           </form>
 
-          <details className="group relative lg:hidden">
-            <summary className="flex min-h-11 min-w-11 cursor-pointer list-none items-center justify-center rounded-md border border-neutral-200 text-neutral-700 hover:bg-neutral-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 [&::-webkit-details-marker]:hidden">
-              <span className="sr-only">{t('nav.menu')}</span>
-              <svg
-                aria-hidden="true"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                className="h-5 w-5 group-open:hidden"
-              >
-                <path d="M4 6h16M4 12h16M4 18h16" />
-              </svg>
-              <svg
-                aria-hidden="true"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                className="hidden h-5 w-5 group-open:block"
-              >
-                <path d="m6 6 12 12M18 6 6 18" />
-              </svg>
-            </summary>
-            <div className="absolute end-0 z-50 mt-2 w-64 rounded-lg border border-neutral-200 bg-white p-2 shadow-lg">
-              <nav className="grid" aria-label={t('nav.menu')}>
-                {NAV_ITEMS.map(([key, href]) => (
-                  <Link
-                    key={key}
-                    href={href}
-                    className="rounded-md px-3 py-2.5 text-sm text-neutral-700 hover:bg-neutral-50 hover:text-neutral-950"
-                  >
-                    {t(`nav.${key}`)}
-                  </Link>
-                ))}
-              </nav>
-              <form action={logoutAction} className="mt-1 border-t border-neutral-100 pt-1">
-                <Button type="submit" variant="ghost" size="sm" className="w-full justify-start">
-                  {t('nav.logout')}
-                </Button>
-              </form>
-            </div>
-          </details>
+          <DashboardMobileNav
+            menuLabel={t('nav.menu')}
+            logoutLabel={t('nav.logout')}
+            items={NAV_ITEMS.map(([key, href]) => ({ href, label: t(`nav.${key}`) }))}
+          />
         </div>
       </div>
     </header>
