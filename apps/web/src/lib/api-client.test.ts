@@ -75,6 +75,44 @@ describe('apiFetch session refresh', () => {
     expect(clearSessionMock).not.toHaveBeenCalled();
   });
 
+  it('refreshes when the access cookie expired but the refresh cookie remains', async () => {
+    getAccessTokenMock.mockResolvedValue(undefined);
+    let protectedCalls = 0;
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+        if (String(input).endsWith('/api/v1/auth/refresh')) {
+          return Response.json({
+            success: true,
+            data: { accessToken: 'fresh-access-token', refreshToken: 'fresh-refresh-token' },
+          });
+        }
+
+        protectedCalls += 1;
+        const authorization = new Headers(init?.headers).get('Authorization');
+        if (!authorization) {
+          return Response.json(
+            {
+              success: false,
+              error: { code: 'UNAUTHORIZED', message: 'Authentication required.' },
+            },
+            { status: 401 },
+          );
+        }
+        return Response.json({ success: true, data: { ok: true } });
+      }),
+    );
+
+    await expect(apiFetch<{ ok: boolean }>('/branches')).resolves.toEqual({ ok: true });
+    expect(protectedCalls).toBe(2);
+    expect(setSessionMock).toHaveBeenCalledWith({
+      accessToken: 'fresh-access-token',
+      refreshToken: 'fresh-refresh-token',
+    });
+    expect(clearSessionMock).not.toHaveBeenCalled();
+  });
+
   it('does not clear cookies when another Worker isolate already rotated the token', async () => {
     vi.stubGlobal(
       'fetch',
