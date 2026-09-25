@@ -72,6 +72,17 @@
     "cancelsOn": "يتم الإلغاء في {date}.",
     "renewsOn": "يتم التجديد في {date}.",
     "plans": {
+      "catalog": {
+        "starter": { "name": "الانطلاق", "description": "لموقع واحد يبدأ بجمع ملاحظات العملاء." },
+        "growth": {
+          "name": "النمو",
+          "description": "للأنشطة متعددة المواقع التي تحتاج إلى رؤى مدعومة بالذكاء الاصطناعي."
+        },
+        "enterprise": {
+          "name": "المؤسسات",
+          "description": "فروع وأعضاء فريق بلا حدود، مع علامة تجارية مخصصة."
+        }
+      },
       "currentPlan": "الخطة الحالية",
       "perMonth": "شهريًا",
       "unlimitedBranches": "فروع غير محدودة",
@@ -79,7 +90,7 @@
       "unlimitedUsers": "أعضاء فريق غير محدودين",
       "limitedUsers": "حتى {count} {count, plural, one {عضو في الفريق} other {أعضاء في الفريق}}",
       "subscribeMonthly": "اشتراك شهري",
-      "subscribeYearly": "اشتراك سنوي ({price})",
+      "subscribeYearly": "اشتراك سنوي",
       "starting": "جارٍ البدء…"
     }
   }

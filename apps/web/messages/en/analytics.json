@@ -5,7 +5,14 @@
     "trendTitle": "Sentiment trend",
     "trendDescription": "Last 30 days, day by day",
     "summariesTitle": "AI summaries",
-    "summariesDescription": "Auto-generated overviews with actionable recommendations"
+    "summariesDescription": "Auto-generated overviews with actionable recommendations",
+    "chart": {
+      "empty": "No data for this range yet.",
+      "ariaLabel": "Sentiment trend over time",
+      "positive": "Positive",
+      "neutral": "Neutral",
+      "negative": "Negative"
+    }
   },
   "branchFilter": {
     "ariaLabel": "Filter by branch",
@@ -23,6 +30,7 @@
   },
   "summariesList": {
     "empty": "No AI summaries yet. Generate one above once there's feedback to summarize.",
+    "unavailable": "No AI analysis is available for this period.",
     "daily": "Daily",
     "weekly": "Weekly",
     "monthly": "Monthly",

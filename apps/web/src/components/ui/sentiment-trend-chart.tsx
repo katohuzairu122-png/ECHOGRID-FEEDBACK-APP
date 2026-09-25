@@ -2,6 +2,13 @@ import type { SentimentTrendPointDto } from '@echo-grid-feedback/shared-types';
 
 interface SentimentTrendChartProps {
   points: SentimentTrendPointDto[];
+  labels: {
+    empty: string;
+    ariaLabel: string;
+    positive: string;
+    neutral: string;
+    negative: string;
+  };
 }
 
 const CHART_HEIGHT = 160;
@@ -18,9 +25,9 @@ const BAR_GAP = 2;
  * percentages of the point count; preserveAspectRatio="none" lets the
  * container's own width (h-40 w-full below) control real rendered size.
  */
-export function SentimentTrendChart({ points }: SentimentTrendChartProps) {
+export function SentimentTrendChart({ points, labels }: SentimentTrendChartProps) {
   if (points.length === 0) {
-    return <p className="py-8 text-center text-sm text-neutral-500">No data for this range yet.</p>;
+    return <p className="py-8 text-center text-sm text-neutral-500">{labels.empty}</p>;
   }
 
   const maxTotal = Math.max(1, ...points.map((p) => p.positive + p.neutral + p.negative));
@@ -34,7 +41,7 @@ export function SentimentTrendChart({ points }: SentimentTrendChartProps) {
         preserveAspectRatio="none"
         className="h-40 w-full"
         role="img"
-        aria-label="Sentiment trend over time"
+        aria-label={labels.ariaLabel}
       >
         {points.map((point, i) => {
           const x = i * barWidth + BAR_GAP / 2;
@@ -69,9 +76,9 @@ export function SentimentTrendChart({ points }: SentimentTrendChartProps) {
         <span>{points[points.length - 1]?.bucket}</span>
       </div>
       <div className="flex items-center justify-center gap-4 text-xs text-neutral-600">
-        <ChartLegendItem colorClass="bg-success" label="Positive" />
-        <ChartLegendItem colorClass="bg-neutral-300" label="Neutral" />
-        <ChartLegendItem colorClass="bg-danger" label="Negative" />
+        <ChartLegendItem colorClass="bg-success" label={labels.positive} />
+        <ChartLegendItem colorClass="bg-neutral-300" label={labels.neutral} />
+        <ChartLegendItem colorClass="bg-danger" label={labels.negative} />
       </div>
     </div>
   );

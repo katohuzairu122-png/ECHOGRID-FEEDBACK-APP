@@ -72,6 +72,20 @@
     "cancelsOn": "S'annule le {date}.",
     "renewsOn": "Se renouvelle le {date}.",
     "plans": {
+      "catalog": {
+        "starter": {
+          "name": "Démarrage",
+          "description": "Pour un seul établissement qui commence à recueillir les avis des clients."
+        },
+        "growth": {
+          "name": "Croissance",
+          "description": "Pour les entreprises multisites qui ont besoin d'analyses assistées par l'IA."
+        },
+        "enterprise": {
+          "name": "Entreprise",
+          "description": "Succursales et membres d'équipe illimités, avec une identité de marque personnalisée."
+        }
+      },
       "currentPlan": "Forfait actuel",
       "perMonth": "mois",
       "unlimitedBranches": "Succursales illimitées",
@@ -79,7 +93,7 @@
       "unlimitedUsers": "Membres d'équipe illimités",
       "limitedUsers": "Jusqu'à {count} membre{count, plural, one {} other {s}} d'équipe",
       "subscribeMonthly": "S'abonner mensuellement",
-      "subscribeYearly": "S'abonner annuellement ({price})",
+      "subscribeYearly": "S'abonner annuellement",
       "starting": "Démarrage…"
     }
   }

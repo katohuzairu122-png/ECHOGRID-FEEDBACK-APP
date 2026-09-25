@@ -22,6 +22,45 @@ interface PlanCardProps {
   isCurrent: boolean;
 }
 
+/** The catalog has stable plan keys, but an edited/custom plan must retain
+ * its actual name and description rather than display stale seed copy. */
+function usePlanCopy(plan: SubscriptionPlanDto) {
+  const t = useTranslations('dashboard.billing.plans.catalog');
+  switch (plan.key) {
+    case 'starter':
+      return {
+        name: plan.name === 'Starter' ? t('starter.name') : plan.name,
+        description:
+          plan.description === 'For a single location getting started with customer feedback.'
+            ? t('starter.description')
+            : plan.description,
+      };
+    case 'growth':
+      return {
+        name: plan.name === 'Growth' ? t('growth.name') : plan.name,
+        description:
+          plan.description === 'For multi-location businesses that need AI-powered insights.'
+            ? t('growth.description')
+            : plan.description,
+      };
+    case 'enterprise':
+      return {
+        name: plan.name === 'Enterprise' ? t('enterprise.name') : plan.name,
+        description:
+          plan.description === 'Unlimited branches and team members, with custom branding.'
+            ? t('enterprise.description')
+            : plan.description,
+      };
+    default:
+      return { name: plan.name, description: plan.description };
+  }
+}
+
+export function PlanTitle({ plan }: { plan: SubscriptionPlanDto }) {
+  const { name } = usePlanCopy(plan);
+  return <span dir="auto">{name}</span>;
+}
+
 /**
  * Two separate bound Server Actions (one per interval) rather than a single
  * form with an interval <select> -- each plan's monthly/yearly pricing is
@@ -37,30 +76,38 @@ interface PlanCardProps {
 export function PlanCard({ plan, isCurrent }: PlanCardProps) {
   const t = useTranslations('dashboard.billing.plans');
   const locale = useLocale();
+  const { name, description } = usePlanCopy(plan);
 
   const monthlyAction = createCheckoutSessionAction.bind(null, plan.id, 'month');
-  const [monthlyState, monthlyFormAction, monthlyPending] = useActionState(monthlyAction, initialState);
+  const [monthlyState, monthlyFormAction, monthlyPending] = useActionState(
+    monthlyAction,
+    initialState,
+  );
 
   const yearlyAction = createCheckoutSessionAction.bind(null, plan.id, 'year');
   const [yearlyState, yearlyFormAction, yearlyPending] = useActionState(yearlyAction, initialState);
 
   const formatPrice = (cents: number) =>
-    new Intl.NumberFormat(locale, { style: 'currency', currency: plan.currency.toUpperCase() }).format(
-      cents / 100,
-    );
+    new Intl.NumberFormat(locale === 'ar' ? 'en-US' : locale, {
+      style: 'currency',
+      currency: plan.currency.toUpperCase(),
+      currencyDisplay: locale === 'ar' ? 'code' : 'symbol',
+    }).format(cents / 100);
 
   return (
     <Card className={isCurrent ? 'border-brand-500 ring-1 ring-brand-500' : undefined}>
       <CardHeader>
         <div className="flex items-center justify-between gap-2">
-          <CardTitle>{plan.name}</CardTitle>
+          <CardTitle>
+            <span dir="auto">{name}</span>
+          </CardTitle>
           {isCurrent && <Badge variant="brand">{t('currentPlan')}</Badge>}
         </div>
-        {plan.description && <CardDescription>{plan.description}</CardDescription>}
+        {description && <CardDescription dir="auto">{description}</CardDescription>}
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
         <p className="text-2xl font-semibold text-neutral-900">
-          {formatPrice(plan.priceMonthlyCents)}
+          <bdi dir="ltr">{formatPrice(plan.priceMonthlyCents)}</bdi>
           <span className="text-sm font-normal text-neutral-500">/{t('perMonth')}</span>
         </p>
         <ul className="flex flex-col gap-1 text-sm text-neutral-600">
@@ -70,7 +117,9 @@ export function PlanCard({ plan, isCurrent }: PlanCardProps) {
               : t('limitedBranches', { count: plan.maxBranches })}
           </li>
           <li>
-            {plan.maxUsers === null ? t('unlimitedUsers') : t('limitedUsers', { count: plan.maxUsers })}
+            {plan.maxUsers === null
+              ? t('unlimitedUsers')
+              : t('limitedUsers', { count: plan.maxUsers })}
           </li>
         </ul>
       </CardContent>
@@ -84,9 +133,14 @@ export function PlanCard({ plan, isCurrent }: PlanCardProps) {
           {plan.priceYearlyCents !== null && (
             <form action={yearlyFormAction}>
               <Button type="submit" variant="outline" disabled={yearlyPending} className="w-full">
-                {yearlyPending
-                  ? t('starting')
-                  : t('subscribeYearly', { price: formatPrice(plan.priceYearlyCents) })}
+                {yearlyPending ? (
+                  t('starting')
+                ) : (
+                  <>
+                    {t('subscribeYearly')} (
+                    <bdi dir="ltr">{formatPrice(plan.priceYearlyCents)}</bdi>)
+                  </>
+                )}
               </Button>
             </form>
           )}

@@ -314,6 +314,16 @@ describe('SummaryService.generateForPeriod', () => {
     expect(call.feedbackCount).toBe(4);
   });
 
+  it('uses the business locale for queued summary generation', async () => {
+    const repos = createFakeRepos({ items: [makeFeedback()], business: { ...BUSINESS, defaultLocale: 'ar' } });
+    const generator = fakeGenerator();
+    const service = new SummaryService(repos, generator, TEST_MODEL, PERMISSIVE_SPEND_LIMITS);
+
+    await service.generateForPeriod({ businessId: BUSINESS_A, periodType: 'weekly', periodStart, periodEnd });
+
+    expect(generator.generate).toHaveBeenCalledWith(expect.objectContaining({ locale: 'ar' }));
+  });
+
   it('only forwards non-empty, trimmed comments to the generator', async () => {
     const items = [
       makeFeedback({ comment: '  Great stuff  ' }),

@@ -1,4 +1,4 @@
-import { countSentimentPolarities } from '@echo-grid-feedback/shared-types';
+import { countSentimentPolarities, resolveSupportedLocale } from '@echo-grid-feedback/shared-types';
 import type { Repositories } from '../repositories';
 import type { FeedbackSummary } from '../repositories/feedback-summary.repository';
 import {
@@ -288,6 +288,7 @@ export class SummaryService {
     let result: SummaryGenerationResult;
     try {
       result = await this.generator.generate({
+        locale: resolveSupportedLocale(business.defaultLocale),
         businessName: business.name,
         branchName: branch?.name,
         periodLabel: formatPeriodLabel(periodStart, periodEnd),

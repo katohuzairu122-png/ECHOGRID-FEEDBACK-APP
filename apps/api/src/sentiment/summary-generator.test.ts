@@ -7,6 +7,7 @@ import type { SummaryGenerationInput } from './summary-generator';
  * builder convention already used in summary.service.test.ts. */
 function makeInput(overrides: Partial<SummaryGenerationInput> = {}): SummaryGenerationInput {
   return {
+    locale: 'en',
     businessName: 'Test Business',
     periodLabel: '2026-07-02 to 2026-07-09',
     feedbackCount: 4,
@@ -69,6 +70,15 @@ describe('ConsoleSummaryGenerator', () => {
 });
 
 describe('buildPrompt (S4 roadmap Block 4 -- category/urgency + period-over-period)', () => {
+  it('requests Arabic output while preserving the parser markers and original customer quotes', () => {
+    const prompt = buildPrompt(makeInput({ locale: 'ar', comments: ['Tremendous'] }));
+    expect(prompt).toContain('Write the summary and each recommendation in Modern Standard Arabic');
+    expect(prompt).toContain('Preserve business names and customer quotes verbatim');
+    expect(prompt).toContain('SUMMARY: <summary prose>');
+    expect(prompt).toContain('RECOMMENDATIONS: <one recommendation per line, no numbering>');
+    expect(prompt).toContain('"Tremendous"');
+  });
+
   it('renders non-empty category and urgency breakdowns as "label (count)", comma-joined', () => {
     const prompt = buildPrompt(
       makeInput({
