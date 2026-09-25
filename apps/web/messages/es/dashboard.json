@@ -1,6 +1,8 @@
 {
   "nav": {
     "menu": "Navegación del panel",
+    "installApp": "Instalar aplicación",
+    "installIosHint": "Para instalar Echo Grid, toca Compartir y luego Añadir a la pantalla de inicio.",
     "branches": "Sucursales",
     "feedback": "Comentarios",
     "loyalty": "Fidelización",

@@ -1,6 +1,8 @@
 {
   "nav": {
     "menu": "Dashboard navigation",
+    "installApp": "Install app",
+    "installIosHint": "To install Echo Grid, tap Share, then Add to Home Screen.",
     "branches": "Branches",
     "feedback": "Feedback",
     "loyalty": "Loyalty",

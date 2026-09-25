@@ -3,6 +3,7 @@ import { getTranslations } from 'next-intl/server';
 import { logoutAction } from '@/lib/actions/auth';
 import { Button } from '@/components/ui';
 import { Logo } from '@/components/brand';
+import { PwaInstallButton } from '@/components/pwa-install-button';
 import { DashboardMobileNav } from './dashboard-mobile-nav';
 
 const NAV_ITEMS = [
@@ -49,15 +50,20 @@ export async function DashboardNav() {
               </Link>
             ))}
           </nav>
-          <form action={logoutAction} className="hidden lg:block">
-            <Button type="submit" variant="ghost" size="sm">
-              {t('nav.logout')}
-            </Button>
-          </form>
+          <div className="hidden items-center gap-1 lg:flex">
+            <PwaInstallButton label={t('nav.installApp')} iosHint={t('nav.installIosHint')} />
+            <form action={logoutAction}>
+              <Button type="submit" variant="ghost" size="sm">
+                {t('nav.logout')}
+              </Button>
+            </form>
+          </div>
 
           <DashboardMobileNav
             menuLabel={t('nav.menu')}
             logoutLabel={t('nav.logout')}
+            installLabel={t('nav.installApp')}
+            installIosHint={t('nav.installIosHint')}
             items={NAV_ITEMS.map(([key, href]) => ({ href, label: t(`nav.${key}`) }))}
           />
         </div>
