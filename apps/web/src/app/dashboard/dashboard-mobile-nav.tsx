@@ -4,6 +4,7 @@ import { useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { Button } from '@/components/ui';
+import { PwaInstallButton } from '@/components/pwa-install-button';
 import { logoutAction } from '@/lib/actions/auth';
 
 interface MobileNavItem {
@@ -15,10 +16,14 @@ export function DashboardMobileNav({
   items,
   menuLabel,
   logoutLabel,
+  installLabel,
+  installIosHint,
 }: {
   items: MobileNavItem[];
   menuLabel: string;
   logoutLabel: string;
+  installLabel: string;
+  installIosHint: string;
 }) {
   const detailsRef = useRef<HTMLDetailsElement>(null);
   const pathname = usePathname();
@@ -75,7 +80,14 @@ export function DashboardMobileNav({
             </Link>
           ))}
         </nav>
-        <form action={logoutAction} className="mt-1 border-t border-neutral-100 pt-1">
+        <div className="mt-1 border-t border-neutral-100 pt-1">
+          <PwaInstallButton
+            label={installLabel}
+            iosHint={installIosHint}
+            className="w-full justify-start"
+          />
+        </div>
+        <form action={logoutAction}>
           <Button type="submit" variant="ghost" size="sm" className="w-full justify-start">
             {logoutLabel}
           </Button>
