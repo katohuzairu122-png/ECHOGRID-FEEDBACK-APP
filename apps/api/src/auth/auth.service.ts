@@ -321,7 +321,8 @@ export class AuthService {
     if (!user) {
       throw new AuthError('User not found.', 'USER_NOT_FOUND');
     }
-    if (!(await this.hasher.verify(input.currentPassword, user.passwordHash))) {
+    const verifiedPasswordHash = user.passwordHash;
+    if (!(await this.hasher.verify(input.currentPassword, verifiedPasswordHash))) {
       // Same code as a failed login -- from the caller's perspective this is
       // exactly that: a password check that did not pass.
       throw new AuthError('Current password is incorrect.', 'INVALID_CREDENTIALS');
@@ -330,7 +331,19 @@ export class AuthService {
       throw new AuthError('This account is not active.', 'ACCOUNT_INACTIVE');
     }
 
-    await this.applyNewPassword(user.id, input.newPassword);
+    const passwordHash = await this.hasher.hash(input.newPassword, PASSWORD_ITERATIONS);
+    const changed = await this.repos.users.updatePasswordIfCurrentHash(
+      user.id,
+      verifiedPasswordHash,
+      passwordHash,
+      user.id,
+    );
+    if (!changed) {
+      // Another request replaced the verified credential first. The supplied
+      // current password is no longer current, so it must not authorize a
+      // second replacement.
+      throw new AuthError('Current password is incorrect.', 'INVALID_CREDENTIALS');
+    }
     await this.afterPasswordChanged(user.id, user.fullName, user.email, deps.email);
   }
 

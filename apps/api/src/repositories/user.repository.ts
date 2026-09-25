@@ -45,6 +45,31 @@ export class UserRepository extends BaseRepository {
     return row;
   }
 
+  /**
+   * Replaces a password only while it still matches the hash the caller
+   * verified. This closes the gap between reading/verifying a credential and
+   * writing its replacement when two password changes arrive concurrently.
+   */
+  async updatePasswordIfCurrentHash(
+    id: string,
+    currentPasswordHash: string,
+    newPasswordHash: string,
+    updatedBy: string,
+  ): Promise<boolean> {
+    const rows = await this.db
+      .update(users)
+      .set({ passwordHash: newPasswordHash, updatedBy, updatedAt: new Date() })
+      .where(
+        and(
+          eq(users.id, id),
+          eq(users.passwordHash, currentPasswordHash),
+          eq(users.isDeleted, false),
+        ),
+      )
+      .returning({ id: users.id });
+    return rows.length > 0;
+  }
+
   async touchLastLogin(id: string): Promise<void> {
     await this.db.update(users).set({ lastLoginAt: new Date() }).where(eq(users.id, id));
   }

@@ -60,6 +60,18 @@ function createFakeRepos() {
         Object.assign(user, patch);
         return user;
       },
+      async updatePasswordIfCurrentHash(
+        id: string,
+        currentPasswordHash: string,
+        newPasswordHash: string,
+        _updatedBy: string,
+      ) {
+        const user = users.get(id);
+        if (!user || user.isDeleted || user.passwordHash !== currentPasswordHash) return false;
+        user.passwordHash = newPasswordHash;
+        user.updatedAt = new Date();
+        return true;
+      },
     },
     refreshTokens: {
       async create(input: NewRefreshToken): Promise<RefreshToken> {
@@ -571,6 +583,43 @@ describe('AuthService', () => {
     await expect(
       service.login({ email: 'changeok@example.com', password: 'brand-new-password-1' }),
     ).resolves.toMatchObject({ accessToken: expect.any(String) });
+  });
+
+  it('allows only one concurrent change authorized by the same current password', async () => {
+    await service.signup({
+      email: 'concurrent-change@example.com',
+      password: 'original-password-1',
+      fullName: 'C',
+    });
+    const user = await repos.users.findByEmail('concurrent-change@example.com');
+
+    const results = await Promise.allSettled([
+      service.changePassword({
+        userId: user!.id,
+        currentPassword: 'original-password-1',
+        newPassword: 'first-new-password-1',
+      }),
+      service.changePassword({
+        userId: user!.id,
+        currentPassword: 'original-password-1',
+        newPassword: 'second-new-password-2',
+      }),
+    ]);
+
+    expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
+    expect(results.filter((result) => result.status === 'rejected')).toHaveLength(1);
+
+    const acceptedPasswords = await Promise.allSettled([
+      service.login({
+        email: 'concurrent-change@example.com',
+        password: 'first-new-password-1',
+      }),
+      service.login({
+        email: 'concurrent-change@example.com',
+        password: 'second-new-password-2',
+      }),
+    ]);
+    expect(acceptedPasswords.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
   });
 
   /** Block 1K: a full happy-path regression check covering BOTH cleanup
