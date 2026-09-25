@@ -10,6 +10,11 @@ vi.mock('@/lib/actions/auth', () => ({
   logoutAction: vi.fn(),
 }));
 
+vi.mock('next/navigation', () => ({
+  usePathname: () => '/dashboard',
+  useRouter: () => ({ prefetch: vi.fn() }),
+}));
+
 describe('DashboardNav responsive navigation', () => {
   it('keeps desktop links and provides a phone/tablet menu with the same destinations', async () => {
     const { container } = render(await DashboardNav());
