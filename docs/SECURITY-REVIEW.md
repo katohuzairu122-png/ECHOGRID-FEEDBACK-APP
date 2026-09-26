@@ -79,7 +79,9 @@ being green.
   stack traces are logged server-side only.
 - **Admin routes** — every `platform/*.routes.ts` handler is gated behind
   `requirePlatformRole` with a fresh per-request DB status check, not just
-  regular auth.
+  regular auth. Platform routes also reject impersonation tokens outright,
+  so an operator cannot inherit a target user's platform role or start a
+  nested impersonation session.
 
 ## Scope note
 

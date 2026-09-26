@@ -37,6 +37,20 @@ export function requirePlatformRole(allowedRoles: PlatformRole[]) {
     Bindings: Bindings;
     Variables: AuthVariables & PlatformVariables;
   }>(async (c, next) => {
+    // Impersonation is a tenant-support tool, never a way to inherit the
+    // target's platform privileges. Without this boundary a support operator
+    // could impersonate a user who also has platformRole='admin' and the
+    // subject-only lookup below would authorize admin-only platform routes.
+    // It also prevents nested impersonation from replacing the original
+    // actor attribution. Exit impersonation before using the platform console.
+    if (c.get('impersonatedBy')) {
+      throw new AppError(
+        'Platform routes are unavailable during impersonation.',
+        403,
+        'IMPERSONATED_PLATFORM_ACCESS_DENIED',
+      );
+    }
+
     const { db, close } = await createDb(c.env.HYPERDRIVE);
     try {
       const repos = createRepositories(db);

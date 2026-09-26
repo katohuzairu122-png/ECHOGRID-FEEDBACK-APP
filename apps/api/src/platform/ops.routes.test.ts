@@ -38,7 +38,7 @@ vi.mock('../repositories', () => ({
 
 const { platformOpsRoutes } = await import('./ops.routes');
 const { errorHandler } = await import('../lib/error-handler');
-const { signAccessToken } = await import('../auth/jwt');
+const { signAccessToken, signImpersonationToken } = await import('../auth/jwt');
 
 /** Fake, and recognisable on sight so assertion 6 cannot pass by accident. */
 const JWT_SECRET = 'test-only-access-secret-not-a-real-value';
@@ -56,6 +56,7 @@ app.route('/api/v1/platform/ops', platformOpsRoutes);
 app.onError(errorHandler);
 
 const ADMIN_USER_ID = '11111111-1111-4111-8111-111111111111';
+const SUPPORT_ACTOR_ID = '22222222-2222-4222-8222-222222222222';
 
 /** Makes requirePlatformRole's DB lookup return this user. */
 function asUser(overrides: { platformRole?: PlatformRole | null; status?: string } = {}) {
@@ -163,6 +164,19 @@ describe('POST /platform/ops/test-alert -- authorization', () => {
 
     expect(response.status).toBe(200);
     expect(await bodyOf(response)).toMatchObject({ success: true, data: { dispatched: true } });
+  });
+
+  it('rejects platform access while impersonating, even when the target is an admin', async () => {
+    const { token } = await signImpersonationToken(
+      ADMIN_USER_ID,
+      SUPPORT_ACTOR_ID,
+      JWT_SECRET,
+    );
+    const response = await callTestAlert({ token });
+
+    expect(response.status).toBe(403);
+    expect(await errorCodeOf(response)).toBe('IMPERSONATED_PLATFORM_ACCESS_DENIED');
+    expect(mocks.notifyOps).not.toHaveBeenCalled();
   });
 
   it('fires no alert on ANY rejected path', async () => {
