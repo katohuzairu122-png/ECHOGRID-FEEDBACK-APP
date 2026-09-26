@@ -149,7 +149,7 @@ authRoutes.post('/password-reset/confirm', rateLimit('AUTH_RATE_LIMITER'), async
  * because a password may be compromised is worthless if the compromised
  * session survives it.
  */
-authRoutes.post('/password/change', authenticate, async (c) => {
+authRoutes.post('/password/change', authenticate, rateLimit('AUTH_RATE_LIMITER'), async (c) => {
   const body = await parseJsonBody(c.req.raw, changePasswordSchema);
   await withAuthService(c, (service) =>
     service.changePassword({

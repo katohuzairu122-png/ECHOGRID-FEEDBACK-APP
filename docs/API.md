@@ -35,8 +35,9 @@ business-scoped routes exist; see ARCHITECTURE.md's Risks section.)*
 **Pagination** — list endpoints accept `?limit=&offset=` query params, both
 optional integers.
 
-**Rate limits** — `POST /api/v1/auth/signup` and `POST /api/v1/auth/login`: 10
-requests/minute, keyed by client IP. The public `/api/v1/qr/*` routes (QR
+**Rate limits** — signup, login, password-reset request/confirm, and
+authenticated password change: 10 requests/minute, keyed by client IP. The
+public `/api/v1/qr/*` routes (QR
 Engagement): 20 requests/minute, keyed by client IP — this platform's only
 anonymous *feedback* write surface, so it gets its own stricter limiter on
 top of the general one. `POST /api/v1/customer-auth/otp/*` (Digital
@@ -300,6 +301,7 @@ be compromised is worthless if the compromised session survives it.
 | --- | --- | --- |
 | `INVALID_CREDENTIALS` | 401 | `currentPassword` did not match |
 | `ACCOUNT_INACTIVE` | 401 | account is not active |
+| `RATE_LIMITED` | 429 | too many authentication attempts from this IP |
 | `USER_NOT_FOUND` | 404 | token references a deleted user |
 
 ---

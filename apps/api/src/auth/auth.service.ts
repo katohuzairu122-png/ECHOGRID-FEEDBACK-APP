@@ -34,6 +34,13 @@ const AUTH_ERROR_STATUS = {
 // newly written cookies. Replays outside this window remain ordinary 401s.
 const CONCURRENT_REFRESH_GRACE_MS = 10_000;
 
+// A syntactically valid 600k-iteration hash used only when login cannot find
+// an account. Verifying against it costs the same PBKDF2 work as checking a
+// real stored password, closing the unknown-email timing oracle. The all-zero
+// derived value is not a real account credential.
+const DUMMY_PASSWORD_HASH =
+  'pbkdf2$600000$AAAAAAAAAAAAAAAAAAAAAA==$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=';
+
 type AuthErrorCode = keyof typeof AUTH_ERROR_STATUS;
 
 /** Extends the shared AppError (Block 7) so auth failures flow through the
@@ -102,11 +109,6 @@ export interface PasswordResetDeps {
  * Route handlers (auth.routes.ts) translate HTTP <-> these methods; they do
  * not contain business rules themselves.
  *
- * Known gaps, deferred on purpose to their owning blocks -- do not deploy
- * this publicly before they land:
- *  - No login rate limiting / brute-force protection (Block 7).
- *  - No CORS configuration, so a browser on a different origin cannot call
- *    these endpoints yet (Block 7).
  */
 export class AuthService {
   constructor(
@@ -139,8 +141,14 @@ export class AuthService {
   async login(input: LoginInput): Promise<AuthTokens> {
     const user = await this.repos.users.findByEmail(input.email);
     // Same error for "no such user" and "wrong password" -- distinguishing
-    // them would let an attacker enumerate valid emails.
-    if (!user || !(await this.hasher.verify(input.password, user.passwordHash))) {
+    // them would let an attacker enumerate valid emails. Always pay the full
+    // verification cost too; an early return would reveal the same fact by
+    // response latency.
+    const passwordValid = await this.hasher.verify(
+      input.password,
+      user?.passwordHash ?? DUMMY_PASSWORD_HASH,
+    );
+    if (!user || !passwordValid) {
       throw new AuthError('Invalid email or password.', 'INVALID_CREDENTIALS');
     }
     // Unlike the above, an inactive account gets its own message: for a

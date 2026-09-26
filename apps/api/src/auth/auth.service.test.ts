@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { AuthService, AuthError } from './auth.service';
 import { createDirectPbkdf2Worker } from './pbkdf2-worker';
 import type { User, NewUser } from '../repositories/user.repository';
@@ -239,6 +239,32 @@ describe('AuthService', () => {
 
     expect(missingAccount.message).toBe(wrongPassword.message);
     expect(missingAccount.code).toBe(wrongPassword.code);
+  });
+
+  it('performs password verification for both missing and existing accounts', async () => {
+    await repos.users.create({
+      email: 'timing@example.com',
+      passwordHash: 'stored-password-hash',
+      fullName: 'Timing User',
+      status: 'active',
+    });
+    const verify = vi.fn(async (_password: string, _storedHash: string) => false);
+    const timingService = new AuthService(
+      repos as unknown as ConstructorParameters<typeof AuthService>[0],
+      SECRETS,
+      { hash: vi.fn(async (_password: string) => 'unused'), verify },
+    );
+
+    await expect(
+      timingService.login({ email: 'missing@example.com', password: 'wrong-password' }),
+    ).rejects.toMatchObject({ code: 'INVALID_CREDENTIALS' });
+    await expect(
+      timingService.login({ email: 'timing@example.com', password: 'wrong-password' }),
+    ).rejects.toMatchObject({ code: 'INVALID_CREDENTIALS' });
+
+    expect(verify).toHaveBeenCalledTimes(2);
+    expect(verify.mock.calls[0]?.[1]).toMatch(/^pbkdf2\$600000\$/);
+    expect(verify.mock.calls[1]?.[1]).toBe('stored-password-hash');
   });
 
   it('refresh rotates the token: the old one stops working, the new one works', async () => {
