@@ -32,7 +32,7 @@ export default async function PlatformLayout({ children }: { children: React.Rea
   if (!user?.platformRole) {
     const t = await getTranslations('platform.accessDenied');
     return (
-      <div className="flex min-h-screen items-center justify-center bg-neutral-50 px-6">
+      <div className="flex min-h-screen items-center justify-center bg-neutral-50 px-4 sm:px-6">
         <div className="max-w-sm text-center">
           <h1 className="text-lg font-semibold text-neutral-900">{t('title')}</h1>
           <p className="mt-2 text-sm text-neutral-500">{t('description')}</p>
@@ -47,7 +47,7 @@ export default async function PlatformLayout({ children }: { children: React.Rea
   return (
     <div className="min-h-screen bg-neutral-50">
       <PlatformNav role={user.platformRole} />
-      <main className="mx-auto max-w-5xl px-6 py-8">{children}</main>
+      <main className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-8">{children}</main>
       <AppFooter />
     </div>
   );
