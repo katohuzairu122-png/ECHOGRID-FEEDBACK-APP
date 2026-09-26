@@ -2,6 +2,8 @@ import { createMiddleware } from 'hono/factory';
 import type { Bindings } from '../config/env';
 import { verifyCustomerAccessToken } from '../customer-auth/customer-jwt';
 import { AppError } from '../lib/errors';
+import { createDb } from '../db/client';
+import { createRepositories } from '../repositories';
 
 export type CustomerAuthVariables = {
   customerId: string;
@@ -25,12 +27,24 @@ export const customerAuthenticate = createMiddleware<{
     throw new AppError('Missing or malformed Authorization header.', 401, 'UNAUTHENTICATED');
   }
 
+  let payload;
   try {
-    const payload = await verifyCustomerAccessToken(token, c.env.CUSTOMER_JWT_SECRET);
-    c.set('customerId', payload.sub);
+    payload = await verifyCustomerAccessToken(token, c.env.CUSTOMER_JWT_SECRET);
   } catch {
     throw new AppError('Invalid or expired access token.', 401, 'UNAUTHENTICATED');
   }
 
+  const { db, close } = await createDb(c.env.HYPERDRIVE);
+  try {
+    const customer = await createRepositories(db).customers.findById(payload.sub);
+    if (!customer || customer.status !== 'active') {
+      throw new AppError('Invalid or expired access token.', 401, 'UNAUTHENTICATED');
+    }
+    c.set('customerId', payload.sub);
+  } finally {
+    c.executionCtx.waitUntil(close());
+  }
+
   await next();
 });
+
