@@ -63,7 +63,11 @@ export async function PlatformNav({ role }: PlatformNavProps) {
               </Button>
             </form>
           </div>
-          <PlatformMobileNav items={mobileItems} menuLabel={t('menu')} logoutLabel={t('logout')} />
+          <PlatformMobileNav
+            items={mobileItems}
+            menuLabel={t('menu')}
+            logoutLabel={t('logout')}
+          />
         </div>
       </div>
     </header>
