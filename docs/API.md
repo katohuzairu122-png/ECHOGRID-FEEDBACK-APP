@@ -28,7 +28,10 @@ every route except `/health`, `/api/v1/auth/signup`, `/api/v1/auth/login`,
 **Tenant context** — routes that operate within a specific business additionally
 require an `X-Business-Id: <uuid>` header, and optionally `X-Branch-Id: <uuid>`
 to scope to one branch. The caller must hold an active (non-revoked) role grant
-at that business. *(Header-based for now — a route-param convention such as
+at that business. A caller with only branch-scoped grants must provide an
+authorized `X-Branch-Id`; query parameters and request bodies cannot override
+that scope. Business-wide operations require a business-wide role grant.
+*(Header-based for now — a route-param convention such as
 `/businesses/:businessId/...` is the likely future replacement once more
 business-scoped routes exist; see ARCHITECTURE.md's Risks section.)*
 

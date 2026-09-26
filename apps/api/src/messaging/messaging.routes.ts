@@ -5,6 +5,7 @@ import { createDb, type Database } from '../db/client';
 import { authenticate, type AuthVariables } from '../middleware/authenticate';
 import { resolveTenantContext, type TenantVariables } from '../middleware/tenant-context';
 import { requirePermission } from '../middleware/require-permission';
+import { requireBusinessWideAccess } from '../middleware/require-business-wide-access';
 import type { AuditVariables } from '../middleware/audit';
 import { parseJsonBody } from '../lib/validate';
 import { ok } from '../lib/response';
@@ -26,7 +27,7 @@ type Env = {
  */
 export const messagingRoutes = new Hono<Env>();
 
-messagingRoutes.use('*', authenticate, resolveTenantContext);
+messagingRoutes.use('*', authenticate, resolveTenantContext, requireBusinessWideAccess);
 
 async function withDb<T>(c: Context<Env>, fn: (db: Database) => Promise<T>): Promise<T> {
   const { db, close } = await createDb(c.env.HYPERDRIVE);

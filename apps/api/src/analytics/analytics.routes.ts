@@ -12,6 +12,7 @@ import { ok } from '../lib/response';
 import { AnalyticsService } from './analytics.service';
 import { enqueueSummaryGeneration } from '../sentiment/sentiment-job';
 import { computePeriodRange } from '../sentiment/period';
+import { authorizedBranchId } from '../rbac/branch-access';
 
 type Env = {
   Bindings: Bindings;
@@ -30,7 +31,7 @@ analyticsRoutes.get('/trends', requirePermission('analytics:view'), async (c) =>
   try {
     const service = new AnalyticsService(createRepositories(db));
     const points = await service.trend(c.get('businessId'), {
-      branchId: url.searchParams.get('branchId') ?? c.get('branchId'),
+      branchId: authorizedBranchId(c.var, url.searchParams.get('branchId') ?? undefined),
       from: url.searchParams.get('from') ?? undefined,
       to: url.searchParams.get('to') ?? undefined,
     });
@@ -49,7 +50,7 @@ analyticsRoutes.get('/search', requirePermission('analytics:view'), async (c) =>
   try {
     const service = new AnalyticsService(createRepositories(db));
     const items = await service.search(c.get('businessId'), {
-      branchId: url.searchParams.get('branchId') ?? c.get('branchId'),
+      branchId: authorizedBranchId(c.var, url.searchParams.get('branchId') ?? undefined),
       sentiment:
         sentiment === 'positive' || sentiment === 'neutral' || sentiment === 'negative'
           ? sentiment
@@ -75,7 +76,7 @@ analyticsRoutes.get('/summaries', requirePermission('analytics:view'), async (c)
   try {
     const service = new AnalyticsService(createRepositories(db));
     const items = await service.listSummaries(c.get('businessId'), {
-      branchId: url.searchParams.get('branchId') ?? c.get('branchId'),
+      branchId: authorizedBranchId(c.var, url.searchParams.get('branchId') ?? undefined),
       periodType:
         periodType === 'daily' || periodType === 'weekly' || periodType === 'monthly'
           ? periodType
@@ -104,7 +105,7 @@ analyticsRoutes.post('/summaries/generate', requirePermission('analytics:manage'
 
   await enqueueSummaryGeneration(c.env.JOBS, {
     businessId: c.get('businessId'),
-    branchId: body.branchId,
+    branchId: authorizedBranchId(c.var, body.branchId),
     periodType: body.periodType,
     periodStart: periodStart.toISOString(),
     periodEnd: periodEnd.toISOString(),

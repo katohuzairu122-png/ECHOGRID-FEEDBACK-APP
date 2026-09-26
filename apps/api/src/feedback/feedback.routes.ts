@@ -20,6 +20,8 @@ import { ok } from '../lib/response';
 import { AppError } from '../lib/errors';
 import { FeedbackService } from './feedback.service';
 import { enqueueClassification } from '../sentiment/sentiment-job';
+import { authorizedBranchId } from '../rbac/branch-access';
+import { requireBusinessWideAccess } from '../middleware/require-business-wide-access';
 
 type Env = {
   Bindings: Bindings;
@@ -69,6 +71,7 @@ function parseFeedbackFilters(url: URL): FeedbackFilterInput {
 
 feedbackRoutes.get('/', requirePermission('feedback:view'), async (c) => {
   const filters = parseFeedbackFilters(new URL(c.req.url));
+  filters.branchId = authorizedBranchId(c.var, filters.branchId);
   const { db, close } = await createDb(c.env.HYPERDRIVE);
   try {
     const service = new FeedbackService(createRepositories(db));
@@ -90,7 +93,7 @@ feedbackRoutes.get('/', requirePermission('feedback:view'), async (c) => {
 // those happen to use different HTTP methods today -- keeping every /bulk/*
 // route ahead of every /:id* route is the simplest rule that can't regress
 // again as more routes are added.
-feedbackRoutes.post('/bulk/assign', requirePermission('feedback:manage'), async (c) => {
+feedbackRoutes.post('/bulk/assign', requireBusinessWideAccess, requirePermission('feedback:manage'), async (c) => {
   const body = await parseJsonBody(c.req.raw, bulkAssignFeedbackSchema);
   const { db, close } = await createDb(c.env.HYPERDRIVE);
   try {
@@ -109,7 +112,7 @@ feedbackRoutes.post('/bulk/assign', requirePermission('feedback:manage'), async 
   }
 });
 
-feedbackRoutes.post('/bulk/status', requirePermission('feedback:manage'), async (c) => {
+feedbackRoutes.post('/bulk/status', requireBusinessWideAccess, requirePermission('feedback:manage'), async (c) => {
   const body = await parseJsonBody(c.req.raw, bulkUpdateFeedbackStatusSchema);
   const { db, close } = await createDb(c.env.HYPERDRIVE);
   try {
@@ -128,7 +131,7 @@ feedbackRoutes.post('/bulk/status', requirePermission('feedback:manage'), async 
   }
 });
 
-feedbackRoutes.post('/:id/assign', requirePermission('feedback:manage'), async (c) => {
+feedbackRoutes.post('/:id/assign', requireBusinessWideAccess, requirePermission('feedback:manage'), async (c) => {
   const body = await parseJsonBody(c.req.raw, assignFeedbackSchema);
   const { db, close } = await createDb(c.env.HYPERDRIVE);
   try {
@@ -153,7 +156,7 @@ feedbackRoutes.post('/:id/assign', requirePermission('feedback:manage'), async (
  * {status: 'reviewed'}. A business can acknowledge feedback, never edit a
  * customer's actual rating/comment.
  */
-feedbackRoutes.patch('/:id', requirePermission('feedback:manage'), async (c) => {
+feedbackRoutes.patch('/:id', requireBusinessWideAccess, requirePermission('feedback:manage'), async (c) => {
   await parseJsonBody(c.req.raw, updateFeedbackStatusSchema);
   const { db, close } = await createDb(c.env.HYPERDRIVE);
   try {
@@ -182,7 +185,7 @@ feedbackRoutes.patch('/:id', requirePermission('feedback:manage'), async (c) => 
  * (Block 4), where "viewing sentiment analytics" becomes a real, separate
  * screen worth gating on its own.
  */
-feedbackRoutes.post('/:id/reanalyze', requirePermission('feedback:manage'), async (c) => {
+feedbackRoutes.post('/:id/reanalyze', requireBusinessWideAccess, requirePermission('feedback:manage'), async (c) => {
   const id = c.req.param('id');
   const { db, close } = await createDb(c.env.HYPERDRIVE);
   try {
@@ -218,7 +221,7 @@ feedbackRoutes.post('/:id/reanalyze', requirePermission('feedback:manage'), asyn
  * documents -- triaging a submission's analysis state is the same
  * supervisory action as marking it reviewed, not a distinct capability.
  */
-feedbackRoutes.post('/:id/classify', requirePermission('feedback:manage'), async (c) => {
+feedbackRoutes.post('/:id/classify', requireBusinessWideAccess, requirePermission('feedback:manage'), async (c) => {
   const body = await parseJsonBody(c.req.raw, classifyFeedbackSchema);
   const { db, close } = await createDb(c.env.HYPERDRIVE);
   try {
@@ -251,7 +254,7 @@ feedbackRoutes.post('/:id/classify', requirePermission('feedback:manage'), async
  * incident to acknowledge, and the two cases shouldn't be distinguishable
  * to the caller (no reason to leak "that id exists but isn't critical").
  */
-feedbackRoutes.post('/:id/acknowledge-critical', requirePermission('feedback:manage'), async (c) => {
+feedbackRoutes.post('/:id/acknowledge-critical', requireBusinessWideAccess, requirePermission('feedback:manage'), async (c) => {
   const feedbackId = c.req.param('id');
   const { db, close } = await createDb(c.env.HYPERDRIVE);
   try {
@@ -278,7 +281,7 @@ feedbackRoutes.post('/:id/acknowledge-critical', requirePermission('feedback:man
   }
 });
 
-feedbackRoutes.delete('/:id', requirePermission('feedback:manage'), async (c) => {
+feedbackRoutes.delete('/:id', requireBusinessWideAccess, requirePermission('feedback:manage'), async (c) => {
   const id = c.req.param('id');
   const { db, close } = await createDb(c.env.HYPERDRIVE);
   try {

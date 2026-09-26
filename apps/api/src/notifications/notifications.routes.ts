@@ -10,6 +10,7 @@ import { createRepositories } from '../repositories';
 import { authenticate, type AuthVariables } from '../middleware/authenticate';
 import { resolveTenantContext, type TenantVariables } from '../middleware/tenant-context';
 import { requirePermission } from '../middleware/require-permission';
+import { requireBusinessWideAccess } from '../middleware/require-business-wide-access';
 import type { AuditVariables } from '../middleware/audit';
 import { parseJsonBody } from '../lib/validate';
 import { ok } from '../lib/response';
@@ -85,7 +86,7 @@ notificationsRoutes.patch('/preferences', async (c) => {
   }
 });
 
-notificationsRoutes.get('/settings', requirePermission('notifications:view'), async (c) => {
+notificationsRoutes.get('/settings', requireBusinessWideAccess, requirePermission('notifications:view'), async (c) => {
   const { db, close } = await createDb(c.env.HYPERDRIVE);
   try {
     const settings = await createRepositories(db).businessNotificationSettings.getOrCreateDefaults(
@@ -97,7 +98,7 @@ notificationsRoutes.get('/settings', requirePermission('notifications:view'), as
   }
 });
 
-notificationsRoutes.patch('/settings', requirePermission('notifications:manage'), async (c) => {
+notificationsRoutes.patch('/settings', requireBusinessWideAccess, requirePermission('notifications:manage'), async (c) => {
   const body = await parseJsonBody(c.req.raw, updateBusinessNotificationSettingsSchema);
   const { db, close } = await createDb(c.env.HYPERDRIVE);
   try {
@@ -120,7 +121,7 @@ notificationsRoutes.patch('/settings', requirePermission('notifications:manage')
 /** Send log -- what has actually gone out, for support/debugging. Requires
  * notifications:view since entries can include a recipient's email/phone
  * (recipientAddress), not just aggregate counts. */
-notificationsRoutes.get('/', requirePermission('notifications:view'), async (c) => {
+notificationsRoutes.get('/', requireBusinessWideAccess, requirePermission('notifications:view'), async (c) => {
   const url = new URL(c.req.url);
   const limit = Number(url.searchParams.get('limit')) || undefined;
   const offset = Number(url.searchParams.get('offset')) || undefined;

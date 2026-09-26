@@ -5,6 +5,10 @@ import { createRepositories } from '../repositories';
 import { authenticate, type AuthVariables } from '../middleware/authenticate';
 import { resolveTenantContext, type TenantVariables } from '../middleware/tenant-context';
 import { requirePermission } from '../middleware/require-permission';
+import {
+  requireAuthorizedBranchParam,
+  requireBusinessWideAccess,
+} from '../middleware/require-business-wide-access';
 import type { AuditVariables } from '../middleware/audit';
 import { parseJsonBody } from '../lib/validate';
 import { ok } from '../lib/response';
@@ -30,7 +34,7 @@ export const branchRoutes = new Hono<Env>();
  */
 branchRoutes.use('*', authenticate, resolveTenantContext);
 
-branchRoutes.get('/', requirePermission('branches:view'), async (c) => {
+branchRoutes.get('/', requireBusinessWideAccess, requirePermission('branches:view'), async (c) => {
   const url = new URL(c.req.url);
   const limit = Number(url.searchParams.get('limit')) || undefined;
   const offset = Number(url.searchParams.get('offset')) || undefined;
@@ -45,7 +49,7 @@ branchRoutes.get('/', requirePermission('branches:view'), async (c) => {
   }
 });
 
-branchRoutes.post('/', requirePermission('branches:manage'), async (c) => {
+branchRoutes.post('/', requireBusinessWideAccess, requirePermission('branches:manage'), async (c) => {
   const body = await parseJsonBody(c.req.raw, createBranchSchema);
   const { db, close } = await createDb(c.env.HYPERDRIVE);
   try {
@@ -65,7 +69,7 @@ branchRoutes.post('/', requirePermission('branches:manage'), async (c) => {
   }
 });
 
-branchRoutes.get('/:id', requirePermission('branches:view'), async (c) => {
+branchRoutes.get('/:id', requireAuthorizedBranchParam(), requirePermission('branches:view'), async (c) => {
   const { db, close } = await createDb(c.env.HYPERDRIVE);
   try {
     const service = new BranchService(createRepositories(db));
@@ -76,7 +80,7 @@ branchRoutes.get('/:id', requirePermission('branches:view'), async (c) => {
   }
 });
 
-branchRoutes.patch('/:id', requirePermission('branches:manage'), async (c) => {
+branchRoutes.patch('/:id', requireAuthorizedBranchParam(), requirePermission('branches:manage'), async (c) => {
   const body = await parseJsonBody(c.req.raw, updateBranchSchema);
   const { db, close } = await createDb(c.env.HYPERDRIVE);
   try {
@@ -101,7 +105,7 @@ branchRoutes.patch('/:id', requirePermission('branches:manage'), async (c) => {
   }
 });
 
-branchRoutes.delete('/:id', requirePermission('branches:manage'), async (c) => {
+branchRoutes.delete('/:id', requireAuthorizedBranchParam(), requirePermission('branches:manage'), async (c) => {
   const id = c.req.param('id');
   const { db, close } = await createDb(c.env.HYPERDRIVE);
   try {
@@ -129,7 +133,7 @@ branchRoutes.delete('/:id', requirePermission('branches:manage'), async (c) => {
  * "https://{domain}/feedback/{token}" is a frontend concern, keeping the
  * API from having to know its own frontend's deployed domain.
  */
-branchRoutes.get('/:id/qr-code', requirePermission('branches:view'), async (c) => {
+branchRoutes.get('/:id/qr-code', requireAuthorizedBranchParam(), requirePermission('branches:view'), async (c) => {
   const { db, close } = await createDb(c.env.HYPERDRIVE);
   try {
     const repos = createRepositories(db);
@@ -145,7 +149,7 @@ branchRoutes.get('/:id/qr-code', requirePermission('branches:view'), async (c) =
   }
 });
 
-branchRoutes.post('/:id/qr-code/regenerate', requirePermission('branches:manage'), async (c) => {
+branchRoutes.post('/:id/qr-code/regenerate', requireAuthorizedBranchParam(), requirePermission('branches:manage'), async (c) => {
   const { db, close } = await createDb(c.env.HYPERDRIVE);
   try {
     const repos = createRepositories(db);

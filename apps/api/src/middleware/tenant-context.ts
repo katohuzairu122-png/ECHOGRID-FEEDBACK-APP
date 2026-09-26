@@ -10,6 +10,7 @@ import { AppError } from '../lib/errors';
 export type TenantVariables = {
   businessId: string;
   branchId?: string;
+  businessWideAccess: boolean;
   permissions: Set<string>;
 };
 
@@ -59,6 +60,22 @@ export const resolveTenantContext = createMiddleware<{
     // one. See rbac/business-access.ts for what the statuses mean.
     assertBusinessIsUsable(await repos.businesses.findById(businessId));
 
+    const businessWideAccess = membership.some((grant) => grant.branchId === null);
+    if (!businessWideAccess) {
+      if (!branchId) {
+        throw new AppError('A branch context is required for this role.', 403, 'BRANCH_CONTEXT_REQUIRED');
+      }
+      if (!membership.some((grant) => grant.branchId === branchId)) {
+        throw new AppError('You do not have access to this branch.', 403, 'BRANCH_ACCESS_DENIED');
+      }
+      // A role grant references a branch by id, but the schema cannot express
+      // the composite invariant that the branch belongs to the same business.
+      // Enforce it here before the branch becomes trusted request context.
+      if (!(await repos.branches.findById(branchId, businessId))) {
+        throw new AppError('You do not have access to this branch.', 403, 'BRANCH_ACCESS_DENIED');
+      }
+    }
+
     const effectivePermissions = await authz.getEffectivePermissions(
       c.get('userId'),
       businessId,
@@ -67,6 +84,7 @@ export const resolveTenantContext = createMiddleware<{
 
     c.set('businessId', businessId);
     if (branchId) c.set('branchId', branchId);
+    c.set('businessWideAccess', businessWideAccess);
     c.set('permissions', effectivePermissions);
   } finally {
     c.executionCtx.waitUntil(close());

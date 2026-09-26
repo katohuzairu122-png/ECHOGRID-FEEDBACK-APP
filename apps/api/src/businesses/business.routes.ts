@@ -6,6 +6,7 @@ import { createRepositories } from '../repositories';
 import { authenticate, type AuthVariables } from '../middleware/authenticate';
 import { resolveTenantContext, type TenantVariables } from '../middleware/tenant-context';
 import { requirePermission } from '../middleware/require-permission';
+import { requireBusinessWideAccess } from '../middleware/require-business-wide-access';
 import { rateLimit } from '../middleware/rate-limit';
 import type { AuditVariables } from '../middleware/audit';
 import { parseJsonBody } from '../lib/validate';
@@ -127,6 +128,7 @@ businessRoutes.patch(
   '/me',
   authenticate,
   resolveTenantContext,
+  requireBusinessWideAccess,
   requirePermission('business:manage_settings'),
   async (c) => {
     const body = await parseJsonBody(c.req.raw, updateBusinessSchema);
@@ -156,6 +158,7 @@ businessRoutes.get(
   '/audit-log',
   authenticate,
   resolveTenantContext,
+  requireBusinessWideAccess,
   requirePermission('audit:view'),
   async (c) => {
     const url = new URL(c.req.url);

@@ -6,6 +6,7 @@ import { createRepositories } from '../repositories';
 import { authenticate, type AuthVariables } from '../middleware/authenticate';
 import { resolveTenantContext, type TenantVariables } from '../middleware/tenant-context';
 import { requirePermission } from '../middleware/require-permission';
+import { requireAuthorizedBranchParam } from '../middleware/require-business-wide-access';
 import type { AuditVariables } from '../middleware/audit';
 import { parseJsonBody } from '../lib/validate';
 import { ok } from '../lib/response';
@@ -67,7 +68,7 @@ function serializeVisitSession(session: VisitSession) {
   };
 }
 
-visitSessionRoutes.post('/:branchId/visit-sessions', requirePermission('branches:manage'), async (c) => {
+visitSessionRoutes.post('/:branchId/visit-sessions', requireAuthorizedBranchParam('branchId'), requirePermission('branches:manage'), async (c) => {
   const body = await parseJsonBody(c.req.raw, issueVisitSessionSchema);
   const branchId = c.req.param('branchId');
   const businessId = c.get('businessId');
@@ -113,6 +114,7 @@ visitSessionRoutes.post('/:branchId/visit-sessions', requirePermission('branches
  */
 visitSessionRoutes.post(
   '/:branchId/visit-sessions/:id/revoke',
+  requireAuthorizedBranchParam('branchId'),
   requirePermission('branches:manage'),
   async (c) => {
     const branchId = c.req.param('branchId');

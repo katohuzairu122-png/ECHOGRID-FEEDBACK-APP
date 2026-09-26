@@ -5,6 +5,7 @@ import { createRepositories } from '../repositories';
 import { authenticate, type AuthVariables } from '../middleware/authenticate';
 import { resolveTenantContext, type TenantVariables } from '../middleware/tenant-context';
 import { requirePermission } from '../middleware/require-permission';
+import { requireBusinessWideAccess } from '../middleware/require-business-wide-access';
 import type { AuditVariables } from '../middleware/audit';
 import { parseJsonBody } from '../lib/validate';
 import { ok } from '../lib/response';
@@ -25,7 +26,7 @@ export const billingRoutes = new Hono<Env>();
  * branchRoutes -- there is no "bootstrapping" billing action analogous to
  * POST /businesses, since a business (and its trial subscription) already
  * exists by the time any of these routes can be reached. */
-billingRoutes.use('*', authenticate, resolveTenantContext);
+billingRoutes.use('*', authenticate, resolveTenantContext, requireBusinessWideAccess);
 
 billingRoutes.get('/plans', requirePermission('billing:view'), async (c) => {
   const { db, close } = await createDb(c.env.HYPERDRIVE);

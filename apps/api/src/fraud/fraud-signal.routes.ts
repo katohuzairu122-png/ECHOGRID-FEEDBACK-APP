@@ -5,6 +5,7 @@ import { createRepositories } from '../repositories';
 import { authenticate, type AuthVariables } from '../middleware/authenticate';
 import { resolveTenantContext, type TenantVariables } from '../middleware/tenant-context';
 import { requirePermission } from '../middleware/require-permission';
+import { requireBusinessWideAccess } from '../middleware/require-business-wide-access';
 import type { AuditVariables } from '../middleware/audit';
 import { ok } from '../lib/response';
 import { AppError } from '../lib/errors';
@@ -36,7 +37,7 @@ type Env = {
  */
 export const fraudSignalRoutes = new Hono<Env>();
 
-fraudSignalRoutes.use('*', authenticate, resolveTenantContext);
+fraudSignalRoutes.use('*', authenticate, resolveTenantContext, requireBusinessWideAccess);
 
 function serializeFraudSignal(signal: FraudSignal) {
   return {
