@@ -10,7 +10,8 @@
       "support": "Soporte",
       "billing": "Facturación",
       "admin": "Administrador"
-    }
+    },
+    "menu": "Navegación de administración"
   },
   "accessDenied": {
     "title": "Se requiere acceso de administrador de plataforma",

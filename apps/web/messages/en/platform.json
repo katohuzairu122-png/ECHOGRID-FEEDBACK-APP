@@ -10,7 +10,8 @@
       "support": "Support",
       "billing": "Billing",
       "admin": "Admin"
-    }
+    },
+    "menu": "Admin navigation"
   },
   "accessDenied": {
     "title": "Platform admin access required",
