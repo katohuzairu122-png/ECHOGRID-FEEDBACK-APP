@@ -61,9 +61,9 @@ function createFakeVisitSessionRepo() {
       session.updatedAt = new Date();
       return session;
     },
-    async revoke(id: string, businessId: string, revokedBy: string): Promise<void> {
+    async revoke(id: string, businessId: string, branchId: string, revokedBy: string): Promise<void> {
       const session = sessions.get(id);
-      if (session && session.businessId === businessId) {
+      if (session && session.businessId === businessId && session.branchId === branchId) {
         session.status = 'revoked';
         session.updatedBy = revokedBy;
         session.updatedAt = new Date();
@@ -186,7 +186,7 @@ describe('VisitSessionService', () => {
 
     it('rejects a revoked session even before it would otherwise expire or exhaust', async () => {
       const issued = await service.issue(BUSINESS_A, BRANCH_A, ACTOR, { ttlSeconds: 3600 });
-      await service.revoke(issued.id, BUSINESS_A, ACTOR);
+      await service.revoke(issued.id, BUSINESS_A, BRANCH_A, ACTOR);
 
       await expect(service.verify(BUSINESS_A, BRANCH_A, issued.code)).resolves.toEqual({
         verified: false,
@@ -198,9 +198,17 @@ describe('VisitSessionService', () => {
   describe('revoke', () => {
     it('is a no-op across tenant boundaries -- revoking with the wrong businessId leaves the session usable', async () => {
       const issued = await service.issue(BUSINESS_A, BRANCH_A, ACTOR, { ttlSeconds: 3600 });
-      await service.revoke(issued.id, 'some-other-business', ACTOR);
+      await service.revoke(issued.id, 'some-other-business', BRANCH_A, ACTOR);
+
+      await expect(service.verify(BUSINESS_A, BRANCH_A, issued.code)).resolves.toMatchObject({ verified: true });
+    });
+
+    it('is a no-op across branch boundaries within the same business', async () => {
+      const issued = await service.issue(BUSINESS_A, BRANCH_A, ACTOR, { ttlSeconds: 3600 });
+      await service.revoke(issued.id, BUSINESS_A, 'some-other-branch', ACTOR);
 
       await expect(service.verify(BUSINESS_A, BRANCH_A, issued.code)).resolves.toMatchObject({ verified: true });
     });
   });
 });
+
