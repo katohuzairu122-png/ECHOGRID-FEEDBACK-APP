@@ -90,10 +90,17 @@ export class VisitSessionRepository extends BaseRepository {
    * therefore recordUse, which also filters on status='active') from this
    * point on.
    */
-  async revoke(id: string, businessId: string, revokedBy: string): Promise<void> {
+  async revoke(id: string, businessId: string, branchId: string, revokedBy: string): Promise<void> {
     await this.db
       .update(visitSessions)
       .set({ status: 'revoked', updatedBy: revokedBy, updatedAt: new Date() })
-      .where(and(eq(visitSessions.id, id), eq(visitSessions.businessId, businessId)));
+      .where(
+        and(
+          eq(visitSessions.id, id),
+          eq(visitSessions.businessId, businessId),
+          eq(visitSessions.branchId, branchId),
+        ),
+      );
   }
 }
+
