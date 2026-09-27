@@ -103,7 +103,8 @@ export class VisitSessionService implements VisitVerificationProvider {
    * leaked to the wrong person -- so this stays a first-class public
    * operation rather than folded into another method.
    */
-  async revoke(id: string, businessId: string, revokedBy: string): Promise<void> {
-    await this.repos.visitSessions.revoke(id, businessId, revokedBy);
+  async revoke(id: string, businessId: string, branchId: string, revokedBy: string): Promise<void> {
+    await this.repos.visitSessions.revoke(id, businessId, branchId, revokedBy);
   }
 }
+
