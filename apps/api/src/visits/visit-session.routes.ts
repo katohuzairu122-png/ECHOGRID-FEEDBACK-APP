@@ -125,7 +125,7 @@ visitSessionRoutes.post(
     try {
       const repos = createRepositories(db);
       await new BranchService(repos).getBranch(branchId, businessId);
-      await new VisitSessionService(repos).revoke(id, businessId, c.get('userId'));
+      await new VisitSessionService(repos).revoke(id, businessId, branchId, c.get('userId'));
 
       c.set('auditMetadata', {
         action: 'visit_session.revoked',
@@ -140,3 +140,4 @@ visitSessionRoutes.post(
     }
   },
 );
+
