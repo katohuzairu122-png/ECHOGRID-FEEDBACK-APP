@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 import { middleware } from './middleware';
 import { ACCESS_TOKEN_COOKIE, REFRESH_TOKEN_COOKIE } from '@/lib/cookies';
@@ -14,58 +14,93 @@ function request(pathname: string, { signedIn = false } = {}) {
   return req;
 }
 
-/** `NextResponse.next()` has no redirect location; a redirect does. */
-function redirectTarget(response: ReturnType<typeof middleware>): string | null {
+function redirectTarget(response: Awaited<ReturnType<typeof middleware>>): string | null {
   const location = response.headers.get('location');
   return location ? new URL(location).pathname : null;
 }
 
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
+
 describe('middleware — account recovery paths', () => {
-  /**
-   * The regression this file exists for. Recovery pages are reached by
-   * definition without a session, so if they are not public the middleware
-   * 307s the reset link to /login and the entire Block 1.5 API becomes
-   * unreachable. The identical bug previously shipped for /feedback (see
-   * middleware.ts's own comment), which is why it is worth a test rather
-   * than a careful read.
-   */
   it.each(['/forgot-password', '/reset-password'])(
     'serves %s to a signed-out visitor instead of redirecting to /login',
-    (path) => {
-      expect(redirectTarget(middleware(request(path)))).toBeNull();
+    async (path) => {
+      expect(redirectTarget(await middleware(request(path)))).toBeNull();
     },
   );
 
-  it('serves /reset-password with its token query string', () => {
+  it('serves /reset-password with its token query string', async () => {
     const req = new NextRequest(new URL('/reset-password?token=abc123', ORIGIN));
-    expect(redirectTarget(middleware(req))).toBeNull();
+    expect(redirectTarget(await middleware(req))).toBeNull();
   });
 
-  /**
-   * Someone resetting because they suspect a compromise is often still
-   * signed in on the device reading the email. Bouncing them to /dashboard
-   * -- which is what including these in STAFF_AUTH_PATHS would have done --
-   * would leave them unable to finish.
-   */
   it.each(['/forgot-password', '/reset-password'])(
     'does not bounce a signed-in user away from %s',
-    (path) => {
-      expect(redirectTarget(middleware(request(path, { signedIn: true })))).toBeNull();
+    async (path) => {
+      expect(redirectTarget(await middleware(request(path, { signedIn: true })))).toBeNull();
     },
   );
 
-  it('still bounces a signed-in user away from /login', () => {
-    expect(redirectTarget(middleware(request('/login', { signedIn: true })))).toBe('/dashboard');
+  it('still bounces a signed-in user away from /login', async () => {
+    expect(redirectTarget(await middleware(request('/login', { signedIn: true })))).toBe(
+      '/dashboard',
+    );
   });
 
-  it('allows /login when only a refresh cookie remains, preventing a redirect loop', () => {
+  it('allows /login when only a refresh cookie remains, preventing a redirect loop', async () => {
     const req = request('/login');
     req.cookies.set(REFRESH_TOKEN_COOKIE, 'a-refresh-token');
 
-    expect(redirectTarget(middleware(req))).toBeNull();
+    expect(redirectTarget(await middleware(req))).toBeNull();
   });
 
-  it('still gates a protected route for a signed-out visitor', () => {
-    expect(redirectTarget(middleware(request('/dashboard')))).toBe('/login');
+  it('still gates a protected route for a signed-out visitor', async () => {
+    expect(redirectTarget(await middleware(request('/dashboard')))).toBe('/login');
+  });
+});
+
+describe('middleware — protected session refresh', () => {
+  it('rotates a refresh-only session and repeats the protected request with fresh cookies', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () =>
+        Response.json({
+          success: true,
+          data: { accessToken: 'fresh-access-token', refreshToken: 'fresh-refresh-token' },
+        }),
+      ),
+    );
+    const req = request('/dashboard?tab=analytics');
+    req.cookies.set(REFRESH_TOKEN_COOKIE, 'old-refresh-token');
+
+    const response = await middleware(req);
+
+    expect(response.headers.get('location')).toBe('https://app.test/dashboard?tab=analytics');
+    expect(response.cookies.get(ACCESS_TOKEN_COOKIE)?.value).toBe('fresh-access-token');
+    expect(response.cookies.get(REFRESH_TOKEN_COOKIE)?.value).toBe('fresh-refresh-token');
+  });
+
+  it('clears an invalid refresh-only session and redirects to login', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () =>
+        Response.json(
+          {
+            success: false,
+            error: { code: 'INVALID_REFRESH_TOKEN', message: 'Invalid.' },
+          },
+          { status: 401 },
+        ),
+      ),
+    );
+    const req = request('/dashboard');
+    req.cookies.set(REFRESH_TOKEN_COOKIE, 'invalid-refresh-token');
+
+    const response = await middleware(req);
+
+    expect(redirectTarget(response)).toBe('/login');
+    expect(response.cookies.get(REFRESH_TOKEN_COOKIE)?.value).toBe('');
   });
 });
