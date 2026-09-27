@@ -1,6 +1,15 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { ACCESS_TOKEN_COOKIE, REFRESH_TOKEN_COOKIE } from '@/lib/cookies';
 
+const API_BASE_URL = process.env.API_BASE_URL ?? 'http://localhost:8787';
+const ACCESS_TOKEN_MAX_AGE = 15 * 60;
+const REFRESH_TOKEN_MAX_AGE = 30 * 24 * 60 * 60;
+
+interface RefreshEnvelope {
+  success: boolean;
+  data?: { accessToken: string; refreshToken: string };
+}
+
 // Staff sign-in pages: redirect AWAY to /dashboard if a staff refresh token
 // is already present, same as before.
 const STAFF_AUTH_PATHS = ['/login', '/signup'];
@@ -73,17 +82,13 @@ const PUBLIC_PATHS = [
 const ROOT_PATH = '/';
 
 /**
- * Presence-only gate, not a validity check -- redirects to /login if the
- * refresh-token cookie is simply missing. Deliberately does NOT verify the
- * token against the API on every request (that would mean a network round
- * trip for every navigation, including ones that touch no protected data);
- * actual validity is enforced by apiFetch() (lib/api-client.ts) wherever a
- * request is actually made to the API, which refreshes or surfaces a 401
- * there instead. Runs in the Edge runtime, so it uses NextRequest's own
- * cookie API rather than next/headers (see lib/session.ts, which can't be
- * imported here).
+ * Gates protected pages using the refresh-token cookie. When the short-lived
+ * access cookie has expired, rotation happens here instead of inside a Server
+ * Component: Next.js permits middleware responses to write cookies, but
+ * forbids cookie mutation during rendering. A successful rotation redirects
+ * once to the original URL so the repeated request carries the fresh pair.
  */
-export function middleware(request: NextRequest) {
+export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
   const isPublicPath =
     pathname === ROOT_PATH || PUBLIC_PATHS.some((path) => pathname.startsWith(path));
@@ -94,6 +99,9 @@ export function middleware(request: NextRequest) {
   if (!isPublicPath && !hasRefreshToken) {
     return NextResponse.redirect(new URL('/login', request.url));
   }
+  if (!isPublicPath && !hasAccessToken && hasRefreshToken) {
+    return refreshProtectedSession(request);
+  }
   // Only bounce away from login when the immediately usable cookie pair is
   // present. A refresh-only cookie is the normal state after the 15-minute
   // access cookie expires; redirecting it to a dashboard request that may
@@ -102,6 +110,51 @@ export function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL('/dashboard', request.url));
   }
   return NextResponse.next();
+}
+
+
+async function refreshProtectedSession(request: NextRequest): Promise<NextResponse> {
+  const refreshToken = request.cookies.get(REFRESH_TOKEN_COOKIE)?.value;
+  if (!refreshToken) {
+    return NextResponse.redirect(new URL('/login', request.url));
+  }
+
+  try {
+    const apiResponse = await fetch(`${API_BASE_URL}/api/v1/auth/refresh`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refreshToken }),
+    });
+    const body = (await apiResponse.json().catch(() => null)) as RefreshEnvelope | null;
+
+    if (apiResponse.ok && body?.success && body.data) {
+      const response = NextResponse.redirect(request.nextUrl);
+      const secure = request.nextUrl.protocol === 'https:';
+      response.cookies.set(ACCESS_TOKEN_COOKIE, body.data.accessToken, {
+        httpOnly: true,
+        secure,
+        sameSite: 'lax',
+        path: '/',
+        maxAge: ACCESS_TOKEN_MAX_AGE,
+      });
+      response.cookies.set(REFRESH_TOKEN_COOKIE, body.data.refreshToken, {
+        httpOnly: true,
+        secure,
+        sameSite: 'lax',
+        path: '/',
+        maxAge: REFRESH_TOKEN_MAX_AGE,
+      });
+      return response;
+    }
+  } catch {
+    // Network failures and invalid refresh responses both end in a clean
+    // login redirect rather than a render-time exception or redirect loop.
+  }
+
+  const response = NextResponse.redirect(new URL('/login', request.url));
+  response.cookies.delete(ACCESS_TOKEN_COOKIE);
+  response.cookies.delete(REFRESH_TOKEN_COOKIE);
+  return response;
 }
 
 export const config = {
