@@ -112,10 +112,7 @@ export interface PasswordResetDeps {
  */
 export class AuthService {
   constructor(
-    private readonly repos: Pick<
-      Repositories,
-      'users' | 'refreshTokens' | 'passwordResetTokens'
-    >,
+    private readonly repos: Pick<Repositories, 'users' | 'refreshTokens' | 'passwordResetTokens'>,
     private readonly secrets: Pick<Bindings, 'JWT_ACCESS_SECRET' | 'JWT_REFRESH_SECRET'>,
     private readonly hasher: Pbkdf2Worker,
     private readonly passwordReset?: PasswordResetDeps,
@@ -190,6 +187,13 @@ export class AuthService {
           'REFRESH_TOKEN_ROTATED',
         );
       }
+      // A replay outside the brief browser-race window is evidence that a
+      // refresh credential escaped the legitimate client. Kill every live
+      // session for the account so the attacker's replacement token cannot
+      // remain usable. This intentionally favors containment over keeping
+      // other devices signed in; the user can authenticate again with the
+      // password while a stolen token cannot silently preserve access.
+      await this.repos.refreshTokens.revokeAllForUser(stored.userId);
       throw new AuthError('Refresh token is invalid or expired.', 'INVALID_REFRESH_TOKEN');
     }
 
@@ -286,12 +290,7 @@ export class AuthService {
     const tokenHash = await hashToken(input.token);
     const stored = await this.repos.passwordResetTokens.findByTokenHash(tokenHash);
 
-    if (
-      !stored ||
-      stored.consumedAt ||
-      stored.invalidatedAt ||
-      stored.expiresAt < new Date()
-    ) {
+    if (!stored || stored.consumedAt || stored.invalidatedAt || stored.expiresAt < new Date()) {
       throw new AuthError('This reset link is invalid or has expired.', 'INVALID_RESET_TOKEN');
     }
 
@@ -463,3 +462,4 @@ export class AuthService {
 
 // Re-exported so callers don't need a second import just for the TTL.
 export { REFRESH_TOKEN_TTL_SECONDS };
+

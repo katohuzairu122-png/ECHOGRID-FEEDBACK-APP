@@ -169,6 +169,13 @@
       "when": 1790195239069,
       "tag": "0023_yielding_sheva_callister",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1790524600887,
+      "tag": "0024_otp_request_cooldowns",
+      "breakpoints": true
     }
   ]
 }

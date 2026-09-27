@@ -1,11 +1,36 @@
-import { eq, and, gt, lt, isNull, desc, sql } from 'drizzle-orm';
-import { otpCodes } from '../db/schema';
+import { eq, and, gt, lt, lte, isNull, desc, sql } from 'drizzle-orm';
+import { otpCodes, otpRequestCooldowns } from '../db/schema';
 import { BaseRepository } from './base.repository';
 
 export type OtpCode = typeof otpCodes.$inferSelect;
 export type NewOtpCode = typeof otpCodes.$inferInsert;
 
 export class OtpCodeRepository extends BaseRepository {
+  /**
+   * Atomically claims the per-phone SMS cooldown. Concurrent Worker
+   * isolates race on the phone primary key; Postgres permits only the first
+   * insert/update whose prior reservation is old enough. A separate read
+   * followed by create cannot provide this guarantee.
+   */
+  async reserveRequest(phone: string, cooldownSeconds: number): Promise<boolean> {
+    const now = new Date();
+    const cutoff = new Date(now.getTime() - cooldownSeconds * 1000);
+    const rows = await this.db
+      .insert(otpRequestCooldowns)
+      .values({ phone, requestedAt: now })
+      .onConflictDoUpdate({
+        target: otpRequestCooldowns.phone,
+        set: { requestedAt: now },
+        setWhere: lte(otpRequestCooldowns.requestedAt, cutoff),
+      })
+      .returning({ phone: otpRequestCooldowns.phone });
+    return rows.length > 0;
+  }
+
+  async releaseRequest(phone: string): Promise<void> {
+    await this.db.delete(otpRequestCooldowns).where(eq(otpRequestCooldowns.phone, phone));
+  }
+
   async create(input: NewOtpCode): Promise<OtpCode> {
     const [row] = await this.db.insert(otpCodes).values(input).returning();
     if (!row) throw new Error('Insert returned no row');
@@ -27,7 +52,11 @@ export class OtpCodeRepository extends BaseRepository {
    * over time (one per request), only the newest active one is valid. */
   async findActiveForPhone(phone: string): Promise<OtpCode | undefined> {
     return this.db.query.otpCodes.findFirst({
-      where: and(eq(otpCodes.phone, phone), isNull(otpCodes.consumedAt), gt(otpCodes.expiresAt, new Date())),
+      where: and(
+        eq(otpCodes.phone, phone),
+        isNull(otpCodes.consumedAt),
+        gt(otpCodes.expiresAt, new Date()),
+      ),
       orderBy: desc(otpCodes.createdAt),
     });
   }
@@ -100,3 +129,4 @@ export class OtpCodeRepository extends BaseRepository {
     return rows.length;
   }
 }
+

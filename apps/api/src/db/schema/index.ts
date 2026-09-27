@@ -17,6 +17,7 @@ export * from './critical-incidents';
 export * from './fraud-signals';
 export * from './customers';
 export * from './otp-codes';
+export * from './otp-request-cooldowns';
 export * from './loyalty-tiers';
 export * from './loyalty-rewards';
 export * from './loyalty-accounts';
@@ -31,3 +32,4 @@ export * from './conversations';
 export * from './messages';
 export * from './visit-sessions';
 export * from './relations';
+

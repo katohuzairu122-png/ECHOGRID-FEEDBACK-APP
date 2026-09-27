@@ -107,7 +107,9 @@ function createFakeRepos() {
         return [...refreshTokens.values()].filter((r) => r.userId === userId && !r.revokedAt);
       },
       async revokeAllForUser(userId: string) {
-        const active = [...refreshTokens.values()].filter((r) => r.userId === userId && !r.revokedAt);
+        const active = [...refreshTokens.values()].filter(
+          (r) => r.userId === userId && !r.revokedAt,
+        );
         for (const row of active) row.revokedAt = new Date();
         return active.length;
       },
@@ -319,7 +321,7 @@ describe('AuthService', () => {
     }
   });
 
-  it('treats a rotated token as an ordinary invalid replay after the concurrency grace window', async () => {
+  it('revokes every live session when a rotated token is replayed after the concurrency grace window', async () => {
     const first = await service.signup({
       email: 'stale-replay@example.com',
       password: 'password-123',
@@ -336,6 +338,9 @@ describe('AuthService', () => {
     await expect(service.refresh(first.refreshToken)).rejects.toMatchObject({
       code: 'INVALID_REFRESH_TOKEN',
     });
+
+    const active = await repos.refreshTokens.listActiveForUser(rotated!.userId);
+    expect(active).toHaveLength(0);
   });
 
   it('refresh rejects a valid token once the account is deactivated -- a suspended user cannot keep renewing an existing session', async () => {
@@ -756,3 +761,4 @@ describe('AuthService', () => {
     ).resolves.toMatchObject({ accessToken: expect.any(String) });
   });
 });
+

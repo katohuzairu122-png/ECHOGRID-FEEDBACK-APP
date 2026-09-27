@@ -10,6 +10,7 @@ import type { OtpCode, NewOtpCode } from '../repositories/otp-code.repository';
 function createFakeRepos() {
   const customers = new Map<string, Customer>();
   const otpCodes = new Map<string, OtpCode>();
+  const otpReservations = new Map<string, number>();
 
   return {
     customers: {
@@ -43,6 +44,16 @@ function createFakeRepos() {
       },
     },
     otpCodes: {
+      async reserveRequest(phone: string, cooldownSeconds: number) {
+        const now = Date.now();
+        const reservedAt = otpReservations.get(phone);
+        if (reservedAt !== undefined && now - reservedAt < cooldownSeconds * 1000) return false;
+        otpReservations.set(phone, now);
+        return true;
+      },
+      async releaseRequest(phone: string) {
+        otpReservations.delete(phone);
+      },
       async create(input: NewOtpCode): Promise<OtpCode> {
         const row: OtpCode = {
           id: crypto.randomUUID(),
@@ -89,7 +100,10 @@ function createFakeRepos() {
  * for, but ConsoleSmsService already exists for dev; this fake exists so
  * the test can read the code back and complete a full request-then-verify
  * cycle without parsing console output. */
-function createFakeSmsService(): SmsService & { lastMessage?: string | undefined; lastPhone?: string | undefined } {
+function createFakeSmsService(): SmsService & {
+  lastMessage?: string | undefined;
+  lastPhone?: string | undefined;
+} {
   const fake = {
     lastMessage: undefined as string | undefined,
     lastPhone: undefined as string | undefined,
@@ -145,6 +159,20 @@ describe('CustomerAuthService', () => {
     await expect(service.requestOtp(PHONE)).rejects.toMatchObject({ code: 'OTP_COOLDOWN' });
   });
 
+  it('allows exactly one concurrent OTP request to reserve a phone cooldown', async () => {
+    const results = await Promise.allSettled([
+      service.requestOtp(PHONE),
+      service.requestOtp(PHONE),
+    ]);
+
+    expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
+    const rejected = results.filter((result) => result.status === 'rejected');
+    expect(rejected).toHaveLength(1);
+    if (rejected[0]?.status === 'rejected') {
+      expect(rejected[0].reason).toMatchObject({ code: 'OTP_COOLDOWN' });
+    }
+  });
+
   it('a full request-then-verify cycle issues a customer session and creates the customer row', async () => {
     await service.requestOtp(PHONE);
     const code = extractCode(sms.lastMessage!);
@@ -189,7 +217,9 @@ describe('CustomerAuthService', () => {
       await service.verifyOtp(PHONE, '000000').catch(() => undefined);
     }
 
-    await expect(service.verifyOtp(PHONE, code)).rejects.toMatchObject({ code: 'OTP_MAX_ATTEMPTS' });
+    await expect(service.verifyOtp(PHONE, code)).rejects.toMatchObject({
+      code: 'OTP_MAX_ATTEMPTS',
+    });
   });
 
   it('rejects verification for a phone with no outstanding code the same way as a wrong code -- no signal about whether the phone has ever requested one', async () => {
@@ -223,5 +253,5 @@ describe('CustomerAuthService', () => {
 
     await expect(service.verifyOtp(PHONE, code)).rejects.toMatchObject({ code: 'OTP_INVALID' });
   });
-
 });
+

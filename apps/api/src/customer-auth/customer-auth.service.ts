@@ -56,30 +56,30 @@ export class CustomerAuthService {
    * "does this number exist" signal) since first-ever verify precedes any
    * customer row existing -- there is nothing to enumerate either way. */
   async requestOtp(phone: string): Promise<void> {
-    const latest = await this.repos.otpCodes.findLatestForPhone(phone);
-    // Only an unconsumed recent code triggers the cooldown: it exists to
-    // rate-limit SMS sends from repeated *unverified* requests. Once a code
-    // has been consumed (which requires a successful verify -- proof of phone
-    // ownership), a fresh request is a legitimate re-authentication, not spam,
-    // and must not be blocked (e.g. a returning customer re-verifying).
-    if (latest && !latest.consumedAt) {
-      const secondsSinceLastRequest = (Date.now() - latest.createdAt.getTime()) / 1000;
-      if (secondsSinceLastRequest < OTP_REQUEST_COOLDOWN_SECONDS) {
-        throw new CustomerAuthError(
-          'Please wait before requesting another code.',
-          'OTP_COOLDOWN',
-        );
-      }
+    const reserved = await this.repos.otpCodes.reserveRequest(phone, OTP_REQUEST_COOLDOWN_SECONDS);
+    if (!reserved) {
+      throw new CustomerAuthError('Please wait before requesting another code.', 'OTP_COOLDOWN');
     }
 
-    const code = generateOtpCode();
-    await this.repos.otpCodes.create({
-      phone,
-      codeHash: await hashOtpCode(code, this.hasher),
-      expiresAt: otpExpiresAt(),
-    });
+    try {
+      const code = generateOtpCode();
+      await this.repos.otpCodes.create({
+        phone,
+        codeHash: await hashOtpCode(code, this.hasher),
+        expiresAt: otpExpiresAt(),
+      });
 
-    await this.sms.send(phone, `Your Echo Grid verification code is ${code}. It expires in 10 minutes.`);
+      await this.sms.send(
+        phone,
+        `Your Echo Grid verification code is ${code}. It expires in 10 minutes.`,
+      );
+    } catch (err) {
+      // A failed database write or SMS delivery must not consume the user's
+      // only request for the next minute. The unused OTP row, if one was
+      // created before delivery failed, remains harmless and expires.
+      await this.repos.otpCodes.releaseRequest(phone).catch(() => undefined);
+      throw err;
+    }
   }
 
   /**
@@ -119,6 +119,11 @@ export class CustomerAuthService {
       throw new CustomerAuthError('Code is invalid or has expired.', 'OTP_INVALID');
     }
 
+    // Successful proof of phone ownership permits an immediate legitimate
+    // re-authentication request while still keeping unverified SMS requests
+    // under the full cooldown.
+    await this.repos.otpCodes.releaseRequest(phone).catch(() => undefined);
+
     let customer = await this.repos.customers.findByPhone(phone);
     if (!customer) {
       customer = await this.repos.customers.create({ phone, phoneVerifiedAt: new Date() });
@@ -131,7 +136,11 @@ export class CustomerAuthService {
       }
     }
 
-    const accessToken = await signCustomerAccessToken(customer.id, this.secrets.CUSTOMER_JWT_SECRET);
+    const accessToken = await signCustomerAccessToken(
+      customer.id,
+      this.secrets.CUSTOMER_JWT_SECRET,
+    );
     return { accessToken, customer };
   }
 }
+

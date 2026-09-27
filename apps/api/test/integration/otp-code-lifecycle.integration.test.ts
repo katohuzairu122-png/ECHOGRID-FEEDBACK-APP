@@ -59,7 +59,25 @@ describe.skipIf(!process.env.DATABASE_URL)('otp_codes lifecycle (integration)', 
     // A real DELETE, not a soft delete -- this table has no soft-delete
     // columns, which is the same reason deleteCreatedBefore exists at all.
     await client.query('DELETE FROM otp_codes WHERE phone LIKE $1', [`${PHONE}%`]);
+    await client.query('DELETE FROM otp_request_cooldowns WHERE phone LIKE $1', [`${PHONE}%`]);
     await client.end();
+  });
+
+  it('allows exactly one concurrent per-phone cooldown reservation', async () => {
+    const results = await Promise.all([
+      repos.otpCodes.reserveRequest(PHONE, 60),
+      repos.otpCodes.reserveRequest(PHONE, 60),
+    ]);
+
+    expect(results.filter(Boolean)).toHaveLength(1);
+    await expect(repos.otpCodes.reserveRequest(PHONE, 60)).resolves.toBe(false);
+  });
+
+  it('permits a new reservation after the phone cooldown is released', async () => {
+    await repos.otpCodes.reserveRequest(OTHER_PHONE, 60);
+    await repos.otpCodes.releaseRequest(OTHER_PHONE);
+
+    await expect(repos.otpCodes.reserveRequest(OTHER_PHONE, 60)).resolves.toBe(true);
   });
 
   it('has the phone/created_at index -- proves the migration is applied', async () => {
@@ -157,7 +175,7 @@ describe.skipIf(!process.env.DATABASE_URL)('otp_codes lifecycle (integration)', 
     expect(deleted).toBe(0);
   });
 
-  it('never deletes another phone\'s rows it was not asked about', async () => {
+  it("never deletes another phone's rows it was not asked about", async () => {
     // The prune is deliberately global -- it takes no phone -- so this
     // guards the one thing that could go wrong with that: the cutoff, not
     // the phone, must be what decides.
@@ -169,3 +187,4 @@ describe.skipIf(!process.env.DATABASE_URL)('otp_codes lifecycle (integration)', 
     expect(survived.rows).toHaveLength(1);
   });
 });
+

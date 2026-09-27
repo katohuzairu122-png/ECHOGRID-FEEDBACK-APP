@@ -4,6 +4,7 @@ import type { AuthVariables } from './authenticate';
 import type { TenantVariables } from './tenant-context';
 import { createDb } from '../db/client';
 import { createRepositories } from '../repositories';
+import { AppError } from '../lib/errors';
 
 export type AuditVariables = {
   auditMetadata?: {
@@ -38,17 +39,59 @@ const MUTATING_METHODS = new Set(['POST', 'PATCH', 'PUT', 'DELETE']);
  * since there's no one to attribute the entry to yet; the `users` table's
  * own createdAt/audit columns record account creation instead).
  *
- * Failed requests (4xx/5xx) are not audited -- the error itself is what
- * matters there, not a redundant log row, and it's already visible via
- * Workers Logs. A failure while WRITING the audit entry is caught and
- * logged rather than thrown, so it can never turn an already-successful
- * response into a 500.
+ * Authentication and authorization failures are recorded as security
+ * events. The entry includes only route/method/error metadata, never a
+ * request body, password, OTP, or token. Other failures remain in Workers
+ * Logs. A failure while WRITING any audit entry is caught and logged rather
+ * than replacing the response the request should have produced.
  */
 export const auditTrail = createMiddleware<{
   Bindings: Bindings;
   Variables: Partial<AuthVariables> & Partial<TenantVariables> & AuditVariables;
 }>(async (c, next) => {
-  await next();
+  const recordSecurityFailure = async (err: AppError) => {
+    try {
+      const { db, close } = await createDb(c.env.HYPERDRIVE);
+      try {
+        await createRepositories(db).auditLog.record({
+          businessId: c.get('businessId') ?? null,
+          actorUserId: c.get('userId') ?? null,
+          action:
+            err.status === 401 ? 'security.authentication_failed' : 'security.authorization_failed',
+          entityType: 'security_event',
+          entityId: null,
+          metadata: {
+            method: c.req.method,
+            path: new URL(c.req.url).pathname,
+            errorCode: err.code,
+          },
+          ipAddress: c.req.header('cf-connecting-ip') ?? null,
+          userAgent: c.req.header('user-agent') ?? null,
+        });
+      } finally {
+        c.executionCtx.waitUntil(close());
+      }
+    } catch (auditErr) {
+      console.error('Failed to write security audit log entry:', auditErr);
+    }
+  };
+
+  try {
+    await next();
+  } catch (err) {
+    if (err instanceof AppError && (err.status === 401 || err.status === 403)) {
+      await recordSecurityFailure(err);
+    }
+    throw err;
+  }
+
+  // Hono's registered onError handler can turn a downstream throw into a
+  // response before control returns here. In that normal application path
+  // the original error is retained on c.error rather than rethrown.
+  if (c.error instanceof AppError && (c.error.status === 401 || c.error.status === 403)) {
+    await recordSecurityFailure(c.error);
+    return;
+  }
 
   if (!MUTATING_METHODS.has(c.req.method)) return;
   if (c.res.status < 200 || c.res.status >= 300) return;
@@ -65,7 +108,10 @@ export const auditTrail = createMiddleware<{
     // depends on, so it can't be something an individual route forgets.
     const impersonatedBy = c.get('impersonatedBy');
     const details = impersonatedBy
-      ? { ...(meta?.details && typeof meta.details === 'object' ? meta.details : {}), impersonatedBy }
+      ? {
+          ...(meta?.details && typeof meta.details === 'object' ? meta.details : {}),
+          impersonatedBy,
+        }
       : (meta?.details ?? null);
 
     const { db, close } = await createDb(c.env.HYPERDRIVE);
@@ -88,3 +134,4 @@ export const auditTrail = createMiddleware<{
     console.error('Failed to write audit log entry:', err);
   }
 });
+
