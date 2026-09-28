@@ -64,3 +64,4 @@ test('QR code scan to feedback inbox, end to end', async ({ page }) => {
   await expect(page).toHaveURL('/dashboard/feedback');
   await expect(page.getByText('Excellent service, E2E test.')).toBeVisible();
 });
+

@@ -49,7 +49,8 @@ test('staff sets up a loyalty tier, reward, and earning rates, end to end', asyn
   await page.getByRole('button', { name: 'New reward' }).click();
   await page.getByLabel('Name').fill('Free coffee');
   await page.getByLabel('Points cost').fill('100');
-  await page.getByRole('button', { name: 'Create reward' }).click();
+  await page.getByRole('button', { name: 'Create reward' }).focus();
+  await page.keyboard.press('Enter');
   await expect(page.getByText('Free coffee').first()).toBeVisible();
   await expect(page.getByText('Active')).toBeVisible();
 
@@ -73,3 +74,4 @@ test('staff sets up a loyalty tier, reward, and earning rates, end to end', asyn
   await page.reload();
   await expect(page.getByLabel('Points per check-in')).toHaveValue('15');
 });
+

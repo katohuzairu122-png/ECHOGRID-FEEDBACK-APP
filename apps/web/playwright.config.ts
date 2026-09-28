@@ -15,6 +15,8 @@ import { defineConfig, devices } from '@playwright/test';
 export default defineConfig({
   testDir: './e2e',
   fullyParallel: false, // signup/business/branch data isn't isolated per test yet
+  workers: 1,
+  timeout: 60_000,
   retries: 0,
   use: {
     baseURL: 'http://localhost:3000',
