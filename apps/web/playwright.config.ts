@@ -22,7 +22,7 @@ export default defineConfig({
   },
   webServer: [
     {
-      command: 'pnpm --filter @echo-grid-feedback/api dev -- --local',
+      command: 'pnpm --filter @echo-grid-feedback/api exec wrangler dev --local',
       url: 'http://localhost:8787/health',
       reuseExistingServer: true,
       timeout: 30_000,
