@@ -1,183 +1,383 @@
-import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
-import process from 'node:process';
+# Echo Grid Feedback App — Updated Completion and Execution Audit
 
-const root = resolve(import.meta.dirname, '..');
-const command = process.argv[2] ?? 'verify';
-const allowed = new Set(['preflight', 'verify', 'e2e', 'evidence']);
-const artifactDir = resolve(root, '.artifacts/block14');
-const artifactPath = resolve(artifactDir, `${command}.json`);
-const startedAt = new Date().toISOString();
-const steps = [];
+**Updated:** 2026-07-20  
+**Repository:** `katohuzairu122-png/ECHOGRID-FEEDBACK-APP`  
+**Current consolidated package:** `ECHOGRID-FEEDBACK-APP-BLOCK-18-LAUNCH-READINESS.zip`
 
-function pnpm() {
-  return process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm';
-}
+## 1. Executive status
 
-function run(name, program, args, options = {}) {
-  process.stdout.write(`\n[block14] ${name}\n`);
-  const started = Date.now();
-  const windowsCommand = process.platform === 'win32' && program.endsWith('.cmd');
-  const result = spawnSync(
-    windowsCommand ? (process.env.ComSpec ?? 'cmd.exe') : program,
-    windowsCommand ? ['/d', '/s', '/c', [program, ...args].join(' ')] : args,
-    {
-      cwd: options.cwd ?? root,
-      env: process.env,
-      encoding: 'utf8',
-      stdio: options.capture ? 'pipe' : 'inherit',
-      shell: false,
-    },
-  );
-  const exitCode = result.error ? 1 : (result.status ?? 1);
-  steps.push({
-    name,
-    command: [program, ...args].join(' '),
-    status: exitCode === 0 ? 'passed' : 'failed',
-    durationMs: Date.now() - started,
-    ...(result.error ? { error: result.error.message } : {}),
-  });
-  if (options.capture && result.stdout) process.stdout.write(result.stdout);
-  if (options.capture && result.stderr) process.stderr.write(result.stderr);
-  if (exitCode !== 0) throw new Error(`${name} failed with exit code ${exitCode}`);
-  return (result.stdout ?? '').trim();
-}
+The project is no longer limited to root configuration files. The complete monorepo is now available and contains:
 
-function check(name, assertion) {
-  const started = Date.now();
-  try {
-    const detail = assertion();
-    steps.push({ name, status: 'passed', durationMs: Date.now() - started, detail });
-  } catch (error) {
-    steps.push({
-      name,
-      status: 'failed',
-      durationMs: Date.now() - started,
-      error: error instanceof Error ? error.message : String(error),
-    });
-    throw error;
-  }
-}
+- `apps/api/**`
+- `apps/web/**`
+- `packages/shared-types/**`
+- database migrations and seeds
+- API, unit, integration, Workers, and Playwright test structure
+- Cloudflare/Wrangler deployment configuration
+- QR engagement and feedback capture
+- loyalty
+- AI sentiment analytics
+- notifications
+- internationalization
+- administration
+- billing and subscription code
+- architecture, setup, API, deployment, and ERD documentation
 
-function requireDatabase() {
-  return check('Database configured', () => {
-    const value = process.env.DATABASE_URL;
-    if (!value) throw new Error('DATABASE_URL is required for integration verification');
-    const database = new URL(value);
-    const local = ['localhost', '127.0.0.1', '::1'].includes(database.hostname);
-    if (!local && process.env.BLOCK14_ALLOW_REMOTE_DATABASE !== 'yes') {
-      throw new Error('Refusing a remote database without BLOCK14_ALLOW_REMOTE_DATABASE=yes');
-    }
-    return `${database.hostname}/${database.pathname.slice(1)}`;
-  });
-}
+Blocks 12 through 18 have been added as a consolidated architectural and verification sequence. The latest package contains the previous project state plus the preparation, verification, hardening, deployment, commercial-readiness, and release-readiness controls introduced by those blocks.
 
-function preflight() {
-  run('pnpm available', pnpm(), ['--version'], { capture: true });
-  run('Git repository available', 'git', ['rev-parse', '--show-toplevel'], { capture: true });
-  check('Required E2E files', () => {
-    const files = [
-      'apps/api/vitest.integration.config.ts',
-      'apps/web/playwright.config.ts',
-      'apps/web/playwright.remote.config.ts',
-      'apps/web/e2e/branch-management.spec.ts',
-      'apps/web/e2e/loyalty.spec.ts',
-      'apps/web/e2e/qr-engagement.spec.ts',
-    ];
-    for (const file of files) readFileSync(resolve(root, file));
-    return `${files.length} files present`;
-  });
-  const remote = process.env.E2E_BASE_URL?.trim();
-  if (remote) {
-    check('Remote E2E target', () => new URL(remote).origin);
-  } else {
-    requireDatabase();
-    check('Local API secrets', () => {
-      const path = resolve(root, 'apps/api/.dev.vars');
-      if (!existsSync(path)) throw new Error('apps/api/.dev.vars is required for local E2E');
-      return path;
-    });
-  }
-  check('Playwright dependency installed', () => {
-    const manifest = JSON.parse(
-      readFileSync(resolve(root, 'apps/web/node_modules/@playwright/test/package.json'), 'utf8'),
-    );
-    return manifest.version;
-  });
-}
+The project is therefore **architecturally advanced but not yet verified as production-ready**.
 
-function e2e() {
-  preflight();
-  const remote = Boolean(process.env.E2E_BASE_URL?.trim());
-  run(
-    remote
-      ? 'Playwright against explicit remote target'
-      : 'Playwright against isolated local stack',
-    pnpm(),
-    remote
-      ? ['--filter', '@echo-grid-feedback/web', 'test:e2e:remote']
-      : ['--filter', '@echo-grid-feedback/web', 'test:e2e'],
-  );
-}
+The remaining work is execution, defect repair, environment configuration, staging validation, and release evidence—not uncontrolled feature expansion.
 
-function verify() {
-  preflight();
-  if (process.env.E2E_BASE_URL?.trim()) requireDatabase();
-  run('API integration tests', pnpm(), ['--filter', '@echo-grid-feedback/api', 'test:integration']);
-  const remote = Boolean(process.env.E2E_BASE_URL?.trim());
-  run(
-    remote
-      ? 'Playwright against explicit remote target'
-      : 'Playwright against isolated local stack',
-    pnpm(),
-    remote
-      ? ['--filter', '@echo-grid-feedback/web', 'test:e2e:remote']
-      : ['--filter', '@echo-grid-feedback/web', 'test:e2e'],
-  );
-}
+## 2. Current package hierarchy
 
-function evidence() {
-  const verification = resolve(artifactDir, 'verify.json');
-  check('Successful verification evidence exists', () => {
-    const parsed = JSON.parse(readFileSync(verification, 'utf8'));
-    if (parsed.status !== 'passed') throw new Error('Block 14 verification has not passed');
-    return verification;
-  });
-}
+The qualified project checkpoints are:
 
-function writeEvidence(status, error) {
-  mkdirSync(dirname(artifactPath), { recursive: true });
-  writeFileSync(
-    artifactPath,
-    `${JSON.stringify(
-      {
-        schemaVersion: 1,
-        block: '2D',
-        command,
-        status,
-        startedAt,
-        completedAt: new Date().toISOString(),
-        nodeVersion: process.version,
-        platform: `${process.platform}-${process.arch}`,
-        target: process.env.E2E_BASE_URL?.trim() || 'local-isolated-stack',
-        ...(process.env.GITHUB_SHA ? { commit: process.env.GITHUB_SHA } : {}),
-        steps,
-        ...(error ? { error: error instanceof Error ? error.message : String(error) } : {}),
-      },
-      null,
-      2,
-    )}\n`,
-  );
-  process.stdout.write(`\n[block14] Evidence: ${artifactPath}\n`);
-}
+1. `ECHOGRID-FEEDBACK-APP-main.zip` — GitHub repository baseline
+2. `feedback-flow-block11-qr-engine.zip` — earlier QR-engine checkpoint
+3. `ECHOGRID-FEEDBACK-APP-BLOCK-12-PREPARED.zip` — QR feedback intake audit and execution plan
+4. `ECHOGRID-FEEDBACK-APP-BLOCK-13-STABILIZATION.zip` — application stabilization controls
+5. `ECHOGRID-FEEDBACK-APP-BLOCK-14-E2E-VERIFICATION.zip` — full end-to-end verification controls
+6. `ECHOGRID-FEEDBACK-APP-BLOCK-15-HARDENING.zip` — security, performance, and reliability controls
+7. `ECHOGRID-FEEDBACK-APP-BLOCK-16-DEPLOYMENT-OPERATIONS.zip` — deployment and production operations controls
+8. `ECHOGRID-FEEDBACK-APP-BLOCK-17-COMMERCIAL-READINESS.zip` — billing and commercial-readiness controls
+9. `ECHOGRID-FEEDBACK-APP-BLOCK-18-LAUNCH-READINESS.zip` — final consolidated launch-readiness package
 
-try {
-  if (!allowed.has(command)) throw new Error(`Unknown Block 14 command: ${command}`);
-  ({ preflight, verify, e2e, evidence })[command]();
-  writeEvidence('passed');
-} catch (error) {
-  writeEvidence('failed', error);
-  process.stderr.write(`\n[block14] ${error instanceof Error ? error.message : String(error)}\n`);
-  process.exitCode = 1;
-}
+Only the Block 18 package should be used for current execution. Earlier ZIPs are rollback and audit checkpoints and should not be merged manually.
+
+## 3. Implemented product capabilities found in the repository
+
+The repository already contains substantial application functionality, including:
+
+### Core platform
+
+- strict TypeScript pnpm monorepo
+- API, web, and shared-types workspaces
+- multi-tenant business architecture
+- role and permission controls
+- branch management
+- database migrations and seed commands
+
+### QR engagement and feedback
+
+- QR generation and management
+- public feedback route and feedback page
+- QR token resolution
+- anonymous feedback submission
+- tenant-scoped feedback persistence
+- feedback inbox workflow
+- sentiment processing integration
+- staff notification flow
+
+### Additional product modules
+
+- digital loyalty
+- AI sentiment analytics
+- notifications
+- internationalization
+- platform administration
+- subscription plans
+- Stripe Checkout
+- Stripe Customer Portal
+- Stripe webhook handling
+- subscription state synchronization
+
+## 4. Block 12 status — QR feedback intake
+
+Block 12 was reclassified after repository inspection because the basic QR scan-to-feedback workflow already exists.
+
+The remaining Block 12 hardening scope is:
+
+- configurable feedback forms and questions
+- normalized responses and answers
+- QR expiration and revocation behavior
+- submission idempotency and replay protection
+- QR scan-event recording
+- privacy-preserving client fingerprint or hash handling
+- scan deduplication
+- stronger transactional persistence
+
+**Status:** Prepared and documented. Not confirmed as fully implemented or passing.
+
+## 5. Block 13 status — application stabilization
+
+Added controls for:
+
+- repository and toolchain preflight
+- quick verification
+- full verification
+- changed-file targeted testing
+- machine-readable verification output
+- stabilization execution ledger
+
+Commands:
+
+```bash
+pnpm block13:preflight
+pnpm block13:verify:quick
+pnpm block13:verify
+pnpm block13:test:changed
+```
+
+**Status:** Complete. The commands are implemented by
+[`tools/block13.mjs`](../tools/block13.mjs), emit versioned JSON evidence under
+`.artifacts/block13/`, and are documented with their execution ledger in
+[`BLOCK-2C-STABILIZATION.md`](./BLOCK-2C-STABILIZATION.md).
+
+## 6. Block 14 status — end-to-end verification
+
+Added controls for:
+
+- Playwright execution
+- API integration tests
+- prerequisite enforcement
+- tenant-isolation manual checks
+- abuse-path checks
+- machine-readable E2E evidence
+
+Commands:
+
+```bash
+pnpm block14:preflight
+pnpm block14:verify
+pnpm block14:e2e
+pnpm block14:evidence
+```
+
+**Status:** Complete. CI provisions Chromium and an isolated PostgreSQL 16
+database, replays migrations and seeds, runs integration plus Playwright
+verification, uploads machine-readable evidence, and gates production
+deployments. See [BLOCK-2D-E2E-VERIFICATION.md](./BLOCK-2D-E2E-VERIFICATION.md).
+
+## 7. Block 15 status — security, performance, and reliability
+
+Added controls for:
+
+- static secret scanning
+- dangerous dynamic-code checks
+- TLS and CORS checks
+- dependency auditing
+- security-header probing
+- configurable load-smoke testing
+- latency and error-rate thresholds
+- machine-readable hardening evidence
+
+Commands:
+
+```bash
+pnpm block15:preflight
+pnpm block15:security
+pnpm block15:runtime
+pnpm block15:load
+pnpm block15:verify
+pnpm block15:evidence
+```
+
+A previous static scan reported no high or medium findings and one low test-fixture finding. That result must still be reproduced locally against the final Block 18 package.
+
+**Status:** Prepared. Runtime security and load checks remain unexecuted.
+
+## 8. Block 16 status — deployment and operations
+
+Added controls for:
+
+- deployment preflight
+- environment-variable audit
+- placeholder detection
+- SHA-256 release manifest
+- API and web smoke tests
+- ordered verification across previous blocks
+- rollback and release evidence controls
+
+Commands:
+
+```bash
+pnpm block16:preflight
+pnpm block16:env:audit
+pnpm block16:manifest
+pnpm block16:smoke
+pnpm block16:verify
+pnpm block16:evidence
+```
+
+**Status:** Prepared. Staging URLs, Cloudflare resources, production bindings, and smoke tests still require real environments.
+
+## 9. Block 17 status — billing and commercial readiness
+
+The repository already contains substantial billing code. Block 17 adds verification and closure controls for:
+
+- plans and subscription lifecycle
+- checkout
+- customer portal
+- webhook processing
+- payment failure
+- cancellation
+- permission boundaries
+- commercial evidence
+
+Commands:
+
+```bash
+pnpm block17:preflight
+pnpm block17:audit
+pnpm block17:verify:static
+pnpm block17:verify
+pnpm block17:evidence
+```
+
+Outstanding business decisions include:
+
+- plan names
+- monthly and annual prices
+- trial duration
+- plan limits
+- annual discount
+- grace period
+- downgrade rules
+- refund policy
+- currencies
+- tax and invoice handling
+
+**Status:** Prepared. Stripe test-mode flows and final commercial decisions remain open.
+
+## 10. Block 18 status — final launch readiness
+
+Block 18 consolidates launch controls and provides:
+
+- final preflight
+- launch-readiness audit
+- static and runtime verification
+- immutable release evidence
+- SHA-256 evidence hashes
+- go/no-go criteria
+- rollback ownership fields
+- changelog and security policy templates
+
+Commands:
+
+```bash
+pnpm block18:preflight
+pnpm block18:audit
+pnpm block18:verify:static
+pnpm block18:verify
+pnpm block18:evidence
+```
+
+Current known blockers:
+
+1. `pnpm-lock.yaml` must be generated and committed.
+2. A project license decision remains open; the package currently declares `UNLICENSED`.
+3. Runtime environments are not yet configured and verified.
+4. Typecheck, lint, tests, and build have not yet been proven to pass on the user’s machine for the final consolidated package.
+5. Staging deployment, production smoke tests, and Stripe test-mode validation remain outstanding.
+
+**Status:** Prepared for execution. Not yet authorized for production launch.
+
+## 11. Required execution order
+
+Use a fresh clone of the GitHub repository and a feature branch. Copy the contents of the Block 18 package into the clone while preserving `.git/`.
+
+Then execute:
+
+```bash
+pnpm install
+pnpm block18:preflight
+pnpm block18:audit
+pnpm block18:verify:static
+pnpm typecheck
+pnpm lint
+pnpm test
+pnpm build
+```
+
+Stop at the first failure. Repair that failure before proceeding.
+
+After static verification passes:
+
+```bash
+pnpm exec playwright install chromium
+pnpm block14:verify
+pnpm block15:runtime
+pnpm block15:load
+pnpm block16:smoke
+pnpm block17:verify
+pnpm block18:verify
+```
+
+Then generate release evidence:
+
+```bash
+export BLOCK18_RELEASE_VERSION="v1.0.0-rc.1"
+export BLOCK18_GIT_COMMIT="$(git rev-parse HEAD)"
+pnpm block18:evidence
+```
+
+## 12. GitHub push procedure
+
+Recommended branch flow:
+
+```bash
+git checkout -b block18-launch-readiness
+pnpm install
+pnpm block18:verify:static
+git add .
+git commit -m "Complete Echo Grid launch-readiness integration"
+git push -u origin block18-launch-readiness
+```
+
+Then open a pull request:
+
+```text
+block18-launch-readiness → main
+```
+
+Do not force-push over `main`. Merge only after local checks and GitHub CI pass.
+
+## 13. Required release evidence
+
+Production readiness requires all of the following:
+
+- reproducible `pnpm-lock.yaml`
+- passing typecheck
+- passing lint
+- passing unit tests
+- passing integration tests
+- passing Workers tests
+- passing Playwright tests
+- passing production build
+- passing tenant-isolation tests
+- passing permission tests
+- passing security checks
+- passing load-smoke thresholds
+- successful database migration and rollback validation
+- successful Stripe test-mode scenarios
+- successful staging smoke tests
+- successful production smoke tests
+- completed release evidence with matching commit SHA
+- documented rollback owner and procedure
+
+## 14. Current classification
+
+| Area | Status |
+|---|---|
+| Product architecture | Advanced |
+| Core application code | Present |
+| QR feedback workflow | Present; hardening pending |
+| Loyalty and analytics | Present; execution verification pending |
+| Billing | Present; commercial and runtime verification pending |
+| Test architecture | Present |
+| Static verification | Not yet proven on final package |
+| Runtime verification | Pending |
+| Staging deployment | Pending |
+| Production launch | Not approved |
+
+## 15. Final conclusion
+
+Echo Grid has moved from incomplete source availability to a substantially built, documented, and staged application architecture. The correct next phase is not another architectural block. It is controlled execution and defect closure against the final Block 18 package.
+
+The application should be classified as:
+
+> **Implementation-rich, verification-pending, and not yet production-approved.**
+
+Production approval should be granted only after every Block 18 verification gate passes against the same Git commit that is deployed.
+

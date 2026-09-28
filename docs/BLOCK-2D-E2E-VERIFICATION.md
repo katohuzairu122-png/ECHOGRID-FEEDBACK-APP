@@ -1,41 +1,35 @@
-{
-  "name": "echo-grid-feedback-platform",
-  "version": "0.1.0",
-  "private": true,
-  "type": "module",
-  "description": "Enterprise Customer Experience Platform: QR-based feedback, loyalty, and sentiment analytics.",
-  "license": "UNLICENSED",
-  "author": "INFINICUS LLC (trading as Echo Grid)",
-  "packageManager": "pnpm@11.9.0",
-  "engines": {
-    "node": ">=22.0.0",
-    "pnpm": ">=11.0.0"
-  },
-  "scripts": {
-    "dev:api": "pnpm --filter @echo-grid-feedback/api dev",
-    "dev:web": "pnpm --filter @echo-grid-feedback/web dev",
-    "build": "pnpm -r --if-present build",
-    "lint": "eslint .",
-    "format": "prettier --write \"**/*.{ts,tsx,js,json,md}\" --ignore-path .gitignore",
-    "format:check": "prettier --check \"**/*.{ts,tsx,js,json,md}\" --ignore-path .gitignore",
-    "typecheck": "pnpm -r --if-present typecheck",
-    "test": "pnpm -r --if-present test",
-    "block13:preflight": "node tools/block13.mjs preflight",
-    "block13:verify:quick": "node tools/block13.mjs quick",
-    "block13:verify": "node tools/block13.mjs full",
-    "block13:test:changed": "node tools/block13.mjs changed",
-    "block14:preflight": "node tools/block14.mjs preflight",
-    "block14:verify": "node tools/block14.mjs verify",
-    "block14:e2e": "node tools/block14.mjs e2e",
-    "block14:evidence": "node tools/block14.mjs evidence"
-  },
-  "devDependencies": {
-    "@eslint/js": "^9.15.0",
-    "@typescript-eslint/eslint-plugin": "^8.15.0",
-    "@typescript-eslint/parser": "^8.15.0",
-    "eslint": "^9.15.0",
-    "eslint-config-prettier": "^9.1.0",
-    "prettier": "^3.3.3",
-    "typescript": "^5.7.2"
-  }
-}
+# Block 2D — End-to-End Verification
+
+Block 2D verifies the application across real PostgreSQL transactions and a
+real Chromium browser. CI provisions a disposable PostgreSQL 16 service,
+applies every migration, seeds the permission catalog, starts the API and web
+development Workers, and runs all Playwright flows. Production deployments
+wait for this gate.
+
+## Commands
+
+| Command                  | Purpose                                                                                  |
+| ------------------------ | ---------------------------------------------------------------------------------------- |
+| `pnpm block14:preflight` | Validate the database/remote target, local secrets, Playwright, Git, and required suites |
+| `pnpm block14:e2e`       | Run the three browser flows locally or against explicit `E2E_BASE_URL`                   |
+| `pnpm block14:verify`    | Run all API integration suites followed by Playwright                                    |
+| `pnpm block14:evidence`  | Validate that successful verification evidence exists                                    |
+
+Every command writes versioned JSON to `.artifacts/block14/`. CI uploads that
+directory together with Playwright reports and failure traces.
+
+Local verification refuses a non-local database unless
+`BLOCK14_ALLOW_REMOTE_DATABASE=yes` is explicitly set. Remote browser runs
+still pass through `e2e/base-url.ts`, which refuses production hosts without
+the exact production-write acknowledgement.
+
+## Verified paths
+
+| Risk                   | Executable evidence                                                                                                                                      |
+| ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Tenant isolation       | Integration suites cover cross-business feedback, permission resolution, redemption ownership, QR assignment, billing permissions, and branch uniqueness |
+| Replay and abuse paths | Integration suites cover feedback idempotency, OTP lifecycle, QR scan deduplication, fraud filtering, and critical-incident atomicity                    |
+| Browser/BFF lifecycle  | Playwright covers signup cookies, business and branch creation, QR scan through anonymous feedback to inbox, and loyalty configuration persistence       |
+| Clean schema replay    | CI applies the complete migration chain to a new PostgreSQL 16 database before verification                                                              |
+| Production safety      | E2E uses an ephemeral local database in CI; remote execution has no default target and guards production hosts                                           |
+
