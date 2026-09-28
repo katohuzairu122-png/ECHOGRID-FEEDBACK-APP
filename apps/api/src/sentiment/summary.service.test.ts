@@ -28,6 +28,8 @@ const PERMISSIVE_SPEND_LIMITS = { dailyLimitUsd: 1000, monthlyLimitUsd: 1000 };
 function makeFeedback(overrides: Partial<Feedback> = {}): Feedback {
   return {
     id: crypto.randomUUID(),
+    submissionKey: null,
+    submissionPayloadHash: null,
     businessId: BUSINESS_A,
     branchId: BRANCH_A,
     qrCodeId: 'qr-1',
@@ -1064,3 +1066,4 @@ describe('SummaryService.generateForPeriod -- retry idempotency (P2-2)', () => {
     expect(repos.feedbackSummaries.findLatestForPeriod).not.toHaveBeenCalled();
   });
 });
+

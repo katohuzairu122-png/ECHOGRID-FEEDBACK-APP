@@ -8,6 +8,8 @@ const BUSINESS_A = 'business-a';
 function makeFeedback(overrides: Partial<Feedback> = {}): Feedback {
   return {
     id: 'feedback-1',
+    submissionKey: null,
+    submissionPayloadHash: null,
     businessId: BUSINESS_A,
     branchId: 'branch-1',
     qrCodeId: 'qr-1',
@@ -195,3 +197,4 @@ describe('SentimentService.classifyAndStore', () => {
     expect(updated.urgency).toBe('P0_CRITICAL');
   });
 });
+
