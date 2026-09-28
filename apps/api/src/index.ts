@@ -64,6 +64,10 @@ export { PasswordHasherDurableObject } from './auth/password-hasher.do';
 const app = new Hono<{ Bindings: Bindings }>();
 
 app.onError(errorHandler);
+// Security headers belong on every response, including the unversioned
+// health probe and Stripe webhook. Keeping this at the root prevents new
+// routes from silently shipping without the baseline policy.
+app.use('*', secureHeaders());
 
 app.get('/health', (c) =>
   c.json({
@@ -108,7 +112,6 @@ api.use(
     allowMethods: ['GET', 'POST', 'PATCH', 'DELETE'],
   }),
 );
-api.use('*', secureHeaders());
 api.use('*', rateLimit('API_RATE_LIMITER'));
 api.use('*', auditTrail);
 

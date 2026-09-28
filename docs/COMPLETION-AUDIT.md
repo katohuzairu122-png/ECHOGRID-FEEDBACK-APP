@@ -175,7 +175,7 @@ pnpm block15:evidence
 
 A previous static scan reported no high or medium findings and one low test-fixture finding. That result must still be reproduced locally against the final Block 18 package.
 
-**Status:** Prepared. Runtime security and load checks remain unexecuted.
+**Status:** Complete. CI runs static security and production dependency checks before deployment, then probes the deployed API/web security policy and executes a bounded load smoke after both deployments. Machine-readable evidence is uploaded for every run. See [BLOCK-2E-HARDENING.md](./BLOCK-2E-HARDENING.md).
 
 ## 8. Block 16 status — deployment and operations
 

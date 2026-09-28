@@ -27,7 +27,13 @@
     "block14:preflight": "node tools/block14.mjs preflight",
     "block14:verify": "node tools/block14.mjs verify",
     "block14:e2e": "node tools/block14.mjs e2e",
-    "block14:evidence": "node tools/block14.mjs evidence"
+    "block14:evidence": "node tools/block14.mjs evidence",
+    "block15:preflight": "node tools/block15.mjs preflight",
+    "block15:security": "node tools/block15.mjs security",
+    "block15:runtime": "node tools/block15.mjs runtime",
+    "block15:load": "node tools/block15.mjs load",
+    "block15:verify": "node tools/block15.mjs verify",
+    "block15:evidence": "node tools/block15.mjs evidence"
   },
   "devDependencies": {
     "@eslint/js": "^9.15.0",
