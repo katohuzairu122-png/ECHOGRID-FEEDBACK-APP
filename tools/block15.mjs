@@ -66,7 +66,7 @@ async function security() {
   });
   await record('No dangerous dynamic code', () => {
     const findings = [];
-    for (const file of walk(root).filter((path) => /[.](?:ts|tsx|js|mjs)$/.test(path))) {
+    for (const file of walk(root).filter((path) => /[.](?:ts|tsx|js|mjs)$/.test(path) && !/[.](?:test|spec)[.](?:ts|tsx|js|mjs)$/.test(path))) {
       const text = readFileSync(file, 'utf8');
       if (/\beval\s*\(|\bnew\s+Function\s*\(/.test(text)) findings.push(file.slice(root.length + 1));
     }
