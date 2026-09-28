@@ -11,8 +11,14 @@ function formDataFrom(fields: Record<string, string>): FormData {
 
 describe('readFeedbackForm', () => {
   it('reads rating as a number', () => {
-    const result = readFeedbackForm(formDataFrom({ rating: '4' }));
+    const result = readFeedbackForm(formDataFrom({ submissionKey: crypto.randomUUID(), rating: '4' }));
     expect(result.rating).toBe(4);
+  });
+
+  it('preserves the submission key across server-action retries', () => {
+    const submissionKey = crypto.randomUUID();
+    const result = readFeedbackForm(formDataFrom({ submissionKey, rating: '4' }));
+    expect(result.submissionKey).toBe(submissionKey);
   });
 
   it('treats a missing optional field as undefined, not an empty string', () => {
@@ -39,3 +45,4 @@ describe('readFeedbackForm', () => {
     expect(result.rating).toBe(0);
   });
 });
+

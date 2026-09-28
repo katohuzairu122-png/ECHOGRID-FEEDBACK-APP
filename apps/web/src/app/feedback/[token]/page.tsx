@@ -46,7 +46,13 @@ export default async function FeedbackLandingPage({ params }: FeedbackLandingPag
 
   return (
     <NextIntlClientProvider locale={locale} messages={messages} formats={formats}>
-      <FeedbackForm token={token} branchName={qr.branchName} businessName={qr.businessName} />
+      <FeedbackForm
+        token={token}
+        branchName={qr.branchName}
+        businessName={qr.businessName}
+        submissionKey={crypto.randomUUID()}
+      />
     </NextIntlClientProvider>
   );
 }
+

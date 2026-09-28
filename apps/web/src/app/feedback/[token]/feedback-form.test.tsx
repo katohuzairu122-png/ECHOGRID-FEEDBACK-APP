@@ -29,7 +29,7 @@ describe('FeedbackForm', () => {
       comment: 'Loved it',
     });
 
-    renderWithIntl(<FeedbackForm token="tok123" branchName="Downtown" businessName="Echo Grid" />);
+    renderWithIntl(<FeedbackForm token="tok123" branchName="Downtown" businessName="Echo Grid" submissionKey={crypto.randomUUID()} />);
 
     await user.click(screen.getByRole('radio', { name: '5 stars' }));
     await user.type(screen.getByLabelText('Comments (optional)'), 'Loved it');
@@ -48,7 +48,7 @@ describe('FeedbackForm', () => {
     });
     vi.mocked(submitFeedbackAction).mockResolvedValue({ success: true });
 
-    renderWithIntl(<FeedbackForm token="tok123" branchName="Downtown" businessName="Echo Grid" />);
+    renderWithIntl(<FeedbackForm token="tok123" branchName="Downtown" businessName="Echo Grid" submissionKey={crypto.randomUUID()} />);
 
     await user.click(screen.getByRole('radio', { name: '5 stars' }));
     await user.click(screen.getByRole('button', { name: 'Continue' }));
@@ -70,7 +70,7 @@ describe('FeedbackForm', () => {
     });
     vi.mocked(submitFeedbackAction).mockResolvedValue({ success: true });
 
-    renderWithIntl(<FeedbackForm token="tok123" branchName="Downtown" businessName="Echo Grid" />);
+    renderWithIntl(<FeedbackForm token="tok123" branchName="Downtown" businessName="Echo Grid" submissionKey={crypto.randomUUID()} />);
 
     await user.click(screen.getByRole('radio', { name: '4 stars' }));
     await user.click(screen.getByRole('button', { name: 'Continue' }));
@@ -88,7 +88,7 @@ describe('FeedbackForm', () => {
     });
     vi.mocked(submitFeedbackAction).mockResolvedValue({ success: true });
 
-    renderWithIntl(<FeedbackForm token="tok123" branchName="Downtown" businessName="Echo Grid" />);
+    renderWithIntl(<FeedbackForm token="tok123" branchName="Downtown" businessName="Echo Grid" submissionKey={crypto.randomUUID()} />);
 
     await user.click(screen.getByRole('radio', { name: '5 stars' }));
     await user.click(screen.getByRole('button', { name: 'Continue' }));
@@ -97,3 +97,4 @@ describe('FeedbackForm', () => {
     expect(await screen.findByText('Thank you!')).toBeInTheDocument();
   });
 });
+

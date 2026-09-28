@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, integer, real, boolean, timestamp, index, check } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, text, integer, real, boolean, timestamp, index, uniqueIndex, check } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import { auditColumns, softDeleteColumns } from './_shared';
 import { businesses } from './businesses';
@@ -25,6 +25,8 @@ export const feedback = pgTable(
   'feedback',
   {
     id: uuid('id').primaryKey().defaultRandom(),
+    submissionKey: uuid('submission_key'),
+    submissionPayloadHash: text('submission_payload_hash'),
     businessId: uuid('business_id')
       .notNull()
       .references(() => businesses.id, { onDelete: 'cascade' }),
@@ -182,6 +184,7 @@ export const feedback = pgTable(
     ...softDeleteColumns,
   },
   (table) => [
+    uniqueIndex('feedback_submission_key_key').on(table.submissionKey),
     index('feedback_branch_created_idx').on(table.branchId, table.createdAt),
     index('feedback_business_created_idx').on(table.businessId, table.createdAt),
     // Powers both the analytics dashboard's sentiment filter and the queue
@@ -240,3 +243,4 @@ export const feedback = pgTable(
     ),
   ],
 );
+

@@ -121,6 +121,15 @@ qrRoutes.post('/:token/feedback', async (c) => {
       QR_TOKEN_SECRET_PREVIOUS: c.env.QR_TOKEN_SECRET_PREVIOUS,
     }).resolveToken(c.req.param('token'));
 
+    const payloadHash = await hashSubmissionPayload(body);
+    const priorSubmission = await repos.feedback.findBySubmissionKey(body.submissionKey);
+    if (priorSubmission) {
+      if (priorSubmission.qrCodeId !== qrCode.id || priorSubmission.submissionPayloadHash !== payloadHash) {
+        throw new AppError('Submission key was already used for different feedback.', 409, 'IDEMPOTENCY_CONFLICT');
+      }
+      return ok(c, { id: priorSubmission.id }, 200);
+    }
+
     // Continuing Development Block 4.1 (S5.4 device/IP velocity, S5.5
     // cooldown) -- deliberately placed AFTER resolveToken (needs a trusted
     // qrCode.businessId/branchId to scope fraud_signals) and BEFORE
@@ -205,9 +214,15 @@ qrRoutes.post('/:token/feedback', async (c) => {
     // transaction can erase its own evidence. That is precisely the defect
     // the audit found in LoyaltyRedemptionService (P1-5), and this is the
     // shape that avoids repeating it.
-    const created = await db.transaction(async (tx) =>
-      new FeedbackService(createRepositories(tx)).submit(qrCode, body, { deviceHash }),
+    const submission = await db.transaction(async (tx) =>
+      new FeedbackService(createRepositories(tx)).submitIdempotent(qrCode, body, { deviceHash, payloadHash }),
     );
+    const created = submission.feedback;
+
+    // A concurrent request can miss the fast replay check above but lose the
+    // unique-key insert race. Its successful original request owns all side
+    // effects; the replay only returns the durable result.
+    if (!submission.inserted) return ok(c, { id: created.id }, 200);
 
     if (cooldown?.inCooldown) {
       // Awaited directly on the outer `repos`, NOT backgrounded via
@@ -396,3 +411,10 @@ qrRoutes.post('/:token/feedback', async (c) => {
     c.executionCtx.waitUntil(close());
   }
 });
+
+async function hashSubmissionPayload(input: unknown): Promise<string> {
+  const bytes = new TextEncoder().encode(JSON.stringify(input));
+  const digest = await crypto.subtle.digest('SHA-256', bytes);
+  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
+}
+

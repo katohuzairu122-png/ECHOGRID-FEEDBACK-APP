@@ -20,6 +20,7 @@ export interface FollowUpQuestionState {
   customerName?: string | undefined;
   customerEmail?: string | undefined;
   customerPhone?: string | undefined;
+  submissionKey?: string | undefined;
 }
 
 /**
@@ -55,6 +56,7 @@ export async function generateFollowUpQuestionAction(
     customerName: parsed.customerName,
     customerEmail: parsed.customerEmail,
     customerPhone: parsed.customerPhone,
+    submissionKey: parsed.submissionKey,
   };
 }
 
@@ -83,3 +85,4 @@ export async function submitFeedbackAction(
 
   return { success: true };
 }
+

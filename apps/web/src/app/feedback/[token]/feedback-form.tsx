@@ -29,6 +29,7 @@ interface FeedbackFormProps {
   token: string;
   branchName: string;
   businessName: string;
+  submissionKey: string;
 }
 
 /**
@@ -46,7 +47,7 @@ interface FeedbackFormProps {
  * pattern as loyalty/login/otp-login-form.tsx, with step 1's fields carried
  * forward into step 2 as hidden inputs rather than re-entered.
  */
-export function FeedbackForm({ token, branchName, businessName }: FeedbackFormProps) {
+export function FeedbackForm({ token, branchName, businessName, submissionKey }: FeedbackFormProps) {
   const [followUpState, followUpFormAction, followUpPending] = useActionState(
     generateFollowUpQuestionAction.bind(null, token),
     followUpInitial,
@@ -77,6 +78,7 @@ export function FeedbackForm({ token, branchName, businessName }: FeedbackFormPr
             <CardContent>
               {!followUpState.ready ? (
                 <form action={followUpFormAction} className="flex flex-col gap-5">
+                  <input type="hidden" name="submissionKey" value={submissionKey} />
                   <div className="flex flex-col items-center gap-2 py-2">
                     <StarRating name="rating" required />
                   </div>
@@ -123,6 +125,7 @@ export function FeedbackForm({ token, branchName, businessName }: FeedbackFormPr
                 </form>
               ) : (
                 <form action={submitFormAction} className="flex flex-col gap-5">
+                  <input type="hidden" name="submissionKey" value={followUpState.submissionKey} />
                   <input type="hidden" name="rating" value={followUpState.rating} />
                   <input type="hidden" name="comment" value={followUpState.comment ?? ''} />
                   <input type="hidden" name="customerName" value={followUpState.customerName ?? ''} />
@@ -173,3 +176,4 @@ export function FeedbackForm({ token, branchName, businessName }: FeedbackFormPr
     </main>
   );
 }
+

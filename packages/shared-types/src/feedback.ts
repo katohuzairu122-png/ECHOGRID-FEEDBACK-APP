@@ -10,6 +10,9 @@ import { feedbackCategorySchema, urgencySchema, sentimentSchema } from './feedba
  * QR flow.
  */
 export const submitFeedbackSchema = z.object({
+  // Stable for one form instance and reused for retries. The API persists it
+  // with the feedback row so a lost response cannot create a second record.
+  submissionKey: z.uuid(),
   rating: z.number().int().min(1).max(5),
   comment: z.string().trim().max(2000).optional(),
   customerName: z.string().trim().max(200).optional(),
@@ -225,3 +228,4 @@ export const bulkUpdateFeedbackStatusSchema = z.object({
   status: z.literal('reviewed'),
 });
 export type BulkUpdateFeedbackStatusInput = z.infer<typeof bulkUpdateFeedbackStatusSchema>;
+

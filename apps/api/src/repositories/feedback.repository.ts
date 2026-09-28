@@ -86,6 +86,25 @@ export class FeedbackRepository extends BaseRepository {
     return row;
   }
 
+  async createIdempotent(input: NewFeedback & { submissionKey: string }): Promise<{ row: Feedback; inserted: boolean }> {
+    const [inserted] = await this.db
+      .insert(feedback)
+      .values(input)
+      .onConflictDoNothing({ target: feedback.submissionKey })
+      .returning();
+    if (inserted) return { row: inserted, inserted: true };
+
+    const existing = await this.db.query.feedback.findFirst({
+      where: eq(feedback.submissionKey, input.submissionKey),
+    });
+    if (!existing) throw new Error('Idempotent insert conflict returned no existing row');
+    return { row: existing, inserted: false };
+  }
+
+  async findBySubmissionKey(submissionKey: string): Promise<Feedback | undefined> {
+    return this.db.query.feedback.findFirst({ where: eq(feedback.submissionKey, submissionKey) });
+  }
+
   /**
    * Level 1 exact-duplicate detection (Continuing Development spec S3.1) --
    * scoped to one branch, not the whole business: the same complaint text
@@ -556,3 +575,4 @@ export class FeedbackRepository extends BaseRepository {
       .returning();
   }
 }
+

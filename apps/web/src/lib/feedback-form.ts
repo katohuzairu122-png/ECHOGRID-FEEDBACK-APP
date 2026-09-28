@@ -18,6 +18,7 @@ export function readFeedbackForm(formData: FormData): SubmitFeedbackInput {
   };
 
   return {
+    submissionKey: String(formData.get('submissionKey')),
     rating: Number(formData.get('rating')),
     comment: optional('comment'),
     customerName: optional('customerName'),
@@ -30,3 +31,4 @@ export function readFeedbackForm(formData: FormData): SubmitFeedbackInput {
     followUpAnswer: formData.get('skipFollowUp') ? undefined : optional('followUpAnswer'),
   };
 }
+

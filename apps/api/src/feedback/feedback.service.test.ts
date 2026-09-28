@@ -58,6 +58,8 @@ function createFakeFeedbackRepo() {
     async create(input: NewFeedback): Promise<Feedback> {
       const item: Feedback = {
         id: crypto.randomUUID(),
+        submissionKey: input.submissionKey ?? null,
+        submissionPayloadHash: input.submissionPayloadHash ?? null,
         businessId: input.businessId,
         branchId: input.branchId,
         qrCodeId: input.qrCodeId,
@@ -91,6 +93,15 @@ function createFakeFeedbackRepo() {
       };
       items.set(item.id, item);
       return item;
+    },
+    async findBySubmissionKey(submissionKey: string): Promise<Feedback | undefined> {
+      return [...items.values()].find((item) => item.submissionKey === submissionKey);
+    },
+    async createIdempotent(input: NewFeedback & { submissionKey: string }) {
+      const existing = [...items.values()].find((item) => item.submissionKey === input.submissionKey);
+      if (existing) return { row: existing, inserted: false };
+      const row = await this.create(input);
+      return { row, inserted: true };
     },
     async markReviewed(
       id: string,
@@ -337,6 +348,27 @@ describe('FeedbackService', () => {
     });
     expect(withoutQuestion.followUpQuestion).toBeNull();
     expect(withoutQuestion.followUpAnswer).toBeNull();
+  });
+
+  it('submitIdempotent returns the original row and creates side effects only once', async () => {
+    const submissionKey = crypto.randomUUID();
+    const input = { submissionKey, rating: 1, comment: 'There is a fire in the kitchen!' };
+    const first = await service.submitIdempotent(QR_CODE, input, { payloadHash: 'same-payload' });
+    const replay = await service.submitIdempotent(QR_CODE, input, { payloadHash: 'same-payload' });
+
+    expect(first.inserted).toBe(true);
+    expect(replay.inserted).toBe(false);
+    expect(replay.feedback.id).toBe(first.feedback.id);
+    expect(repos.criticalIncidents.items).toHaveLength(1);
+  });
+
+  it('submitIdempotent rejects reuse of a key with a different payload', async () => {
+    const submissionKey = crypto.randomUUID();
+    await service.submitIdempotent(QR_CODE, { submissionKey, rating: 5 }, { payloadHash: 'first' });
+
+    await expect(
+      service.submitIdempotent(QR_CODE, { submissionKey, rating: 1 }, { payloadHash: 'changed' }),
+    ).rejects.toMatchObject({ status: 409, code: 'IDEMPOTENCY_CONFLICT' });
   });
 
   it('listForBusiness returns only that business’s feedback', async () => {
@@ -822,3 +854,4 @@ describe('FeedbackService', () => {
     ).rejects.toMatchObject({ code: 'FEEDBACK_NOT_FOUND', status: 404 });
   });
 });
+

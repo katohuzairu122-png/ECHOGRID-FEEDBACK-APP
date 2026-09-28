@@ -54,7 +54,7 @@ export class FeedbackService {
    */
   async submit(
     qrCode: QrCode,
-    input: SubmitFeedbackInput,
+    input: Omit<SubmitFeedbackInput, 'submissionKey'> & { submissionKey?: string },
     context: { deviceHash?: string | undefined } = {},
   ): Promise<Feedback> {
     // Level 1 deterministic processing (Automated Feedback Sorting) -- a
@@ -173,6 +173,67 @@ export class FeedbackService {
     return created;
   }
 
+  async submitIdempotent(
+    qrCode: QrCode,
+    input: SubmitFeedbackInput,
+    context: { deviceHash?: string | undefined; payloadHash: string },
+  ): Promise<{ feedback: Feedback; inserted: boolean }> {
+    const existing = await this.repos.feedback.findBySubmissionKey(input.submissionKey);
+    if (existing) return this.validateReplay(existing, qrCode, context.payloadHash);
+
+    const detection = detectCriticalSignals(input.comment);
+    const normalizedText = normalizeFeedbackText(input.comment);
+    const normalizedTextHash = isDistinctiveEnoughToCompare(normalizedText)
+      ? await hashNormalizedText(normalizedText)
+      : null;
+    const duplicateTextCount = normalizedTextHash
+      ? await this.repos.feedback.countByNormalizedHash(
+          qrCode.businessId, qrCode.branchId, normalizedTextHash,
+          new Date(Date.now() - DUPLICATE_LOOKBACK_MS),
+        )
+      : 0;
+    const nearDuplicateCount = context.deviceHash && input.comment
+      ? countNearDuplicates(
+          input.comment,
+          await this.repos.feedback.listRecentCommentsForDevice(
+            qrCode.businessId, qrCode.branchId, context.deviceHash,
+            new Date(Date.now() - DUPLICATE_LOOKBACK_MS), NEAR_DUPLICATE_CANDIDATE_LIMIT,
+          ),
+        )
+      : 0;
+    const result = await this.repos.feedback.createIdempotent({
+      businessId: qrCode.businessId,
+      branchId: qrCode.branchId,
+      qrCodeId: qrCode.id,
+      ...input,
+      submissionPayloadHash: context.payloadHash,
+      followUpAnswer: input.followUpQuestion ? input.followUpAnswer : undefined,
+      urgency: detection.isCritical ? 'P0_CRITICAL' : undefined,
+      normalizedTextHash: normalizedTextHash ?? undefined,
+      isDuplicateText: duplicateTextCount > 0,
+      duplicateTextCount,
+      ...(context.deviceHash ? { deviceHash: context.deviceHash } : {}),
+      nearDuplicateCount,
+    });
+    if (!result.inserted) return this.validateReplay(result.row, qrCode, context.payloadHash);
+    if (detection.isCritical) {
+      await this.repos.criticalIncidents.create({
+        businessId: qrCode.businessId,
+        branchId: qrCode.branchId,
+        feedbackId: result.row.id,
+        matchedSignals: detection.matchedSignals.join(', '),
+      });
+    }
+    return { feedback: result.row, inserted: true };
+  }
+
+  private validateReplay(existing: Feedback, qrCode: QrCode, payloadHash: string) {
+    if (existing.qrCodeId !== qrCode.id || existing.submissionPayloadHash !== payloadHash) {
+      throw new AppError('Submission key was already used for different feedback.', 409, 'IDEMPOTENCY_CONFLICT');
+    }
+    return { feedback: existing, inserted: false };
+  }
+
   /** Merges a named saved view's preset fields with the caller's own
    * explicit filters -- the caller's values win wherever both set the same
    * field (e.g. requesting "Critical now" narrowed to one branchId), never
@@ -279,3 +340,4 @@ export class FeedbackService {
     await this.repos.feedback.softDelete(id, businessId, deletedBy);
   }
 }
+
