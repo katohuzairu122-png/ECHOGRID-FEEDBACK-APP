@@ -57,6 +57,7 @@ export class FeedbackService {
     input: Omit<SubmitFeedbackInput, 'submissionKey'> & { submissionKey?: string },
     context: { deviceHash?: string | undefined } = {},
   ): Promise<Feedback> {
+    const { answers: _answers, deviceSignal: _deviceSignal, visitProof: _visitProof, ...feedbackInput } = input;
     // Level 1 deterministic processing (Automated Feedback Sorting) -- a
     // synchronous keyword scan, never a model call, so a credible safety
     // emergency gets P0_CRITICAL the instant this row is stored, not
@@ -126,7 +127,7 @@ export class FeedbackService {
       businessId: qrCode.businessId,
       branchId: qrCode.branchId,
       qrCodeId: qrCode.id,
-      ...input,
+      ...feedbackInput,
       // A follow-up answer only means something paired with the question it
       // answered -- never trust a client to keep these consistent.
       followUpAnswer: input.followUpQuestion ? input.followUpAnswer : undefined,
@@ -178,6 +179,7 @@ export class FeedbackService {
     input: SubmitFeedbackInput,
     context: { deviceHash?: string | undefined; payloadHash: string },
   ): Promise<{ feedback: Feedback; inserted: boolean }> {
+    const { answers: _answers, deviceSignal: _deviceSignal, visitProof: _visitProof, ...feedbackInput } = input;
     const existing = await this.repos.feedback.findBySubmissionKey(input.submissionKey);
     if (existing) return this.validateReplay(existing, qrCode, context.payloadHash);
 
@@ -205,7 +207,7 @@ export class FeedbackService {
       businessId: qrCode.businessId,
       branchId: qrCode.branchId,
       qrCodeId: qrCode.id,
-      ...input,
+      ...feedbackInput,
       submissionPayloadHash: context.payloadHash,
       followUpAnswer: input.followUpQuestion ? input.followUpAnswer : undefined,
       urgency: detection.isCritical ? 'P0_CRITICAL' : undefined,
@@ -340,4 +342,5 @@ export class FeedbackService {
     await this.repos.feedback.softDelete(id, businessId, deletedBy);
   }
 }
+
 

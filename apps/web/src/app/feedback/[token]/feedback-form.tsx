@@ -21,6 +21,7 @@ import {
   Textarea,
 } from '@/components/ui';
 import { PoweredByFooter } from '@/components/brand';
+import type { PublicFeedbackForm } from '@echo-grid-feedback/shared-types';
 
 const followUpInitial: FollowUpQuestionState = {};
 const submitInitial: FeedbackFormState = {};
@@ -30,6 +31,7 @@ interface FeedbackFormProps {
   branchName: string;
   businessName: string;
   submissionKey: string;
+  feedbackForm?: PublicFeedbackForm | null;
 }
 
 /**
@@ -47,7 +49,7 @@ interface FeedbackFormProps {
  * pattern as loyalty/login/otp-login-form.tsx, with step 1's fields carried
  * forward into step 2 as hidden inputs rather than re-entered.
  */
-export function FeedbackForm({ token, branchName, businessName, submissionKey }: FeedbackFormProps) {
+export function FeedbackForm({ token, branchName, businessName, submissionKey, feedbackForm = null }: FeedbackFormProps) {
   const [followUpState, followUpFormAction, followUpPending] = useActionState(
     generateFollowUpQuestionAction.bind(null, token),
     followUpInitial,
@@ -126,11 +128,35 @@ export function FeedbackForm({ token, branchName, businessName, submissionKey }:
               ) : (
                 <form action={submitFormAction} className="flex flex-col gap-5">
                   <input type="hidden" name="submissionKey" value={followUpState.submissionKey} />
+                  {feedbackForm && <input type="hidden" name="formVersionId" value={feedbackForm.versionId} />}
                   <input type="hidden" name="rating" value={followUpState.rating} />
                   <input type="hidden" name="comment" value={followUpState.comment ?? ''} />
                   <input type="hidden" name="customerName" value={followUpState.customerName ?? ''} />
                   <input type="hidden" name="customerEmail" value={followUpState.customerEmail ?? ''} />
                   <input type="hidden" name="customerPhone" value={followUpState.customerPhone ?? ''} />
+
+                  {feedbackForm?.questions.map((question) => (
+                    <div key={question.id} className="flex flex-col gap-1.5">
+                      <Label htmlFor={`answer-${question.id}`}>{question.label}</Label>
+                      {(question.type === 'text' || question.type === 'rating') && (
+                        <Input id={`answer-${question.id}`} name={`answer:${question.id}:${question.type}`} type={question.type === 'rating' ? 'number' : 'text'} min={question.type === 'rating' ? 1 : undefined} max={question.type === 'rating' ? 5 : undefined} required={question.required} />
+                      )}
+                      {question.type === 'textarea' && <Textarea id={`answer-${question.id}`} name={`answer:${question.id}:${question.type}`} required={question.required} maxLength={2000} />}
+                      {question.type === 'boolean' && (
+                        <select id={`answer-${question.id}`} name={`answer:${question.id}:boolean`} required={question.required} className="h-10 rounded-md border border-neutral-300 bg-white px-3">
+                          <option value="">Select</option><option value="true">Yes</option><option value="false">No</option>
+                        </select>
+                      )}
+                      {question.type === 'single_choice' && (
+                        <select id={`answer-${question.id}`} name={`answer:${question.id}:single_choice`} required={question.required} className="h-10 rounded-md border border-neutral-300 bg-white px-3">
+                          <option value="">Select</option>{question.options?.map((option) => <option key={option} value={option}>{option}</option>)}
+                        </select>
+                      )}
+                      {question.type === 'multi_choice' && question.options?.map((option) => (
+                        <label key={option} className="flex items-center gap-2 text-sm"><input type="checkbox" name={`answer:${question.id}:multi_choice`} value={option} />{option}</label>
+                      ))}
+                    </div>
+                  ))}
 
                   {followUpState.question ? (
                     <>

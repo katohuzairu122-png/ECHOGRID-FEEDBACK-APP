@@ -3,6 +3,7 @@ import { sql } from 'drizzle-orm';
 import { auditColumns, softDeleteColumns } from './_shared';
 import { businesses } from './businesses';
 import { branches } from './branches';
+import { feedbackFormVersions } from './feedback-forms';
 
 /**
  * A scannable public entry point into one branch's feedback flow.
@@ -46,6 +47,7 @@ export const qrCodes = pgTable(
       .references(() => branches.id, { onDelete: 'cascade' }),
     type: text('type').notNull().default('feedback'),
     status: text('status').notNull().default('active'),
+    feedbackFormVersionId: uuid('feedback_form_version_id').references(() => feedbackFormVersions.id, { onDelete: 'set null' }),
     ...auditColumns,
     ...softDeleteColumns,
   },
@@ -62,3 +64,4 @@ export const qrCodes = pgTable(
     check('qr_codes_status_check', sql`${table.status} IN ('active', 'revoked')`),
   ],
 );
+

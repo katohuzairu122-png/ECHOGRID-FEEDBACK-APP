@@ -4,6 +4,7 @@ import { auditColumns, softDeleteColumns } from './_shared';
 import { businesses } from './businesses';
 import { branches } from './branches';
 import { qrCodes } from './qr-codes';
+import { feedbackFormVersions } from './feedback-forms';
 
 /**
  * A single customer-submitted rating/comment, captured anonymously through
@@ -27,6 +28,7 @@ export const feedback = pgTable(
     id: uuid('id').primaryKey().defaultRandom(),
     submissionKey: uuid('submission_key'),
     submissionPayloadHash: text('submission_payload_hash'),
+    formVersionId: uuid('form_version_id').references(() => feedbackFormVersions.id, { onDelete: 'restrict' }),
     businessId: uuid('business_id')
       .notNull()
       .references(() => businesses.id, { onDelete: 'cascade' }),

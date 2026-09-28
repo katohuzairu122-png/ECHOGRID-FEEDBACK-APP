@@ -13,6 +13,7 @@ import { branchRoutes } from './branches/branch.routes';
 import { visitSessionRoutes } from './visits/visit-session.routes';
 import { qrRoutes } from './qr/qr.routes';
 import { feedbackRoutes } from './feedback/feedback.routes';
+import { feedbackFormRoutes } from './feedback/feedback-form.routes';
 import { customerAuthRoutes } from './customer-auth/customer-auth.routes';
 import { loyaltyRoutes } from './loyalty/loyalty.routes';
 import { loyaltyCustomerRoutes } from './loyalty/loyalty-customer.routes';
@@ -121,6 +122,7 @@ api.route('/branches', branchRoutes);
 api.route('/branches', visitSessionRoutes);
 api.route('/qr', qrRoutes);
 api.route('/feedback', feedbackRoutes);
+api.route('/feedback-forms', feedbackFormRoutes);
 api.route('/customer-auth', customerAuthRoutes);
 api.route('/loyalty', loyaltyRoutes);
 api.route('/loyalty/me', loyaltyCustomerRoutes);
@@ -625,3 +627,4 @@ export default {
   queue,
   scheduled,
 };
+

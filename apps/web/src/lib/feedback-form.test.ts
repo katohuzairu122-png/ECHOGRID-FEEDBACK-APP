@@ -21,6 +21,22 @@ describe('readFeedbackForm', () => {
     expect(result.submissionKey).toBe(submissionKey);
   });
 
+  it('normalizes structured form controls into typed answers', () => {
+    const textId = crypto.randomUUID();
+    const ratingId = crypto.randomUUID();
+    const multiId = crypto.randomUUID();
+    const formData = formDataFrom({ submissionKey: crypto.randomUUID(), formVersionId: crypto.randomUUID(), rating: '5' });
+    formData.set(`answer:${textId}:text`, 'Helpful staff');
+    formData.set(`answer:${ratingId}:rating`, '4');
+    formData.append(`answer:${multiId}:multi_choice`, 'Dining');
+    formData.append(`answer:${multiId}:multi_choice`, 'Service');
+    expect(readFeedbackForm(formData).answers).toEqual([
+      { questionId: textId, value: 'Helpful staff' },
+      { questionId: ratingId, value: 4 },
+      { questionId: multiId, value: ['Dining', 'Service'] },
+    ]);
+  });
+
   it('treats a missing optional field as undefined, not an empty string', () => {
     const result = readFeedbackForm(formDataFrom({ rating: '5' }));
     expect(result.comment).toBeUndefined();

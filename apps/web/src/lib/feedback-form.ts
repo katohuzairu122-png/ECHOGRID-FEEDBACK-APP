@@ -17,8 +17,22 @@ export function readFeedbackForm(formData: FormData): SubmitFeedbackInput {
     return typeof value === 'string' && value.trim() !== '' ? value : undefined;
   };
 
+  const answers = [...formData.keys()]
+    .filter((key) => key.startsWith('answer:'))
+    .filter((key, index, all) => all.indexOf(key) === index)
+    .filter((key) => formData.getAll(key).some((value) => String(value).trim() !== ''))
+    .map((key) => {
+      const [, questionId, type] = key.split(':');
+      const values = formData.getAll(key).map(String);
+      const raw = values[0] ?? '';
+      const value = type === 'rating' ? Number(raw) : type === 'boolean' ? raw === 'true' : type === 'multi_choice' ? values : raw;
+      return { questionId: questionId!, value };
+    });
+
   return {
     submissionKey: String(formData.get('submissionKey')),
+    formVersionId: optional('formVersionId'),
+    answers: answers.length ? answers : undefined,
     rating: Number(formData.get('rating')),
     comment: optional('comment'),
     customerName: optional('customerName'),

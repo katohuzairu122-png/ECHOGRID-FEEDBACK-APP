@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { localeSchema } from './i18n';
+import { publicFeedbackFormSchema } from './feedback-forms';
 
 export const qrCodeSchema = z.object({
   id: z.uuid(),
@@ -29,6 +30,8 @@ export const qrResolveSchema = z.object({
   defaultLocale: localeSchema,
   defaultCurrency: z.string(),
   defaultTimezone: z.string(),
+  feedbackForm: publicFeedbackFormSchema.nullable().optional(),
 });
 
 export type QrResolveDto = z.infer<typeof qrResolveSchema>;
+

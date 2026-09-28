@@ -32,6 +32,7 @@ import {
   NEAR_DUPLICATE_REASON_CODE,
 } from '../fraud/near-duplicate';
 import { VisitSessionService } from '../visits/visit-session.service';
+import { validateFeedbackAnswers } from '../feedback/feedback-form-validator';
 
 /**
  * The platform's only fully anonymous write surface -- no authenticate /
@@ -67,6 +68,7 @@ qrRoutes.get('/:token', async (c) => {
       throw new AppError('This QR code is no longer valid.', 404, 'QR_CODE_NOT_FOUND');
     }
 
+    const feedbackForm = await repos.feedbackForms.findForQr(qrCode.id);
     return ok(c, {
       branchId: branch.id,
       branchName: branch.name,
@@ -74,6 +76,7 @@ qrRoutes.get('/:token', async (c) => {
       defaultLocale: business.defaultLocale,
       defaultCurrency: business.defaultCurrency,
       defaultTimezone: business.defaultTimezone,
+      feedbackForm: feedbackForm ?? null,
     });
   } finally {
     c.executionCtx.waitUntil(close());
@@ -128,6 +131,16 @@ qrRoutes.post('/:token/feedback', async (c) => {
         throw new AppError('Submission key was already used for different feedback.', 409, 'IDEMPOTENCY_CONFLICT');
       }
       return ok(c, { id: priorSubmission.id }, 200);
+    }
+
+    const feedbackForm = await repos.feedbackForms.findForQr(qrCode.id);
+    if (feedbackForm) {
+      if (body.formVersionId !== feedbackForm.versionId) {
+        throw new AppError('The feedback form has changed. Please reload and try again.', 409, 'FORM_VERSION_CHANGED');
+      }
+      validateFeedbackAnswers(feedbackForm, body.answers ?? []);
+    } else if (body.formVersionId || body.answers?.length) {
+      throw new AppError('This QR code does not use that feedback form.', 422, 'INVALID_FORM_ANSWERS');
     }
 
     // Continuing Development Block 4.1 (S5.4 device/IP velocity, S5.5
@@ -214,9 +227,14 @@ qrRoutes.post('/:token/feedback', async (c) => {
     // transaction can erase its own evidence. That is precisely the defect
     // the audit found in LoyaltyRedemptionService (P1-5), and this is the
     // shape that avoids repeating it.
-    const submission = await db.transaction(async (tx) =>
-      new FeedbackService(createRepositories(tx)).submitIdempotent(qrCode, body, { deviceHash, payloadHash }),
-    );
+    const submission = await db.transaction(async (tx) => {
+      const txRepos = createRepositories(tx);
+      const result = await new FeedbackService(txRepos).submitIdempotent(qrCode, body, { deviceHash, payloadHash });
+      if (result.inserted && feedbackForm) {
+        await txRepos.feedbackForms.createAnswers(result.feedback.id, feedbackForm, body.answers ?? []);
+      }
+      return result;
+    });
     const created = submission.feedback;
 
     // A concurrent request can miss the fast replay check above but lose the

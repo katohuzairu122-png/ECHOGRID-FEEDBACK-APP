@@ -90,6 +90,7 @@ export default async function FeedbackPage({ searchParams }: FeedbackPageProps) 
           <h1 className="text-2xl font-semibold text-neutral-900">{t('title')}</h1>
           <p className="text-sm text-neutral-500">{business.name}</p>
         </div>
+        <Link href="/dashboard/feedback/forms" className="text-sm font-medium text-brand-700 hover:underline">Manage forms</Link>
         <BranchFilter branches={branches} selectedBranchId={branchId} />
       </div>
 
@@ -130,3 +131,4 @@ export default async function FeedbackPage({ searchParams }: FeedbackPageProps) 
     </div>
   );
 }
+

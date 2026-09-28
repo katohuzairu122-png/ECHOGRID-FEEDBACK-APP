@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { feedbackCategorySchema, urgencySchema, sentimentSchema } from './feedback-classification';
+import { feedbackAnswerInputSchema } from './feedback-forms';
 
 /**
  * Public submission contract -- shared by apps/api's validation of
@@ -13,6 +14,8 @@ export const submitFeedbackSchema = z.object({
   // Stable for one form instance and reused for retries. The API persists it
   // with the feedback row so a lost response cannot create a second record.
   submissionKey: z.uuid(),
+  formVersionId: z.uuid().optional(),
+  answers: z.array(feedbackAnswerInputSchema).max(50).optional(),
   rating: z.number().int().min(1).max(5),
   comment: z.string().trim().max(2000).optional(),
   customerName: z.string().trim().max(200).optional(),

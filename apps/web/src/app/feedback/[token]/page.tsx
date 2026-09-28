@@ -53,6 +53,7 @@ export default async function FeedbackLandingPage({ params }: FeedbackLandingPag
         branchName={qr.branchName}
         businessName={qr.businessName}
         submissionKey={crypto.randomUUID()}
+        feedbackForm={qr.feedbackForm ?? null}
       />
     </NextIntlClientProvider>
   );

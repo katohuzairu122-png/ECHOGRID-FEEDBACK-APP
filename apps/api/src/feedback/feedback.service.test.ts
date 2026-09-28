@@ -60,6 +60,7 @@ function createFakeFeedbackRepo() {
         id: crypto.randomUUID(),
         submissionKey: input.submissionKey ?? null,
         submissionPayloadHash: input.submissionPayloadHash ?? null,
+        formVersionId: input.formVersionId ?? null,
         businessId: input.businessId,
         branchId: input.branchId,
         qrCodeId: input.qrCodeId,

@@ -10,6 +10,7 @@ function makeFeedback(overrides: Partial<Feedback> = {}): Feedback {
     id: 'feedback-1',
     submissionKey: null,
     submissionPayloadHash: null,
+    formVersionId: null,
     businessId: BUSINESS_A,
     branchId: 'branch-1',
     qrCodeId: 'qr-1',

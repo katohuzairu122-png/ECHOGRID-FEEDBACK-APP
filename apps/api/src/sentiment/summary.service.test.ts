@@ -30,6 +30,7 @@ function makeFeedback(overrides: Partial<Feedback> = {}): Feedback {
     id: crypto.randomUUID(),
     submissionKey: null,
     submissionPayloadHash: null,
+    formVersionId: null,
     businessId: BUSINESS_A,
     branchId: BRANCH_A,
     qrCodeId: 'qr-1',
