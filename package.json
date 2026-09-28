@@ -19,7 +19,11 @@
     "format": "prettier --write \"**/*.{ts,tsx,js,json,md}\" --ignore-path .gitignore",
     "format:check": "prettier --check \"**/*.{ts,tsx,js,json,md}\" --ignore-path .gitignore",
     "typecheck": "pnpm -r --if-present typecheck",
-    "test": "pnpm -r --if-present test"
+    "test": "pnpm -r --if-present test",
+    "block13:preflight": "node tools/block13.mjs preflight",
+    "block13:verify:quick": "node tools/block13.mjs quick",
+    "block13:verify": "node tools/block13.mjs full",
+    "block13:test:changed": "node tools/block13.mjs changed"
   },
   "devDependencies": {
     "@eslint/js": "^9.15.0",

@@ -109,6 +109,7 @@ export default [
       '**/.next/**',
       '**/.open-next/**',
       '**/.wrangler/**',
+      '**/.wrangler-dry-run/**',
       '**/node_modules/**',
       '**/coverage/**',
     ],

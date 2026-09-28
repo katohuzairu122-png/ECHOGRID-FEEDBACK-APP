@@ -1,6 +1,7 @@
 node_modules/
 dist/
 .wrangler/
+.wrangler-dry-run/
 .next/
 .open-next/
 .env
@@ -18,6 +19,7 @@ coverage/
 playwright-report/
 test-results/
 blob-report/
+.artifacts/
 
 # Next.js generated types
 apps/web/next-env.d.ts

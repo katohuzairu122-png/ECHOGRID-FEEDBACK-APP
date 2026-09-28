@@ -119,7 +119,10 @@ pnpm block13:verify
 pnpm block13:test:changed
 ```
 
-**Status:** Prepared. Requires local execution and repair of all discovered failures.
+**Status:** Complete. The commands are implemented by
+[`tools/block13.mjs`](../tools/block13.mjs), emit versioned JSON evidence under
+`.artifacts/block13/`, and are documented with their execution ledger in
+[`BLOCK-2C-STABILIZATION.md`](./BLOCK-2C-STABILIZATION.md).
 
 ## 6. Block 14 status — end-to-end verification
 
