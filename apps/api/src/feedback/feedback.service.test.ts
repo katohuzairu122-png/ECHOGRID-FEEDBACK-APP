@@ -301,6 +301,7 @@ const QR_CODE: QrCode = {
   branchId: BRANCH_A,
   type: 'feedback',
   status: 'active',
+  feedbackFormVersionId: null,
   createdAt: new Date(),
   createdBy: null,
   updatedAt: new Date(),
@@ -855,4 +856,3 @@ describe('FeedbackService', () => {
     ).rejects.toMatchObject({ code: 'FEEDBACK_NOT_FOUND', status: 404 });
   });
 });
-
