@@ -6,6 +6,7 @@ import { ApiError } from '@/lib/api-client';
 import { loadMessages } from '@/i18n/load-messages';
 import { formats } from '@/i18n/formats';
 import { FeedbackForm } from './feedback-form';
+import { QrScanRecorder } from './qr-scan-recorder';
 
 interface FeedbackLandingPageProps {
   params: Promise<{ token: string }>;
@@ -46,6 +47,7 @@ export default async function FeedbackLandingPage({ params }: FeedbackLandingPag
 
   return (
     <NextIntlClientProvider locale={locale} messages={messages} formats={formats}>
+      <QrScanRecorder token={token} />
       <FeedbackForm
         token={token}
         branchName={qr.branchName}

@@ -10,6 +10,7 @@ export * from './audit-log';
 export * from './refresh-tokens';
 export * from './password-reset-tokens';
 export * from './qr-codes';
+export * from './qr-scan-events';
 export * from './feedback';
 export * from './feedback-summaries';
 export * from './ai-usage-log';

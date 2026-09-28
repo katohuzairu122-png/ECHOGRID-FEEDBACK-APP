@@ -9,6 +9,7 @@ import { PasswordResetTokenRepository } from './password-reset-token.repository'
 import { PermissionRepository } from './permission.repository';
 import { AuditLogRepository } from './audit-log.repository';
 import { QrCodeRepository } from './qr-code.repository';
+import { QrScanEventRepository } from './qr-scan-event.repository';
 import { FeedbackRepository } from './feedback.repository';
 import { FeedbackSummaryRepository } from './feedback-summary.repository';
 import { AiUsageLogRepository } from './ai-usage-log.repository';
@@ -40,6 +41,7 @@ export * from './password-reset-token.repository';
 export * from './permission.repository';
 export * from './audit-log.repository';
 export * from './qr-code.repository';
+export * from './qr-scan-event.repository';
 export * from './feedback.repository';
 export * from './feedback-summary.repository';
 export * from './ai-usage-log.repository';
@@ -78,6 +80,7 @@ export function createRepositories(db: Db) {
     permissions: new PermissionRepository(db),
     auditLog: new AuditLogRepository(db),
     qrCodes: new QrCodeRepository(db),
+    qrScanEvents: new QrScanEventRepository(db),
     feedback: new FeedbackRepository(db),
     feedbackSummaries: new FeedbackSummaryRepository(db),
     aiUsageLog: new AiUsageLogRepository(db),
@@ -102,3 +105,4 @@ export function createRepositories(db: Db) {
 }
 
 export type Repositories = ReturnType<typeof createRepositories>;
+

@@ -13,6 +13,7 @@ export * from './i18n';
 export * from './branches';
 export * from './businesses';
 export * from './qr-codes';
+export * from './qr-scans';
 export * from './feedback';
 export * from './feedback-classification';
 export * from './customer-auth';
@@ -25,3 +26,4 @@ export * from './billing';
 export * from './messaging';
 export * from './visits';
 export * from './fraud-signals';
+

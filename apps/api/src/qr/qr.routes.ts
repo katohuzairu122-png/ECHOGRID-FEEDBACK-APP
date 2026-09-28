@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { submitFeedbackSchema, generateFollowUpQuestionSchema } from '@echo-grid-feedback/shared-types';
+import { submitFeedbackSchema, generateFollowUpQuestionSchema, recordQrScanSchema } from '@echo-grid-feedback/shared-types';
 import type { Bindings } from '../config/env';
 import { createDb } from '../db/client';
 import { createRepositories } from '../repositories';
@@ -407,6 +407,36 @@ qrRoutes.post('/:token/feedback', async (c) => {
     }
 
     return ok(c, { id: created.id }, 201);
+  } finally {
+    c.executionCtx.waitUntil(close());
+  }
+});
+
+const SCAN_DEDUP_WINDOW_MS = 10 * 60 * 1000;
+
+qrRoutes.post('/:token/scan', async (c) => {
+  const body = await parseJsonBody(c.req.raw, recordQrScanSchema);
+  const { db, close } = await createDb(c.env.HYPERDRIVE);
+  try {
+    const repos = createRepositories(db);
+    // Resolution precedes hashing and persistence: malformed, expired, and
+    // revoked tokens can never inflate legitimate scan analytics.
+    const qrCode = await new QrCodeService(repos, {
+      QR_TOKEN_SECRET: c.env.QR_TOKEN_SECRET,
+      QR_TOKEN_SECRET_PREVIOUS: c.env.QR_TOKEN_SECRET_PREVIOUS,
+    }).resolveToken(c.req.param('token'));
+    const hasher = new VelocityTracker(c.env.CACHE, c.env.FRAUD_DETECTION_SALT);
+    const clientHash = await hasher.hashSubject(`${qrCode.id}:${body.deviceSignal}`);
+    const now = Date.now();
+    const dedupBucket = new Date(Math.floor(now / SCAN_DEDUP_WINDOW_MS) * SCAN_DEDUP_WINDOW_MS);
+    const result = await repos.qrScanEvents.recordDeduplicated({
+      businessId: qrCode.businessId,
+      branchId: qrCode.branchId,
+      qrCodeId: qrCode.id,
+      clientHash,
+      dedupBucket,
+    });
+    return ok(c, { recorded: result.recorded }, result.recorded ? 201 : 200);
   } finally {
     c.executionCtx.waitUntil(close());
   }
