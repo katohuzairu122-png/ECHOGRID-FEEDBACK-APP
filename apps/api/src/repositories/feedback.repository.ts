@@ -52,7 +52,48 @@ function expandSentimentFilter(value: string): readonly string[] {
 }
 
 export class FeedbackRepository extends BaseRepository {
+  private entitlementColumnsAvailable?: boolean;
+
+  private async supportsResponseEntitlements(): Promise<boolean> {
+    if (this.entitlementColumnsAvailable !== undefined) return this.entitlementColumnsAvailable;
+    const [row] = await this.db
+      .select({
+        available: sql<boolean>`EXISTS (
+          SELECT 1
+          FROM information_schema.columns
+          WHERE table_schema = current_schema()
+            AND table_name = 'feedback'
+            AND column_name = 'entitlement_status'
+        )`,
+      })
+      .from(sql`(select 1) as capability_probe`);
+    const available = row?.available ?? false;
+    this.entitlementColumnsAvailable = available;
+    return available;
+  }
+
   async getResponseUsage(businessId: string): Promise<ResponseUsage> {
+    if (!(await this.supportsResponseEntitlements())) {
+      const [row] = await this.db
+        .select({ included: sql<number>`count(*)::int` })
+        .from(feedback)
+        .where(
+          and(
+            eq(feedback.businessId, businessId),
+            eq(feedback.isDeleted, false),
+            gte(
+              feedback.createdAt,
+              sql`date_trunc('month', CURRENT_TIMESTAMP AT TIME ZONE 'UTC') AT TIME ZONE 'UTC'`,
+            ),
+          ),
+        );
+      return {
+        included: row?.included ?? 0,
+        queued: 0,
+        periodStart: new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), 1)).toISOString(),
+      };
+    }
+
     const [row] = await this.db
       .select({
         included: sql<number>`count(*) FILTER (
@@ -98,13 +139,14 @@ export class FeedbackRepository extends BaseRepository {
     businessId: string,
     options: { branchId?: string | undefined; limit?: number | undefined; offset?: number | undefined } = {},
   ): Promise<Feedback[]> {
+    const entitlementFilter = (await this.supportsResponseEntitlements()) ? isIncludedByPlan : undefined;
     const limit = Math.min(options.limit ?? DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE);
     const offset = options.offset ?? 0;
     return this.db.query.feedback.findMany({
       where: and(
         eq(feedback.businessId, businessId),
         eq(feedback.isDeleted, false),
-        isIncludedByPlan,
+        entitlementFilter,
         options.branchId ? eq(feedback.branchId, options.branchId) : undefined,
       ),
       limit,
@@ -370,11 +412,12 @@ export class FeedbackRepository extends BaseRepository {
     businessId: string,
     options: { branchId?: string | undefined; from: Date; to: Date },
   ): Promise<Feedback[]> {
+    const entitlementFilter = (await this.supportsResponseEntitlements()) ? isIncludedByPlan : undefined;
     return this.db.query.feedback.findMany({
       where: and(
         eq(feedback.businessId, businessId),
         eq(feedback.isDeleted, false),
-        isIncludedByPlan,
+        entitlementFilter,
         options.branchId ? eq(feedback.branchId, options.branchId) : undefined,
         gte(feedback.createdAt, options.from),
         lte(feedback.createdAt, options.to),
@@ -403,12 +446,13 @@ export class FeedbackRepository extends BaseRepository {
       offset?: number | undefined;
     } = {},
   ): Promise<Feedback[]> {
+    const entitlementFilter = (await this.supportsResponseEntitlements()) ? isIncludedByPlan : undefined;
     const limit = Math.min(options.limit ?? DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE);
     return this.db.query.feedback.findMany({
       where: and(
         eq(feedback.businessId, businessId),
         eq(feedback.isDeleted, false),
-        isIncludedByPlan,
+        entitlementFilter,
         options.branchId ? eq(feedback.branchId, options.branchId) : undefined,
         options.sentiment
           ? inArray(feedback.sentiment, expandSentimentFilter(options.sentiment))
@@ -435,6 +479,7 @@ export class FeedbackRepository extends BaseRepository {
     businessId: string,
     options: { branchId?: string | undefined; from: Date; to: Date },
   ): Promise<SentimentTrendBucket[]> {
+    const entitlementFilter = (await this.supportsResponseEntitlements()) ? isIncludedByPlan : undefined;
     const rows = await this.db
       .select({
         bucket: sql<string>`date_trunc('day', ${feedback.createdAt})::date::text`,
@@ -446,7 +491,7 @@ export class FeedbackRepository extends BaseRepository {
         and(
           eq(feedback.businessId, businessId),
           eq(feedback.isDeleted, false),
-          isIncludedByPlan,
+          entitlementFilter,
           options.branchId ? eq(feedback.branchId, options.branchId) : undefined,
           gte(feedback.createdAt, options.from),
           lte(feedback.createdAt, options.to),
@@ -491,13 +536,14 @@ export class FeedbackRepository extends BaseRepository {
     businessId: string,
     filters: Omit<FeedbackFilterInput, 'savedView'>,
   ): Promise<{ items: Feedback[]; hasMore: boolean }> {
+    const entitlementFilter = (await this.supportsResponseEntitlements()) ? isIncludedByPlan : undefined;
     const limit = Math.min(filters.limit ?? DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE);
     const offset = filters.offset ?? 0;
 
     const conditions = [
       eq(feedback.businessId, businessId),
       eq(feedback.isDeleted, false),
-      isIncludedByPlan,
+      entitlementFilter,
       filters.branchId ? eq(feedback.branchId, filters.branchId) : undefined,
       filters.category?.length ? inArray(feedback.category, filters.category) : undefined,
       filters.urgency?.length ? inArray(feedback.urgency, filters.urgency) : undefined,
