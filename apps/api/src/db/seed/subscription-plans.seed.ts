@@ -1,78 +1,91 @@
 import 'dotenv/config';
 import { Client } from 'pg';
 import { buildDb } from '../client';
-import { SubscriptionPlanRepository, type NewSubscriptionPlan } from '../../repositories/subscription-plan.repository';
+import {
+  SubscriptionPlanRepository,
+  type NewSubscriptionPlan,
+} from '../../repositories/subscription-plan.repository';
 
 /**
- * Starting plan catalog (Billing Block 8). Prices are placeholders --
- * real-world figures were never provided, so these are structurally
- * plausible starting points only, NOT a pricing recommendation; edit
- * before production use, same "flagged estimate" treatment as
- * PUBLIC_RATE_LIMITER's 20/min figure elsewhere in this codebase.
- *
- * stripePriceIdMonthly/Yearly are left null here on purpose -- they can
- * only be real once a Stripe account actually has these Prices created
- * (Stripe Dashboard > Product catalog, or the Stripe CLI/API). Fill them in
- * via a follow-up UPDATE, or the future platform-admin plan editor (Block
- * 10), before checkout can work for a given plan -- billing.service.ts's
- * createCheckoutSession fails loudly (422 PLAN_NOT_PURCHASABLE) rather than
- * silently if a plan is selected before its price IDs are set.
+ * Affordable launch catalog. Response allowances live in the open features
+ * object so the entitlement layer and plan UI share the same plan-owned value.
+ * Stripe Price IDs are intentionally omitted: seeding must never overwrite
+ * production IDs after an operator connects the matching Stripe prices.
  */
 const PLANS: NewSubscriptionPlan[] = [
   {
+    key: 'free',
+    name: 'Free',
+    description: 'Explore Echo Grid with a small monthly feedback allowance.',
+    priceMonthlyCents: 0,
+    priceYearlyCents: null,
+    currency: 'usd',
+    maxBranches: 1,
+    maxUsers: 1,
+    features: { monthlyResponses: 25, aiSummaries: false, customBranding: false },
+    isActive: true,
+    isDefaultTrial: false,
+    sortOrder: 0,
+  },
+  {
     key: 'starter',
     name: 'Starter',
-    description: 'For a single location getting started with customer feedback.',
-    priceMonthlyCents: 2900,
-    priceYearlyCents: 29000,
+    description: 'For one location ready to collect feedback every day.',
+    priceMonthlyCents: 900,
+    priceYearlyCents: 9000,
     currency: 'usd',
-    stripePriceIdMonthly: null,
-    stripePriceIdYearly: null,
     maxBranches: 1,
     maxUsers: 3,
-    features: { aiSummaries: false, customBranding: false },
+    features: { monthlyResponses: 1000, aiSummaries: false, customBranding: false },
     isActive: true,
     isDefaultTrial: true,
-    sortOrder: 0,
+    sortOrder: 1,
   },
   {
     key: 'growth',
     name: 'Growth',
-    description: 'For multi-location businesses that need AI-powered insights.',
-    priceMonthlyCents: 9900,
-    priceYearlyCents: 99000,
+    description: 'For growing teams managing feedback across several locations.',
+    priceMonthlyCents: 2900,
+    priceYearlyCents: 29000,
     currency: 'usd',
-    stripePriceIdMonthly: null,
-    stripePriceIdYearly: null,
-    maxBranches: 10,
-    maxUsers: 25,
-    features: { aiSummaries: true, customBranding: false },
-    isActive: true,
-    isDefaultTrial: false,
-    sortOrder: 1,
-  },
-  {
-    key: 'enterprise',
-    name: 'Enterprise',
-    description: 'Unlimited branches and team members, with custom branding.',
-    priceMonthlyCents: 29900,
-    priceYearlyCents: 299000,
-    currency: 'usd',
-    stripePriceIdMonthly: null,
-    stripePriceIdYearly: null,
-    maxBranches: null,
-    maxUsers: null,
-    features: { aiSummaries: true, customBranding: true },
+    maxBranches: 5,
+    maxUsers: 10,
+    features: { monthlyResponses: 5000, aiSummaries: true, customBranding: false },
     isActive: true,
     isDefaultTrial: false,
     sortOrder: 2,
   },
+  {
+    key: 'business',
+    name: 'Business',
+    description:
+      'For established multi-location teams that need higher limits and AI insights.',
+    priceMonthlyCents: 5900,
+    priceYearlyCents: 59000,
+    currency: 'usd',
+    maxBranches: 15,
+    maxUsers: 30,
+    features: { monthlyResponses: 20000, aiSummaries: true, customBranding: true },
+    isActive: true,
+    isDefaultTrial: false,
+    sortOrder: 3,
+  },
+  {
+    key: 'enterprise',
+    name: 'Enterprise',
+    description: 'Custom limits, onboarding, and support for large organizations.',
+    priceMonthlyCents: 0,
+    priceYearlyCents: null,
+    currency: 'usd',
+    maxBranches: null,
+    maxUsers: null,
+    features: { monthlyResponses: null, aiSummaries: true, customBranding: true },
+    isActive: true,
+    isDefaultTrial: false,
+    sortOrder: 4,
+  },
 ];
 
-/**
- * Connects directly via DATABASE_URL, same as permissions.seed.ts. Run with:
- *   pnpm --filter @echo-grid-feedback/api db:seed:plans
- */
 async function main() {
   const client = new Client({ connectionString: process.env.DATABASE_URL });
   await client.connect();

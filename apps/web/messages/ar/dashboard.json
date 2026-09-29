@@ -76,14 +76,25 @@
     "renewsOn": "يتم التجديد في {date}.",
     "plans": {
       "catalog": {
-        "starter": { "name": "الانطلاق", "description": "لموقع واحد يبدأ بجمع ملاحظات العملاء." },
+        "free": {
+          "name": "مجاني",
+          "description": "استكشف Echo Grid مع عدد محدود من الملاحظات شهريًا."
+        },
+        "starter": {
+          "name": "الانطلاق",
+          "description": "لموقع واحد جاهز لجمع ملاحظات العملاء يوميًا."
+        },
         "growth": {
           "name": "النمو",
-          "description": "للأنشطة متعددة المواقع التي تحتاج إلى رؤى مدعومة بالذكاء الاصطناعي."
+          "description": "للفرق النامية التي تدير الملاحظات عبر عدة مواقع."
+        },
+        "business": {
+          "name": "الأعمال",
+          "description": "للفرق متعددة المواقع التي تحتاج إلى حدود أعلى ورؤى بالذكاء الاصطناعي."
         },
         "enterprise": {
           "name": "المؤسسات",
-          "description": "فروع وأعضاء فريق بلا حدود، مع علامة تجارية مخصصة."
+          "description": "حدود وتهيئة ودعم مخصص للمؤسسات الكبيرة."
         }
       },
       "currentPlan": "الخطة الحالية",
@@ -94,7 +105,12 @@
       "limitedUsers": "حتى {count} {count, plural, one {عضو في الفريق} other {أعضاء في الفريق}}",
       "subscribeMonthly": "اشتراك شهري",
       "subscribeYearly": "اشتراك سنوي",
-      "starting": "جارٍ البدء…"
+      "starting": "جارٍ البدء…",
+      "limitedResponses": "{count} استجابة شهريًا",
+      "unlimitedResponses": "حد استجابات مخصص",
+      "customPrice": "سعر مخصص",
+      "contactSales": "تواصل مع المبيعات",
+      "freePrice": "مجاني"
     }
   }
 }

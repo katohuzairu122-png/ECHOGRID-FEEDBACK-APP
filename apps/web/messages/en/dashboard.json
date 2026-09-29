@@ -76,17 +76,25 @@
     "renewsOn": "Renews {date}.",
     "plans": {
       "catalog": {
+        "free": {
+          "name": "Free",
+          "description": "Explore Echo Grid with a small monthly feedback allowance."
+        },
         "starter": {
           "name": "Starter",
-          "description": "For a single location getting started with customer feedback."
+          "description": "For one location ready to collect feedback every day."
         },
         "growth": {
           "name": "Growth",
-          "description": "For multi-location businesses that need AI-powered insights."
+          "description": "For growing teams managing feedback across several locations."
+        },
+        "business": {
+          "name": "Business",
+          "description": "For established multi-location teams that need higher limits and AI insights."
         },
         "enterprise": {
           "name": "Enterprise",
-          "description": "Unlimited branches and team members, with custom branding."
+          "description": "Custom limits, onboarding, and support for large organizations."
         }
       },
       "currentPlan": "Current plan",
@@ -97,7 +105,12 @@
       "limitedUsers": "Up to {count} team {count, plural, one {member} other {members}}",
       "subscribeMonthly": "Subscribe monthly",
       "subscribeYearly": "Subscribe yearly",
-      "starting": "Starting…"
+      "starting": "Starting…",
+      "limitedResponses": "{count} responses per month",
+      "unlimitedResponses": "Custom response allowance",
+      "customPrice": "Custom pricing",
+      "contactSales": "Contact sales",
+      "freePrice": "Free"
     }
   }
 }

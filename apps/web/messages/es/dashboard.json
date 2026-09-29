@@ -76,17 +76,25 @@
     "renewsOn": "Se renueva el {date}.",
     "plans": {
       "catalog": {
+        "free": {
+          "name": "Gratis",
+          "description": "Explora Echo Grid con una pequeña cantidad mensual de respuestas."
+        },
         "starter": {
           "name": "Inicio",
-          "description": "Para un único local que comienza a recoger opiniones de sus clientes."
+          "description": "Para un local preparado para recoger opiniones cada día."
         },
         "growth": {
           "name": "Crecimiento",
-          "description": "Para negocios con varias ubicaciones que necesitan información impulsada por IA."
+          "description": "Para equipos en crecimiento que gestionan opiniones en varios locales."
+        },
+        "business": {
+          "name": "Negocio",
+          "description": "Para equipos multisede consolidados que necesitan límites mayores y análisis con IA."
         },
         "enterprise": {
           "name": "Empresa",
-          "description": "Sucursales y miembros del equipo ilimitados, con marca personalizada."
+          "description": "Límites, incorporación y soporte personalizados para grandes organizaciones."
         }
       },
       "currentPlan": "Plan actual",
@@ -97,7 +105,12 @@
       "limitedUsers": "Hasta {count} {count, plural, one {miembro} other {miembros}} del equipo",
       "subscribeMonthly": "Suscribirse mensualmente",
       "subscribeYearly": "Suscribirse anualmente",
-      "starting": "Iniciando…"
+      "starting": "Iniciando…",
+      "limitedResponses": "{count} respuestas al mes",
+      "unlimitedResponses": "Límite de respuestas personalizado",
+      "customPrice": "Precio personalizado",
+      "contactSales": "Contactar con ventas",
+      "freePrice": "Gratis"
     }
   }
 }

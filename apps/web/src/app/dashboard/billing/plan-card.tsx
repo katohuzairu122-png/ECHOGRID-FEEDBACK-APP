@@ -7,6 +7,7 @@ import { createCheckoutSessionAction, type BillingActionState } from '@/lib/acti
 import {
   Badge,
   Button,
+  buttonVariants,
   Card,
   CardContent,
   CardDescription,
@@ -27,11 +28,19 @@ interface PlanCardProps {
 function usePlanCopy(plan: SubscriptionPlanDto) {
   const t = useTranslations('dashboard.billing.plans.catalog');
   switch (plan.key) {
+    case 'free':
+      return {
+        name: plan.name === 'Free' ? t('free.name') : plan.name,
+        description:
+          plan.description === 'Explore Echo Grid with a small monthly feedback allowance.'
+            ? t('free.description')
+            : plan.description,
+      };
     case 'starter':
       return {
         name: plan.name === 'Starter' ? t('starter.name') : plan.name,
         description:
-          plan.description === 'For a single location getting started with customer feedback.'
+          plan.description === 'For one location ready to collect feedback every day.'
             ? t('starter.description')
             : plan.description,
       };
@@ -39,15 +48,26 @@ function usePlanCopy(plan: SubscriptionPlanDto) {
       return {
         name: plan.name === 'Growth' ? t('growth.name') : plan.name,
         description:
-          plan.description === 'For multi-location businesses that need AI-powered insights.'
+          plan.description ===
+          'For growing teams managing feedback across several locations.'
             ? t('growth.description')
+            : plan.description,
+      };
+    case 'business':
+      return {
+        name: plan.name === 'Business' ? t('business.name') : plan.name,
+        description:
+          plan.description ===
+          'For established multi-location teams that need higher limits and AI insights.'
+            ? t('business.description')
             : plan.description,
       };
     case 'enterprise':
       return {
         name: plan.name === 'Enterprise' ? t('enterprise.name') : plan.name,
         description:
-          plan.description === 'Unlimited branches and team members, with custom branding.'
+          plan.description ===
+          'Custom limits, onboarding, and support for large organizations.'
             ? t('enterprise.description')
             : plan.description,
       };
@@ -93,6 +113,8 @@ export function PlanCard({ plan, isCurrent }: PlanCardProps) {
       currency: plan.currency.toUpperCase(),
       currencyDisplay: locale === 'ar' ? 'code' : 'symbol',
     }).format(cents / 100);
+  const responseLimit = plan.features?.monthlyResponses;
+  const hasResponseLimit = typeof responseLimit === 'number';
 
   return (
     <Card className={isCurrent ? 'border-brand-500 ring-1 ring-brand-500' : undefined}>
@@ -107,10 +129,23 @@ export function PlanCard({ plan, isCurrent }: PlanCardProps) {
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
         <p className="text-2xl font-semibold text-neutral-900">
-          <bdi dir="ltr">{formatPrice(plan.priceMonthlyCents)}</bdi>
-          <span className="text-sm font-normal text-neutral-500">/{t('perMonth')}</span>
+          {plan.key === 'enterprise' ? (
+            t('customPrice')
+          ) : plan.priceMonthlyCents === 0 ? (
+            t('freePrice')
+          ) : (
+            <>
+              <bdi dir="ltr">{formatPrice(plan.priceMonthlyCents)}</bdi>
+              <span className="text-sm font-normal text-neutral-500">/{t('perMonth')}</span>
+            </>
+          )}
         </p>
         <ul className="flex flex-col gap-1 text-sm text-neutral-600">
+          <li>
+            {hasResponseLimit
+              ? t('limitedResponses', { count: responseLimit })
+              : t('unlimitedResponses')}
+          </li>
           <li>
             {plan.maxBranches === null
               ? t('unlimitedBranches')
@@ -123,7 +158,17 @@ export function PlanCard({ plan, isCurrent }: PlanCardProps) {
           </li>
         </ul>
       </CardContent>
-      {!isCurrent && (
+      {!isCurrent && plan.key === 'enterprise' && (
+        <CardFooter>
+          <a
+            href="mailto:sales@echo-grid.uk"
+            className={buttonVariants({ className: 'w-full' })}
+          >
+            {t('contactSales')}
+          </a>
+        </CardFooter>
+      )}
+      {!isCurrent && plan.priceMonthlyCents > 0 && plan.key !== 'enterprise' && (
         <CardFooter className="flex flex-col items-stretch gap-2">
           <form action={monthlyFormAction}>
             <Button type="submit" disabled={monthlyPending} className="w-full">

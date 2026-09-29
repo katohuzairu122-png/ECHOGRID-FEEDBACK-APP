@@ -11,14 +11,14 @@ const starter: SubscriptionPlanDto = {
   id: '00000000-0000-4000-8000-000000000001',
   key: 'starter',
   name: 'Starter',
-  description: 'For a single location getting started with customer feedback.',
-  priceMonthlyCents: 2900,
-  priceYearlyCents: 29000,
+  description: 'For one location ready to collect feedback every day.',
+  priceMonthlyCents: 900,
+  priceYearlyCents: 9000,
   currency: 'usd',
   maxBranches: 1,
   maxUsers: 3,
-  features: null,
-  sortOrder: 0,
+  features: { monthlyResponses: 1000 },
+  sortOrder: 1,
 };
 
 function renderArabic(plan: SubscriptionPlanDto) {
@@ -32,13 +32,14 @@ function renderArabic(plan: SubscriptionPlanDto) {
 }
 
 describe('PlanCard Arabic display', () => {
-  it('translates a seeded plan and keeps prices readable without changing their amount', () => {
+  it('translates the affordable catalog and displays its response allowance', () => {
     renderArabic(starter);
 
     expect(screen.getByText('الانطلاق')).toBeInTheDocument();
-    expect(screen.getByText('لموقع واحد يبدأ بجمع ملاحظات العملاء.')).toBeInTheDocument();
-    expect(screen.getByText(/USD\s*29\.00/)).toHaveAttribute('dir', 'ltr');
-    expect(screen.getByRole('button', { name: /USD\s*290\.00/ })).toBeInTheDocument();
+    expect(screen.getByText('لموقع واحد جاهز لجمع ملاحظات العملاء يوميًا.')).toBeInTheDocument();
+    expect(screen.getByText('1000 استجابة شهريًا')).toBeInTheDocument();
+    expect(screen.getByText(/USD\s*9\.00/)).toHaveAttribute('dir', 'ltr');
+    expect(screen.getByRole('button', { name: /USD\s*90\.00/ })).toBeInTheDocument();
   });
 
   it('preserves edited catalog content instead of showing stale seed translations', () => {

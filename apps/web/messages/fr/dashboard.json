@@ -76,17 +76,25 @@
     "renewsOn": "Se renouvelle le {date}.",
     "plans": {
       "catalog": {
+        "free": {
+          "name": "Gratuit",
+          "description": "Découvrez Echo Grid avec un petit quota mensuel d’avis."
+        },
         "starter": {
           "name": "Démarrage",
-          "description": "Pour un seul établissement qui commence à recueillir les avis des clients."
+          "description": "Pour un établissement prêt à recueillir des avis chaque jour."
         },
         "growth": {
           "name": "Croissance",
-          "description": "Pour les entreprises multisites qui ont besoin d'analyses assistées par l'IA."
+          "description": "Pour les équipes en croissance gérant plusieurs établissements."
+        },
+        "business": {
+          "name": "Business",
+          "description": "Pour les équipes multisites établies ayant besoin de limites supérieures et d’analyses IA."
         },
         "enterprise": {
           "name": "Entreprise",
-          "description": "Succursales et membres d'équipe illimités, avec une identité de marque personnalisée."
+          "description": "Limites, intégration et assistance personnalisées pour les grandes organisations."
         }
       },
       "currentPlan": "Forfait actuel",
@@ -97,7 +105,12 @@
       "limitedUsers": "Jusqu'à {count} membre{count, plural, one {} other {s}} d'équipe",
       "subscribeMonthly": "S'abonner mensuellement",
       "subscribeYearly": "S'abonner annuellement",
-      "starting": "Démarrage…"
+      "starting": "Démarrage…",
+      "limitedResponses": "{count} réponses par mois",
+      "unlimitedResponses": "Quota de réponses personnalisé",
+      "customPrice": "Tarification personnalisée",
+      "contactSales": "Contacter les ventes",
+      "freePrice": "Gratuit"
     }
   }
 }

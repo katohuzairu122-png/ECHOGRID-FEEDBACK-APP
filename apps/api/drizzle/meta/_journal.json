@@ -204,6 +204,13 @@
       "when": 1790606193371,
       "tag": "0028_even_liz_osborn",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1790683200000,
+      "tag": "0029_affordable_subscription_catalog",
+      "breakpoints": true
     }
   ]
 }
