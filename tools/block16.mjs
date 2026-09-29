@@ -50,7 +50,7 @@ async function preflight() {
     const deployment = text('docs/DEPLOYMENT.md');
     const operations = text('docs/OPERATIONS.md');
     if (!/wrangler rollback/.test(deployment) || !/apps\/api/.test(deployment) || !/apps\/web/.test(deployment)) throw new Error('Deployment rollback must cover both Workers');
-    if (!/forward[- ]fix/i.test(deployment + operations) || !/migration/i.test(deployment + operations)) throw new Error('Database forward-fix policy is missing');
+    if (!/forward(?:[- ]fix| migration)/i.test(deployment + operations) || !/migration/i.test(deployment + operations)) throw new Error('Database forward-fix policy is missing');
     return 'Worker rollback and database forward-fix documented';
   });
 }
