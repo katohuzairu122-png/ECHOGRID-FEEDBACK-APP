@@ -5,6 +5,7 @@ import { logoutAction } from '@/lib/actions/auth';
 import { Badge, Button } from '@/components/ui';
 import { Logo } from '@/components/brand';
 import { PlatformMobileNav } from './platform-mobile-nav';
+import { PlatformNavLinks } from './platform-nav-links';
 
 type PlatformRole = NonNullable<CurrentUserDto['platformRole']>;
 
@@ -28,8 +29,9 @@ interface PlatformNavProps {
 
 export async function PlatformNav({ role }: PlatformNavProps) {
   const t = await getTranslations('platform.nav');
+  const platformItems = NAV_ITEMS.map(([key, href]) => ({ href, label: t(key) }));
   const mobileItems = [
-    ...NAV_ITEMS.map(([key, href]) => ({ href, label: t(key) })),
+    ...platformItems,
     { href: '/dashboard', label: t('backToDashboard') },
   ];
 
@@ -45,12 +47,8 @@ export async function PlatformNav({ role }: PlatformNavProps) {
               <span className="text-sm font-medium text-neutral-500">{t('brand')}</span>
               <Badge variant="accent">{t(ROLE_LABEL_KEYS[role])}</Badge>
             </div>
-            <nav className="hidden items-center gap-4 lg:flex" aria-label={t('menu')}>
-              {NAV_ITEMS.map(([key, href]) => (
-                <Link key={key} href={href} className={linkClassName}>
-                  {t(key)}
-                </Link>
-              ))}
+            <nav className="hidden items-center gap-2 lg:flex" aria-label={t('menu')}>
+              <PlatformNavLinks items={platformItems} />
             </nav>
           </div>
           <div className="hidden items-center gap-4 lg:flex">
