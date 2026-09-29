@@ -22,6 +22,7 @@ const expected = journal.entries.map((entry) => {
   const sql = fs.readFileSync(path.join(drizzleRoot, file), 'utf8');
   return {
     file,
+    createdAt: Number(entry.when),
     hash: createHash('sha256').update(sql).digest('hex'),
   };
 });
@@ -37,10 +38,14 @@ try {
   }
 
   const applied = await client.query(
-    `SELECT hash FROM drizzle.__drizzle_migrations ORDER BY created_at`,
+    `SELECT hash, created_at FROM drizzle.__drizzle_migrations ORDER BY created_at`,
   );
-  const appliedHashes = new Set(applied.rows.map((row) => row.hash));
-  const pending = expected.filter((migration) => !appliedHashes.has(migration.hash));
+  const appliedByCreatedAt = new Map(
+    applied.rows.map((row) => [Number(row.created_at), row.hash]),
+  );
+  const pending = expected.filter(
+    (migration) => !appliedByCreatedAt.has(migration.createdAt),
+  );
 
   if (pending.length > 0) {
     process.stderr.write(
@@ -51,8 +56,17 @@ try {
     process.exit(1);
   }
 
+  // Drizzle identifies whether a migration is pending by the journal's
+  // `when` value (`created_at` in the database), not by re-hashing every
+  // historical SQL file. Older Echo Grid migrations were normalized after
+  // they had already been applied, so their stored hashes legitimately
+  // differ while their immutable journal identities remain present.
+  const matchingHashes = expected.filter(
+    (migration) => appliedByCreatedAt.get(migration.createdAt) === migration.hash,
+  ).length;
+
   process.stdout.write(
-    `[production-migrations] OK -- ${expected.length} repository migration(s) are applied.\n`,
+    `[production-migrations] OK -- ${expected.length} repository migration(s) are applied (${matchingHashes} exact SQL hash match(es)).\n`,
   );
 } finally {
   await client.end().catch(() => undefined);

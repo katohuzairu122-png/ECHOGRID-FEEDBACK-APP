@@ -68,4 +68,6 @@ jobs:
         run: pnpm --filter @echo-grid-feedback/api db:migrate
 
       - name: Verify staging migration state
+        # Verification follows Drizzle journal timestamps and reports exact
+        # SQL hash matches for additional evidence.
         run: pnpm --filter @echo-grid-feedback/api db:verify:production
