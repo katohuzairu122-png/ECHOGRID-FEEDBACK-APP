@@ -52,16 +52,14 @@ if (args.has('--connect') && !process.env.DATABASE_URL) {
 const stripe = new Stripe(secretKey, { maxNetworkRetries: 2 });
 
 async function findOrCreateProduct(plan) {
-  const result = await stripe.products.search({
-    query: `metadata["echo_grid_plan_key"]:"${plan.key}"`,
-    limit: 100,
-  });
-  const existing = result.data.find(
-    (product) =>
+  for await (const product of stripe.products.list({ limit: 100 })) {
+    if (
       product.metadata.echo_grid_plan_key === plan.key &&
-      product.metadata.echo_grid_catalog_version === CATALOG_VERSION,
-  );
-  if (existing) return existing;
+      product.metadata.echo_grid_catalog_version === CATALOG_VERSION
+    ) {
+      return product;
+    }
+  }
 
   return stripe.products.create({
     name: plan.name,
