@@ -395,3 +395,37 @@ people who've already deployed before, not a first-time walkthrough.
 | `403 PLATFORM_ACCESS_DENIED` on every `/platform/*` route, or the `/platform` UI shows "Platform admin access required" | No account with a non-null `platformRole` exists yet, or you're logged in as one that doesn't have one | Run `pnpm db:seed:platform-admin` (see Database above), then log in as `PLATFORM_ADMIN_EMAIL` |
 | Stripe webhook events never reach `POST /webhooks/stripe` in local dev | Stripe can't call `localhost` directly | Install the [Stripe CLI](https://stripe.com/docs/stripe-cli) and run `stripe listen --forward-to localhost:8787/webhooks/stripe`; it prints a `whsec_...` value — use that as `STRIPE_WEBHOOK_SECRET` in `.dev.vars` for local testing (a different value than your deployed endpoint's signing secret) |
 | `POST /billing/checkout`/`/portal` return `PLAN_NOT_PURCHASABLE` or a Stripe error | The seeded plans (`db:seed:plans`) have placeholder pricing and no real `stripePriceIdMonthly`/`Yearly` | Create matching Prices in your Stripe test-mode Dashboard, then set them via `PATCH /platform/billing/plans/:id` (or the `/platform/billing/plans` UI) before testing checkout end to end |
+
+
+## Stripe catalog onboarding
+
+Run this block only after the Stripe account registration and business verification are complete. The command is idempotent: it reuses products and recurring prices that already match the approved catalog.
+
+1. Copy the appropriate restricted or secret API key into the shell without committing it:
+
+   ```bash
+   export STRIPE_SECRET_KEY=sk_test_...   # use sk_live_... only for production
+   export DATABASE_URL=postgresql://...   # required only with --connect
+   ```
+
+2. Create and verify the catalog in Stripe test mode:
+
+   ```bash
+   pnpm --filter @echo-grid-feedback/api billing:stripe:provision -- --test --apply
+   ```
+
+3. After test Checkout and webhook verification succeed, create the live catalog and connect its Price IDs to the production database:
+
+   ```bash
+   pnpm --filter @echo-grid-feedback/api billing:stripe:provision -- --live --apply --connect
+   ```
+
+The command creates only the paid self-service plans:
+
+| Plan | Monthly | Annual |
+|---|---:|---:|
+| Starter | $9 | $90 |
+| Growth | $29 | $290 |
+| Business | $59 | $590 |
+
+Free has no Stripe Price. Enterprise remains a contact-sales plan. The command refuses to run when the requested mode does not match the key prefix, requires `--apply` before making changes, validates every returned Price, writes a non-secret receipt to `artifacts/stripe-catalog-<mode>.json`, and updates the database only when `--connect` is supplied. Never commit API keys or paste them into chat.
