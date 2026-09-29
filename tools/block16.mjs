@@ -36,7 +36,7 @@ function requireTargets() {
 }
 async function fetchTimed(url, init) {
   const started = performance.now();
-  const response = await fetch(url, { redirect: 'follow', ...init, signal: AbortSignal.timeout(15000) });
+  const response = await globalThis.fetch(url, { redirect: 'follow', ...init, signal: globalThis.AbortSignal.timeout(15000) });
   return { response, durationMs: Math.round(performance.now() - started) };
 }
 
