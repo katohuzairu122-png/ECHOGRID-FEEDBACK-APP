@@ -59,6 +59,15 @@ export class BillingService {
    * fact the UI actually needs (can "Manage billing" be opened yet).
    */
   async getSubscription(businessId: string): Promise<BillingSubscriptionView | undefined> {
+    await this.repos.subscriptionPlans.reconcileCatalog?.(APPROVED_SUBSCRIPTION_CATALOG);
+    const freePlan = await this.repos.subscriptionPlans.findByKey('free');
+    if (freePlan) {
+      await this.repos.businessSubscriptions.transitionExpiredCardlessTrial?.(
+        businessId,
+        freePlan.id,
+        new Date(),
+      );
+    }
     const subscription = await this.repos.businessSubscriptions.findByBusinessWithPlan(businessId);
     if (!subscription) return undefined;
 

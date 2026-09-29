@@ -1,4 +1,4 @@
-import { eq, sql } from 'drizzle-orm';
+import { and, eq, isNull, lte, sql } from 'drizzle-orm';
 import { businessSubscriptions, subscriptionPlans } from '../db/schema';
 import { BaseRepository } from './base.repository';
 
@@ -79,6 +79,69 @@ export class BusinessSubscriptionRepository extends BaseRepository {
       .returning();
     if (!row) throw new Error('Insert returned no row');
     return row;
+  }
+
+  /**
+   * Moves one expired card-less trial onto Free. The WHERE clause repeats
+   * every eligibility condition so a concurrent Stripe webhook wins safely:
+   * once either Stripe identifier exists, this update cannot downgrade it.
+   */
+  async transitionExpiredCardlessTrial(
+    businessId: string,
+    freePlanId: string,
+    now: Date,
+  ): Promise<BusinessSubscription | undefined> {
+    const [row] = await this.db
+      .update(businessSubscriptions)
+      .set({
+        planId: freePlanId,
+        status: 'active',
+        billingInterval: null,
+        trialEndsAt: null,
+        currentPeriodStart: null,
+        currentPeriodEnd: null,
+        cancelAtPeriodEnd: false,
+        canceledAt: null,
+        updatedAt: now,
+      })
+      .where(
+        and(
+          eq(businessSubscriptions.businessId, businessId),
+          eq(businessSubscriptions.status, 'trialing'),
+          lte(businessSubscriptions.trialEndsAt, now),
+          isNull(businessSubscriptions.stripeCustomerId),
+          isNull(businessSubscriptions.stripeSubscriptionId),
+        ),
+      )
+      .returning();
+    return row;
+  }
+
+  /** Daily bulk counterpart to transitionExpiredCardlessTrial. */
+  async transitionAllExpiredCardlessTrials(freePlanId: string, now: Date): Promise<number> {
+    const rows = await this.db
+      .update(businessSubscriptions)
+      .set({
+        planId: freePlanId,
+        status: 'active',
+        billingInterval: null,
+        trialEndsAt: null,
+        currentPeriodStart: null,
+        currentPeriodEnd: null,
+        cancelAtPeriodEnd: false,
+        canceledAt: null,
+        updatedAt: now,
+      })
+      .where(
+        and(
+          eq(businessSubscriptions.status, 'trialing'),
+          lte(businessSubscriptions.trialEndsAt, now),
+          isNull(businessSubscriptions.stripeCustomerId),
+          isNull(businessSubscriptions.stripeSubscriptionId),
+        ),
+      )
+      .returning({ id: businessSubscriptions.id });
+    return rows.length;
   }
 
   async findByStripeSubscriptionId(stripeSubscriptionId: string): Promise<BusinessSubscription | undefined> {

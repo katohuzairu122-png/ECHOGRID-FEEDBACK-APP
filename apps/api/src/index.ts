@@ -42,6 +42,7 @@ import { NotificationDeliveryService } from './notifications/notification-delive
 import { NotificationService } from './notifications/notification.service';
 import { computeRetryDelaySeconds } from './lib/backoff';
 import { notifyOps, alertOnFailure } from './lib/ops-alert';
+import { SubscriptionLifecycleService } from './billing/subscription-lifecycle.service';
 
 // Durable Object classes must be exported from the Worker's main module for
 // wrangler to find them (see wrangler.toml's durable_objects.bindings /
@@ -596,6 +597,20 @@ async function sweepStalePendingAiUsage(env: Bindings): Promise<void> {
  * tomorrow. Logs a count only -- never a phone number, matching this
  * codebase's existing caution about what reaches logs.
  */
+async function expireCardlessTrials(env: Bindings): Promise<void> {
+  const { db, close } = await createDb(env.HYPERDRIVE);
+  try {
+    const transitioned = await new SubscriptionLifecycleService(
+      createRepositories(db),
+    ).expireCardlessTrials(new Date());
+    if (transitioned > 0) {
+      console.log(`Moved ${transitioned} expired card-less trial(s) to Free.`);
+    }
+  } finally {
+    await close();
+  }
+}
+
 async function pruneOldOtpCodes(env: Bindings): Promise<void> {
   const cutoff = new Date(Date.now() - OTP_RETENTION_DAYS * 24 * 60 * 60 * 1000);
   const { db, close } = await createDb(env.HYPERDRIVE);
