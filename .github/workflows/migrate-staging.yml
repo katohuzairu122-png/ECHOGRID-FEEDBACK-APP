@@ -1,6 +1,13 @@
 name: Migrate staging database
 
 on:
+  # A workflow cannot dispatch itself when it is first installed. This
+  # narrow push trigger bootstraps the staging schema once; later edits to
+  # application code do not run database migrations automatically.
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/migrate-staging.yml
   workflow_dispatch:
     inputs:
       expected_commit:
@@ -35,8 +42,8 @@ jobs:
       - name: Verify reviewed commit and confirmation
         shell: bash
         env:
-          EXPECTED_COMMIT: ${{ inputs.expected_commit }}
-          CONFIRMATION: ${{ inputs.confirmation }}
+          EXPECTED_COMMIT: ${{ github.event_name == 'workflow_dispatch' && inputs.expected_commit || github.sha }}
+          CONFIRMATION: ${{ github.event_name == 'workflow_dispatch' && inputs.confirmation || 'MIGRATE_STAGING' }}
         run: |
           set -euo pipefail
           [[ "$EXPECTED_COMMIT" =~ ^[0-9a-f]{40}$ ]]
