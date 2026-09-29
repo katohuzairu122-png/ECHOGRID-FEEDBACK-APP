@@ -103,6 +103,7 @@ describe('BranchService', () => {
   let repos: {
     branches: ReturnType<typeof createFakeBranchRepo>;
     businessSubscriptions: { findByBusinessWithPlan: (businessId: string) => Promise<unknown> };
+    subscriptionPlans: { findByKey: (key: string) => Promise<unknown> };
   };
   let service: BranchService;
 
@@ -116,6 +117,11 @@ describe('BranchService', () => {
             businessId,
             plan: { name: 'Test plan', maxBranches },
           };
+        },
+      },
+      subscriptionPlans: {
+        async findByKey() {
+          return { name: 'Free', maxBranches: 1 };
         },
       },
     };
@@ -165,6 +171,15 @@ describe('BranchService', () => {
 
     await expect(
       service.createBranch(BUSINESS_A, { name: 'Downtown', slug: 'downtown' }, ACTOR),
+    ).rejects.toMatchObject({ code: 'PLAN_BRANCH_LIMIT_REACHED', status: 422 });
+  });
+
+  it('uses the Free allowance when a legacy business has no subscription row', async () => {
+    repos.businessSubscriptions.findByBusinessWithPlan = async () => undefined;
+    await service.createBranch(BUSINESS_A, { name: 'Downtown', slug: 'downtown' }, ACTOR);
+
+    await expect(
+      service.createBranch(BUSINESS_A, { name: 'Uptown', slug: 'uptown' }, ACTOR),
     ).rejects.toMatchObject({ code: 'PLAN_BRANCH_LIMIT_REACHED', status: 422 });
   });
 

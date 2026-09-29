@@ -15,7 +15,10 @@ import type { CreateBranchInput, UpdateBranchInput } from '@echo-grid-feedback/s
  */
 export class BranchService {
   constructor(
-    private readonly repos: Pick<Repositories, 'branches' | 'businessSubscriptions'>,
+    private readonly repos: Pick<
+      Repositories,
+      'branches' | 'businessSubscriptions' | 'subscriptionPlans'
+    >,
   ) {}
 
   async listBranches(
@@ -48,12 +51,13 @@ export class BranchService {
     }
 
     const subscription = await this.repos.businessSubscriptions.findByBusinessWithPlan(businessId);
-    const branchLimit = subscription?.plan.maxBranches;
+    const plan = subscription?.plan ?? (await this.repos.subscriptionPlans.findByKey('free'));
+    const branchLimit = plan?.maxBranches;
     if (branchLimit !== null && branchLimit !== undefined) {
       const branchCount = await this.repos.branches.countActiveByBusiness(businessId);
       if (branchCount >= branchLimit) {
         throw new AppError(
-          `Your ${subscription?.plan.name ?? 'current'} plan allows ${branchLimit} branch${branchLimit === 1 ? '' : 'es'}. Upgrade your plan to add another branch.`,
+          `Your ${plan?.name ?? 'current'} plan allows ${branchLimit} branch${branchLimit === 1 ? '' : 'es'}. Upgrade your plan to add another branch.`,
           422,
           'PLAN_BRANCH_LIMIT_REACHED',
         );
@@ -72,7 +76,7 @@ export class BranchService {
       // product error as the friendly pre-check above.
       if (error instanceof Error && error.message.includes('PLAN_BRANCH_LIMIT_REACHED')) {
         throw new AppError(
-          `Your ${subscription?.plan.name ?? 'current'} plan has reached its branch limit. Upgrade your plan to add another branch.`,
+          `Your ${plan?.name ?? 'current'} plan has reached its branch limit. Upgrade your plan to add another branch.`,
           422,
           'PLAN_BRANCH_LIMIT_REACHED',
         );
