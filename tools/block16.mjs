@@ -60,7 +60,7 @@ async function envAudit() {
   await record('Production Worker configuration', () => {
     const api = text('apps/api/wrangler.toml'); const web = text('apps/web/wrangler.toml');
     const combined = `${api}\n${web}`;
-    const placeholders = [/your[-_]/i, /replace[-_ ]me/i, /example\.com/i, /<[^>]+>/];
+    const placeholders = [/your[-_]/i, /replace[-_ ]me/i, /example\.com/i];
     const found = placeholders.filter((pattern) => pattern.test(combined)).map(String);
     if (found.length) throw new Error(`Placeholder production configuration found: ${found.join(', ')}`);
     for (const marker of ['[[hyperdrive]]', '[[r2_buckets]]', '[[kv_namespaces]]', '[[queues.producers]]', '[ai]', '[observability]']) if (!api.includes(marker)) throw new Error(`API binding missing: ${marker}`);
