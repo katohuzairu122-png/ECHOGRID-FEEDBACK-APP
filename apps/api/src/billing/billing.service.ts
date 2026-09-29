@@ -4,6 +4,7 @@ import type { SubscriptionPlan, BusinessSubscriptionWithPlan } from '../reposito
 import type { CreateCheckoutSessionInput, CreatePortalSessionInput } from '@echo-grid-feedback/shared-types';
 import { AppError } from '../lib/errors';
 import { assertRedirectOriginAllowed } from '../lib/allowed-origins';
+import { APPROVED_SUBSCRIPTION_CATALOG } from './subscription-catalog';
 
 /** getSubscription()'s return shape -- the repository row with Stripe
  * identifiers swapped for the one derived boolean the frontend needs. See
@@ -36,6 +37,7 @@ export class BillingService {
   /** Strips stripePriceIdMonthly/Yearly -- same reasoning as
    * getSubscription's own strip, applied to the plan picker's list view. */
   async listPlans(): Promise<Omit<SubscriptionPlan, 'stripePriceIdMonthly' | 'stripePriceIdYearly'>[]> {
+    await this.repos.subscriptionPlans.reconcileCatalog(APPROVED_SUBSCRIPTION_CATALOG);
     const plans = await this.repos.subscriptionPlans.listActive();
     return plans.map(({ stripePriceIdMonthly, stripePriceIdYearly, ...rest }) => rest);
   }

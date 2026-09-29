@@ -93,6 +93,53 @@ export class SubscriptionPlanRepository extends BaseRepository {
     return row;
   }
 
+  /**
+   * Reconciles the approved launch catalog at the production read boundary.
+   * This is deliberately idempotent: CI validates migrations against an
+   * ephemeral database, while deployed Workers reach production through
+   * Hyperdrive and cannot run drizzle-kit. Only changed rows are written.
+   * Stripe IDs are cleared when an amount changes so an old Price can never
+   * charge a customer more than the amount displayed.
+   */
+  async reconcileCatalog(plans: readonly NewSubscriptionPlan[]): Promise<void> {
+    for (const input of plans) {
+      const existing = await this.findByKey(input.key);
+      if (!existing) {
+        await this.create(input);
+        continue;
+      }
+
+      const priceChanged =
+        existing.priceMonthlyCents !== input.priceMonthlyCents ||
+        existing.priceYearlyCents !== input.priceYearlyCents;
+      const changed =
+        priceChanged ||
+        existing.name !== input.name ||
+        existing.description !== input.description ||
+        existing.currency !== input.currency ||
+        existing.maxBranches !== input.maxBranches ||
+        existing.maxUsers !== input.maxUsers ||
+        JSON.stringify(existing.features) !== JSON.stringify(input.features) ||
+        existing.isActive !== input.isActive ||
+        existing.isDefaultTrial !== input.isDefaultTrial ||
+        existing.sortOrder !== input.sortOrder;
+
+      if (!changed) continue;
+
+      const { key: _key, ...editable } = input;
+      await this.db
+        .update(subscriptionPlans)
+        .set({
+          ...editable,
+          ...(priceChanged
+            ? { stripePriceIdMonthly: null, stripePriceIdYearly: null }
+            : {}),
+          updatedAt: new Date(),
+        })
+        .where(eq(subscriptionPlans.id, existing.id));
+    }
+  }
+
   /** Platform admin plan creation (Block 10) -- key uniqueness is enforced
    * by the DB (subscription_plans_key_key); a duplicate is left to surface
    * as a raw constraint error here, same as BusinessService relying on
