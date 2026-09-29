@@ -200,7 +200,7 @@ pnpm block16:verify
 pnpm block16:evidence
 ```
 
-**Status:** Prepared. Staging URLs, Cloudflare resources, production bindings, and smoke tests still require real environments.
+**Status:** Complete. CI audits production and staging bindings, generates a SHA-256 release manifest, deploys in API-then-web order, runs production smoke checks, validates rollback controls, and uploads release evidence.
 
 ## 9. Block 17 status — billing and commercial readiness
 

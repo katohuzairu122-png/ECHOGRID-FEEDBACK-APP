@@ -270,9 +270,11 @@ authentication — keep deploying with Step 6's manual commands.
 ## Rollback
 
 ```bash
-npx wrangler rollback              # rolls back to the previous deployment
-npx wrangler rollback <version-id> # or a specific one
-npx wrangler deployments list --name echo-grid-feedback-api   # see recent deployments/IDs
+pnpm --dir apps/api exec wrangler deployments list
+pnpm --dir apps/api exec wrangler rollback              # API first
+pnpm --dir apps/web exec wrangler deployments list
+pnpm --dir apps/web exec wrangler rollback               # then web
+# Pass a version ID to either rollback command to select a specific release.
 ```
 
 `wrangler rollback` creates a **new** deployment running the old version's

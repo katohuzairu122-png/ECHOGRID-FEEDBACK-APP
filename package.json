@@ -33,7 +33,13 @@
     "block15:runtime": "node tools/block15.mjs runtime",
     "block15:load": "node tools/block15.mjs load",
     "block15:verify": "node tools/block15.mjs verify",
-    "block15:evidence": "node tools/block15.mjs evidence"
+    "block15:evidence": "node tools/block15.mjs evidence",
+    "block16:preflight": "node tools/block16.mjs preflight",
+    "block16:env:audit": "node tools/block16.mjs env-audit",
+    "block16:manifest": "node tools/block16.mjs manifest",
+    "block16:smoke": "node tools/block16.mjs smoke",
+    "block16:verify": "node tools/block16.mjs verify",
+    "block16:evidence": "node tools/block16.mjs evidence"
   },
   "devDependencies": {
     "@eslint/js": "^9.15.0",
