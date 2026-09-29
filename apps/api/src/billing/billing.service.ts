@@ -60,7 +60,7 @@ export class BillingService {
    */
   async getSubscription(businessId: string): Promise<BillingSubscriptionView | undefined> {
     await this.repos.subscriptionPlans.reconcileCatalog?.(APPROVED_SUBSCRIPTION_CATALOG);
-    const freePlan = await this.repos.subscriptionPlans.findByKey('free');
+    const freePlan = await this.repos.subscriptionPlans.findByKey?.('free');
     if (freePlan) {
       await this.repos.businessSubscriptions.transitionExpiredCardlessTrial?.(
         businessId,

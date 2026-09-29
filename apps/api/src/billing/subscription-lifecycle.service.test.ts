@@ -8,9 +8,9 @@ import type { BusinessSubscriptionRepository } from '../repositories/business-su
 
 const freePlan = { id: 'free-plan-id', key: 'free' } as SubscriptionPlan;
 
-function createService(free: SubscriptionPlan | undefined = freePlan) {
+function createService(free: SubscriptionPlan | null | undefined = freePlan) {
   const reconcileCatalog = vi.fn().mockResolvedValue(undefined);
-  const findByKey = vi.fn().mockResolvedValue(free);
+  const findByKey = vi.fn().mockResolvedValue(free ?? undefined);
   const transitionAllExpiredCardlessTrials = vi.fn().mockResolvedValue(3);
 
   const service = new SubscriptionLifecycleService({
@@ -46,7 +46,7 @@ describe('SubscriptionLifecycleService', () => {
   });
 
   it('fails visibly when the Free plan cannot be resolved', async () => {
-    const context = createService(undefined);
+    const context = createService(null);
 
     await expect(
       context.service.expireCardlessTrials(new Date()),
