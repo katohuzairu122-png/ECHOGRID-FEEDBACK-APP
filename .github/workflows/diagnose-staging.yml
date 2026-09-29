@@ -1,0 +1,48 @@
+name: Diagnose staging signup
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/diagnose-staging.yml
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: staging
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.9.0
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Trace one synthetic signup
+        working-directory: apps/api
+        shell: bash
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          timeout 35s pnpm exec wrangler tail --env staging --format json > /tmp/staging-tail.log 2>&1 &
+          tail_pid=$!
+          sleep 8
+          status=$(curl --silent --show-error --output /tmp/signup-response.json --write-out '%{http_code}' \
+            --request POST \
+            --header 'content-type: application/json' \
+            --data '{"email":"diagnostic-signup@example.test","password":"a-strong-test-password","fullName":"Diagnostic Signup"}' \
+            https://echo-grid-feedback-api-staging.katohuzairu122.workers.dev/api/v1/auth/signup)
+          sleep 8
+          kill "$tail_pid" 2>/dev/null || true
+          wait "$tail_pid" 2>/dev/null || true
+          cat /tmp/staging-tail.log
+          echo "Synthetic signup HTTP status: $status"
