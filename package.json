@@ -44,7 +44,12 @@
     "block17:audit": "node tools/block17.mjs audit",
     "block17:verify:static": "node tools/block17.mjs verify-static",
     "block17:verify": "node tools/block17.mjs verify",
-    "block17:evidence": "node tools/block17.mjs evidence"
+    "block17:evidence": "node tools/block17.mjs evidence",
+    "block18:preflight": "node tools/block18.mjs preflight",
+    "block18:audit": "node tools/block18.mjs audit",
+    "block18:verify:static": "node tools/block18.mjs verify-static",
+    "block18:verify": "node tools/block18.mjs verify",
+    "block18:evidence": "node tools/block18.mjs evidence"
   },
   "devDependencies": {
     "@eslint/js": "^9.15.0",

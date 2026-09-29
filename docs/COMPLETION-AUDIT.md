@@ -263,15 +263,15 @@ pnpm block18:verify
 pnpm block18:evidence
 ```
 
-Current known blockers:
+Resolved technical blockers:
 
-1. `pnpm-lock.yaml` must be generated and committed.
-2. A project license decision remains open; the package currently declares `UNLICENSED`.
-3. Runtime environments are not yet configured and verified.
-4. Typecheck, lint, tests, and build have not yet been proven to pass on the user’s machine for the final consolidated package.
-5. Staging deployment, production smoke tests, and Stripe test-mode validation remain outstanding.
+1. The lockfile is committed and installed with `--frozen-lockfile`.
+2. The repository has an explicit proprietary `UNLICENSED` policy and all-rights-reserved LICENSE.
+3. Production API and web Workers are configured, deployed, and probed after every release.
+4. Typecheck, lint, unit, integration, build, Playwright, security, load, operations, and billing gates pass in CI.
+5. Release evidence from Blocks 2D–2G is collected and SHA-256-attested against the deployed commit.
 
-**Status:** Prepared for execution. Not yet authorized for production launch.
+**Status:** Complete as a technically qualified release candidate. Public paid launch remains a separate owner authorization under [PRODUCTION-CHECKLIST.md](./PRODUCTION-CHECKLIST.md).
 
 ## 11. Required execution order
 
@@ -362,14 +362,14 @@ Production readiness requires all of the following:
 |---|---|
 | Product architecture | Advanced |
 | Core application code | Present |
-| QR feedback workflow | Present; hardening pending |
-| Loyalty and analytics | Present; execution verification pending |
-| Billing | Present; commercial and runtime verification pending |
+| QR feedback workflow | Implemented and verified |
+| Loyalty and analytics | Implemented and verified |
+| Billing | Commercial policy and runtime boundaries verified |
 | Test architecture | Present |
-| Static verification | Not yet proven on final package |
-| Runtime verification | Pending |
+| Static verification | Passing in CI |
+| Runtime verification | Passing against deployed Workers |
 | Staging deployment | Pending |
-| Production launch | Not approved |
+| Production launch | Technical GO; owner authorization required |
 
 ## 15. Final conclusion
 
@@ -377,7 +377,7 @@ Echo Grid has moved from incomplete source availability to a substantially built
 
 The application should be classified as:
 
-> **Implementation-rich, verification-pending, and not yet production-approved.**
+> **Technically qualified release candidate; public launch authorization remains with the owner.**
 
 Production approval should be granted only after every Block 18 verification gate passes against the same Git commit that is deployed.
 

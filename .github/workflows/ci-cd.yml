@@ -168,6 +168,16 @@ jobs:
           path: .artifacts/block17/
           if-no-files-found: error
 
+      - name: Block 2H final static readiness
+        run: pnpm block18:verify:static
+
+      - name: Upload Block 2H static evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: block-2h-static-evidence
+          path: .artifacts/block18/
+          if-no-files-found: error
+
       - name: Typecheck API
         run: pnpm --filter @echo-grid-feedback/api typecheck
 
@@ -452,4 +462,64 @@ jobs:
         with:
           name: block-2g-commercial-evidence
           path: .artifacts/block17/
+          if-no-files-found: error
+
+  block-2h-launch-readiness:
+    name: Block 2H Launch Readiness
+    runs-on: ubuntu-latest
+    needs: block-2g-commercial
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    timeout-minutes: 10
+    env:
+      BLOCK18_API_URL: https://echo-grid-feedback-api.katohuzairu122.workers.dev
+      BLOCK18_WEB_URL: https://echo-grid-feedback-web.katohuzairu122.workers.dev
+      BLOCK18_RELEASE_VERSION: v0.1.0-rc.1
+      BLOCK18_GIT_COMMIT: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.9.0
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Download Block 2D evidence
+        uses: actions/download-artifact@v4
+        with:
+          name: block-2d-evidence
+          path: .artifacts/imports/2d
+      - name: Download Block 2E evidence
+        uses: actions/download-artifact@v4
+        with:
+          name: block-2e-evidence
+          path: .artifacts/imports/2e
+      - name: Download Block 2F evidence
+        uses: actions/download-artifact@v4
+        with:
+          name: block-2f-release-evidence
+          path: .artifacts/imports/2f
+      - name: Download Block 2G evidence
+        uses: actions/download-artifact@v4
+        with:
+          name: block-2g-commercial-evidence
+          path: .artifacts/imports/2g
+      - name: Download Block 2H static evidence
+        uses: actions/download-artifact@v4
+        with:
+          name: block-2h-static-evidence
+          path: .artifacts/block18
+      - name: Final deployed release verification
+        run: pnpm block18:verify
+      - name: Generate immutable release attestation
+        run: pnpm block18:evidence
+      - name: Upload Block 2H launch evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: block-2h-launch-evidence
+          path: .artifacts/block18/
           if-no-files-found: error
