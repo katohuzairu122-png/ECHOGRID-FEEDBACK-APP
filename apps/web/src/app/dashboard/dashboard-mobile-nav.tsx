@@ -6,6 +6,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { Button } from '@/components/ui';
 import { PwaInstallButton } from '@/components/pwa-install-button';
 import { logoutAction } from '@/lib/actions/auth';
+import { isDashboardNavItemActive } from './dashboard-nav-links';
 
 interface MobileNavItem {
   href: string;
@@ -69,16 +70,24 @@ export function DashboardMobileNav({
       </summary>
       <div className="absolute end-0 z-50 mt-2 w-64 rounded-lg border border-neutral-200 bg-white p-2 shadow-lg">
         <nav className="grid" aria-label={menuLabel}>
-          {items.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              onClick={closeMenu}
-              className="rounded-md px-3 py-2.5 text-sm text-neutral-700 hover:bg-neutral-50 hover:text-neutral-950"
-            >
-              {item.label}
-            </Link>
-          ))}
+          {items.map((item) => {
+            const active = isDashboardNavItemActive(pathname, item.href);
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                aria-current={active ? 'page' : undefined}
+                onClick={closeMenu}
+                className={
+                  active
+                    ? 'rounded-md bg-brand-50 px-3 py-2.5 text-sm font-medium text-brand-700'
+                    : 'rounded-md px-3 py-2.5 text-sm text-neutral-700 hover:bg-neutral-50 hover:text-neutral-950'
+                }
+              >
+                {item.label}
+              </Link>
+            );
+          })}
         </nav>
         <div className="mt-1 border-t border-neutral-100 pt-1">
           <PwaInstallButton

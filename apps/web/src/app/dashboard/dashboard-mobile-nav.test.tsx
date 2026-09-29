@@ -5,7 +5,7 @@ import { DashboardMobileNav } from './dashboard-mobile-nav';
 const prefetch = vi.fn();
 
 vi.mock('next/navigation', () => ({
-  usePathname: () => '/dashboard',
+  usePathname: () => '/dashboard/feedback',
   useRouter: () => ({ prefetch }),
 }));
 
@@ -43,5 +43,7 @@ describe('DashboardMobileNav', () => {
     analyticsLink.addEventListener('click', (event) => event.preventDefault());
     fireEvent.click(analyticsLink);
     expect(details).not.toHaveAttribute('open');
+    expect(screen.getByRole('link', { name: 'Feedback' })).toHaveAttribute('aria-current', 'page');
+    expect(analyticsLink).not.toHaveAttribute('aria-current');
   });
 });

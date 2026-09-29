@@ -5,6 +5,7 @@ import { Button } from '@/components/ui';
 import { Logo } from '@/components/brand';
 import { PwaInstallButton } from '@/components/pwa-install-button';
 import { DashboardMobileNav } from './dashboard-mobile-nav';
+import { DashboardNavLinks } from './dashboard-nav-links';
 
 const NAV_ITEMS = [
   ['branches', '/dashboard/branches'],
@@ -16,8 +17,6 @@ const NAV_ITEMS = [
   ['settings', '/dashboard/settings'],
   ['billing', '/dashboard/billing'],
 ] as const;
-
-const linkClassName = 'text-sm text-neutral-600 hover:text-neutral-900';
 
 /**
  * Server Component -- async only because getTranslations() is (i18n &
@@ -44,11 +43,9 @@ export async function DashboardNav() {
             <Logo variant="horizontal" iconSize={28} />
           </Link>
           <nav className="hidden items-center gap-4 lg:flex" aria-label={t('nav.menu')}>
-            {NAV_ITEMS.map(([key, href]) => (
-              <Link key={key} href={href} className={linkClassName}>
-                {t(`nav.${key}`)}
-              </Link>
-            ))}
+            <DashboardNavLinks
+              items={NAV_ITEMS.map(([key, href]) => ({ href, label: t(`nav.${key}`) }))}
+            />
           </nav>
           <div className="hidden items-center gap-1 lg:flex">
             <PwaInstallButton label={t('nav.installApp')} iosHint={t('nav.installIosHint')} />

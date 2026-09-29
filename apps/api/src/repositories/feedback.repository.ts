@@ -532,13 +532,30 @@ export class FeedbackRepository extends BaseRepository {
       filters.sortBy === 'urgency' ? feedback.urgency : filters.sortBy === 'rating' ? feedback.rating : feedback.createdAt;
 
     const rows = await this.db.query.feedback.findMany({
+      // The staff inbox never consumes submission idempotency keys or the
+      // form-version foreign key. Keeping them out of this read also lets the
+      // inbox remain available while a newly deployed Worker and the
+      // separately-operated production migration are briefly out of step.
+      columns: {
+        submissionKey: false,
+        submissionPayloadHash: false,
+        formVersionId: false,
+      },
       where: and(...conditions),
       orderBy: [direction(sortColumn), desc(feedback.createdAt)],
       limit: limit + 1,
       offset,
     });
 
-    return { items: rows.slice(0, limit), hasMore: rows.length > limit };
+    return {
+      items: rows.slice(0, limit).map((row) => ({
+        ...row,
+        submissionKey: null,
+        submissionPayloadHash: null,
+        formVersionId: null,
+      })),
+      hasMore: rows.length > limit,
+    };
   }
 
   async assign(id: string, businessId: string, assignedTo: string | null, updatedBy: string): Promise<Feedback | undefined> {
