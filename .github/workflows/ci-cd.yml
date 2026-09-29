@@ -158,6 +158,16 @@ jobs:
           path: .artifacts/block16/
           if-no-files-found: error
 
+      - name: Block 2G commercial audit and billing verification
+        run: pnpm block17:verify:static
+
+      - name: Upload Block 2G static evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: block-2g-static-evidence
+          path: .artifacts/block17/
+          if-no-files-found: error
+
       - name: Typecheck API
         run: pnpm --filter @echo-grid-feedback/api typecheck
 
@@ -405,4 +415,41 @@ jobs:
         with:
           name: block-2f-release-evidence
           path: .artifacts/block16/
+          if-no-files-found: error
+
+  block-2g-commercial:
+    name: Block 2G Commercial Readiness
+    runs-on: ubuntu-latest
+    needs: block-2f-release
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    timeout-minutes: 10
+    env:
+      BLOCK17_API_URL: https://echo-grid-feedback-api.katohuzairu122.workers.dev
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.9.0
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Download Block 2G static evidence
+        uses: actions/download-artifact@v4
+        with:
+          name: block-2g-static-evidence
+          path: .artifacts/block17
+      - name: Verify production billing boundaries
+        run: pnpm block17:verify
+      - name: Finalize Block 2G evidence
+        run: pnpm block17:evidence
+      - name: Upload Block 2G commercial evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: block-2g-commercial-evidence
+          path: .artifacts/block17/
           if-no-files-found: error

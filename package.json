@@ -39,7 +39,12 @@
     "block16:manifest": "node tools/block16.mjs manifest",
     "block16:smoke": "node tools/block16.mjs smoke",
     "block16:verify": "node tools/block16.mjs verify",
-    "block16:evidence": "node tools/block16.mjs evidence"
+    "block16:evidence": "node tools/block16.mjs evidence",
+    "block17:preflight": "node tools/block17.mjs preflight",
+    "block17:audit": "node tools/block17.mjs audit",
+    "block17:verify:static": "node tools/block17.mjs verify-static",
+    "block17:verify": "node tools/block17.mjs verify",
+    "block17:evidence": "node tools/block17.mjs evidence"
   },
   "devDependencies": {
     "@eslint/js": "^9.15.0",

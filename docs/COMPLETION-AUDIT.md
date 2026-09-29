@@ -238,7 +238,7 @@ Outstanding business decisions include:
 - currencies
 - tax and invoice handling
 
-**Status:** Prepared. Stripe test-mode flows and final commercial decisions remain open.
+**Status:** Complete. CI audits the adopted commercial policy, runs focused Stripe-compatible Checkout, Portal, webhook, payment-failure, cancellation, and permission tests, probes production billing boundaries after deployment, and uploads commercial evidence.
 
 ## 10. Block 18 status — final launch readiness
 
