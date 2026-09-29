@@ -127,6 +127,15 @@ its own session-scoped `whsec_...` value; use that for local
 
 ## Step 4 — Database: Migrate & Seed
 
+For production, use the manual **Migrate production database** GitHub Actions
+workflow. Configure the `production` environment with required reviewers and
+add its `PRODUCTION_DATABASE_URL` secret. The workflow requires the exact
+reviewed `main` commit SHA plus the confirmation text `MIGRATE_PRODUCTION`,
+serializes migration runs, applies forward migrations, and verifies every
+repository migration hash is recorded before it succeeds.
+
+The commands below remain the local and staging path:
+
 ```bash
 cd apps/api
 pnpm db:generate               # writes migration SQL from the Drizzle schema
