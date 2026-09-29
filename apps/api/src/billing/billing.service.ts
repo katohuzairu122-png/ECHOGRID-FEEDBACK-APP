@@ -37,7 +37,7 @@ export class BillingService {
   /** Strips stripePriceIdMonthly/Yearly -- same reasoning as
    * getSubscription's own strip, applied to the plan picker's list view. */
   async listPlans(): Promise<Omit<SubscriptionPlan, 'stripePriceIdMonthly' | 'stripePriceIdYearly'>[]> {
-    await this.repos.subscriptionPlans.reconcileCatalog(APPROVED_SUBSCRIPTION_CATALOG);
+    await this.repos.subscriptionPlans.reconcileCatalog?.(APPROVED_SUBSCRIPTION_CATALOG);
     const plans = await this.repos.subscriptionPlans.listActive();
     return plans.map(({ stripePriceIdMonthly, stripePriceIdYearly, ...rest }) => rest);
   }
