@@ -4,7 +4,7 @@ import { dirname, resolve } from 'node:path';
 import process from 'node:process';
 import { performance } from 'node:perf_hooks';
 
-const root = resolve(import.meta.dirname);
+const root = resolve(import.meta.dirname, '..');
 const command = process.argv[2] ?? 'verify';
 const allowed = new Set(['preflight', 'env-audit', 'manifest', 'smoke', 'verify', 'evidence']);
 const artifactDir = resolve(root, '.artifacts/block16');
