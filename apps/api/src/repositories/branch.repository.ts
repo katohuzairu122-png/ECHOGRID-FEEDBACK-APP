@@ -1,4 +1,4 @@
-import { eq, and } from 'drizzle-orm';
+import { eq, and, sql } from 'drizzle-orm';
 import { branches } from '../db/schema';
 import { BaseRepository } from './base.repository';
 import type { Patch } from '../lib/types';
@@ -14,6 +14,14 @@ const MAX_PAGE_SIZE = 200;
  * updated, or deleted across tenant boundaries.
  */
 export class BranchRepository extends BaseRepository {
+  async countActiveByBusiness(businessId: string): Promise<number> {
+    const [row] = await this.db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(branches)
+      .where(and(eq(branches.businessId, businessId), eq(branches.isDeleted, false)));
+    return row?.count ?? 0;
+  }
+
   async findById(id: string, businessId: string): Promise<Branch | undefined> {
     return this.db.query.branches.findFirst({
       where: and(

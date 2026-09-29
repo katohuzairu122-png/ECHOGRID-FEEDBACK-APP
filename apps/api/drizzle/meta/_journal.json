@@ -218,6 +218,13 @@
       "when": 1790769600000,
       "tag": "0030_response_allowance_queue",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1790856000000,
+      "tag": "0031_plan_branch_team_limits",
+      "breakpoints": true
     }
   ]
 }

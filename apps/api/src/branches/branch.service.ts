@@ -14,7 +14,9 @@ import type { CreateBranchInput, UpdateBranchInput } from '@echo-grid-feedback/s
  * exception.
  */
 export class BranchService {
-  constructor(private readonly repos: Pick<Repositories, 'branches'>) {}
+  constructor(
+    private readonly repos: Pick<Repositories, 'branches' | 'businessSubscriptions'>,
+  ) {}
 
   async listBranches(
     businessId: string,
@@ -45,11 +47,38 @@ export class BranchService {
       );
     }
 
-    return this.repos.branches.create({
-      ...input,
-      businessId,
-      createdBy,
-    } satisfies NewBranch);
+    const subscription = await this.repos.businessSubscriptions.findByBusinessWithPlan(businessId);
+    const branchLimit = subscription?.plan.maxBranches;
+    if (branchLimit !== null && branchLimit !== undefined) {
+      const branchCount = await this.repos.branches.countActiveByBusiness(businessId);
+      if (branchCount >= branchLimit) {
+        throw new AppError(
+          `Your ${subscription?.plan.name ?? 'current'} plan allows ${branchLimit} branch${branchLimit === 1 ? '' : 'es'}. Upgrade your plan to add another branch.`,
+          422,
+          'PLAN_BRANCH_LIMIT_REACHED',
+        );
+      }
+    }
+
+    try {
+      return await this.repos.branches.create({
+        ...input,
+        businessId,
+        createdBy,
+      } satisfies NewBranch);
+    } catch (error) {
+      // Migration 0031 repeats the capacity check under a per-business
+      // advisory lock. Translate its race-safe rejection into the same
+      // product error as the friendly pre-check above.
+      if (error instanceof Error && error.message.includes('PLAN_BRANCH_LIMIT_REACHED')) {
+        throw new AppError(
+          `Your ${subscription?.plan.name ?? 'current'} plan has reached its branch limit. Upgrade your plan to add another branch.`,
+          422,
+          'PLAN_BRANCH_LIMIT_REACHED',
+        );
+      }
+      throw error;
+    }
   }
 
   async updateBranch(
