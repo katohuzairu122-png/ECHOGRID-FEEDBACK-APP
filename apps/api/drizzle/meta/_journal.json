@@ -225,6 +225,13 @@
       "when": 1790856000000,
       "tag": "0031_plan_branch_team_limits",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1790942400000,
+      "tag": "0032_scope_plan_limit_guards",
+      "breakpoints": true
     }
   ]
 }
