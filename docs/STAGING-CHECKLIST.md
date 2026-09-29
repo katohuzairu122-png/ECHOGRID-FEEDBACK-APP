@@ -1,5 +1,14 @@
 # Staging Environment Checklist
 
+## Database migration gate
+
+- [ ] The GitHub `staging` environment has a `STAGING_DATABASE_URL` secret
+      pointing only to the dedicated staging database.
+- [ ] Run **Migrate staging database** with the full release commit SHA and
+      confirmation `MIGRATE_STAGING`.
+- [ ] Confirm the workflow's repository-chain, migration, and applied-hash
+      verification steps all pass before deploying that commit to staging.
+
 A condensed, staging-specific gate on top of [DEPLOYMENT.md](./DEPLOYMENT.md)
 (the full step-by-step runbook — read that first). This file is the
 short "did I actually do everything staging needs" pass before calling a

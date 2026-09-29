@@ -127,12 +127,21 @@ its own session-scoped `whsec_...` value; use that for local
 
 ## Step 4 — Database: Migrate & Seed
 
-For production, use the manual **Migrate production database** GitHub Actions
+For staging, use the manual **Migrate staging database** GitHub Actions
+workflow. Configure the `staging` environment with its dedicated
+`STAGING_DATABASE_URL` secret. The workflow requires the exact reviewed
+`main` commit SHA plus the confirmation text `MIGRATE_STAGING`, serializes
+staging migration runs, and verifies every repository migration hash after
+applying the migration chain.
+
+For production, use the corresponding manual **Migrate production database**
 workflow. Configure the `production` environment with required reviewers and
-add its `PRODUCTION_DATABASE_URL` secret. The workflow requires the exact
-reviewed `main` commit SHA plus the confirmation text `MIGRATE_PRODUCTION`,
-serializes migration runs, applies forward migrations, and verifies every
-repository migration hash is recorded before it succeeds.
+add its `PRODUCTION_DATABASE_URL` secret. It requires the exact reviewed
+`main` commit SHA plus `MIGRATE_PRODUCTION`, serializes production migration
+runs, applies forward migrations, and performs the same hash verification.
+
+Run the staging workflow for a release commit first. Complete the staging
+checks against that same SHA before approving its production migration.
 
 The commands below remain the local and staging path:
 

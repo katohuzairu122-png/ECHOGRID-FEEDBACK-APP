@@ -1,0 +1,67 @@
+name: Migrate staging database
+
+on:
+  workflow_dispatch:
+    inputs:
+      expected_commit:
+        description: Full main-branch commit SHA to exercise in staging
+        required: true
+        type: string
+      confirmation:
+        description: Type MIGRATE_STAGING
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: staging-database-migration
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    name: Review and apply staging migrations
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: staging
+    env:
+      DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Verify reviewed commit and confirmation
+        shell: bash
+        env:
+          EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+          CONFIRMATION: ${{ inputs.confirmation }}
+        run: |
+          set -euo pipefail
+          [[ "$EXPECTED_COMMIT" =~ ^[0-9a-f]{40}$ ]]
+          test "$CONFIRMATION" = "MIGRATE_STAGING"
+          test "$(git rev-parse HEAD)" = "$EXPECTED_COMMIT"
+          test -n "${DATABASE_URL}"
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.9.0
+          run_install: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Verify repository migration chain
+        run: pnpm --filter @echo-grid-feedback/api db:check
+
+      - name: Apply reviewed forward migrations
+        run: pnpm --filter @echo-grid-feedback/api db:migrate
+
+      - name: Verify staging migration state
+        run: pnpm --filter @echo-grid-feedback/api db:verify:production
