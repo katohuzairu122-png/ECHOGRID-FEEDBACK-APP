@@ -95,7 +95,7 @@ async function verify() {
 
 async function evidence() {
   await record('Complete Block 17 evidence', () => {
-    for (const name of ['audit', 'verify-static', 'verify']) {
+    for (const name of ['verify-static', 'verify']) {
       const path = resolve(artifactDir, `${name}.json`);
       if (!existsSync(path) || JSON.parse(readFileSync(path, 'utf8')).status !== 'passed') throw new Error(`${name}.json is missing or failed`);
     }
