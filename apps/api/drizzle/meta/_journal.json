@@ -211,6 +211,13 @@
       "when": 1790683200000,
       "tag": "0029_affordable_subscription_catalog",
       "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1790769600000,
+      "tag": "0030_response_allowance_queue",
+      "breakpoints": true
     }
   ]
 }

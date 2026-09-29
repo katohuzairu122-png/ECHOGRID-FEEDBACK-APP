@@ -62,6 +62,9 @@
     "openingPortal": "Opening…",
     "plansTitle": "Plans",
     "plansDescription": "Change plan any time -- your new plan takes effect immediately.",
+    "responsesUsed": "{used} of {limit} responses used this month",
+    "responsesQueued": "{count} responses queued — upgrade within 7 days to unlock them",
+    "unlimited": "Unlimited",
     "status": {
       "trialing": "Trial",
       "active": "Active",

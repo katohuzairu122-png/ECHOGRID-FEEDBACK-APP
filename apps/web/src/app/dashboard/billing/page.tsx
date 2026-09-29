@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation';
 import { getTranslations, getFormatter } from 'next-intl/server';
 import type {
   BusinessSubscriptionWithPlanDto,
+  ResponseUsageDto,
   SubscriptionPlanDto,
 } from '@echo-grid-feedback/shared-types';
 import { getActiveBusiness } from '@/lib/business';
@@ -28,14 +29,16 @@ export default async function BillingPage() {
   const business = await getActiveBusiness();
   if (!business) redirect('/dashboard');
 
-  const [t, format, subscription, plans] = await Promise.all([
+  const [t, format, subscription, plans, usage] = await Promise.all([
     getTranslations('dashboard.billing'),
     getFormatter(),
     apiFetch<BusinessSubscriptionWithPlanDto | null>('/billing/subscription', {
       businessId: business.id,
     }),
     apiFetch<SubscriptionPlanDto[]>('/billing/plans', { businessId: business.id }),
+    apiFetch<ResponseUsageDto>('/billing/usage', { businessId: business.id }),
   ]);
+  const responseLimit = subscription?.plan.features?.monthlyResponses;
 
   return (
     <div className="flex flex-col gap-8">
@@ -76,6 +79,19 @@ export default async function BillingPage() {
               <ManageBillingButton />
             </CardContent>
           )}
+          <CardContent className="flex flex-wrap gap-x-6 gap-y-1 text-sm text-neutral-600">
+            <span>
+              {t('responsesUsed', {
+                used: usage.included,
+                limit: typeof responseLimit === 'number' ? responseLimit : t('unlimited'),
+              })}
+            </span>
+            {usage.queued > 0 && (
+              <span className="font-medium text-amber-700">
+                {t('responsesQueued', { count: usage.queued })}
+              </span>
+            )}
+          </CardContent>
         </Card>
       )}
 

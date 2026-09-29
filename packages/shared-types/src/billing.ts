@@ -78,6 +78,12 @@ export const businessSubscriptionWithPlanSchema = businessSubscriptionSchema.ext
 
 export type BusinessSubscriptionWithPlanDto = z.infer<typeof businessSubscriptionWithPlanSchema>;
 
+export interface ResponseUsageDto {
+  included: number;
+  queued: number;
+  periodStart: string;
+}
+
 /**
  * successUrl/cancelUrl are supplied by the caller (apps/web), not configured
  * on the API -- same "the web app knows its own base URL already" reasoning

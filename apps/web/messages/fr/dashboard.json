@@ -62,6 +62,9 @@
     "openingPortal": "Ouverture…",
     "plansTitle": "Forfaits",
     "plansDescription": "Changez de forfait à tout moment -- votre nouveau forfait prend effet immédiatement.",
+    "responsesUsed": "{used} réponses utilisées sur {limit} ce mois-ci",
+    "responsesQueued": "{count} réponses en attente — passez à un forfait supérieur sous 7 jours pour les débloquer",
+    "unlimited": "Illimité",
     "status": {
       "trialing": "Essai",
       "active": "Actif",

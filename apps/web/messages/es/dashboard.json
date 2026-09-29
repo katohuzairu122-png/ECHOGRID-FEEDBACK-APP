@@ -62,6 +62,9 @@
     "openingPortal": "Abriendo…",
     "plansTitle": "Planes",
     "plansDescription": "Cambia de plan cuando quieras -- tu nuevo plan se aplica de inmediato.",
+    "responsesUsed": "{used} de {limit} respuestas usadas este mes",
+    "responsesQueued": "{count} respuestas en espera — mejora el plan en 7 días para desbloquearlas",
+    "unlimited": "Ilimitadas",
     "status": {
       "trialing": "Prueba",
       "active": "Activo",

@@ -62,6 +62,9 @@
     "openingPortal": "جارٍ الفتح…",
     "plansTitle": "الخطط",
     "plansDescription": "يمكنك تغيير الخطة في أي وقت — وتدخل خطتك الجديدة حيز التنفيذ فورًا.",
+    "responsesUsed": "تم استخدام {used} من أصل {limit} ردًا هذا الشهر",
+    "responsesQueued": "{count} ردًا في الانتظار — قم بالترقية خلال 7 أيام لفتحها",
+    "unlimited": "غير محدود",
     "status": {
       "trialing": "فترة تجريبية",
       "active": "نشط",

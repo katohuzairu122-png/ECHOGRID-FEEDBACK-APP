@@ -16,6 +16,11 @@ export type SentimentTrendBucket = {
   neutral: number;
   negative: number;
 };
+export type ResponseUsage = {
+  included: number;
+  queued: number;
+  periodStart: string;
+};
 
 const DEFAULT_PAGE_SIZE = 50;
 const MAX_PAGE_SIZE = 200;
@@ -25,6 +30,9 @@ const MAX_PAGE_SIZE = 200;
 // set into Worker memory. SummaryService additionally caps prompt size
 // separately (MAX_COMMENTS_IN_PROMPT); this cap protects the query itself.
 const MAX_PERIOD_ROWS = 5000;
+// Added by migration 0030. Queued submissions remain stored but are not
+// visible in the business inbox or analytics until an upgrade unlocks them.
+const isIncludedByPlan = sql`"entitlement_status" = 'included'`;
 
 // The analytics search dashboard's sentiment filter (analytics.routes.ts)
 // still only offers the original 3 options (positive/neutral/negative) --
@@ -44,6 +52,38 @@ function expandSentimentFilter(value: string): readonly string[] {
 }
 
 export class FeedbackRepository extends BaseRepository {
+  async getResponseUsage(businessId: string): Promise<ResponseUsage> {
+    const [row] = await this.db
+      .select({
+        included: sql<number>`count(*) FILTER (
+          WHERE entitlement_status = 'included' AND is_deleted = false
+        )::int`,
+        queued: sql<number>`count(*) FILTER (
+          WHERE entitlement_status = 'queued'
+            AND queued_until > CURRENT_TIMESTAMP
+            AND is_deleted = false
+        )::int`,
+        periodStart: sql<string>`(
+          date_trunc('month', CURRENT_TIMESTAMP AT TIME ZONE 'UTC') AT TIME ZONE 'UTC'
+        )::text`,
+      })
+      .from(feedback)
+      .where(
+        and(
+          eq(feedback.businessId, businessId),
+          gte(
+            feedback.createdAt,
+            sql`date_trunc('month', CURRENT_TIMESTAMP AT TIME ZONE 'UTC') AT TIME ZONE 'UTC'`,
+          ),
+        ),
+      );
+    return {
+      included: row?.included ?? 0,
+      queued: row?.queued ?? 0,
+      periodStart: row?.periodStart ?? new Date().toISOString(),
+    };
+  }
+
   async findById(id: string, businessId: string): Promise<Feedback | undefined> {
     return this.db.query.feedback.findFirst({
       where: and(
@@ -64,6 +104,7 @@ export class FeedbackRepository extends BaseRepository {
       where: and(
         eq(feedback.businessId, businessId),
         eq(feedback.isDeleted, false),
+        isIncludedByPlan,
         options.branchId ? eq(feedback.branchId, options.branchId) : undefined,
       ),
       limit,
@@ -333,6 +374,7 @@ export class FeedbackRepository extends BaseRepository {
       where: and(
         eq(feedback.businessId, businessId),
         eq(feedback.isDeleted, false),
+        isIncludedByPlan,
         options.branchId ? eq(feedback.branchId, options.branchId) : undefined,
         gte(feedback.createdAt, options.from),
         lte(feedback.createdAt, options.to),
@@ -366,6 +408,7 @@ export class FeedbackRepository extends BaseRepository {
       where: and(
         eq(feedback.businessId, businessId),
         eq(feedback.isDeleted, false),
+        isIncludedByPlan,
         options.branchId ? eq(feedback.branchId, options.branchId) : undefined,
         options.sentiment
           ? inArray(feedback.sentiment, expandSentimentFilter(options.sentiment))
@@ -403,6 +446,7 @@ export class FeedbackRepository extends BaseRepository {
         and(
           eq(feedback.businessId, businessId),
           eq(feedback.isDeleted, false),
+          isIncludedByPlan,
           options.branchId ? eq(feedback.branchId, options.branchId) : undefined,
           gte(feedback.createdAt, options.from),
           lte(feedback.createdAt, options.to),
@@ -453,6 +497,7 @@ export class FeedbackRepository extends BaseRepository {
     const conditions = [
       eq(feedback.businessId, businessId),
       eq(feedback.isDeleted, false),
+      isIncludedByPlan,
       filters.branchId ? eq(feedback.branchId, filters.branchId) : undefined,
       filters.category?.length ? inArray(feedback.category, filters.category) : undefined,
       filters.urgency?.length ? inArray(feedback.urgency, filters.urgency) : undefined,

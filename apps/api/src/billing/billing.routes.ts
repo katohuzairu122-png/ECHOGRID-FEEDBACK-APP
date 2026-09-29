@@ -50,6 +50,16 @@ billingRoutes.get('/subscription', requirePermission('billing:view'), async (c) 
   }
 });
 
+billingRoutes.get('/usage', requirePermission('billing:view'), async (c) => {
+  const { db, close } = await createDb(c.env.HYPERDRIVE);
+  try {
+    const usage = await createRepositories(db).feedback.getResponseUsage(c.get('businessId'));
+    return ok(c, usage);
+  } finally {
+    c.executionCtx.waitUntil(close());
+  }
+});
+
 billingRoutes.post('/checkout', requirePermission('billing:manage'), async (c) => {
   const body = await parseJsonBody(c.req.raw, createCheckoutSessionSchema);
   const { db, close } = await createDb(c.env.HYPERDRIVE);
