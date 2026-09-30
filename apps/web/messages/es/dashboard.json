@@ -50,7 +50,16 @@
     "confirmPasswordLabel": "Confirmar nueva contraseña",
     "passwordHint": "Usa al menos 12 caracteres.",
     "changePasswordSubmit": "Cambiar contraseña",
-    "changePasswordPending": "Cambiando…"
+    "changePasswordPending": "Cambiando…",
+    "profileTitle": "Tu perfil",
+    "profileDescription": "Gestiona los datos personales de tu cuenta de Echo Grid.",
+    "profileNameLabel": "Nombre completo",
+    "profileEmailLabel": "Correo electrónico",
+    "profileEmailHint": "Los cambios de correo requieren verificación y se añadirán en el siguiente bloque de seguridad.",
+    "profilePhoneLabel": "Teléfono",
+    "profileSubmit": "Guardar perfil",
+    "profileSubmitPending": "Guardando…",
+    "profileSuccess": "Perfil guardado."
   },
   "impersonationBanner": {
     "label": "Suplantación activa —",
