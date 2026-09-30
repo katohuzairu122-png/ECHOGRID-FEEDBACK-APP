@@ -6,7 +6,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { Button } from '@/components/ui';
 import { PwaInstallButton } from '@/components/pwa-install-button';
 import { logoutAction } from '@/lib/actions/auth';
-import { isDashboardNavItemActive } from './dashboard-nav-links';
+import { getActiveDashboardNavHref } from './dashboard-nav-links';
 
 interface MobileNavItem {
   href: string;
@@ -29,6 +29,7 @@ export function DashboardMobileNav({
   const detailsRef = useRef<HTMLDetailsElement>(null);
   const pathname = usePathname();
   const router = useRouter();
+  const activeHref = getActiveDashboardNavHref(pathname, items);
 
   const closeMenu = () => {
     if (detailsRef.current) detailsRef.current.open = false;
@@ -71,7 +72,7 @@ export function DashboardMobileNav({
       <div className="absolute end-0 z-50 mt-2 w-64 rounded-lg border border-neutral-200 bg-white p-2 shadow-lg">
         <nav className="grid" aria-label={menuLabel}>
           {items.map((item) => {
-            const active = isDashboardNavItemActive(pathname, item.href);
+            const active = activeHref === item.href;
             return (
               <Link
                 key={item.href}
@@ -105,3 +106,4 @@ export function DashboardMobileNav({
     </details>
   );
 }
+
