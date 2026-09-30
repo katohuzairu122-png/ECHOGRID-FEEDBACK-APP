@@ -48,6 +48,7 @@ import {
   logoutAction,
   requestPasswordResetAction,
   resetPasswordAction,
+  signupAction,
 } from './auth';
 
 describe('logoutAction', () => {
@@ -133,6 +134,59 @@ describe('logoutAction', () => {
 
     expect(clearSessionMock).not.toHaveBeenCalled();
     expect(redirectMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('signupAction', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.stubGlobal('fetch', vi.fn());
+  });
+
+  it('rejects signup when terms have not been accepted', async () => {
+    const formData = new FormData();
+    formData.set('fullName', 'Test User');
+    formData.set('email', 'user@example.com');
+    formData.set('password', 'secure-password-123');
+
+    await expect(signupAction({}, formData)).resolves.toEqual({
+      error: 'You must accept the Terms of Service and Privacy Policy.',
+    });
+
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('submits signup after terms are accepted', async () => {
+    vi.mocked(fetch).mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          success: true,
+          data: { accessToken: 'access-token', refreshToken: 'refresh-token' },
+        }),
+        { status: 201, headers: { 'Content-Type': 'application/json' } },
+      ),
+    );
+
+    const formData = new FormData();
+    formData.set('fullName', 'Test User');
+    formData.set('email', 'user@example.com');
+    formData.set('password', 'secure-password-123');
+    formData.set('acceptTerms', 'on');
+
+    await signupAction({}, formData);
+
+    expect(fetch).toHaveBeenCalledWith(
+      'https://api.example.test/api/v1/auth/signup',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({
+          email: 'user@example.com',
+          password: 'secure-password-123',
+          fullName: 'Test User',
+        }),
+      }),
+    );
+    expect(redirectMock).toHaveBeenCalledWith('/dashboard');
   });
 });
 
