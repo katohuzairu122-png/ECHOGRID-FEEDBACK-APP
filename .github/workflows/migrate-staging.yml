@@ -1,10 +1,6 @@
 name: Migrate staging database
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - .github/workflows/migrate-staging.yml
   workflow_dispatch:
     inputs:
       expected_commit:
@@ -39,8 +35,8 @@ jobs:
       - name: Verify reviewed commit and confirmation
         shell: bash
         env:
-          EXPECTED_COMMIT: ${{ github.event_name == 'workflow_dispatch' && inputs.expected_commit || github.sha }}
-          CONFIRMATION: ${{ github.event_name == 'workflow_dispatch' && inputs.confirmation || 'MIGRATE_STAGING' }}
+          EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+          CONFIRMATION: ${{ inputs.confirmation }}
         run: |
           set -euo pipefail
           [[ "$EXPECTED_COMMIT" =~ ^[0-9a-f]{40}$ ]]
