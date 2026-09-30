@@ -19,6 +19,7 @@ export const currentUserSchema = z.object({
   id: z.uuid(),
   email: z.string(),
   fullName: z.string(),
+  phone: z.string().nullable(),
   platformRole: z.enum(['support', 'billing', 'admin']).nullable(),
   // Platform Admin Console Block 7: non-null only when the caller's access
   // token is an impersonation token (auth/jwt.ts's signImpersonationToken)
