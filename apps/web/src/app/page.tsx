@@ -12,14 +12,6 @@ const FEATURES = [
   { key: 'loyalty', Icon: LoyaltyIcon },
 ] as const;
 
-/**
- * Public landing page as of the Echo Grid brand implementation (previously
- * an unconditional redirect to /dashboard). Checks hasSession() itself
- * rather than relying on middleware.ts -- consistent with every other
- * protected surface in this app (dashboard/platform/loyalty layouts), and
- * necessary anyway since NEXT_PRIVATE_MINIMAL_MODE currently disables
- * middleware.ts entirely on the deployed Worker (wrangler.toml).
- */
 export default async function RootPage() {
   if (await hasSession()) {
     redirect('/dashboard');
@@ -48,6 +40,12 @@ export default async function RootPage() {
           </div>
         ))}
       </div>
+      <nav aria-label="Legal" className="flex flex-wrap justify-center gap-x-5 gap-y-2 text-xs text-neutral-500">
+        <Link href="/privacy">Privacy</Link>
+        <Link href="/terms">Terms</Link>
+        <Link href="/refunds">Refunds</Link>
+        <Link href="/cookies">Cookies</Link>
+      </nav>
     </main>
   );
 }
