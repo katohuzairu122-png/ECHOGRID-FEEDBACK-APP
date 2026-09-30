@@ -50,7 +50,16 @@
     "confirmPasswordLabel": "تأكيد كلمة المرور الجديدة",
     "passwordHint": "استخدم 12 حرفًا على الأقل.",
     "changePasswordSubmit": "تغيير كلمة المرور",
-    "changePasswordPending": "جارٍ تغيير كلمة المرور…"
+    "changePasswordPending": "جارٍ تغيير كلمة المرور…",
+    "profileTitle": "ملفك الشخصي",
+    "profileDescription": "إدارة التفاصيل الشخصية المعروضة في حساب Echo Grid.",
+    "profileNameLabel": "الاسم الكامل",
+    "profileEmailLabel": "البريد الإلكتروني",
+    "profileEmailHint": "يتطلب تغيير البريد الإلكتروني التحقق وسيُضاف في مرحلة أمان الحساب التالية.",
+    "profilePhoneLabel": "رقم الهاتف",
+    "profileSubmit": "حفظ الملف الشخصي",
+    "profileSubmitPending": "جارٍ الحفظ…",
+    "profileSuccess": "تم حفظ الملف الشخصي."
   },
   "impersonationBanner": {
     "label": "انتحال الهوية —",
