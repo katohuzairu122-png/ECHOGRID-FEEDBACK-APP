@@ -75,6 +75,13 @@ export async function signupAction(
   const email = String(formData.get('email') ?? '');
   const password = String(formData.get('password') ?? '');
   const fullName = String(formData.get('fullName') ?? '');
+  const acceptTerms = formData.get('acceptTerms') === 'on';
+
+  // Server Actions are public HTTP endpoints, so the browser's required
+  // checkbox is reinforced here before an account can be created.
+  if (!acceptTerms) {
+    return { error: 'You must accept the Terms of Service and Privacy Policy.' };
+  }
 
   const result = await callAuthEndpoint('signup', { email, password, fullName });
   if (result.error) return result;
