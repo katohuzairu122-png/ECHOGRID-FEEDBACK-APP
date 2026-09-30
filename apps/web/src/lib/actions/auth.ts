@@ -196,6 +196,31 @@ export async function resetPasswordAction(
  * well and the user is sent back to login. Failed password-change attempts
  * deliberately leave the current session untouched.
  */
+export interface ProfileActionState {
+  error?: string;
+  success?: boolean;
+}
+
+export async function updateProfileAction(
+  _prevState: ProfileActionState,
+  formData: FormData,
+): Promise<ProfileActionState> {
+  const fullName = String(formData.get('fullName') ?? '').trim();
+  const phone = String(formData.get('phone') ?? '').trim();
+
+  try {
+    await apiFetch('/auth/me', {
+      method: 'PATCH',
+      body: JSON.stringify({ fullName, phone: phone || null }),
+    });
+    return { success: true };
+  } catch (err) {
+    return {
+      error: err instanceof ApiError ? err.message : 'Something went wrong. Please try again.',
+    };
+  }
+}
+
 export interface ChangePasswordActionState {
   error?: string;
 }
