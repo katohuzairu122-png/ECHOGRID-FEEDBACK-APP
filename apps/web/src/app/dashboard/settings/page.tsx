@@ -1,9 +1,12 @@
 import { redirect } from 'next/navigation';
+import type { CurrentUserDto } from '@echo-grid-feedback/shared-types';
 import { getTranslations } from 'next-intl/server';
 import { getActiveBusiness } from '@/lib/business';
+import { apiFetch } from '@/lib/api-client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui';
 import { SettingsForm } from './settings-form';
 import { ChangePasswordForm } from './change-password-form';
+import { ProfileForm } from './profile-form';
 
 /**
  * Business settings -- name and locale/currency/timezone defaults (i18n &
@@ -14,7 +17,10 @@ import { ChangePasswordForm } from './change-password-form';
  * updateBusinessSettingsAction for the write path and its permission note.
  */
 export default async function BusinessSettingsPage() {
-  const business = await getActiveBusiness();
+  const [business, user] = await Promise.all([
+    getActiveBusiness(),
+    apiFetch<CurrentUserDto>('/auth/me'),
+  ]);
   if (!business) redirect('/dashboard');
 
   const t = await getTranslations('dashboard.settings');
@@ -25,6 +31,16 @@ export default async function BusinessSettingsPage() {
         <h1 className="text-2xl font-semibold text-neutral-900">{t('title')}</h1>
         <p className="text-sm text-neutral-500">{business.name}</p>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>{t('profileTitle')}</CardTitle>
+          <CardDescription>{t('profileDescription')}</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <ProfileForm user={user} />
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>

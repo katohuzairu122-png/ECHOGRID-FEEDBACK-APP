@@ -11,6 +11,7 @@ import {
   requestPasswordResetSchema,
   resetPasswordSchema,
   changePasswordSchema,
+  updateProfileSchema,
 } from './auth.dto';
 import { createEmailService } from '../notifications/email.service';
 import { parseJsonBody } from '../lib/validate';
@@ -140,6 +141,33 @@ authRoutes.post('/password-reset/confirm', rateLimit('AUTH_RATE_LIMITER'), async
 });
 
 /**
+ * Authenticated self-service profile update. Email changes require a
+ * separate verification flow and are deliberately excluded here.
+ */
+authRoutes.patch('/me', authenticate, async (c) => {
+  const body = await parseJsonBody(c.req.raw, updateProfileSchema);
+  const { db, close } = await createDb(c.env.HYPERDRIVE);
+  try {
+    const user = await createRepositories(db).users.update(
+      c.get('userId'),
+      { fullName: body.fullName, phone: body.phone || null },
+      c.get('userId'),
+    );
+    if (!user) throw new AppError('User not found.', 404, 'USER_NOT_FOUND');
+    return ok(c, {
+      id: user.id,
+      email: user.email,
+      fullName: user.fullName,
+      phone: user.phone,
+      platformRole: user.platformRole,
+      impersonatedBy: c.get('impersonatedBy') ?? null,
+    });
+  } finally {
+    c.executionCtx.waitUntil(close());
+  }
+});
+
+/**
  * Authenticated self-service password change -- the everyday counterpart to
  * the recovery flow above, and the reason a user who merely *suspects*
  * compromise no longer has to go through email to rotate a credential.
@@ -183,6 +211,7 @@ authRoutes.get('/me', authenticate, async (c) => {
       id: user.id,
       email: user.email,
       fullName: user.fullName,
+      phone: user.phone,
       platformRole: user.platformRole,
       impersonatedBy: c.get('impersonatedBy') ?? null,
     });

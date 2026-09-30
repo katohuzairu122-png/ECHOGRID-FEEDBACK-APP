@@ -44,6 +44,11 @@ export const resetPasswordSchema = z.object({
   newPassword: newPasswordSchema,
 });
 
+export const updateProfileSchema = z.object({
+  fullName: z.string().trim().min(1).max(200),
+  phone: z.string().trim().max(50).nullable().optional(),
+});
+
 export const changePasswordSchema = z.object({
   currentPassword: z.string().min(1),
   newPassword: newPasswordSchema,
@@ -54,4 +59,5 @@ export type LoginBody = z.infer<typeof loginSchema>;
 export type RefreshBody = z.infer<typeof refreshSchema>;
 export type RequestPasswordResetBody = z.infer<typeof requestPasswordResetSchema>;
 export type ResetPasswordBody = z.infer<typeof resetPasswordSchema>;
+export type UpdateProfileBody = z.infer<typeof updateProfileSchema>;
 export type ChangePasswordBody = z.infer<typeof changePasswordSchema>;
