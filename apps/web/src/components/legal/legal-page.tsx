@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { Logo } from '@/components/brand';
 
-export const LEGAL_CONTACT_EMAIL = 'legal@echo-grid.uk';
+export const LEGAL_CONTACT_EMAIL = 'support@echo-grid.uk';
 export const LEGAL_EFFECTIVE_DATE = '30 September 2026';
 
 export function LegalPage({
