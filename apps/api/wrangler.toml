@@ -76,7 +76,7 @@ ANTHROPIC_MONTHLY_SPEND_LIMIT_USD = "150"
 # Resend sender identity (Notifications Block 2) -- non-secret, one
 # platform-wide "from" address for v1. echo-grid.uk verified in Resend as of
 # 2026-08-05 (INFINICUS team account) -- real address, not a placeholder.
-RESEND_FROM_ADDRESS = "Echo Grid <notifications@echo-grid.uk>"
+RESEND_FROM_ADDRESS = "Echo Grid Support <support@echo-grid.uk>"
 # CORS allow-list for apps/web's deployed origin(s), comma-separated --
 # read by index.ts's cors() middleware (config/env.ts's Bindings). Only
 # matters for direct browser-to-API calls; today's Server Actions (BFF
@@ -306,7 +306,7 @@ ENVIRONMENT = "staging"
 ANTHROPIC_MODEL = "claude-sonnet-5"
 ANTHROPIC_DAILY_SPEND_LIMIT_USD = "1"
 ANTHROPIC_MONTHLY_SPEND_LIMIT_USD = "10"
-RESEND_FROM_ADDRESS = "Echo Grid Staging <notifications@echo-grid.uk>"
+RESEND_FROM_ADDRESS = "Echo Grid Staging <support@echo-grid.uk>"
 ALLOWED_ORIGINS = "https://echo-grid-feedback-web-staging.katohuzairu122.workers.dev"
 WEB_BASE_URL = "https://echo-grid-feedback-web-staging.katohuzairu122.workers.dev"
 
