@@ -63,6 +63,7 @@ const METADATA_ASSET_PATHS = [
 const PUBLIC_PATHS = [
   '/feedback',
   '/loyalty',
+  '/invite',
   ...STAFF_AUTH_PATHS,
   ...RECOVERY_PATHS,
   ...METADATA_ASSET_PATHS,

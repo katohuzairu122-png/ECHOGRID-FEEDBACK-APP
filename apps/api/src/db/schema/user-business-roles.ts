@@ -41,9 +41,9 @@ export const userBusinessRoles = pgTable(
     // business-wide grants for the same user/business/role.
     uniqueIndex('ubr_branch_scoped_unique')
       .on(table.userId, table.businessId, table.branchId, table.roleId)
-      .where(sql`${table.branchId} IS NOT NULL`),
+      .where(sql`${table.branchId} IS NOT NULL AND ${table.deletedAt} IS NULL`),
     uniqueIndex('ubr_business_wide_unique')
       .on(table.userId, table.businessId, table.roleId)
-      .where(sql`${table.branchId} IS NULL`),
+      .where(sql`${table.branchId} IS NULL AND ${table.deletedAt} IS NULL`),
   ],
 );

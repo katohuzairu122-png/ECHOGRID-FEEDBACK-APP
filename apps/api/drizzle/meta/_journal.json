@@ -232,6 +232,13 @@
       "when": 1790942400000,
       "tag": "0032_scope_plan_limit_guards",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1791028800000,
+      "tag": "0033_team_management",
+      "breakpoints": true
     }
   ]
 }

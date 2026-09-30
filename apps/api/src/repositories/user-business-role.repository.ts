@@ -1,4 +1,4 @@
-import { eq, and, isNull } from 'drizzle-orm';
+import { eq, and, isNull, sql } from 'drizzle-orm';
 import { userBusinessRoles } from '../db/schema';
 import { BaseRepository } from './base.repository';
 
@@ -24,6 +24,17 @@ export type PlatformTeamMember = {
  * business-wide grant (see schema comment).
  */
 export class UserBusinessRoleRepository extends BaseRepository {
+  async countDistinctUsers(businessId: string): Promise<number> {
+    const [row] = await this.db.select({ count: sql<number>`count(distinct ${userBusinessRoles.userId})::int` })
+      .from(userBusinessRoles).where(and(eq(userBusinessRoles.businessId, businessId), isNull(userBusinessRoles.deletedAt)));
+    return row?.count ?? 0;
+  }
+
+  async findActive(id: string, businessId: string): Promise<UserBusinessRole | undefined> {
+    return this.db.query.userBusinessRoles.findFirst({
+      where: and(eq(userBusinessRoles.id, id), eq(userBusinessRoles.businessId, businessId), isNull(userBusinessRoles.deletedAt)),
+    });
+  }
   async grant(input: NewUserBusinessRole): Promise<UserBusinessRole> {
     const [row] = await this.db.insert(userBusinessRoles).values(input).returning();
     if (!row) throw new Error('Insert returned no row');
