@@ -1,4 +1,4 @@
-import { Hono } from 'hono';
+import { Hono, type Context } from 'hono';
 import { z } from 'zod';
 import type { Bindings } from '../config/env';
 import { createDb } from '../db/client';
@@ -45,7 +45,7 @@ async function assertSeatAvailable(repos: ReturnType<typeof createRepositories>,
   if (used >= maxUsers) throw new AppError(`Your plan allows ${maxUsers} team members.`, 409, 'TEAM_LIMIT_REACHED');
 }
 
-async function sendInvite(c: any, invitation: { email: string; id: string }, rawToken: string) {
+async function sendInvite(c: Context<Env>, invitation: { email: string; id: string }, rawToken: string) {
   const link = `${c.env.WEB_BASE_URL.replace(/\/$/, '')}/invite/${rawToken}`;
   await createEmailService(c.env.ENVIRONMENT, { apiKey: c.env.RESEND_API_KEY, fromAddress: c.env.RESEND_FROM_ADDRESS }).send({
     to: invitation.email,
