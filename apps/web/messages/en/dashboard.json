@@ -50,7 +50,16 @@
     "confirmPasswordLabel": "Confirm new password",
     "passwordHint": "Use at least 12 characters.",
     "changePasswordSubmit": "Change password",
-    "changePasswordPending": "Changing…"
+    "changePasswordPending": "Changing…",
+    "profileTitle": "Your profile",
+    "profileDescription": "Manage the personal details shown on your Echo Grid account.",
+    "profileNameLabel": "Full name",
+    "profileEmailLabel": "Email",
+    "profileEmailHint": "Email changes require verification and will be added in the next account-security block.",
+    "profilePhoneLabel": "Phone number",
+    "profileSubmit": "Save profile",
+    "profileSubmitPending": "Saving…",
+    "profileSuccess": "Profile saved."
   },
   "impersonationBanner": {
     "label": "Impersonating —",
