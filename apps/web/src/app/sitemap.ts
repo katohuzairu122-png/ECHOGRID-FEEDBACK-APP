@@ -7,6 +7,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
     { url: APP_URL, lastModified, changeFrequency: 'monthly', priority: 1 },
     { url: `${APP_URL}/login`, lastModified, changeFrequency: 'yearly', priority: 0.5 },
     { url: `${APP_URL}/signup`, lastModified, changeFrequency: 'yearly', priority: 0.5 },
+    { url: `${APP_URL}/support`, lastModified, changeFrequency: 'monthly', priority: 0.6 },
     ...['privacy', 'terms', 'refunds', 'cookies'].map((path) => ({
       url: `${APP_URL}/${path}`,
       lastModified,
