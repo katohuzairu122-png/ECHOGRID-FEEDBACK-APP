@@ -40,7 +40,8 @@ export default async function RootPage() {
           </div>
         ))}
       </div>
-      <nav aria-label="Legal" className="flex flex-wrap justify-center gap-x-5 gap-y-2 text-xs text-neutral-500">
+      <nav aria-label="Support and legal" className="flex flex-wrap justify-center gap-x-5 gap-y-2 text-xs text-neutral-500">
+        <Link href="/support">Support</Link>
         <Link href="/privacy">Privacy</Link>
         <Link href="/terms">Terms</Link>
         <Link href="/refunds">Refunds</Link>
