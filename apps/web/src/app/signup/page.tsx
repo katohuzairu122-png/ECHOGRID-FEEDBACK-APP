@@ -45,6 +45,26 @@ export default function SignupPage() {
               />
               <p className="text-xs text-neutral-500">{t('passwordHint')}</p>
             </div>
+            <div className="flex items-start gap-2">
+              <input
+                id="acceptTerms"
+                name="acceptTerms"
+                type="checkbox"
+                required
+                className="mt-1 h-4 w-4 rounded border-neutral-300 text-brand-700"
+              />
+              <Label htmlFor="acceptTerms" className="text-sm font-normal leading-5 text-neutral-600">
+                {t('acceptTermsPrefix')}{' '}
+                <Link href="/terms" target="_blank" className="font-medium text-brand-700 hover:underline">
+                  {t('termsLink')}
+                </Link>{' '}
+                {t('and')}{' '}
+                <Link href="/privacy" target="_blank" className="font-medium text-brand-700 hover:underline">
+                  {t('privacyLink')}
+                </Link>
+                .
+              </Label>
+            </div>
             {state.error && (
               <p role="alert" className="text-sm text-danger">
                 {state.error}

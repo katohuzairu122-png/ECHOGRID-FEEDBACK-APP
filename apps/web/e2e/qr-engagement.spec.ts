@@ -21,6 +21,7 @@ test('QR code scan to feedback inbox, end to end', async ({ page }) => {
   await page.getByLabel('Full name').fill('QR E2E Test User');
   await page.getByLabel('Email').fill(`qr-e2e-${unique}@example.test`);
   await page.getByLabel('Password', { exact: true }).fill('a-strong-test-password');
+  await page.getByLabel(/I agree to the Terms of Service/).check();
   await page.getByRole('button', { name: 'Create account' }).click();
   await expect(page).toHaveURL('/dashboard');
 

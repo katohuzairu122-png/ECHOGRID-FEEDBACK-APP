@@ -25,6 +25,7 @@ test('staff sets up a loyalty tier, reward, and earning rates, end to end', asyn
   await page.getByLabel('Full name').fill('Loyalty E2E Test User');
   await page.getByLabel('Email').fill(`loyalty-e2e-${unique}@example.test`);
   await page.getByLabel('Password', { exact: true }).fill('a-strong-test-password');
+  await page.getByLabel(/I agree to the Terms of Service/).check();
   await page.getByRole('button', { name: 'Create account' }).click();
   await expect(page).toHaveURL('/dashboard');
 
