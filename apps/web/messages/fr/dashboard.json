@@ -50,7 +50,16 @@
     "confirmPasswordLabel": "Confirmer le nouveau mot de passe",
     "passwordHint": "Utilisez au moins 12 caractères.",
     "changePasswordSubmit": "Modifier le mot de passe",
-    "changePasswordPending": "Modification…"
+    "changePasswordPending": "Modification…",
+    "profileTitle": "Votre profil",
+    "profileDescription": "Gérez les informations personnelles de votre compte Echo Grid.",
+    "profileNameLabel": "Nom complet",
+    "profileEmailLabel": "E-mail",
+    "profileEmailHint": "La modification de l’e-mail nécessite une vérification et sera ajoutée au prochain bloc de sécurité.",
+    "profilePhoneLabel": "Numéro de téléphone",
+    "profileSubmit": "Enregistrer le profil",
+    "profileSubmitPending": "Enregistrement…",
+    "profileSuccess": "Profil enregistré."
   },
   "impersonationBanner": {
     "label": "Emprunt d'identité —",
