@@ -16,33 +16,20 @@ const NAV_ITEMS = [
   ['notifications', '/dashboard/notifications'],
   ['settings', '/dashboard/settings'],
   ['billing', '/dashboard/billing'],
+  ['support', '/support'],
 ] as const;
 
-/**
- * Server Component -- async only because getTranslations() is (i18n &
- * Multi-Currency Block 4). The logout <form> still needs no
- * useActionState: it's a bare Server Action reference, and logout either
- * works or the user just tries again.
- *
- * Deliberately does NOT fetch the current user to conditionally show a
- * "Platform Admin" link -- that would add an extra /auth/me round trip to
- * EVERY dashboard page load (this component is in the shared layout) for
- * the overwhelming majority of users who will never have a platformRole.
- * That entry point lives on dashboard/page.tsx instead (Platform Admin
- * Console Block 5) -- one page, visited once per session in the common
- * case, not every navigation.
- */
 export async function DashboardNav() {
   const t = await getTranslations('dashboard');
 
   return (
     <header className="border-b border-neutral-200 bg-white">
-      <div className="mx-auto max-w-5xl px-4 py-3 sm:px-6 lg:py-4">
-        <div className="flex items-center justify-between gap-4">
+      <div className="mx-auto max-w-6xl px-4 py-3 sm:px-6 lg:py-4">
+        <div className="flex items-center justify-between gap-3">
           <Link href="/dashboard" aria-label="Echo Grid dashboard home">
             <Logo variant="horizontal" iconSize={28} />
           </Link>
-          <nav className="hidden items-center gap-4 lg:flex" aria-label={t('nav.menu')}>
+          <nav className="hidden items-center gap-2 lg:flex" aria-label={t('nav.menu')}>
             <DashboardNavLinks
               items={NAV_ITEMS.map(([key, href]) => ({ href, label: t(`nav.${key}`) }))}
             />
@@ -55,7 +42,6 @@ export async function DashboardNav() {
               </Button>
             </form>
           </div>
-
           <DashboardMobileNav
             menuLabel={t('nav.menu')}
             logoutLabel={t('nav.logout')}
