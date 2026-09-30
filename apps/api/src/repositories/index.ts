@@ -28,6 +28,7 @@ import { NotificationRepository } from './notification.repository';
 import { BusinessNotificationSettingsRepository } from './business-notification-settings.repository';
 import { SubscriptionPlanRepository } from './subscription-plan.repository';
 import { BusinessSubscriptionRepository } from './business-subscription.repository';
+import { TeamInvitationRepository } from './team-invitation.repository';
 import { ConversationRepository } from './conversation.repository';
 import { MessageRepository } from './message.repository';
 import { VisitSessionRepository } from './visit-session.repository';
@@ -61,6 +62,7 @@ export * from './notification.repository';
 export * from './business-notification-settings.repository';
 export * from './subscription-plan.repository';
 export * from './business-subscription.repository';
+export * from './team-invitation.repository';
 export * from './conversation.repository';
 export * from './message.repository';
 export * from './visit-session.repository';
@@ -101,6 +103,7 @@ export function createRepositories(db: Db) {
     businessNotificationSettings: new BusinessNotificationSettingsRepository(db),
     subscriptionPlans: new SubscriptionPlanRepository(db),
     businessSubscriptions: new BusinessSubscriptionRepository(db),
+    teamInvitations: new TeamInvitationRepository(db),
     conversations: new ConversationRepository(db),
     messages: new MessageRepository(db),
     visitSessions: new VisitSessionRepository(db),

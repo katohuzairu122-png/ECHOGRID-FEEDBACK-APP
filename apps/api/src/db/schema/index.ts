@@ -31,6 +31,7 @@ export * from './notifications';
 export * from './business-notification-settings';
 export * from './subscription-plans';
 export * from './business-subscriptions';
+export * from './team-invitations';
 export * from './conversations';
 export * from './messages';
 export * from './visit-sessions';

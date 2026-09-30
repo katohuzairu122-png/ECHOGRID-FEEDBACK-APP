@@ -15,6 +15,7 @@ const NAV_ITEMS = [
   ['analytics', '/dashboard/analytics'],
   ['notifications', '/dashboard/notifications'],
   ['settings', '/dashboard/settings'],
+  ['team', '/dashboard/settings/team'],
   ['billing', '/dashboard/billing'],
   ['support', '/support'],
 ] as const;

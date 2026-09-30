@@ -28,6 +28,7 @@ import { subscriptionPlans } from './subscription-plans';
 import { businessSubscriptions } from './business-subscriptions';
 import { conversations } from './conversations';
 import { messages } from './messages';
+import { teamInvitations } from './team-invitations';
 
 export const businessesRelations = relations(businesses, ({ many, one }) => ({
   branches: many(branches),
@@ -47,6 +48,7 @@ export const businessesRelations = relations(businesses, ({ many, one }) => ({
   notificationPreferences: many(notificationPreferences),
   notifications: many(notifications),
   conversations: many(conversations),
+  teamInvitations: many(teamInvitations),
   // one, not many: business_subscriptions_business_id_key enforces exactly
   // one row per business at the DB layer (Billing Block 8).
   subscription: one(businessSubscriptions, {
@@ -64,6 +66,7 @@ export const branchesRelations = relations(branches, ({ one, many }) => ({
   aiUsageLogs: many(aiUsageLog),
   criticalIncidents: many(criticalIncidents),
   fraudSignals: many(fraudSignals),
+  teamInvitations: many(teamInvitations),
 }));
 
 export const usersRelations = relations(users, ({ many }) => ({
@@ -73,12 +76,21 @@ export const usersRelations = relations(users, ({ many }) => ({
   passwordResetTokens: many(passwordResetTokens),
   notificationPreferences: many(notificationPreferences),
   notifications: many(notifications),
+  teamInvitationsSent: many(teamInvitations),
 }));
 
 export const rolesRelations = relations(roles, ({ one, many }) => ({
   business: one(businesses, { fields: [roles.businessId], references: [businesses.id] }),
   rolePermissions: many(rolePermissions),
+  teamInvitations: many(teamInvitations),
   userBusinessRoles: many(userBusinessRoles),
+}));
+
+export const teamInvitationsRelations = relations(teamInvitations, ({ one }) => ({
+  business: one(businesses, { fields: [teamInvitations.businessId], references: [businesses.id] }),
+  branch: one(branches, { fields: [teamInvitations.branchId], references: [branches.id] }),
+  role: one(roles, { fields: [teamInvitations.roleId], references: [roles.id] }),
+  inviter: one(users, { fields: [teamInvitations.invitedBy], references: [users.id] }),
 }));
 
 export const permissionsRelations = relations(permissions, ({ many }) => ({
