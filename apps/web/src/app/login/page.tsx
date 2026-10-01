@@ -1,8 +1,7 @@
 'use client';
 
-import { Suspense, useActionState } from 'react';
+import { useActionState, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { loginAction, type AuthActionState } from '@/lib/actions/auth';
 import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Input, Label } from '@/components/ui';
@@ -10,9 +9,12 @@ import { Logo } from '@/components/brand';
 
 const initialState: AuthActionState = {};
 
-function LoginForm() {
-  const searchParams = useSearchParams();
-  const next = searchParams.get('next') ?? '/dashboard';
+export default function LoginPage() {
+  const [next, setNext] = useState('/dashboard');
+  useEffect(() => {
+    const requested = new URLSearchParams(window.location.search).get('next');
+    if (requested?.startsWith('/') && !requested.startsWith('//')) setNext(requested);
+  }, []);
   const [state, formAction, pending] = useActionState(loginAction, initialState);
   // i18n & Multi-Currency Block 4. state.error itself stays untranslated --
   // it's the API's raw error message, not a UI string this component owns;
@@ -74,14 +76,5 @@ function LoginForm() {
         </CardContent>
       </Card>
     </main>
-  );
-}
-
-
-export default function LoginPage() {
-  return (
-    <Suspense fallback={null}>
-      <LoginForm />
-    </Suspense>
   );
 }
