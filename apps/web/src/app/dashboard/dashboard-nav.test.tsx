@@ -15,6 +15,10 @@ vi.mock('@/lib/business', () => ({
   getActiveBusiness: vi.fn(async () => null),
 }));
 
+vi.mock('./business-switcher', () => ({
+  BusinessSwitcher: () => null,
+}));
+
 vi.mock('next/navigation', () => ({
   usePathname: () => '/dashboard',
   useRouter: () => ({ prefetch: vi.fn() }),
