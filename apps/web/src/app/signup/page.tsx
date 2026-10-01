@@ -1,6 +1,6 @@
 'use client';
 
-import { useActionState } from 'react';
+import { useActionState, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import { signupAction, type AuthActionState } from '@/lib/actions/auth';
@@ -10,6 +10,11 @@ import { Logo } from '@/components/brand';
 const initialState: AuthActionState = {};
 
 export default function SignupPage() {
+  const [next, setNext] = useState('/dashboard');
+  useEffect(() => {
+    const requested = new URLSearchParams(window.location.search).get('next');
+    if (requested?.startsWith('/') && !requested.startsWith('//')) setNext(requested);
+  }, []);
   const [state, formAction, pending] = useActionState(signupAction, initialState);
   // i18n & Multi-Currency Block 4 -- see login/page.tsx's identical note on
   // state.error staying untranslated.
@@ -25,6 +30,7 @@ export default function SignupPage() {
         </CardHeader>
         <CardContent>
           <form action={formAction} className="flex flex-col gap-4">
+            <input type="hidden" name="next" value={next} />
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="fullName">{t('fullNameLabel')}</Label>
               <Input id="fullName" name="fullName" autoComplete="name" required />
@@ -76,7 +82,7 @@ export default function SignupPage() {
           </form>
           <p className="mt-4 text-center text-sm text-neutral-500">
             {t('hasAccount')}{' '}
-            <Link href="/login" className="font-medium text-brand-700 hover:underline">
+            <Link href={`/login?next=${encodeURIComponent(next)}`} className="font-medium text-brand-700 hover:underline">
               {t('loginLink')}
             </Link>
           </p>

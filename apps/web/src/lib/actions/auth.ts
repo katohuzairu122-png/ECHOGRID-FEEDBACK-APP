@@ -61,11 +61,15 @@ export async function loginAction(
 ): Promise<AuthActionState> {
   const email = String(formData.get('email') ?? '');
   const password = String(formData.get('password') ?? '');
+  const requestedNext = String(formData.get('next') ?? '/dashboard');
+  const next = requestedNext.startsWith('/') && !requestedNext.startsWith('//')
+    ? requestedNext
+    : '/dashboard';
 
   const result = await callAuthEndpoint('login', { email, password });
   if (result.error) return result;
 
-  redirect('/dashboard');
+  redirect(next);
 }
 
 export async function signupAction(
@@ -76,6 +80,10 @@ export async function signupAction(
   const password = String(formData.get('password') ?? '');
   const fullName = String(formData.get('fullName') ?? '');
   const acceptTerms = formData.get('acceptTerms') === 'on';
+  const requestedNext = String(formData.get('next') ?? '/dashboard');
+  const next = requestedNext.startsWith('/') && !requestedNext.startsWith('//')
+    ? requestedNext
+    : '/dashboard';
 
   // Server Actions are public HTTP endpoints, so the browser's required
   // checkbox is reinforced here before an account can be created.
@@ -86,7 +94,7 @@ export async function signupAction(
   const result = await callAuthEndpoint('signup', { email, password, fullName });
   if (result.error) return result;
 
-  redirect('/dashboard');
+  redirect(next);
 }
 
 /**

@@ -1,6 +1,6 @@
 'use client';
 
-import { useActionState } from 'react';
+import { useActionState, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import { loginAction, type AuthActionState } from '@/lib/actions/auth';
@@ -10,6 +10,11 @@ import { Logo } from '@/components/brand';
 const initialState: AuthActionState = {};
 
 export default function LoginPage() {
+  const [next, setNext] = useState('/dashboard');
+  useEffect(() => {
+    const requested = new URLSearchParams(window.location.search).get('next');
+    if (requested?.startsWith('/') && !requested.startsWith('//')) setNext(requested);
+  }, []);
   const [state, formAction, pending] = useActionState(loginAction, initialState);
   // i18n & Multi-Currency Block 4. state.error itself stays untranslated --
   // it's the API's raw error message, not a UI string this component owns;
@@ -26,6 +31,7 @@ export default function LoginPage() {
         </CardHeader>
         <CardContent>
           <form action={formAction} className="flex flex-col gap-4">
+            <input type="hidden" name="next" value={next} />
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="email">{t('emailLabel')}</Label>
               <Input id="email" name="email" type="email" autoComplete="email" required />
@@ -63,7 +69,7 @@ export default function LoginPage() {
           </form>
           <p className="mt-4 text-center text-sm text-neutral-500">
             {t('noAccount')}{' '}
-            <Link href="/signup" className="font-medium text-brand-700 hover:underline">
+            <Link href={`/signup?next=${encodeURIComponent(next)}`} className="font-medium text-brand-700 hover:underline">
               {t('signupLink')}
             </Link>
           </p>
