@@ -1,6 +1,6 @@
 'use client';
 
-import { useActionState } from 'react';
+import { Suspense, useActionState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
@@ -10,7 +10,7 @@ import { Logo } from '@/components/brand';
 
 const initialState: AuthActionState = {};
 
-export default function SignupPage() {
+function SignupForm() {
   const searchParams = useSearchParams();
   const next = searchParams.get('next') ?? '/dashboard';
   const [state, formAction, pending] = useActionState(signupAction, initialState);
@@ -87,5 +87,14 @@ export default function SignupPage() {
         </CardContent>
       </Card>
     </main>
+  );
+}
+
+
+export default function SignupPage() {
+  return (
+    <Suspense fallback={null}>
+      <SignupForm />
+    </Suspense>
   );
 }
