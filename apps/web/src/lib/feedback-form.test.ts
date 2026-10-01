@@ -56,9 +56,25 @@ describe('readFeedbackForm', () => {
     expect(result.customerName).toBe('Alex');
   });
 
+  it('preserves complaint, suggestion, and advice as labelled staff-readable feedback', () => {
+    const result = readFeedbackForm(formDataFrom({
+      submissionKey: crypto.randomUUID(),
+      rating: '1',
+      feedbackType: 'Complaint',
+      comment: 'The order arrived cold.',
+      suggestion: 'Use insulated packaging.',
+      advice: 'Contact customers when delivery is delayed.',
+    }));
+
+    expect(result.comment).toBe(
+      'Type: Complaint\n\nDetails: The order arrived cold.\n\nSuggestion: Use insulated packaging.\n\nAdvice: Contact customers when delivery is delayed.',
+    );
+  });
+
   it('defaults rating to 0 rather than throwing when absent -- Number(null) is 0, not NaN, and server-side Zod validation (min 1) is what actually rejects it', () => {
     const result = readFeedbackForm(formDataFrom({}));
     expect(result.rating).toBe(0);
   });
 });
+
 
