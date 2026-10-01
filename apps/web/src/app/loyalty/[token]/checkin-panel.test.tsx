@@ -14,6 +14,22 @@ describe('CheckinPanel', () => {
     vi.clearAllMocks();
   });
 
+  it('shows the feedback thank-you above the loyalty sign-in action', () => {
+    render(
+      <CheckinPanel
+        token="qr-token"
+        branchName="Main branch"
+        businessName="Echo Grid Cafe"
+        signedIn={false}
+        feedbackReceived
+      />,
+    );
+
+    const thankYou = screen.getByText('Thank you!');
+    const signIn = screen.getByRole('link', { name: 'Sign in to check in' });
+    expect(thankYou.compareDocumentPosition(signIn) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
   it('shows the API error returned by the check-in action', async () => {
     const user = userEvent.setup();
     vi.mocked(checkinAction).mockResolvedValue({
