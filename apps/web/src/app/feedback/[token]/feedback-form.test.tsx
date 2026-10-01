@@ -37,6 +37,7 @@ describe('FeedbackForm', () => {
 
     renderWithIntl(<FeedbackForm token="tok123" branchName="Downtown" businessName="Echo Grid" submissionKey={crypto.randomUUID()} />);
 
+    await user.selectOptions(screen.getByLabelText('What would you like to share?'), 'Other');
     await user.click(screen.getByRole('radio', { name: '5 stars' }));
     await user.type(screen.getByLabelText('Comments (optional)'), 'Loved it');
     await user.click(screen.getByRole('button', { name: 'Continue' }));
@@ -56,6 +57,7 @@ describe('FeedbackForm', () => {
 
     renderWithIntl(<FeedbackForm token="tok123" branchName="Downtown" businessName="Echo Grid" submissionKey={crypto.randomUUID()} />);
 
+    await user.selectOptions(screen.getByLabelText('What would you like to share?'), 'Compliment');
     await user.click(screen.getByRole('radio', { name: '5 stars' }));
     await user.click(screen.getByRole('button', { name: 'Continue' }));
 
@@ -78,6 +80,7 @@ describe('FeedbackForm', () => {
 
     renderWithIntl(<FeedbackForm token="tok123" branchName="Downtown" businessName="Echo Grid" submissionKey={crypto.randomUUID()} />);
 
+    await user.selectOptions(screen.getByLabelText('What would you like to share?'), 'Suggestion');
     await user.click(screen.getByRole('radio', { name: '4 stars' }));
     await user.click(screen.getByRole('button', { name: 'Continue' }));
 
@@ -96,12 +99,24 @@ describe('FeedbackForm', () => {
 
     renderWithIntl(<FeedbackForm token="tok123" branchName="Downtown" businessName="Echo Grid" submissionKey={crypto.randomUUID()} />);
 
+    await user.selectOptions(screen.getByLabelText('What would you like to share?'), 'Compliment');
     await user.click(screen.getByRole('radio', { name: '5 stars' }));
     await user.click(screen.getByRole('button', { name: 'Continue' }));
     await user.click(await screen.findByRole('button', { name: 'Submit feedback' }));
 
     expect(await screen.findByText('Thank you!')).toBeInTheDocument();
     await waitFor(() => expect(replaceMock).toHaveBeenCalledWith('/loyalty/tok123'));
+  });
+
+  it('requires an explanation for a complaint and offers optional suggestion and advice fields', async () => {
+    const user = userEvent.setup();
+    renderWithIntl(<FeedbackForm token="tok123" branchName="Downtown" businessName="Echo Grid" submissionKey={crypto.randomUUID()} />);
+
+    await user.selectOptions(screen.getByLabelText('What would you like to share?'), 'Complaint');
+
+    expect(screen.getByLabelText('What went wrong?')).toBeRequired();
+    expect(screen.getByLabelText('How could we improve? (optional)')).not.toBeRequired();
+    expect(screen.getByLabelText('Any other advice? (optional)')).not.toBeRequired();
   });
 });
 
