@@ -1,5 +1,6 @@
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
+import { getBusinesses } from '@/lib/business';
 import { DashboardNav } from './dashboard-nav';
 
 vi.mock('next-intl/server', () => ({
@@ -12,7 +13,7 @@ vi.mock('@/lib/actions/auth', () => ({
 
 vi.mock('@/lib/business', () => ({
   getBusinesses: vi.fn(async () => []),
-  getActiveBusiness: vi.fn(async () => null),
+  getActiveBusinessQuiet: vi.fn(async () => null),
 }));
 
 vi.mock('./business-switcher', () => ({
@@ -33,5 +34,14 @@ describe('DashboardNav responsive navigation', () => {
     expect(screen.getAllByRole('link', { name: 'nav.analytics' })).toHaveLength(2);
     expect(screen.getAllByRole('link', { name: 'nav.billing' })).toHaveLength(2);
     expect(screen.getAllByRole('button', { name: 'nav.logout' })).toHaveLength(2);
+  });
+
+  it('keeps the dashboard navigation usable when the optional business switcher cannot load', async () => {
+    vi.mocked(getBusinesses).mockRejectedValueOnce(new Error('Business API unavailable'));
+
+    const { container } = render(await DashboardNav());
+
+    expect(container.querySelector('nav.lg\\:flex')).toBeInTheDocument();
+    expect(screen.getAllByRole('link', { name: 'nav.feedback' })).toHaveLength(2);
   });
 });
