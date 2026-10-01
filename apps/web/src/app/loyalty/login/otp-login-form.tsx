@@ -1,7 +1,6 @@
 'use client';
 
 import { useActionState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import {
   requestOtpAction,
@@ -11,6 +10,7 @@ import {
 } from '@/lib/actions/customer-auth';
 import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Input, Label } from '@/components/ui';
 import { Logo } from '@/components/brand';
+import { navigateWithCommittedCookies } from '@/lib/browser-navigation';
 
 const requestInitial: OtpRequestState = {};
 const verifyInitial: OtpVerifyState = {};
@@ -27,7 +27,6 @@ interface OtpLoginFormProps {
  * field in the verify form rather than re-typed.
  */
 export function OtpLoginForm({ next }: OtpLoginFormProps) {
-  const router = useRouter();
   const [requestState, requestFormAction, requestPending] = useActionState(
     requestOtpAction,
     requestInitial,
@@ -42,9 +41,8 @@ export function OtpLoginForm({ next }: OtpLoginFormProps) {
     // The action response that stores the httpOnly cookie has now completed.
     // A fresh navigation will include it, preventing a verified customer from
     // being sent back to the phone-number step by the loyalty page.
-    router.replace(verifyState.next);
-    router.refresh();
-  }, [router, verifyState.next, verifyState.success]);
+    navigateWithCommittedCookies(verifyState.next);
+  }, [verifyState.next, verifyState.success]);
 
   // i18n & Multi-Currency Block 6.
   const t = useTranslations('loyalty.customer.login');
