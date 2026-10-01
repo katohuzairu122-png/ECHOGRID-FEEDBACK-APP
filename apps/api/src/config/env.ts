@@ -79,6 +79,10 @@ export interface Bindings {
   TWILIO_ACCOUNT_SID: string;
   TWILIO_AUTH_TOKEN: string;
   TWILIO_FROM_NUMBER: string;
+  /** Twilio Verify V2 Service SID (starts with VA). Production customer OTP
+   * uses Verify so sender selection and delivery compliance stay with the
+   * verification product rather than a provisioned Programmable SMS number. */
+  TWILIO_VERIFY_SERVICE_SID: string;
 
   /** Anthropic API (Sentiment Analytics Block 3) -- powers the LLM-backed
    * summary/recommendation engine only, called via plain fetch() (see
