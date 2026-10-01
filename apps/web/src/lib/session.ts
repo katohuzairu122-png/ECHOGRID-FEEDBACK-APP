@@ -6,6 +6,7 @@ import {
   ADMIN_ACCESS_TOKEN_COOKIE,
   ADMIN_REFRESH_TOKEN_COOKIE,
   IMPERSONATING_COOKIE,
+  ACTIVE_BUSINESS_COOKIE,
 } from './cookies';
 
 const ACCESS_TOKEN_MAX_AGE = 15 * 60; // matches apps/api's JWT_ACCESS_SECRET TTL
@@ -91,6 +92,7 @@ export async function clearSession(): Promise<void> {
   store.delete(ADMIN_ACCESS_TOKEN_COOKIE);
   store.delete(ADMIN_REFRESH_TOKEN_COOKIE);
   store.delete(IMPERSONATING_COOKIE);
+  store.delete(ACTIVE_BUSINESS_COOKIE);
 }
 
 /**
@@ -192,3 +194,4 @@ export async function isImpersonating(): Promise<boolean> {
   const store = await cookies();
   return store.has(IMPERSONATING_COOKIE);
 }
+
