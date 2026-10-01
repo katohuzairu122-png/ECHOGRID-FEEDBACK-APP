@@ -2,8 +2,10 @@
 
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
+import { cookies } from 'next/headers';
 import { apiFetch, ApiError } from '@/lib/api-client';
 import { getActiveBusiness } from '@/lib/business';
+import { ACTIVE_BUSINESS_COOKIE } from '@/lib/cookies';
 
 export type TeamActionState = { error?: string; success?: string };
 const teamPath = '/dashboard/settings/team';
@@ -35,8 +37,9 @@ export async function acceptInvitationAction(
   token: string,
   _prevState: TeamActionState,
 ): Promise<TeamActionState> {
+  let accepted: { businessId: string };
   try {
-    await apiFetch('/team/invitations/accept', {
+    accepted = await apiFetch<{ businessId: string }>('/team/invitations/accept', {
       method: 'POST',
       body: JSON.stringify({ token }),
     });
@@ -48,6 +51,13 @@ export async function acceptInvitationAction(
     };
   }
 
-  revalidatePath('/dashboard');
+  (await cookies()).set(ACTIVE_BUSINESS_COOKIE, accepted.businessId, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    path: '/',
+    maxAge: 365 * 24 * 60 * 60,
+  });
+  revalidatePath('/dashboard', 'layout');
   redirect('/dashboard');
 }
