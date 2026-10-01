@@ -10,6 +10,15 @@ vi.mock('@/lib/actions/auth', () => ({
   logoutAction: vi.fn(),
 }));
 
+vi.mock('@/lib/business', () => ({
+  getBusinesses: vi.fn(async () => []),
+  getActiveBusiness: vi.fn(async () => null),
+}));
+
+vi.mock('./business-switcher', () => ({
+  BusinessSwitcher: () => null,
+}));
+
 vi.mock('next/navigation', () => ({
   usePathname: () => '/dashboard',
   useRouter: () => ({ prefetch: vi.fn() }),

@@ -1,12 +1,16 @@
 import 'server-only';
+import { cache } from 'react';
+import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import type { BusinessDto } from '@echo-grid-feedback/shared-types';
 import { apiFetch, ApiError } from './api-client';
+import { ACTIVE_BUSINESS_COOKIE } from './cookies';
+import { selectActiveBusiness } from './business-selection';
 
 /** Shared by both exports below so the actual fetch is defined once. */
-async function fetchBusinessList(): Promise<BusinessDto[]> {
+export const getBusinesses = cache(async (): Promise<BusinessDto[]> => {
   return apiFetch<BusinessDto[]>('/businesses');
-}
+});
 
 /**
  * The business every dashboard page scopes its data to. There is currently
@@ -22,7 +26,7 @@ async function fetchBusinessList(): Promise<BusinessDto[]> {
 export async function getActiveBusiness(): Promise<BusinessDto | null> {
   let businesses: BusinessDto[];
   try {
-    businesses = await fetchBusinessList();
+    businesses = await getBusinesses();
   } catch (err) {
     if (err instanceof ApiError && err.status === 401) {
       redirect('/login');
@@ -30,13 +34,8 @@ export async function getActiveBusiness(): Promise<BusinessDto | null> {
     throw err;
   }
 
-  if (businesses.length === 0) return null;
-
-  // Array destructuring sidesteps noUncheckedIndexedAccess's `| undefined`
-  // on bracket access (businesses[0]) -- see dashboard/page.tsx's original
-  // Block 4 note for the same pattern.
-  const [active] = businesses;
-  return active ?? null;
+  const selectedId = (await cookies()).get(ACTIVE_BUSINESS_COOKIE)?.value;
+  return selectActiveBusiness(businesses, selectedId);
 }
 
 /**
@@ -52,9 +51,11 @@ export async function getActiveBusiness(): Promise<BusinessDto | null> {
  */
 export async function getActiveBusinessQuiet(): Promise<BusinessDto | null> {
   try {
-    const businesses = await fetchBusinessList();
-    return businesses[0] ?? null;
+    const businesses = await getBusinesses();
+    const selectedId = (await cookies()).get(ACTIVE_BUSINESS_COOKIE)?.value;
+    return selectActiveBusiness(businesses, selectedId);
   } catch {
     return null;
   }
 }
+

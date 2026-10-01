@@ -4,7 +4,9 @@ import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import type { BusinessDto } from '@echo-grid-feedback/shared-types';
 import { apiFetch, ApiError } from '@/lib/api-client';
-import { getActiveBusiness } from '@/lib/business';
+import { getActiveBusiness, getBusinesses } from '@/lib/business';
+import { cookies } from 'next/headers';
+import { ACTIVE_BUSINESS_COOKIE } from '@/lib/cookies';
 
 export interface CreateBusinessState {
   error?: string;
@@ -83,3 +85,22 @@ export async function updateBusinessSettingsAction(
   revalidatePath(SETTINGS_PATH);
   return { success: true };
 }
+
+/** Validates the selection against the authenticated membership list before
+ * persisting it, so a forged form value can never establish tenant access. */
+export async function switchBusinessAction(formData: FormData): Promise<void> {
+  const businessId = String(formData.get('businessId') ?? '');
+  const businesses = await getBusinesses();
+  if (!businesses.some((business) => business.id === businessId)) return;
+
+  (await cookies()).set(ACTIVE_BUSINESS_COOKIE, businessId, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    path: '/',
+    maxAge: 365 * 24 * 60 * 60,
+  });
+  revalidatePath('/dashboard', 'layout');
+  redirect('/dashboard');
+}
+
