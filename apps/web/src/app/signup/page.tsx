@@ -1,8 +1,7 @@
 'use client';
 
-import { Suspense, useActionState } from 'react';
+import { useActionState, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { signupAction, type AuthActionState } from '@/lib/actions/auth';
 import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Input, Label } from '@/components/ui';
@@ -10,9 +9,12 @@ import { Logo } from '@/components/brand';
 
 const initialState: AuthActionState = {};
 
-function SignupForm() {
-  const searchParams = useSearchParams();
-  const next = searchParams.get('next') ?? '/dashboard';
+export default function SignupPage() {
+  const [next, setNext] = useState('/dashboard');
+  useEffect(() => {
+    const requested = new URLSearchParams(window.location.search).get('next');
+    if (requested?.startsWith('/') && !requested.startsWith('//')) setNext(requested);
+  }, []);
   const [state, formAction, pending] = useActionState(signupAction, initialState);
   // i18n & Multi-Currency Block 4 -- see login/page.tsx's identical note on
   // state.error staying untranslated.
@@ -87,14 +89,5 @@ function SignupForm() {
         </CardContent>
       </Card>
     </main>
-  );
-}
-
-
-export default function SignupPage() {
-  return (
-    <Suspense fallback={null}>
-      <SignupForm />
-    </Suspense>
   );
 }
