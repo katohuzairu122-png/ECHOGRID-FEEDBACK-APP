@@ -31,8 +31,23 @@ export async function revokeTeamAccessAction(id: string) { await mutate(`/team/m
 export async function updateTeamAccessAction(id: string, formData: FormData) {
   await mutate(`/team/members/${id}`, 'PATCH', { roleId: String(formData.get('roleId') ?? ''), branchId: String(formData.get('branchId') ?? '') || null });
 }
-export async function acceptInvitationAction(token: string) {
-  await apiFetch('/team/invitations/accept', { method: 'POST', body: JSON.stringify({ token }) });
+export async function acceptInvitationAction(
+  token: string,
+  _prevState: TeamActionState,
+): Promise<TeamActionState> {
+  try {
+    await apiFetch('/team/invitations/accept', {
+      method: 'POST',
+      body: JSON.stringify({ token }),
+    });
+  } catch (error) {
+    return {
+      error: error instanceof ApiError
+        ? error.message
+        : 'Could not accept the invitation. Please try again.',
+    };
+  }
+
   revalidatePath('/dashboard');
   redirect('/dashboard');
 }
