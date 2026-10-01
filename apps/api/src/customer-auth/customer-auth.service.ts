@@ -87,6 +87,32 @@ export class CustomerAuthService {
    * customer row on first successful verify (a phone number only becomes a
    * customers row once it's actually confirmed to be reachable/owned).
    */
+  /**
+   * Completes sign-in after a trusted verification provider has approved
+   * ownership of the phone number. Twilio Verify uses this path in
+   * production; the repository-backed OTP flow calls the same method after
+   * validating its locally generated code in development and tests.
+   */
+  async completeVerifiedPhone(phone: string): Promise<CustomerAuthResult> {
+    let customer = await this.repos.customers.findByPhone(phone);
+    if (!customer) {
+      customer = await this.repos.customers.create({ phone, phoneVerifiedAt: new Date() });
+    } else {
+      if (customer.status !== 'active') {
+        throw new CustomerAuthError('This account is not active.', 'CUSTOMER_SUSPENDED');
+      }
+      if (!customer.phoneVerifiedAt) {
+        customer = (await this.repos.customers.markPhoneVerified(customer.id)) ?? customer;
+      }
+    }
+
+    const accessToken = await signCustomerAccessToken(
+      customer.id,
+      this.secrets.CUSTOMER_JWT_SECRET,
+    );
+    return { accessToken, customer };
+  }
+
   async verifyOtp(phone: string, code: string): Promise<CustomerAuthResult> {
     const active = await this.repos.otpCodes.findActiveForPhone(phone);
     if (!active) {
@@ -124,23 +150,7 @@ export class CustomerAuthService {
     // under the full cooldown.
     await this.repos.otpCodes.releaseRequest(phone).catch(() => undefined);
 
-    let customer = await this.repos.customers.findByPhone(phone);
-    if (!customer) {
-      customer = await this.repos.customers.create({ phone, phoneVerifiedAt: new Date() });
-    } else {
-      if (customer.status !== 'active') {
-        throw new CustomerAuthError('This account is not active.', 'CUSTOMER_SUSPENDED');
-      }
-      if (!customer.phoneVerifiedAt) {
-        customer = (await this.repos.customers.markPhoneVerified(customer.id)) ?? customer;
-      }
-    }
-
-    const accessToken = await signCustomerAccessToken(
-      customer.id,
-      this.secrets.CUSTOMER_JWT_SECRET,
-    );
-    return { accessToken, customer };
+    return this.completeVerifiedPhone(phone);
   }
 }
 
