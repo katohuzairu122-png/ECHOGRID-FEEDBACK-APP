@@ -105,7 +105,7 @@ describe('FeedbackForm', () => {
     await user.click(await screen.findByRole('button', { name: 'Submit feedback' }));
 
     expect(await screen.findByText('Thank you!')).toBeInTheDocument();
-    await waitFor(() => expect(replaceMock).toHaveBeenCalledWith('/loyalty/tok123'));
+    await waitFor(() => expect(replaceMock).toHaveBeenCalledWith('/loyalty/tok123?feedback=received'));
   });
 
   it('requires an explanation for a complaint and offers optional suggestion and advice fields', async () => {
