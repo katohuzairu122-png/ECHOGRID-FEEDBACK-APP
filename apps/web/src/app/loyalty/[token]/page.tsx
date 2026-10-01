@@ -10,6 +10,7 @@ import { CheckinPanel } from './checkin-panel';
 
 interface LoyaltyCheckinPageProps {
   params: Promise<{ token: string }>;
+  searchParams: Promise<{ feedback?: string }>;
 }
 
 /**
@@ -21,8 +22,8 @@ interface LoyaltyCheckinPageProps {
  * boolean, so the client component never needs to guess or flash between
  * states.
  */
-export default async function LoyaltyCheckinPage({ params }: LoyaltyCheckinPageProps) {
-  const { token } = await params;
+export default async function LoyaltyCheckinPage({ params, searchParams }: LoyaltyCheckinPageProps) {
+  const [{ token }, query] = await Promise.all([params, searchParams]);
 
   let qr: QrResolveDto;
   try {
@@ -47,6 +48,7 @@ export default async function LoyaltyCheckinPage({ params }: LoyaltyCheckinPageP
         branchName={qr.branchName}
         businessName={qr.businessName}
         signedIn={signedIn}
+        feedbackReceived={query.feedback === 'received'}
       />
     </NextIntlClientProvider>
   );
