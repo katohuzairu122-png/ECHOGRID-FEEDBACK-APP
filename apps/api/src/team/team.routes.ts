@@ -107,17 +107,58 @@ teamRoutes.post('/invitations/accept', authenticate, async (c) => {
   const { token } = await parseJsonBody(c.req.raw, z.object({ token: z.string().min(32) }));
   const { db, close } = await createDb(c.env.HYPERDRIVE);
   try {
-    const repos = createRepositories(db); const now = new Date();
-    const invitation = await repos.teamInvitations.findUsableByHash(await hashToken(token), now);
-    if (!invitation) throw new AppError('Invitation is invalid or expired.', 404, 'INVITATION_INVALID');
-    const user = await repos.users.findById(c.get('userId'));
-    if (!user || normalizeEmail(user.email) !== invitation.email) throw new AppError('Sign in with the invited email address.', 403, 'INVITATION_EMAIL_MISMATCH');
-    await validateScope(repos, invitation.businessId, invitation.roleId, invitation.branchId);
-    if (!(await repos.teamInvitations.accept(invitation.id, now))) throw new AppError('Invitation is invalid or expired.', 409, 'INVITATION_ALREADY_USED');
-    await repos.userBusinessRoles.grant({ userId: user.id, businessId: invitation.businessId, roleId: invitation.roleId, branchId: invitation.branchId, createdBy: invitation.invitedBy });
-    if (!user.emailVerifiedAt) await repos.users.update(user.id, { emailVerifiedAt: now, status: 'active' }, user.id);
-    return ok(c, { businessId: invitation.businessId });
-  } finally { c.executionCtx.waitUntil(close()); }
+    const tokenHash = await hashToken(token);
+    const userId = c.get('userId');
+    const businessId = await db.transaction(async (tx) => {
+      const repos = createRepositories(tx);
+      const now = new Date();
+      const invitation = await repos.teamInvitations.findUsableByHash(tokenHash, now);
+      if (!invitation) {
+        throw new AppError('Invitation is invalid or expired.', 404, 'INVITATION_INVALID');
+      }
+
+      const user = await repos.users.findById(userId);
+      if (!user || normalizeEmail(user.email) !== invitation.email) {
+        throw new AppError(
+          'Sign in with the invited email address.',
+          403,
+          'INVITATION_EMAIL_MISMATCH',
+        );
+      }
+
+      await validateScope(repos, invitation.businessId, invitation.roleId, invitation.branchId);
+      if (!(await repos.teamInvitations.accept(invitation.id, now))) {
+        throw new AppError(
+          'Invitation is invalid or expired.',
+          409,
+          'INVITATION_ALREADY_USED',
+        );
+      }
+
+      // These writes must commit together. Previously the invitation was
+      // consumed first; a later grant/update failure left a permanently
+      // unusable link and the browser showed only its generic Retry page.
+      await repos.userBusinessRoles.grant({
+        userId: user.id,
+        businessId: invitation.businessId,
+        roleId: invitation.roleId,
+        branchId: invitation.branchId,
+        createdBy: invitation.invitedBy,
+      });
+      if (!user.emailVerifiedAt) {
+        await repos.users.update(
+          user.id,
+          { emailVerifiedAt: now, status: 'active' },
+          user.id,
+        );
+      }
+      return invitation.businessId;
+    });
+
+    return ok(c, { businessId });
+  } finally {
+    c.executionCtx.waitUntil(close());
+  }
 });
 
 teamRoutes.patch('/members/:grantId', authenticate, resolveTenantContext, requireBusinessWideAccess, requirePermission('roles:manage'), async (c) => {
