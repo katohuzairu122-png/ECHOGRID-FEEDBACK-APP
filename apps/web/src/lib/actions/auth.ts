@@ -61,11 +61,15 @@ export async function loginAction(
 ): Promise<AuthActionState> {
   const email = String(formData.get('email') ?? '');
   const password = String(formData.get('password') ?? '');
+  const requestedNext = String(formData.get('next') ?? '/dashboard');
+  const next = requestedNext.startsWith('/') && !requestedNext.startsWith('//')
+    ? requestedNext
+    : '/dashboard';
 
   const result = await callAuthEndpoint('login', { email, password });
   if (result.error) return result;
 
-  redirect('/dashboard');
+  redirect(next);
 }
 
 export async function signupAction(
