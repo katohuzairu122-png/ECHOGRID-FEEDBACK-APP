@@ -5,6 +5,13 @@ import { renderWithIntl as render } from '@/test-utils';
 import { OtpLoginForm } from './otp-login-form';
 import { requestOtpAction, verifyOtpAction } from '@/lib/actions/customer-auth';
 
+const replaceMock = vi.fn();
+const refreshMock = vi.fn();
+
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ replace: replaceMock, refresh: refreshMock }),
+}));
+
 // Server Actions can't run against a server inside jsdom -- mocked at the
 // module boundary so this test covers OtpLoginForm's OWN logic (which step
 // renders, phone carried forward into the verify form, error surfacing),
@@ -47,6 +54,26 @@ describe('OtpLoginForm', () => {
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Too many requests');
     expect(screen.queryByLabelText('Verification code')).not.toBeInTheDocument();
+  });
+
+  it('navigates only after verification has saved the customer session', async () => {
+    const user = userEvent.setup();
+    vi.mocked(requestOtpAction).mockResolvedValue({ sent: true, phone: '+15551234567' });
+    vi.mocked(verifyOtpAction).mockResolvedValue({
+      success: true,
+      next: '/loyalty/qr-token?feedback=received',
+    });
+
+    render(<OtpLoginForm next="/loyalty/qr-token?feedback=received" />);
+    await user.type(screen.getByLabelText('Phone number'), '+15551234567');
+    await user.click(screen.getByRole('button', { name: 'Send code' }));
+    await user.type(await screen.findByLabelText('Verification code'), '123456');
+    await user.click(screen.getByRole('button', { name: 'Verify' }));
+
+    await waitFor(() => {
+      expect(replaceMock).toHaveBeenCalledWith('/loyalty/qr-token?feedback=received');
+      expect(refreshMock).toHaveBeenCalled();
+    });
   });
 
   it('shows the error returned by verifyOtpAction on the code step without crashing', async () => {
