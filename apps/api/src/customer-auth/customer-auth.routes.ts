@@ -2,8 +2,9 @@ import { Hono, type Context } from 'hono';
 import type { Bindings } from '../config/env';
 import { createDb } from '../db/client';
 import { createRepositories } from '../repositories';
-import { CustomerAuthService } from './customer-auth.service';
+import { CustomerAuthError, CustomerAuthService } from './customer-auth.service';
 import { createSmsService } from './sms.service';
+import { TwilioVerifyService } from './twilio-verify.service';
 import { createDurableObjectPbkdf2Worker } from '../auth/pbkdf2-worker';
 import { requestOtpSchema, verifyOtpSchema } from '@echo-grid-feedback/shared-types';
 import { parseJsonBody } from '../lib/validate';
@@ -42,17 +43,37 @@ async function withCustomerAuthService<T>(
   }
 }
 
+function createTwilioVerifyService(c: Context<{ Bindings: Bindings }>): TwilioVerifyService {
+  return new TwilioVerifyService({
+    accountSid: c.env.TWILIO_ACCOUNT_SID,
+    authToken: c.env.TWILIO_AUTH_TOKEN,
+    serviceSid: c.env.TWILIO_VERIFY_SERVICE_SID,
+  });
+}
+
 customerAuthRoutes.post('/otp/request', rateLimit('OTP_RATE_LIMITER'), async (c) => {
   const body = await parseJsonBody(c.req.raw, requestOtpSchema);
-  await withCustomerAuthService(c, (service) => service.requestOtp(body.phone));
+  if (c.env.ENVIRONMENT === 'production') {
+    await createTwilioVerifyService(c).request(body.phone);
+  } else {
+    await withCustomerAuthService(c, (service) => service.requestOtp(body.phone));
+  }
   return c.body(null, 204);
 });
 
 customerAuthRoutes.post('/otp/verify', rateLimit('OTP_RATE_LIMITER'), async (c) => {
   const body = await parseJsonBody(c.req.raw, verifyOtpSchema);
-  const result = await withCustomerAuthService(c, (service) =>
-    service.verifyOtp(body.phone, body.code),
-  );
+  const result = await withCustomerAuthService(c, async (service) => {
+    if (c.env.ENVIRONMENT !== 'production') {
+      return service.verifyOtp(body.phone, body.code);
+    }
+
+    const approved = await createTwilioVerifyService(c).check(body.phone, body.code);
+    if (!approved) {
+      throw new CustomerAuthError('Code is invalid or has expired.', 'OTP_INVALID');
+    }
+    return service.completeVerifiedPhone(body.phone);
+  });
   return ok(c, {
     accessToken: result.accessToken,
     customer: {
