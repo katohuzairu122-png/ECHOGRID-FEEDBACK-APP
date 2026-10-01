@@ -14,6 +14,8 @@ export interface OtpRequestState {
 
 export interface OtpVerifyState {
   error?: string;
+  success?: boolean;
+  next?: string;
 }
 
 /**
@@ -55,7 +57,10 @@ export async function verifyOtpAction(
 ): Promise<OtpVerifyState> {
   const phone = String(formData.get('phone') ?? '').trim();
   const code = String(formData.get('code') ?? '').trim();
-  const next = String(formData.get('next') ?? '/loyalty/dashboard');
+  const requestedNext = String(formData.get('next') ?? '/loyalty/dashboard');
+  const next = requestedNext.startsWith('/') && !requestedNext.startsWith('//')
+    ? requestedNext
+    : '/loyalty/dashboard';
 
   let result: CustomerAuthResponse;
   try {
@@ -69,7 +74,12 @@ export async function verifyOtpAction(
   }
 
   await setCustomerSession(result.accessToken);
-  redirect(next);
+
+  // Return only after the Set-Cookie response has completed. The client then
+  // performs a fresh document navigation carrying the new customer cookie.
+  // Redirecting from this same Server Action raced cookie persistence on the
+  // deployed Cloudflare runtime and sent verified customers back to login.
+  return { success: true, next };
 }
 
 export async function customerLogoutAction(): Promise<void> {
