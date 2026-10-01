@@ -70,8 +70,20 @@
     "thankYouTitle": "Thank you!",
     "thankYouDescription": "Your feedback for {branchName} has been received.",
     "heading": "How was your visit?",
+    "typeLabel": "What would you like to share?",
+    "typePlaceholder": "Choose one",
+    "typeComplaint": "Complaint",
+    "typeSuggestion": "Suggestion",
+    "typeCompliment": "Compliment",
+    "typeOther": "Other",
+    "complaintLabel": "What went wrong?",
+    "complaintPlaceholder": "Tell us what happened so the team can investigate...",
     "commentLabel": "Comments (optional)",
     "commentPlaceholder": "Tell us more about your visit...",
+    "suggestionLabel": "How could we improve? (optional)",
+    "suggestionPlaceholder": "Share a practical suggestion...",
+    "adviceLabel": "Any other advice? (optional)",
+    "advicePlaceholder": "Anything else you would like the team to know...",
     "contactDisclosure": "Share your contact info (optional)",
     "nameLabel": "Name",
     "emailLabel": "Email",
@@ -87,3 +99,4 @@
     "description": "This feedback code may have expired or been replaced. Please ask a staff member for a current code, or try scanning again."
   }
 }
+
