@@ -13,6 +13,7 @@ interface CheckinPanelProps {
   branchName: string;
   businessName: string;
   signedIn: boolean;
+  feedbackReceived?: boolean;
 }
 
 /**
@@ -20,12 +21,13 @@ interface CheckinPanelProps {
  * redirect) but is a plain useTransition action, not a form -- checking in
  * has no fields to collect, just a single confirmation tap.
  */
-export function CheckinPanel({ token, branchName, businessName, signedIn }: CheckinPanelProps) {
+export function CheckinPanel({ token, branchName, businessName, signedIn, feedbackReceived = false }: CheckinPanelProps) {
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string>();
   const [account, setAccount] = useState<LoyaltyAccountDto>();
   // i18n & Multi-Currency Block 6.
   const t = useTranslations('loyalty.customer.checkin');
+  const feedbackT = useTranslations('feedback.submit');
 
   const handleCheckin = () => {
     setError(undefined);
@@ -45,6 +47,14 @@ export function CheckinPanel({ token, branchName, businessName, signedIn }: Chec
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-center gap-4 bg-neutral-50 p-4 sm:p-8">
+      {feedbackReceived && (
+        <Card className="w-full max-w-md border-brand-200 bg-brand-50">
+          <CardContent className="flex flex-col items-center gap-2 py-8 text-center">
+            <CardTitle>{feedbackT('thankYouTitle')}</CardTitle>
+            <CardDescription>{feedbackT('thankYouDescription', { branchName })}</CardDescription>
+          </CardContent>
+        </Card>
+      )}
       <Card className="w-full max-w-md">
         {account ? (
           <CardContent className="flex flex-col items-center gap-3 py-14 text-center">
