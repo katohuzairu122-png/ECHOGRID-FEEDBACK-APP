@@ -54,6 +54,7 @@ test('QR code scan to feedback inbox, end to end', async ({ page }) => {
   // but Playwright's actionability check clicks the input's own (now
   // off-screen) box and sees the label geometrically on top of it.
   await customerPage.getByRole('radio', { name: '5 stars' }).click({ force: true });
+  await customerPage.getByLabel('What would you like to share?').selectOption('compliment');
   await customerPage.getByLabel('Comments (optional)').fill('Excellent service, E2E test.');
   await customerPage.getByRole('button', { name: 'Continue' }).click();
   await customerPage.getByRole('button', { name: 'Submit feedback' }).click();
