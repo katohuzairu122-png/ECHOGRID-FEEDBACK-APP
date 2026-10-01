@@ -5,6 +5,12 @@ import { renderWithIntl } from '@/test-utils';
 import { FeedbackForm } from './feedback-form';
 import { submitFeedbackAction, generateFollowUpQuestionAction } from '@/lib/actions/qr-feedback';
 
+const replaceMock = vi.fn();
+
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ replace: replaceMock }),
+}));
+
 // Server Actions can't actually run against a server inside a jsdom unit
 // test -- mocked at the module boundary so FeedbackForm's OWN logic (the
 // two-step gating, hidden-field carry-forward, Skip vs Submit) is what's
@@ -95,6 +101,8 @@ describe('FeedbackForm', () => {
     await user.click(await screen.findByRole('button', { name: 'Submit feedback' }));
 
     expect(await screen.findByText('Thank you!')).toBeInTheDocument();
+    await waitFor(() => expect(replaceMock).toHaveBeenCalledWith('/loyalty/tok123'));
   });
 });
+
 
