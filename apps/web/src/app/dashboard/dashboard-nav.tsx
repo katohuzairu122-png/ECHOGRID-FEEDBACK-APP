@@ -7,7 +7,7 @@ import { PwaInstallButton } from '@/components/pwa-install-button';
 import { DashboardMobileNav } from './dashboard-mobile-nav';
 import { DashboardNavLinks } from './dashboard-nav-links';
 import { BusinessSwitcher } from './business-switcher';
-import { getActiveBusiness, getBusinesses } from '@/lib/business';
+import { getActiveBusinessQuiet, getBusinesses } from '@/lib/business';
 
 const NAV_ITEMS = [
   ['branches', '/dashboard/branches'],
@@ -24,7 +24,13 @@ const NAV_ITEMS = [
 
 export async function DashboardNav() {
   const t = await getTranslations('dashboard');
-  const [businesses, activeBusiness] = await Promise.all([getBusinesses(), getActiveBusiness()]);
+  // The switcher is optional dashboard chrome. A transient business-list
+  // failure must not take down the shared layout and strand every dashboard
+  // page behind a global error boundary.
+  const [businesses, activeBusiness] = await Promise.all([
+    getBusinesses().catch(() => []),
+    getActiveBusinessQuiet(),
+  ]);
 
   return (
     <header className="border-b border-neutral-200 bg-white">
@@ -59,4 +65,3 @@ export async function DashboardNav() {
     </header>
   );
 }
-
