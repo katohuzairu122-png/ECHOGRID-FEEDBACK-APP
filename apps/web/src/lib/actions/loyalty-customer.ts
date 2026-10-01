@@ -28,14 +28,29 @@ export async function joinLoyaltyAction(businessId: string): Promise<LoyaltyAcco
 /** Scanning a branch's QR code while signed in as a customer -- reuses the
  * same token feedback's public form uses (one QR code, two possible
  * destinations depending on which link the customer taps). */
-export async function checkinAction(qrToken: string): Promise<LoyaltyAccountDto> {
-  const account = await customerApiFetch<LoyaltyAccountDto>('/loyalty/me/checkin', {
-    method: 'POST',
-    body: JSON.stringify({ qrToken }),
-  });
-  revalidatePath('/loyalty/dashboard');
-  revalidatePath(`/loyalty/dashboard/${account.businessId}`);
-  return account;
+export interface CheckinResult {
+  error?: string;
+  account?: LoyaltyAccountDto;
+}
+
+export async function checkinAction(qrToken: string): Promise<CheckinResult> {
+  try {
+    const account = await customerApiFetch<LoyaltyAccountDto>('/loyalty/me/checkin', {
+      method: 'POST',
+      body: JSON.stringify({ qrToken }),
+    });
+    revalidatePath('/loyalty/dashboard');
+    revalidatePath(`/loyalty/dashboard/${account.businessId}`);
+    return { account };
+  } catch (err) {
+    // Preserve Next.js redirects raised by customerApiFetch for an expired
+    // customer session. All ordinary API failures become serializable state
+    // so the client can show the useful API message instead of Next.js's
+    // production-only generic server-action error.
+    rethrowControlFlow(err);
+    if (err instanceof ApiError) return { error: err.message };
+    return { error: 'Something went wrong. Please try again.' };
+  }
 }
 
 export interface RedeemState {

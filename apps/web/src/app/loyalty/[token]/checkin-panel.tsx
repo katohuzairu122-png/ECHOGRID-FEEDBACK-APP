@@ -5,7 +5,6 @@ import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import type { LoyaltyAccountDto } from '@echo-grid-feedback/shared-types';
 import { checkinAction } from '@/lib/actions/loyalty-customer';
-import { ApiError } from '@/lib/api-error';
 import { Button, buttonVariants, Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui';
 import { PoweredByFooter } from '@/components/brand';
 
@@ -33,9 +32,13 @@ export function CheckinPanel({ token, branchName, businessName, signedIn }: Chec
     startTransition(async () => {
       try {
         const result = await checkinAction(token);
-        setAccount(result);
-      } catch (err) {
-        setError(err instanceof ApiError ? err.message : t('genericError'));
+        if (result.error) {
+          setError(result.error);
+          return;
+        }
+        if (result.account) setAccount(result.account);
+      } catch {
+        setError(t('genericError'));
       }
     });
   };
