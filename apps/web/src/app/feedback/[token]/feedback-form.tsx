@@ -1,6 +1,6 @@
 'use client';
 
-import { useActionState, useEffect } from 'react';
+import { useActionState, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import {
@@ -52,6 +52,7 @@ interface FeedbackFormProps {
  */
 export function FeedbackForm({ token, branchName, businessName, submissionKey, feedbackForm = null }: FeedbackFormProps) {
   const router = useRouter();
+  const [feedbackType, setFeedbackType] = useState('');
   const [followUpState, followUpFormAction, followUpPending] = useActionState(
     generateFollowUpQuestionAction.bind(null, token),
     followUpInitial,
@@ -96,14 +97,36 @@ export function FeedbackForm({ token, branchName, businessName, submissionKey, f
                   </div>
 
                   <div className="flex flex-col gap-1.5">
-                    <Label htmlFor="comment">{t('commentLabel')}</Label>
+                    <Label htmlFor="feedbackType">{t('typeLabel')}</Label>
+                    <select id="feedbackType" name="feedbackType" value={feedbackType} onChange={(event) => setFeedbackType(event.target.value)} required className="h-10 rounded-md border border-neutral-300 bg-white px-3">
+                      <option value="">{t('typePlaceholder')}</option>
+                      <option value="Complaint">{t('typeComplaint')}</option>
+                      <option value="Suggestion">{t('typeSuggestion')}</option>
+                      <option value="Compliment">{t('typeCompliment')}</option>
+                      <option value="Other">{t('typeOther')}</option>
+                    </select>
+                  </div>
+
+                  <div className="flex flex-col gap-1.5">
+                    <Label htmlFor="comment">{feedbackType === 'Complaint' ? t('complaintLabel') : t('commentLabel')}</Label>
                     <Textarea
                       id="comment"
                       name="comment"
                       rows={4}
-                      maxLength={2000}
-                      placeholder={t('commentPlaceholder')}
+                      maxLength={1000}
+                      placeholder={feedbackType === 'Complaint' ? t('complaintPlaceholder') : t('commentPlaceholder')}
+                      required={feedbackType === 'Complaint'}
                     />
+                  </div>
+
+                  <div className="flex flex-col gap-1.5">
+                    <Label htmlFor="suggestion">{t('suggestionLabel')}</Label>
+                    <Textarea id="suggestion" name="suggestion" rows={2} maxLength={400} placeholder={t('suggestionPlaceholder')} />
+                  </div>
+
+                  <div className="flex flex-col gap-1.5">
+                    <Label htmlFor="advice">{t('adviceLabel')}</Label>
+                    <Textarea id="advice" name="advice" rows={2} maxLength={400} placeholder={t('advicePlaceholder')} />
                   </div>
 
                   <details className="rounded-md border border-neutral-200 p-3">

@@ -29,12 +29,26 @@ export function readFeedbackForm(formData: FormData): SubmitFeedbackInput {
       return { questionId: questionId!, value };
     });
 
+  const feedbackType = optional('feedbackType');
+  const details = optional('comment');
+  const suggestion = optional('suggestion');
+  const advice = optional('advice');
+  const hasStructuredFields = Boolean(feedbackType || suggestion || advice);
+  const comment = hasStructuredFields
+    ? [
+        feedbackType ? `Type: ${feedbackType}` : undefined,
+        details ? `Details: ${details}` : undefined,
+        suggestion ? `Suggestion: ${suggestion}` : undefined,
+        advice ? `Advice: ${advice}` : undefined,
+      ].filter(Boolean).join('\n\n') || undefined
+    : details;
+
   return {
     submissionKey: String(formData.get('submissionKey')),
     formVersionId: optional('formVersionId'),
     answers: answers.length ? answers : undefined,
     rating: Number(formData.get('rating')),
-    comment: optional('comment'),
+    comment,
     customerName: optional('customerName'),
     customerEmail: optional('customerEmail'),
     customerPhone: optional('customerPhone'),
@@ -45,4 +59,5 @@ export function readFeedbackForm(formData: FormData): SubmitFeedbackInput {
     followUpAnswer: formData.get('skipFollowUp') ? undefined : optional('followUpAnswer'),
   };
 }
+
 

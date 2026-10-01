@@ -70,8 +70,20 @@
     "thankYouTitle": "شكرًا لك!",
     "thankYouDescription": "تم استلام ملاحظاتك حول {branchName}.",
     "heading": "كيف كانت زيارتك؟",
+    "typeLabel": "ما الذي تود مشاركته؟",
+    "typePlaceholder": "اختر خيارًا",
+    "typeComplaint": "شكوى",
+    "typeSuggestion": "اقتراح",
+    "typeCompliment": "إشادة",
+    "typeOther": "أخرى",
+    "complaintLabel": "ما الذي حدث بشكل غير مرضٍ؟",
+    "complaintPlaceholder": "أخبرنا بما حدث حتى يتمكن الفريق من التحقق...",
     "commentLabel": "التعليقات (اختياري)",
     "commentPlaceholder": "أخبرنا بالمزيد عن زيارتك...",
+    "suggestionLabel": "كيف يمكننا التحسن؟ (اختياري)",
+    "suggestionPlaceholder": "شارك اقتراحًا عمليًا...",
+    "adviceLabel": "هل لديك نصيحة أخرى؟ (اختياري)",
+    "advicePlaceholder": "أي شيء آخر تود أن يعرفه الفريق...",
     "contactDisclosure": "مشاركة معلومات الاتصال الخاصة بك (اختياري)",
     "nameLabel": "الاسم",
     "emailLabel": "البريد الإلكتروني",
@@ -87,3 +99,4 @@
     "description": "ربما انتهت صلاحية رمز الملاحظات هذا أو تم استبداله. يرجى طلب الرمز الحالي من أحد الموظفين، أو محاولة المسح مرة أخرى."
   }
 }
+

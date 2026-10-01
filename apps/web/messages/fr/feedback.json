@@ -70,8 +70,20 @@
     "thankYouTitle": "Merci !",
     "thankYouDescription": "Votre avis pour {branchName} a bien été reçu.",
     "heading": "Comment s'est passée votre visite ?",
+    "typeLabel": "Que souhaitez-vous partager ?",
+    "typePlaceholder": "Choisissez une option",
+    "typeComplaint": "Réclamation",
+    "typeSuggestion": "Suggestion",
+    "typeCompliment": "Compliment",
+    "typeOther": "Autre",
+    "complaintLabel": "Qu'est-ce qui s'est mal passé ?",
+    "complaintPlaceholder": "Expliquez ce qui s'est passé afin que l'équipe puisse enquêter...",
     "commentLabel": "Commentaires (facultatif)",
     "commentPlaceholder": "Parlez-nous en davantage sur votre visite...",
+    "suggestionLabel": "Comment pourrions-nous nous améliorer ? (facultatif)",
+    "suggestionPlaceholder": "Partagez une suggestion concrète...",
+    "adviceLabel": "Un autre conseil ? (facultatif)",
+    "advicePlaceholder": "Toute autre information utile pour l'équipe...",
     "contactDisclosure": "Partagez vos coordonnées (facultatif)",
     "nameLabel": "Nom",
     "emailLabel": "E-mail",
@@ -87,3 +99,4 @@
     "description": "Ce code d'avis a peut-être expiré ou été remplacé. Demandez un code actuel à un membre du personnel, ou essayez de scanner à nouveau."
   }
 }
+

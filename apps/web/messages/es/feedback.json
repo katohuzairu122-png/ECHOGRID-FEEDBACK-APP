@@ -70,8 +70,20 @@
     "thankYouTitle": "¡Gracias!",
     "thankYouDescription": "Hemos recibido tu comentario para {branchName}.",
     "heading": "¿Cómo fue tu visita?",
+    "typeLabel": "¿Qué te gustaría compartir?",
+    "typePlaceholder": "Elige una opción",
+    "typeComplaint": "Queja",
+    "typeSuggestion": "Sugerencia",
+    "typeCompliment": "Felicitación",
+    "typeOther": "Otro",
+    "complaintLabel": "¿Qué salió mal?",
+    "complaintPlaceholder": "Cuéntanos qué ocurrió para que el equipo pueda investigarlo...",
     "commentLabel": "Comentarios (opcional)",
     "commentPlaceholder": "Cuéntanos más sobre tu visita...",
+    "suggestionLabel": "¿Cómo podríamos mejorar? (opcional)",
+    "suggestionPlaceholder": "Comparte una sugerencia práctica...",
+    "adviceLabel": "¿Algún otro consejo? (opcional)",
+    "advicePlaceholder": "Cualquier otra cosa que quieras que el equipo sepa...",
     "contactDisclosure": "Comparte tus datos de contacto (opcional)",
     "nameLabel": "Nombre",
     "emailLabel": "Correo electrónico",
@@ -87,3 +99,4 @@
     "description": "Este código de comentarios puede haber caducado o haber sido reemplazado. Pide a un miembro del personal un código actual, o intenta escanear de nuevo."
   }
 }
+
