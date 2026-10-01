@@ -16,3 +16,6 @@ export const REFRESH_TOKEN_COOKIE = 'ff_refresh_token';
 export const ADMIN_ACCESS_TOKEN_COOKIE = 'ff_admin_access_token';
 export const ADMIN_REFRESH_TOKEN_COOKIE = 'ff_admin_refresh_token';
 export const IMPERSONATING_COOKIE = 'ff_impersonating';
+/** Non-sensitive UUID identifying the dashboard tenant the user selected. */
+export const ACTIVE_BUSINESS_COOKIE = 'ff_active_business';
+
