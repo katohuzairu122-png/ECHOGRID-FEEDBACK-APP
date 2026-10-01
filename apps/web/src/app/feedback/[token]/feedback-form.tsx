@@ -69,7 +69,7 @@ export function FeedbackForm({ token, branchName, businessName, submissionKey, f
   // does not become a dead end: signed-out customers are offered phone OTP,
   // signed-in customers can collect the visit points, then open rewards.
   useEffect(() => {
-    if (submitState.success) router.replace(`/loyalty/${token}`);
+    if (submitState.success) router.replace(`/loyalty/${token}?feedback=received`);
   }, [router, submitState.success, token]);
 
   return (
