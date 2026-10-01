@@ -1,6 +1,7 @@
 'use client';
 
-import { useActionState } from 'react';
+import { useActionState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import {
   submitFeedbackAction,
@@ -50,6 +51,7 @@ interface FeedbackFormProps {
  * forward into step 2 as hidden inputs rather than re-entered.
  */
 export function FeedbackForm({ token, branchName, businessName, submissionKey, feedbackForm = null }: FeedbackFormProps) {
+  const router = useRouter();
   const [followUpState, followUpFormAction, followUpPending] = useActionState(
     generateFollowUpQuestionAction.bind(null, token),
     followUpInitial,
@@ -60,6 +62,14 @@ export function FeedbackForm({ token, branchName, businessName, submissionKey, f
   );
   // i18n & Multi-Currency Block 5.
   const t = useTranslations('feedback.submit');
+
+  // Feedback and loyalty share the same branch QR token. Continue directly
+  // into the customer check-in flow so an anonymous feedback submission
+  // does not become a dead end: signed-out customers are offered phone OTP,
+  // signed-in customers can collect the visit points, then open rewards.
+  useEffect(() => {
+    if (submitState.success) router.replace(`/loyalty/${token}`);
+  }, [router, submitState.success, token]);
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-center gap-4 bg-neutral-50 p-4 sm:p-8">
@@ -202,4 +212,5 @@ export function FeedbackForm({ token, branchName, businessName, submissionKey, f
     </main>
   );
 }
+
 
