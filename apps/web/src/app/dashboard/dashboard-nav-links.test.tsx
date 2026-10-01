@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import { DashboardNavLinks, isDashboardNavItemActive } from './dashboard-nav-links';
+import { DashboardNavLinks, getActiveDashboardNavHref, isDashboardNavItemActive } from './dashboard-nav-links';
 
 vi.mock('next/navigation', () => ({ usePathname: () => '/dashboard/feedback/forms' }));
 
@@ -20,5 +20,13 @@ describe('DashboardNavLinks', () => {
   it('does not activate routes that only share a string prefix', () => {
     expect(isDashboardNavItemActive('/dashboard/feedback-export', '/dashboard/feedback')).toBe(false);
   });
+
+  it('selects only the most specific nested navigation item', () => {
+    expect(getActiveDashboardNavHref('/dashboard/settings/team', [
+      { href: '/dashboard/settings', label: 'Settings' },
+      { href: '/dashboard/settings/team', label: 'Team' },
+    ])).toBe('/dashboard/settings/team');
+  });
 });
+
 

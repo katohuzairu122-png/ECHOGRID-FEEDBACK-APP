@@ -12,13 +12,22 @@ export function isDashboardNavItemActive(pathname: string, href: string): boolea
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
+/** When navigation entries are nested, only the most specific match is
+ * current (for example Team, not both Settings and Team). */
+export function getActiveDashboardNavHref(pathname: string, items: DashboardNavItem[]): string | undefined {
+  return items
+    .filter((item) => isDashboardNavItemActive(pathname, item.href))
+    .sort((a, b) => b.href.length - a.href.length)[0]?.href;
+}
+
 export function DashboardNavLinks({ items }: { items: DashboardNavItem[] }) {
   const pathname = usePathname();
+  const activeHref = getActiveDashboardNavHref(pathname, items);
 
   return (
     <>
       {items.map((item) => {
-        const active = isDashboardNavItemActive(pathname, item.href);
+        const active = activeHref === item.href;
         return (
           <Link
             key={item.href}
@@ -37,4 +46,5 @@ export function DashboardNavLinks({ items }: { items: DashboardNavItem[] }) {
     </>
   );
 }
+
 
