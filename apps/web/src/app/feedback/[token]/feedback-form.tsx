@@ -1,7 +1,6 @@
 'use client';
 
 import { useActionState, useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import {
   submitFeedbackAction,
@@ -23,6 +22,7 @@ import {
 } from '@/components/ui';
 import { PoweredByFooter } from '@/components/brand';
 import type { PublicFeedbackForm } from '@echo-grid-feedback/shared-types';
+import { navigateWithCommittedCookies } from '@/lib/browser-navigation';
 
 const followUpInitial: FollowUpQuestionState = {};
 const submitInitial: FeedbackFormState = {};
@@ -51,7 +51,6 @@ interface FeedbackFormProps {
  * forward into step 2 as hidden inputs rather than re-entered.
  */
 export function FeedbackForm({ token, branchName, businessName, submissionKey, feedbackForm = null }: FeedbackFormProps) {
-  const router = useRouter();
   const [feedbackType, setFeedbackType] = useState('');
   const [followUpState, followUpFormAction, followUpPending] = useActionState(
     generateFollowUpQuestionAction.bind(null, token),
@@ -69,8 +68,15 @@ export function FeedbackForm({ token, branchName, businessName, submissionKey, f
   // does not become a dead end: signed-out customers are offered phone OTP,
   // signed-in customers can collect the visit points, then open rewards.
   useEffect(() => {
-    if (submitState.success) router.replace(`/loyalty/${token}?feedback=received`);
-  }, [router, submitState.success, token]);
+    if (submitState.success) navigateWithCommittedCookies(`/loyalty/${token}?feedback=received`);
+  }, [submitState.success, token]);
+
+  // The thank-you confirmation belongs on the loyalty destination above
+  // sign-in/check-in. Avoid flashing the former feedback-page card while
+  // the browser starts that full-document navigation.
+  if (submitState.success) {
+    return <main aria-busy="true" className="min-h-screen bg-neutral-50" />;
+  }
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-center gap-4 bg-neutral-50 p-4 sm:p-8">

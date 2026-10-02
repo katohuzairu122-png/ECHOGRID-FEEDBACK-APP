@@ -5,10 +5,10 @@ import { renderWithIntl } from '@/test-utils';
 import { FeedbackForm } from './feedback-form';
 import { submitFeedbackAction, generateFollowUpQuestionAction } from '@/lib/actions/qr-feedback';
 
-const replaceMock = vi.fn();
+const { navigateMock } = vi.hoisted(() => ({ navigateMock: vi.fn() }));
 
-vi.mock('next/navigation', () => ({
-  useRouter: () => ({ replace: replaceMock }),
+vi.mock('@/lib/browser-navigation', () => ({
+  navigateWithCommittedCookies: navigateMock,
 }));
 
 // Server Actions can't actually run against a server inside a jsdom unit
@@ -88,7 +88,7 @@ describe('FeedbackForm', () => {
     expect(screen.queryByRole('button', { name: 'Skip' })).not.toBeInTheDocument();
   });
 
-  it('shows the thank-you screen after a successful submission', async () => {
+  it('moves the thank-you message to the loyalty destination after submission', async () => {
     const user = userEvent.setup();
     vi.mocked(generateFollowUpQuestionAction).mockResolvedValue({
       ready: true,
@@ -104,8 +104,8 @@ describe('FeedbackForm', () => {
     await user.click(screen.getByRole('button', { name: 'Continue' }));
     await user.click(await screen.findByRole('button', { name: 'Submit feedback' }));
 
-    expect(await screen.findByText('Thank you!')).toBeInTheDocument();
-    await waitFor(() => expect(replaceMock).toHaveBeenCalledWith('/loyalty/tok123?feedback=received'));
+    await waitFor(() => expect(navigateMock).toHaveBeenCalledWith('/loyalty/tok123?feedback=received'));
+    expect(screen.queryByText('Thank you!')).not.toBeInTheDocument();
   });
 
   it('requires an explanation for a complaint and offers optional suggestion and advice fields', async () => {

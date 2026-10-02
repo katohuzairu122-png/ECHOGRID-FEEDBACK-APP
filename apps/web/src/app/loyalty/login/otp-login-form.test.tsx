@@ -5,11 +5,10 @@ import { renderWithIntl as render } from '@/test-utils';
 import { OtpLoginForm } from './otp-login-form';
 import { requestOtpAction, verifyOtpAction } from '@/lib/actions/customer-auth';
 
-const replaceMock = vi.fn();
-const refreshMock = vi.fn();
+const { navigateMock } = vi.hoisted(() => ({ navigateMock: vi.fn() }));
 
-vi.mock('next/navigation', () => ({
-  useRouter: () => ({ replace: replaceMock, refresh: refreshMock }),
+vi.mock('@/lib/browser-navigation', () => ({
+  navigateWithCommittedCookies: navigateMock,
 }));
 
 // Server Actions can't run against a server inside jsdom -- mocked at the
@@ -71,8 +70,7 @@ describe('OtpLoginForm', () => {
     await user.click(screen.getByRole('button', { name: 'Verify' }));
 
     await waitFor(() => {
-      expect(replaceMock).toHaveBeenCalledWith('/loyalty/qr-token?feedback=received');
-      expect(refreshMock).toHaveBeenCalled();
+      expect(navigateMock).toHaveBeenCalledWith('/loyalty/qr-token?feedback=received');
     });
   });
 
