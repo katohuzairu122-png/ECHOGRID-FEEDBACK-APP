@@ -5,7 +5,7 @@ import { renderWithIntl as render } from '@/test-utils';
 import { OtpLoginForm } from './otp-login-form';
 import { requestOtpAction, verifyOtpAction } from '@/lib/actions/customer-auth';
 
-const navigateMock = vi.fn();
+const { navigateMock } = vi.hoisted(() => ({ navigateMock: vi.fn() }));
 
 vi.mock('@/lib/browser-navigation', () => ({
   navigateWithCommittedCookies: navigateMock,
