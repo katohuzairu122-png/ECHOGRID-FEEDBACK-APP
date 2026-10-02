@@ -1,6 +1,5 @@
 'use server';
 
-import type { FollowUpQuestionDto } from '@echo-grid-feedback/shared-types';
 import { publicApiFetch } from '@/lib/public-api-client';
 import { ApiError } from '@/lib/api-client';
 import { readFeedbackForm } from '@/lib/feedback-form';
@@ -37,20 +36,9 @@ export async function generateFollowUpQuestionAction(
 ): Promise<FollowUpQuestionState> {
   const parsed = readFeedbackForm(formData);
 
-  let question: string | undefined;
-  try {
-    const result = await publicApiFetch<FollowUpQuestionDto>(`/qr/${token}/follow-up-question`, {
-      method: 'POST',
-      body: JSON.stringify({ rating: parsed.rating, comment: parsed.comment }),
-    });
-    question = result.question;
-  } catch {
-    question = undefined;
-  }
-
   return {
     ready: true,
-    question,
+    question: undefined,
     rating: parsed.rating,
     comment: parsed.comment,
     customerName: parsed.customerName,
