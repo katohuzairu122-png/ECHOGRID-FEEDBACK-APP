@@ -27,9 +27,30 @@ async function mutate(path: string, method: 'POST' | 'PATCH' | 'DELETE', body?: 
   revalidatePath(teamPath);
 }
 
-export async function resendInvitationAction(id: string) { await mutate(`/team/invitations/${id}/resend`, 'POST'); }
-export async function cancelInvitationAction(id: string) { await mutate(`/team/invitations/${id}`, 'DELETE'); }
-export async function revokeTeamAccessAction(id: string) { await mutate(`/team/members/${id}`, 'DELETE'); }
+async function mutateWithState(
+  path: string,
+  method: 'POST' | 'DELETE',
+  success: string,
+): Promise<TeamActionState> {
+  try {
+    await mutate(path, method);
+    return { success };
+  } catch (error) {
+    return {
+      error: error instanceof ApiError ? error.message : 'The action could not be completed. Please try again.',
+    };
+  }
+}
+
+export async function resendInvitationAction(id: string, _state: TeamActionState) {
+  return mutateWithState(`/team/invitations/${id}/resend`, 'POST', 'Invitation resent.');
+}
+export async function cancelInvitationAction(id: string, _state: TeamActionState) {
+  return mutateWithState(`/team/invitations/${id}`, 'DELETE', 'Invitation cancelled.');
+}
+export async function revokeTeamAccessAction(id: string, _state: TeamActionState) {
+  return mutateWithState(`/team/members/${id}`, 'DELETE', 'Access revoked.');
+}
 export async function updateTeamAccessAction(id: string, formData: FormData) {
   await mutate(`/team/members/${id}`, 'PATCH', { roleId: String(formData.get('roleId') ?? ''), branchId: String(formData.get('branchId') ?? '') || null });
 }
