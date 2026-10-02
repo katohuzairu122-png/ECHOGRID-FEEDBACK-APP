@@ -71,6 +71,13 @@ export function FeedbackForm({ token, branchName, businessName, submissionKey, f
     if (submitState.success) navigateWithCommittedCookies(`/loyalty/${token}?feedback=received`);
   }, [submitState.success, token]);
 
+  // The thank-you confirmation belongs on the loyalty destination above
+  // sign-in/check-in. Avoid flashing the former feedback-page card while
+  // the browser starts that full-document navigation.
+  if (submitState.success) {
+    return <main aria-busy="true" className="min-h-screen bg-neutral-50" />;
+  }
+
   return (
     <main className="flex min-h-screen flex-col items-center justify-center gap-4 bg-neutral-50 p-4 sm:p-8">
       <Card className="w-full max-w-md">
