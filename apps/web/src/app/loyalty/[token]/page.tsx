@@ -10,7 +10,7 @@ import { CheckinPanel } from './checkin-panel';
 
 interface LoyaltyCheckinPageProps {
   params: Promise<{ token: string }>;
-  searchParams: Promise<{ feedback?: string }>;
+  searchParams: Promise<{ feedback?: string; autocheckin?: string }>;
 }
 
 /**
@@ -49,6 +49,7 @@ export default async function LoyaltyCheckinPage({ params, searchParams }: Loyal
         businessName={qr.businessName}
         signedIn={signedIn}
         feedbackReceived={query.feedback === 'received'}
+        autoCheckin={query.autocheckin === '1'}
       />
     </NextIntlClientProvider>
   );

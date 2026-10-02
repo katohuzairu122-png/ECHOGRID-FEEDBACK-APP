@@ -2,6 +2,7 @@
 
 import { useActionState, useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
+import { useRouter } from 'next/navigation';
 import type { BranchDto } from '@echo-grid-feedback/shared-types';
 import { createBranchAction, updateBranchAction, type BranchFormState } from '@/lib/actions/branches';
 import {
@@ -32,6 +33,7 @@ interface BranchFormDialogProps {
 }
 
 export function BranchFormDialog({ branch, trigger }: BranchFormDialogProps) {
+  const router = useRouter();
   const [open, setOpen] = useState(false);
   const action = branch ? updateBranchAction.bind(null, branch.id) : createBranchAction;
   const [state, formAction, pending] = useActionState(action, initialState);
@@ -61,8 +63,11 @@ export function BranchFormDialog({ branch, trigger }: BranchFormDialogProps) {
   // and would stay indistinguishable from "just succeeded" without this
   // explicit flag -- see BranchFormState in lib/actions/branches.ts.
   useEffect(() => {
-    if (state.success) setOpen(false);
-  }, [state]);
+    if (state.success) {
+      setOpen(false);
+      router.refresh();
+    }
+  }, [router, state.success]);
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
