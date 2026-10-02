@@ -5,6 +5,12 @@ import { renderWithIntl } from '@/test-utils';
 import type { BranchDto } from '@echo-grid-feedback/shared-types';
 import { BranchFormDialog } from './branch-form-dialog';
 import { createBranchAction, updateBranchAction } from '@/lib/actions/branches';
+const { refreshMock } = vi.hoisted(() => ({ refreshMock: vi.fn() }));
+
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ refresh: refreshMock }),
+}));
+
 
 // Server Actions can't actually run against a server inside a jsdom unit
 // test -- mocked at the module boundary so BranchFormDialog's OWN logic
