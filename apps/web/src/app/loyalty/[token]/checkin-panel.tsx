@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useEffect, useRef, useState, useTransition } from 'react';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import type { LoyaltyAccountDto } from '@echo-grid-feedback/shared-types';
@@ -14,6 +14,7 @@ interface CheckinPanelProps {
   businessName: string;
   signedIn: boolean;
   feedbackReceived?: boolean;
+  autoCheckin?: boolean;
 }
 
 /**
@@ -21,10 +22,11 @@ interface CheckinPanelProps {
  * redirect) but is a plain useTransition action, not a form -- checking in
  * has no fields to collect, just a single confirmation tap.
  */
-export function CheckinPanel({ token, branchName, businessName, signedIn, feedbackReceived = false }: CheckinPanelProps) {
+export function CheckinPanel({ token, branchName, businessName, signedIn, feedbackReceived = false, autoCheckin = false }: CheckinPanelProps) {
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string>();
   const [account, setAccount] = useState<LoyaltyAccountDto>();
+  const automaticCheckinStarted = useRef(false);
   // i18n & Multi-Currency Block 6.
   const t = useTranslations('loyalty.customer.checkin');
   const feedbackT = useTranslations('feedback.submit');
@@ -44,6 +46,12 @@ export function CheckinPanel({ token, branchName, businessName, signedIn, feedba
       }
     });
   };
+
+  useEffect(() => {
+    if (!signedIn || !autoCheckin || automaticCheckinStarted.current) return;
+    automaticCheckinStarted.current = true;
+    handleCheckin();
+  }, [autoCheckin, signedIn]);
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-center gap-4 bg-neutral-50 p-4 sm:p-8">
@@ -83,7 +91,7 @@ export function CheckinPanel({ token, branchName, businessName, signedIn, feedba
                 </Button>
               ) : (
                 <Link
-                  href={`/loyalty/login?next=/loyalty/${token}`}
+                  href={`/loyalty/login?next=${encodeURIComponent(`/loyalty/${token}?autocheckin=1${feedbackReceived ? '&feedback=received' : ''}`)}`}
                   className={buttonVariants({ size: 'lg', className: 'w-full' })}
                 >
                   {t('signInToCheckIn')}
