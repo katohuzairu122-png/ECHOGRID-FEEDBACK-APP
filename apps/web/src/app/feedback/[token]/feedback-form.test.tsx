@@ -5,7 +5,7 @@ import { renderWithIntl } from '@/test-utils';
 import { FeedbackForm } from './feedback-form';
 import { submitFeedbackAction, generateFollowUpQuestionAction } from '@/lib/actions/qr-feedback';
 
-const navigateMock = vi.fn();
+const { navigateMock } = vi.hoisted(() => ({ navigateMock: vi.fn() }));
 
 vi.mock('@/lib/browser-navigation', () => ({
   navigateWithCommittedCookies: navigateMock,
