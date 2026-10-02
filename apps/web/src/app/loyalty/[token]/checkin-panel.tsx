@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState, useTransition } from 'react';
+import { useCallback, useEffect, useRef, useState, useTransition } from 'react';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import type { LoyaltyAccountDto } from '@echo-grid-feedback/shared-types';
@@ -31,7 +31,7 @@ export function CheckinPanel({ token, branchName, businessName, signedIn, feedba
   const t = useTranslations('loyalty.customer.checkin');
   const feedbackT = useTranslations('feedback.submit');
 
-  const handleCheckin = () => {
+  const handleCheckin = useCallback(() => {
     setError(undefined);
     startTransition(async () => {
       try {
@@ -45,13 +45,13 @@ export function CheckinPanel({ token, branchName, businessName, signedIn, feedba
         setError(t('genericError'));
       }
     });
-  };
+  }, [t, token]);
 
   useEffect(() => {
     if (!signedIn || !autoCheckin || automaticCheckinStarted.current) return;
     automaticCheckinStarted.current = true;
     handleCheckin();
-  }, [autoCheckin, signedIn]);
+  }, [autoCheckin, handleCheckin, signedIn]);
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-center gap-4 bg-neutral-50 p-4 sm:p-8">
