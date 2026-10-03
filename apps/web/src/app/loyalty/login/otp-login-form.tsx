@@ -1,6 +1,6 @@
 'use client';
 
-import { useActionState, useState, type FormEvent } from 'react';
+import { useActionState } from 'react';
 import { useTranslations } from 'next-intl';
 import {
   requestOtpAction,
@@ -8,64 +8,29 @@ import {
 } from '@/lib/actions/customer-auth';
 import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Input, Label } from '@/components/ui';
 import { Logo } from '@/components/brand';
-import { navigateWithCommittedCookies } from '@/lib/browser-navigation';
 
 const requestInitial: OtpRequestState = {};
 
 interface OtpLoginFormProps {
   next: string;
-}
-
-interface VerifyResponse {
-  error?: string;
+  initialPhone?: string;
+  verifyError?: string;
 }
 
 /**
- * Two-step SMS OTP sign-in. The request step is a Server Action; verification
- * uses a same-origin route handler so its Set-Cookie header is written directly
- * to the browser response before navigation. This avoids Cloudflare dropping
- * cookie mutations attached to a Server Action response.
+ * Two-step SMS OTP sign-in. The request step is a Server Action. The verify
+ * step is a native document POST: the route sets the httpOnly customer cookie
+ * and redirects to the QR loyalty page in one response, so Cloudflare and the
+ * browser cannot race a separate client navigation against cookie storage.
  */
-export function OtpLoginForm({ next }: OtpLoginFormProps) {
+export function OtpLoginForm({ next, initialPhone, verifyError }: OtpLoginFormProps) {
   const [requestState, requestFormAction, requestPending] = useActionState(
     requestOtpAction,
     requestInitial,
   );
-  const [verifyPending, setVerifyPending] = useState(false);
-  const [verifyError, setVerifyError] = useState<string>();
-  // i18n & Multi-Currency Block 6.
   const t = useTranslations('loyalty.customer.login');
-
-  const handleVerify = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    setVerifyError(undefined);
-    setVerifyPending(true);
-
-    const formData = new FormData(event.currentTarget);
-    try {
-      const response = await fetch('/api/customer-auth/otp/verify', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          phone: String(formData.get('phone') ?? ''),
-          code: String(formData.get('code') ?? ''),
-        }),
-      });
-      const result = (await response.json().catch(() => ({}))) as VerifyResponse;
-      if (!response.ok) {
-        setVerifyError(result.error ?? t('genericError'));
-        return;
-      }
-
-      // fetch has fully processed the Set-Cookie response at this point. A
-      // document navigation now carries the new customer session.
-      navigateWithCommittedCookies(next);
-    } catch {
-      setVerifyError(t('genericError'));
-    } finally {
-      setVerifyPending(false);
-    }
-  };
+  const verificationPhone = requestState.sent ? requestState.phone : initialPhone;
+  const codeSent = Boolean(verificationPhone);
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-center gap-8 bg-neutral-50 p-8">
@@ -74,13 +39,13 @@ export function OtpLoginForm({ next }: OtpLoginFormProps) {
         <CardHeader>
           <CardTitle>{t('title')}</CardTitle>
           <CardDescription>
-            {requestState.sent
-              ? t('codeSentDescription', { phone: requestState.phone ?? '' })
+            {codeSent
+              ? t('codeSentDescription', { phone: verificationPhone ?? '' })
               : t('phoneDescription')}
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {!requestState.sent ? (
+          {!codeSent ? (
             <form action={requestFormAction} className="flex flex-col gap-4">
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="phone">{t('phoneLabel')}</Label>
@@ -105,8 +70,9 @@ export function OtpLoginForm({ next }: OtpLoginFormProps) {
               </Button>
             </form>
           ) : (
-            <form onSubmit={handleVerify} className="flex flex-col gap-4">
-              <input type="hidden" name="phone" value={requestState.phone} />
+            <form action="/api/customer-auth/otp/verify" method="post" className="flex flex-col gap-4">
+              <input type="hidden" name="phone" value={verificationPhone} />
+              <input type="hidden" name="next" value={next} />
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="code">{t('codeLabel')}</Label>
                 <Input
@@ -123,8 +89,8 @@ export function OtpLoginForm({ next }: OtpLoginFormProps) {
                   {verifyError}
                 </p>
               )}
-              <Button type="submit" disabled={verifyPending} className="w-full">
-                {verifyPending ? t('verifying') : t('verify')}
+              <Button type="submit" className="w-full">
+                {t('verify')}
               </Button>
             </form>
           )}
