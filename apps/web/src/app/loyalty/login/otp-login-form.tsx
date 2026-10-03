@@ -1,51 +1,71 @@
 'use client';
 
-import { useActionState, useEffect } from 'react';
+import { useActionState, useState, type FormEvent } from 'react';
 import { useTranslations } from 'next-intl';
 import {
   requestOtpAction,
-  verifyOtpAction,
   type OtpRequestState,
-  type OtpVerifyState,
 } from '@/lib/actions/customer-auth';
 import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Input, Label } from '@/components/ui';
 import { Logo } from '@/components/brand';
 import { navigateWithCommittedCookies } from '@/lib/browser-navigation';
 
 const requestInitial: OtpRequestState = {};
-const verifyInitial: OtpVerifyState = {};
 
 interface OtpLoginFormProps {
   next: string;
 }
 
+interface VerifyResponse {
+  error?: string;
+}
+
 /**
- * Two-step SMS OTP sign-in, the customer counterpart to app/login/page.tsx.
- * Both steps are separate useActionState-bound forms rather than one form
- * with conditional fields -- requestState.sent gates which one renders, so
- * the phone number (needed by BOTH steps) is carried forward as a hidden
- * field in the verify form rather than re-typed.
+ * Two-step SMS OTP sign-in. The request step is a Server Action; verification
+ * uses a same-origin route handler so its Set-Cookie header is written directly
+ * to the browser response before navigation. This avoids Cloudflare dropping
+ * cookie mutations attached to a Server Action response.
  */
 export function OtpLoginForm({ next }: OtpLoginFormProps) {
   const [requestState, requestFormAction, requestPending] = useActionState(
     requestOtpAction,
     requestInitial,
   );
-  const [verifyState, verifyFormAction, verifyPending] = useActionState(
-    verifyOtpAction,
-    verifyInitial,
-  );
-  useEffect(() => {
-    if (!verifyState.success || !verifyState.next) return;
-
-    // The action response that stores the httpOnly cookie has now completed.
-    // A fresh navigation will include it, preventing a verified customer from
-    // being sent back to the phone-number step by the loyalty page.
-    navigateWithCommittedCookies(verifyState.next);
-  }, [verifyState.next, verifyState.success]);
-
+  const [verifyPending, setVerifyPending] = useState(false);
+  const [verifyError, setVerifyError] = useState<string>();
   // i18n & Multi-Currency Block 6.
   const t = useTranslations('loyalty.customer.login');
+
+  const handleVerify = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setVerifyError(undefined);
+    setVerifyPending(true);
+
+    const formData = new FormData(event.currentTarget);
+    try {
+      const response = await fetch('/api/customer-auth/otp/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          phone: String(formData.get('phone') ?? ''),
+          code: String(formData.get('code') ?? ''),
+        }),
+      });
+      const result = (await response.json().catch(() => ({}))) as VerifyResponse;
+      if (!response.ok) {
+        setVerifyError(result.error ?? t('genericError'));
+        return;
+      }
+
+      // fetch has fully processed the Set-Cookie response at this point. A
+      // document navigation now carries the new customer session.
+      navigateWithCommittedCookies(next);
+    } catch {
+      setVerifyError(t('genericError'));
+    } finally {
+      setVerifyPending(false);
+    }
+  };
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-center gap-8 bg-neutral-50 p-8">
@@ -85,9 +105,8 @@ export function OtpLoginForm({ next }: OtpLoginFormProps) {
               </Button>
             </form>
           ) : (
-            <form action={verifyFormAction} className="flex flex-col gap-4">
+            <form onSubmit={handleVerify} className="flex flex-col gap-4">
               <input type="hidden" name="phone" value={requestState.phone} />
-              <input type="hidden" name="next" value={next} />
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="code">{t('codeLabel')}</Label>
                 <Input
@@ -99,9 +118,9 @@ export function OtpLoginForm({ next }: OtpLoginFormProps) {
                   required
                 />
               </div>
-              {verifyState.error && (
+              {verifyError && (
                 <p role="alert" className="text-sm text-danger">
-                  {verifyState.error}
+                  {verifyError}
                 </p>
               )}
               <Button type="submit" disabled={verifyPending} className="w-full">
