@@ -1,15 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen, waitFor } from '@testing-library/react';
+import { screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithIntl as render } from '@/test-utils';
 import { OtpLoginForm } from './otp-login-form';
 import { requestOtpAction } from '@/lib/actions/customer-auth';
-
-const { navigateMock } = vi.hoisted(() => ({ navigateMock: vi.fn() }));
-
-vi.mock('@/lib/browser-navigation', () => ({
-  navigateWithCommittedCookies: navigateMock,
-}));
 
 vi.mock('@/lib/actions/customer-auth', () => ({
   requestOtpAction: vi.fn(),
@@ -18,7 +12,6 @@ vi.mock('@/lib/actions/customer-auth', () => ({
 describe('OtpLoginForm', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.stubGlobal('fetch', vi.fn());
   });
 
   it('starts on the phone-entry step, not the code-entry step', () => {
@@ -51,44 +44,36 @@ describe('OtpLoginForm', () => {
     expect(screen.queryByLabelText('Verification code')).not.toBeInTheDocument();
   });
 
-  it('navigates only after the verification route has committed the customer cookie', async () => {
+  it('posts verification and the QR return path as one native navigation', async () => {
     const user = userEvent.setup();
     vi.mocked(requestOtpAction).mockResolvedValue({ sent: true, phone: '+15551234567' });
-    vi.mocked(fetch).mockResolvedValue({
-      ok: true,
-      json: async () => ({ success: true }),
-    } as Response);
 
-    render(<OtpLoginForm next="/loyalty/qr-token?feedback=received" />);
+    render(<OtpLoginForm next="/loyalty/qr-token?autocheckin=1&feedback=received" />);
     await user.type(screen.getByLabelText('Phone number'), '+15551234567');
     await user.click(screen.getByRole('button', { name: 'Send code' }));
-    await user.type(await screen.findByLabelText('Verification code'), '123456');
-    await user.click(screen.getByRole('button', { name: 'Verify' }));
 
-    await waitFor(() => {
-      expect(fetch).toHaveBeenCalledWith(
-        '/api/customer-auth/otp/verify',
-        expect.objectContaining({ method: 'POST' }),
-      );
-      expect(navigateMock).toHaveBeenCalledWith('/loyalty/qr-token?feedback=received');
+    const code = await screen.findByLabelText('Verification code');
+    const form = code.closest('form');
+    expect(form).toHaveAttribute('action', '/api/customer-auth/otp/verify');
+    expect(form).toHaveAttribute('method', 'post');
+    expect(form).toHaveFormValues({
+      phone: '+15551234567',
+      next: '/loyalty/qr-token?autocheckin=1&feedback=received',
+      code: '',
     });
   });
 
-  it('shows the error returned by the verification route on the code step', async () => {
-    const user = userEvent.setup();
-    vi.mocked(requestOtpAction).mockResolvedValue({ sent: true, phone: '+15551234567' });
-    vi.mocked(fetch).mockResolvedValue({
-      ok: false,
-      json: async () => ({ error: 'Code is invalid or has expired.' }),
-    } as Response);
+  it('keeps the customer on the code step when verification redirects back with an error', () => {
+    render(
+      <OtpLoginForm
+        next="/loyalty/dashboard"
+        initialPhone="+15551234567"
+        verifyError="Code is invalid or has expired."
+      />,
+    );
 
-    render(<OtpLoginForm next="/loyalty/dashboard" />);
-    await user.type(screen.getByLabelText('Phone number'), '+15551234567');
-    await user.click(screen.getByRole('button', { name: 'Send code' }));
-    await user.type(await screen.findByLabelText('Verification code'), '000000');
-    await user.click(screen.getByRole('button', { name: 'Verify' }));
-
-    expect(await screen.findByRole('alert')).toHaveTextContent('Code is invalid');
-    expect(navigateMock).not.toHaveBeenCalled();
+    expect(screen.getByLabelText('Verification code')).toBeInTheDocument();
+    expect(screen.getByRole('alert')).toHaveTextContent('Code is invalid');
+    expect(screen.queryByLabelText('Phone number')).not.toBeInTheDocument();
   });
 });
