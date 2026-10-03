@@ -57,7 +57,25 @@ describe('TwilioVerifyService', () => {
     ).resolves.toBe(false);
   });
 
-  it('returns a safe application error when Twilio rejects the request', async () => {
+  it('explains Twilio send-attempt limits instead of reporting an outage', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ code: 60203, message: 'Max send attempts reached' }), {
+          status: 429,
+        }),
+      ),
+    );
+
+    await expect(new TwilioVerifyService(credentials).request('+15551234567')).rejects.toMatchObject({
+      code: 'OTP_SEND_LIMIT',
+      status: 429,
+      message:
+        'Too many verification codes were requested. Please wait 10 minutes, then request a new code.',
+    });
+  });
+
+  it('returns an actionable validation error for an invalid phone number', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValue(
@@ -68,8 +86,25 @@ describe('TwilioVerifyService', () => {
     );
 
     await expect(new TwilioVerifyService(credentials).request('+15551234567')).rejects.toMatchObject({
+      code: 'OTP_PHONE_INVALID',
+      status: 400,
+      message: 'Enter a valid mobile number in international format, including the country code.',
+    });
+  });
+
+  it('keeps unknown Twilio failures behind a safe provider error', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ code: 60001, message: 'Provider detail' }), {
+          status: 500,
+        }),
+      ),
+    );
+
+    await expect(new TwilioVerifyService(credentials).request('+15551234567')).rejects.toMatchObject({
       code: 'OTP_PROVIDER_ERROR',
-      status: 500,
+      status: 503,
       message: 'The verification service is temporarily unavailable. Please try again.',
     });
   });

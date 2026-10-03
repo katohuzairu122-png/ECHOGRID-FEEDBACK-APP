@@ -50,9 +50,58 @@ export class TwilioVerifyService {
         providerCode: payload.code,
         status: response.status,
       });
+
+      // These are expected, actionable Verify rejections rather than a
+      // provider outage. Twilio keeps one verification lifecycle alive for
+      // about ten minutes and permits at most five sends in that lifecycle.
+      // Exposing that recovery instruction prevents customers from repeatedly
+      // pressing Send code while the same lifecycle remains locked.
+      if (
+        response.status === 429 ||
+        payload.code === 60203 ||
+        payload.code === 60207 ||
+        payload.code === 60212 ||
+        payload.code === 60624 ||
+        payload.code === 60626
+      ) {
+        throw new AppError(
+          'Too many verification codes were requested. Please wait 10 minutes, then request a new code.',
+          429,
+          'OTP_SEND_LIMIT',
+        );
+      }
+
+      if (
+        payload.code === 60238 ||
+        payload.code === 60410 ||
+        payload.code === 60412 ||
+        payload.code === 60605
+      ) {
+        throw new AppError(
+          'SMS verification is currently blocked for this number. Please contact support.',
+          403,
+          'OTP_DELIVERY_BLOCKED',
+        );
+      }
+
+      if (
+        payload.code === 60006 ||
+        payload.code === 60200 ||
+        payload.code === 60205 ||
+        payload.code === 60610 ||
+        payload.code === 60612 ||
+        payload.code === 60625
+      ) {
+        throw new AppError(
+          'Enter a valid mobile number in international format, including the country code.',
+          400,
+          'OTP_PHONE_INVALID',
+        );
+      }
+
       throw new AppError(
         'The verification service is temporarily unavailable. Please try again.',
-        500,
+        503,
         'OTP_PROVIDER_ERROR',
       );
     }
