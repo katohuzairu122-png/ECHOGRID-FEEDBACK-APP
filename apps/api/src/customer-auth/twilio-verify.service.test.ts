@@ -44,6 +44,19 @@ describe('TwilioVerifyService', () => {
     await expect(service.check('+15551234567', '000000')).resolves.toBe(false);
   });
 
+  it('treats an expired or already-consumed verification as an invalid code', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ code: 20404, message: 'Not found' }), { status: 404 }),
+      ),
+    );
+
+    await expect(
+      new TwilioVerifyService(credentials).check('+15551234567', '123456'),
+    ).resolves.toBe(false);
+  });
+
   it('returns a safe application error when Twilio rejects the request', async () => {
     vi.stubGlobal(
       'fetch',
