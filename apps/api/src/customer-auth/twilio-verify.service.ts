@@ -101,7 +101,7 @@ export class TwilioVerifyService {
 
       throw new AppError(
         'The verification service is temporarily unavailable. Please try again.',
-        503,
+        500,
         'OTP_PROVIDER_ERROR',
       );
     }

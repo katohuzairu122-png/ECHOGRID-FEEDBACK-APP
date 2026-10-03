@@ -104,7 +104,7 @@ describe('TwilioVerifyService', () => {
 
     await expect(new TwilioVerifyService(credentials).request('+15551234567')).rejects.toMatchObject({
       code: 'OTP_PROVIDER_ERROR',
-      status: 503,
+      status: 500,
       message: 'The verification service is temporarily unavailable. Please try again.',
     });
   });
