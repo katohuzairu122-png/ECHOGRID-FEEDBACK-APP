@@ -13,8 +13,8 @@ const requestInitial: OtpRequestState = {};
 
 interface OtpLoginFormProps {
   next: string;
-  initialPhone?: string;
-  verifyError?: string;
+  initialPhone?: string | undefined;
+  verifyError?: string | undefined;
 }
 
 /**
