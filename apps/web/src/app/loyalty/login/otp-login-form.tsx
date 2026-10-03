@@ -2,6 +2,7 @@
 
 import { useActionState } from 'react';
 import { useTranslations } from 'next-intl';
+import Link from 'next/link';
 import {
   requestOtpAction,
   type OtpRequestState,
@@ -92,6 +93,12 @@ export function OtpLoginForm({ next, initialPhone, verifyError }: OtpLoginFormPr
               <Button type="submit" className="w-full">
                 {t('verify')}
               </Button>
+              <Link
+                href={`/loyalty/login?next=${encodeURIComponent(next)}`}
+                className="text-center text-sm font-medium text-brand-700 hover:underline"
+              >
+                {t('sendCode')}
+              </Link>
             </form>
           )}
         </CardContent>

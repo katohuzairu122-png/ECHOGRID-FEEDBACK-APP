@@ -12,17 +12,14 @@ interface TwilioVerifyResponse {
   message?: string;
 }
 
-/**
- * Cloudflare Workers-compatible Twilio Verify client. Verify owns OTP
- * generation, delivery, expiry, attempt limits, and one-time consumption;
- * Echo Grid only asks it to start a verification and approve a submitted
- * code. This avoids provisioning an SMS-capable sender number solely for
- * login codes.
- */
 export class TwilioVerifyService {
   constructor(private readonly credentials: TwilioVerifyCredentials) {}
 
-  private async post(path: string, body: URLSearchParams): Promise<TwilioVerifyResponse> {
+  private async post(
+    path: string,
+    body: URLSearchParams,
+    missingVerificationIsInvalid = false,
+  ): Promise<TwilioVerifyResponse> {
     const { accountSid, authToken, serviceSid } = this.credentials;
     const response = await fetch(
       `https://verify.twilio.com/v2/Services/${serviceSid}/${path}`,
@@ -38,8 +35,17 @@ export class TwilioVerifyService {
 
     const payload = (await response.json().catch(() => ({}))) as TwilioVerifyResponse;
     if (!response.ok) {
-      // Provider code and HTTP status are safe diagnostics. Do not include
-      // Twilio's free-text response because it can echo phone numbers.
+      // Twilio removes a verification after it expires, is approved, or
+      // reaches its attempt limit. VerificationCheck then returns 404/20404;
+      // that means the submitted code is no longer valid, not that Twilio is
+      // unavailable.
+      if (
+        missingVerificationIsInvalid &&
+        (response.status === 404 || payload.code === 20404)
+      ) {
+        return payload;
+      }
+
       console.error('Twilio Verify request failed.', {
         providerCode: payload.code,
         status: response.status,
@@ -61,6 +67,7 @@ export class TwilioVerifyService {
     const result = await this.post(
       'VerificationCheck',
       new URLSearchParams({ To: phone, Code: code }),
+      true,
     );
     return result.status === 'approved';
   }
