@@ -8,6 +8,9 @@ import { loadMessages } from '@/i18n/load-messages';
 import { formats } from '@/i18n/formats';
 import { CheckinPanel } from './checkin-panel';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 interface LoyaltyCheckinPageProps {
   params: Promise<{ token: string }>;
   searchParams: Promise<{ feedback?: string; autocheckin?: string }>;
@@ -17,10 +20,8 @@ interface LoyaltyCheckinPageProps {
  * The loyalty counterpart to app/feedback/[token]/page.tsx -- same QR
  * token, same anonymous server-side resolve-or-404 pattern, different
  * destination action (check in for points instead of leaving feedback).
- * Whether the visitor already has a customer session is resolved here
- * (server-side, from the httpOnly cookie) and handed down as a plain
- * boolean, so the client component never needs to guess or flash between
- * states.
+ * This route is always dynamic because its signed-in state comes from the
+ * customer cookie written immediately before the OTP redirect.
  */
 export default async function LoyaltyCheckinPage({ params, searchParams }: LoyaltyCheckinPageProps) {
   const [{ token }, query] = await Promise.all([params, searchParams]);
@@ -35,9 +36,6 @@ export default async function LoyaltyCheckinPage({ params, searchParams }: Loyal
 
   const signedIn = await hasCustomerSession();
 
-  // Same reasoning as feedback/[token]/page.tsx: fully anonymous, so qr's
-  // own defaultLocale (i18n & Multi-Currency Block 2) is the only signal
-  // available for which business's locale this page should render in.
   const locale = resolveSupportedLocale(qr.defaultLocale);
   const messages = await loadMessages(locale);
 
