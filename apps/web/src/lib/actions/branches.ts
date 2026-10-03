@@ -28,7 +28,9 @@ export async function createBranchAction(
     return { error: 'Something went wrong. Please try again.' };
   }
 
-  revalidatePath('/dashboard/branches');
+  // The client refreshes after receiving this success result. Calling
+  // revalidatePath here can fail in the Cloudflare runtime after the branch
+  // has already been created, which incorrectly sends the user to the error page.
   return { success: true };
 }
 
@@ -57,7 +59,7 @@ export async function updateBranchAction(
     return { error: 'Something went wrong. Please try again.' };
   }
 
-  revalidatePath('/dashboard/branches');
+  // The client refreshes after receiving this success result.
   return { success: true };
 }
 
