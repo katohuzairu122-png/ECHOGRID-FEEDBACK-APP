@@ -35,12 +35,19 @@ export const CUSTOMER_LOGIN_PATH = '/loyalty/login';
  * caller could swallow this: a bare `catch {}` around customerApiFetch
  * would turn the redirect back into a broken page.
  */
-export async function customerApiFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
+export async function customerApiFetch<T>(
+  path: string,
+  init: RequestInit = {},
+  loginNext?: string,
+): Promise<T> {
+  const loginPath = loginNext
+    ? `${CUSTOMER_LOGIN_PATH}?next=${encodeURIComponent(loginNext)}`
+    : CUSTOMER_LOGIN_PATH;
   const token = await getCustomerToken();
   if (!token) {
     // No token at all -- same destination, reached without a wasted API
     // round trip. Previously an immediate uncaught ApiError.
-    redirect(CUSTOMER_LOGIN_PATH);
+    redirect(loginPath);
   }
 
   const headers = new Headers(init.headers);
@@ -53,7 +60,7 @@ export async function customerApiFetch<T>(path: string, init: RequestInit = {}):
     return await parseEnvelope<T>(response);
   } catch (err) {
     if (err instanceof ApiError && err.status === 401) {
-      redirect(CUSTOMER_LOGIN_PATH);
+      redirect(loginPath);
     }
     // Every other failure keeps surfacing as an ApiError for the nearest
     // error boundary. A 403, a 500 or a malformed envelope is not something
