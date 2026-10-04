@@ -21,16 +21,25 @@ import { AppError } from '../lib/errors';
  * feedback surface the same way AUTH_RATE_LIMITER guards pre-auth
  * endpoints -- IP is the only signal available pre-token-resolution.
  */
-export function rateLimit(
-  binding:
-    | 'AUTH_RATE_LIMITER'
-    | 'API_RATE_LIMITER'
-    | 'PUBLIC_RATE_LIMITER'
-    | 'OTP_RATE_LIMITER'
-    | 'FOLLOWUP_QUESTION_RATE_LIMITER',
-) {
+type RateLimitBinding =
+  | 'AUTH_RATE_LIMITER'
+  | 'API_RATE_LIMITER'
+  | 'PUBLIC_RATE_LIMITER'
+  | 'OTP_RATE_LIMITER'
+  | 'FOLLOWUP_QUESTION_RATE_LIMITER';
+
+type RateLimitKeyResolver = (request: Request) => string | Promise<string>;
+
+export function rateLimit(binding: RateLimitBinding, resolveKey?: RateLimitKeyResolver) {
   return createMiddleware<{ Bindings: Bindings }>(async (c, next) => {
-    const key = c.req.header('cf-connecting-ip') ?? 'unknown';
+    // Server-side web actions reach this Worker through a Worker-to-Worker
+    // request, where cf-connecting-ip may identify the web Worker rather than
+    // the customer. Routes handling public identifiers (such as an OTP phone
+    // number) can therefore supply a stable subject key and avoid collapsing
+    // every customer into one shared rate-limit bucket.
+    const key = resolveKey
+      ? await resolveKey(c.req.raw.clone())
+      : c.req.header('cf-connecting-ip') ?? 'unknown';
     const { success } = await c.env[binding].limit({ key });
     if (!success) {
       throw new AppError('Too many requests. Please try again shortly.', 429, 'RATE_LIMITED');

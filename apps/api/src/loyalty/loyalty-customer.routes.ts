@@ -98,7 +98,11 @@ loyaltyCustomerRoutes.post('/checkin', async (c) => {
     // qr.routes.ts's feedback submit -- see fraud/velocity-tracker.ts for why
     // this is a KV layer distinct from this router's own PUBLIC_RATE_LIMITER.
     const velocity = new VelocityTracker(c.env.CACHE, c.env.FRAUD_DETECTION_SALT);
-    const ip = c.req.header('cf-connecting-ip') ?? 'unknown';
+    // This is an authenticated route reached through the web Worker. Key the
+    // velocity signal by the verified customer instead of the network hop;
+    // otherwise every customer can share the web Worker's address and trip
+    // one platform-wide counter.
+    const ip = `customer:${customerId}`;
 
     const breach = await velocity.checkVelocity({
       eventType: 'loyalty_checkin',
@@ -191,26 +195,22 @@ loyaltyCustomerRoutes.post('/checkin', async (c) => {
 
     if (cooldown.inCooldown) {
       const existing = await repos.loyaltyAccounts.findByCustomerAndBusiness(customerId, qrCode.businessId);
-      if (!existing) {
-        // Unreachable in the normal flow -- an active cooldown can only
-        // exist once an earlier check-in REQUEST already reached the
-        // recordCheckin call below and that transaction committed,
-        // auto-enrolling this customer. Fails closed instead of silently
-        // falling through to recordCheckin (which would just award points
-        // anyway, defeating the point of the cooldown) on the narrow chance
-        // the KV cooldown key outlived a rolled-back DB transaction.
-        throw new AppError('Loyalty account not found.', 404, 'LOYALTY_ACCOUNT_NOT_FOUND');
+      if (existing) {
+        await repos.fraudSignals.create({
+          businessId: qrCode.businessId,
+          branchId: qrCode.branchId,
+          feedbackId: null,
+          signalType: 'cooldown',
+          reasonCode: 'checkin_cooldown',
+          severity: 'low',
+          metadata: { customerId, windowSeconds: CHECKIN_COOLDOWN_SECONDS },
+        });
+        return ok(c, existing);
       }
-      await repos.fraudSignals.create({
-        businessId: qrCode.businessId,
-        branchId: qrCode.branchId,
-        feedbackId: null,
-        signalType: 'cooldown',
-        reasonCode: 'checkin_cooldown',
-        severity: 'low',
-        metadata: { customerId, windowSeconds: CHECKIN_COOLDOWN_SECONDS },
-      });
-      return ok(c, existing);
+      // A previous attempt can reserve the KV cooldown and then fail before
+      // recordCheckin commits. No account means no points were awarded, so
+      // retry the idempotent database operation instead of locking a new
+      // customer out for four hours.
     }
 
     const account = await new LoyaltyAccountService(db).recordCheckin(

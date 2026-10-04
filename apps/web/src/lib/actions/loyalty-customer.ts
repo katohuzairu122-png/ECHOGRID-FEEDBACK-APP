@@ -35,10 +35,14 @@ export interface CheckinResult {
 
 export async function checkinAction(qrToken: string): Promise<CheckinResult> {
   try {
-    const account = await customerApiFetch<LoyaltyAccountDto>('/loyalty/me/checkin', {
-      method: 'POST',
-      body: JSON.stringify({ qrToken }),
-    });
+    const account = await customerApiFetch<LoyaltyAccountDto>(
+      '/loyalty/me/checkin',
+      {
+        method: 'POST',
+        body: JSON.stringify({ qrToken }),
+      },
+      `/loyalty/${qrToken}?autocheckin=1`,
+    );
     revalidatePath('/loyalty/dashboard');
     revalidatePath(`/loyalty/dashboard/${account.businessId}`);
     return { account };

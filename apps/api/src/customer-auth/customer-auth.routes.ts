@@ -51,7 +51,13 @@ function createTwilioVerifyService(c: Context<{ Bindings: Bindings }>): TwilioVe
   });
 }
 
-customerAuthRoutes.post('/otp/request', rateLimit('OTP_RATE_LIMITER'), async (c) => {
+async function otpPhoneRateLimitKey(request: Request): Promise<string> {
+  const body = (await request.json().catch(() => ({}))) as { phone?: unknown };
+  const phone = typeof body.phone === 'string' ? body.phone.trim() : '';
+  return phone ? `phone:${phone}` : 'phone:invalid';
+}
+
+customerAuthRoutes.post('/otp/request', rateLimit('OTP_RATE_LIMITER', otpPhoneRateLimitKey), async (c) => {
   const body = await parseJsonBody(c.req.raw, requestOtpSchema);
   if (c.env.ENVIRONMENT === 'production') {
     await createTwilioVerifyService(c).request(body.phone);
@@ -61,7 +67,7 @@ customerAuthRoutes.post('/otp/request', rateLimit('OTP_RATE_LIMITER'), async (c)
   return c.body(null, 204);
 });
 
-customerAuthRoutes.post('/otp/verify', rateLimit('OTP_RATE_LIMITER'), async (c) => {
+customerAuthRoutes.post('/otp/verify', rateLimit('OTP_RATE_LIMITER', otpPhoneRateLimitKey), async (c) => {
   const body = await parseJsonBody(c.req.raw, verifyOtpSchema);
   const result = await withCustomerAuthService(c, async (service) => {
     if (c.env.ENVIRONMENT !== 'production') {
