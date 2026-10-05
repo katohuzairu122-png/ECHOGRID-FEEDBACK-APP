@@ -102,6 +102,5 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     path: '/',
     maxAge: CUSTOMER_TOKEN_MAX_AGE,
   });
-  response.cookies.delete(CUSTOMER_PENDING_PHONE_COOKIE);
   return response;
 }
