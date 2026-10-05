@@ -130,12 +130,15 @@ api.route('/qr', qrRoutes);
 api.route('/feedback', feedbackRoutes);
 api.route('/feedback-forms', feedbackFormRoutes);
 api.route('/customer-auth', customerAuthRoutes);
-api.route('/loyalty', loyaltyRoutes);
+// Customer subtrees must precede staff wildcard middleware at the parent.
+// Hono runs matching middleware in registration order; /loyalty/* also
+// matches /loyalty/me/* and must not verify customer JWTs as staff.
 api.route('/loyalty/me', loyaltyCustomerRoutes);
+api.route('/loyalty', loyaltyRoutes);
 api.route('/analytics', analyticsRoutes);
 api.route('/notifications', notificationsRoutes);
-api.route('/messaging', messagingRoutes);
 api.route('/messaging/me', messagingCustomerRoutes);
+api.route('/messaging', messagingRoutes);
 // Continuing Development Block 5.1 (S7.1 minimal manual review) -- reads
 // fraud_signals (Block 3.1), which every detector since (3.2, 4.1, 4.3.2)
 // has been writing to with no staff-facing surface until now.
