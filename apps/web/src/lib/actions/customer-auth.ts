@@ -4,7 +4,13 @@ import { redirect } from 'next/navigation';
 import type { CustomerAuthResponse } from '@echo-grid-feedback/shared-types';
 import { publicApiFetch } from '@/lib/public-api-client';
 import { ApiError } from '@/lib/api-client';
-import { setCustomerSession, clearCustomerSession } from '@/lib/customer-session';
+import {
+  setCustomerSession,
+  clearCustomerSession,
+  setPendingCustomerPhone,
+  getPendingCustomerPhone,
+  clearPendingCustomerPhone,
+} from '@/lib/customer-session';
 
 export interface OtpRequestState {
   error?: string;
@@ -41,6 +47,7 @@ export async function requestOtpAction(
     return { error: 'Something went wrong. Please try again.' };
   }
 
+  await setPendingCustomerPhone(phone);
   return { sent: true, phone };
 }
 
@@ -55,7 +62,7 @@ export async function verifyOtpAction(
   _prevState: OtpVerifyState,
   formData: FormData,
 ): Promise<OtpVerifyState> {
-  const phone = String(formData.get('phone') ?? '').trim();
+  const phone = (await getPendingCustomerPhone()) ?? '';
   const code = String(formData.get('code') ?? '').trim();
   const requestedNext = String(formData.get('next') ?? '/loyalty/dashboard');
   const next = requestedNext.startsWith('/') && !requestedNext.startsWith('//')
@@ -74,6 +81,7 @@ export async function verifyOtpAction(
   }
 
   await setCustomerSession(result.accessToken);
+  await clearPendingCustomerPhone();
 
   // Return only after the Set-Cookie response has completed. The client then
   // performs a fresh document navigation carrying the new customer cookie.

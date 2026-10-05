@@ -6,3 +6,7 @@
  * needs it there.
  */
 export const CUSTOMER_TOKEN_COOKIE = 'ff_customer_token';
+
+
+/** Short-lived server-side binding between OTP request and verification. */
+export const CUSTOMER_PENDING_PHONE_COOKIE = 'ff_customer_pending_phone';
