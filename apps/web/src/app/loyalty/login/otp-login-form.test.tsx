@@ -76,4 +76,22 @@ describe('OtpLoginForm', () => {
     expect(screen.getByRole('alert')).toHaveTextContent('Code is invalid');
     expect(screen.queryByLabelText('Phone number')).not.toBeInTheDocument();
   });
+
+  it('explains an expired request on the phone step and allows requesting a fresh code', async () => {
+    const user = userEvent.setup();
+    vi.mocked(requestOtpAction).mockResolvedValue({ sent: true, phone: '+15551234567' });
+    render(
+      <OtpLoginForm
+        next="/loyalty/qr-token?autocheckin=1"
+        verifyError="Your verification request expired. Please request a new code."
+      />,
+    );
+
+    expect(screen.getByRole('alert')).toHaveTextContent('Your verification request expired');
+    await user.type(screen.getByLabelText('Phone number'), '+15551234567');
+    await user.click(screen.getByRole('button', { name: 'Send code' }));
+    const code = await screen.findByLabelText('Verification code');
+    expect(code.closest('form')).toHaveFormValues({ next: '/loyalty/qr-token?autocheckin=1' });
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
 });

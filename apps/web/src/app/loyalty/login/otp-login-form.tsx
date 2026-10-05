@@ -32,6 +32,7 @@ export function OtpLoginForm({ next, initialPhone, verifyError }: OtpLoginFormPr
   const t = useTranslations('loyalty.customer.login');
   const verificationPhone = requestState.sent ? requestState.phone : initialPhone;
   const codeSent = Boolean(verificationPhone);
+  const currentVerifyError = requestState.sent ? undefined : verifyError;
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-center gap-8 bg-neutral-50 p-8">
@@ -61,9 +62,9 @@ export function OtpLoginForm({ next, initialPhone, verifyError }: OtpLoginFormPr
                 />
                 <p className="text-xs text-neutral-500">{t('phoneHint')}</p>
               </div>
-              {requestState.error && (
+              {(requestState.error || currentVerifyError) && (
                 <p role="alert" className="text-sm text-danger">
-                  {requestState.error}
+                  {requestState.error || currentVerifyError}
                 </p>
               )}
               <Button type="submit" disabled={requestPending} className="w-full">
@@ -84,9 +85,9 @@ export function OtpLoginForm({ next, initialPhone, verifyError }: OtpLoginFormPr
                   required
                 />
               </div>
-              {verifyError && (
+              {currentVerifyError && (
                 <p role="alert" className="text-sm text-danger">
-                  {verifyError}
+                  {currentVerifyError}
                 </p>
               )}
               <Button type="submit" className="w-full">
