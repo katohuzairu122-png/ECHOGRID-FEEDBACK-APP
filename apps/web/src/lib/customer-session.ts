@@ -1,6 +1,9 @@
 import 'server-only';
 import { cookies } from 'next/headers';
-import { CUSTOMER_TOKEN_COOKIE } from './customer-cookies';
+import {
+  CUSTOMER_PENDING_PHONE_COOKIE,
+  CUSTOMER_TOKEN_COOKIE,
+} from './customer-cookies';
 
 // Matches apps/api's CUSTOMER_ACCESS_TOKEN_TTL_SECONDS (customer-auth/customer-jwt.ts).
 const CUSTOMER_TOKEN_MAX_AGE = 90 * 24 * 60 * 60;
@@ -38,4 +41,28 @@ export async function hasCustomerSession(): Promise<boolean> {
 export async function clearCustomerSession(): Promise<void> {
   const store = await cookies();
   store.delete(CUSTOMER_TOKEN_COOKIE);
+}
+
+
+const CUSTOMER_PENDING_PHONE_MAX_AGE = 10 * 60;
+
+export async function setPendingCustomerPhone(phone: string): Promise<void> {
+  const store = await cookies();
+  store.set(CUSTOMER_PENDING_PHONE_COOKIE, phone, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    path: '/',
+    maxAge: CUSTOMER_PENDING_PHONE_MAX_AGE,
+  });
+}
+
+export async function getPendingCustomerPhone(): Promise<string | undefined> {
+  const store = await cookies();
+  return store.get(CUSTOMER_PENDING_PHONE_COOKIE)?.value;
+}
+
+export async function clearPendingCustomerPhone(): Promise<void> {
+  const store = await cookies();
+  store.delete(CUSTOMER_PENDING_PHONE_COOKIE);
 }

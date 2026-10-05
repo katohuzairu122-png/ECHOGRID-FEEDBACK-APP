@@ -1,7 +1,10 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import type { CustomerAuthResponse } from '@echo-grid-feedback/shared-types';
 import { ApiError } from '@/lib/api-client';
-import { CUSTOMER_TOKEN_COOKIE } from '@/lib/customer-cookies';
+import {
+  CUSTOMER_PENDING_PHONE_COOKIE,
+  CUSTOMER_TOKEN_COOKIE,
+} from '@/lib/customer-cookies';
 import { publicApiFetch } from '@/lib/public-api-client';
 
 const CUSTOMER_TOKEN_MAX_AGE = 90 * 24 * 60 * 60;
@@ -26,25 +29,26 @@ function verificationErrorRedirect(
   return NextResponse.redirect(target, 303);
 }
 
-export async function POST(request: Request): Promise<NextResponse> {
+export async function POST(request: NextRequest): Promise<NextResponse> {
   const contentType = request.headers.get('content-type') ?? '';
   const isFormPost =
     contentType.includes('application/x-www-form-urlencoded') ||
     contentType.includes('multipart/form-data');
 
-  let phone = '';
+  const phone = request.cookies.get(CUSTOMER_PENDING_PHONE_COOKIE)?.value.trim() ?? '';
+  let submittedPhone = '';
   let code = '';
   let next = '/loyalty/dashboard';
 
   try {
     if (isFormPost) {
       const formData = await request.formData();
-      phone = String(formData.get('phone') ?? '').trim();
+      submittedPhone = String(formData.get('phone') ?? '').trim();
       code = String(formData.get('code') ?? '').trim();
       next = safeNext(formData.get('next'));
     } else {
       const body = (await request.json()) as { phone?: unknown; code?: unknown; next?: unknown };
-      phone = typeof body.phone === 'string' ? body.phone.trim() : '';
+      submittedPhone = typeof body.phone === 'string' ? body.phone.trim() : '';
       code = typeof body.code === 'string' ? body.code.trim() : '';
       next = safeNext(body.next);
     }
@@ -55,8 +59,20 @@ export async function POST(request: Request): Promise<NextResponse> {
     return NextResponse.json({ error: 'Invalid request.' }, { status: 400 });
   }
 
-  if (!phone || !code) {
-    const error = 'Phone number and verification code are required.';
+  if (!phone) {
+    const error = 'Your verification request expired. Please request a new code.';
+    if (isFormPost) return verificationErrorRedirect(request, next, '', error);
+    return NextResponse.json({ error }, { status: 400 });
+  }
+
+  if (submittedPhone && submittedPhone !== phone) {
+    const error = 'The verification request does not match this phone number. Please request a new code.';
+    if (isFormPost) return verificationErrorRedirect(request, next, phone, error);
+    return NextResponse.json({ error }, { status: 400 });
+  }
+
+  if (!code) {
+    const error = 'Verification code is required.';
     if (isFormPost) return verificationErrorRedirect(request, next, phone, error);
     return NextResponse.json({ error }, { status: 400 });
   }
@@ -86,5 +102,6 @@ export async function POST(request: Request): Promise<NextResponse> {
     path: '/',
     maxAge: CUSTOMER_TOKEN_MAX_AGE,
   });
+  response.cookies.delete(CUSTOMER_PENDING_PHONE_COOKIE);
   return response;
 }

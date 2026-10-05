@@ -57,10 +57,10 @@ describe('OtpLoginForm', () => {
     expect(form).toHaveAttribute('action', '/api/customer-auth/otp/verify');
     expect(form).toHaveAttribute('method', 'post');
     expect(form).toHaveFormValues({
-      phone: '+15551234567',
       next: '/loyalty/qr-token?autocheckin=1&feedback=received',
       code: '',
     });
+    expect(form?.querySelector('input[name="phone"]')).toBeNull();
   });
 
   it('keeps the customer on the code step when verification redirects back with an error', () => {
