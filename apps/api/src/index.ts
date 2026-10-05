@@ -18,6 +18,7 @@ import { feedbackFormRoutes } from './feedback/feedback-form.routes';
 import { customerAuthRoutes } from './customer-auth/customer-auth.routes';
 import { loyaltyRoutes } from './loyalty/loyalty.routes';
 import { loyaltyCustomerRoutes } from './loyalty/loyalty-customer.routes';
+import { branchLoyaltyPublicRoutes, branchLoyaltyCustomerRoutes, branchLoyaltyStaffRoutes } from './loyalty/branch-loyalty.routes';
 import { analyticsRoutes } from './analytics/analytics.routes';
 import { notificationsRoutes } from './notifications/notifications.routes';
 import { platformBusinessRoutes } from './platform/business-directory.routes';
@@ -134,6 +135,9 @@ api.route('/customer-auth', customerAuthRoutes);
 // Hono runs matching middleware in registration order; /loyalty/* also
 // matches /loyalty/me/* and must not verify customer JWTs as staff.
 api.route('/loyalty/me', loyaltyCustomerRoutes);
+api.route('/branch-loyalty/me', branchLoyaltyCustomerRoutes);
+api.route('/branch-loyalty/staff', branchLoyaltyStaffRoutes);
+api.route('/branch-loyalty/public', branchLoyaltyPublicRoutes);
 api.route('/loyalty', loyaltyRoutes);
 api.route('/analytics', analyticsRoutes);
 api.route('/notifications', notificationsRoutes);

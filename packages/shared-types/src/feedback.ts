@@ -76,6 +76,7 @@ export const updateFeedbackStatusSchema = z.object({
 
 export const feedbackSchema = z.object({
   id: z.uuid(),
+  verifiedPurchaseId: z.uuid().nullable().optional(),
   businessId: z.uuid(),
   branchId: z.uuid(),
   qrCodeId: z.uuid(),

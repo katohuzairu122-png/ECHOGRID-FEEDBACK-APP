@@ -63,6 +63,7 @@ function createFakeFeedbackRepo() {
         formVersionId: input.formVersionId ?? null,
         businessId: input.businessId,
         branchId: input.branchId,
+        verifiedPurchaseId: input.verifiedPurchaseId ?? null,
         qrCodeId: input.qrCodeId,
         rating: input.rating,
         comment: input.comment ?? null,

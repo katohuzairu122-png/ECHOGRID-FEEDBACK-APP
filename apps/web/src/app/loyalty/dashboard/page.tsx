@@ -27,6 +27,7 @@ export default async function LoyaltyCustomerDashboardPage() {
   return (
     <div className="flex flex-col gap-6">
       <h1 className="text-2xl font-semibold text-neutral-900">{t('title')}</h1>
+      <Link className="text-brand-700 underline" href="/loyalty/dashboard/branches">My branch memberships and purchase rewards</Link>
 
       {accounts.length === 0 ? (
         <Card>

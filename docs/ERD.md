@@ -1,5 +1,27 @@
 # Entity-Relationship Reference
 
+## Branch purchase loyalty additions (2026-10-05)
+
+These additive tables do not modify existing business-level account balances.
+Their Drizzle definitions are in `src/db/schema/branch-loyalty.ts` and their
+product/reconciliation rules are in [LOYALTY_COMMUNITY_SPEC.md](./LOYALTY_COMMUNITY_SPEC.md).
+
+| Table | Identity and data | Integrity |
+| --- | --- | --- |
+| `branch_loyalty_programs` | Branch PK, owning business, onboarding mode, listing, qualifying purchase terms, progress unit, reward name/cost, feedback bonus, enabled state and audit columns | Positive reward cost; business-only/community mode; restrictive business/branch FKs |
+| `customer_community_choices` | Global customer PK, joined preference, policy version and timestamps | Independent of branch memberships |
+| `branch_loyalty_memberships` | UUID PK, customer/business/branch, nullable activation and audit columns | Unique customer/branch; restrictive entitlement FKs |
+| `branch_loyalty_ledger` | UUID PK, membership/business/branch, purchase/feedback bonus/redemption/refund, signed units, receipt/evidence, reversal, request/code, reward snapshot and fulfillment metadata | Positive purchase/negative spend and refund; required references; unique branch receipt, reversal, membership request and code; restrictive FKs |
+
+`feedback.verified_purchase_id` is nullable, references the branch ledger
+and is unique when present. It is populated only by the authenticated
+purchase feedback service after ownership/branch/refund checks, never by
+an anonymous body field. Existing feedback defaults to no linked purchase.
+
+Branches/businesses with new entitlements must be archived rather than
+hard-deleted. Historic business points remain in the original tables;
+no arbitrary migration or currency conversion is performed.
+
 Authoritative reference for the schema defined in `apps/api/src/db/schema/`.
 The diagram below is abbreviated for readability; the field tables that follow
 it are the source of truth for every column, type, and constraint. See

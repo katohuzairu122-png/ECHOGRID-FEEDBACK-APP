@@ -4,11 +4,15 @@ import { signCustomerAccessToken } from './customer-auth/customer-jwt';
 
 const mocks = vi.hoisted(() => ({
   listAccounts: vi.fn(async () => []),
+  listBranchMemberships: vi.fn(async () => []),
   listConversations: vi.fn(async () => []),
   findCustomer: vi.fn(async () => ({ status: 'active' })),
   findUser: vi.fn(),
 }));
 vi.mock('./db/client', () => ({ createDb: vi.fn(async () => ({ db: {}, close: async () => {} })) }));
+vi.mock('./loyalty/branch-loyalty.service', () => ({ BranchLoyaltyService: class {
+  list = mocks.listBranchMemberships;
+} }));
 vi.mock('./repositories', () => ({ createRepositories: () => ({
   customers: { findById: mocks.findCustomer },
   users: { findById: mocks.findUser },
@@ -29,6 +33,7 @@ describe('mounted customer and staff route boundaries', () => {
 
   it.each([
     ['/api/v1/loyalty/me/accounts', mocks.listAccounts],
+    ['/api/v1/branch-loyalty/me/memberships', mocks.listBranchMemberships],
     ['/api/v1/messaging/me/conversations', mocks.listConversations],
   ] as const)('accepts a customer session at %s without staff authentication', async (path, list) => {
     const token = await signCustomerAccessToken(customerId, env.CUSTOMER_JWT_SECRET);
@@ -41,7 +46,7 @@ describe('mounted customer and staff route boundaries', () => {
     expect(mocks.findUser).not.toHaveBeenCalled();
   });
 
-  it.each(['/api/v1/loyalty/accounts', '/api/v1/messaging/conversations'])(
+  it.each(['/api/v1/loyalty/accounts', '/api/v1/messaging/conversations', '/api/v1/branch-loyalty/staff/branches/11111111-1111-4111-8111-111111111111/program'])(
     'still rejects customer credentials on staff route %s', async (path) => {
       const token = await signCustomerAccessToken(customerId, env.CUSTOMER_JWT_SECRET);
       const response = await worker.fetch(new Request(`https://api.test${path}`, {

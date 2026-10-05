@@ -5,6 +5,7 @@ import { LoyaltySubnavLinks } from './loyalty-subnav-links';
 export async function LoyaltySubnav() {
   const t = await getTranslations('loyalty.staff.subnav');
   const items = [
+    { href: '/dashboard/loyalty/branches', label: 'Branch purchase loyalty' },
     { href: '/dashboard/loyalty', label: t('accounts') },
     { href: '/dashboard/loyalty/tiers', label: t('tiers') },
     { href: '/dashboard/loyalty/rewards', label: t('rewards') },

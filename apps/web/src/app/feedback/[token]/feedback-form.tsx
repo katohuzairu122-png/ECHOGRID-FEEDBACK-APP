@@ -4,6 +4,7 @@ import { useActionState, useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import {
   submitFeedbackAction,
+  submitPurchaseFeedbackAction,
   generateFollowUpQuestionAction,
   type FeedbackFormState,
   type FollowUpQuestionState,
@@ -33,6 +34,7 @@ interface FeedbackFormProps {
   businessName: string;
   submissionKey: string;
   feedbackForm?: PublicFeedbackForm | null;
+  purchaseId?: string;
 }
 
 /**
@@ -50,14 +52,14 @@ interface FeedbackFormProps {
  * pattern as loyalty/login/otp-login-form.tsx, with step 1's fields carried
  * forward into step 2 as hidden inputs rather than re-entered.
  */
-export function FeedbackForm({ token, branchName, businessName, submissionKey, feedbackForm = null }: FeedbackFormProps) {
+export function FeedbackForm({ token, branchName, businessName, submissionKey, feedbackForm = null, purchaseId }: FeedbackFormProps) {
   const [feedbackType, setFeedbackType] = useState('');
   const [followUpState, followUpFormAction, followUpPending] = useActionState(
     generateFollowUpQuestionAction.bind(null, token),
     followUpInitial,
   );
   const [submitState, submitFormAction, submitPending] = useActionState(
-    submitFeedbackAction.bind(null, token),
+    purchaseId ? submitPurchaseFeedbackAction.bind(null, token, purchaseId) : submitFeedbackAction.bind(null, token),
     submitInitial,
   );
   // i18n & Multi-Currency Block 5.
@@ -68,8 +70,8 @@ export function FeedbackForm({ token, branchName, businessName, submissionKey, f
   // does not become a dead end: signed-out customers are offered phone OTP,
   // signed-in customers can collect the visit points, then open rewards.
   useEffect(() => {
-    if (submitState.success) navigateWithCommittedCookies(`/loyalty/${token}?feedback=received`);
-  }, [submitState.success, token]);
+    if (submitState.success) navigateWithCommittedCookies(purchaseId ? '/loyalty/dashboard/branches' : `/loyalty/${token}?feedback=received`);
+  }, [submitState.success, token, purchaseId]);
 
   // The thank-you confirmation belongs on the loyalty destination above
   // sign-in/check-in. Avoid flashing the former feedback-page card while

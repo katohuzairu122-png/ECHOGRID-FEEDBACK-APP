@@ -33,6 +33,7 @@ function makeFeedback(overrides: Partial<Feedback> = {}): Feedback {
     formVersionId: null,
     businessId: BUSINESS_A,
     branchId: BRANCH_A,
+    verifiedPurchaseId: null,
     qrCodeId: 'qr-1',
     rating: 5,
     comment: null,

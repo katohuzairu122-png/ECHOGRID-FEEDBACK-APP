@@ -25,6 +25,7 @@ import {
 } from '../fraud/velocity-tracker';
 import { VisitSessionService } from '../visits/visit-session.service';
 import { LoyaltyAccountService } from './loyalty-account.service';
+import { BranchLoyaltyService } from './branch-loyalty.service';
 import { LoyaltyRewardService } from './loyalty-reward.service';
 import { LoyaltyRedemptionService } from './loyalty-redemption.service';
 import { LoyaltyTierService } from './loyalty-tier.service';
@@ -92,6 +93,9 @@ loyaltyCustomerRoutes.post('/checkin', async (c) => {
       QR_TOKEN_SECRET: c.env.QR_TOKEN_SECRET,
       QR_TOKEN_SECRET_PREVIOUS: c.env.QR_TOKEN_SECRET_PREVIOUS,
     }).resolveToken(body.qrToken);
+    if (await new BranchLoyaltyService(db).program(qrCode.businessId, qrCode.branchId)) {
+      throw new AppError('This branch awards rewards only for staff-confirmed qualifying purchases.', 422, 'PURCHASE_REQUIRED');
+    }
     const customerId = c.get('customerId');
 
     // Continuing Development Block 4.1 (S5.4/S5.5). Same velocity pattern as

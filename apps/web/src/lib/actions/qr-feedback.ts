@@ -3,6 +3,7 @@
 import { publicApiFetch } from '@/lib/public-api-client';
 import { ApiError } from '@/lib/api-client';
 import { readFeedbackForm } from '@/lib/feedback-form';
+import { customerApiFetch } from '@/lib/customer-api-client';
 
 export interface FeedbackFormState {
   error?: string;
@@ -72,5 +73,15 @@ export async function submitFeedbackAction(
   }
 
   return { success: true };
+}
+
+export async function submitPurchaseFeedbackAction(token: string, purchaseId: string, _state: FeedbackFormState, formData: FormData): Promise<FeedbackFormState> {
+  try {
+    await customerApiFetch('/branch-loyalty/me/feedback', { method: 'POST', body: JSON.stringify({ qrToken: token, purchaseId, feedback: readFeedbackForm(formData) }) });
+    return { success: true };
+  } catch (err) {
+    if (err instanceof ApiError) return { error: err.message };
+    throw err;
+  }
 }
 

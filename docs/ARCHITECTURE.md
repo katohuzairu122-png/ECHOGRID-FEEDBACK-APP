@@ -36,6 +36,26 @@ contract), [SETUP.md](./SETUP.md) (running it).
 
 ## System Overview
 
+### Branch purchase loyalty and community (2026-10-05)
+
+The additive branch purchase model is specified in
+[LOYALTY_COMMUNITY_SPEC.md](./LOYALTY_COMMUNITY_SPEC.md). It keeps global
+customer identity and business-scoped legacy accounts, while adding
+branch memberships and a separate purchase/redemption/refund ledger.
+`BranchLoyaltyService` owns its database transactions for the same reason
+as `LoyaltyAccountService`: membership activation, ledger writes and
+redemption reservations must be atomic. Program/membership row locks
+coordinate configuration and balance mutations. Customer and staff
+routes mount at disjoint `/branch-loyalty/me` and `/branch-loyalty/staff`
+prefixes. Public QR resolution and recognition listing use
+`/branch-loyalty/public`. Web screens retain the existing BFF pattern.
+
+No automatic legacy balance allocation occurs. Configured branches stop
+scan-only earning, and new branch membership activates only after a
+staff-confirmed qualifying purchase. Survey rewards and closed-business
+partner compensation are specified but not implemented or financially
+activated in this change.
+
 ```
                         ┌───────────────────────────┐
                         │   Client (browser / QR)     │

@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation';
 import { NextIntlClientProvider } from 'next-intl';
-import { resolveSupportedLocale, type QrResolveDto } from '@echo-grid-feedback/shared-types';
+import { resolveSupportedLocale, type QrResolveDto, type BranchProgramDto } from '@echo-grid-feedback/shared-types';
+import { BranchLanding } from '../branch-landing';
 import { publicApiFetch } from '@/lib/public-api-client';
 import { ApiError } from '@/lib/api-client';
 import { hasCustomerSession } from '@/lib/customer-session';
@@ -38,17 +39,18 @@ export default async function LoyaltyCheckinPage({ params, searchParams }: Loyal
 
   const locale = resolveSupportedLocale(qr.defaultLocale);
   const messages = await loadMessages(locale);
+  const program = await publicApiFetch<BranchProgramDto | null>(`/branch-loyalty/public/qr/${token}`);
 
   return (
     <NextIntlClientProvider locale={locale} messages={messages} formats={formats}>
-      <CheckinPanel
+      {program ? <BranchLanding token={token} qr={qr} program={program} /> : <CheckinPanel
         token={token}
         branchName={qr.branchName}
         businessName={qr.businessName}
         signedIn={signedIn}
         feedbackReceived={query.feedback === 'received'}
         autoCheckin={query.autocheckin === '1'}
-      />
+      />}
     </NextIntlClientProvider>
   );
 }

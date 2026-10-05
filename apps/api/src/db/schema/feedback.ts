@@ -5,6 +5,7 @@ import { businesses } from './businesses';
 import { branches } from './branches';
 import { qrCodes } from './qr-codes';
 import { feedbackFormVersions } from './feedback-forms';
+import { branchLoyaltyLedger } from './branch-loyalty';
 
 /**
  * A single customer-submitted rating/comment, captured anonymously through
@@ -26,6 +27,7 @@ export const feedback = pgTable(
   'feedback',
   {
     id: uuid('id').primaryKey().defaultRandom(),
+    verifiedPurchaseId: uuid('verified_purchase_id').references(() => branchLoyaltyLedger.id, { onDelete: 'restrict' }),
     submissionKey: uuid('submission_key'),
     submissionPayloadHash: text('submission_payload_hash'),
     formVersionId: uuid('form_version_id').references(() => feedbackFormVersions.id, { onDelete: 'restrict' }),
@@ -187,6 +189,7 @@ export const feedback = pgTable(
   },
   (table) => [
     uniqueIndex('feedback_submission_key_key').on(table.submissionKey),
+    uniqueIndex('feedback_verified_purchase_key').on(table.verifiedPurchaseId),
     index('feedback_branch_created_idx').on(table.branchId, table.createdAt),
     index('feedback_business_created_idx').on(table.businessId, table.createdAt),
     // Powers both the analytics dashboard's sentiment filter and the queue

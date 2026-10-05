@@ -149,6 +149,7 @@ export function FeedbackInboxList({ items, branchNames, currentUserId }: Feedbac
             </div>
 
             {item.comment && <p className="text-sm text-neutral-800">{item.comment}</p>}
+            <p className="text-xs text-neutral-500">{item.verifiedPurchaseId ? 'Verified branch purchase' : 'No linked purchase evidence'}</p>
 
             {item.followUpQuestion && item.followUpAnswer && (
               <div className="rounded-md bg-neutral-50 p-3">

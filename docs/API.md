@@ -1,5 +1,33 @@
 # API Contract Reference
 
+## Branch purchase loyalty (2026-10-05)
+
+These additive routes use the envelope and `/api/v1` prefix below. See
+[LOYALTY_COMMUNITY_SPEC.md](./LOYALTY_COMMUNITY_SPEC.md) for locked decisions,
+rollout gates and the explicitly deferred survey/settlement features.
+
+| Method | Path | Boundary | Purpose |
+| --- | --- | --- | --- |
+| GET | `/branch-loyalty/public/qr/:token` | Public rate limit, signed QR | Branch program or null for a legacy branch |
+| GET | `/branch-loyalty/public/directory` | Public rate limit | Published member branches, no customer data |
+| GET | `/branch-loyalty/me/memberships` | Customer JWT | Own branch cards and ledger balances |
+| GET/POST | `/branch-loyalty/me/community` | Customer JWT | Read/save global community choice |
+| POST | `/branch-loyalty/me/join` | Customer JWT, signed QR | Pending enrollment; body `qrToken`, `joinCommunity` |
+| GET | `/branch-loyalty/me/memberships/:id/history` | Owning customer | Recent 100 ledger entries |
+| POST | `/branch-loyalty/me/memberships/:id/redeem` | Owning customer | Reserve configured reward with stable `requestId` |
+| POST | `/branch-loyalty/me/feedback` | Customer JWT, signed QR, own purchase | Body `qrToken`, `purchaseId`, `feedback` using the existing feedback schema |
+| GET/PUT | `/branch-loyalty/staff/branches/:branchId/program` | Staff tenant, branch scope, loyalty permission | Read/configure program; PUT also needs business-wide access |
+| POST | `/branch-loyalty/staff/branches/:branchId/purchases` | Staff, branch scope, `loyalty:manage` | Confirm `membershipId`, `receiptReference`, `qualifyingUnits`, `evidence` |
+| POST | `/branch-loyalty/staff/branches/:branchId/refunds` | Staff, branch scope, `loyalty:manage` | Append reversal for `purchaseId`, with `reason` |
+| POST | `/branch-loyalty/staff/branches/:branchId/confirm` | Staff, branch scope, `loyalty:manage` | Fulfill reserved redemption `code` once |
+
+Customer routes never accept a business/branch override for QR enrollment
+or purchase feedback. Staff routes still require `X-Business-Id`; branch
+roles also require matching `X-Branch-Id`. A receipt replay with different
+purchase details returns `REFERENCE_ALREADY_USED`. Spent/reserved units
+cannot be refunded automatically (`REFUND_REQUIRES_REVIEW`). Earned program
+terms cannot be overwritten (`PROGRAM_TERMS_LOCKED`).
+
 Base URL (local dev): `http://localhost:8787`. All routes except `/health` are
 versioned under `/api/v1`. There is currently one version; breaking changes
 will ship as `/api/v2` rather than mutating v1's contract.

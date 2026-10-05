@@ -26,6 +26,7 @@ export * from './loyalty-rewards';
 export * from './loyalty-accounts';
 export * from './loyalty-transactions';
 export * from './loyalty-settings';
+export * from './branch-loyalty';
 export * from './notification-preferences';
 export * from './notifications';
 export * from './business-notification-settings';

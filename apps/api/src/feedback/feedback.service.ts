@@ -177,7 +177,7 @@ export class FeedbackService {
   async submitIdempotent(
     qrCode: QrCode,
     input: SubmitFeedbackInput,
-    context: { deviceHash?: string | undefined; payloadHash: string },
+    context: { deviceHash?: string | undefined; payloadHash: string; verifiedPurchaseId?: string },
   ): Promise<{ feedback: Feedback; inserted: boolean }> {
     const { answers: _answers, deviceSignal: _deviceSignal, visitProof: _visitProof, ...feedbackInput } = input;
     const existing = await this.repos.feedback.findBySubmissionKey(input.submissionKey);
@@ -207,6 +207,7 @@ export class FeedbackService {
       businessId: qrCode.businessId,
       branchId: qrCode.branchId,
       qrCodeId: qrCode.id,
+      ...(context.verifiedPurchaseId ? { verifiedPurchaseId: context.verifiedPurchaseId } : {}),
       ...feedbackInput,
       submissionPayloadHash: context.payloadHash,
       followUpAnswer: input.followUpQuestion ? input.followUpAnswer : undefined,

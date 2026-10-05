@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation';
 import { NextIntlClientProvider } from 'next-intl';
-import { resolveSupportedLocale, type QrResolveDto } from '@echo-grid-feedback/shared-types';
+import { resolveSupportedLocale, type QrResolveDto, type BranchProgramDto } from '@echo-grid-feedback/shared-types';
+import { BranchLanding } from '../../loyalty/branch-landing';
 import { publicApiFetch } from '@/lib/public-api-client';
 import { ApiError } from '@/lib/api-client';
 import { loadMessages } from '@/i18n/load-messages';
@@ -10,6 +11,7 @@ import { QrScanRecorder } from './qr-scan-recorder';
 
 interface FeedbackLandingPageProps {
   params: Promise<{ token: string }>;
+  searchParams: Promise<{ purchase?: string; survey?: string }>;
 }
 
 /**
@@ -21,8 +23,9 @@ interface FeedbackLandingPageProps {
  * interactive form itself (rating, comment, submit) is a separate Client
  * Component -- see feedback-form.tsx.
  */
-export default async function FeedbackLandingPage({ params }: FeedbackLandingPageProps) {
+export default async function FeedbackLandingPage({ params, searchParams }: FeedbackLandingPageProps) {
   const { token } = await params;
+  const query = await searchParams;
 
   let qr: QrResolveDto;
   try {
@@ -44,17 +47,18 @@ export default async function FeedbackLandingPage({ params }: FeedbackLandingPag
   // staff-resolved default with the scanned branch's own business locale.
   const locale = resolveSupportedLocale(qr.defaultLocale);
   const messages = await loadMessages(locale);
+  const program = await publicApiFetch<BranchProgramDto | null>(`/branch-loyalty/public/qr/${token}`);
 
   return (
     <NextIntlClientProvider locale={locale} messages={messages} formats={formats}>
       <QrScanRecorder token={token} />
-      <FeedbackForm
+      {program && query.survey !== '1' ? <BranchLanding token={token} qr={qr} program={program} {...(query.purchase ? { purchaseId: query.purchase } : {})} /> : <FeedbackForm
         token={token}
         branchName={qr.branchName}
         businessName={qr.businessName}
         submissionKey={crypto.randomUUID()}
         feedbackForm={qr.feedbackForm ?? null}
-      />
+      />}
     </NextIntlClientProvider>
   );
 }

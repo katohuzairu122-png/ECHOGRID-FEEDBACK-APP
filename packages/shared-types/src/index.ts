@@ -19,6 +19,7 @@ export * from './feedback-forms';
 export * from './feedback-classification';
 export * from './customer-auth';
 export * from './loyalty';
+export * from './branch-loyalty';
 export * from './analytics';
 export * from './notifications';
 export * from './platform';
