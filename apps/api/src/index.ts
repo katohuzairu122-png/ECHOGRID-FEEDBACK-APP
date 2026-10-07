@@ -9,6 +9,7 @@ import { rateLimit } from './middleware/rate-limit';
 import { auditTrail } from './middleware/audit';
 import { authRoutes } from './auth/auth.routes';
 import { businessRoutes } from './businesses/business.routes';
+import { businessCategoryRoutes } from './businesses/business-category.routes';
 import { teamRoutes } from './team/team.routes';
 import { branchRoutes } from './branches/branch.routes';
 import { visitSessionRoutes } from './visits/visit-session.routes';
@@ -121,6 +122,7 @@ api.use('*', auditTrail);
 
 api.route('/auth', authRoutes);
 api.route('/businesses', businessRoutes);
+api.route('/business-categories', businessCategoryRoutes);
 api.route('/team', teamRoutes);
 api.route('/branches', branchRoutes);
 // Continuing Development Block 4.3.1 (S5.3) -- a second file at the same
