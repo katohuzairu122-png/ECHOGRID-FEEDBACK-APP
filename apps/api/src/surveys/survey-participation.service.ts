@@ -577,6 +577,15 @@ export class SurveyParticipationService {
     );
     if (existing) return existing;
 
+    const latest = await repos.consentGrants.findLatestForResource(
+      customerId,
+      campaign.businessId,
+      'survey_participation',
+      'survey_campaign',
+      campaign.id,
+    );
+    const renewalAnchor = latest?.id ?? 'initial';
+
     return repos.consentGrants.create({
       customerId,
       businessId: campaign.businessId,
@@ -586,7 +595,7 @@ export class SurveyParticipationService {
       resourceId: campaign.id,
       consentVersion,
       status: 'active',
-      idempotencyKey: `survey:${campaign.id}:${customerId}:${idempotencyKey}`,
+      idempotencyKey: `survey:${campaign.id}:${customerId}:${idempotencyKey}:${renewalAnchor}`,
       expiresAt: campaign.endsAt,
       metadata: {
         campaignId: campaign.id,
