@@ -188,6 +188,8 @@ export type SurveyAnswerInput = z.infer<typeof surveyAnswerInputSchema>;
 
 export const startSurveyParticipationSchema = z.object({
   idempotencyKey: z.string().trim().min(8).max(200),
+  consentAccepted: z.literal(true),
+  consentVersion: z.string().trim().min(1).max(100).default('v1'),
 });
 export type StartSurveyParticipationInput = z.infer<typeof startSurveyParticipationSchema>;
 
