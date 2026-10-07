@@ -3,6 +3,16 @@ import { Client } from 'pg';
 import { buildDb } from '../../src/db/client';
 import { createRepositories } from '../../src/repositories';
 
+async function expectUniqueViolation(promise: Promise<unknown>): Promise<void> {
+  try {
+    await promise;
+    throw new Error('Expected a PostgreSQL unique-constraint violation.');
+  } catch (error) {
+    const cause = (error as { cause?: { code?: string } }).cause;
+    expect(cause?.code).toBe('23505');
+  }
+}
+
 describe.skipIf(!process.env.DATABASE_URL)('Split 05 Community repositories (integration)', () => {
   let client: Client;
   let repos: ReturnType<typeof createRepositories>;
@@ -35,13 +45,13 @@ describe.skipIf(!process.env.DATABASE_URL)('Split 05 Community repositories (int
       membership.id,
     );
 
-    await expect(
+    await expectUniqueViolation(
       repos.communityMemberships.create({
         customerId,
         status: 'active',
         policyVersion: 'community-v1',
       }),
-    ).rejects.toMatchObject({ code: '23505' });
+    );
 
     const left = await repos.communityMemberships.updateStatus(customerId, {
       status: 'left',
@@ -56,12 +66,12 @@ describe.skipIf(!process.env.DATABASE_URL)('Split 05 Community repositories (int
     });
     expect(account.pointsBalance).toBe(0);
 
-    await expect(
+    await expectUniqueViolation(
       repos.communityPointAccounts.create({
         customerId,
         status: 'active',
       }),
-    ).rejects.toMatchObject({ code: '23505' });
+    );
   });
 
   it('enforces global/scoped rule versions and resolves only active in-window rules', async () => {
@@ -72,14 +82,14 @@ describe.skipIf(!process.env.DATABASE_URL)('Split 05 Community repositories (int
       points: 50,
     });
 
-    await expect(
+    await expectUniqueViolation(
       repos.communityPointRules.create({
         sourceType: 'survey_completion',
         version: 1,
         status: 'draft',
         points: 75,
       }),
-    ).rejects.toMatchObject({ code: '23505' });
+    );
 
     const activated = await repos.communityPointRules.updateLifecycle(globalV1.id, {
       status: 'active',
@@ -113,7 +123,7 @@ describe.skipIf(!process.env.DATABASE_URL)('Split 05 Community repositories (int
       )?.id,
     ).toBe(scoped.id);
 
-    await expect(
+    await expectUniqueViolation(
       repos.communityPointRules.create({
         sourceType: 'survey_completion',
         resourceType: 'survey_campaign',
@@ -122,7 +132,7 @@ describe.skipIf(!process.env.DATABASE_URL)('Split 05 Community repositories (int
         status: 'draft',
         points: 125,
       }),
-    ).rejects.toMatchObject({ code: '23505' });
+    );
   });
 
   it('persists idempotent award decisions and append-only Community Point transactions', async () => {
@@ -222,7 +232,7 @@ describe.skipIf(!process.env.DATABASE_URL)('Split 05 Community repositories (int
       (await repos.communityPointTransactions.findReversalOf(firstEarn.transaction.id))?.id,
     ).toBe(reverse.transaction.id);
 
-    await expect(
+    await expectUniqueViolation(
       repos.communityPointTransactions.createIdempotent({
         accountId: account!.id,
         customerId,
@@ -235,7 +245,7 @@ describe.skipIf(!process.env.DATABASE_URL)('Split 05 Community repositories (int
         reversalOf: firstEarn.transaction.id,
         idempotencyKey: crypto.randomUUID(),
       }),
-    ).rejects.toMatchObject({ code: '23505' });
+    );
 
     const negative = await repos.communityPointAccounts.incrementBalance(
       account!.id,
