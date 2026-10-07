@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, isNull, or, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, isNull, lte, or, sql } from 'drizzle-orm';
 import {
   surveyCampaigns,
   surveyQuestions,
@@ -226,19 +226,32 @@ export class SurveyRepository extends BaseRepository {
   async listQrExposedForBusinessBranch(
     businessId: string,
     branchId: string,
+    now = new Date(),
   ): Promise<SurveyCampaign[]> {
-    return this.db.query.surveyCampaigns.findMany({
-      where: and(
-        eq(surveyCampaigns.businessId, businessId),
-        eq(surveyCampaigns.status, 'active'),
-        eq(surveyCampaigns.exposeInQrResolver, true),
-        or(
-          isNull(surveyCampaigns.branchId),
-          eq(surveyCampaigns.branchId, branchId),
+    const rows = await this.db
+      .select({ campaign: surveyCampaigns })
+      .from(surveyCampaigns)
+      .innerJoin(surveys, eq(surveys.id, surveyCampaigns.surveyId))
+      .innerJoin(
+        surveyVersions,
+        eq(surveyVersions.id, surveyCampaigns.surveyVersionId),
+      )
+      .where(
+        and(
+          eq(surveyCampaigns.businessId, businessId),
+          eq(surveyCampaigns.status, 'active'),
+          eq(surveyCampaigns.exposeInQrResolver, true),
+          or(isNull(surveyCampaigns.branchId), eq(surveyCampaigns.branchId, branchId)),
+          or(isNull(surveyCampaigns.startsAt), lte(surveyCampaigns.startsAt, now)),
+          or(isNull(surveyCampaigns.endsAt), gt(surveyCampaigns.endsAt, now)),
+          eq(surveys.status, 'published'),
+          eq(surveyVersions.status, 'published'),
+          eq(surveyVersions.surveyId, surveys.id),
         ),
-      ),
-      orderBy: [desc(surveyCampaigns.createdAt)],
-    });
+      )
+      .orderBy(desc(surveyCampaigns.createdAt));
+
+    return rows.map((row) => row.campaign);
   }
 
   async updateCampaignStatus(
