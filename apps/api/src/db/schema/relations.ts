@@ -16,6 +16,9 @@ import { aiUsageLog } from './ai-usage-log';
 import { criticalIncidents } from './critical-incidents';
 import { fraudSignals } from './fraud-signals';
 import { customers } from './customers';
+import { businessCustomerMemberships } from './business-customer-memberships';
+import { consentGrants } from './consent-grants';
+import { customerActionAuthorizations } from './customer-action-authorizations';
 import { loyaltyTiers } from './loyalty-tiers';
 import { loyaltyRewards } from './loyalty-rewards';
 import { loyaltyAccounts } from './loyalty-accounts';
@@ -44,6 +47,9 @@ export const businessesRelations = relations(businesses, ({ many, one }) => ({
   loyaltyTiers: many(loyaltyTiers),
   loyaltyRewards: many(loyaltyRewards),
   loyaltyAccounts: many(loyaltyAccounts),
+  customerMemberships: many(businessCustomerMemberships),
+  consentGrants: many(consentGrants),
+  customerActionAuthorizations: many(customerActionAuthorizations),
   loyaltySettings: many(loyaltySettings),
   notificationPreferences: many(notificationPreferences),
   notifications: many(notifications),
@@ -168,6 +174,40 @@ export const customersRelations = relations(customers, ({ many }) => ({
   notifications: many(notifications),
   conversations: many(conversations),
 }));
+
+
+export const businessCustomerMembershipsRelations = relations(
+  businessCustomerMemberships,
+  ({ one }) => ({
+    customer: one(customers, {
+      fields: [businessCustomerMemberships.customerId],
+      references: [customers.id],
+    }),
+    business: one(businesses, {
+      fields: [businessCustomerMemberships.businessId],
+      references: [businesses.id],
+    }),
+  }),
+);
+
+export const consentGrantsRelations = relations(consentGrants, ({ one }) => ({
+  customer: one(customers, { fields: [consentGrants.customerId], references: [customers.id] }),
+  business: one(businesses, { fields: [consentGrants.businessId], references: [businesses.id] }),
+}));
+
+export const customerActionAuthorizationsRelations = relations(
+  customerActionAuthorizations,
+  ({ one }) => ({
+    customer: one(customers, {
+      fields: [customerActionAuthorizations.customerId],
+      references: [customers.id],
+    }),
+    business: one(businesses, {
+      fields: [customerActionAuthorizations.businessId],
+      references: [businesses.id],
+    }),
+  }),
+);
 
 export const loyaltyTiersRelations = relations(loyaltyTiers, ({ one, many }) => ({
   business: one(businesses, { fields: [loyaltyTiers.businessId], references: [businesses.id] }),
