@@ -5,6 +5,7 @@ import { loyaltyRewards } from './loyalty-rewards';
 import { qrCodes } from './qr-codes';
 import { visitSessions } from './visit-sessions';
 import { feedback } from './feedback';
+import { loyaltyPurchaseEvents } from './loyalty-purchase-events';
 
 /**
  * Append-only points ledger, mirroring `audit_log`'s design -- the source
@@ -59,7 +60,8 @@ export const loyaltyTransactions = pgTable(
     // table -- this ledger row's own existence must never depend on whether
     // a since-deleted feedback row still exists.
     feedbackId: uuid('feedback_id').references(() => feedback.id, { onDelete: 'set null' }),
-    purchaseAmount: numeric('purchase_amount', { precision: 10, scale: 2 }), // set only for type='purchase'
+    purchaseAmount: numeric('purchase_amount', { precision: 10, scale: 2 }), // legacy/raw purchase amount projection
+    purchaseEventId: uuid('purchase_event_id').references(() => loyaltyPurchaseEvents.id, { onDelete: 'restrict' }),
     redemptionCode: text('redemption_code').unique(), // set only for type='redemption'
     redemptionConfirmedAt: timestamp('redemption_confirmed_at', { withTimezone: true }),
     // Continuing Development Block 6.2 (S6.7 reward state machine). Only
@@ -78,6 +80,9 @@ export const loyaltyTransactions = pgTable(
   },
   (table) => [
     index('loyalty_transactions_account_created_idx').on(table.loyaltyAccountId, table.createdAt),
+    uniqueIndex('loyalty_transactions_purchase_event_key')
+      .on(table.purchaseEventId)
+      .where(sql`${table.purchaseEventId} IS NOT NULL`),
     uniqueIndex('loyalty_transactions_redemption_code_key')
       .on(table.redemptionCode)
       .where(sql`${table.redemptionCode} IS NOT NULL`),
@@ -126,6 +131,10 @@ export const loyaltyTransactions = pgTable(
     check(
       'loyalty_transactions_type_check',
       sql`${table.type} IN ('checkin', 'purchase', 'redemption', 'referral_bonus', 'birthday_bonus', 'adjustment')`,
+    ),
+    check(
+      'loyalty_transactions_purchase_event_type_check',
+      sql`${table.purchaseEventId} IS NULL OR ${table.type} = 'purchase'`,
     ),
     check(
       'loyalty_transactions_issuance_status_check',
