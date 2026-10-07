@@ -228,7 +228,7 @@ export class CommunityPointAwardService {
         };
       }
 
-      return this.awardDecision(repos, {
+      return this.awardDecision(tx, repos, {
         customerId,
         completionRef: evidence.completionRef,
         businessId: evidence.businessId,
