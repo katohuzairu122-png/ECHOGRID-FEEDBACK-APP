@@ -12,6 +12,8 @@ describe.skipIf(!process.env.DATABASE_URL)('Split 04 survey repositories (integr
   let businessAId: string;
   let businessBId: string;
   let customerId: string;
+  let businessABranchId: string;
+  let businessAOtherBranchId: string;
   let businessBBranchId: string;
 
   beforeAll(async () => {
@@ -34,6 +36,16 @@ describe.skipIf(!process.env.DATABASE_URL)('Split 04 survey repositories (integr
       phoneVerifiedAt: new Date(),
     });
 
+    const businessABranch = await repos.branches.create({
+      businessId: businessA.id,
+      name: 'Survey Branch A',
+      slug: `survey-a-${suffix}`,
+    });
+    const businessAOtherBranch = await repos.branches.create({
+      businessId: businessA.id,
+      name: 'Survey Branch B',
+      slug: `survey-b-${suffix}`,
+    });
     const businessBBranch = await repos.branches.create({
       businessId: businessB.id,
       name: 'Other Business Branch',
@@ -41,6 +53,8 @@ describe.skipIf(!process.env.DATABASE_URL)('Split 04 survey repositories (integr
     });
 
     businessAId = businessA.id;
+    businessABranchId = businessABranch.id;
+    businessAOtherBranchId = businessAOtherBranch.id;
     businessBId = businessB.id;
     businessBBranchId = businessBBranch.id;
     customerId = customer.id;
@@ -158,6 +172,118 @@ describe.skipIf(!process.env.DATABASE_URL)('Split 04 survey repositories (integr
       crypto.randomUUID(),
     );
     expect(closed.status).toBe('closed');
+  });
+
+  it('exposes only active in-window campaigns through the QR discovery query', async () => {
+    const management = new SurveyManagementService(repos);
+    const actorId = crypto.randomUUID();
+
+    const survey = await management.createSurvey(
+      businessAId,
+      { name: 'QR Discovery Survey' },
+      actorId,
+    );
+    const createdVersion = await management.createVersion(
+      businessAId,
+      survey.id,
+      {
+        title: 'QR Discovery Survey v1',
+        questions: [
+          {
+            key: 'rating',
+            label: 'Rate us',
+            type: 'rating',
+            required: true,
+            validation: { min: 1, max: 5 },
+          },
+        ],
+      },
+      actorId,
+    );
+    await management.publishVersion(
+      businessAId,
+      survey.id,
+      createdVersion.version.id,
+      actorId,
+    );
+
+    const businessWide = await management.createCampaign(
+      businessAId,
+      {
+        surveyVersionId: createdVersion.version.id,
+        name: 'Business-wide QR survey',
+        audienceClass: 'general_authenticated_participant',
+        repeatPolicy: 'repeatable',
+        exposeInQrResolver: true,
+      },
+      actorId,
+    );
+    await management.activateCampaign(businessAId, businessWide.id, actorId);
+
+    const branchOnly = await management.createCampaign(
+      businessAId,
+      {
+        surveyVersionId: createdVersion.version.id,
+        branchId: businessABranchId,
+        name: 'Branch-only QR survey',
+        audienceClass: 'general_authenticated_participant',
+        repeatPolicy: 'repeatable',
+        exposeInQrResolver: true,
+      },
+      actorId,
+    );
+    await management.activateCampaign(businessAId, branchOnly.id, actorId);
+
+    const hidden = await management.createCampaign(
+      businessAId,
+      {
+        surveyVersionId: createdVersion.version.id,
+        name: 'Not exposed',
+        audienceClass: 'general_authenticated_participant',
+        repeatPolicy: 'repeatable',
+        exposeInQrResolver: false,
+      },
+      actorId,
+    );
+    await management.activateCampaign(businessAId, hidden.id, actorId);
+
+    const future = await management.createCampaign(
+      businessAId,
+      {
+        surveyVersionId: createdVersion.version.id,
+        name: 'Future QR survey',
+        audienceClass: 'general_authenticated_participant',
+        repeatPolicy: 'repeatable',
+        startsAt: new Date(Date.now() + 60_000).toISOString(),
+        exposeInQrResolver: true,
+      },
+      actorId,
+    );
+    await management.activateCampaign(businessAId, future.id, actorId);
+
+    const firstBranch = await repos.surveys.listQrExposedForBusinessBranch(
+      businessAId,
+      businessABranchId,
+    );
+    expect(firstBranch.map((row) => row.id)).toEqual(
+      expect.arrayContaining([businessWide.id, branchOnly.id]),
+    );
+    expect(firstBranch.map((row) => row.id)).not.toContain(hidden.id);
+    expect(firstBranch.map((row) => row.id)).not.toContain(future.id);
+
+    const otherBranch = await repos.surveys.listQrExposedForBusinessBranch(
+      businessAId,
+      businessAOtherBranchId,
+    );
+    expect(otherBranch.map((row) => row.id)).toContain(businessWide.id);
+    expect(otherBranch.map((row) => row.id)).not.toContain(branchOnly.id);
+
+    await management.pauseCampaign(businessAId, branchOnly.id, actorId);
+    const afterPause = await repos.surveys.listQrExposedForBusinessBranch(
+      businessAId,
+      businessABranchId,
+    );
+    expect(afterPause.map((row) => row.id)).not.toContain(branchOnly.id);
   });
 
   it('enforces participant eligibility, consent, and idempotent submission', async () => {
