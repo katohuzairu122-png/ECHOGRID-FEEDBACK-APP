@@ -6,6 +6,7 @@ import {
   issueRewardSchema,
   updateNotificationPreferencesSchema,
   CUSTOMER_NOTIFICATION_EVENT_TYPES,
+  resolveBusinessQrActionsSchema,
 } from '@echo-grid-feedback/shared-types';
 import type { Bindings } from '../config/env';
 import { createDb, type Database } from '../db/client';
@@ -30,6 +31,8 @@ import { LoyaltyRedemptionService } from './loyalty-redemption.service';
 import { LoyaltyTierService } from './loyalty-tier.service';
 import { NotificationService } from '../notifications/notification.service';
 import { CustomerMembershipService } from '../customer-relationships/customer-membership.service';
+import { signCustomerQrToken, CUSTOMER_QR_TOKEN_TTL_SECONDS } from '../qr/customer-qr-token';
+import { LoyaltyActionResolver } from './loyalty-action-resolver';
 
 type Env = { Bindings: Bindings; Variables: CustomerAuthVariables };
 
@@ -52,6 +55,29 @@ async function withDb<T>(c: Context<Env>, fn: (db: Database) => Promise<T>): Pro
     c.executionCtx.waitUntil(close());
   }
 }
+
+loyaltyCustomerRoutes.get('/customer-qr', async (c) => {
+  const token = await signCustomerQrToken(c.get('customerId'), c.env.QR_TOKEN_SECRET);
+  return ok(c, {
+    token,
+    expiresAt: new Date(Date.now() + CUSTOMER_QR_TOKEN_TTL_SECONDS * 1000).toISOString(),
+  });
+});
+
+loyaltyCustomerRoutes.post('/actions/resolve-business', async (c) => {
+  const body = await parseJsonBody(c.req.raw, resolveBusinessQrActionsSchema);
+  return withDb(c, async (db) => {
+    const repos = createRepositories(db);
+    const result = await new LoyaltyActionResolver(repos, {
+      QR_TOKEN_SECRET: c.env.QR_TOKEN_SECRET,
+      QR_TOKEN_SECRET_PREVIOUS: c.env.QR_TOKEN_SECRET_PREVIOUS,
+    }).resolveBusinessForCustomer({
+      businessQrToken: body.businessQrToken,
+      customerId: c.get('customerId'),
+    });
+    return ok(c, result);
+  });
+});
 
 loyaltyCustomerRoutes.get('/accounts', async (c) => {
   return withDb(c, async (db) => {
