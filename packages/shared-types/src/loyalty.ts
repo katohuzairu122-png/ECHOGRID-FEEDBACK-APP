@@ -493,8 +493,37 @@ export const loyaltyResolvedActionSchema = z.enum([
   'VIEW_REWARDS',
   'CHECK_IN',
   'LEAVE_FEEDBACK',
+  'TAKE_SURVEY',
   'VIEW_ALLOWED_MEMBERSHIP_STATE',
   'VALIDATE_PURCHASE',
   'GRANT_LOYALTY_PROGRESS',
   'REDEEM_REWARD',
 ]);
+
+
+export const resolvedSurveyCampaignSchema = z.object({
+  campaignId: z.uuid(),
+  surveyId: z.uuid(),
+  surveyVersionId: z.uuid(),
+  name: z.string(),
+  audienceClass: z.enum([
+    'customer',
+    'community_candidate',
+    'community_member',
+    'business_member',
+    'general_authenticated_participant',
+  ]),
+});
+
+export const resolveBusinessQrActionsResultSchema = z.object({
+  businessId: z.uuid(),
+  branchId: z.uuid(),
+  loyaltyAccountId: z.uuid().nullable(),
+  membershipStatus: z.enum(['active', 'none']),
+  actions: z.array(loyaltyResolvedActionSchema),
+  surveyCampaigns: z.array(resolvedSurveyCampaignSchema),
+});
+
+export type LoyaltyResolvedActionDto = z.infer<typeof loyaltyResolvedActionSchema>;
+export type ResolvedSurveyCampaignDto = z.infer<typeof resolvedSurveyCampaignSchema>;
+export type ResolveBusinessQrActionsResultDto = z.infer<typeof resolveBusinessQrActionsResultSchema>;
