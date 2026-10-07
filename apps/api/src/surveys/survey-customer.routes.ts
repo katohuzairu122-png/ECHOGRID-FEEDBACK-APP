@@ -21,6 +21,45 @@ export const surveyCustomerRoutes = new Hono<Env>();
 
 surveyCustomerRoutes.use('*', customerAuthenticate, rateLimit('PUBLIC_RATE_LIMITER'));
 
+function serializeCampaignDetail(result: Awaited<ReturnType<SurveyParticipationService['getCampaign']>>) {
+  return {
+    campaign: {
+      id: result.campaign.id,
+      surveyId: result.campaign.surveyId,
+      surveyVersionId: result.campaign.surveyVersionId,
+      businessId: result.campaign.businessId,
+      branchId: result.campaign.branchId,
+      name: result.campaign.name,
+      status: result.campaign.status,
+      audienceClass: result.campaign.audienceClass,
+      repeatPolicy: result.campaign.repeatPolicy,
+      startsAt: result.campaign.startsAt?.toISOString() ?? null,
+      endsAt: result.campaign.endsAt?.toISOString() ?? null,
+      maxResponses: result.campaign.maxResponses,
+      exposeInQrResolver: result.campaign.exposeInQrResolver,
+    },
+    version: {
+      id: result.version.id,
+      surveyId: result.version.surveyId,
+      version: result.version.version,
+      status: result.version.status,
+      title: result.version.title,
+      description: result.version.description,
+      publishedAt: result.version.publishedAt?.toISOString() ?? null,
+      questions: result.questions.map((question) => ({
+        id: question.id,
+        key: question.key,
+        label: question.label,
+        type: question.type,
+        required: question.required,
+        position: question.position,
+        options: question.options ?? null,
+        validation: question.validation ?? null,
+      })),
+    },
+  };
+}
+
 function serializeParticipation(row: {
   id: string;
   surveyId: string;
@@ -68,7 +107,7 @@ surveyCustomerRoutes.get('/campaigns/:campaignId', async (c) => {
       c.get('customerId'),
       c.req.param('campaignId'),
     );
-    return ok(c, result);
+    return ok(c, serializeCampaignDetail(result));
   });
 });
 
