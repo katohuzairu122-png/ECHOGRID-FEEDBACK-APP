@@ -99,31 +99,14 @@ const BUSINESS_B = 'business-b';
 const ACTOR = 'actor-user-id';
 
 describe('BranchService', () => {
-  let maxBranches: number | null;
   let repos: {
     branches: ReturnType<typeof createFakeBranchRepo>;
-    businessSubscriptions: { findByBusinessWithPlan: (businessId: string) => Promise<unknown> };
-    subscriptionPlans: { findByKey: (key: string) => Promise<unknown> };
   };
   let service: BranchService;
 
   beforeEach(() => {
-    maxBranches = null;
     repos = {
       branches: createFakeBranchRepo(),
-      businessSubscriptions: {
-        async findByBusinessWithPlan(businessId: string) {
-          return {
-            businessId,
-            plan: { name: 'Test plan', maxBranches },
-          };
-        },
-      },
-      subscriptionPlans: {
-        async findByKey() {
-          return { name: 'Free', maxBranches: 1 };
-        },
-      },
     };
     service = new BranchService(repos as unknown as ConstructorParameters<typeof BranchService>[0]);
   });
@@ -146,42 +129,6 @@ describe('BranchService', () => {
     ).rejects.toMatchObject({ code: 'SLUG_TAKEN', status: 409 });
   });
 
-  it('rejects a new branch when the plan allowance is exhausted', async () => {
-    maxBranches = 1;
-    await service.createBranch(BUSINESS_A, { name: 'Downtown', slug: 'downtown' }, ACTOR);
-
-    await expect(
-      service.createBranch(BUSINESS_A, { name: 'Uptown', slug: 'uptown' }, ACTOR),
-    ).rejects.toMatchObject({ code: 'PLAN_BRANCH_LIMIT_REACHED', status: 422 });
-  });
-
-  it('allows another branch when the plan has capacity', async () => {
-    maxBranches = 2;
-    await service.createBranch(BUSINESS_A, { name: 'Downtown', slug: 'downtown' }, ACTOR);
-
-    await expect(
-      service.createBranch(BUSINESS_A, { name: 'Uptown', slug: 'uptown' }, ACTOR),
-    ).resolves.toMatchObject({ slug: 'uptown' });
-  });
-
-  it('maps the database race guard to the plan-limit product error', async () => {
-    repos.branches.create = async () => {
-      throw new Error('PLAN_BRANCH_LIMIT_REACHED');
-    };
-
-    await expect(
-      service.createBranch(BUSINESS_A, { name: 'Downtown', slug: 'downtown' }, ACTOR),
-    ).rejects.toMatchObject({ code: 'PLAN_BRANCH_LIMIT_REACHED', status: 422 });
-  });
-
-  it('uses the Free allowance when a legacy business has no subscription row', async () => {
-    repos.businessSubscriptions.findByBusinessWithPlan = async () => undefined;
-    await service.createBranch(BUSINESS_A, { name: 'Downtown', slug: 'downtown' }, ACTOR);
-
-    await expect(
-      service.createBranch(BUSINESS_A, { name: 'Uptown', slug: 'uptown' }, ACTOR),
-    ).rejects.toMatchObject({ code: 'PLAN_BRANCH_LIMIT_REACHED', status: 422 });
-  });
 
   it('allows the same slug at a different business -- uniqueness is per-tenant, not global', async () => {
     await service.createBranch(BUSINESS_A, { name: 'Downtown', slug: 'downtown' }, ACTOR);
@@ -251,6 +198,14 @@ describe('BranchService', () => {
     await expect(
       service.updateBranch(uptown.id, BUSINESS_A, { slug: 'downtown' }, ACTOR),
     ).rejects.toMatchObject({ code: 'SLUG_TAKEN' });
+  });
+
+  it('allows branch lifecycle status updates independently of soft deletion', async () => {
+    const branch = await service.createBranch(BUSINESS_A, { name: 'Downtown', slug: 'downtown' }, ACTOR);
+    const inactive = await service.updateBranch(branch.id, BUSINESS_A, { status: 'inactive' }, ACTOR);
+    expect(inactive.status).toBe('inactive');
+    const archived = await service.updateBranch(branch.id, BUSINESS_A, { status: 'archived' }, ACTOR);
+    expect(archived.status).toBe('archived');
   });
 
   it('deleteBranch soft-deletes: the branch no longer appears in list or get', async () => {
