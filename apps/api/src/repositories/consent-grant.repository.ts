@@ -18,6 +18,13 @@ export class ConsentGrantRepository extends BaseRepository {
     return row;
   }
 
+  async listForCustomer(customerId: string): Promise<ConsentGrant[]> {
+    return this.db.query.consentGrants.findMany({
+      where: eq(consentGrants.customerId, customerId),
+      orderBy: (row, { desc }) => [desc(row.grantedAt)],
+    });
+  }
+
   async findActive(customerId: string, businessId: string, purpose: ConsentPurpose): Promise<ConsentGrant | undefined> {
     const now = new Date();
     return this.db.query.consentGrants.findFirst({
