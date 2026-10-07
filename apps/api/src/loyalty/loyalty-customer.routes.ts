@@ -29,6 +29,7 @@ import { LoyaltyRewardService } from './loyalty-reward.service';
 import { LoyaltyRedemptionService } from './loyalty-redemption.service';
 import { LoyaltyTierService } from './loyalty-tier.service';
 import { NotificationService } from '../notifications/notification.service';
+import { CustomerMembershipService } from '../customer-relationships/customer-membership.service';
 
 type Env = { Bindings: Bindings; Variables: CustomerAuthVariables };
 
@@ -72,11 +73,22 @@ loyaltyCustomerRoutes.get('/accounts/:businessId', async (c) => {
 loyaltyCustomerRoutes.post('/join', async (c) => {
   const body = await parseJsonBody(c.req.raw, joinLoyaltyProgramSchema);
   return withDb(c, async (db) => {
-    const account = await new LoyaltyAccountService(db).enroll({
+    const repos = createRepositories(db);
+    const qrCode = await new QrCodeService(repos, {
+      QR_TOKEN_SECRET: c.env.QR_TOKEN_SECRET,
+      QR_TOKEN_SECRET_PREVIOUS: c.env.QR_TOKEN_SECRET_PREVIOUS,
+    }).resolveToken(body.qrToken);
+
+    const result = await new CustomerMembershipService(db).join({
       customerId: c.get('customerId'),
-      businessId: body.businessId,
+      businessId: qrCode.businessId,
+      onboardingSource: 'business_qr',
+      onboardingReference: qrCode.id,
+      consentVersion: body.consentVersion,
+      idempotencyKey: body.idempotencyKey,
     });
-    return ok(c, account, 201);
+
+    return ok(c, result.loyaltyAccount, 201);
   });
 });
 
