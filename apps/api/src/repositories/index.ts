@@ -17,6 +17,9 @@ import { AiUsageLogRepository } from './ai-usage-log.repository';
 import { CriticalIncidentRepository } from './critical-incident.repository';
 import { FraudSignalRepository } from './fraud-signal.repository';
 import { CustomerRepository } from './customer.repository';
+import { CustomerMembershipRepository } from './customer-membership.repository';
+import { ConsentGrantRepository } from './consent-grant.repository';
+import { CustomerActionAuthorizationRepository } from './customer-action-authorization.repository';
 import { OtpCodeRepository } from './otp-code.repository';
 import { LoyaltyTierRepository } from './loyalty-tier.repository';
 import { LoyaltyRewardRepository } from './loyalty-reward.repository';
@@ -51,6 +54,9 @@ export * from './ai-usage-log.repository';
 export * from './critical-incident.repository';
 export * from './fraud-signal.repository';
 export * from './customer.repository';
+export * from './customer-membership.repository';
+export * from './consent-grant.repository';
+export * from './customer-action-authorization.repository';
 export * from './otp-code.repository';
 export * from './loyalty-tier.repository';
 export * from './loyalty-reward.repository';
@@ -92,6 +98,9 @@ export function createRepositories(db: Db) {
     criticalIncidents: new CriticalIncidentRepository(db),
     fraudSignals: new FraudSignalRepository(db),
     customers: new CustomerRepository(db),
+    customerMemberships: new CustomerMembershipRepository(db),
+    consentGrants: new ConsentGrantRepository(db),
+    customerActionAuthorizations: new CustomerActionAuthorizationRepository(db),
     otpCodes: new OtpCodeRepository(db),
     loyaltyTiers: new LoyaltyTierRepository(db),
     loyaltyRewards: new LoyaltyRewardRepository(db),
