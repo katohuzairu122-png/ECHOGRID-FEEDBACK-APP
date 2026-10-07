@@ -1,4 +1,4 @@
-import { and, asc, desc, eq } from 'drizzle-orm';
+import { and, asc, desc, eq, sql } from 'drizzle-orm';
 import {
   surveyCampaigns,
   surveyQuestions,
@@ -62,6 +62,35 @@ export class SurveyRepository extends BaseRepository {
       )
       .returning();
     return row;
+  }
+
+  async createNextVersionWithQuestions(
+    surveyId: string,
+    versionInput: Omit<NewSurveyVersion, 'surveyId' | 'version'>,
+    questions: Omit<NewSurveyQuestion, 'versionId'>[],
+  ): Promise<{ version: SurveyVersion; questions: SurveyQuestion[] }> {
+    return this.db.transaction(async (tx) => {
+      await tx.execute(sql`select id from ${surveys} where ${surveys.id} = ${surveyId} for update`);
+      const [nextRow] = await tx
+        .select({ next: sql<number>`coalesce(max(${surveyVersions.version}), 0) + 1` })
+        .from(surveyVersions)
+        .where(eq(surveyVersions.surveyId, surveyId));
+
+      const [version] = await tx
+        .insert(surveyVersions)
+        .values({ ...versionInput, surveyId, version: Number(nextRow?.next ?? 1) })
+        .returning();
+      if (!version) throw new Error('Survey version insert returned no row');
+
+      const insertedQuestions = questions.length
+        ? await tx
+            .insert(surveyQuestions)
+            .values(questions.map((question) => ({ ...question, versionId: version.id })))
+            .returning()
+        : [];
+
+      return { version, questions: insertedQuestions };
+    });
   }
 
   async createVersionWithQuestions(
