@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { joinCustomerMembershipSchema } from './customer-relationships';
 
 /**
  * Digital Loyalty module contract -- request/response shapes shared between
@@ -202,9 +203,7 @@ export const updateLoyaltySettingsSchema = z.object({
 
 // ---- Customer-facing -----------------------------------------------------
 
-export const joinLoyaltyProgramSchema = z.object({
-  businessId: z.uuid(),
-});
+export const joinLoyaltyProgramSchema = joinCustomerMembershipSchema;
 
 /** Check-in reuses the same anonymous QR token as feedback (qr_codes.token)
  * -- one QR code per branch drives both flows, distinguished by which
