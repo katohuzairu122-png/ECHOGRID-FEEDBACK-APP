@@ -30,3 +30,4 @@ export * from './messaging';
 export * from './visits';
 export * from './fraud-signals';
 
+export * from './surveys';
