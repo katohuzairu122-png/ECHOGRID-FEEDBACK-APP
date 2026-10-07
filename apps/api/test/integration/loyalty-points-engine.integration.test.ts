@@ -63,13 +63,27 @@ describe.skipIf(!process.env.DATABASE_URL)('LoyaltyAccountService points engine 
     await client.end();
   });
 
-  it('recordCheckin auto-enrolls a customer with no existing account, awards the configured points, and records a visit', async () => {
+  it('recordCheckin rejects a non-member, then awards points after explicit membership exists', async () => {
     const qrCode = await repos.qrCodes.create({ businessId, branchId });
+
+    await expect(service.recordCheckin(customerId, businessId, qrCode.id)).rejects.toMatchObject({
+      code: 'MEMBERSHIP_REQUIRED',
+      status: 409,
+    });
+
+    const membership = await repos.customerMemberships.create({
+      customerId,
+      businessId,
+      status: 'active',
+      onboardingSource: 'integration_test',
+      onboardingReference: qrCode.id,
+    });
+    await repos.loyaltyAccounts.create({ customerId, businessId, membershipId: membership.id });
 
     const account = await service.recordCheckin(customerId, businessId, qrCode.id);
 
     expect(account.customerId).toBe(customerId);
-    expect(account.points).toBe(10); // loyalty_settings' default pointsPerCheckin
+    expect(account.points).toBe(10);
     expect(account.visitCount).toBe(1);
     expect(account.lastVisitAt).not.toBeNull();
   });
@@ -126,6 +140,18 @@ describe.skipIf(!process.env.DATABASE_URL)('LoyaltyAccountService points engine 
       ttlSeconds: 60,
     });
     const otherCustomer = await repos.customers.create({ phone: `+1555${Date.now()}` });
+    const otherMembership = await repos.customerMemberships.create({
+      customerId: otherCustomer.id,
+      businessId,
+      status: 'active',
+      onboardingSource: 'integration_test',
+      onboardingReference: qrCode.id,
+    });
+    await repos.loyaltyAccounts.create({
+      customerId: otherCustomer.id,
+      businessId,
+      membershipId: otherMembership.id,
+    });
 
     const first = await service.recordCheckin(customerId, businessId, qrCode.id, session.id);
     const second = await service.recordCheckin(otherCustomer.id, businessId, qrCode.id, session.id);
