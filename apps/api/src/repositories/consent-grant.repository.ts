@@ -25,6 +25,27 @@ export class ConsentGrantRepository extends BaseRepository {
     });
   }
 
+  async findActiveForResource(
+    customerId: string,
+    businessId: string | null,
+    purpose: ConsentPurpose,
+    resourceType: string,
+    resourceId: string,
+  ): Promise<ConsentGrant | undefined> {
+    const now = new Date();
+    return this.db.query.consentGrants.findFirst({
+      where: and(
+        eq(consentGrants.customerId, customerId),
+        businessId === null ? isNull(consentGrants.businessId) : eq(consentGrants.businessId, businessId),
+        eq(consentGrants.purpose, purpose),
+        eq(consentGrants.resourceType, resourceType),
+        eq(consentGrants.resourceId, resourceId),
+        eq(consentGrants.status, 'active'),
+        or(isNull(consentGrants.expiresAt), gt(consentGrants.expiresAt, now)),
+      ),
+    });
+  }
+
   async findActive(customerId: string, businessId: string, purpose: ConsentPurpose): Promise<ConsentGrant | undefined> {
     const now = new Date();
     return this.db.query.consentGrants.findFirst({
