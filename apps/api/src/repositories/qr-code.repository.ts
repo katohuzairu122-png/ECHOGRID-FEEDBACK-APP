@@ -21,6 +21,7 @@ export class QrCodeRepository extends BaseRepository {
       where: and(
         eq(qrCodes.branchId, branchId),
         eq(qrCodes.businessId, businessId),
+        eq(qrCodes.type, 'business'),
         eq(qrCodes.status, 'active'),
         eq(qrCodes.isDeleted, false),
       ),
@@ -43,7 +44,12 @@ export class QrCodeRepository extends BaseRepository {
    */
   async findActiveById(id: string): Promise<QrCode | undefined> {
     return this.db.query.qrCodes.findFirst({
-      where: and(eq(qrCodes.id, id), eq(qrCodes.status, 'active'), eq(qrCodes.isDeleted, false)),
+      where: and(
+        eq(qrCodes.id, id),
+        eq(qrCodes.type, 'business'),
+        eq(qrCodes.status, 'active'),
+        eq(qrCodes.isDeleted, false),
+      ),
     });
   }
 
