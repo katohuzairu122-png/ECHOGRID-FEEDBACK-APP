@@ -55,7 +55,7 @@ export async function checkinAction(qrToken: string): Promise<CheckinResult> {
     if (err instanceof ApiError) {
       return {
         error: err.message,
-        code: err.code,
+        ...(err.code !== undefined ? { code: err.code } : {}),
         membershipRequired: err.code === 'MEMBERSHIP_REQUIRED',
       };
     }
@@ -69,7 +69,12 @@ export async function joinAndCheckinAction(qrToken: string): Promise<CheckinResu
     return await checkinAction(qrToken);
   } catch (err) {
     rethrowControlFlow(err);
-    if (err instanceof ApiError) return { error: err.message, code: err.code };
+    if (err instanceof ApiError) {
+      return {
+        error: err.message,
+        ...(err.code !== undefined ? { code: err.code } : {}),
+      };
+    }
     return { error: 'Something went wrong. Please try again.' };
   }
 }
