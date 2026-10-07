@@ -11,6 +11,7 @@
 export * from './common';
 export * from './i18n';
 export * from './branches';
+export * from './business-categories';
 export * from './businesses';
 export * from './qr-codes';
 export * from './qr-scans';
