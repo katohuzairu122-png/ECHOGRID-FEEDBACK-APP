@@ -1,4 +1,5 @@
 export * from './_shared';
+export * from './business-categories';
 export * from './businesses';
 export * from './branches';
 export * from './users';
