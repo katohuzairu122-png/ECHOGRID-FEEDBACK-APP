@@ -11,11 +11,33 @@ const MEMBERSHIP_ID = crypto.randomUUID();
 const ACCOUNT_ID = crypto.randomUUID();
 const QR_ID = crypto.randomUUID();
 
-function createRepos(activeMembership: boolean) {
-  const customer = {
-    id: CUSTOMER_ID,
+type Audience =
+  | 'customer'
+  | 'community_candidate'
+  | 'community_member'
+  | 'business_member'
+  | 'general_authenticated_participant';
+
+function campaign(audienceClass: Audience, name: string = audienceClass) {
+  return {
+    id: crypto.randomUUID(),
+    surveyId: crypto.randomUUID(),
+    surveyVersionId: crypto.randomUUID(),
+    businessId: BUSINESS_ID,
+    branchId: null,
+    name,
     status: 'active',
+    audienceClass,
+    repeatPolicy: 'once_per_campaign',
+    exposeInQrResolver: true,
+    startsAt: null,
+    endsAt: null,
+    maxResponses: null,
   };
+}
+
+function createRepos(activeMembership: boolean, campaigns = [] as ReturnType<typeof campaign>[]) {
+  const customer = { id: CUSTOMER_ID, status: 'active' };
   const membership = activeMembership
     ? {
         id: MEMBERSHIP_ID,
@@ -67,13 +89,25 @@ function createRepos(activeMembership: boolean) {
         return undefined;
       },
     },
+    surveys: {
+      async listQrExposedForBusinessBranch(businessId: string, branchId: string) {
+        return businessId === BUSINESS_ID && branchId === BRANCH_ID ? campaigns : [];
+      },
+    },
   };
 }
 
-function resolver(activeMembership: boolean) {
+function resolver(activeMembership: boolean, campaigns = [] as ReturnType<typeof campaign>[]) {
   return new LoyaltyActionResolver(
-    createRepos(activeMembership) as unknown as ConstructorParameters<typeof LoyaltyActionResolver>[0],
+    createRepos(activeMembership, campaigns) as unknown as ConstructorParameters<typeof LoyaltyActionResolver>[0],
     { QR_TOKEN_SECRET: SECRET, QR_TOKEN_SECRET_PREVIOUS: undefined },
+  );
+}
+
+async function businessQrToken() {
+  return signQrToken(
+    { qrCodeId: QR_ID, businessId: BUSINESS_ID, branchId: BRANCH_ID },
+    SECRET,
   );
 }
 
@@ -107,32 +141,66 @@ describe('LoyaltyActionResolver', () => {
     expect(result.actions).toEqual([]);
   });
 
-  it('returns JOIN_LOYALTY when a customer scans a business QR without membership', async () => {
-    const token = await signQrToken(
-      { qrCodeId: QR_ID, businessId: BUSINESS_ID, branchId: BRANCH_ID },
-      SECRET,
-    );
+  it('returns JOIN_LOYALTY and no survey action when no eligible campaign exists', async () => {
     const result = await resolver(false).resolveBusinessForCustomer({
-      businessQrToken: token,
+      businessQrToken: await businessQrToken(),
       customerId: CUSTOMER_ID,
     });
     expect(result.actions).toEqual(['JOIN_LOYALTY', 'LEAVE_FEEDBACK']);
+    expect(result.surveyCampaigns).toEqual([]);
   });
 
-  it('returns loyalty-card actions for an existing member scanning the business QR', async () => {
-    const token = await signQrToken(
-      { qrCodeId: QR_ID, businessId: BUSINESS_ID, branchId: BRANCH_ID },
-      SECRET,
-    );
-    const result = await resolver(true).resolveBusinessForCustomer({
-      businessQrToken: token,
+  it('exposes a general authenticated survey to a non-member without granting authority in the QR', async () => {
+    const general = campaign('general_authenticated_participant', 'Experience survey');
+    const result = await resolver(false, [general]).resolveBusinessForCustomer({
+      businessQrToken: await businessQrToken(),
       customerId: CUSTOMER_ID,
     });
-    expect(result.actions).toEqual([
+
+    expect(result.actions).toEqual(['JOIN_LOYALTY', 'LEAVE_FEEDBACK', 'TAKE_SURVEY']);
+    expect(result.surveyCampaigns).toEqual([
+      {
+        campaignId: general.id,
+        surveyId: general.surveyId,
+        surveyVersionId: general.surveyVersionId,
+        name: 'Experience survey',
+        audienceClass: 'general_authenticated_participant',
+      },
+    ]);
+  });
+
+  it('hides business-member surveys from non-members and exposes them after membership exists', async () => {
+    const memberOnly = campaign('business_member', 'Members survey');
+
+    const nonMember = await resolver(false, [memberOnly]).resolveBusinessForCustomer({
+      businessQrToken: await businessQrToken(),
+      customerId: CUSTOMER_ID,
+    });
+    expect(nonMember.actions).toEqual(['JOIN_LOYALTY', 'LEAVE_FEEDBACK']);
+    expect(nonMember.surveyCampaigns).toEqual([]);
+
+    const member = await resolver(true, [memberOnly]).resolveBusinessForCustomer({
+      businessQrToken: await businessQrToken(),
+      customerId: CUSTOMER_ID,
+    });
+    expect(member.actions).toEqual([
       'OPEN_LOYALTY_CARD',
       'VIEW_REWARDS',
       'CHECK_IN',
       'LEAVE_FEEDBACK',
+      'TAKE_SURVEY',
     ]);
+    expect(member.surveyCampaigns).toHaveLength(1);
+  });
+
+  it('fails Community survey discovery closed until Community membership exists', async () => {
+    const community = campaign('community_member', 'Community survey');
+    const result = await resolver(true, [community]).resolveBusinessForCustomer({
+      businessQrToken: await businessQrToken(),
+      customerId: CUSTOMER_ID,
+    });
+
+    expect(result.actions).not.toContain('TAKE_SURVEY');
+    expect(result.surveyCampaigns).toEqual([]);
   });
 });

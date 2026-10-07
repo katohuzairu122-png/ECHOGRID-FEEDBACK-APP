@@ -19,6 +19,14 @@ import { fraudSignals } from './fraud-signals';
 import { customers } from './customers';
 import { businessCustomerMemberships } from './business-customer-memberships';
 import { consentGrants } from './consent-grants';
+import {
+  surveys,
+  surveyVersions,
+  surveyQuestions,
+  surveyCampaigns,
+  surveyParticipations,
+  surveyAnswers,
+} from './surveys';
 import { customerActionAuthorizations } from './customer-action-authorizations';
 import { loyaltyTiers } from './loyalty-tiers';
 import { loyaltyRewards } from './loyalty-rewards';
@@ -51,6 +59,9 @@ export const businessesRelations = relations(businesses, ({ many, one }) => ({
   loyaltyAccounts: many(loyaltyAccounts),
   customerMemberships: many(businessCustomerMemberships),
   consentGrants: many(consentGrants),
+  surveys: many(surveys),
+  surveyCampaigns: many(surveyCampaigns),
+  surveyParticipations: many(surveyParticipations),
   customerActionAuthorizations: many(customerActionAuthorizations),
   loyaltySettings: many(loyaltySettings),
   notificationPreferences: many(notificationPreferences),
@@ -80,6 +91,8 @@ export const branchesRelations = relations(branches, ({ one, many }) => ({
   criticalIncidents: many(criticalIncidents),
   fraudSignals: many(fraudSignals),
   teamInvitations: many(teamInvitations),
+  surveyCampaigns: many(surveyCampaigns),
+  surveyParticipations: many(surveyParticipations),
 }));
 
 export const usersRelations = relations(users, ({ many }) => ({
@@ -197,9 +210,10 @@ export const businessCustomerMembershipsRelations = relations(
   }),
 );
 
-export const consentGrantsRelations = relations(consentGrants, ({ one }) => ({
+export const consentGrantsRelations = relations(consentGrants, ({ one, many }) => ({
   customer: one(customers, { fields: [consentGrants.customerId], references: [customers.id] }),
   business: one(businesses, { fields: [consentGrants.businessId], references: [businesses.id] }),
+  surveyParticipations: many(surveyParticipations),
 }));
 
 export const customerActionAuthorizationsRelations = relations(
@@ -215,6 +229,88 @@ export const customerActionAuthorizationsRelations = relations(
     }),
   }),
 );
+
+export const surveysRelations = relations(surveys, ({ one, many }) => ({
+  business: one(businesses, { fields: [surveys.businessId], references: [businesses.id] }),
+  versions: many(surveyVersions),
+  campaigns: many(surveyCampaigns),
+  participations: many(surveyParticipations),
+}));
+
+export const surveyVersionsRelations = relations(surveyVersions, ({ one, many }) => ({
+  survey: one(surveys, { fields: [surveyVersions.surveyId], references: [surveys.id] }),
+  questions: many(surveyQuestions),
+  campaigns: many(surveyCampaigns),
+  participations: many(surveyParticipations),
+}));
+
+export const surveyQuestionsRelations = relations(surveyQuestions, ({ one, many }) => ({
+  version: one(surveyVersions, {
+    fields: [surveyQuestions.versionId],
+    references: [surveyVersions.id],
+  }),
+  answers: many(surveyAnswers),
+}));
+
+export const surveyCampaignsRelations = relations(surveyCampaigns, ({ one, many }) => ({
+  survey: one(surveys, { fields: [surveyCampaigns.surveyId], references: [surveys.id] }),
+  version: one(surveyVersions, {
+    fields: [surveyCampaigns.surveyVersionId],
+    references: [surveyVersions.id],
+  }),
+  business: one(businesses, {
+    fields: [surveyCampaigns.businessId],
+    references: [businesses.id],
+  }),
+  branch: one(branches, { fields: [surveyCampaigns.branchId], references: [branches.id] }),
+  participations: many(surveyParticipations),
+}));
+
+export const surveyParticipationsRelations = relations(
+  surveyParticipations,
+  ({ one, many }) => ({
+    survey: one(surveys, {
+      fields: [surveyParticipations.surveyId],
+      references: [surveys.id],
+    }),
+    version: one(surveyVersions, {
+      fields: [surveyParticipations.surveyVersionId],
+      references: [surveyVersions.id],
+    }),
+    campaign: one(surveyCampaigns, {
+      fields: [surveyParticipations.campaignId],
+      references: [surveyCampaigns.id],
+    }),
+    participant: one(customers, {
+      fields: [surveyParticipations.participantCustomerId],
+      references: [customers.id],
+    }),
+    business: one(businesses, {
+      fields: [surveyParticipations.businessId],
+      references: [businesses.id],
+    }),
+    branch: one(branches, {
+      fields: [surveyParticipations.branchId],
+      references: [branches.id],
+    }),
+    consentGrant: one(consentGrants, {
+      fields: [surveyParticipations.consentGrantId],
+      references: [consentGrants.id],
+    }),
+    answers: many(surveyAnswers),
+  }),
+);
+
+export const surveyAnswersRelations = relations(surveyAnswers, ({ one }) => ({
+  participation: one(surveyParticipations, {
+    fields: [surveyAnswers.participationId],
+    references: [surveyParticipations.id],
+  }),
+  question: one(surveyQuestions, {
+    fields: [surveyAnswers.questionId],
+    references: [surveyQuestions.id],
+  }),
+}));
 
 export const loyaltyTiersRelations = relations(loyaltyTiers, ({ one, many }) => ({
   business: one(businesses, { fields: [loyaltyTiers.businessId], references: [businesses.id] }),

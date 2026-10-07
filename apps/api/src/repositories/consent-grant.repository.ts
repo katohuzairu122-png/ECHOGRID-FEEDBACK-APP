@@ -8,11 +8,20 @@ export type NewConsentGrant = typeof consentGrants.$inferInsert;
 export class ConsentGrantRepository extends BaseRepository {
   async create(input: NewConsentGrant): Promise<ConsentGrant> {
     if (input.idempotencyKey) {
+      const [inserted] = await this.db
+        .insert(consentGrants)
+        .values(input)
+        .onConflictDoNothing()
+        .returning();
+      if (inserted) return inserted;
+
       const existing = await this.db.query.consentGrants.findFirst({
         where: eq(consentGrants.idempotencyKey, input.idempotencyKey),
       });
       if (existing) return existing;
+      throw new Error('Consent idempotency conflict did not resolve to an existing grant.');
     }
+
     const [row] = await this.db.insert(consentGrants).values(input).returning();
     if (!row) throw new Error('Insert returned no row');
     return row;
@@ -22,6 +31,46 @@ export class ConsentGrantRepository extends BaseRepository {
     return this.db.query.consentGrants.findMany({
       where: eq(consentGrants.customerId, customerId),
       orderBy: (row, { desc }) => [desc(row.grantedAt)],
+    });
+  }
+
+  async findLatestForResource(
+    customerId: string,
+    businessId: string | null,
+    purpose: ConsentPurpose,
+    resourceType: string,
+    resourceId: string,
+  ): Promise<ConsentGrant | undefined> {
+    return this.db.query.consentGrants.findFirst({
+      where: and(
+        eq(consentGrants.customerId, customerId),
+        businessId === null ? isNull(consentGrants.businessId) : eq(consentGrants.businessId, businessId),
+        eq(consentGrants.purpose, purpose),
+        eq(consentGrants.resourceType, resourceType),
+        eq(consentGrants.resourceId, resourceId),
+      ),
+      orderBy: (row, { desc }) => [desc(row.grantedAt), desc(row.createdAt)],
+    });
+  }
+
+  async findActiveForResource(
+    customerId: string,
+    businessId: string | null,
+    purpose: ConsentPurpose,
+    resourceType: string,
+    resourceId: string,
+  ): Promise<ConsentGrant | undefined> {
+    const now = new Date();
+    return this.db.query.consentGrants.findFirst({
+      where: and(
+        eq(consentGrants.customerId, customerId),
+        businessId === null ? isNull(consentGrants.businessId) : eq(consentGrants.businessId, businessId),
+        eq(consentGrants.purpose, purpose),
+        eq(consentGrants.resourceType, resourceType),
+        eq(consentGrants.resourceId, resourceId),
+        eq(consentGrants.status, 'active'),
+        or(isNull(consentGrants.expiresAt), gt(consentGrants.expiresAt, now)),
+      ),
     });
   }
 
