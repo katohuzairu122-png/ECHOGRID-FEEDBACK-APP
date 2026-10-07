@@ -18,7 +18,7 @@ type Audience =
   | 'business_member'
   | 'general_authenticated_participant';
 
-function campaign(audienceClass: Audience, name = audienceClass) {
+function campaign(audienceClass: Audience, name: string = audienceClass) {
   return {
     id: crypto.randomUUID(),
     surveyId: crypto.randomUUID(),
