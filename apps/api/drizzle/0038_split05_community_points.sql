@@ -111,7 +111,8 @@ CREATE UNIQUE INDEX "community_memberships_customer_key" ON "community_membershi
 CREATE INDEX "community_memberships_status_idx" ON "community_memberships" USING btree ("status");--> statement-breakpoint
 CREATE UNIQUE INDEX "community_point_accounts_customer_key" ON "community_point_accounts" USING btree ("customer_id");--> statement-breakpoint
 CREATE INDEX "community_point_accounts_status_idx" ON "community_point_accounts" USING btree ("status");--> statement-breakpoint
-CREATE UNIQUE INDEX "community_point_rules_source_resource_version_key" ON "community_point_rules" USING btree ("source_type","resource_type","resource_id","version");--> statement-breakpoint
+CREATE UNIQUE INDEX "community_point_rules_global_version_key" ON "community_point_rules" USING btree ("source_type","version") WHERE "community_point_rules"."resource_type" IS NULL AND "community_point_rules"."resource_id" IS NULL;--> statement-breakpoint
+CREATE UNIQUE INDEX "community_point_rules_resource_version_key" ON "community_point_rules" USING btree ("source_type","resource_type","resource_id","version") WHERE "community_point_rules"."resource_type" IS NOT NULL AND "community_point_rules"."resource_id" IS NOT NULL;--> statement-breakpoint
 CREATE INDEX "community_point_rules_source_status_idx" ON "community_point_rules" USING btree ("source_type","status");--> statement-breakpoint
 CREATE INDEX "community_point_rules_resource_idx" ON "community_point_rules" USING btree ("resource_type","resource_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "community_point_award_decisions_source_rule_key" ON "community_point_award_decisions" USING btree ("source_type","source_ref","rule_id");--> statement-breakpoint
