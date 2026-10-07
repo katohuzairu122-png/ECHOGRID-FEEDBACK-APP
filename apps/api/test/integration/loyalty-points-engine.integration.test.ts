@@ -169,9 +169,80 @@ describe.skipIf(!process.env.DATABASE_URL)('LoyaltyAccountService points engine 
     const before = account!.points;
 
     // Default pointsPerCurrencyUnit is 1.00 -> $19.99 floors to 19 points.
-    const updated = await service.recordPurchase(businessId, account!.id, 19.99, STAFF_ACTOR_ID);
+    const result = await service.recordPurchase({
+      businessId,
+      branchId,
+      accountId: account!.id,
+      purchaseAmount: 19.99,
+      idempotencyKey: crypto.randomUUID(),
+      channel: 'branch',
+      staffUserId: STAFF_ACTOR_ID,
+    });
 
-    expect(updated.points).toBe(before + 19);
+    expect(result.account.points).toBe(before + 19);
+    expect(result.inserted).toBe(true);
+  });
+
+
+  it('recordPurchase is idempotent and a replay cannot award points twice', async () => {
+    const account = await repos.loyaltyAccounts.findByCustomerAndBusiness(customerId, businessId);
+    const before = account!.points;
+    const idempotencyKey = crypto.randomUUID();
+
+    const first = await service.recordPurchase({
+      businessId,
+      branchId,
+      accountId: account!.id,
+      purchaseAmount: 7.5,
+      idempotencyKey,
+      channel: 'branch',
+      staffUserId: STAFF_ACTOR_ID,
+    });
+    const second = await service.recordPurchase({
+      businessId,
+      branchId,
+      accountId: account!.id,
+      purchaseAmount: 7.5,
+      idempotencyKey,
+      channel: 'branch',
+      staffUserId: STAFF_ACTOR_ID,
+    });
+
+    expect(first.inserted).toBe(true);
+    expect(second.inserted).toBe(false);
+
+    const after = await repos.loyaltyAccounts.findByCustomerAndBusiness(customerId, businessId);
+    expect(after!.points).toBe(before + 7);
+
+    const events = await repos.loyaltyPurchaseEvents.findByIdempotencyKey(businessId, idempotencyKey);
+    expect(events).toBeDefined();
+  });
+
+  it('recordPurchase rejects conflicting reuse of an idempotency key', async () => {
+    const account = await repos.loyaltyAccounts.findByCustomerAndBusiness(customerId, businessId);
+    const idempotencyKey = crypto.randomUUID();
+
+    await service.recordPurchase({
+      businessId,
+      branchId,
+      accountId: account!.id,
+      purchaseAmount: 5,
+      idempotencyKey,
+      channel: 'branch',
+      staffUserId: STAFF_ACTOR_ID,
+    });
+
+    await expect(
+      service.recordPurchase({
+        businessId,
+        branchId,
+        accountId: account!.id,
+        purchaseAmount: 6,
+        idempotencyKey,
+        channel: 'branch',
+        staffUserId: STAFF_ACTOR_ID,
+      }),
+    ).rejects.toMatchObject({ code: 'IDEMPOTENCY_CONFLICT', status: 409 });
   });
 
   it('adjustPoints rejects an adjustment that would drop the balance below zero', async () => {
