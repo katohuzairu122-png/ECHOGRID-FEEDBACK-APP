@@ -4,6 +4,7 @@ import { buildDb } from '../../src/db/client';
 import { createRepositories } from '../../src/repositories';
 import { SurveyManagementService } from '../../src/surveys/survey-management.service';
 import { SurveyParticipationService } from '../../src/surveys/survey-participation.service';
+import { SurveyCompletionEvidenceService } from '../../src/surveys/survey-completion-evidence.service';
 
 describe.skipIf(!process.env.DATABASE_URL)('Split 04 survey repositories (integration)', () => {
   let client: Client;
@@ -588,5 +589,28 @@ describe.skipIf(!process.env.DATABASE_URL)('Split 04 survey repositories (integr
     expect(completed.submissionPayloadHash).toBe('payload-hash-1');
     expect(await repos.surveyParticipations.listAnswers(completed.id)).toHaveLength(1);
     expect(await repos.surveyParticipations.countCompletedForCampaign(campaign.id)).toBe(1);
+
+    const evidenceService = new SurveyCompletionEvidenceService(repos);
+    const evidence = await evidenceService.getByCompletionRef(completed.id);
+    expect(evidence).toEqual({
+      evidenceVersion: 'v1',
+      completionRef: completed.id,
+      participantCustomerId: customerId,
+      surveyId: survey.id,
+      surveyVersionId: version.id,
+      campaignId: campaign.id,
+      businessId: businessAId,
+      branchId: null,
+      source: 'direct',
+      completedAt: completed.completedAt!.toISOString(),
+    });
+
+    const event = evidenceService.toEvent(evidence);
+    expect(event.eventKey).toBe(`survey-completion:${completed.id}`);
+    expect(event.evidence.completionRef).toBe(completed.id);
+    expect(event.evidence).not.toHaveProperty('answers');
+    expect(event.evidence).not.toHaveProperty('submissionPayloadHash');
+    expect(event.evidence).not.toHaveProperty('communityPoints');
+    expect(event.evidence).not.toHaveProperty('loyaltyPoints');
   });
 });
