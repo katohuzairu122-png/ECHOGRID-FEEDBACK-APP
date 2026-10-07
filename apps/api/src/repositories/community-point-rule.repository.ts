@@ -66,6 +66,17 @@ export class CommunityPointRuleRepository extends BaseRepository {
     });
   }
 
+  async isActiveNow(id: string, now = new Date()): Promise<CommunityPointRule | undefined> {
+    return this.db.query.communityPointRules.findFirst({
+      where: and(
+        eq(communityPointRules.id, id),
+        eq(communityPointRules.status, 'active'),
+        or(isNull(communityPointRules.startsAt), lte(communityPointRules.startsAt, now)),
+        or(isNull(communityPointRules.endsAt), gt(communityPointRules.endsAt, now)),
+      ),
+    });
+  }
+
   async updateLifecycle(
     id: string,
     patch: Partial<
