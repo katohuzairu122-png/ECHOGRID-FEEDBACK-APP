@@ -25,6 +25,7 @@ import { OtpCodeRepository } from './otp-code.repository';
 import { LoyaltyTierRepository } from './loyalty-tier.repository';
 import { LoyaltyRewardRepository } from './loyalty-reward.repository';
 import { LoyaltyAccountRepository } from './loyalty-account.repository';
+import { LoyaltyPurchaseEventRepository } from './loyalty-purchase-event.repository';
 import { LoyaltyTransactionRepository } from './loyalty-transaction.repository';
 import { LoyaltySettingsRepository } from './loyalty-settings.repository';
 import { NotificationPreferenceRepository } from './notification-preference.repository';
@@ -63,6 +64,7 @@ export * from './otp-code.repository';
 export * from './loyalty-tier.repository';
 export * from './loyalty-reward.repository';
 export * from './loyalty-account.repository';
+export * from './loyalty-purchase-event.repository';
 export * from './loyalty-transaction.repository';
 export * from './loyalty-settings.repository';
 export * from './notification-preference.repository';
@@ -108,6 +110,7 @@ export function createRepositories(db: Db) {
     loyaltyTiers: new LoyaltyTierRepository(db),
     loyaltyRewards: new LoyaltyRewardRepository(db),
     loyaltyAccounts: new LoyaltyAccountRepository(db),
+    loyaltyPurchaseEvents: new LoyaltyPurchaseEventRepository(db),
     loyaltyTransactions: new LoyaltyTransactionRepository(db),
     loyaltySettings: new LoyaltySettingsRepository(db),
     notificationPreferences: new NotificationPreferenceRepository(db),
