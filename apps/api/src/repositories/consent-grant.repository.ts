@@ -34,6 +34,25 @@ export class ConsentGrantRepository extends BaseRepository {
     });
   }
 
+  async findLatestForResource(
+    customerId: string,
+    businessId: string | null,
+    purpose: ConsentPurpose,
+    resourceType: string,
+    resourceId: string,
+  ): Promise<ConsentGrant | undefined> {
+    return this.db.query.consentGrants.findFirst({
+      where: and(
+        eq(consentGrants.customerId, customerId),
+        businessId === null ? isNull(consentGrants.businessId) : eq(consentGrants.businessId, businessId),
+        eq(consentGrants.purpose, purpose),
+        eq(consentGrants.resourceType, resourceType),
+        eq(consentGrants.resourceId, resourceId),
+      ),
+      orderBy: (row, { desc }) => [desc(row.grantedAt), desc(row.createdAt)],
+    });
+  }
+
   async findActiveForResource(
     customerId: string,
     businessId: string | null,
