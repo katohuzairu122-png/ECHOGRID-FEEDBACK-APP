@@ -108,12 +108,16 @@ export class SurveyParticipationService {
   async getCampaign(
     customerId: string,
     campaignId: string,
-  ): Promise<{ campaign: SurveyCampaign; questions: SurveyQuestion[] }> {
+  ) {
     const repos = createRepositories(this.db);
     const campaign = await this.requireStartableCampaign(repos, campaignId);
     await this.assertAudienceEligible(repos, customerId, campaign);
+    const version = await repos.surveys.findVersionById(campaign.surveyVersionId);
+    if (!version) {
+      throw new AppError('Survey version not found.', 404, 'SURVEY_VERSION_NOT_FOUND');
+    }
     const questions = await repos.surveys.listQuestions(campaign.surveyVersionId);
-    return { campaign, questions };
+    return { campaign, version, questions };
   }
 
   async start(
