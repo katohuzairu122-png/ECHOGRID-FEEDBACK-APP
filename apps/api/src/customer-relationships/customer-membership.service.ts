@@ -37,8 +37,8 @@ export class CustomerMembershipService {
           onboardingReference: input.onboardingReference,
         });
       } else if (membership.status !== 'active') {
-        if (!['left', 'suspended'].includes(membership.status)) {
-          throw new AppError('This membership cannot be reactivated.', 409, 'MEMBERSHIP_NOT_REACTIVATABLE');
+        if (membership.status !== 'left') {
+          throw new AppError('This membership cannot be reactivated by the customer.', 409, 'MEMBERSHIP_NOT_REACTIVATABLE');
         }
         membership = await repos.customerMemberships.reactivate(
           membership.id,
@@ -47,19 +47,26 @@ export class CustomerMembershipService {
         );
       }
 
-      await repos.consentGrants.create({
-        customerId: input.customerId,
-        businessId: input.businessId,
-        purpose: 'join_loyalty',
-        consentVersion: input.consentVersion ?? 'v1',
-        status: 'active',
-        ...(input.idempotencyKey !== undefined ? { idempotencyKey: input.idempotencyKey } : {}),
-        metadata: {
-          onboardingSource: input.onboardingSource,
-          onboardingReference: input.onboardingReference,
-          membershipId: membership.id,
-        },
-      });
+      const existingJoinConsent = await repos.consentGrants.findActive(
+        input.customerId,
+        input.businessId,
+        'join_loyalty',
+      );
+      if (!existingJoinConsent) {
+        await repos.consentGrants.create({
+          customerId: input.customerId,
+          businessId: input.businessId,
+          purpose: 'join_loyalty',
+          consentVersion: input.consentVersion ?? 'v1',
+          status: 'active',
+          ...(input.idempotencyKey !== undefined ? { idempotencyKey: input.idempotencyKey } : {}),
+          metadata: {
+            onboardingSource: input.onboardingSource,
+            onboardingReference: input.onboardingReference,
+            membershipId: membership.id,
+          },
+        });
+      }
 
       let loyaltyAccount = await repos.loyaltyAccounts.findByCustomerAndBusiness(input.customerId, input.businessId);
       if (!loyaltyAccount) {
