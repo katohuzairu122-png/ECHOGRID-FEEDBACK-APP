@@ -23,6 +23,7 @@ import { customerActionAuthorizations } from './customer-action-authorizations';
 import { loyaltyTiers } from './loyalty-tiers';
 import { loyaltyRewards } from './loyalty-rewards';
 import { loyaltyAccounts } from './loyalty-accounts';
+import { loyaltyPurchaseEvents } from './loyalty-purchase-events';
 import { loyaltyTransactions } from './loyalty-transactions';
 import { loyaltySettings } from './loyalty-settings';
 import { notificationPreferences } from './notification-preferences';
@@ -223,6 +224,7 @@ export const loyaltyTiersRelations = relations(loyaltyTiers, ({ one, many }) => 
 export const loyaltyRewardsRelations = relations(loyaltyRewards, ({ one, many }) => ({
   business: one(businesses, { fields: [loyaltyRewards.businessId], references: [businesses.id] }),
   transactions: many(loyaltyTransactions),
+  purchaseEvents: many(loyaltyPurchaseEvents),
 }));
 
 export const loyaltyAccountsRelations = relations(loyaltyAccounts, ({ one, many }) => ({
@@ -236,7 +238,34 @@ export const loyaltyAccountsRelations = relations(loyaltyAccounts, ({ one, many 
   transactions: many(loyaltyTransactions),
 }));
 
+export const loyaltyPurchaseEventsRelations = relations(loyaltyPurchaseEvents, ({ one }) => ({
+  business: one(businesses, {
+    fields: [loyaltyPurchaseEvents.businessId],
+    references: [businesses.id],
+  }),
+  branch: one(branches, {
+    fields: [loyaltyPurchaseEvents.branchId],
+    references: [branches.id],
+  }),
+  customer: one(customers, {
+    fields: [loyaltyPurchaseEvents.customerId],
+    references: [customers.id],
+  }),
+  membership: one(businessCustomerMemberships, {
+    fields: [loyaltyPurchaseEvents.membershipId],
+    references: [businessCustomerMemberships.id],
+  }),
+  loyaltyAccount: one(loyaltyAccounts, {
+    fields: [loyaltyPurchaseEvents.loyaltyAccountId],
+    references: [loyaltyAccounts.id],
+  }),
+}));
+
 export const loyaltyTransactionsRelations = relations(loyaltyTransactions, ({ one }) => ({
+  purchaseEvent: one(loyaltyPurchaseEvents, {
+    fields: [loyaltyTransactions.purchaseEventId],
+    references: [loyaltyPurchaseEvents.id],
+  }),
   loyaltyAccount: one(loyaltyAccounts, {
     fields: [loyaltyTransactions.loyaltyAccountId],
     references: [loyaltyAccounts.id],
