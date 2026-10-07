@@ -7,6 +7,7 @@ import {
   createRewardSchema,
   updateRewardSchema,
   updateLoyaltySettingsSchema,
+  resolveCustomerQrSchema,
 } from '@echo-grid-feedback/shared-types';
 import type { Bindings } from '../config/env';
 import { createDb, type Database } from '../db/client';
@@ -24,6 +25,7 @@ import { LoyaltyTierService } from './loyalty-tier.service';
 import { LoyaltyRewardService } from './loyalty-reward.service';
 import { LoyaltyRedemptionService } from './loyalty-redemption.service';
 import { NotificationService } from '../notifications/notification.service';
+import { LoyaltyActionResolver } from './loyalty-action-resolver';
 
 type Env = {
   Bindings: Bindings;
@@ -38,7 +40,7 @@ type Env = {
  */
 export const loyaltyRoutes = new Hono<Env>();
 
-loyaltyRoutes.use('*', authenticate, resolveTenantContext, requireBusinessWideAccess);
+loyaltyRoutes.use('*', authenticate, resolveTenantContext);
 
 async function withDb<T>(c: Context<Env>, fn: (db: Database) => Promise<T>): Promise<T> {
   const { db, close } = await createDb(c.env.HYPERDRIVE);
@@ -49,9 +51,26 @@ async function withDb<T>(c: Context<Env>, fn: (db: Database) => Promise<T>): Pro
   }
 }
 
+// ---- Core QR action resolution (Split 03) ---------------------------------
+
+loyaltyRoutes.post('/actions/resolve-customer', requirePermission('loyalty:view'), async (c) => {
+  const body = await parseJsonBody(c.req.raw, resolveCustomerQrSchema);
+  return withDb(c, async (db) => {
+    const result = await new LoyaltyActionResolver(createRepositories(db), {
+      QR_TOKEN_SECRET: c.env.QR_TOKEN_SECRET,
+      QR_TOKEN_SECRET_PREVIOUS: c.env.QR_TOKEN_SECRET_PREVIOUS,
+    }).resolveCustomerForStaff({
+      customerQrToken: body.customerQrToken,
+      businessId: c.get('businessId'),
+      permissions: c.get('permissions'),
+    });
+    return ok(c, result);
+  });
+});
+
 // ---- Accounts & points engine (Block 3) ---------------------------------
 
-loyaltyRoutes.get('/accounts', requirePermission('loyalty:view'), async (c) => {
+loyaltyRoutes.get('/accounts', requirePermission('loyalty:view'), requireBusinessWideAccess, async (c) => {
   const url = new URL(c.req.url);
   const limit = Number(url.searchParams.get('limit')) || undefined;
   const offset = Number(url.searchParams.get('offset')) || undefined;
@@ -61,14 +80,14 @@ loyaltyRoutes.get('/accounts', requirePermission('loyalty:view'), async (c) => {
   });
 });
 
-loyaltyRoutes.get('/accounts/:id', requirePermission('loyalty:view'), async (c) => {
+loyaltyRoutes.get('/accounts/:id', requirePermission('loyalty:view'), requireBusinessWideAccess, async (c) => {
   return withDb(c, async (db) => {
     const account = await new LoyaltyAccountService(db).getAccount(c.req.param('id'), c.get('businessId'));
     return ok(c, account);
   });
 });
 
-loyaltyRoutes.get('/accounts/:id/transactions', requirePermission('loyalty:view'), async (c) => {
+loyaltyRoutes.get('/accounts/:id/transactions', requirePermission('loyalty:view'), requireBusinessWideAccess, async (c) => {
   const url = new URL(c.req.url);
   const limit = Number(url.searchParams.get('limit')) || undefined;
   const offset = Number(url.searchParams.get('offset')) || undefined;
@@ -92,12 +111,17 @@ loyaltyRoutes.post('/accounts/:id/purchase', requirePermission('loyalty:manage')
     // "before" to compare against -- LoyaltyAccountService's return value is
     // only the "after" state, and tier-change detection needs both.
     const before = await new LoyaltyAccountService(db).getAccount(accountId, businessId);
-    const account = await new LoyaltyAccountService(db).recordPurchase(
+    const purchase = await new LoyaltyAccountService(db).recordPurchase({
       businessId,
+      ...(c.get('branchId') ? { branchId: c.get('branchId') } : {}),
       accountId,
-      body.purchaseAmount,
-      c.get('userId'),
-    );
+      purchaseAmount: body.purchaseAmount,
+      idempotencyKey: body.idempotencyKey,
+      ...(body.externalReference !== undefined ? { externalReference: body.externalReference } : {}),
+      channel: body.channel,
+      staffUserId: c.get('userId'),
+    });
+    const account = purchase.account;
     c.set('auditMetadata', { action: 'loyalty.purchase_recorded', entityType: 'loyalty_account', entityId: account.id });
 
     // Notification triggers run AFTER recordPurchase's own transaction has
@@ -108,7 +132,7 @@ loyaltyRoutes.post('/accounts/:id/purchase', requirePermission('loyalty:manage')
     // Uses its own fresh connection (runInBackground), not the outer
     // `repos` -- see that helper's doc comment for why reusing it races
     // withDb's own close().
-    const pointsEarned = account.points - before.points;
+    const pointsEarned = purchase.inserted ? account.points - before.points : 0;
     c.executionCtx.waitUntil(
       runInBackground(c.env.HYPERDRIVE, async (repos) => {
         const business = await repos.businesses.findById(businessId);
@@ -136,7 +160,7 @@ loyaltyRoutes.post('/accounts/:id/purchase', requirePermission('loyalty:manage')
   });
 });
 
-loyaltyRoutes.post('/accounts/:id/adjust', requirePermission('loyalty:manage'), async (c) => {
+loyaltyRoutes.post('/accounts/:id/adjust', requirePermission('loyalty:manage'), requireBusinessWideAccess, async (c) => {
   const body = await parseJsonBody(c.req.raw, adjustPointsSchema);
   return withDb(c, async (db) => {
     const account = await new LoyaltyAccountService(db).adjustPoints(
@@ -161,14 +185,14 @@ function serializeSettings(settings: LoyaltySettings) {
   return { ...settings, pointsPerCurrencyUnit: Number(settings.pointsPerCurrencyUnit) };
 }
 
-loyaltyRoutes.get('/settings', requirePermission('loyalty:view'), async (c) => {
+loyaltyRoutes.get('/settings', requirePermission('loyalty:view'), requireBusinessWideAccess, async (c) => {
   return withDb(c, async (db) => {
     const settings = await createRepositories(db).loyaltySettings.getOrCreateDefaults(c.get('businessId'));
     return ok(c, serializeSettings(settings));
   });
 });
 
-loyaltyRoutes.patch('/settings', requirePermission('rewards:manage'), async (c) => {
+loyaltyRoutes.patch('/settings', requirePermission('rewards:manage'), requireBusinessWideAccess, async (c) => {
   const body = await parseJsonBody(c.req.raw, updateLoyaltySettingsSchema);
   return withDb(c, async (db) => {
     const settings = await createRepositories(db).loyaltySettings.update(
@@ -183,14 +207,14 @@ loyaltyRoutes.patch('/settings', requirePermission('rewards:manage'), async (c) 
 
 // ---- Tiers (Block 4 -- program configuration) -----------------------------
 
-loyaltyRoutes.get('/tiers', requirePermission('loyalty:view'), async (c) => {
+loyaltyRoutes.get('/tiers', requirePermission('loyalty:view'), requireBusinessWideAccess, async (c) => {
   return withDb(c, async (db) => {
     const tiers = await new LoyaltyTierService(createRepositories(db)).list(c.get('businessId'));
     return ok(c, tiers);
   });
 });
 
-loyaltyRoutes.post('/tiers', requirePermission('rewards:manage'), async (c) => {
+loyaltyRoutes.post('/tiers', requirePermission('rewards:manage'), requireBusinessWideAccess, async (c) => {
   const body = await parseJsonBody(c.req.raw, createTierSchema);
   return withDb(c, async (db) => {
     const tier = await new LoyaltyTierService(createRepositories(db)).create(c.get('businessId'), body, c.get('userId'));
@@ -199,7 +223,7 @@ loyaltyRoutes.post('/tiers', requirePermission('rewards:manage'), async (c) => {
   });
 });
 
-loyaltyRoutes.patch('/tiers/:id', requirePermission('rewards:manage'), async (c) => {
+loyaltyRoutes.patch('/tiers/:id', requirePermission('rewards:manage'), requireBusinessWideAccess, async (c) => {
   const body = await parseJsonBody(c.req.raw, updateTierSchema);
   return withDb(c, async (db) => {
     const tier = await new LoyaltyTierService(createRepositories(db)).update(
@@ -213,7 +237,7 @@ loyaltyRoutes.patch('/tiers/:id', requirePermission('rewards:manage'), async (c)
   });
 });
 
-loyaltyRoutes.delete('/tiers/:id', requirePermission('rewards:manage'), async (c) => {
+loyaltyRoutes.delete('/tiers/:id', requirePermission('rewards:manage'), requireBusinessWideAccess, async (c) => {
   const id = c.req.param('id');
   return withDb(c, async (db) => {
     await new LoyaltyTierService(createRepositories(db)).remove(id, c.get('businessId'), c.get('userId'));
@@ -224,7 +248,7 @@ loyaltyRoutes.delete('/tiers/:id', requirePermission('rewards:manage'), async (c
 
 // ---- Rewards (Block 4) -----------------------------------------------------
 
-loyaltyRoutes.get('/rewards', requirePermission('loyalty:view'), async (c) => {
+loyaltyRoutes.get('/rewards', requirePermission('loyalty:view'), requireBusinessWideAccess, async (c) => {
   return withDb(c, async (db) => {
     const rewards = await new LoyaltyRewardService(createRepositories(db)).list(c.get('businessId'), {
       includeInactive: true,
@@ -233,7 +257,7 @@ loyaltyRoutes.get('/rewards', requirePermission('loyalty:view'), async (c) => {
   });
 });
 
-loyaltyRoutes.post('/rewards', requirePermission('rewards:manage'), async (c) => {
+loyaltyRoutes.post('/rewards', requirePermission('rewards:manage'), requireBusinessWideAccess, async (c) => {
   const body = await parseJsonBody(c.req.raw, createRewardSchema);
   return withDb(c, async (db) => {
     const reward = await new LoyaltyRewardService(createRepositories(db)).create(c.get('businessId'), body, c.get('userId'));
@@ -242,7 +266,7 @@ loyaltyRoutes.post('/rewards', requirePermission('rewards:manage'), async (c) =>
   });
 });
 
-loyaltyRoutes.patch('/rewards/:id', requirePermission('rewards:manage'), async (c) => {
+loyaltyRoutes.patch('/rewards/:id', requirePermission('rewards:manage'), requireBusinessWideAccess, async (c) => {
   const body = await parseJsonBody(c.req.raw, updateRewardSchema);
   return withDb(c, async (db) => {
     const reward = await new LoyaltyRewardService(createRepositories(db)).update(
@@ -256,7 +280,7 @@ loyaltyRoutes.patch('/rewards/:id', requirePermission('rewards:manage'), async (
   });
 });
 
-loyaltyRoutes.delete('/rewards/:id', requirePermission('rewards:manage'), async (c) => {
+loyaltyRoutes.delete('/rewards/:id', requirePermission('rewards:manage'), requireBusinessWideAccess, async (c) => {
   const id = c.req.param('id');
   return withDb(c, async (db) => {
     await new LoyaltyRewardService(createRepositories(db)).remove(id, c.get('businessId'), c.get('userId'));
@@ -275,7 +299,7 @@ loyaltyRoutes.delete('/rewards/:id', requirePermission('rewards:manage'), async 
 // own, and stats' fields are already plain numbers by the time the
 // service returns them (see campaignDashboardSchema's own comment in
 // shared-types/src/loyalty.ts for why that split exists).
-loyaltyRoutes.get('/rewards/:id/dashboard', requirePermission('loyalty:view'), async (c) => {
+loyaltyRoutes.get('/rewards/:id/dashboard', requirePermission('loyalty:view'), requireBusinessWideAccess, async (c) => {
   return withDb(c, async (db) => {
     const dashboard = await new LoyaltyRewardService(createRepositories(db)).getCampaignDashboard(
       c.req.param('id'),
