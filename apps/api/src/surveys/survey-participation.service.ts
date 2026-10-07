@@ -358,7 +358,7 @@ export class SurveyParticipationService {
         );
       }
 
-      await this.assertAudienceEligible(repos, customerId, campaign);
+      await assertSurveyAudienceEligible(repos, customerId, campaign);
 
       const version = await repos.surveys.findVersionById(participation.surveyVersionId);
       if (
