@@ -3,6 +3,7 @@ import type { Repositories } from '../repositories';
 import { AppError } from '../lib/errors';
 import { QrCodeService } from '../qr/qr-code.service';
 import { verifyCustomerQrToken } from '../qr/customer-qr-token';
+import { assertSurveyAudienceEligible } from '../surveys/survey-participation.service';
 
 export type LoyaltyResolvedAction =
   | 'JOIN_LOYALTY'
@@ -10,16 +11,30 @@ export type LoyaltyResolvedAction =
   | 'VIEW_REWARDS'
   | 'CHECK_IN'
   | 'LEAVE_FEEDBACK'
+  | 'TAKE_SURVEY'
   | 'VIEW_ALLOWED_MEMBERSHIP_STATE'
   | 'VALIDATE_PURCHASE'
   | 'GRANT_LOYALTY_PROGRESS'
   | 'REDEEM_REWARD';
 
+export interface ResolvedSurveyCampaign {
+  campaignId: string;
+  surveyId: string;
+  surveyVersionId: string;
+  name: string;
+  audienceClass: string;
+}
+
 export class LoyaltyActionResolver {
   constructor(
     private readonly repos: Pick<
       Repositories,
-      'customers' | 'customerMemberships' | 'loyaltyAccounts' | 'qrCodes' | 'fraudSignals'
+      | 'customers'
+      | 'customerMemberships'
+      | 'loyaltyAccounts'
+      | 'qrCodes'
+      | 'fraudSignals'
+      | 'surveys'
     >,
     private readonly secrets: Pick<Bindings, 'QR_TOKEN_SECRET' | 'QR_TOKEN_SECRET_PREVIOUS'>,
   ) {}
@@ -80,6 +95,7 @@ export class LoyaltyActionResolver {
     loyaltyAccountId: string | null;
     membershipStatus: 'active' | 'none';
     actions: LoyaltyResolvedAction[];
+    surveyCampaigns: ResolvedSurveyCampaign[];
   }> {
     const qrCode = await new QrCodeService(this.repos, this.secrets).resolveToken(input.businessQrToken);
     const membership = await this.repos.customerMemberships.findActive(input.customerId, qrCode.businessId);
@@ -87,12 +103,42 @@ export class LoyaltyActionResolver {
       ? await this.repos.loyaltyAccounts.findByCustomerAndBusiness(input.customerId, qrCode.businessId)
       : undefined;
 
+    const campaigns = await this.repos.surveys.listQrExposedForBusinessBranch(
+      qrCode.businessId,
+      qrCode.branchId,
+    );
+
+    const surveyCampaigns: ResolvedSurveyCampaign[] = [];
+    for (const campaign of campaigns) {
+      try {
+        await assertSurveyAudienceEligible(this.repos, input.customerId, campaign);
+      } catch (error) {
+        if (
+          error instanceof AppError &&
+          (error.code === 'SURVEY_PARTICIPANT_INELIGIBLE' ||
+            error.code === 'SURVEY_COMMUNITY_AUDIENCE_UNAVAILABLE')
+        ) {
+          continue;
+        }
+        throw error;
+      }
+
+      surveyCampaigns.push({
+        campaignId: campaign.id,
+        surveyId: campaign.surveyId,
+        surveyVersionId: campaign.surveyVersionId,
+        name: campaign.name,
+        audienceClass: campaign.audienceClass,
+      });
+    }
+
     const actions: LoyaltyResolvedAction[] = ['LEAVE_FEEDBACK'];
     if (!membership || !account) {
       actions.unshift('JOIN_LOYALTY');
     } else {
       actions.unshift('OPEN_LOYALTY_CARD', 'VIEW_REWARDS', 'CHECK_IN');
     }
+    if (surveyCampaigns.length > 0) actions.push('TAKE_SURVEY');
 
     return {
       businessId: qrCode.businessId,
@@ -100,6 +146,7 @@ export class LoyaltyActionResolver {
       loyaltyAccountId: account?.id ?? null,
       membershipStatus: membership ? 'active' : 'none',
       actions,
+      surveyCampaigns,
     };
   }
 }
