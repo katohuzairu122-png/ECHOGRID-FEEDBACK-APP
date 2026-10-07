@@ -3,12 +3,7 @@ import { createRepositories, type Business } from '../repositories';
 import { RoleProvisioningService } from '../rbac/role-provisioning.service';
 import { SubscriptionProvisioningService } from '../billing/subscription-provisioning.service';
 import { AppError } from '../lib/errors';
-import type { UpdateBusinessInput } from '@echo-grid-feedback/shared-types';
-
-export interface CreateBusinessInput {
-  name: string;
-  slug: string;
-}
+import type { CreateBusinessInput, UpdateBusinessInput } from '@echo-grid-feedback/shared-types';
 
 export interface CreateBusinessResult {
   businessId: string;
@@ -38,9 +33,17 @@ export class BusinessService {
         throw new AppError(`Slug "${input.slug}" is already taken.`, 409, 'SLUG_TAKEN');
       }
 
+      const category = input.categoryKey
+        ? await repos.businessCategories.findByKey(input.categoryKey)
+        : undefined;
+      if (input.categoryKey && !category) {
+        throw new AppError('Business category is invalid or inactive.', 422, 'INVALID_BUSINESS_CATEGORY');
+      }
+
       const business = await repos.businesses.create({
         name: input.name,
         slug: input.slug,
+        ...(category ? { categoryId: category.id } : {}),
         createdBy: ownerId,
       });
 
@@ -100,7 +103,22 @@ export class BusinessService {
     updatedBy: string,
   ): Promise<Business> {
     const repos = createRepositories(this.db);
-    const updated = await repos.businesses.update(id, patch, updatedBy);
+    const { categoryKey, ...businessPatch } = patch;
+    const category = categoryKey
+      ? await repos.businessCategories.findByKey(categoryKey)
+      : undefined;
+    if (categoryKey && !category) {
+      throw new AppError('Business category is invalid or inactive.', 422, 'INVALID_BUSINESS_CATEGORY');
+    }
+
+    const updated = await repos.businesses.update(
+      id,
+      {
+        ...businessPatch,
+        ...(category ? { categoryId: category.id } : {}),
+      },
+      updatedBy,
+    );
     if (!updated) {
       throw new AppError('Business not found.', 404, 'BUSINESS_NOT_FOUND');
     }
