@@ -1,4 +1,4 @@
-import { eq, sql } from 'drizzle-orm';
+import { sql } from 'drizzle-orm';
 import type { Database } from '../db/client';
 import { customers } from '../db/schema';
 import {
