@@ -112,6 +112,47 @@ function assertAnswerValue(question: SurveyQuestion, value: SurveyAnswerInput['v
   fail('Unsupported survey question type.');
 }
 
+export async function assertSurveyAudienceEligible(
+  repos: Pick<ReturnType<typeof createRepositories>, 'customerMemberships'>,
+  customerId: string,
+  campaign: SurveyCampaign,
+): Promise<void> {
+  if (
+    campaign.audienceClass === 'customer' ||
+    campaign.audienceClass === 'general_authenticated_participant'
+  ) {
+    return;
+  }
+
+  if (campaign.audienceClass === 'business_member') {
+    if (!campaign.businessId) {
+      throw new AppError(
+        'This survey audience is not available for this campaign.',
+        403,
+        'SURVEY_PARTICIPANT_INELIGIBLE',
+      );
+    }
+    const membership = await repos.customerMemberships.findActive(
+      customerId,
+      campaign.businessId,
+    );
+    if (!membership) {
+      throw new AppError(
+        'An active business membership is required for this survey.',
+        403,
+        'SURVEY_PARTICIPANT_INELIGIBLE',
+      );
+    }
+    return;
+  }
+
+  throw new AppError(
+    'Community survey audiences are not available until Community membership is implemented.',
+    409,
+    'SURVEY_COMMUNITY_AUDIENCE_UNAVAILABLE',
+  );
+}
+
 export class SurveyParticipationService {
   constructor(private readonly db: Database) {}
 
@@ -121,7 +162,7 @@ export class SurveyParticipationService {
   ) {
     const repos = createRepositories(this.db);
     const campaign = await this.requireStartableCampaign(repos, campaignId);
-    await this.assertAudienceEligible(repos, customerId, campaign);
+    await assertSurveyAudienceEligible(repos, customerId, campaign);
     const version = await repos.surveys.findVersionById(campaign.surveyVersionId);
     if (!version) {
       throw new AppError('Survey version not found.', 404, 'SURVEY_VERSION_NOT_FOUND');
@@ -209,7 +250,7 @@ export class SurveyParticipationService {
         return { participation: raced, inserted: false };
       }
 
-      await this.assertAudienceEligible(repos, customerId, campaign);
+      await assertSurveyAudienceEligible(repos, customerId, campaign);
       await this.assertRepeatPolicy(repos, customerId, campaign);
 
       if (campaign.maxResponses !== null) {
@@ -484,47 +525,6 @@ export class SurveyParticipationService {
     }
 
     return campaign;
-  }
-
-  private async assertAudienceEligible(
-    repos: ReturnType<typeof createRepositories>,
-    customerId: string,
-    campaign: SurveyCampaign,
-  ): Promise<void> {
-    if (
-      campaign.audienceClass === 'customer' ||
-      campaign.audienceClass === 'general_authenticated_participant'
-    ) {
-      return;
-    }
-
-    if (campaign.audienceClass === 'business_member') {
-      if (!campaign.businessId) {
-        throw new AppError(
-          'This survey audience is not available for this campaign.',
-          403,
-          'SURVEY_PARTICIPANT_INELIGIBLE',
-        );
-      }
-      const membership = await repos.customerMemberships.findActive(
-        customerId,
-        campaign.businessId,
-      );
-      if (!membership) {
-        throw new AppError(
-          'An active business membership is required for this survey.',
-          403,
-          'SURVEY_PARTICIPANT_INELIGIBLE',
-        );
-      }
-      return;
-    }
-
-    throw new AppError(
-      'Community survey audiences are not available until Community membership is implemented.',
-      409,
-      'SURVEY_COMMUNITY_AUDIENCE_UNAVAILABLE',
-    );
   }
 
   private async assertRepeatPolicy(
