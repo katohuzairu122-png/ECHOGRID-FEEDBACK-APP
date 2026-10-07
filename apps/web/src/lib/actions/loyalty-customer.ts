@@ -12,10 +12,8 @@ import { customerApiFetch } from '@/lib/customer-api-client';
 import { rethrowControlFlow } from '@/lib/rethrow-control-flow';
 import { ApiError } from '@/lib/api-client';
 
-/** Explicit "join this business's loyalty program" action -- distinct from
- * checkinAction's auto-enroll, for a customer who wants to join without
- * having scanned a QR code yet (e.g. from a shared referral link, Block 5's
- * UI entry point for that flow). */
+/** Explicit customer-consented join through a server-verified business QR
+ * context. Split 01 deliberately rejects arbitrary businessId-only enrollment. */
 export async function joinLoyaltyAction(qrToken: string): Promise<LoyaltyAccountDto> {
   const account = await customerApiFetch<LoyaltyAccountDto>('/loyalty/me/join', {
     method: 'POST',
