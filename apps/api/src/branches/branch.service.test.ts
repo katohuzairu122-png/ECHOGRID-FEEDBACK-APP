@@ -130,6 +130,13 @@ describe('BranchService', () => {
   });
 
 
+  it('allows multiple branches without consulting subscription branch capacity', async () => {
+    await service.createBranch(BUSINESS_A, { name: 'Downtown', slug: 'downtown' }, ACTOR);
+    await expect(
+      service.createBranch(BUSINESS_A, { name: 'Uptown', slug: 'uptown' }, ACTOR),
+    ).resolves.toMatchObject({ businessId: BUSINESS_A, slug: 'uptown' });
+  });
+
   it('allows the same slug at a different business -- uniqueness is per-tenant, not global', async () => {
     await service.createBranch(BUSINESS_A, { name: 'Downtown', slug: 'downtown' }, ACTOR);
 
