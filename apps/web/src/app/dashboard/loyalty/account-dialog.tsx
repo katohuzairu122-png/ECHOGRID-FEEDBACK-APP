@@ -37,6 +37,7 @@ interface AccountDialogProps {
 export function AccountDialog({ accountId, customerLabel }: AccountDialogProps) {
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<'purchase' | 'adjust'>('purchase');
+  const [purchaseIdempotencyKey, setPurchaseIdempotencyKey] = useState(() => crypto.randomUUID());
 
   const [purchaseState, purchaseAction, purchasePending] = useActionState(
     recordPurchaseAction.bind(null, accountId),
@@ -53,7 +54,12 @@ export function AccountDialog({ accountId, customerLabel }: AccountDialogProps) 
   // indistinguishable from "just submitted successfully" without this
   // explicit flag, and closing must happen in an effect, not during render.
   useEffect(() => {
-    if (purchaseState.success || adjustState.success) setOpen(false);
+    if (purchaseState.success) {
+      setPurchaseIdempotencyKey(crypto.randomUUID());
+      setOpen(false);
+    } else if (adjustState.success) {
+      setOpen(false);
+    }
   }, [purchaseState, adjustState]);
 
   return (
@@ -86,6 +92,7 @@ export function AccountDialog({ accountId, customerLabel }: AccountDialogProps) 
 
         {mode === 'purchase' ? (
           <form action={purchaseAction} className="mt-4 flex flex-col gap-3">
+            <input type="hidden" name="idempotencyKey" value={purchaseIdempotencyKey} />
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="purchaseAmount">{t('purchaseAmountLabel')}</Label>
               <Input
