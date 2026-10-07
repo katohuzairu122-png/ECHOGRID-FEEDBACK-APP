@@ -15,12 +15,12 @@ import { ApiError } from '@/lib/api-client';
 /** Explicit customer-consented join through a server-verified business QR
  * context. Split 01 deliberately rejects arbitrary businessId-only enrollment. */
 export async function joinLoyaltyAction(qrToken: string): Promise<LoyaltyAccountDto> {
-  const account = await customerApiFetch<LoyaltyAccountDto>('/loyalty/me/join', {
+  const result = await customerApiFetch<{ loyaltyAccount: LoyaltyAccountDto }>('/customer-memberships/join', {
     method: 'POST',
     body: JSON.stringify({ qrToken, consentVersion: 'v1' }),
   });
   revalidatePath('/loyalty/dashboard');
-  return account;
+  return result.loyaltyAccount;
 }
 
 /** Scanning a branch's QR code while signed in as a customer -- reuses the
