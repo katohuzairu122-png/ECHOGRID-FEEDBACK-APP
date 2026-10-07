@@ -16,6 +16,7 @@ import { qrRoutes } from './qr/qr.routes';
 import { feedbackRoutes } from './feedback/feedback.routes';
 import { feedbackFormRoutes } from './feedback/feedback-form.routes';
 import { customerAuthRoutes } from './customer-auth/customer-auth.routes';
+import { customerMembershipRoutes } from './customer-relationships/customer-membership.routes';
 import { loyaltyRoutes } from './loyalty/loyalty.routes';
 import { loyaltyCustomerRoutes } from './loyalty/loyalty-customer.routes';
 import { analyticsRoutes } from './analytics/analytics.routes';
@@ -130,6 +131,7 @@ api.route('/qr', qrRoutes);
 api.route('/feedback', feedbackRoutes);
 api.route('/feedback-forms', feedbackFormRoutes);
 api.route('/customer-auth', customerAuthRoutes);
+api.route('/customer-memberships', customerMembershipRoutes);
 // Customer subtrees must precede staff wildcard middleware at the parent.
 // Hono runs matching middleware in registration order; /loyalty/* also
 // matches /loyalty/me/* and must not verify customer JWTs as staff.
