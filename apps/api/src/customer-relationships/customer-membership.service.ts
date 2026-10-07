@@ -53,7 +53,7 @@ export class CustomerMembershipService {
         purpose: 'join_loyalty',
         consentVersion: input.consentVersion ?? 'v1',
         status: 'active',
-        idempotencyKey: input.idempotencyKey,
+        ...(input.idempotencyKey !== undefined ? { idempotencyKey: input.idempotencyKey } : {}),
         metadata: {
           onboardingSource: input.onboardingSource,
           onboardingReference: input.onboardingReference,
