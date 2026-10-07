@@ -1,5 +1,6 @@
 import { relations } from 'drizzle-orm';
 import { businesses } from './businesses';
+import { businessCategories } from './business-categories';
 import { branches } from './branches';
 import { users } from './users';
 import { roles } from './roles';
@@ -61,6 +62,11 @@ export const businessesRelations = relations(businesses, ({ many, one }) => ({
     fields: [businesses.id],
     references: [businessSubscriptions.businessId],
   }),
+}));
+
+
+export const businessCategoriesRelations = relations(businessCategories, ({ many }) => ({
+  businesses: many(businesses),
 }));
 
 export const branchesRelations = relations(branches, ({ one, many }) => ({
