@@ -69,6 +69,19 @@ export class CommunityPointAwardDecisionRepository extends BaseRepository {
     return row;
   }
 
+  async listBySourceRef(
+    sourceType: CommunityPointAwardDecision['sourceType'],
+    sourceRef: string,
+  ): Promise<CommunityPointAwardDecision[]> {
+    return this.db.query.communityPointAwardDecisions.findMany({
+      where: and(
+        eq(communityPointAwardDecisions.sourceType, sourceType),
+        eq(communityPointAwardDecisions.sourceRef, sourceRef),
+      ),
+      orderBy: [desc(communityPointAwardDecisions.evaluatedAt)],
+    });
+  }
+
   async listPendingMembershipForCustomer(
     customerId: string,
   ): Promise<CommunityPointAwardDecision[]> {
