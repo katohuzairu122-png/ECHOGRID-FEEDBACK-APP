@@ -211,10 +211,6 @@ if (added.length === 0 && modified.length === 0) {
 
 process.stderr.write('\n[migration-drift] Schema changes have no migration.\n\n');
 for (const f of added) process.stderr.write(`  would create  drizzle/${f}\n`);
-for (const f of added.filter((name) => name.endsWith('.sql'))) {
-  const generated = after.get(f)?.contents;
-  if (generated) process.stderr.write(`\n--- generated ${f} ---\n${generated.toString('utf8')}\n--- end generated ---\n`);
-}
 for (const f of modified) process.stderr.write(`  would modify  drizzle/${f}\n`);
 process.stderr.write(
   '\nThe committed schema in src/db/schema/ no longer matches drizzle/. Deploying this\n' +
