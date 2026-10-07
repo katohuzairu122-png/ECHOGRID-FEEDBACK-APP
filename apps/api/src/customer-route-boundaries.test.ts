@@ -36,7 +36,6 @@ describe('mounted customer and staff route boundaries', () => {
     ['/api/v1/loyalty/me/accounts', mocks.listAccounts],
     ['/api/v1/messaging/me/conversations', mocks.listConversations],
     ['/api/v1/surveys/me/participations', mocks.listParticipations],
-    ['/api/v1/community/me', mocks.getCommunityStatus],
   ] as const)('accepts a customer session at %s without staff authentication', async (path, list) => {
     const token = await signCustomerAccessToken(customerId, env.CUSTOMER_JWT_SECRET);
     const response = await worker.fetch(new Request(`https://api.test${path}`, {
@@ -45,6 +44,20 @@ describe('mounted customer and staff route boundaries', () => {
     expect(response.status).toBe(200);
     expect(await response.json()).toMatchObject({ success: true, data: [] });
     expect(list).toHaveBeenCalledWith(customerId);
+    expect(mocks.findUser).not.toHaveBeenCalled();
+  });
+
+  it('accepts a customer session at /api/v1/community/me without staff authentication', async () => {
+    const token = await signCustomerAccessToken(customerId, env.CUSTOMER_JWT_SECRET);
+    const response = await worker.fetch(new Request('https://api.test/api/v1/community/me', {
+      headers: { Authorization: `Bearer ${token}` },
+    }), env, ctx);
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      success: true,
+      data: { membership: null, account: null },
+    });
+    expect(mocks.getCommunityStatus).toHaveBeenCalledWith(customerId);
     expect(mocks.findUser).not.toHaveBeenCalled();
   });
 
