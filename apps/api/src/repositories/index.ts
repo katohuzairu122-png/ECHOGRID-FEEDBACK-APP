@@ -1,5 +1,6 @@
 import type { Db } from '../db/client';
 import { BusinessRepository } from './business.repository';
+import { BusinessCategoryRepository } from './business-category.repository';
 import { BranchRepository } from './branch.repository';
 import { UserRepository } from './user.repository';
 import { RoleRepository } from './role.repository';
@@ -37,6 +38,7 @@ import { MessageRepository } from './message.repository';
 import { VisitSessionRepository } from './visit-session.repository';
 
 export * from './business.repository';
+export * from './business-category.repository';
 export * from './branch.repository';
 export * from './user.repository';
 export * from './role.repository';
@@ -81,6 +83,7 @@ export * from './visit-session.repository';
 export function createRepositories(db: Db) {
   return {
     businesses: new BusinessRepository(db),
+    businessCategories: new BusinessCategoryRepository(db),
     branches: new BranchRepository(db),
     users: new UserRepository(db),
     roles: new RoleRepository(db),
