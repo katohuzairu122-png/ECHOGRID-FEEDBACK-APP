@@ -1,6 +1,10 @@
 import { sign, verify } from 'hono/jwt';
 
 /**
+ * Split 03 names this token for what it already is: the shared Business QR
+ * context used by feedback and loyalty. Legacy qr_feedback claims remain
+ * accepted until their normal expiry window lapses.
+ *
  * Continuing Development Block 3.2 (S5.1/S5.2) -- replaces the pre-3.2
  * opaque-random `qr_codes.token` column with a signed, expiring JWT built
  * from the row's own id. Same signing primitive as auth/jwt.ts and
@@ -34,7 +38,7 @@ export type QrTokenPayload = {
   businessId: string;
   branchId: string;
   campaignId: string | null;
-  type: 'qr_feedback';
+  type: 'qr_business' | 'qr_feedback';
   sigVer: number;
   nonce: string;
   iat: number;
@@ -70,7 +74,7 @@ export async function signQrToken(
     businessId: params.businessId,
     branchId: params.branchId,
     campaignId: params.campaignId ?? null,
-    type: 'qr_feedback',
+    type: 'qr_business',
     sigVer: QR_TOKEN_SIGNATURE_VERSION,
     nonce: crypto.randomUUID(),
     iat,
@@ -81,7 +85,7 @@ export async function signQrToken(
 
 async function verifyWithSecret(token: string, secret: string): Promise<QrTokenPayload> {
   const payload = (await verify(token, secret, 'HS256')) as QrTokenPayload;
-  if (payload.type !== 'qr_feedback') throw new Error('Not a QR token');
+  if (payload.type !== 'qr_business' && payload.type !== 'qr_feedback') throw new Error('Not a business QR token');
   return payload;
 }
 
