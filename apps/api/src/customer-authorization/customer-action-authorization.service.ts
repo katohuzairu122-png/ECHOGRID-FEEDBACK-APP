@@ -25,10 +25,10 @@ export class CustomerActionAuthorizationService {
       actionType: input.actionType,
       correlationId: input.correlationId,
       expiresAt: new Date(Date.now() + input.ttlSeconds * 1000),
-      resourceType: input.resourceType,
-      resourceId: input.resourceId,
-      scope: input.scope,
-      idempotencyKey: input.idempotencyKey,
+      ...(input.resourceType !== undefined ? { resourceType: input.resourceType } : {}),
+      ...(input.resourceId !== undefined ? { resourceId: input.resourceId } : {}),
+      ...(input.scope !== undefined ? { scope: input.scope } : {}),
+      ...(input.idempotencyKey !== undefined ? { idempotencyKey: input.idempotencyKey } : {}),
     });
   }
 
