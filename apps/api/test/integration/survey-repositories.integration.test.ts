@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { Client } from 'pg';
 import { buildDb } from '../../src/db/client';
 import { createRepositories } from '../../src/repositories';
+import { SurveyManagementService } from '../../src/surveys/survey-management.service';
 
 describe.skipIf(!process.env.DATABASE_URL)('Split 04 survey repositories (integration)', () => {
   let client: Client;
@@ -9,6 +10,7 @@ describe.skipIf(!process.env.DATABASE_URL)('Split 04 survey repositories (integr
   let businessAId: string;
   let businessBId: string;
   let customerId: string;
+  let businessBBranchId: string;
 
   beforeAll(async () => {
     client = new Client({ connectionString: process.env.DATABASE_URL });
@@ -29,13 +31,130 @@ describe.skipIf(!process.env.DATABASE_URL)('Split 04 survey repositories (integr
       phoneVerifiedAt: new Date(),
     });
 
+    const businessBBranch = await repos.branches.create({
+      businessId: businessB.id,
+      name: 'Other Business Branch',
+      slug: `other-${suffix}`,
+    });
+
     businessAId = businessA.id;
     businessBId = businessB.id;
+    businessBBranchId = businessBBranch.id;
     customerId = customer.id;
   });
 
   afterAll(async () => {
     await client.end();
+  });
+
+  it('enforces management lifecycle and cross-business boundaries', async () => {
+    const service = new SurveyManagementService(repos);
+    const survey = await service.createSurvey(
+      businessAId,
+      { name: 'Management Survey' },
+      crypto.randomUUID(),
+    );
+
+    await expect(service.getSurvey(businessBId, survey.id)).rejects.toMatchObject({
+      code: 'SURVEY_NOT_FOUND',
+      status: 404,
+    });
+
+    const version = await service.createVersion(
+      businessAId,
+      survey.id,
+      {
+        title: 'Management Survey v1',
+        questions: [
+          {
+            key: 'score',
+            label: 'Score',
+            type: 'rating',
+            required: true,
+            validation: { min: 1, max: 5 },
+          },
+        ],
+      },
+      crypto.randomUUID(),
+    );
+
+    await expect(
+      service.createCampaign(
+        businessAId,
+        {
+          surveyVersionId: version.version.id,
+          branchId: businessBBranchId,
+          name: 'Wrong Branch',
+          audienceClass: 'general_authenticated_participant',
+          repeatPolicy: 'once_per_campaign',
+          exposeInQrResolver: false,
+        },
+        crypto.randomUUID(),
+      ),
+    ).rejects.toMatchObject({
+      code: 'SURVEY_VERSION_NOT_PUBLISHED',
+      status: 409,
+    });
+
+    const published = await service.publishVersion(
+      businessAId,
+      survey.id,
+      version.version.id,
+      crypto.randomUUID(),
+    );
+    expect(published.status).toBe('published');
+
+    await expect(
+      service.createCampaign(
+        businessAId,
+        {
+          surveyVersionId: version.version.id,
+          branchId: businessBBranchId,
+          name: 'Wrong Branch',
+          audienceClass: 'general_authenticated_participant',
+          repeatPolicy: 'once_per_campaign',
+          exposeInQrResolver: false,
+        },
+        crypto.randomUUID(),
+      ),
+    ).rejects.toMatchObject({
+      code: 'BRANCH_NOT_FOUND',
+      status: 404,
+    });
+
+    const campaign = await service.createCampaign(
+      businessAId,
+      {
+        surveyVersionId: version.version.id,
+        name: 'Valid Campaign',
+        audienceClass: 'general_authenticated_participant',
+        repeatPolicy: 'once_per_campaign',
+        exposeInQrResolver: false,
+      },
+      crypto.randomUUID(),
+    );
+    expect(campaign.status).toBe('draft');
+
+    const active = await service.activateCampaign(
+      businessAId,
+      campaign.id,
+      crypto.randomUUID(),
+    );
+    expect(active.status).toBe('active');
+
+    const paused = await service.pauseCampaign(
+      businessAId,
+      campaign.id,
+      crypto.randomUUID(),
+    );
+    expect(paused.status).toBe('paused');
+
+    const closed = await service.closeCampaign(
+      businessAId,
+      campaign.id,
+      crypto.randomUUID(),
+    );
+    expect(closed.status).toBe('closed');
   });
 
   it('preserves tenant isolation and durable idempotent completion evidence', async () => {
