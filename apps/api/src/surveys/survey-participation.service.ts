@@ -5,7 +5,7 @@ import type {
   SurveyQuestionValidation,
 } from '@echo-grid-feedback/shared-types';
 import { sql } from 'drizzle-orm';
-import type { Database } from '../db/client';
+import type { Database, Transaction } from '../db/client';
 import {
   surveyCampaigns,
   surveyParticipations,
@@ -105,6 +105,17 @@ function assertAnswerValue(question: SurveyQuestion, value: SurveyAnswerInput['v
 export class SurveyParticipationService {
   constructor(private readonly db: Database) {}
 
+  async getCampaign(
+    customerId: string,
+    campaignId: string,
+  ): Promise<{ campaign: SurveyCampaign; questions: SurveyQuestion[] }> {
+    const repos = createRepositories(this.db);
+    const campaign = await this.requireStartableCampaign(repos, campaignId);
+    await this.assertAudienceEligible(repos, customerId, campaign);
+    const questions = await repos.surveys.listQuestions(campaign.surveyVersionId);
+    return { campaign, questions };
+  }
+
   async start(
     customerId: string,
     campaignId: string,
@@ -153,6 +164,37 @@ export class SurveyParticipationService {
       }
 
       await this.lockRepeatPolicyScope(tx, campaign);
+
+      const raced = await repos.surveyParticipations.findByCampaignIdempotencyKey(
+        campaign.id,
+        input.idempotencyKey,
+      );
+      if (raced) {
+        if (raced.participantCustomerId !== customerId) {
+          throw new AppError(
+            'This idempotency key is already in use.',
+            409,
+            'IDEMPOTENCY_CONFLICT',
+          );
+        }
+        const consent = await this.ensureCampaignConsent(
+          repos,
+          customerId,
+          campaign,
+          input.consentVersion,
+          input.idempotencyKey,
+        );
+        if (raced.consentGrantId !== consent.id) {
+          const updated = await repos.surveyParticipations.attachConsentGrant(
+            raced.id,
+            customerId,
+            consent.id,
+          );
+          if (updated) return { participation: updated, inserted: false };
+        }
+        return { participation: raced, inserted: false };
+      }
+
       await this.assertAudienceEligible(repos, customerId, campaign);
       await this.assertRepeatPolicy(repos, customerId, campaign);
 
@@ -499,7 +541,7 @@ export class SurveyParticipationService {
   }
 
   private async lockRepeatPolicyScope(
-    tx: Parameters<Parameters<Database['transaction']>[0]>[0],
+    tx: Transaction,
     campaign: SurveyCampaign,
   ): Promise<void> {
     if (campaign.repeatPolicy === 'once') {
