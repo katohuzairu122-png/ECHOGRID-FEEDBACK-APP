@@ -99,3 +99,8 @@ Any implementation pressure to:
 - merge PR #51 directly,
 
 is an architecture conflict and must stop for review.
+
+
+## Schema metadata gate
+
+Drizzle-generated migration metadata is committed with migration `0037`. The schema gate must pass `db:check`, full migration replay on PostgreSQL 16, API typecheck, and CI verification before Split 04 moves beyond the schema layer.
