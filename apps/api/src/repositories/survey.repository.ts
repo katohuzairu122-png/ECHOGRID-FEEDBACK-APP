@@ -44,6 +44,26 @@ export class SurveyRepository extends BaseRepository {
     });
   }
 
+  async updateSurveyStatus(
+    id: string,
+    businessId: string,
+    status: Survey['status'],
+    updatedBy: string,
+  ): Promise<Survey | undefined> {
+    const [row] = await this.db
+      .update(surveys)
+      .set({ status, updatedBy, updatedAt: new Date() })
+      .where(
+        and(
+          eq(surveys.id, id),
+          eq(surveys.ownerType, 'business'),
+          eq(surveys.businessId, businessId),
+        ),
+      )
+      .returning();
+    return row;
+  }
+
   async createVersionWithQuestions(
     versionInput: NewSurveyVersion,
     questions: Omit<NewSurveyQuestion, 'versionId'>[],
@@ -67,6 +87,23 @@ export class SurveyRepository extends BaseRepository {
     return this.db.query.surveyVersions.findFirst({
       where: eq(surveyVersions.id, versionId),
     });
+  }
+
+  async updateVersionStatus(
+    versionId: string,
+    surveyId: string,
+    status: SurveyVersion['status'],
+    publishedAt?: Date,
+  ): Promise<SurveyVersion | undefined> {
+    const [row] = await this.db
+      .update(surveyVersions)
+      .set({
+        status,
+        ...(publishedAt !== undefined ? { publishedAt } : {}),
+      })
+      .where(and(eq(surveyVersions.id, versionId), eq(surveyVersions.surveyId, surveyId)))
+      .returning();
+    return row;
   }
 
   async findVersionForBusiness(
@@ -121,5 +158,19 @@ export class SurveyRepository extends BaseRepository {
       where: eq(surveyCampaigns.businessId, businessId),
       orderBy: [desc(surveyCampaigns.createdAt)],
     });
+  }
+
+  async updateCampaignStatus(
+    id: string,
+    businessId: string,
+    status: SurveyCampaign['status'],
+    updatedBy: string,
+  ): Promise<SurveyCampaign | undefined> {
+    const [row] = await this.db
+      .update(surveyCampaigns)
+      .set({ status, updatedBy, updatedAt: new Date() })
+      .where(and(eq(surveyCampaigns.id, id), eq(surveyCampaigns.businessId, businessId)))
+      .returning();
+    return row;
   }
 }
