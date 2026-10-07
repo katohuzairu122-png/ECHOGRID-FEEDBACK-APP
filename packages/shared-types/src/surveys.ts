@@ -256,3 +256,42 @@ export const surveyParticipationSchema = z.object({
   invalidatedAt: z.string().nullable(),
 });
 export type SurveyParticipationDto = z.infer<typeof surveyParticipationSchema>;
+
+
+/**
+ * Stable, non-economic proof that one authenticated participant completed
+ * one immutable survey version through one campaign. The authoritative
+ * completion reference is the survey participation id itself.
+ *
+ * This contract deliberately contains no answers, reward eligibility,
+ * Community Point amount, loyalty balance, settlement value, or billing
+ * field. Split 05 may evaluate this evidence but must not infer authority
+ * from a queue/event alone.
+ */
+export const surveyCompletionEvidenceSchema = z.object({
+  evidenceVersion: z.literal('v1'),
+  completionRef: z.uuid(),
+  participantCustomerId: z.uuid(),
+  surveyId: z.uuid(),
+  surveyVersionId: z.uuid(),
+  campaignId: z.uuid(),
+  businessId: z.uuid().nullable(),
+  branchId: z.uuid().nullable(),
+  source: surveyParticipationSourceSchema,
+  completedAt: z.string(),
+});
+export type SurveyCompletionEvidence = z.infer<typeof surveyCompletionEvidenceSchema>;
+
+/**
+ * Derived event envelope for optional asynchronous consumers. It is not a
+ * source of truth: consumers must treat completionRef as the durable key
+ * back to survey_participations and remain idempotent by that reference.
+ */
+export const surveyCompletionEventSchema = z.object({
+  type: z.literal('survey.participation.completed'),
+  eventVersion: z.literal('v1'),
+  eventKey: z.string().regex(/^survey-completion:[0-9a-f-]{36}$/),
+  occurredAt: z.string(),
+  evidence: surveyCompletionEvidenceSchema,
+});
+export type SurveyCompletionEvent = z.infer<typeof surveyCompletionEventSchema>;
