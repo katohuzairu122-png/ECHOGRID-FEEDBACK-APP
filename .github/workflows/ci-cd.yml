@@ -56,6 +56,8 @@ env:
 jobs:
   verify:
     name: Typecheck & Test
+    permissions:
+      contents: write
     runs-on: ubuntu-latest
     # The integration tier adds a few minutes; 20 bounds a hung job instead
     # of letting it sit on GitHub's 6-hour default.
@@ -130,6 +132,24 @@ jobs:
           name: split-04-generated-drizzle
           path: .artifacts/schema-gate-generated/
           if-no-files-found: error
+
+      - name: Commit generated metadata to Split 04 branch
+        if: failure()
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin architecture/split-04-surveys-participation
+          git worktree add /tmp/split04 origin/architecture/split-04-surveys-participation
+          rm -f /tmp/split04/apps/api/drizzle/0037_split04_surveys_participation.sql
+          cp .artifacts/schema-gate-generated/drizzle/0037_*.sql /tmp/split04/apps/api/drizzle/
+          cp .artifacts/schema-gate-generated/drizzle/meta/0037_snapshot.json /tmp/split04/apps/api/drizzle/meta/
+          cp .artifacts/schema-gate-generated/drizzle/meta/_journal.json /tmp/split04/apps/api/drizzle/meta/
+          cd /tmp/split04
+          git add apps/api/drizzle
+          git commit -m "chore: commit Drizzle-generated Split 04 migration metadata"
+          git push origin HEAD:architecture/split-04-surveys-participation
 
       # Defined in package.json since the repo was set up and never run by
       # anything, which is how apps/api/scripts/*.mjs accumulated `no-undef`
