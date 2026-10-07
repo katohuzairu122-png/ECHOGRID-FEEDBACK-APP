@@ -28,6 +28,7 @@ export * from './otp-request-cooldowns';
 export * from './loyalty-tiers';
 export * from './loyalty-rewards';
 export * from './loyalty-accounts';
+export * from './loyalty-purchase-events';
 export * from './loyalty-transactions';
 export * from './loyalty-settings';
 export * from './notification-preferences';
