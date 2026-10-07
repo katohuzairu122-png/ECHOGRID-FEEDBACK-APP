@@ -69,8 +69,9 @@ export class LoyaltyAccountService {
     });
   }
 
-  /** Auto-enrolls on first scan -- a customer tapping a business's QR code
-   * for the first time shouldn't need a separate "join" step.
+  /** Records a check-in only for an already-active business membership.
+   * Split 01 removes silent QR auto-enrollment: relationship creation is an
+   * explicit consented action handled by CustomerMembershipService.
    *
    * `visitSessionId` is optional and only ever set by the caller when Block
    * 4.3.2's visit verification actually succeeded on this request -- see
@@ -96,9 +97,29 @@ export class LoyaltyAccountService {
     return this.db.transaction(async (tx) => {
       const repos = createRepositories(tx);
 
-      let account = await repos.loyaltyAccounts.findByCustomerAndBusiness(customerId, businessId);
+      const membership = await repos.customerMemberships.findActive(customerId, businessId);
+      if (!membership) {
+        throw new AppError(
+          'Join this loyalty program before checking in.',
+          409,
+          'MEMBERSHIP_REQUIRED',
+        );
+      }
+
+      const account = await repos.loyaltyAccounts.findByCustomerAndBusiness(customerId, businessId);
       if (!account) {
-        account = await repos.loyaltyAccounts.create({ customerId, businessId });
+        throw new AppError(
+          'Your loyalty account is not ready for this membership.',
+          409,
+          'LOYALTY_ACCOUNT_NOT_READY',
+        );
+      }
+      if (account.membershipId && account.membershipId !== membership.id) {
+        throw new AppError(
+          'Loyalty membership mapping is inconsistent.',
+          409,
+          'MEMBERSHIP_MAPPING_CONFLICT',
+        );
       }
 
       if (visitSessionId) {
