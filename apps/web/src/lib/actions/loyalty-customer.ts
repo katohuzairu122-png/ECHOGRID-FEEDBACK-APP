@@ -16,10 +16,10 @@ import { ApiError } from '@/lib/api-client';
  * checkinAction's auto-enroll, for a customer who wants to join without
  * having scanned a QR code yet (e.g. from a shared referral link, Block 5's
  * UI entry point for that flow). */
-export async function joinLoyaltyAction(businessId: string): Promise<LoyaltyAccountDto> {
+export async function joinLoyaltyAction(qrToken: string): Promise<LoyaltyAccountDto> {
   const account = await customerApiFetch<LoyaltyAccountDto>('/loyalty/me/join', {
     method: 'POST',
-    body: JSON.stringify({ businessId }),
+    body: JSON.stringify({ qrToken, consentVersion: 'v1' }),
   });
   revalidatePath('/loyalty/dashboard');
   return account;
@@ -30,6 +30,8 @@ export async function joinLoyaltyAction(businessId: string): Promise<LoyaltyAcco
  * destinations depending on which link the customer taps). */
 export interface CheckinResult {
   error?: string;
+  code?: string;
+  membershipRequired?: boolean;
   account?: LoyaltyAccountDto;
 }
 
@@ -52,7 +54,24 @@ export async function checkinAction(qrToken: string): Promise<CheckinResult> {
     // so the client can show the useful API message instead of Next.js's
     // production-only generic server-action error.
     rethrowControlFlow(err);
-    if (err instanceof ApiError) return { error: err.message };
+    if (err instanceof ApiError) {
+      return {
+        error: err.message,
+        code: err.code,
+        membershipRequired: err.code === 'MEMBERSHIP_REQUIRED',
+      };
+    }
+    return { error: 'Something went wrong. Please try again.' };
+  }
+}
+
+export async function joinAndCheckinAction(qrToken: string): Promise<CheckinResult> {
+  try {
+    await joinLoyaltyAction(qrToken);
+    return await checkinAction(qrToken);
+  } catch (err) {
+    rethrowControlFlow(err);
+    if (err instanceof ApiError) return { error: err.message, code: err.code };
     return { error: 'Something went wrong. Please try again.' };
   }
 }
