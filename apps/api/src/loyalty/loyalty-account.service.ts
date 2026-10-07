@@ -6,6 +6,7 @@ import {
   type LoyaltyAccountWithCustomer,
 } from '../repositories';
 import { AppError } from '../lib/errors';
+import type { LoyaltyPurchaseChannel } from '../db/schema';
 
 export interface EnrollInput {
   customerId: string;
@@ -136,26 +137,74 @@ export class LoyaltyAccountService {
     });
   }
 
-  /** Staff-recorded purchase (loyalty:manage). Points are floored, never
-   * rounded up -- a business's per-currency-unit rate is a promise to the
-   * customer, and rounding in the business's favor is the safer default. */
-  async recordPurchase(
-    businessId: string,
-    accountId: string,
-    purchaseAmount: number,
-    staffUserId: string,
-  ): Promise<LoyaltyAccount> {
+  /** Staff-recorded qualifying purchase. Split 03 gives the purchase its
+   * own durable idempotent evidence row before any loyalty value moves. */
+  async recordPurchase(input: {
+    businessId: string;
+    branchId?: string;
+    accountId: string;
+    purchaseAmount: number;
+    idempotencyKey: string;
+    externalReference?: string;
+    channel: LoyaltyPurchaseChannel;
+    staffUserId: string;
+  }): Promise<{ account: LoyaltyAccount; inserted: boolean }> {
     return this.db.transaction(async (tx) => {
       const repos = createRepositories(tx);
-      const account = await this.requireAccount(repos, accountId, businessId);
+      const account = await this.requireAccount(repos, input.accountId, input.businessId);
 
-      const settings = await repos.loyaltySettings.getOrCreateDefaults(businessId);
-      const points = Math.floor(purchaseAmount * Number(settings.pointsPerCurrencyUnit));
+      const membership = await repos.customerMemberships.findActive(account.customerId, input.businessId);
+      if (!membership || (account.membershipId && account.membershipId !== membership.id)) {
+        throw new AppError(
+          'An active customer membership is required before loyalty progress can be granted.',
+          409,
+          'MEMBERSHIP_REQUIRED',
+        );
+      }
 
-      return this.applyEarning(repos, account, 'purchase', points, {
-        purchaseAmount: purchaseAmount.toFixed(2),
-        createdBy: staffUserId,
+      const amount = input.purchaseAmount.toFixed(2);
+      const { event, inserted } = await repos.loyaltyPurchaseEvents.createIdempotent({
+        businessId: input.businessId,
+        branchId: input.branchId ?? null,
+        customerId: account.customerId,
+        membershipId: membership.id,
+        loyaltyAccountId: account.id,
+        idempotencyKey: input.idempotencyKey,
+        externalReference: input.externalReference ?? null,
+        channel: input.channel,
+        qualifyingAmount: amount,
+        paymentStatus: 'confirmed',
+        createdBy: input.staffUserId,
       });
+
+      if (!inserted) {
+        const sameRequest =
+          event.loyaltyAccountId === account.id &&
+          event.qualifyingAmount === amount &&
+          event.branchId === (input.branchId ?? null) &&
+          event.channel === input.channel &&
+          event.externalReference === (input.externalReference ?? null) &&
+          event.paymentStatus === 'confirmed';
+
+        if (!sameRequest) {
+          throw new AppError(
+            'This idempotency key was already used for a different purchase.',
+            409,
+            'IDEMPOTENCY_CONFLICT',
+          );
+        }
+        return { account, inserted: false };
+      }
+
+      const settings = await repos.loyaltySettings.getOrCreateDefaults(input.businessId);
+      const points = Math.floor(input.purchaseAmount * Number(settings.pointsPerCurrencyUnit));
+
+      const updated = await this.applyEarning(repos, account, 'purchase', points, {
+        purchaseAmount: amount,
+        purchaseEventId: event.id,
+        createdBy: input.staffUserId,
+      });
+      return { account: updated, inserted: true };
     });
   }
 
@@ -256,6 +305,7 @@ export class LoyaltyAccountService {
       relatedQrCodeId?: string | undefined;
       visitSessionId?: string | undefined;
       purchaseAmount?: string | undefined;
+      purchaseEventId?: string | undefined;
       notes?: string | undefined;
       createdBy?: string | undefined;
       recordVisit?: boolean | undefined;
@@ -278,6 +328,7 @@ export class LoyaltyAccountService {
       relatedQrCodeId: extra.relatedQrCodeId ?? null,
       visitSessionId: extra.visitSessionId ?? null,
       purchaseAmount: extra.purchaseAmount ?? null,
+      purchaseEventId: extra.purchaseEventId ?? null,
       notes: extra.notes ?? null,
       createdBy: extra.createdBy ?? null,
     });
