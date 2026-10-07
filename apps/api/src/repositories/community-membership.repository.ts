@@ -27,9 +27,11 @@ export class CommunityMembershipRepository extends BaseRepository {
 
   async updateStatus(
     customerId: string,
-    patch: Pick<
-      NewCommunityMembership,
-      'status' | 'policyVersion' | 'joinedAt' | 'leftAt' | 'suspendedAt'
+    patch: Partial<
+      Pick<
+        NewCommunityMembership,
+        'status' | 'policyVersion' | 'joinedAt' | 'leftAt' | 'suspendedAt'
+      >
     >,
   ): Promise<CommunityMembership | undefined> {
     const [row] = await this.db
