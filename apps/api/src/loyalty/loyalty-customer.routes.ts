@@ -85,7 +85,7 @@ loyaltyCustomerRoutes.post('/join', async (c) => {
       onboardingSource: 'business_qr',
       onboardingReference: qrCode.id,
       consentVersion: body.consentVersion,
-      idempotencyKey: body.idempotencyKey,
+      ...(body.idempotencyKey !== undefined ? { idempotencyKey: body.idempotencyKey } : {}),
     });
 
     return ok(c, result.loyaltyAccount, 201);
