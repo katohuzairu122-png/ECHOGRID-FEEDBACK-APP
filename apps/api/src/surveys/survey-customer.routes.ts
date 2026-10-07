@@ -21,6 +21,38 @@ export const surveyCustomerRoutes = new Hono<Env>();
 
 surveyCustomerRoutes.use('*', customerAuthenticate, rateLimit('PUBLIC_RATE_LIMITER'));
 
+function serializeParticipation(row: {
+  id: string;
+  surveyId: string;
+  surveyVersionId: string;
+  campaignId: string;
+  participantCustomerId: string;
+  businessId: string | null;
+  branchId: string | null;
+  status: 'started' | 'submitted' | 'completed' | 'invalidated';
+  source: 'direct' | 'business_qr' | 'customer_qr' | 'link' | 'staff_assisted' | 'other';
+  startedAt: Date;
+  submittedAt: Date | null;
+  completedAt: Date | null;
+  invalidatedAt: Date | null;
+}) {
+  return {
+    id: row.id,
+    surveyId: row.surveyId,
+    surveyVersionId: row.surveyVersionId,
+    campaignId: row.campaignId,
+    participantCustomerId: row.participantCustomerId,
+    businessId: row.businessId,
+    branchId: row.branchId,
+    status: row.status,
+    source: row.source,
+    startedAt: row.startedAt.toISOString(),
+    submittedAt: row.submittedAt?.toISOString() ?? null,
+    completedAt: row.completedAt?.toISOString() ?? null,
+    invalidatedAt: row.invalidatedAt?.toISOString() ?? null,
+  };
+}
+
 async function withDb<T>(c: Context<Env>, fn: (db: Database) => Promise<T>): Promise<T> {
   const { db, close } = await createDb(c.env.HYPERDRIVE);
   try {
@@ -48,7 +80,11 @@ surveyCustomerRoutes.post('/campaigns/:campaignId/start', async (c) => {
       c.req.param('campaignId'),
       body,
     );
-    return ok(c, result, result.inserted ? 201 : 200);
+    return ok(
+      c,
+      { participation: serializeParticipation(result.participation), inserted: result.inserted },
+      result.inserted ? 201 : 200,
+    );
   });
 });
 
@@ -60,7 +96,7 @@ surveyCustomerRoutes.post('/campaigns/:campaignId/submit', async (c) => {
       c.req.param('campaignId'),
       body,
     );
-    return ok(c, participation);
+    return ok(c, serializeParticipation(participation));
   });
 });
 
@@ -69,6 +105,6 @@ surveyCustomerRoutes.get('/participations', async (c) => {
     const rows = await createRepositories(db).surveyParticipations.listForCustomer(
       c.get('customerId'),
     );
-    return ok(c, rows);
+    return ok(c, rows.map(serializeParticipation));
   });
 });
