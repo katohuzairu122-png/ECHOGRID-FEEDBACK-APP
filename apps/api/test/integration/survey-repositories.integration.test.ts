@@ -3,9 +3,11 @@ import { Client } from 'pg';
 import { buildDb } from '../../src/db/client';
 import { createRepositories } from '../../src/repositories';
 import { SurveyManagementService } from '../../src/surveys/survey-management.service';
+import { SurveyParticipationService } from '../../src/surveys/survey-participation.service';
 
 describe.skipIf(!process.env.DATABASE_URL)('Split 04 survey repositories (integration)', () => {
   let client: Client;
+  let db: ReturnType<typeof buildDb>;
   let repos: ReturnType<typeof createRepositories>;
   let businessAId: string;
   let businessBId: string;
@@ -15,7 +17,8 @@ describe.skipIf(!process.env.DATABASE_URL)('Split 04 survey repositories (integr
   beforeAll(async () => {
     client = new Client({ connectionString: process.env.DATABASE_URL });
     await client.connect();
-    repos = createRepositories(buildDb(client));
+    db = buildDb(client);
+    repos = createRepositories(db);
 
     const suffix = crypto.randomUUID();
     const businessA = await repos.businesses.create({
@@ -155,6 +158,215 @@ describe.skipIf(!process.env.DATABASE_URL)('Split 04 survey repositories (integr
       crypto.randomUUID(),
     );
     expect(closed.status).toBe('closed');
+  });
+
+  it('enforces participant eligibility, consent, and idempotent submission', async () => {
+    const management = new SurveyManagementService(repos);
+    const participationService = new SurveyParticipationService(db);
+    const actorId = crypto.randomUUID();
+
+    const survey = await management.createSurvey(
+      businessAId,
+      { name: 'Participant Survey' },
+      actorId,
+    );
+    const createdVersion = await management.createVersion(
+      businessAId,
+      survey.id,
+      {
+        title: 'Participant Survey v1',
+        questions: [
+          {
+            key: 'rating',
+            label: 'Rate the experience',
+            type: 'rating',
+            required: true,
+            validation: { min: 1, max: 5 },
+          },
+        ],
+      },
+      actorId,
+    );
+    await management.publishVersion(
+      businessAId,
+      survey.id,
+      createdVersion.version.id,
+      actorId,
+    );
+
+    const campaign = await management.createCampaign(
+      businessAId,
+      {
+        surveyVersionId: createdVersion.version.id,
+        name: 'Participant Campaign',
+        audienceClass: 'general_authenticated_participant',
+        repeatPolicy: 'once_per_campaign',
+        exposeInQrResolver: false,
+      },
+      actorId,
+    );
+    await management.activateCampaign(businessAId, campaign.id, actorId);
+
+    const idempotencyKey = crypto.randomUUID();
+    const started = await participationService.start(customerId, campaign.id, {
+      idempotencyKey,
+      consentAccepted: true,
+      consentVersion: 'v1',
+    });
+
+    expect(started.inserted).toBe(true);
+    expect(started.participation.status).toBe('started');
+    expect(started.participation.consentGrantId).not.toBeNull();
+
+    await repos.consentGrants.revoke(started.participation.consentGrantId!, customerId);
+
+    await expect(
+      participationService.submit(customerId, campaign.id, {
+        idempotencyKey,
+        answers: [{ questionId: createdVersion.questions[0]!.id, value: 5 }],
+      }),
+    ).rejects.toMatchObject({
+      code: 'SURVEY_CONSENT_REQUIRED',
+      status: 403,
+    });
+
+    const reconsented = await participationService.start(customerId, campaign.id, {
+      idempotencyKey,
+      consentAccepted: true,
+      consentVersion: 'v2',
+    });
+    expect(reconsented.inserted).toBe(false);
+    expect(reconsented.participation.consentGrantId).not.toBe(started.participation.consentGrantId);
+
+    const completed = await participationService.submit(customerId, campaign.id, {
+      idempotencyKey,
+      answers: [{ questionId: createdVersion.questions[0]!.id, value: 5 }],
+    });
+    expect(completed.status).toBe('completed');
+    expect(completed.submissionPayloadHash).toMatch(/^[0-9a-f]{64}$/);
+
+    const replay = await participationService.submit(customerId, campaign.id, {
+      idempotencyKey,
+      answers: [{ questionId: createdVersion.questions[0]!.id, value: 5 }],
+    });
+    expect(replay.id).toBe(completed.id);
+
+    await expect(
+      participationService.submit(customerId, campaign.id, {
+        idempotencyKey,
+        answers: [{ questionId: createdVersion.questions[0]!.id, value: 4 }],
+      }),
+    ).rejects.toMatchObject({
+      code: 'IDEMPOTENCY_CONFLICT',
+      status: 409,
+    });
+
+    await expect(
+      participationService.start(customerId, campaign.id, {
+        idempotencyKey: crypto.randomUUID(),
+        consentAccepted: true,
+        consentVersion: 'v1',
+      }),
+    ).rejects.toMatchObject({
+      code: 'SURVEY_REPEAT_NOT_ALLOWED',
+      status: 409,
+    });
+  });
+
+  it('fails closed for membership and Community audience eligibility', async () => {
+    const management = new SurveyManagementService(repos);
+    const participationService = new SurveyParticipationService(db);
+    const actorId = crypto.randomUUID();
+
+    const survey = await management.createSurvey(
+      businessAId,
+      { name: 'Audience Survey' },
+      actorId,
+    );
+    const createdVersion = await management.createVersion(
+      businessAId,
+      survey.id,
+      {
+        title: 'Audience Survey v1',
+        questions: [
+          {
+            key: 'comment',
+            label: 'Comment',
+            type: 'text',
+            required: false,
+          },
+        ],
+      },
+      actorId,
+    );
+    await management.publishVersion(
+      businessAId,
+      survey.id,
+      createdVersion.version.id,
+      actorId,
+    );
+
+    const memberCampaign = await management.createCampaign(
+      businessAId,
+      {
+        surveyVersionId: createdVersion.version.id,
+        name: 'Members only',
+        audienceClass: 'business_member',
+        repeatPolicy: 'repeatable',
+        exposeInQrResolver: false,
+      },
+      actorId,
+    );
+    await management.activateCampaign(businessAId, memberCampaign.id, actorId);
+
+    await expect(
+      participationService.start(customerId, memberCampaign.id, {
+        idempotencyKey: crypto.randomUUID(),
+        consentAccepted: true,
+        consentVersion: 'v1',
+      }),
+    ).rejects.toMatchObject({
+      code: 'SURVEY_PARTICIPANT_INELIGIBLE',
+      status: 403,
+    });
+
+    await repos.customerMemberships.create({
+      customerId,
+      businessId: businessAId,
+      status: 'active',
+      onboardingSource: 'integration_test',
+    });
+
+    const memberStart = await participationService.start(customerId, memberCampaign.id, {
+      idempotencyKey: crypto.randomUUID(),
+      consentAccepted: true,
+      consentVersion: 'v1',
+    });
+    expect(memberStart.participation.status).toBe('started');
+
+    const communityCampaign = await management.createCampaign(
+      businessAId,
+      {
+        surveyVersionId: createdVersion.version.id,
+        name: 'Community only',
+        audienceClass: 'community_member',
+        repeatPolicy: 'repeatable',
+        exposeInQrResolver: false,
+      },
+      actorId,
+    );
+    await management.activateCampaign(businessAId, communityCampaign.id, actorId);
+
+    await expect(
+      participationService.start(customerId, communityCampaign.id, {
+        idempotencyKey: crypto.randomUUID(),
+        consentAccepted: true,
+        consentVersion: 'v1',
+      }),
+    ).rejects.toMatchObject({
+      code: 'SURVEY_COMMUNITY_AUDIENCE_UNAVAILABLE',
+      status: 409,
+    });
   });
 
   it('preserves tenant isolation and durable idempotent completion evidence', async () => {
