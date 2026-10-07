@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, isNull, or, sql } from 'drizzle-orm';
 import {
   surveyCampaigns,
   surveyQuestions,
@@ -219,6 +219,24 @@ export class SurveyRepository extends BaseRepository {
   async listCampaignsForBusiness(businessId: string): Promise<SurveyCampaign[]> {
     return this.db.query.surveyCampaigns.findMany({
       where: eq(surveyCampaigns.businessId, businessId),
+      orderBy: [desc(surveyCampaigns.createdAt)],
+    });
+  }
+
+  async listQrExposedForBusinessBranch(
+    businessId: string,
+    branchId: string,
+  ): Promise<SurveyCampaign[]> {
+    return this.db.query.surveyCampaigns.findMany({
+      where: and(
+        eq(surveyCampaigns.businessId, businessId),
+        eq(surveyCampaigns.status, 'active'),
+        eq(surveyCampaigns.exposeInQrResolver, true),
+        or(
+          isNull(surveyCampaigns.branchId),
+          eq(surveyCampaigns.branchId, branchId),
+        ),
+      ),
       orderBy: [desc(surveyCampaigns.createdAt)],
     });
   }
