@@ -10,6 +10,7 @@ import { rateLimit } from '../middleware/rate-limit';
 import { parseJsonBody } from '../lib/validate';
 import { ok } from '../lib/response';
 import { CommunityMembershipService } from './community-membership.service';
+import { CommunityPointAwardService } from './community-point-award.service';
 
 type Env = { Bindings: Bindings; Variables: CustomerAuthVariables };
 
@@ -74,6 +75,9 @@ communityCustomerRoutes.post('/join', async (c) => {
       c.get('customerId'),
       body.policyVersion,
     );
+    const released = await new CommunityPointAwardService(db).reevaluatePendingMembership(
+      c.get('customerId'),
+    );
     return ok(
       c,
       {
@@ -81,6 +85,7 @@ communityCustomerRoutes.post('/join', async (c) => {
         account: serializeAccount(result.account),
         created: result.created,
         reactivated: result.reactivated,
+        releasedPendingAwards: released.filter((award) => award.awarded).length,
       },
       result.created ? 201 : 200,
     );
