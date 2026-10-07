@@ -34,6 +34,7 @@ import { messagingRoutes } from './messaging/messaging.routes';
 import { messagingCustomerRoutes } from './messaging/messaging-customer.routes';
 import { fraudSignalRoutes } from './fraud/fraud-signal.routes';
 import { surveyRoutes } from './surveys/survey.routes';
+import { surveyCustomerRoutes } from './surveys/survey-customer.routes';
 import { createDb } from './db/client';
 import { createRepositories } from './repositories';
 import { createSentimentService } from './sentiment/sentiment.service';
@@ -150,6 +151,9 @@ api.route('/messaging', messagingRoutes);
 // fraud_signals (Block 3.1), which every detector since (3.2, 4.1, 4.3.2)
 // has been writing to with no staff-facing surface until now.
 api.route('/fraud-signals', fraudSignalRoutes);
+// Customer survey routes must precede the staff survey router: /surveys/* would otherwise
+// run staff authentication for /surveys/me/* just like the loyalty customer/staff split.
+api.route('/surveys/me', surveyCustomerRoutes);
 api.route('/surveys', surveyRoutes);
 api.route('/billing', billingRoutes);
 // Platform Admin Console (Blocks 2-3) -- cross-tenant, gated by
