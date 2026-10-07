@@ -37,6 +37,8 @@ import { TeamInvitationRepository } from './team-invitation.repository';
 import { ConversationRepository } from './conversation.repository';
 import { MessageRepository } from './message.repository';
 import { VisitSessionRepository } from './visit-session.repository';
+import { SurveyRepository } from './survey.repository';
+import { SurveyParticipationRepository } from './survey-participation.repository';
 
 export * from './business.repository';
 export * from './business-category.repository';
@@ -76,6 +78,8 @@ export * from './team-invitation.repository';
 export * from './conversation.repository';
 export * from './message.repository';
 export * from './visit-session.repository';
+export * from './survey.repository';
+export * from './survey-participation.repository';
 
 /**
  * Constructs one instance of every repository, sharing a single
@@ -122,6 +126,8 @@ export function createRepositories(db: Db) {
     conversations: new ConversationRepository(db),
     messages: new MessageRepository(db),
     visitSessions: new VisitSessionRepository(db),
+    surveys: new SurveyRepository(db),
+    surveyParticipations: new SurveyParticipationRepository(db),
   };
 }
 
