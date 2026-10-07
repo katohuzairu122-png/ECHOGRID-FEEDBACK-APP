@@ -28,11 +28,12 @@ export async function recordPurchaseAction(
   if (!business) return { error: 'No active business.' };
 
   const purchaseAmount = Number(formData.get('purchaseAmount'));
+  const idempotencyKey = String(formData.get('idempotencyKey') ?? '');
   try {
     await apiFetch(`/loyalty/accounts/${accountId}/purchase`, {
       method: 'POST',
       businessId: business.id,
-      body: JSON.stringify({ purchaseAmount }),
+      body: JSON.stringify({ purchaseAmount, idempotencyKey, channel: 'other' }),
     });
   } catch (err) {
     if (err instanceof ApiError) return { error: err.message };
