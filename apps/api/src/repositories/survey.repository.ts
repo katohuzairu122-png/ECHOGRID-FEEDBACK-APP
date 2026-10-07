@@ -118,6 +118,40 @@ export class SurveyRepository extends BaseRepository {
     });
   }
 
+  async publishVersionAndSurvey(
+    versionId: string,
+    surveyId: string,
+    businessId: string,
+    actorId: string,
+    publishedAt = new Date(),
+  ): Promise<SurveyVersion | undefined> {
+    return this.db.transaction(async (tx) => {
+      const [published] = await tx
+        .update(surveyVersions)
+        .set({ status: 'published', publishedAt })
+        .where(and(eq(surveyVersions.id, versionId), eq(surveyVersions.surveyId, surveyId)))
+        .returning();
+      if (!published) return undefined;
+
+      const [updatedSurvey] = await tx
+        .update(surveys)
+        .set({ status: 'published', updatedBy: actorId, updatedAt: publishedAt })
+        .where(
+          and(
+            eq(surveys.id, surveyId),
+            eq(surveys.ownerType, 'business'),
+            eq(surveys.businessId, businessId),
+          ),
+        )
+        .returning({ id: surveys.id });
+
+      if (!updatedSurvey) {
+        throw new Error('Survey disappeared during version publication.');
+      }
+      return published;
+    });
+  }
+
   async updateVersionStatus(
     versionId: string,
     surveyId: string,
