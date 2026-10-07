@@ -45,7 +45,7 @@ export const qrCodes = pgTable(
     branchId: uuid('branch_id')
       .notNull()
       .references(() => branches.id, { onDelete: 'cascade' }),
-    type: text('type').notNull().default('feedback'),
+    type: text('type').notNull().default('business'),
     status: text('status').notNull().default('active'),
     feedbackFormVersionId: uuid('feedback_form_version_id').references(() => feedbackFormVersions.id, { onDelete: 'set null' }),
     ...auditColumns,
