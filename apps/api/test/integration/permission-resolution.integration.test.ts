@@ -69,6 +69,9 @@ describe.skipIf(!process.env.DATABASE_URL)('permission resolution (integration)'
     // DEFAULT_ROLES in role-provisioning.service.ts).
     expect(keys.has('business:delete')).toBe(true);
     expect(keys.has('branches:manage')).toBe(true);
+    expect(keys.has('survey:view')).toBe(true);
+    expect(keys.has('survey:manage')).toBe(true);
+    expect(keys.has('survey:responses:view')).toBe(true);
   });
 
   it('a business-wide grant also resolves with no branch specified', async () => {
