@@ -2,7 +2,7 @@
 
 ## Status
 
-**Gate state:** IMPLEMENTATION COMPLETE — FINAL CI/MAIN MERGE REQUIRED
+**Gate state:** LOCKED COMPLETE
 
 **Split:** 04 — Surveys & Participation  
 **Repository:** `katohuzairu122-png/ECHOGRID-FEEDBACK-APP`  
@@ -216,7 +216,7 @@ Required test coverage includes:
 - completion event determinism;
 - no answer/economic fields in completion evidence.
 
-Final lock requires the follow-up completion-proof PR to pass the repository CI suite and merge to `main`.
+Final lock was satisfied by CI/CD run #370 on head `29eadd6015559674cc33a4e60e500a9185a7d19f`, followed by merge of PR #57 to `main` as `a4ff25a923e0cd9b01f299537ea93a80d46f8023`.
 
 ---
 
@@ -239,13 +239,13 @@ Final lock requires the follow-up completion-proof PR to pass the repository CI 
 | Privacy / tenant isolation coverage | PASS |
 | Completion evidence boundary | PASS |
 | Completion report exists | PASS |
-| Final CI on completion-proof head | PENDING |
-| Completion-proof changes merged to main | PENDING |
+| Final CI on completion-proof head | PASS — CI/CD #370 |
+| Completion-proof changes merged to main | PASS — PR #57 / `a4ff25a` |
 
 ---
 
 ## 10. Final lock rule
 
-Split 04 becomes **LOCKED COMPLETE** only after the completion-proof follow-up head passes CI and is merged to `main`.
+Split 04 is **LOCKED COMPLETE**.
 
-Until then the implementation is complete, but the final repository gate remains open.
+The completion-proof head passed the full repository gate, including real-Postgres integration, API/web builds, Chromium installation, and Block 2D browser verification. PR #57 then merged to `main`.
