@@ -210,9 +210,10 @@ export const businessCustomerMembershipsRelations = relations(
   }),
 );
 
-export const consentGrantsRelations = relations(consentGrants, ({ one }) => ({
+export const consentGrantsRelations = relations(consentGrants, ({ one, many }) => ({
   customer: one(customers, { fields: [consentGrants.customerId], references: [customers.id] }),
   business: one(businesses, { fields: [consentGrants.businessId], references: [businesses.id] }),
+  surveyParticipations: many(surveyParticipations),
 }));
 
 export const customerActionAuthorizationsRelations = relations(
