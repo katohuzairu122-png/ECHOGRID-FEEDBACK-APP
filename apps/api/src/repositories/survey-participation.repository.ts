@@ -1,4 +1,4 @@
-import { and, desc, eq, sql } from 'drizzle-orm';
+import { and, desc, eq, ne, sql } from 'drizzle-orm';
 import {
   surveyAnswers,
   surveyParticipations,
@@ -14,6 +14,18 @@ export class SurveyParticipationRepository extends BaseRepository {
   async findById(id: string): Promise<SurveyParticipation | undefined> {
     return this.db.query.surveyParticipations.findFirst({
       where: eq(surveyParticipations.id, id),
+    });
+  }
+
+  async findByIdForCustomer(
+    id: string,
+    customerId: string,
+  ): Promise<SurveyParticipation | undefined> {
+    return this.db.query.surveyParticipations.findFirst({
+      where: and(
+        eq(surveyParticipations.id, id),
+        eq(surveyParticipations.participantCustomerId, customerId),
+      ),
     });
   }
 
@@ -59,6 +71,40 @@ export class SurveyParticipationRepository extends BaseRepository {
     });
   }
 
+  async countNonInvalidatedForCustomerCampaign(
+    customerId: string,
+    campaignId: string,
+  ): Promise<number> {
+    const [row] = await this.db
+      .select({ count: sql<number>`count(*)` })
+      .from(surveyParticipations)
+      .where(
+        and(
+          eq(surveyParticipations.participantCustomerId, customerId),
+          eq(surveyParticipations.campaignId, campaignId),
+          ne(surveyParticipations.status, 'invalidated'),
+        ),
+      );
+    return Number(row?.count ?? 0);
+  }
+
+  async countNonInvalidatedForCustomerSurvey(
+    customerId: string,
+    surveyId: string,
+  ): Promise<number> {
+    const [row] = await this.db
+      .select({ count: sql<number>`count(*)` })
+      .from(surveyParticipations)
+      .where(
+        and(
+          eq(surveyParticipations.participantCustomerId, customerId),
+          eq(surveyParticipations.surveyId, surveyId),
+          ne(surveyParticipations.status, 'invalidated'),
+        ),
+      );
+    return Number(row?.count ?? 0);
+  }
+
   async countForCustomerCampaign(customerId: string, campaignId: string): Promise<number> {
     const [row] = await this.db
       .select({ count: sql<number>`count(*)` })
@@ -89,6 +135,24 @@ export class SurveyParticipationRepository extends BaseRepository {
     return this.db.query.surveyAnswers.findMany({
       where: eq(surveyAnswers.participationId, participationId),
     });
+  }
+
+  async attachConsentGrant(
+    participationId: string,
+    customerId: string,
+    consentGrantId: string,
+  ): Promise<SurveyParticipation | undefined> {
+    const [row] = await this.db
+      .update(surveyParticipations)
+      .set({ consentGrantId, updatedAt: new Date() })
+      .where(
+        and(
+          eq(surveyParticipations.id, participationId),
+          eq(surveyParticipations.participantCustomerId, customerId),
+        ),
+      )
+      .returning();
+    return row;
   }
 
   async completeWithAnswers(
