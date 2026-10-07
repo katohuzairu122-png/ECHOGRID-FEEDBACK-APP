@@ -267,6 +267,13 @@
       "when": 1791394460628,
       "tag": "0037_sad_shiva",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1791401600000,
+      "tag": "0038_split05_community_points",
+      "breakpoints": true
     }
   ]
 }

@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   listAccounts: vi.fn(async () => []),
   listConversations: vi.fn(async () => []),
   listParticipations: vi.fn(async () => []),
+  getCommunityStatus: vi.fn(async () => null),
   findCustomer: vi.fn(async () => ({ status: 'active' })),
   findUser: vi.fn(),
 }));
@@ -16,6 +17,8 @@ vi.mock('./repositories', () => ({ createRepositories: () => ({
   loyaltyAccounts: { listForCustomer: mocks.listAccounts },
   conversations: { listForCustomer: mocks.listConversations },
   surveyParticipations: { listForCustomer: mocks.listParticipations },
+  communityMemberships: { findByCustomerId: mocks.getCommunityStatus },
+  communityPointAccounts: { findByCustomerId: vi.fn(async () => undefined) },
 }) }));
 vi.mock('./middleware/rate-limit', () => ({ rateLimit: () => async (_c: unknown, next: () => Promise<void>) => next() }));
 vi.mock('./middleware/audit', () => ({ auditTrail: async (_c: unknown, next: () => Promise<void>) => next() }));
@@ -41,6 +44,20 @@ describe('mounted customer and staff route boundaries', () => {
     expect(response.status).toBe(200);
     expect(await response.json()).toMatchObject({ success: true, data: [] });
     expect(list).toHaveBeenCalledWith(customerId);
+    expect(mocks.findUser).not.toHaveBeenCalled();
+  });
+
+  it('accepts a customer session at /api/v1/community/me without staff authentication', async () => {
+    const token = await signCustomerAccessToken(customerId, env.CUSTOMER_JWT_SECRET);
+    const response = await worker.fetch(new Request('https://api.test/api/v1/community/me', {
+      headers: { Authorization: `Bearer ${token}` },
+    }), env, ctx);
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      success: true,
+      data: { membership: null, account: null },
+    });
+    expect(mocks.getCommunityStatus).toHaveBeenCalledWith(customerId);
     expect(mocks.findUser).not.toHaveBeenCalled();
   });
 
