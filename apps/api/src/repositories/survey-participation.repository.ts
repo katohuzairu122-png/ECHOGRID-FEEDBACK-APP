@@ -17,6 +17,15 @@ export class SurveyParticipationRepository extends BaseRepository {
     });
   }
 
+  async findCompletedById(id: string): Promise<SurveyParticipation | undefined> {
+    return this.db.query.surveyParticipations.findFirst({
+      where: and(
+        eq(surveyParticipations.id, id),
+        eq(surveyParticipations.status, 'completed'),
+      ),
+    });
+  }
+
   async findByIdForCustomer(
     id: string,
     customerId: string,
