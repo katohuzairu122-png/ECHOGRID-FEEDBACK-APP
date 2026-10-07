@@ -38,7 +38,7 @@ function createFakeQrCodeRepo() {
         id: crypto.randomUUID(),
         businessId: input.businessId,
         branchId: input.branchId,
-        type: input.type ?? 'feedback',
+        type: input.type ?? 'business',
       status: input.status ?? 'active',
       feedbackFormVersionId: input.feedbackFormVersionId ?? null,
         createdAt: new Date(),
@@ -121,6 +121,7 @@ describe('QrCodeService', () => {
     expect(payload.businessId).toBe(BUSINESS_A);
     expect(payload.branchId).toBe(BRANCH_A);
     expect(payload.campaignId).toBeNull();
+    expect(payload.type).toBe('qr_business');
   });
 
   it('getOrCreateActiveForBranch returns the existing ROW on a second call, not a new one -- lazy get-or-create. The token is re-signed fresh each call (different nonce/iat), which is expected, not a bug', async () => {
