@@ -184,6 +184,20 @@ const result = spawnSync(process.execPath, [resolveDrizzleKitBin(), 'generate'],
 });
 
 const after = snapshotDir(DRIZZLE_DIR);
+
+// Diagnostic branch support: preserve exactly what drizzle-kit generated
+// before restore() removes it, so CI can expose the canonical migration
+// metadata as an artifact. This branch is never merged.
+const artifactRoot = path.resolve(API_ROOT, '..', '..', '.artifacts', 'schema-gate-generated');
+for (const [relative, entry] of after) {
+  const previous = before.get(relative);
+  if (!previous || previous.hash !== entry.hash) {
+    const destination = path.join(artifactRoot, 'drizzle', relative);
+    fs.mkdirSync(path.dirname(destination), { recursive: true });
+    fs.writeFileSync(destination, entry.contents);
+  }
+}
+
 restore(before, after);
 
 if (result.error?.code === 'ETIMEDOUT' || result.signal) {
