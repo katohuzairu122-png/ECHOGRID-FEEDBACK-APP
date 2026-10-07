@@ -51,10 +51,11 @@ function assertAnswerValue(question: SurveyQuestion, value: SurveyAnswerInput['v
 
   if (question.type === 'text' || question.type === 'textarea') {
     if (typeof value !== 'string') fail('This survey answer must be text.');
-    if (validation.minLength !== undefined && value.length < validation.minLength) {
+    const textValue = value as string;
+    if (validation.minLength !== undefined && textValue.length < validation.minLength) {
       fail('This survey answer is shorter than allowed.');
     }
-    if (validation.maxLength !== undefined && value.length > validation.maxLength) {
+    if (validation.maxLength !== undefined && textValue.length > validation.maxLength) {
       fail('This survey answer is longer than allowed.');
     }
     return;
@@ -64,13 +65,14 @@ function assertAnswerValue(question: SurveyQuestion, value: SurveyAnswerInput['v
     if (typeof value !== 'number' || !Number.isFinite(value)) {
       fail('This survey answer must be a number.');
     }
-    if (question.type === 'rating' && !Number.isInteger(value)) {
+    const numericValue = value as number;
+    if (question.type === 'rating' && !Number.isInteger(numericValue)) {
       fail('This survey rating must be an integer.');
     }
-    if (validation.min !== undefined && value < validation.min) {
+    if (validation.min !== undefined && numericValue < validation.min) {
       fail('This survey answer is below the allowed minimum.');
     }
-    if (validation.max !== undefined && value > validation.max) {
+    if (validation.max !== undefined && numericValue > validation.max) {
       fail('This survey answer is above the allowed maximum.');
     }
     return;
@@ -83,7 +85,11 @@ function assertAnswerValue(question: SurveyQuestion, value: SurveyAnswerInput['v
 
   const options = question.options ?? [];
   if (question.type === 'single_choice') {
-    if (typeof value !== 'string' || !options.includes(value)) {
+    if (typeof value !== 'string') {
+      fail('This survey answer is not one of the allowed options.');
+    }
+    const selected = value as string;
+    if (!options.includes(selected)) {
       fail('This survey answer is not one of the allowed options.');
     }
     return;
@@ -93,7 +99,11 @@ function assertAnswerValue(question: SurveyQuestion, value: SurveyAnswerInput['v
     if (!Array.isArray(value) || value.some((item) => typeof item !== 'string')) {
       fail('This survey answer must be a list of allowed options.');
     }
-    if (new Set(value).size !== value.length || value.some((item) => !options.includes(item))) {
+    const selected = value as string[];
+    if (
+      new Set(selected).size !== selected.length ||
+      selected.some((item: string) => !options.includes(item))
+    ) {
       fail('This survey answer contains duplicate or invalid options.');
     }
     return;
