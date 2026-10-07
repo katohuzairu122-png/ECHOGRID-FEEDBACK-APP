@@ -412,6 +412,7 @@ export const loyaltyTransactionSchema = z.object({
   visitSessionId: z.uuid().nullable(),
   feedbackId: z.uuid().nullable(),
   purchaseAmount: z.string().nullable(),
+  purchaseEventId: z.uuid().nullable(),
   redemptionCode: z.string().nullable(),
   redemptionConfirmedAt: z.string().nullable(),
   notes: z.string().nullable(),
