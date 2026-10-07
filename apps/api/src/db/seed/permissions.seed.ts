@@ -40,6 +40,21 @@ const PERMISSIONS: NewPermission[] = [
     category: 'Feedback',
   },
   {
+    key: 'survey:view',
+    description: 'View survey definitions and campaigns for the business.',
+    category: 'Surveys',
+  },
+  {
+    key: 'survey:manage',
+    description: 'Create, version, publish, pause, and close business surveys and campaigns.',
+    category: 'Surveys',
+  },
+  {
+    key: 'survey:responses:view',
+    description: 'View participant responses and completion evidence for business-owned surveys.',
+    category: 'Surveys',
+  },
+  {
     key: 'loyalty:view',
     description: 'View customer loyalty accounts, balances, and transaction history.',
     category: 'Loyalty',
