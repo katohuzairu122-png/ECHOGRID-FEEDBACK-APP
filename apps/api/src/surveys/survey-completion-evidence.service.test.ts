@@ -60,7 +60,7 @@ describe('SurveyCompletionEvidenceService', () => {
     await expect(
       service(undefined).getByCompletionRef(COMPLETION_ID),
     ).rejects.toMatchObject({
-      statusCode: 404,
+      status: 404,
       code: 'SURVEY_COMPLETION_EVIDENCE_NOT_FOUND',
     });
   });
