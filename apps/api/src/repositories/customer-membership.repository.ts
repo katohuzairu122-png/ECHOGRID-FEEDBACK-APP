@@ -1,4 +1,4 @@
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { businessCustomerMemberships } from '../db/schema';
 import { BaseRepository } from './base.repository';
 
@@ -54,8 +54,8 @@ export class CustomerMembershipRepository extends BaseRepository {
         leftAt: null,
         suspendedAt: null,
         closedAt: null,
-        onboardingSource,
-        onboardingReference,
+        ...(onboardingSource !== undefined ? { onboardingSource } : {}),
+        ...(onboardingReference !== undefined ? { onboardingReference } : {}),
         updatedAt: new Date(),
       })
       .where(and(eq(businessCustomerMemberships.id, id), eq(businessCustomerMemberships.isDeleted, false)))
