@@ -39,6 +39,11 @@ import { MessageRepository } from './message.repository';
 import { VisitSessionRepository } from './visit-session.repository';
 import { SurveyRepository } from './survey.repository';
 import { SurveyParticipationRepository } from './survey-participation.repository';
+import { CommunityMembershipRepository } from './community-membership.repository';
+import { CommunityPointAccountRepository } from './community-point-account.repository';
+import { CommunityPointRuleRepository } from './community-point-rule.repository';
+import { CommunityPointAwardDecisionRepository } from './community-point-award-decision.repository';
+import { CommunityPointTransactionRepository } from './community-point-transaction.repository';
 
 export * from './business.repository';
 export * from './business-category.repository';
@@ -80,6 +85,11 @@ export * from './message.repository';
 export * from './visit-session.repository';
 export * from './survey.repository';
 export * from './survey-participation.repository';
+export * from './community-membership.repository';
+export * from './community-point-account.repository';
+export * from './community-point-rule.repository';
+export * from './community-point-award-decision.repository';
+export * from './community-point-transaction.repository';
 
 /**
  * Constructs one instance of every repository, sharing a single
@@ -128,6 +138,11 @@ export function createRepositories(db: Db) {
     visitSessions: new VisitSessionRepository(db),
     surveys: new SurveyRepository(db),
     surveyParticipations: new SurveyParticipationRepository(db),
+    communityMemberships: new CommunityMembershipRepository(db),
+    communityPointAccounts: new CommunityPointAccountRepository(db),
+    communityPointRules: new CommunityPointRuleRepository(db),
+    communityPointAwardDecisions: new CommunityPointAwardDecisionRepository(db),
+    communityPointTransactions: new CommunityPointTransactionRepository(db),
   };
 }
 
