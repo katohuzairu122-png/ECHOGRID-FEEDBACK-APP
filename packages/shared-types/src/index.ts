@@ -31,3 +31,5 @@ export * from './visits';
 export * from './fraud-signals';
 
 export * from './surveys';
+
+export * from './community-points';
