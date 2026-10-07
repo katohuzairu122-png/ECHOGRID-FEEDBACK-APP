@@ -132,12 +132,12 @@ export const communityPointRules = pgTable(
     retiredAt: timestamp('retired_at', { withTimezone: true }),
   },
   (table) => [
-    uniqueIndex('community_point_rules_source_resource_version_key').on(
-      table.sourceType,
-      table.resourceType,
-      table.resourceId,
-      table.version,
-    ),
+    uniqueIndex('community_point_rules_global_version_key')
+      .on(table.sourceType, table.version)
+      .where(sql`${table.resourceType} IS NULL AND ${table.resourceId} IS NULL`),
+    uniqueIndex('community_point_rules_resource_version_key')
+      .on(table.sourceType, table.resourceType, table.resourceId, table.version)
+      .where(sql`${table.resourceType} IS NOT NULL AND ${table.resourceId} IS NOT NULL`),
     index('community_point_rules_source_status_idx').on(table.sourceType, table.status),
     index('community_point_rules_resource_idx').on(table.resourceType, table.resourceId),
     check(
