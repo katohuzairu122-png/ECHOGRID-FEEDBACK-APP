@@ -104,25 +104,14 @@ export class SurveyManagementService {
       throw new AppError('Archived survey versions cannot be published.', 409, 'SURVEY_VERSION_ARCHIVED');
     }
 
-    const publishedAt = new Date();
-    const published = await this.repos.surveys.updateVersionStatus(
+    const published = await this.repos.surveys.publishVersionAndSurvey(
       version.id,
       survey.id,
-      'published',
-      publishedAt,
+      businessId,
+      actorId,
     );
     if (!published) {
       throw new AppError('Survey version not found.', 404, 'SURVEY_VERSION_NOT_FOUND');
-    }
-
-    const updatedSurvey = await this.repos.surveys.updateSurveyStatus(
-      survey.id,
-      businessId,
-      'published',
-      actorId,
-    );
-    if (!updatedSurvey) {
-      throw new AppError('Survey not found.', 404, 'SURVEY_NOT_FOUND');
     }
     return published;
   }
