@@ -155,6 +155,34 @@ export class SurveyParticipationRepository extends BaseRepository {
     return row;
   }
 
+  async completeWithAnswersLocked(
+    participationId: string,
+    answers: Omit<NewSurveyAnswer, 'participationId'>[],
+    submissionPayloadHash: string,
+    completedAt = new Date(),
+  ): Promise<SurveyParticipation> {
+    if (answers.length) {
+      await this.db
+        .insert(surveyAnswers)
+        .values(answers.map((answer) => ({ ...answer, participationId })));
+    }
+
+    const [updated] = await this.db
+      .update(surveyParticipations)
+      .set({
+        status: 'completed',
+        submissionPayloadHash,
+        submittedAt: completedAt,
+        completedAt,
+        updatedAt: completedAt,
+      })
+      .where(eq(surveyParticipations.id, participationId))
+      .returning();
+
+    if (!updated) throw new Error('Survey participation not found');
+    return updated;
+  }
+
   async completeWithAnswers(
     participationId: string,
     answers: Omit<NewSurveyAnswer, 'participationId'>[],
