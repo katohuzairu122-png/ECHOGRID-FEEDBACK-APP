@@ -8,11 +8,20 @@ export type NewConsentGrant = typeof consentGrants.$inferInsert;
 export class ConsentGrantRepository extends BaseRepository {
   async create(input: NewConsentGrant): Promise<ConsentGrant> {
     if (input.idempotencyKey) {
+      const [inserted] = await this.db
+        .insert(consentGrants)
+        .values(input)
+        .onConflictDoNothing()
+        .returning();
+      if (inserted) return inserted;
+
       const existing = await this.db.query.consentGrants.findFirst({
         where: eq(consentGrants.idempotencyKey, input.idempotencyKey),
       });
       if (existing) return existing;
+      throw new Error('Consent idempotency conflict did not resolve to an existing grant.');
     }
+
     const [row] = await this.db.insert(consentGrants).values(input).returning();
     if (!row) throw new Error('Insert returned no row');
     return row;
