@@ -253,6 +253,13 @@
       "when": 1791360000000,
       "tag": "0035_split02_business_branch",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1791367200000,
+      "tag": "0036_split03_loyalty_qr_core",
+      "breakpoints": true
     }
   ]
 }
