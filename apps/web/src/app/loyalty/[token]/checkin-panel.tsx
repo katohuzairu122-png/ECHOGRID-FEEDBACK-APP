@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState, useTransition } from 'react';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import type { LoyaltyAccountDto } from '@echo-grid-feedback/shared-types';
-import { checkinAction } from '@/lib/actions/loyalty-customer';
+import { checkinAction, joinAndCheckinAction } from '@/lib/actions/loyalty-customer';
 import { Button, buttonVariants, Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui';
 import { PoweredByFooter } from '@/components/brand';
 
@@ -26,6 +26,7 @@ export function CheckinPanel({ token, branchName, businessName, signedIn, feedba
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string>();
   const [account, setAccount] = useState<LoyaltyAccountDto>();
+  const [membershipRequired, setMembershipRequired] = useState(false);
   const automaticCheckinStarted = useRef(false);
   // i18n & Multi-Currency Block 6.
   const t = useTranslations('loyalty.customer.checkin');
@@ -33,13 +34,32 @@ export function CheckinPanel({ token, branchName, businessName, signedIn, feedba
 
   const handleCheckin = useCallback(() => {
     setError(undefined);
+    setMembershipRequired(false);
     startTransition(async () => {
       try {
         const result = await checkinAction(token);
         if (result.error) {
           setError(result.error);
+          setMembershipRequired(Boolean(result.membershipRequired));
           return;
         }
+        if (result.account) setAccount(result.account);
+      } catch {
+        setError(t('genericError'));
+      }
+    });
+  }, [t, token]);
+
+  const handleJoinAndCheckin = useCallback(() => {
+    setError(undefined);
+    startTransition(async () => {
+      try {
+        const result = await joinAndCheckinAction(token);
+        if (result.error) {
+          setError(result.error);
+          return;
+        }
+        setMembershipRequired(false);
         if (result.account) setAccount(result.account);
       } catch {
         setError(t('genericError'));
@@ -97,7 +117,15 @@ export function CheckinPanel({ token, branchName, businessName, signedIn, feedba
                   {t('signInToCheckIn')}
                 </Link>
               )}
-              {error && (
+              {membershipRequired && signedIn && (
+                <div className="flex flex-col gap-2 rounded-md border p-3">
+                  <p className="text-sm">{t('joinRequired')}</p>
+                  <Button onClick={handleJoinAndCheckin} disabled={pending} size="lg" className="w-full">
+                    {pending ? t('joining') : t('joinAndCheckIn')}
+                  </Button>
+                </div>
+              )}
+              {error && !membershipRequired && (
                 <p role="alert" className="text-sm text-danger">
                   {error}
                 </p>

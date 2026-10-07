@@ -11,6 +11,7 @@
 export * from './common';
 export * from './i18n';
 export * from './branches';
+export * from './business-categories';
 export * from './businesses';
 export * from './qr-codes';
 export * from './qr-scans';
@@ -18,6 +19,7 @@ export * from './feedback';
 export * from './feedback-forms';
 export * from './feedback-classification';
 export * from './customer-auth';
+export * from './customer-relationships';
 export * from './loyalty';
 export * from './analytics';
 export * from './notifications';

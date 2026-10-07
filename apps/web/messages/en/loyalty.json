@@ -215,7 +215,10 @@
       "checkingIn": "Checking in…",
       "checkIn": "Check in",
       "signInToCheckIn": "Sign in to check in",
-      "genericError": "Something went wrong. Please try again."
+      "genericError": "Something went wrong. Please try again.",
+      "joinRequired": "Join this business's loyalty program before checking in.",
+      "joining": "Joining…",
+      "joinAndCheckIn": "Join loyalty & check in"
     },
     "messages": {
       "title": "Messages",

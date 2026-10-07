@@ -12,17 +12,15 @@ import { customerApiFetch } from '@/lib/customer-api-client';
 import { rethrowControlFlow } from '@/lib/rethrow-control-flow';
 import { ApiError } from '@/lib/api-client';
 
-/** Explicit "join this business's loyalty program" action -- distinct from
- * checkinAction's auto-enroll, for a customer who wants to join without
- * having scanned a QR code yet (e.g. from a shared referral link, Block 5's
- * UI entry point for that flow). */
-export async function joinLoyaltyAction(businessId: string): Promise<LoyaltyAccountDto> {
-  const account = await customerApiFetch<LoyaltyAccountDto>('/loyalty/me/join', {
+/** Explicit customer-consented join through a server-verified business QR
+ * context. Split 01 deliberately rejects arbitrary businessId-only enrollment. */
+export async function joinLoyaltyAction(qrToken: string): Promise<LoyaltyAccountDto> {
+  const result = await customerApiFetch<{ loyaltyAccount: LoyaltyAccountDto }>('/customer-memberships/join', {
     method: 'POST',
-    body: JSON.stringify({ businessId }),
+    body: JSON.stringify({ qrToken, consentVersion: 'v1' }),
   });
   revalidatePath('/loyalty/dashboard');
-  return account;
+  return result.loyaltyAccount;
 }
 
 /** Scanning a branch's QR code while signed in as a customer -- reuses the
@@ -30,6 +28,8 @@ export async function joinLoyaltyAction(businessId: string): Promise<LoyaltyAcco
  * destinations depending on which link the customer taps). */
 export interface CheckinResult {
   error?: string;
+  code?: string;
+  membershipRequired?: boolean;
   account?: LoyaltyAccountDto;
 }
 
@@ -52,7 +52,29 @@ export async function checkinAction(qrToken: string): Promise<CheckinResult> {
     // so the client can show the useful API message instead of Next.js's
     // production-only generic server-action error.
     rethrowControlFlow(err);
-    if (err instanceof ApiError) return { error: err.message };
+    if (err instanceof ApiError) {
+      return {
+        error: err.message,
+        ...(err.code !== undefined ? { code: err.code } : {}),
+        membershipRequired: err.code === 'MEMBERSHIP_REQUIRED',
+      };
+    }
+    return { error: 'Something went wrong. Please try again.' };
+  }
+}
+
+export async function joinAndCheckinAction(qrToken: string): Promise<CheckinResult> {
+  try {
+    await joinLoyaltyAction(qrToken);
+    return await checkinAction(qrToken);
+  } catch (err) {
+    rethrowControlFlow(err);
+    if (err instanceof ApiError) {
+      return {
+        error: err.message,
+        ...(err.code !== undefined ? { code: err.code } : {}),
+      };
+    }
     return { error: 'Something went wrong. Please try again.' };
   }
 }

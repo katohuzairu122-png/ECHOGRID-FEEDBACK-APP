@@ -1,5 +1,6 @@
 import { relations } from 'drizzle-orm';
 import { businesses } from './businesses';
+import { businessCategories } from './business-categories';
 import { branches } from './branches';
 import { users } from './users';
 import { roles } from './roles';
@@ -16,9 +17,13 @@ import { aiUsageLog } from './ai-usage-log';
 import { criticalIncidents } from './critical-incidents';
 import { fraudSignals } from './fraud-signals';
 import { customers } from './customers';
+import { businessCustomerMemberships } from './business-customer-memberships';
+import { consentGrants } from './consent-grants';
+import { customerActionAuthorizations } from './customer-action-authorizations';
 import { loyaltyTiers } from './loyalty-tiers';
 import { loyaltyRewards } from './loyalty-rewards';
 import { loyaltyAccounts } from './loyalty-accounts';
+import { loyaltyPurchaseEvents } from './loyalty-purchase-events';
 import { loyaltyTransactions } from './loyalty-transactions';
 import { loyaltySettings } from './loyalty-settings';
 import { notificationPreferences } from './notification-preferences';
@@ -44,6 +49,9 @@ export const businessesRelations = relations(businesses, ({ many, one }) => ({
   loyaltyTiers: many(loyaltyTiers),
   loyaltyRewards: many(loyaltyRewards),
   loyaltyAccounts: many(loyaltyAccounts),
+  customerMemberships: many(businessCustomerMemberships),
+  consentGrants: many(consentGrants),
+  customerActionAuthorizations: many(customerActionAuthorizations),
   loyaltySettings: many(loyaltySettings),
   notificationPreferences: many(notificationPreferences),
   notifications: many(notifications),
@@ -55,6 +63,11 @@ export const businessesRelations = relations(businesses, ({ many, one }) => ({
     fields: [businesses.id],
     references: [businessSubscriptions.businessId],
   }),
+}));
+
+
+export const businessCategoriesRelations = relations(businessCategories, ({ many }) => ({
+  businesses: many(businesses),
 }));
 
 export const branchesRelations = relations(branches, ({ one, many }) => ({
@@ -169,6 +182,40 @@ export const customersRelations = relations(customers, ({ many }) => ({
   conversations: many(conversations),
 }));
 
+
+export const businessCustomerMembershipsRelations = relations(
+  businessCustomerMemberships,
+  ({ one }) => ({
+    customer: one(customers, {
+      fields: [businessCustomerMemberships.customerId],
+      references: [customers.id],
+    }),
+    business: one(businesses, {
+      fields: [businessCustomerMemberships.businessId],
+      references: [businesses.id],
+    }),
+  }),
+);
+
+export const consentGrantsRelations = relations(consentGrants, ({ one }) => ({
+  customer: one(customers, { fields: [consentGrants.customerId], references: [customers.id] }),
+  business: one(businesses, { fields: [consentGrants.businessId], references: [businesses.id] }),
+}));
+
+export const customerActionAuthorizationsRelations = relations(
+  customerActionAuthorizations,
+  ({ one }) => ({
+    customer: one(customers, {
+      fields: [customerActionAuthorizations.customerId],
+      references: [customers.id],
+    }),
+    business: one(businesses, {
+      fields: [customerActionAuthorizations.businessId],
+      references: [businesses.id],
+    }),
+  }),
+);
+
 export const loyaltyTiersRelations = relations(loyaltyTiers, ({ one, many }) => ({
   business: one(businesses, { fields: [loyaltyTiers.businessId], references: [businesses.id] }),
   loyaltyAccounts: many(loyaltyAccounts),
@@ -177,6 +224,7 @@ export const loyaltyTiersRelations = relations(loyaltyTiers, ({ one, many }) => 
 export const loyaltyRewardsRelations = relations(loyaltyRewards, ({ one, many }) => ({
   business: one(businesses, { fields: [loyaltyRewards.businessId], references: [businesses.id] }),
   transactions: many(loyaltyTransactions),
+  purchaseEvents: many(loyaltyPurchaseEvents),
 }));
 
 export const loyaltyAccountsRelations = relations(loyaltyAccounts, ({ one, many }) => ({
@@ -190,7 +238,34 @@ export const loyaltyAccountsRelations = relations(loyaltyAccounts, ({ one, many 
   transactions: many(loyaltyTransactions),
 }));
 
+export const loyaltyPurchaseEventsRelations = relations(loyaltyPurchaseEvents, ({ one }) => ({
+  business: one(businesses, {
+    fields: [loyaltyPurchaseEvents.businessId],
+    references: [businesses.id],
+  }),
+  branch: one(branches, {
+    fields: [loyaltyPurchaseEvents.branchId],
+    references: [branches.id],
+  }),
+  customer: one(customers, {
+    fields: [loyaltyPurchaseEvents.customerId],
+    references: [customers.id],
+  }),
+  membership: one(businessCustomerMemberships, {
+    fields: [loyaltyPurchaseEvents.membershipId],
+    references: [businessCustomerMemberships.id],
+  }),
+  loyaltyAccount: one(loyaltyAccounts, {
+    fields: [loyaltyPurchaseEvents.loyaltyAccountId],
+    references: [loyaltyAccounts.id],
+  }),
+}));
+
 export const loyaltyTransactionsRelations = relations(loyaltyTransactions, ({ one }) => ({
+  purchaseEvent: one(loyaltyPurchaseEvents, {
+    fields: [loyaltyTransactions.purchaseEventId],
+    references: [loyaltyPurchaseEvents.id],
+  }),
   loyaltyAccount: one(loyaltyAccounts, {
     fields: [loyaltyTransactions.loyaltyAccountId],
     references: [loyaltyAccounts.id],

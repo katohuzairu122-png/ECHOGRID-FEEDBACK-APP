@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { joinCustomerMembershipSchema } from './customer-relationships';
 
 /**
  * Digital Loyalty module contract -- request/response shapes shared between
@@ -10,8 +11,20 @@ import { z } from 'zod';
 
 // ---- Staff: points engine ----------------------------------------------
 
+export const loyaltyPurchaseChannelSchema = z.enum([
+  'branch',
+  'online',
+  'delivery',
+  'whatsapp',
+  'phone',
+  'other',
+]);
+
 export const recordPurchaseSchema = z.object({
   purchaseAmount: z.number().positive().max(1_000_000),
+  idempotencyKey: z.string().trim().min(8).max(200),
+  externalReference: z.string().trim().min(1).max(200).optional(),
+  channel: loyaltyPurchaseChannelSchema.default('other'),
 });
 
 /**
@@ -202,9 +215,7 @@ export const updateLoyaltySettingsSchema = z.object({
 
 // ---- Customer-facing -----------------------------------------------------
 
-export const joinLoyaltyProgramSchema = z.object({
-  businessId: z.uuid(),
-});
+export const joinLoyaltyProgramSchema = joinCustomerMembershipSchema;
 
 /** Check-in reuses the same anonymous QR token as feedback (qr_codes.token)
  * -- one QR code per branch drives both flows, distinguished by which
@@ -401,6 +412,7 @@ export const loyaltyTransactionSchema = z.object({
   visitSessionId: z.uuid().nullable(),
   feedbackId: z.uuid().nullable(),
   purchaseAmount: z.string().nullable(),
+  purchaseEventId: z.uuid().nullable(),
   redemptionCode: z.string().nullable(),
   redemptionConfirmedAt: z.string().nullable(),
   notes: z.string().nullable(),
@@ -460,3 +472,29 @@ export type LoyaltyTransactionDto = z.infer<typeof loyaltyTransactionSchema>;
 export type LoyaltySettingsDto = z.infer<typeof loyaltySettingsSchema>;
 export type RedemptionResult = z.infer<typeof redemptionResultSchema>;
 export type IssuanceResultDto = z.infer<typeof issuanceResultSchema>;
+
+
+export const customerQrTokenSchema = z.object({
+  token: z.string().min(1),
+  expiresAt: z.string(),
+});
+
+export const resolveCustomerQrSchema = z.object({
+  customerQrToken: z.string().min(1),
+});
+
+export const resolveBusinessQrActionsSchema = z.object({
+  businessQrToken: z.string().min(1),
+});
+
+export const loyaltyResolvedActionSchema = z.enum([
+  'JOIN_LOYALTY',
+  'OPEN_LOYALTY_CARD',
+  'VIEW_REWARDS',
+  'CHECK_IN',
+  'LEAVE_FEEDBACK',
+  'VIEW_ALLOWED_MEMBERSHIP_STATE',
+  'VALIDATE_PURCHASE',
+  'GRANT_LOYALTY_PROGRESS',
+  'REDEEM_REWARD',
+]);

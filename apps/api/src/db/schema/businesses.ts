@@ -1,6 +1,7 @@
-import { pgTable, uuid, text, check } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, text, check, index } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import { auditColumns, softDeleteColumns } from './_shared';
+import { businessCategories } from './business-categories';
 
 /**
  * A tenant. Every other tenant-owned table hangs off businessId, directly or
@@ -14,6 +15,7 @@ export const businesses = pgTable(
     slug: text('slug').notNull().unique(),
     legalName: text('legal_name'),
     industry: text('industry'),
+    categoryId: uuid('category_id').references(() => businessCategories.id, { onDelete: 'restrict' }),
     // BCP-47 language tag, ISO 4217 currency, IANA timezone -- app-layer
     // defaults for new branches/customers. Never assumed elsewhere.
     defaultLocale: text('default_locale').notNull().default('en'),
@@ -37,6 +39,7 @@ export const businesses = pgTable(
     // limit rather than a reflection of what the platform supports. Keep
     // this constraint's value list in lockstep with SUPPORTED_LOCALES --
     // it is enforced independently at the DB layer for defense in depth.
+    index('businesses_category_id_idx').on(table.categoryId),
     check(
       'businesses_default_locale_check',
       sql`${table.defaultLocale} IN ('en', 'es', 'fr', 'ar')`,

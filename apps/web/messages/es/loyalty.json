@@ -215,7 +215,10 @@
       "checkingIn": "Registrando…",
       "checkIn": "Registrarme",
       "signInToCheckIn": "Inicia sesión para registrarte",
-      "genericError": "Algo salió mal. Inténtalo de nuevo."
+      "genericError": "Algo salió mal. Inténtalo de nuevo.",
+      "joinRequired": "Únete al programa de fidelización de este negocio antes de registrarte.",
+      "joining": "Uniéndome…",
+      "joinAndCheckIn": "Unirme y registrarme"
     },
     "messages": {
       "title": "Mensajes",

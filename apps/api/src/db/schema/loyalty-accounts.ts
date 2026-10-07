@@ -3,6 +3,7 @@ import { sql } from 'drizzle-orm';
 import { businesses } from './businesses';
 import { customers } from './customers';
 import { loyaltyTiers } from './loyalty-tiers';
+import { businessCustomerMemberships } from './business-customer-memberships';
 import { auditColumns, softDeleteColumns } from './_shared';
 
 /**
@@ -30,6 +31,7 @@ export const loyaltyAccounts = pgTable(
     businessId: uuid('business_id')
       .notNull()
       .references(() => businesses.id, { onDelete: 'cascade' }),
+    membershipId: uuid('membership_id').references(() => businessCustomerMemberships.id, { onDelete: 'restrict' }),
     points: integer('points').notNull().default(0),
     tierId: uuid('tier_id').references(() => loyaltyTiers.id, { onDelete: 'set null' }),
     referredByCustomerId: uuid('referred_by_customer_id').references(() => customers.id, {
@@ -43,6 +45,7 @@ export const loyaltyAccounts = pgTable(
   },
   (table) => [
     uniqueIndex('loyalty_accounts_customer_business_key').on(table.customerId, table.businessId),
+    uniqueIndex('loyalty_accounts_membership_id_key').on(table.membershipId).where(sql`${table.membershipId} IS NOT NULL`),
     check('loyalty_accounts_status_check', sql`${table.status} IN ('active', 'suspended')`),
     check('loyalty_accounts_points_check', sql`${table.points} >= 0`),
   ],

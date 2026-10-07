@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { slugSchema } from './common';
 import { localeSchema } from './i18n';
+import { businessCategoryKeySchema } from './business-categories';
 
 /**
  * Business create request contract -- mirrors createBranchSchema's role
@@ -11,6 +12,7 @@ import { localeSchema } from './i18n';
 export const createBusinessSchema = z.object({
   name: z.string().trim().min(1).max(200),
   slug: slugSchema,
+  categoryKey: businessCategoryKeySchema.optional(),
 });
 
 export type CreateBusinessInput = z.infer<typeof createBusinessSchema>;
@@ -42,6 +44,7 @@ export const updateBusinessSchema = z.object({
   // IANA timezone, length-checked only -- matches branches.ts's timezone
   // field exactly (same concept, same validation depth, no ~400-zone enum).
   defaultTimezone: z.string().trim().min(1).max(100).optional(),
+  categoryKey: businessCategoryKeySchema.optional(),
 });
 
 export type UpdateBusinessInput = z.infer<typeof updateBusinessSchema>;
@@ -59,6 +62,7 @@ export const businessSchema = z.object({
   defaultCurrency: z.string(),
   defaultTimezone: z.string(),
   status: z.enum(['active', 'suspended', 'archived']),
+  categoryKey: businessCategoryKeySchema.nullable().optional(),
 });
 
 export type BusinessDto = z.infer<typeof businessSchema>;
@@ -77,6 +81,7 @@ export const businessPublicSchema = z.object({
   defaultLocale: localeSchema,
   defaultCurrency: z.string(),
   defaultTimezone: z.string(),
+  categoryKey: businessCategoryKeySchema.nullable().optional(),
 });
 
 export type BusinessPublicDto = z.infer<typeof businessPublicSchema>;

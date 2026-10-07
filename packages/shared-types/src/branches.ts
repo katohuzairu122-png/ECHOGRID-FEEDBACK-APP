@@ -28,7 +28,9 @@ export const createBranchSchema = z.object({
   longitude: z.number().min(-180).max(180).optional(),
 });
 
-export const updateBranchSchema = createBranchSchema.partial();
+export const updateBranchSchema = createBranchSchema.partial().extend({
+  status: z.enum(['active', 'inactive', 'archived']).optional(),
+});
 
 export type CreateBranchInput = z.infer<typeof createBranchSchema>;
 export type UpdateBranchInput = z.infer<typeof updateBranchSchema>;

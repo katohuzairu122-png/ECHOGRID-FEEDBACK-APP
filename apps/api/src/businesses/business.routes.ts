@@ -61,12 +61,16 @@ businessRoutes.get('/:id/public', rateLimit('PUBLIC_RATE_LIMITER'), async (c) =>
     if (!business) {
       throw new AppError('Business not found.', 404, 'BUSINESS_NOT_FOUND');
     }
+    const category = business.categoryId
+      ? await createRepositories(db).businessCategories.findById(business.categoryId)
+      : undefined;
     return ok(c, {
       id: business.id,
       name: business.name,
       defaultLocale: business.defaultLocale,
       defaultCurrency: business.defaultCurrency,
       defaultTimezone: business.defaultTimezone,
+      categoryKey: category?.key ?? null,
     });
   } finally {
     c.executionCtx.waitUntil(close());

@@ -63,13 +63,27 @@ describe.skipIf(!process.env.DATABASE_URL)('LoyaltyAccountService points engine 
     await client.end();
   });
 
-  it('recordCheckin auto-enrolls a customer with no existing account, awards the configured points, and records a visit', async () => {
+  it('recordCheckin rejects a non-member, then awards points after explicit membership exists', async () => {
     const qrCode = await repos.qrCodes.create({ businessId, branchId });
+
+    await expect(service.recordCheckin(customerId, businessId, qrCode.id)).rejects.toMatchObject({
+      code: 'MEMBERSHIP_REQUIRED',
+      status: 409,
+    });
+
+    const membership = await repos.customerMemberships.create({
+      customerId,
+      businessId,
+      status: 'active',
+      onboardingSource: 'integration_test',
+      onboardingReference: qrCode.id,
+    });
+    await repos.loyaltyAccounts.create({ customerId, businessId, membershipId: membership.id });
 
     const account = await service.recordCheckin(customerId, businessId, qrCode.id);
 
     expect(account.customerId).toBe(customerId);
-    expect(account.points).toBe(10); // loyalty_settings' default pointsPerCheckin
+    expect(account.points).toBe(10);
     expect(account.visitCount).toBe(1);
     expect(account.lastVisitAt).not.toBeNull();
   });
@@ -126,6 +140,18 @@ describe.skipIf(!process.env.DATABASE_URL)('LoyaltyAccountService points engine 
       ttlSeconds: 60,
     });
     const otherCustomer = await repos.customers.create({ phone: `+1555${Date.now()}` });
+    const otherMembership = await repos.customerMemberships.create({
+      customerId: otherCustomer.id,
+      businessId,
+      status: 'active',
+      onboardingSource: 'integration_test',
+      onboardingReference: qrCode.id,
+    });
+    await repos.loyaltyAccounts.create({
+      customerId: otherCustomer.id,
+      businessId,
+      membershipId: otherMembership.id,
+    });
 
     const first = await service.recordCheckin(customerId, businessId, qrCode.id, session.id);
     const second = await service.recordCheckin(otherCustomer.id, businessId, qrCode.id, session.id);
@@ -143,9 +169,80 @@ describe.skipIf(!process.env.DATABASE_URL)('LoyaltyAccountService points engine 
     const before = account!.points;
 
     // Default pointsPerCurrencyUnit is 1.00 -> $19.99 floors to 19 points.
-    const updated = await service.recordPurchase(businessId, account!.id, 19.99, STAFF_ACTOR_ID);
+    const result = await service.recordPurchase({
+      businessId,
+      branchId,
+      accountId: account!.id,
+      purchaseAmount: 19.99,
+      idempotencyKey: crypto.randomUUID(),
+      channel: 'branch',
+      staffUserId: STAFF_ACTOR_ID,
+    });
 
-    expect(updated.points).toBe(before + 19);
+    expect(result.account.points).toBe(before + 19);
+    expect(result.inserted).toBe(true);
+  });
+
+
+  it('recordPurchase is idempotent and a replay cannot award points twice', async () => {
+    const account = await repos.loyaltyAccounts.findByCustomerAndBusiness(customerId, businessId);
+    const before = account!.points;
+    const idempotencyKey = crypto.randomUUID();
+
+    const first = await service.recordPurchase({
+      businessId,
+      branchId,
+      accountId: account!.id,
+      purchaseAmount: 7.5,
+      idempotencyKey,
+      channel: 'branch',
+      staffUserId: STAFF_ACTOR_ID,
+    });
+    const second = await service.recordPurchase({
+      businessId,
+      branchId,
+      accountId: account!.id,
+      purchaseAmount: 7.5,
+      idempotencyKey,
+      channel: 'branch',
+      staffUserId: STAFF_ACTOR_ID,
+    });
+
+    expect(first.inserted).toBe(true);
+    expect(second.inserted).toBe(false);
+
+    const after = await repos.loyaltyAccounts.findByCustomerAndBusiness(customerId, businessId);
+    expect(after!.points).toBe(before + 7);
+
+    const events = await repos.loyaltyPurchaseEvents.findByIdempotencyKey(businessId, idempotencyKey);
+    expect(events).toBeDefined();
+  });
+
+  it('recordPurchase rejects conflicting reuse of an idempotency key', async () => {
+    const account = await repos.loyaltyAccounts.findByCustomerAndBusiness(customerId, businessId);
+    const idempotencyKey = crypto.randomUUID();
+
+    await service.recordPurchase({
+      businessId,
+      branchId,
+      accountId: account!.id,
+      purchaseAmount: 5,
+      idempotencyKey,
+      channel: 'branch',
+      staffUserId: STAFF_ACTOR_ID,
+    });
+
+    await expect(
+      service.recordPurchase({
+        businessId,
+        branchId,
+        accountId: account!.id,
+        purchaseAmount: 6,
+        idempotencyKey,
+        channel: 'branch',
+        staffUserId: STAFF_ACTOR_ID,
+      }),
+    ).rejects.toMatchObject({ code: 'IDEMPOTENCY_CONFLICT', status: 409 });
   });
 
   it('adjustPoints rejects an adjustment that would drop the balance below zero', async () => {

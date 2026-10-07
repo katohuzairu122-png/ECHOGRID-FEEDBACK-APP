@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { sign } from 'hono/jwt';
 import { QrCodeService } from './qr-code.service';
 import { verifyQrToken } from './qr-token';
 import type { QrCode, NewQrCode } from '../repositories/qr-code.repository';
@@ -38,7 +39,7 @@ function createFakeQrCodeRepo() {
         id: crypto.randomUUID(),
         businessId: input.businessId,
         branchId: input.branchId,
-        type: input.type ?? 'feedback',
+        type: input.type ?? 'business',
       status: input.status ?? 'active',
       feedbackFormVersionId: input.feedbackFormVersionId ?? null,
         createdAt: new Date(),
@@ -121,6 +122,7 @@ describe('QrCodeService', () => {
     expect(payload.businessId).toBe(BUSINESS_A);
     expect(payload.branchId).toBe(BRANCH_A);
     expect(payload.campaignId).toBeNull();
+    expect(payload.type).toBe('qr_business');
   });
 
   it('getOrCreateActiveForBranch returns the existing ROW on a second call, not a new one -- lazy get-or-create. The token is re-signed fresh each call (different nonce/iat), which is expected, not a bug', async () => {
@@ -143,6 +145,28 @@ describe('QrCodeService', () => {
   it('regenerate works even when no active code exists yet -- the first-ever regenerate call', async () => {
     const { qrCode } = await service.regenerate(BRANCH_A, BUSINESS_A, ACTOR);
     expect(qrCode.status).toBe('active');
+  });
+
+  it('resolveToken accepts a legacy qr_feedback token for an existing business QR during compatibility', async () => {
+    const { qrCode } = await service.getOrCreateActiveForBranch(BRANCH_A, BUSINESS_A, ACTOR);
+    const now = Math.floor(Date.now() / 1000);
+    const legacyToken = await sign(
+      {
+        sub: qrCode.id,
+        businessId: BUSINESS_A,
+        branchId: BRANCH_A,
+        campaignId: null,
+        type: 'qr_feedback',
+        sigVer: 1,
+        nonce: crypto.randomUUID(),
+        iat: now,
+        exp: now + 60,
+      },
+      SECRET,
+      'HS256',
+    );
+
+    await expect(service.resolveToken(legacyToken)).resolves.toMatchObject({ id: qrCode.id });
   });
 
   it('resolveToken returns the matching active code for a valid token', async () => {

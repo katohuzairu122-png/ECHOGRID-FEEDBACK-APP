@@ -68,6 +68,16 @@ export class LoyaltyAccountRepository extends BaseRepository {
     return row;
   }
 
+  async attachMembership(id: string, membershipId: string): Promise<LoyaltyAccount> {
+    const [row] = await this.db
+      .update(loyaltyAccounts)
+      .set({ membershipId, updatedAt: new Date() })
+      .where(and(eq(loyaltyAccounts.id, id), eq(loyaltyAccounts.isDeleted, false)))
+      .returning();
+    if (!row) throw new Error('Loyalty account not found');
+    return row;
+  }
+
   /**
    * Atomic delta application via sql`` expressions, not read-then-write --
    * two concurrent earning events for the same account (e.g. a check-in and

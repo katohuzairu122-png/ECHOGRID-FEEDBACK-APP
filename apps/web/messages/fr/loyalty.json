@@ -215,7 +215,10 @@
       "checkingIn": "Enregistrement…",
       "checkIn": "S'enregistrer",
       "signInToCheckIn": "Se connecter pour s'enregistrer",
-      "genericError": "Une erreur s'est produite. Veuillez réessayer."
+      "genericError": "Une erreur s'est produite. Veuillez réessayer.",
+      "joinRequired": "Rejoignez le programme de fidélité de cette entreprise avant de vous enregistrer.",
+      "joining": "Adhésion…",
+      "joinAndCheckIn": "Rejoindre et s'enregistrer"
     },
     "messages": {
       "title": "Messages",

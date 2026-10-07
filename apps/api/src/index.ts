@@ -9,6 +9,7 @@ import { rateLimit } from './middleware/rate-limit';
 import { auditTrail } from './middleware/audit';
 import { authRoutes } from './auth/auth.routes';
 import { businessRoutes } from './businesses/business.routes';
+import { businessCategoryRoutes } from './businesses/business-category.routes';
 import { teamRoutes } from './team/team.routes';
 import { branchRoutes } from './branches/branch.routes';
 import { visitSessionRoutes } from './visits/visit-session.routes';
@@ -16,6 +17,8 @@ import { qrRoutes } from './qr/qr.routes';
 import { feedbackRoutes } from './feedback/feedback.routes';
 import { feedbackFormRoutes } from './feedback/feedback-form.routes';
 import { customerAuthRoutes } from './customer-auth/customer-auth.routes';
+import { customerMembershipRoutes } from './customer-relationships/customer-membership.routes';
+import { consentRoutes } from './consent/consent.routes';
 import { loyaltyRoutes } from './loyalty/loyalty.routes';
 import { loyaltyCustomerRoutes } from './loyalty/loyalty-customer.routes';
 import { analyticsRoutes } from './analytics/analytics.routes';
@@ -119,6 +122,7 @@ api.use('*', auditTrail);
 
 api.route('/auth', authRoutes);
 api.route('/businesses', businessRoutes);
+api.route('/business-categories', businessCategoryRoutes);
 api.route('/team', teamRoutes);
 api.route('/branches', branchRoutes);
 // Continuing Development Block 4.3.1 (S5.3) -- a second file at the same
@@ -130,6 +134,8 @@ api.route('/qr', qrRoutes);
 api.route('/feedback', feedbackRoutes);
 api.route('/feedback-forms', feedbackFormRoutes);
 api.route('/customer-auth', customerAuthRoutes);
+api.route('/customer-memberships', customerMembershipRoutes);
+api.route('/consents', consentRoutes);
 // Customer subtrees must precede staff wildcard middleware at the parent.
 // Hono runs matching middleware in registration order; /loyalty/* also
 // matches /loyalty/me/* and must not verify customer JWTs as staff.
