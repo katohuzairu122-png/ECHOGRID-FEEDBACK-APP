@@ -68,7 +68,9 @@ export class CommunityPointRuleRepository extends BaseRepository {
 
   async updateLifecycle(
     id: string,
-    patch: Pick<NewCommunityPointRule, 'status' | 'activatedAt' | 'retiredAt'>,
+    patch: Partial<
+      Pick<NewCommunityPointRule, 'status' | 'activatedAt' | 'retiredAt'>
+    >,
   ): Promise<CommunityPointRule | undefined> {
     const [row] = await this.db
       .update(communityPointRules)
