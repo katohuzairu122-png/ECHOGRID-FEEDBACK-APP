@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import type { Database } from '../db/client';
+import type { Database, Db } from '../db/client';
 import { communityPointAccounts } from '../db/schema';
 import {
   createRepositories,
@@ -109,7 +109,7 @@ export class CommunityPointAwardService {
         };
       }
 
-      return this.awardDecision(repos, {
+      return this.awardDecision(tx, repos, {
         customerId: evidence.participantCustomerId,
         completionRef: evidence.completionRef,
         businessId: evidence.businessId,
@@ -258,6 +258,7 @@ export class CommunityPointAwardService {
   }
 
   private async awardDecision(
+    db: Db,
     repos: ReturnType<typeof createRepositories>,
     input: {
       customerId: string;
@@ -277,7 +278,7 @@ export class CommunityPointAwardService {
       );
     }
 
-    await repos.db.execute(
+    await db.execute(
       sql`select id from ${communityPointAccounts} where ${communityPointAccounts.id} = ${account.id} for update`,
     );
     account = (await repos.communityPointAccounts.findById(account.id)) ?? account;
