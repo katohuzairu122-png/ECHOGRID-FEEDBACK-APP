@@ -339,12 +339,18 @@ export class ReceivingBusinessSettlementService {
     branchId: string | undefined,
     fulfillment: OrphanSettlementFulfillmentContractInput,
   ): void {
-    const expected = this.buildFulfillmentSnapshot(fulfillment);
+    const snapshot = settlement.fulfillmentSnapshot;
+    const snapshotMatches =
+      snapshot !== null &&
+      snapshot.benefitType === fulfillment.benefitType &&
+      snapshot.title === fulfillment.title &&
+      snapshot.description === fulfillment.description &&
+      snapshot.terms === (fulfillment.terms ?? null);
+
     if (
       settlement.receivingBranchId !== (branchId ?? null) ||
       settlement.fulfillmentPolicyVersion !== FULFILLMENT_POLICY_VERSION ||
-      JSON.stringify(settlement.fulfillmentSnapshot) !==
-        JSON.stringify(expected) ||
+      !snapshotMatches ||
       settlement.fulfillmentReference !== (fulfillment.reference ?? null)
     ) {
       throw new AppError(
