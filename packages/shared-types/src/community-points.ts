@@ -111,6 +111,21 @@ export type CommunityPointAdminAdjustmentInput = z.infer<
   typeof communityPointAdminAdjustmentSchema
 >;
 
+export const communityPointAdminReversalSchema = z.object({
+  reason: z.string().trim().min(3).max(1000),
+  idempotencyKey: z.string().trim().min(8).max(200),
+});
+export type CommunityPointAdminReversalInput = z.infer<
+  typeof communityPointAdminReversalSchema
+>;
+
+export const communityPointPlatformStateChangeSchema = z.object({
+  reason: z.string().trim().min(3).max(1000),
+});
+export type CommunityPointPlatformStateChangeInput = z.infer<
+  typeof communityPointPlatformStateChangeSchema
+>;
+
 export const communityMembershipSchema = z.object({
   id: z.uuid(),
   customerId: z.uuid(),

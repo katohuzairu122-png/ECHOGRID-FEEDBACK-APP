@@ -38,6 +38,11 @@ function appFor(role: PlatformRole) {
     requireCommunityPlatformPermission('community:ledger:view'),
     (c) => c.json({ ok: true }),
   );
+  app.post(
+    '/adjust',
+    requireCommunityPlatformPermission('community:adjust'),
+    (c) => c.json({ ok: true }),
+  );
   return app;
 }
 
@@ -96,6 +101,26 @@ describe('Community platform permission matrix', () => {
 
   it('middleware admits admin to manage authority', async () => {
     const response = await appFor('admin').request('/manage', { method: 'POST' });
+    expect(response.status).toBe(200);
+  });
+
+  it.each(['support', 'billing'] as const)(
+    'middleware rejects %s from Community adjustment authority',
+    async (role) => {
+      const response = await appFor(role).request('/adjust', { method: 'POST' });
+      expect(response.status).toBe(403);
+      expect(await response.json()).toMatchObject({
+        success: false,
+        error: {
+          code: 'PLATFORM_PERMISSION_DENIED',
+          details: { requiredPermission: 'community:adjust' },
+        },
+      });
+    },
+  );
+
+  it('middleware admits admin to Community adjustment authority', async () => {
+    const response = await appFor('admin').request('/adjust', { method: 'POST' });
     expect(response.status).toBe(200);
   });
 });

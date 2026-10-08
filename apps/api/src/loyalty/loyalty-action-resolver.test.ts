@@ -36,7 +36,11 @@ function campaign(audienceClass: Audience, name: string = audienceClass) {
   };
 }
 
-function createRepos(activeMembership: boolean, campaigns = [] as ReturnType<typeof campaign>[]) {
+function createRepos(
+  activeMembership: boolean,
+  campaigns = [] as ReturnType<typeof campaign>[],
+  activeCommunityMembership = false,
+) {
   const customer = { id: CUSTOMER_ID, status: 'active' };
   const membership = activeMembership
     ? {
@@ -74,6 +78,18 @@ function createRepos(activeMembership: boolean, campaigns = [] as ReturnType<typ
         return customerId === CUSTOMER_ID && businessId === BUSINESS_ID ? membership : undefined;
       },
     },
+    communityMemberships: {
+      async findActiveByCustomerId(customerId: string) {
+        return customerId === CUSTOMER_ID && activeCommunityMembership
+          ? {
+              id: crypto.randomUUID(),
+              customerId: CUSTOMER_ID,
+              status: 'active',
+              policyVersion: 'community-policy-v1',
+            }
+          : undefined;
+      },
+    },
     loyaltyAccounts: {
       async findByCustomerAndBusiness(customerId: string, businessId: string) {
         return customerId === CUSTOMER_ID && businessId === BUSINESS_ID ? account : undefined;
@@ -97,9 +113,17 @@ function createRepos(activeMembership: boolean, campaigns = [] as ReturnType<typ
   };
 }
 
-function resolver(activeMembership: boolean, campaigns = [] as ReturnType<typeof campaign>[]) {
+function resolver(
+  activeMembership: boolean,
+  campaigns = [] as ReturnType<typeof campaign>[],
+  activeCommunityMembership = false,
+) {
   return new LoyaltyActionResolver(
-    createRepos(activeMembership, campaigns) as unknown as ConstructorParameters<typeof LoyaltyActionResolver>[0],
+    createRepos(
+      activeMembership,
+      campaigns,
+      activeCommunityMembership,
+    ) as unknown as ConstructorParameters<typeof LoyaltyActionResolver>[0],
     { QR_TOKEN_SECRET: SECRET, QR_TOKEN_SECRET_PREVIOUS: undefined },
   );
 }
@@ -193,14 +217,41 @@ describe('LoyaltyActionResolver', () => {
     expect(member.surveyCampaigns).toHaveLength(1);
   });
 
-  it('fails Community survey discovery closed until Community membership exists', async () => {
+  it('exposes community_member surveys only to active Community members', async () => {
     const community = campaign('community_member', 'Community survey');
-    const result = await resolver(true, [community]).resolveBusinessForCustomer({
+
+    const nonMember = await resolver(true, [community], false).resolveBusinessForCustomer({
       businessQrToken: await businessQrToken(),
       customerId: CUSTOMER_ID,
     });
+    expect(nonMember.actions).not.toContain('TAKE_SURVEY');
+    expect(nonMember.surveyCampaigns).toEqual([]);
 
-    expect(result.actions).not.toContain('TAKE_SURVEY');
-    expect(result.surveyCampaigns).toEqual([]);
+    const member = await resolver(true, [community], true).resolveBusinessForCustomer({
+      businessQrToken: await businessQrToken(),
+      customerId: CUSTOMER_ID,
+    });
+    expect(member.actions).toContain('TAKE_SURVEY');
+    expect(member.surveyCampaigns).toHaveLength(1);
+    expect(member.surveyCampaigns[0]!.audienceClass).toBe('community_member');
+  });
+
+  it('exposes community_candidate surveys only when no active Community membership exists', async () => {
+    const candidate = campaign('community_candidate', 'Community candidate survey');
+
+    const nonMember = await resolver(false, [candidate], false).resolveBusinessForCustomer({
+      businessQrToken: await businessQrToken(),
+      customerId: CUSTOMER_ID,
+    });
+    expect(nonMember.actions).toContain('TAKE_SURVEY');
+    expect(nonMember.surveyCampaigns).toHaveLength(1);
+    expect(nonMember.surveyCampaigns[0]!.audienceClass).toBe('community_candidate');
+
+    const activeMember = await resolver(false, [candidate], true).resolveBusinessForCustomer({
+      businessQrToken: await businessQrToken(),
+      customerId: CUSTOMER_ID,
+    });
+    expect(activeMember.actions).not.toContain('TAKE_SURVEY');
+    expect(activeMember.surveyCampaigns).toEqual([]);
   });
 });

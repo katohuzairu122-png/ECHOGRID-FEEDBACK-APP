@@ -31,6 +31,7 @@ export class LoyaltyActionResolver {
       Repositories,
       | 'customers'
       | 'customerMemberships'
+      | 'communityMemberships'
       | 'loyaltyAccounts'
       | 'qrCodes'
       | 'fraudSignals'

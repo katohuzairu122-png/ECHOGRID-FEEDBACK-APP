@@ -91,19 +91,6 @@ describe.skipIf(!process.env.DATABASE_URL)('Split 05 Community repositories (int
       }),
     );
 
-    const activated = await repos.communityPointRules.updateLifecycle(globalV1.id, {
-      status: 'active',
-      activatedAt: new Date(),
-    });
-    expect(activated?.status).toBe('active');
-
-    const activeGlobal = await repos.communityPointRules.findActiveForResource(
-      'survey_completion',
-      null,
-      null,
-    );
-    expect(activeGlobal?.id).toBe(globalV1.id);
-
     const campaignId = crypto.randomUUID();
     const scoped = await repos.communityPointRules.create({
       sourceType: 'survey_completion',
@@ -116,6 +103,21 @@ describe.skipIf(!process.env.DATABASE_URL)('Split 05 Community repositories (int
     expect(
       (
         await repos.communityPointRules.findLatestVersion(
+          'survey_completion',
+          'survey_campaign',
+          campaignId,
+        )
+      )?.id,
+    ).toBe(scoped.id);
+
+    const activatedScoped = await repos.communityPointRules.updateLifecycle(scoped.id, {
+      status: 'active',
+      activatedAt: new Date(),
+    });
+    expect(activatedScoped?.status).toBe('active');
+    expect(
+      (
+        await repos.communityPointRules.findActiveForResource(
           'survey_completion',
           'survey_campaign',
           campaignId,
@@ -139,7 +141,7 @@ describe.skipIf(!process.env.DATABASE_URL)('Split 05 Community repositories (int
     const account = await repos.communityPointAccounts.findByCustomerId(customerId);
     expect(account).toBeDefined();
 
-    const rule = await repos.communityPointRules.findActiveForResource(
+    const rule = await repos.communityPointRules.findLatestVersion(
       'survey_completion',
       null,
       null,
