@@ -110,3 +110,14 @@ export const orphanSettlementEventSchema = z.object({
   createdAt: z.string(),
 });
 export type OrphanSettlementEventDto = z.infer<typeof orphanSettlementEventSchema>;
+
+
+export const orphanSettlementAccessAuthorizationSchema = z.object({
+  receivingBusinessId: z.uuid(),
+  consentVersion: z.string().trim().min(1).max(100),
+  correlationId: z.string().trim().min(8).max(200),
+  idempotencyKey: z.string().trim().min(8).max(200),
+});
+export type OrphanSettlementAccessAuthorizationInput = z.infer<
+  typeof orphanSettlementAccessAuthorizationSchema
+>;

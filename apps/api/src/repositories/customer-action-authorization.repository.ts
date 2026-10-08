@@ -6,14 +6,35 @@ export type CustomerActionAuthorization = typeof customerActionAuthorizations.$i
 export type NewCustomerActionAuthorization = typeof customerActionAuthorizations.$inferInsert;
 
 export class CustomerActionAuthorizationRepository extends BaseRepository {
+  async findByIdempotencyKey(
+    idempotencyKey: string,
+  ): Promise<CustomerActionAuthorization | undefined> {
+    return this.db.query.customerActionAuthorizations.findFirst({
+      where: eq(customerActionAuthorizations.idempotencyKey, idempotencyKey),
+    });
+  }
+
   async create(input: NewCustomerActionAuthorization): Promise<CustomerActionAuthorization> {
     if (input.idempotencyKey) {
-      const existing = await this.db.query.customerActionAuthorizations.findFirst({
-        where: eq(customerActionAuthorizations.idempotencyKey, input.idempotencyKey),
-      });
+      const [inserted] = await this.db
+        .insert(customerActionAuthorizations)
+        .values(input)
+        .onConflictDoNothing()
+        .returning();
+
+      if (inserted) return inserted;
+
+      const existing = await this.findByIdempotencyKey(input.idempotencyKey);
       if (existing) return existing;
+      throw new Error(
+        'Customer action authorization conflict did not resolve to an existing row',
+      );
     }
-    const [row] = await this.db.insert(customerActionAuthorizations).values(input).returning();
+
+    const [row] = await this.db
+      .insert(customerActionAuthorizations)
+      .values(input)
+      .returning();
     if (!row) throw new Error('Insert returned no row');
     return row;
   }
