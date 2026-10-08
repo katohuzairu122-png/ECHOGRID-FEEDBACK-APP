@@ -66,6 +66,26 @@ export class CommunityPointRuleRepository extends BaseRepository {
     });
   }
 
+  async findActiveStatusForResource(
+    sourceType: CommunityPointRule['sourceType'],
+    resourceType: CommunityPointRule['resourceType'],
+    resourceId: string | null,
+  ): Promise<CommunityPointRule | undefined> {
+    return this.db.query.communityPointRules.findFirst({
+      where: and(
+        eq(communityPointRules.sourceType, sourceType),
+        eq(communityPointRules.status, 'active'),
+        resourceType === null
+          ? isNull(communityPointRules.resourceType)
+          : eq(communityPointRules.resourceType, resourceType),
+        resourceId === null
+          ? isNull(communityPointRules.resourceId)
+          : eq(communityPointRules.resourceId, resourceId),
+      ),
+      orderBy: [desc(communityPointRules.version)],
+    });
+  }
+
   async isActiveNow(id: string, now = new Date()): Promise<CommunityPointRule | undefined> {
     return this.db.query.communityPointRules.findFirst({
       where: and(
