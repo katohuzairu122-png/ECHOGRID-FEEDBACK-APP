@@ -41,6 +41,7 @@ import { surveyCustomerRoutes } from './surveys/survey-customer.routes';
 import { communityCustomerRoutes } from './community/community-customer.routes';
 import { communityPointCustomerRoutes } from './community/community-point-customer.routes';
 import { orphanCustomerRoutes } from './orphan-settlement/orphan-customer.routes';
+import { settlementBusinessRoutes } from './orphan-settlement/settlement-business.routes';
 import { createDb } from './db/client';
 import { createRepositories } from './repositories';
 import { createSentimentService } from './sentiment/sentiment.service';
@@ -163,6 +164,7 @@ api.route('/surveys/me', surveyCustomerRoutes);
 api.route('/community/me', communityCustomerRoutes);
 api.route('/community-points/me', communityPointCustomerRoutes);
 api.route('/orphan-claims/me', orphanCustomerRoutes);
+api.route('/settlements', settlementBusinessRoutes);
 api.route('/surveys', surveyRoutes);
 api.route('/billing', billingRoutes);
 // Platform Admin Console (Blocks 2-3) -- cross-tenant, gated by
