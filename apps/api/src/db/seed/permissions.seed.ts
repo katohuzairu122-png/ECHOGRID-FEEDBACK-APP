@@ -100,6 +100,21 @@ const PERMISSIONS: NewPermission[] = [
     category: 'Billing',
   },
   {
+    key: 'settlement:view',
+    description: 'Inspect customer-authorized orphan settlement claims for this business.',
+    category: 'Settlement',
+  },
+  {
+    key: 'settlement:accept',
+    description: 'Accept a customer-authorized orphan settlement and reserve its claim.',
+    category: 'Settlement',
+  },
+  {
+    key: 'settlement:fulfill',
+    description: 'Fulfill an accepted orphan settlement after customer completion authorization.',
+    category: 'Settlement',
+  },
+  {
     key: 'messages:view',
     description: 'View customer message conversations and their contents.',
     category: 'Messages',
