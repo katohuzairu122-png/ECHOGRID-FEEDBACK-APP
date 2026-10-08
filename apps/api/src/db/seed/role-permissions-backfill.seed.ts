@@ -30,6 +30,7 @@ const DEFAULT_ROLES: Record<string, string[]> = {
     'branches:view', 'branches:manage', 'audit:view',
     'feedback:view', 'feedback:manage', 'survey:view', 'survey:manage', 'survey:responses:view', 'loyalty:view', 'loyalty:manage', 'rewards:manage',
     'analytics:view', 'analytics:manage', 'notifications:view', 'notifications:manage',
+    'settlement:view', 'settlement:accept', 'settlement:fulfill',
     'billing:view', 'billing:manage', 'messages:view', 'messages:send',
   ],
   Admin: [
@@ -38,6 +39,7 @@ const DEFAULT_ROLES: Record<string, string[]> = {
     'branches:view', 'branches:manage', 'audit:view',
     'feedback:view', 'feedback:manage', 'survey:view', 'survey:manage', 'survey:responses:view', 'loyalty:view', 'loyalty:manage', 'rewards:manage',
     'analytics:view', 'analytics:manage', 'notifications:view', 'notifications:manage',
+    'settlement:view', 'settlement:accept', 'settlement:fulfill',
     'billing:view', 'messages:view', 'messages:send',
   ],
   Manager: [
@@ -45,6 +47,7 @@ const DEFAULT_ROLES: Record<string, string[]> = {
     'branches:view', 'branches:manage',
     'feedback:view', 'feedback:manage', 'survey:view', 'survey:manage', 'survey:responses:view', 'loyalty:view', 'loyalty:manage', 'rewards:manage',
     'analytics:view', 'analytics:manage', 'notifications:view', 'notifications:manage',
+    'settlement:view', 'settlement:accept', 'settlement:fulfill',
     'messages:view', 'messages:send',
   ],
   Staff: [
