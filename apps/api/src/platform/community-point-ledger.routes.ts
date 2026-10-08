@@ -5,7 +5,7 @@ import {
 } from '@echo-grid-feedback/shared-types';
 import type { Bindings } from '../config/env';
 import { createDb } from '../db/client';
-import type { CommunityPointTransaction } from '../repositories';
+import { createRepositories, type CommunityPointTransaction } from '../repositories';
 import { authenticate, type AuthVariables } from '../middleware/authenticate';
 import {
   requirePlatformRole,
@@ -65,12 +65,6 @@ platformCommunityPointLedgerRoutes.get('/', async (c) => {
   const { limit, offset, ...filters } = parsed.data;
   const { db, close } = await createDb(c.env.HYPERDRIVE);
   try {
-    const rows = await db.query.communityPointTransactions.findMany({
-      where: undefined,
-      limit: 0,
-    });
-    void rows;
-    const { createRepositories } = await import('../repositories');
     const transactions = await createRepositories(db).communityPointTransactions.listPlatform(
       filters,
       { limit, offset },
