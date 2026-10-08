@@ -491,8 +491,8 @@ describe.skipIf(!process.env.DATABASE_URL)('Split 04 survey repositories (integr
         consentVersion: 'v1',
       }),
     ).rejects.toMatchObject({
-      code: 'SURVEY_COMMUNITY_AUDIENCE_UNAVAILABLE',
-      status: 409,
+      code: 'SURVEY_PARTICIPANT_INELIGIBLE',
+      status: 403,
     });
   });
 
