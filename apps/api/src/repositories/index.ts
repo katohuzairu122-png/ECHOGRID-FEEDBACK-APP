@@ -44,6 +44,9 @@ import { CommunityPointAccountRepository } from './community-point-account.repos
 import { CommunityPointRuleRepository } from './community-point-rule.repository';
 import { CommunityPointAwardDecisionRepository } from './community-point-award-decision.repository';
 import { CommunityPointTransactionRepository } from './community-point-transaction.repository';
+import { OrphanRewardClaimRepository } from './orphan-reward-claim.repository';
+import { OrphanSettlementRepository } from './orphan-settlement.repository';
+import { OrphanSettlementEventRepository } from './orphan-settlement-event.repository';
 
 export * from './business.repository';
 export * from './business-category.repository';
@@ -90,6 +93,9 @@ export * from './community-point-account.repository';
 export * from './community-point-rule.repository';
 export * from './community-point-award-decision.repository';
 export * from './community-point-transaction.repository';
+export * from './orphan-reward-claim.repository';
+export * from './orphan-settlement.repository';
+export * from './orphan-settlement-event.repository';
 
 /**
  * Constructs one instance of every repository, sharing a single
@@ -143,6 +149,9 @@ export function createRepositories(db: Db) {
     communityPointRules: new CommunityPointRuleRepository(db),
     communityPointAwardDecisions: new CommunityPointAwardDecisionRepository(db),
     communityPointTransactions: new CommunityPointTransactionRepository(db),
+    orphanRewardClaims: new OrphanRewardClaimRepository(db),
+    orphanSettlements: new OrphanSettlementRepository(db),
+    orphanSettlementEvents: new OrphanSettlementEventRepository(db),
   };
 }
 

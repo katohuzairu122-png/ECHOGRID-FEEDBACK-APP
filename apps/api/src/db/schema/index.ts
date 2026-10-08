@@ -17,6 +17,7 @@ export * from './feedback-forms';
 export * from './feedback-answers';
 export * from './surveys';
 export * from './community-points';
+export * from './orphan-settlement';
 export * from './feedback-summaries';
 export * from './ai-usage-log';
 export * from './critical-incidents';
