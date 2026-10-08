@@ -6,6 +6,14 @@ export type CustomerActionAuthorization = typeof customerActionAuthorizations.$i
 export type NewCustomerActionAuthorization = typeof customerActionAuthorizations.$inferInsert;
 
 export class CustomerActionAuthorizationRepository extends BaseRepository {
+  async findByIdempotencyKey(
+    idempotencyKey: string,
+  ): Promise<CustomerActionAuthorization | undefined> {
+    return this.db.query.customerActionAuthorizations.findFirst({
+      where: eq(customerActionAuthorizations.idempotencyKey, idempotencyKey),
+    });
+  }
+
   async create(input: NewCustomerActionAuthorization): Promise<CustomerActionAuthorization> {
     if (input.idempotencyKey) {
       const existing = await this.db.query.customerActionAuthorizations.findFirst({
