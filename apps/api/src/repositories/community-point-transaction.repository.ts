@@ -74,12 +74,12 @@ export class CommunityPointTransactionRepository extends BaseRepository {
 
   async listPlatform(
     filters: {
-      customerId?: string;
-      accountId?: string;
-      businessId?: string;
-      branchId?: string;
-      type?: CommunityPointTransaction['type'];
-      sourceType?: CommunityPointTransaction['sourceType'];
+      customerId?: string | undefined;
+      accountId?: string | undefined;
+      businessId?: string | undefined;
+      branchId?: string | undefined;
+      type?: CommunityPointTransaction['type'] | undefined;
+      sourceType?: CommunityPointTransaction['sourceType'] | undefined;
     } = {},
     options: { limit?: number; offset?: number } = {},
   ): Promise<CommunityPointTransaction[]> {
