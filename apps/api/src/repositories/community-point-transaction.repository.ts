@@ -1,4 +1,4 @@
-import { and, desc, eq } from 'drizzle-orm';
+import { and, desc, eq, type SQL } from 'drizzle-orm';
 import { communityPointTransactions } from '../db/schema';
 import { BaseRepository } from './base.repository';
 
@@ -66,6 +66,33 @@ export class CommunityPointTransactionRepository extends BaseRepository {
   ): Promise<CommunityPointTransaction[]> {
     return this.db.query.communityPointTransactions.findMany({
       where: eq(communityPointTransactions.customerId, customerId),
+      orderBy: [desc(communityPointTransactions.createdAt)],
+      limit: Math.min(options.limit ?? 100, 200),
+      offset: options.offset ?? 0,
+    });
+  }
+
+  async listPlatform(
+    filters: {
+      customerId?: string;
+      accountId?: string;
+      businessId?: string;
+      branchId?: string;
+      type?: CommunityPointTransaction['type'];
+      sourceType?: CommunityPointTransaction['sourceType'];
+    } = {},
+    options: { limit?: number; offset?: number } = {},
+  ): Promise<CommunityPointTransaction[]> {
+    const conditions: SQL[] = [];
+    if (filters.customerId) conditions.push(eq(communityPointTransactions.customerId, filters.customerId));
+    if (filters.accountId) conditions.push(eq(communityPointTransactions.accountId, filters.accountId));
+    if (filters.businessId) conditions.push(eq(communityPointTransactions.businessId, filters.businessId));
+    if (filters.branchId) conditions.push(eq(communityPointTransactions.branchId, filters.branchId));
+    if (filters.type) conditions.push(eq(communityPointTransactions.type, filters.type));
+    if (filters.sourceType) conditions.push(eq(communityPointTransactions.sourceType, filters.sourceType));
+
+    return this.db.query.communityPointTransactions.findMany({
+      where: conditions.length > 0 ? and(...conditions) : undefined,
       orderBy: [desc(communityPointTransactions.createdAt)],
       limit: Math.min(options.limit ?? 100, 200),
       offset: options.offset ?? 0,
