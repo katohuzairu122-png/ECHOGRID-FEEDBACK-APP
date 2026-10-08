@@ -1,4 +1,4 @@
-import { desc, eq } from 'drizzle-orm';
+import { and, desc, eq } from 'drizzle-orm';
 import { orphanRewardClaims } from '../db/schema';
 import { BaseRepository } from './base.repository';
 
@@ -9,6 +9,18 @@ export class OrphanRewardClaimRepository extends BaseRepository {
   async findById(id: string): Promise<OrphanRewardClaim | undefined> {
     return this.db.query.orphanRewardClaims.findFirst({
       where: eq(orphanRewardClaims.id, id),
+    });
+  }
+
+  async findByIdForCustomer(
+    id: string,
+    customerId: string,
+  ): Promise<OrphanRewardClaim | undefined> {
+    return this.db.query.orphanRewardClaims.findFirst({
+      where: and(
+        eq(orphanRewardClaims.id, id),
+        eq(orphanRewardClaims.customerId, customerId),
+      ),
     });
   }
 
