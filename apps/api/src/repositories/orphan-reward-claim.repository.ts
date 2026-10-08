@@ -12,6 +12,29 @@ export class OrphanRewardClaimRepository extends BaseRepository {
     });
   }
 
+  async lockForUpdate(id: string): Promise<OrphanRewardClaim | undefined> {
+    const [row] = await this.db
+      .select()
+      .from(orphanRewardClaims)
+      .where(eq(orphanRewardClaims.id, id))
+      .for('update');
+    return row;
+  }
+
+  async reserveAvailable(id: string): Promise<OrphanRewardClaim | undefined> {
+    const [row] = await this.db
+      .update(orphanRewardClaims)
+      .set({ status: 'reserved' })
+      .where(
+        and(
+          eq(orphanRewardClaims.id, id),
+          eq(orphanRewardClaims.status, 'available'),
+        ),
+      )
+      .returning();
+    return row;
+  }
+
   async findByIdForCustomer(
     id: string,
     customerId: string,

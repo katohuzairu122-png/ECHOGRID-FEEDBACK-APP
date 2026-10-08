@@ -1,4 +1,4 @@
-import { desc, eq } from 'drizzle-orm';
+import { and, desc, eq } from 'drizzle-orm';
 import { orphanSettlements } from '../db/schema';
 import { BaseRepository } from './base.repository';
 
@@ -10,6 +10,48 @@ export class OrphanSettlementRepository extends BaseRepository {
     return this.db.query.orphanSettlements.findFirst({
       where: eq(orphanSettlements.id, id),
     });
+  }
+
+  async lockForUpdate(id: string): Promise<OrphanSettlement | undefined> {
+    const [row] = await this.db
+      .select()
+      .from(orphanSettlements)
+      .where(eq(orphanSettlements.id, id))
+      .for('update');
+    return row;
+  }
+
+  async reserveProposed(
+    id: string,
+    input: {
+      receivingBranchId?: string | undefined;
+      acceptedByUserId: string;
+      acceptedAt: Date;
+      fulfillmentPolicyVersion: string;
+      fulfillmentSnapshot: Record<string, unknown>;
+      fulfillmentReference?: string | undefined;
+    },
+  ): Promise<OrphanSettlement | undefined> {
+    const [row] = await this.db
+      .update(orphanSettlements)
+      .set({
+        status: 'reserved',
+        receivingBranchId: input.receivingBranchId ?? null,
+        acceptedByUserId: input.acceptedByUserId,
+        acceptedAt: input.acceptedAt,
+        fulfillmentPolicyVersion: input.fulfillmentPolicyVersion,
+        fulfillmentSnapshot: input.fulfillmentSnapshot,
+        fulfillmentReference: input.fulfillmentReference ?? null,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(orphanSettlements.id, id),
+          eq(orphanSettlements.status, 'proposed'),
+        ),
+      )
+      .returning();
+    return row;
   }
 
   async findByIdempotencyKey(
