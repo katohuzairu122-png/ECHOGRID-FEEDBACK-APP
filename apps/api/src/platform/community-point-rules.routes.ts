@@ -1,4 +1,4 @@
-import { Hono } from 'hono';
+import { Hono, type Context } from 'hono';
 import {
   createCommunityPointRuleSchema,
   type CommunityPointRuleDto,
@@ -49,7 +49,7 @@ function serializeRule(rule: CommunityPointRule): CommunityPointRuleDto {
   };
 }
 
-function auditContext(c: Parameters<typeof ok>[0]) {
+function auditContext(c: Context<Env>) {
   return {
     actorUserId: c.get('userId') as string,
     ipAddress: c.req.header('cf-connecting-ip') ?? null,
