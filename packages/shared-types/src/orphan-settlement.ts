@@ -121,3 +121,31 @@ export const orphanSettlementAccessAuthorizationSchema = z.object({
 export type OrphanSettlementAccessAuthorizationInput = z.infer<
   typeof orphanSettlementAccessAuthorizationSchema
 >;
+
+
+export const orphanSettlementBusinessAccessSchema = z.object({
+  settlementId: z.uuid(),
+  authorizationId: z.uuid(),
+});
+export type OrphanSettlementBusinessAccessInput = z.infer<
+  typeof orphanSettlementBusinessAccessSchema
+>;
+
+export const orphanSettlementFulfillmentContractSchema = z.object({
+  benefitType: z.enum(['discount', 'free_item', 'voucher']),
+  title: z.string().trim().min(1).max(120),
+  description: z.string().trim().min(1).max(1000),
+  terms: z.string().trim().min(1).max(2000).optional(),
+  reference: z.string().trim().min(1).max(200).optional(),
+});
+export type OrphanSettlementFulfillmentContractInput = z.infer<
+  typeof orphanSettlementFulfillmentContractSchema
+>;
+
+export const orphanSettlementAcceptSchema = z.object({
+  authorizationId: z.uuid(),
+  fulfillment: orphanSettlementFulfillmentContractSchema,
+});
+export type OrphanSettlementAcceptInput = z.infer<
+  typeof orphanSettlementAcceptSchema
+>;
