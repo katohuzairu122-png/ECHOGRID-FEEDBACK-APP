@@ -19,9 +19,7 @@ export class CustomerActionAuthorizationRepository extends BaseRepository {
       const [inserted] = await this.db
         .insert(customerActionAuthorizations)
         .values(input)
-        .onConflictDoNothing({
-          target: customerActionAuthorizations.idempotencyKey,
-        })
+        .onConflictDoNothing()
         .returning();
 
       if (inserted) return inserted;
