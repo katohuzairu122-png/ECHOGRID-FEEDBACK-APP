@@ -113,7 +113,10 @@ function assertAnswerValue(question: SurveyQuestion, value: SurveyAnswerInput['v
 }
 
 export async function assertSurveyAudienceEligible(
-  repos: Pick<ReturnType<typeof createRepositories>, 'customerMemberships'>,
+  repos: Pick<
+    ReturnType<typeof createRepositories>,
+    'customerMemberships' | 'communityMemberships'
+  >,
   customerId: string,
   campaign: SurveyCampaign,
 ): Promise<void> {
@@ -146,10 +149,36 @@ export async function assertSurveyAudienceEligible(
     return;
   }
 
+  if (campaign.audienceClass === 'community_member') {
+    const membership =
+      await repos.communityMemberships.findActiveByCustomerId(customerId);
+    if (!membership) {
+      throw new AppError(
+        'An active Echo Grid Community membership is required for this survey.',
+        403,
+        'SURVEY_PARTICIPANT_INELIGIBLE',
+      );
+    }
+    return;
+  }
+
+  if (campaign.audienceClass === 'community_candidate') {
+    const membership =
+      await repos.communityMemberships.findActiveByCustomerId(customerId);
+    if (membership) {
+      throw new AppError(
+        'This survey is limited to customers who are not active Community members.',
+        403,
+        'SURVEY_PARTICIPANT_INELIGIBLE',
+      );
+    }
+    return;
+  }
+
   throw new AppError(
-    'Community survey audiences are not available until Community membership is implemented.',
-    409,
-    'SURVEY_COMMUNITY_AUDIENCE_UNAVAILABLE',
+    'Unsupported survey audience.',
+    403,
+    'SURVEY_PARTICIPANT_INELIGIBLE',
   );
 }
 
