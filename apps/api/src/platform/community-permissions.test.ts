@@ -33,6 +33,11 @@ function appFor(role: PlatformRole) {
     requireCommunityPlatformPermission('community:rules:manage'),
     (c) => c.json({ ok: true }),
   );
+  app.get(
+    '/ledger',
+    requireCommunityPlatformPermission('community:ledger:view'),
+    (c) => c.json({ ok: true }),
+  );
   return app;
 }
 
@@ -65,6 +70,14 @@ describe('Community platform permission matrix', () => {
       expect(platformRoleHasCommunityPermission('admin', permission)).toBe(true);
     }
   });
+
+  it.each(['support', 'billing', 'admin'] as const)(
+    'middleware admits %s to Community ledger inspection',
+    async (role) => {
+      const response = await appFor(role).request('/ledger');
+      expect(response.status).toBe(200);
+    },
+  );
 
   it.each(['support', 'billing'] as const)(
     'middleware rejects %s from manage authority',
