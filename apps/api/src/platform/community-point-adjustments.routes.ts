@@ -2,12 +2,15 @@ import { Hono, type Context } from 'hono';
 import {
   communityPointAdminAdjustmentSchema,
   communityPointAdminReversalSchema,
+  communityPointPlatformStateChangeSchema,
+  type CommunityMembershipDto,
   type CommunityPointAccountDto,
   type CommunityPointTransactionDto,
 } from '@echo-grid-feedback/shared-types';
 import type { Bindings } from '../config/env';
 import { createDb } from '../db/client';
 import type {
+  CommunityMembership,
   CommunityPointAccount,
   CommunityPointTransaction,
 } from '../repositories';
@@ -21,6 +24,7 @@ import { parseJsonBody } from '../lib/validate';
 import { ok } from '../lib/response';
 import { requireCommunityPlatformPermission } from './community-permissions';
 import { CommunityPointAdminAdjustmentService } from '../community/community-point-admin-adjustment.service';
+import { CommunityPlatformStateService } from '../community/community-platform-state.service';
 
 type Env = {
   Bindings: Bindings;
@@ -41,6 +45,22 @@ function auditContext(c: Context<Env>) {
     actorUserId: c.get('userId') as string,
     ipAddress: c.req.header('cf-connecting-ip') ?? null,
     userAgent: c.req.header('user-agent') ?? null,
+  };
+}
+
+function serializeMembership(
+  row: CommunityMembership,
+): CommunityMembershipDto {
+  return {
+    id: row.id,
+    customerId: row.customerId,
+    status: row.status,
+    policyVersion: row.policyVersion,
+    joinedAt: row.joinedAt.toISOString(),
+    leftAt: row.leftAt?.toISOString() ?? null,
+    suspendedAt: row.suspendedAt?.toISOString() ?? null,
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
   };
 }
 
@@ -93,6 +113,58 @@ platformCommunityPointAdjustmentRoutes.post(
       c.set('auditAlreadyRecorded', true);
       return ok(c, {
         transaction: serializeTransaction(result.transaction),
+        account: serializeAccount(result.account),
+        changed: result.changed,
+      });
+    } finally {
+      c.executionCtx.waitUntil(close());
+    }
+  },
+);
+
+platformCommunityPointAdjustmentRoutes.post(
+  '/:customerId/suspend',
+  async (c) => {
+    const body = await parseJsonBody(
+      c.req.raw,
+      communityPointPlatformStateChangeSchema,
+    );
+    const { db, close } = await createDb(c.env.HYPERDRIVE);
+    try {
+      const result = await new CommunityPlatformStateService(db).suspend(
+        c.req.param('customerId'),
+        body,
+        auditContext(c),
+      );
+      c.set('auditAlreadyRecorded', true);
+      return ok(c, {
+        membership: serializeMembership(result.membership),
+        account: serializeAccount(result.account),
+        changed: result.changed,
+      });
+    } finally {
+      c.executionCtx.waitUntil(close());
+    }
+  },
+);
+
+platformCommunityPointAdjustmentRoutes.post(
+  '/:customerId/restore',
+  async (c) => {
+    const body = await parseJsonBody(
+      c.req.raw,
+      communityPointPlatformStateChangeSchema,
+    );
+    const { db, close } = await createDb(c.env.HYPERDRIVE);
+    try {
+      const result = await new CommunityPlatformStateService(db).restore(
+        c.req.param('customerId'),
+        body,
+        auditContext(c),
+      );
+      c.set('auditAlreadyRecorded', true);
+      return ok(c, {
+        membership: serializeMembership(result.membership),
         account: serializeAccount(result.account),
         changed: result.changed,
       });
