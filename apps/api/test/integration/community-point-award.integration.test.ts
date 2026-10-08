@@ -184,7 +184,6 @@ describe.skipIf(!process.env.DATABASE_URL)(
       expect(
         await repos.loyaltyTransactions.listForAccount(
           businessLoyaltyAccountId,
-          businessId,
         ),
       ).toHaveLength(0);
     });
