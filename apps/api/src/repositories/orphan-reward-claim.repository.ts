@@ -61,7 +61,10 @@ export class OrphanRewardClaimRepository extends BaseRepository {
 
   async listForCustomer(
     customerId: string,
-    options: { limit?: number; offset?: number } = {},
+    options: {
+      limit?: number | undefined;
+      offset?: number | undefined;
+    } = {},
   ): Promise<OrphanRewardClaim[]> {
     return this.db.query.orphanRewardClaims.findMany({
       where: eq(orphanRewardClaims.customerId, customerId),
