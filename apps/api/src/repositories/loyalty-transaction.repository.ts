@@ -11,6 +11,21 @@ export type NewLoyaltyTransaction = typeof loyaltyTransactions.$inferInsert;
 const MAX_PERIOD_ROWS = 5000;
 
 export class LoyaltyTransactionRepository extends BaseRepository {
+  async findById(id: string): Promise<LoyaltyTransaction | undefined> {
+    return this.db.query.loyaltyTransactions.findFirst({
+      where: eq(loyaltyTransactions.id, id),
+    });
+  }
+
+  async lockForUpdate(id: string): Promise<LoyaltyTransaction | undefined> {
+    const [row] = await this.db
+      .select()
+      .from(loyaltyTransactions)
+      .where(eq(loyaltyTransactions.id, id))
+      .for('update');
+    return row;
+  }
+
   async create(input: NewLoyaltyTransaction): Promise<LoyaltyTransaction> {
     const [row] = await this.db.insert(loyaltyTransactions).values(input).returning();
     if (!row) throw new Error('Insert returned no row');
