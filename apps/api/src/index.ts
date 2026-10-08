@@ -29,6 +29,7 @@ import { platformBillingPlansRoutes } from './platform/billing-plans.routes';
 import { platformBillingSubscriptionsRoutes } from './platform/billing-subscriptions.routes';
 import { platformCommunityPointRulesRoutes } from './platform/community-point-rules.routes';
 import { platformCommunityPointLedgerRoutes } from './platform/community-point-ledger.routes';
+import { platformCommunityPointAdjustmentRoutes } from './platform/community-point-adjustments.routes';
 import { platformOpsRoutes } from './platform/ops.routes';
 import { billingRoutes } from './billing/billing.routes';
 import { stripeWebhookRoutes } from './billing/stripe-webhook.routes';
@@ -174,6 +175,7 @@ api.route('/platform/billing/plans', platformBillingPlansRoutes);
 api.route('/platform/billing/subscriptions', platformBillingSubscriptionsRoutes);
 api.route('/platform/community-point-rules', platformCommunityPointRulesRoutes);
 api.route('/platform/community-point-ledger', platformCommunityPointLedgerRoutes);
+api.route('/platform/community-points', platformCommunityPointAdjustmentRoutes);
 // Operations diagnostics -- admin-only, and the only platform prefix that
 // WRITES nothing and READS nothing. See ops.routes.ts for why it is gated
 // tighter than audit-log (which admits all three roles).
