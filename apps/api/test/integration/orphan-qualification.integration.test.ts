@@ -117,19 +117,27 @@ describe.skipIf(!process.env.DATABASE_URL)(
         if (businessId === archivedBusinessId && targetCustomerId === customerId) {
           accountId = archivedAccountId;
         } else {
-          const membership = await repos.customerMemberships.create({
-            customerId: targetCustomerId,
+          const existingAccount = await repos.loyaltyAccounts.findByCustomerAndBusiness(
+            targetCustomerId,
             businessId,
-            status: businessId === archivedBusinessId ? 'business_exited' : 'active',
-            onboardingSource: 'split06-qualification-helper',
-          });
-          const account = await repos.loyaltyAccounts.create({
-            customerId: targetCustomerId,
-            businessId,
-            membershipId: membership.id,
-            points: 100,
-          });
-          accountId = account.id;
+          );
+          if (existingAccount) {
+            accountId = existingAccount.id;
+          } else {
+            const membership = await repos.customerMemberships.create({
+              customerId: targetCustomerId,
+              businessId,
+              status: businessId === archivedBusinessId ? 'business_exited' : 'active',
+              onboardingSource: 'split06-qualification-helper',
+            });
+            const account = await repos.loyaltyAccounts.create({
+              customerId: targetCustomerId,
+              businessId,
+              membershipId: membership.id,
+              points: 100,
+            });
+            accountId = account.id;
+          }
         }
       }
 
