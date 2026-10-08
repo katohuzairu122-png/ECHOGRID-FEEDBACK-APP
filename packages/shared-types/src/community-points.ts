@@ -47,6 +47,21 @@ export type CommunityPointTransactionSource = z.infer<
   typeof communityPointTransactionSourceSchema
 >;
 
+
+export const communityPointLedgerQuerySchema = z.object({
+  customerId: z.uuid().optional(),
+  accountId: z.uuid().optional(),
+  businessId: z.uuid().optional(),
+  branchId: z.uuid().optional(),
+  type: communityPointTransactionTypeSchema.optional(),
+  sourceType: communityPointTransactionSourceSchema.optional(),
+  limit: z.coerce.number().int().min(1).max(200).default(100),
+  offset: z.coerce.number().int().min(0).default(0),
+});
+export type CommunityPointLedgerQuery = z.infer<
+  typeof communityPointLedgerQuerySchema
+>;
+
 export const joinCommunitySchema = z.object({
   policyVersion: z.string().trim().min(1).max(100),
 });
