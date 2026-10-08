@@ -17,7 +17,7 @@ type Env = {
 
 function appFor(role: PlatformRole) {
   const app = new Hono<Env>();
-  app.onError(errorHandler);
+  app.onError(async (error, context) => errorHandler(error, context as never));
   app.use('*', async (c, next) => {
     c.set('userId', '11111111-1111-4111-8111-111111111111');
     c.set('platformRole', role);
