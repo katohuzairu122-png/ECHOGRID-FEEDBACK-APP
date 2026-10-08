@@ -10,6 +10,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
     let client: Client;
     let db: ReturnType<typeof buildDb>;
     let actorUserId: string;
+    let campaignId: string;
 
     beforeAll(async () => {
       client = new Client({ connectionString: process.env.DATABASE_URL });
@@ -25,6 +26,37 @@ describe.skipIf(!process.env.DATABASE_URL)(
         platformRole: 'admin',
       });
       actorUserId = actor.id;
+
+      const business = await createRepositories(db).businesses.create({
+        name: 'Community Rule Admin Business',
+        slug: `community-rule-admin-${crypto.randomUUID()}`,
+      });
+      const survey = await createRepositories(db).surveys.createSurvey({
+        ownerType: 'business',
+        businessId: business.id,
+        name: 'Community Rule Admin Survey',
+        status: 'published',
+      });
+      const { version } = await createRepositories(db).surveys.createVersionWithQuestions(
+        {
+          surveyId: survey.id,
+          version: 1,
+          status: 'published',
+          title: 'Community Rule Admin Survey v1',
+          publishedAt: new Date(),
+        },
+        [],
+      );
+      const campaign = await createRepositories(db).surveys.createCampaign({
+        surveyId: survey.id,
+        surveyVersionId: version.id,
+        businessId: business.id,
+        name: 'Community Rule Admin Campaign',
+        status: 'active',
+        audienceClass: 'general_authenticated_participant',
+        repeatPolicy: 'once_per_campaign',
+      });
+      campaignId = campaign.id;
     });
 
     afterAll(async () => {
@@ -41,11 +73,21 @@ describe.skipIf(!process.env.DATABASE_URL)(
       const service = new CommunityPointRuleAdminService(db);
 
       const v1 = await service.create(
-        { sourceType: 'survey_completion', points: 40 },
+        {
+          sourceType: 'survey_completion',
+          resourceType: 'survey_campaign',
+          resourceId: campaignId,
+          points: 40,
+        },
         audit(),
       );
       const v2 = await service.create(
-        { sourceType: 'survey_completion', points: 60 },
+        {
+          sourceType: 'survey_completion',
+          resourceType: 'survey_campaign',
+          resourceId: campaignId,
+          points: 60,
+        },
         audit(),
       );
 
@@ -115,13 +157,18 @@ describe.skipIf(!process.env.DATABASE_URL)(
       const repos = createRepositories(db);
       const before = await repos.communityPointRules.findLatestVersion(
         'survey_completion',
-        null,
-        null,
+        'survey_campaign',
+        campaignId,
       );
 
       await expect(
         new CommunityPointRuleAdminService(db).create(
-          { sourceType: 'survey_completion', points: 75 },
+          {
+            sourceType: 'survey_completion',
+            resourceType: 'survey_campaign',
+            resourceId: campaignId,
+            points: 75,
+          },
           {
             actorUserId: crypto.randomUUID(),
             ipAddress: null,
@@ -132,8 +179,8 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
       const after = await repos.communityPointRules.findLatestVersion(
         'survey_completion',
-        null,
-        null,
+        'survey_campaign',
+        campaignId,
       );
 
       expect(after?.id).toBe(before?.id);
