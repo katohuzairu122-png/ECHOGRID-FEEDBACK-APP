@@ -189,6 +189,19 @@ export class CommunityPointAdminAdjustmentService {
             'COMMUNITY_ADMIN_REVERSAL_CONFLICT',
           );
         }
+
+        const replayKeyOwner =
+          await repos.communityPointTransactions.findByIdempotencyKey(
+            input.idempotencyKey,
+          );
+        if (replayKeyOwner && replayKeyOwner.id !== existingCorrection.id) {
+          throw new AppError(
+            'Community Point reversal idempotency key conflicts with another mutation.',
+            409,
+            'IDEMPOTENCY_CONFLICT',
+          );
+        }
+
         return {
           transaction: existingCorrection,
           account,
