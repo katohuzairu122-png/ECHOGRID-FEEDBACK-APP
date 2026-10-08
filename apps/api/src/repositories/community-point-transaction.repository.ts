@@ -99,6 +99,18 @@ export class CommunityPointTransactionRepository extends BaseRepository {
     });
   }
 
+  async findAdminAdjustmentBySourceRef(
+    sourceRef: string,
+  ): Promise<CommunityPointTransaction | undefined> {
+    return this.db.query.communityPointTransactions.findFirst({
+      where: and(
+        eq(communityPointTransactions.type, 'admin_adjustment'),
+        eq(communityPointTransactions.sourceType, 'admin_adjustment'),
+        eq(communityPointTransactions.sourceRef, sourceRef),
+      ),
+    });
+  }
+
   async findByAwardDecision(
     awardDecisionId: string,
   ): Promise<CommunityPointTransaction | undefined> {
