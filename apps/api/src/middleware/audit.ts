@@ -7,6 +7,9 @@ import { createRepositories } from '../repositories';
 import { AppError } from '../lib/errors';
 
 export type AuditVariables = {
+  /** Set only after a domain service has committed its semantic audit row
+   * in the same transaction as the protected mutation. */
+  auditAlreadyRecorded?: boolean;
   auditMetadata?: {
     action?: string;
     entityType?: string;
@@ -98,6 +101,7 @@ export const auditTrail = createMiddleware<{
 
   const actorUserId = c.get('userId');
   if (!actorUserId) return;
+  if (c.get('auditAlreadyRecorded')) return;
 
   try {
     const meta = c.get('auditMetadata');
