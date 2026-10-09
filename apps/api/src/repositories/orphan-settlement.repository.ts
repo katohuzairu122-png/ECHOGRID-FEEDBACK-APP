@@ -54,6 +54,31 @@ export class OrphanSettlementRepository extends BaseRepository {
     return row;
   }
 
+  async authorizeCompletionReserved(
+    id: string,
+    input: {
+      completionAuthorizationId: string;
+      completionAuthorizedAt: Date;
+    },
+  ): Promise<OrphanSettlement | undefined> {
+    const [row] = await this.db
+      .update(orphanSettlements)
+      .set({
+        status: 'completion_authorized',
+        completionAuthorizationId: input.completionAuthorizationId,
+        completionAuthorizedAt: input.completionAuthorizedAt,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(orphanSettlements.id, id),
+          eq(orphanSettlements.status, 'reserved'),
+        ),
+      )
+      .returning();
+    return row;
+  }
+
   async findByIdempotencyKey(
     idempotencyKey: string,
   ): Promise<OrphanSettlement | undefined> {
