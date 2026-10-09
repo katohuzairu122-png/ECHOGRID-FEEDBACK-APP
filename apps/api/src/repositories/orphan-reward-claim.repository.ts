@@ -35,6 +35,20 @@ export class OrphanRewardClaimRepository extends BaseRepository {
     return row;
   }
 
+  async releaseReserved(id: string): Promise<OrphanRewardClaim | undefined> {
+    const [row] = await this.db
+      .update(orphanRewardClaims)
+      .set({ status: 'available' })
+      .where(
+        and(
+          eq(orphanRewardClaims.id, id),
+          eq(orphanRewardClaims.status, 'reserved'),
+        ),
+      )
+      .returning();
+    return row;
+  }
+
   async settleReserved(
     id: string,
     settledAt: Date,
