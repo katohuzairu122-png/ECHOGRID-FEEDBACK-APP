@@ -212,10 +212,19 @@ export class OrphanSettlementRepository extends BaseRepository {
 
   async listForReceivingBusiness(
     receivingBusinessId: string,
-    options: { limit?: number; offset?: number } = {},
+    options: {
+      branchId?: string | undefined;
+      limit?: number | undefined;
+      offset?: number | undefined;
+    } = {},
   ): Promise<OrphanSettlement[]> {
     return this.db.query.orphanSettlements.findMany({
-      where: eq(orphanSettlements.receivingBusinessId, receivingBusinessId),
+      where: and(
+        eq(orphanSettlements.receivingBusinessId, receivingBusinessId),
+        options.branchId
+          ? eq(orphanSettlements.receivingBranchId, options.branchId)
+          : undefined,
+      ),
       orderBy: [desc(orphanSettlements.createdAt)],
       limit: Math.min(options.limit ?? 100, 200),
       offset: options.offset ?? 0,
