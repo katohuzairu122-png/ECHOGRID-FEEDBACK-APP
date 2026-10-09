@@ -12,6 +12,7 @@ import { rateLimit } from '../middleware/rate-limit';
 import { parseJsonBody } from '../lib/validate';
 import { ok } from '../lib/response';
 import { CustomerSettlementCompletionService } from './customer-settlement-completion.service';
+import { OrphanSettlementTerminationService } from './orphan-settlement-termination.service';
 
 type Env = {
   Bindings: Bindings;
@@ -130,4 +131,33 @@ orphanSettlementCustomerRoutes.post(
       );
     });
   },
+);
+
+
+orphanSettlementCustomerRoutes.post(
+  '/:settlementId/cancel',
+  async (c) =>
+    withDb(c, async (db) => {
+      const result =
+        await new OrphanSettlementTerminationService(db).cancelForCustomer(
+          c.get('customerId'),
+          c.req.param('settlementId'),
+        );
+
+      return ok(c, {
+        settlement: {
+          id: result.settlement.id,
+          claimId: result.settlement.claimId,
+          receivingBusinessId: result.settlement.receivingBusinessId,
+          receivingBranchId: result.settlement.receivingBranchId,
+          status: result.settlement.status,
+        },
+        claim: {
+          id: result.claim.id,
+          status: result.claim.status,
+        },
+        claimReleased: result.claimReleased,
+        changed: result.changed,
+      });
+    }),
 );
