@@ -149,3 +149,14 @@ export const orphanSettlementAcceptSchema = z.object({
 export type OrphanSettlementAcceptInput = z.infer<
   typeof orphanSettlementAcceptSchema
 >;
+
+
+export const orphanSettlementCompletionAuthorizationSchema = z.object({
+  correlationId: z.string().trim().min(8).max(200),
+  idempotencyKey: z.string().trim().min(8).max(200),
+  fulfillmentPolicyVersion: z.string().trim().min(1).max(200),
+  fulfillmentReference: z.string().trim().min(1).max(200).nullable(),
+});
+export type OrphanSettlementCompletionAuthorizationInput = z.infer<
+  typeof orphanSettlementCompletionAuthorizationSchema
+>;
