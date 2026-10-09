@@ -1,7 +1,7 @@
 # ECHO GRID — SPLIT 07: PARTNER LAYER & PARTNER CREDITS
 
-**Version:** v1.0 — ARCHITECTURE FREEZE CANDIDATE  
-**Status:** REVIEW ONLY — NOT YET FROZEN  
+**Version:** v1.0 — ARCHITECTURE FROZEN FOR IMPLEMENTATION  
+**Status:** FROZEN FOR IMPLEMENTATION — on finalization PR merge  
 **Repository:** `katohuzairu122-png/ECHOGRID-FEEDBACK-APP`  
 **Target:** `main`  
 **Predecessors:** Splits 01–06 (preserve their locked interfaces)  
@@ -13,7 +13,7 @@ This specification adds a platform-administered Partner Layer for receiving busi
 
 Split 07 owns enrollment, eligibility, policy versioning, issuance decisions, provisional/available credits, append-only credit history, reversal/recovery obligations, benefit eligibility statements, and business-facing inspection. It owns **no** subscription charges, invoices, discounts applied, Stripe state, cash conversions, business loyalty, Community Point mutations, or orphan settlement transitions.
 
-This document is an architecture-only review candidate. Its numerical settings are approved for architecture review by the project request, but become operational policy only after formal architecture freeze, implementation, tests, operational approvals, and separate Split 08 freeze for billing application.
+This document is the architecture baseline for implementation following the finalization PR merge. Its numerical settings are frozen for Split 07 design, but become operational only after implementation, tests, operational approvals, and a separate Split 08 freeze for billing application.
 
 ## 2. Existing repository reconciliation
 
@@ -149,4 +149,4 @@ Do not expose financial benefit redemption or write Stripe state before **separa
 
 ## 14. Freeze process
 
-This PR is **architecture only**, not an implementation or activation authorization. Review this proposal against economic margin exposure and operational obligations. After approval, merge to main with required CI/reviews, record freeze commit and set status to `FROZEN FOR IMPLEMENTATION` through an explicit documentation change if needed. Only then plan additive Split 07 implementation blocks; Split 08 remains separately gated.
+This finalization remains **architecture only**, not implementation or activation authorization. Freeze becomes effective **only when this finalization PR merges into main following review and CI**. The merge commit is the freeze anchor. Implement additive Split 07 blocks through separate gated PRs. Split 08 remains independently frozen and tested before any invoice or Stripe effects.
