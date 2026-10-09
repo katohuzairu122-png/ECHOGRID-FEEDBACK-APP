@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, lte } from 'drizzle-orm';
 import { orphanSettlements } from '../db/schema';
 import { BaseRepository } from './base.repository';
 
@@ -105,6 +105,50 @@ export class OrphanSettlementRepository extends BaseRepository {
       )
       .returning();
     return row;
+  }
+
+  async terminatePreFulfillment(
+    id: string,
+    status: 'cancelled' | 'expired',
+  ): Promise<OrphanSettlement | undefined> {
+    const [row] = await this.db
+      .update(orphanSettlements)
+      .set({
+        status,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(orphanSettlements.id, id),
+          inArray(orphanSettlements.status, [
+            'proposed',
+            'accepted',
+            'reserved',
+            'completion_authorized',
+          ]),
+        ),
+      )
+      .returning();
+    return row;
+  }
+
+  async listExpiredActive(
+    cutoff: Date,
+    limit = 100,
+  ): Promise<OrphanSettlement[]> {
+    return this.db.query.orphanSettlements.findMany({
+      where: and(
+        inArray(orphanSettlements.status, [
+          'proposed',
+          'accepted',
+          'reserved',
+          'completion_authorized',
+        ]),
+        lte(orphanSettlements.expiresAt, cutoff),
+      ),
+      orderBy: [asc(orphanSettlements.expiresAt)],
+      limit: Math.min(limit, 500),
+    });
   }
 
   async findByIdempotencyKey(
