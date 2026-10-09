@@ -478,6 +478,69 @@ describe.skipIf(!process.env.DATABASE_URL)(
       ).toBe('active');
     });
 
+    it('scopes receiving-business settlement history to trusted branch context', async () => {
+      const firstClaim = await createClaim();
+      const firstProposal = await propose(
+        firstClaim.customerId,
+        firstClaim.claim.id,
+        receivingBusinessId,
+      );
+      const first = await new ReceivingBusinessSettlementService(
+        db,
+      ).acceptAndReserve({
+        businessId: receivingBusinessId,
+        branchId: receivingBranchId,
+        actorUserId,
+        settlementId: firstProposal.settlement.id,
+        acceptance: {
+          authorizationId: firstProposal.authorization.id,
+          fulfillment,
+        },
+      });
+
+      const secondClaim = await createClaim();
+      const secondProposal = await propose(
+        secondClaim.customerId,
+        secondClaim.claim.id,
+        receivingBusinessId,
+      );
+      const second = await new ReceivingBusinessSettlementService(
+        db,
+      ).acceptAndReserve({
+        businessId: receivingBusinessId,
+        branchId: otherReceivingBranchId,
+        actorUserId,
+        settlementId: secondProposal.settlement.id,
+        acceptance: {
+          authorizationId: secondProposal.authorization.id,
+          fulfillment,
+        },
+      });
+
+      const branchA =
+        await repos.orphanSettlements.listForReceivingBusiness(
+          receivingBusinessId,
+          { branchId: receivingBranchId, limit: 200 },
+        );
+      const branchB =
+        await repos.orphanSettlements.listForReceivingBusiness(
+          receivingBusinessId,
+          { branchId: otherReceivingBranchId, limit: 200 },
+        );
+      const businessWide =
+        await repos.orphanSettlements.listForReceivingBusiness(
+          receivingBusinessId,
+          { limit: 200 },
+        );
+
+      expect(branchA.some((row) => row.id === first.settlement.id)).toBe(true);
+      expect(branchA.some((row) => row.id === second.settlement.id)).toBe(false);
+      expect(branchB.some((row) => row.id === second.settlement.id)).toBe(true);
+      expect(branchB.some((row) => row.id === first.settlement.id)).toBe(false);
+      expect(businessWide.some((row) => row.id === first.settlement.id)).toBe(true);
+      expect(businessWide.some((row) => row.id === second.settlement.id)).toBe(true);
+    });
+
     it('does not mutate either business loyalty or Community Point ledgers during acceptance', async () => {
       const created = await createClaim();
       const proposal = await propose(

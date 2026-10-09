@@ -498,6 +498,8 @@ export const loyaltyResolvedActionSchema = z.enum([
   'VALIDATE_PURCHASE',
   'GRANT_LOYALTY_PROGRESS',
   'REDEEM_REWARD',
+  'REQUEST_ORPHAN_SETTLEMENT_ACCESS',
+  'SETTLE_ORPHAN_REWARD',
 ]);
 
 

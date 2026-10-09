@@ -15,7 +15,9 @@ export type LoyaltyResolvedAction =
   | 'VIEW_ALLOWED_MEMBERSHIP_STATE'
   | 'VALIDATE_PURCHASE'
   | 'GRANT_LOYALTY_PROGRESS'
-  | 'REDEEM_REWARD';
+  | 'REDEEM_REWARD'
+  | 'REQUEST_ORPHAN_SETTLEMENT_ACCESS'
+  | 'SETTLE_ORPHAN_REWARD';
 
 export interface ResolvedSurveyCampaign {
   campaignId: string;
@@ -36,6 +38,8 @@ export class LoyaltyActionResolver {
       | 'qrCodes'
       | 'fraudSignals'
       | 'surveys'
+      | 'businesses'
+      | 'orphanRewardClaims'
     >,
     private readonly secrets: Pick<Bindings, 'QR_TOKEN_SECRET' | 'QR_TOKEN_SECRET_PREVIOUS'>,
   ) {}
@@ -77,6 +81,13 @@ export class LoyaltyActionResolver {
       if (input.permissions.has('loyalty:manage')) {
         actions.push('VALIDATE_PURCHASE', 'GRANT_LOYALTY_PROGRESS');
       }
+    }
+
+    // Split 06: capability only. Never query orphan claims here, otherwise
+    // the mere presence/absence of this action would leak whether the scanned
+    // customer owns orphan value before consent.
+    if (input.permissions.has('settlement:view')) {
+      actions.push('REQUEST_ORPHAN_SETTLEMENT_ACCESS');
     }
 
     return {
@@ -140,6 +151,19 @@ export class LoyaltyActionResolver {
       actions.unshift('OPEN_LOYALTY_CARD', 'VIEW_REWARDS', 'CHECK_IN');
     }
     if (surveyCampaigns.length > 0) actions.push('TAKE_SURVEY');
+
+    // Split 06: customer-side QR action is eligible only when the scanned
+    // business is currently active and the customer owns at least one
+    // available orphan claim from a different origin business. No claim ID,
+    // reward value, settlement ID, or authorization state is returned.
+    const receivingBusiness = await this.repos.businesses.findById(qrCode.businessId);
+    const canSettleOrphan =
+      receivingBusiness?.status === 'active' &&
+      (await this.repos.orphanRewardClaims.existsAvailableForCustomerExcludingBusiness(
+        input.customerId,
+        qrCode.businessId,
+      ));
+    if (canSettleOrphan) actions.push('SETTLE_ORPHAN_REWARD');
 
     return {
       businessId: qrCode.businessId,

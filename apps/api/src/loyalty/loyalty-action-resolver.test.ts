@@ -40,6 +40,8 @@ function createRepos(
   activeMembership: boolean,
   campaigns = [] as ReturnType<typeof campaign>[],
   activeCommunityMembership = false,
+  hasAvailableOrphan = false,
+  receivingBusinessStatus: 'active' | 'suspended' | 'archived' = 'active',
 ) {
   const customer = { id: CUSTOMER_ID, status: 'active' };
   const membership = activeMembership
@@ -110,6 +112,25 @@ function createRepos(
         return businessId === BUSINESS_ID && branchId === BRANCH_ID ? campaigns : [];
       },
     },
+    businesses: {
+      async findById(id: string) {
+        return id === BUSINESS_ID
+          ? { id: BUSINESS_ID, status: receivingBusinessStatus, isDeleted: false }
+          : undefined;
+      },
+    },
+    orphanRewardClaims: {
+      async existsAvailableForCustomerExcludingBusiness(
+        customerId: string,
+        excludedOriginBusinessId: string,
+      ) {
+        return (
+          customerId === CUSTOMER_ID &&
+          excludedOriginBusinessId === BUSINESS_ID &&
+          hasAvailableOrphan
+        );
+      },
+    },
   };
 }
 
@@ -117,12 +138,16 @@ function resolver(
   activeMembership: boolean,
   campaigns = [] as ReturnType<typeof campaign>[],
   activeCommunityMembership = false,
+  hasAvailableOrphan = false,
+  receivingBusinessStatus: 'active' | 'suspended' | 'archived' = 'active',
 ) {
   return new LoyaltyActionResolver(
     createRepos(
       activeMembership,
       campaigns,
       activeCommunityMembership,
+      hasAvailableOrphan,
+      receivingBusinessStatus,
     ) as unknown as ConstructorParameters<typeof LoyaltyActionResolver>[0],
     { QR_TOKEN_SECRET: SECRET, QR_TOKEN_SECRET_PREVIOUS: undefined },
   );
@@ -153,6 +178,30 @@ describe('LoyaltyActionResolver', () => {
     ]);
   });
 
+  it('offers settlement-access request from staff capability without querying customer orphan ownership', async () => {
+    const token = await signCustomerQrToken(CUSTOMER_ID, SECRET);
+    const result = await resolver(false, [], false, false).resolveCustomerForStaff({
+      customerQrToken: token,
+      businessId: BUSINESS_ID,
+      permissions: new Set(['loyalty:view', 'settlement:view']),
+    });
+
+    expect(result.membershipStatus).toBe('none');
+    expect(result.loyaltyAccountId).toBeNull();
+    expect(result.actions).toEqual(['REQUEST_ORPHAN_SETTLEMENT_ACCESS']);
+  });
+
+  it('does not expose settlement-access request when staff lacks settlement:view', async () => {
+    const token = await signCustomerQrToken(CUSTOMER_ID, SECRET);
+    const result = await resolver(false, [], false, true).resolveCustomerForStaff({
+      customerQrToken: token,
+      businessId: BUSINESS_ID,
+      permissions: new Set(['loyalty:view']),
+    });
+
+    expect(result.actions).not.toContain('REQUEST_ORPHAN_SETTLEMENT_ACCESS');
+  });
+
   it('does not expose loyalty actions when this business has no relationship', async () => {
     const token = await signCustomerQrToken(CUSTOMER_ID, SECRET);
     const result = await resolver(false).resolveCustomerForStaff({
@@ -172,6 +221,38 @@ describe('LoyaltyActionResolver', () => {
     });
     expect(result.actions).toEqual(['JOIN_LOYALTY', 'LEAVE_FEEDBACK']);
     expect(result.surveyCampaigns).toEqual([]);
+  });
+
+  it('exposes SETTLE_ORPHAN_REWARD only when an available claim exists for another origin business', async () => {
+    const none = await resolver(false, [], false, false).resolveBusinessForCustomer({
+      businessQrToken: await businessQrToken(),
+      customerId: CUSTOMER_ID,
+    });
+    expect(none.actions).not.toContain('SETTLE_ORPHAN_REWARD');
+
+    const eligible = await resolver(false, [], false, true).resolveBusinessForCustomer({
+      businessQrToken: await businessQrToken(),
+      customerId: CUSTOMER_ID,
+    });
+    expect(eligible.actions).toContain('SETTLE_ORPHAN_REWARD');
+    expect(eligible).not.toHaveProperty('claimId');
+    expect(eligible).not.toHaveProperty('settlementId');
+    expect(eligible).not.toHaveProperty('rewardValue');
+  });
+
+  it('does not expose SETTLE_ORPHAN_REWARD for an inactive receiving business', async () => {
+    const result = await resolver(
+      false,
+      [],
+      false,
+      true,
+      'suspended',
+    ).resolveBusinessForCustomer({
+      businessQrToken: await businessQrToken(),
+      customerId: CUSTOMER_ID,
+    });
+
+    expect(result.actions).not.toContain('SETTLE_ORPHAN_REWARD');
   });
 
   it('exposes a general authenticated survey to a non-member without granting authority in the QR', async () => {

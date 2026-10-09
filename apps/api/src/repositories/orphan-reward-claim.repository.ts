@@ -1,4 +1,4 @@
-import { and, desc, eq } from 'drizzle-orm';
+import { and, desc, eq, ne } from 'drizzle-orm';
 import { orphanRewardClaims } from '../db/schema';
 import { BaseRepository } from './base.repository';
 
@@ -99,6 +99,21 @@ export class OrphanRewardClaimRepository extends BaseRepository {
         eq(orphanRewardClaims.customerId, customerId),
       ),
     });
+  }
+
+  async existsAvailableForCustomerExcludingBusiness(
+    customerId: string,
+    excludedOriginBusinessId: string,
+  ): Promise<boolean> {
+    const row = await this.db.query.orphanRewardClaims.findFirst({
+      where: and(
+        eq(orphanRewardClaims.customerId, customerId),
+        eq(orphanRewardClaims.status, 'available'),
+        ne(orphanRewardClaims.originBusinessId, excludedOriginBusinessId),
+      ),
+      columns: { id: true },
+    });
+    return row !== undefined;
   }
 
   async findBySourceTransaction(
