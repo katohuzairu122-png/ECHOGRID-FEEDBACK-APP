@@ -293,8 +293,8 @@ export class OrphanSettlementReversalService {
       event.receivingBusinessId !== settlement.receivingBusinessId ||
       event.receivingBranchId !== settlement.receivingBranchId ||
       event.actorUserId !== audit.actorUserId ||
-      event.metadata.reasonCode !== input.reasonCode ||
-      event.metadata.evidenceReference !== input.evidenceReference
+      event.metadata?.reasonCode !== input.reasonCode ||
+      event.metadata?.evidenceReference !== input.evidenceReference
     ) {
       throw new AppError(
         'Settlement reversal idempotency conflicts with another reversal.',
@@ -323,8 +323,8 @@ export class OrphanSettlementReversalService {
       );
     }
 
-    const reasonCode = event.metadata.reasonCode;
-    const evidenceReference = event.metadata.evidenceReference;
+    const reasonCode = event.metadata?.reasonCode;
+    const evidenceReference = event.metadata?.evidenceReference;
     if (
       typeof reasonCode !== 'string' ||
       typeof evidenceReference !== 'string'
