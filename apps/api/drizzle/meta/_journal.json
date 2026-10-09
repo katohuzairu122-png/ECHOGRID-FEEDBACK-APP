@@ -281,6 +281,13 @@
       "when": 1791478800000,
       "tag": "0039_split06_orphan_settlement",
       "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1791583200000,
+      "tag": "0040_split07_partner_credit_foundations",
+      "breakpoints": true
     }
   ]
 }
