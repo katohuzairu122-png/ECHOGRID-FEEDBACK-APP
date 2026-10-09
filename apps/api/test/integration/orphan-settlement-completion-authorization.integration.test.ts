@@ -359,6 +359,39 @@ describe.skipIf(!process.env.DATABASE_URL)(
       ).toHaveLength(2);
     });
 
+    it('cannot reuse one completion idempotency key across another settlement or claim', async () => {
+      const first = await createReservedSettlement();
+      const second = await createReservedSettlement();
+      const service = new CustomerSettlementCompletionService(db);
+      const sharedInput = completionInput(first.fulfillment.reference);
+
+      await service.authorizeCompletion(
+        first.customerId,
+        first.accepted.settlement.id,
+        sharedInput,
+      );
+
+      await expect(
+        service.authorizeCompletion(
+          second.customerId,
+          second.accepted.settlement.id,
+          {
+            ...sharedInput,
+            fulfillmentReference: second.fulfillment.reference,
+          },
+        ),
+      ).rejects.toMatchObject({
+        status: 409,
+        code: 'ORPHAN_COMPLETION_IDEMPOTENCY_CONFLICT',
+      });
+
+      expect(
+        (await repos.orphanSettlements.findById(
+          second.accepted.settlement.id,
+        ))?.status,
+      ).toBe('reserved');
+    });
+
     it('does not mutate business loyalty or Community Point ledgers during completion authorization', async () => {
       const fixture = await createReservedSettlement();
       const loyaltyBefore = await repos.loyaltyTransactions.listForAccount(
