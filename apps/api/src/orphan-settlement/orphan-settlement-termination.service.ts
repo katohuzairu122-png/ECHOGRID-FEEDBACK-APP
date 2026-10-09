@@ -43,15 +43,19 @@ export class OrphanSettlementTerminationService {
     });
   }
 
-  async expireDue(now = new Date(), limit = 100): Promise<number> {
+  async expireDue(
+    now = new Date(),
+    limit = 100,
+  ): Promise<{ expired: number; blocked: number }> {
     const repos = createRepositories(this.db);
     const due = await repos.orphanSettlements.listExpiredActive(now, limit);
-    let changed = 0;
+    let expired = 0;
+    let blocked = 0;
 
     for (const settlement of due) {
       try {
         const result = await this.expireSettlement(settlement.id, now);
-        if (result.changed) changed += 1;
+        if (result.changed) expired += 1;
       } catch (error) {
         // Fail closed per the frozen claim-expiry boundary. A due reservation
         // whose underlying claim is no longer releasable is left untouched
@@ -61,13 +65,14 @@ export class OrphanSettlementTerminationService {
           error instanceof AppError &&
           error.code === 'ORPHAN_CLAIM_NOT_RELEASABLE'
         ) {
+          blocked += 1;
           continue;
         }
         throw error;
       }
     }
 
-    return changed;
+    return { expired, blocked };
   }
 
   private async terminate(input: {
