@@ -17,6 +17,7 @@ import { requirePermission } from '../middleware/require-permission';
 import { parseJsonBody } from '../lib/validate';
 import { ok } from '../lib/response';
 import { ReceivingBusinessSettlementService } from './receiving-business-settlement.service';
+import { OrphanSettlementFulfillmentService } from './orphan-settlement-fulfillment.service';
 
 type Env = {
   Bindings: Bindings;
@@ -118,4 +119,46 @@ settlementBusinessRoutes.post(
       });
     });
   },
+);
+
+
+settlementBusinessRoutes.post(
+  '/:settlementId/fulfill',
+  requirePermission('settlement:fulfill'),
+  async (c) =>
+    withDb(c, async (db) => {
+      const result = await new OrphanSettlementFulfillmentService(db).fulfill({
+        businessId: c.get('businessId'),
+        ...(c.get('branchId') !== undefined
+          ? { branchId: c.get('branchId') }
+          : {}),
+        actorUserId: c.get('userId'),
+        settlementId: c.req.param('settlementId'),
+      });
+
+      return ok(c, {
+        settlement: {
+          id: result.settlement.id,
+          claimId: result.settlement.claimId,
+          receivingBusinessId: result.settlement.receivingBusinessId,
+          receivingBranchId: result.settlement.receivingBranchId,
+          status: result.settlement.status,
+          fulfilledByUserId: result.settlement.fulfilledByUserId,
+          fulfilledAt: result.settlement.fulfilledAt?.toISOString() ?? null,
+          fulfillmentPolicyVersion:
+            result.settlement.fulfillmentPolicyVersion,
+          fulfillmentReference: result.settlement.fulfillmentReference,
+        },
+        claim: {
+          id: result.claim.id,
+          status: result.claim.status,
+          settledAt: result.claim.settledAt?.toISOString() ?? null,
+        },
+        completionEvidence: {
+          evidenceVersion: result.evidence.evidenceVersion,
+          settlementRef: result.evidence.settlementRef,
+        },
+        changed: result.changed,
+      });
+    }),
 );
