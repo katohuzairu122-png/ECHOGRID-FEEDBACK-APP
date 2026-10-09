@@ -151,6 +151,25 @@ export class OrphanSettlementRepository extends BaseRepository {
     });
   }
 
+  async reverseFulfilled(
+    id: string,
+  ): Promise<OrphanSettlement | undefined> {
+    const [row] = await this.db
+      .update(orphanSettlements)
+      .set({
+        status: 'reversed',
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(orphanSettlements.id, id),
+          eq(orphanSettlements.status, 'fulfilled'),
+        ),
+      )
+      .returning();
+    return row;
+  }
+
   async findByIdempotencyKey(
     idempotencyKey: string,
   ): Promise<OrphanSettlement | undefined> {
