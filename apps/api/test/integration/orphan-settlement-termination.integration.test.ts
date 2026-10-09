@@ -315,6 +315,65 @@ describe.skipIf(!process.env.DATABASE_URL)(
       ).toBe('reserved');
     });
 
+    it('hides another customer settlement and rolls back on conflicting cancellation history', async () => {
+      const fixture = await authorizeCompletion(
+        await reserve(await createProposal()),
+      );
+      const otherCustomer = await repos.customers.create({
+        phone: `+1593${Math.floor(Math.random() * 9_000_000 + 1_000_000)}`,
+        phoneVerifiedAt: new Date(),
+      });
+      const service = new OrphanSettlementTerminationService(db);
+
+      await expect(
+        service.cancelForCustomer(
+          otherCustomer.id,
+          fixture.accepted.settlement.id,
+        ),
+      ).rejects.toMatchObject({
+        status: 404,
+        code: 'ORPHAN_SETTLEMENT_NOT_FOUND',
+      });
+
+      await repos.orphanSettlementEvents.appendIdempotent({
+        claimId: fixture.claim.id,
+        settlementId: fixture.accepted.settlement.id,
+        customerId: fixture.customerId,
+        eventType: 'settlement_cancelled',
+        originBusinessId,
+        receivingBusinessId,
+        actorUserId,
+        customerActionAuthorizationId: fixture.completion.authorization.id,
+        idempotencyKey: `settlement-cancelled:${fixture.accepted.settlement.id}`,
+      });
+
+      await expect(
+        service.cancelForCustomer(
+          fixture.customerId,
+          fixture.accepted.settlement.id,
+        ),
+      ).rejects.toMatchObject({
+        status: 409,
+        code: 'ORPHAN_SETTLEMENT_EVENT_CONFLICT',
+      });
+
+      expect(
+        (
+          await repos.customerActionAuthorizations.findById(
+            fixture.completion.authorization.id,
+          )
+        )?.status,
+      ).toBe('active');
+      expect(
+        (await repos.orphanSettlements.findById(
+          fixture.accepted.settlement.id,
+        ))?.status,
+      ).toBe('completion_authorized');
+      expect(
+        (await repos.orphanRewardClaims.findById(fixture.claim.id))?.status,
+      ).toBe('reserved');
+    });
+
     it('does not cancel fulfilled settlements', async () => {
       const fixture = await authorizeCompletion(
         await reserve(await createProposal()),
