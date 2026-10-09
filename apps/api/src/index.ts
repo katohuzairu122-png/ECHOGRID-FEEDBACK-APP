@@ -616,12 +616,20 @@ async function scheduled(event: ScheduledController, env: Bindings, ctx: Executi
 async function sweepExpiredOrphanSettlements(env: Bindings): Promise<void> {
   const { db, close } = await createDb(env.HYPERDRIVE);
   try {
-    const expired = await new OrphanSettlementTerminationService(db).expireDue(
-      new Date(),
-      100,
-    );
-    if (expired > 0) {
-      console.log(`Expired ${expired} orphan settlement reservation(s).`);
+    const result =
+      await new OrphanSettlementTerminationService(db).expireDue(
+        new Date(),
+        100,
+      );
+    if (result.expired > 0) {
+      console.log(
+        `Expired ${result.expired} orphan settlement reservation(s).`,
+      );
+    }
+    if (result.blocked > 0) {
+      console.warn(
+        `Blocked expiry for ${result.blocked} orphan settlement reservation(s) pending explicit claim policy.`,
+      );
     }
   } finally {
     await close();
