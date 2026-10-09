@@ -1,4 +1,4 @@
-import { and, desc, eq } from 'drizzle-orm';
+import { and, desc, eq, inArray } from 'drizzle-orm';
 import { orphanSettlements } from '../db/schema';
 import { BaseRepository } from './base.repository';
 
@@ -48,6 +48,34 @@ export class OrphanSettlementRepository extends BaseRepository {
         and(
           eq(orphanSettlements.id, id),
           eq(orphanSettlements.status, 'proposed'),
+        ),
+      )
+      .returning();
+    return row;
+  }
+
+  async authorizeCompletion(
+    id: string,
+    input: {
+      completionAuthorizationId: string;
+      completionAuthorizedAt: Date;
+    },
+  ): Promise<OrphanSettlement | undefined> {
+    const [row] = await this.db
+      .update(orphanSettlements)
+      .set({
+        status: 'completion_authorized',
+        completionAuthorizationId: input.completionAuthorizationId,
+        completionAuthorizedAt: input.completionAuthorizedAt,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(orphanSettlements.id, id),
+          inArray(orphanSettlements.status, [
+            'reserved',
+            'completion_authorized',
+          ]),
         ),
       )
       .returning();
