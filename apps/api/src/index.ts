@@ -43,6 +43,7 @@ import { communityPointCustomerRoutes } from './community/community-point-custom
 import { orphanCustomerRoutes } from './orphan-settlement/orphan-customer.routes';
 import { orphanSettlementCustomerRoutes } from './orphan-settlement/orphan-settlement-customer.routes';
 import { settlementBusinessRoutes } from './orphan-settlement/settlement-business.routes';
+import { OrphanSettlementTerminationService } from './orphan-settlement/orphan-settlement-termination.service';
 import { createDb } from './db/client';
 import { createRepositories } from './repositories';
 import { createSentimentService } from './sentiment/sentiment.service';
@@ -508,6 +509,18 @@ async function scheduled(event: ScheduledController, env: Bindings, ctx: Executi
         () => sweepStalePendingAiUsage(env),
       ),
     );
+    ctx.waitUntil(
+      alertOnFailure(
+        env,
+        {
+          event: 'cron.orphan_settlement_expiry_sweep_failed',
+          severity: 'warning',
+          message: 'The orphan-settlement expiry sweep failed.',
+          detail: { cron: event.cron },
+        },
+        () => sweepExpiredOrphanSettlements(env),
+      ),
+    );
     return;
   }
 
@@ -600,6 +613,21 @@ async function scheduled(event: ScheduledController, env: Bindings, ctx: Executi
  * transient database error simply means the next run picks up the same
  * rows -- they are, by definition, not going anywhere.
  */
+async function sweepExpiredOrphanSettlements(env: Bindings): Promise<void> {
+  const { db, close } = await createDb(env.HYPERDRIVE);
+  try {
+    const expired = await new OrphanSettlementTerminationService(db).expireDue(
+      new Date(),
+      100,
+    );
+    if (expired > 0) {
+      console.log(`Expired ${expired} orphan settlement reservation(s).`);
+    }
+  } finally {
+    await close();
+  }
+}
+
 async function sweepStalePendingAiUsage(env: Bindings): Promise<void> {
   const cutoff = new Date(Date.now() - STALE_PENDING_MINUTES * 60 * 1000);
   const { db, close } = await createDb(env.HYPERDRIVE);
