@@ -35,6 +35,19 @@ export class OrphanSettlementReversalService {
   ): Promise<OrphanSettlementReversalResult> {
     const committed = await this.db.transaction(async (tx) => {
       const repos = createRepositories(tx);
+      const actor = await repos.users.findById(audit.actorUserId);
+      if (
+        !actor ||
+        actor.status !== 'active' ||
+        actor.platformRole !== 'admin'
+      ) {
+        throw new AppError(
+          'Only an active platform administrator may reverse a fulfilled orphan settlement.',
+          403,
+          'ORPHAN_SETTLEMENT_REVERSAL_AUTHORITY_REQUIRED',
+        );
+      }
+
       const settlement = await repos.orphanSettlements.lockForUpdate(
         settlementId,
       );
