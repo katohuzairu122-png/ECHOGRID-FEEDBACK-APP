@@ -49,6 +49,26 @@ export class OrphanRewardClaimRepository extends BaseRepository {
     return row;
   }
 
+  async reverseSettled(
+    id: string,
+    reversedAt: Date,
+  ): Promise<OrphanRewardClaim | undefined> {
+    const [row] = await this.db
+      .update(orphanRewardClaims)
+      .set({
+        status: 'reversed',
+        reversedAt,
+      })
+      .where(
+        and(
+          eq(orphanRewardClaims.id, id),
+          eq(orphanRewardClaims.status, 'settled'),
+        ),
+      )
+      .returning();
+    return row;
+  }
+
   async settleReserved(
     id: string,
     settledAt: Date,
