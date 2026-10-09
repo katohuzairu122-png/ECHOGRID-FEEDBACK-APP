@@ -211,6 +211,14 @@ export class CustomerSettlementCompletionService {
         claimId: claim!.id,
       });
 
+      if (!this.isUsable(authorization)) {
+        throw new AppError(
+          'The completion authorization idempotency key resolves to an authorization that is no longer usable.',
+          409,
+          'ORPHAN_COMPLETION_IDEMPOTENCY_CONFLICT',
+        );
+      }
+
       if (
         authorization.correlationId !== input.correlationId ||
         authorization.idempotencyKey !== authorizationKey
