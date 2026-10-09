@@ -45,3 +45,4 @@ export * from './messages';
 export * from './visit-sessions';
 export * from './relations';
 
+export * from './partner-credits';

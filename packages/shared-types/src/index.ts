@@ -34,3 +34,5 @@ export * from './surveys';
 
 export * from './community-points';
 export * from './orphan-settlement';
+
+export * from './partner-credits';

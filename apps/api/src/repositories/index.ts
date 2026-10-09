@@ -1,3 +1,4 @@
+import { PartnerCreditRepository } from './partner-credit.repository';
 import type { Db } from '../db/client';
 import { BusinessRepository } from './business.repository';
 import { BusinessCategoryRepository } from './business-category.repository';
@@ -96,6 +97,7 @@ export * from './community-point-transaction.repository';
 export * from './orphan-reward-claim.repository';
 export * from './orphan-settlement.repository';
 export * from './orphan-settlement-event.repository';
+export * from './partner-credit.repository';
 
 /**
  * Constructs one instance of every repository, sharing a single
@@ -152,6 +154,7 @@ export function createRepositories(db: Db) {
     orphanRewardClaims: new OrphanRewardClaimRepository(db),
     orphanSettlements: new OrphanSettlementRepository(db),
     orphanSettlementEvents: new OrphanSettlementEventRepository(db),
+    partnerCredits: new PartnerCreditRepository(db),
   };
 }
 
