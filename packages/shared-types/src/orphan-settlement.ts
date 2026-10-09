@@ -160,3 +160,24 @@ export const orphanSettlementCompletionAuthorizationSchema = z.object({
 export type OrphanSettlementCompletionAuthorizationInput = z.infer<
   typeof orphanSettlementCompletionAuthorizationSchema
 >;
+
+
+/**
+ * Stable, value-neutral handoff emitted only after terminal orphan settlement
+ * fulfillment commits. Downstream consumers must re-resolve settlementRef.
+ */
+export const orphanSettlementCompletionEvidenceSchema = z.object({
+  evidenceVersion: z.literal('v1'),
+  settlementRef: z.uuid(),
+  claimId: z.uuid(),
+  customerId: z.uuid(),
+  originBusinessId: z.uuid(),
+  receivingBusinessId: z.uuid(),
+  receivingBranchId: z.uuid().nullable(),
+  fulfilledAt: z.string(),
+  fulfillmentPolicyVersion: z.string().min(1),
+  fulfillmentReference: z.string().nullable(),
+});
+export type OrphanSettlementCompletionEvidence = z.infer<
+  typeof orphanSettlementCompletionEvidenceSchema
+>;
