@@ -5,6 +5,7 @@ import {
 } from '@echo-grid-feedback/shared-types';
 import type { Bindings } from '../config/env';
 import { createDb, type Database } from '../db/client';
+import { createRepositories } from '../repositories';
 import {
   authenticate,
   type AuthVariables,
@@ -16,6 +17,7 @@ import {
 import { requirePermission } from '../middleware/require-permission';
 import { parseJsonBody } from '../lib/validate';
 import { ok } from '../lib/response';
+import { AppError } from '../lib/errors';
 import { ReceivingBusinessSettlementService } from './receiving-business-settlement.service';
 import { OrphanSettlementFulfillmentService } from './orphan-settlement-fulfillment.service';
 
@@ -39,6 +41,69 @@ async function withDb<T>(
     c.executionCtx.waitUntil(close());
   }
 }
+
+function parsePagination(c: Context<Env>) {
+  const limit =
+    c.req.query('limit') === undefined ? 100 : Number(c.req.query('limit'));
+  const offset =
+    c.req.query('offset') === undefined ? 0 : Number(c.req.query('offset'));
+
+  if (
+    !Number.isInteger(limit) ||
+    limit < 1 ||
+    limit > 200 ||
+    !Number.isInteger(offset) ||
+    offset < 0
+  ) {
+    throw new AppError('Invalid pagination.', 400, 'PAGINATION_INVALID');
+  }
+
+  return { limit, offset };
+}
+
+settlementBusinessRoutes.get(
+  '/',
+  requirePermission('settlement:view'),
+  async (c) => {
+    const pagination = parsePagination(c);
+
+    return withDb(c, async (db) => {
+      const rows = await createRepositories(db).orphanSettlements.listForReceivingBusiness(
+        c.get('businessId'),
+        {
+          ...(c.get('branchId') !== undefined
+            ? { branchId: c.get('branchId') }
+            : {}),
+          ...pagination,
+        },
+      );
+
+      return ok(c, {
+        settlements: rows.map((row) => ({
+          id: row.id,
+          claimId: row.claimId,
+          receivingBusinessId: row.receivingBusinessId,
+          receivingBranchId: row.receivingBranchId,
+          status: row.status,
+          acceptedAt: row.acceptedAt?.toISOString() ?? null,
+          completionAuthorizedAt:
+            row.completionAuthorizedAt?.toISOString() ?? null,
+          fulfilledAt: row.fulfilledAt?.toISOString() ?? null,
+          fulfillmentPolicyVersion: row.fulfillmentPolicyVersion,
+          fulfillmentSnapshot: row.fulfillmentSnapshot,
+          fulfillmentReference: row.fulfillmentReference,
+          expiresAt: row.expiresAt.toISOString(),
+          createdAt: row.createdAt.toISOString(),
+          updatedAt: row.updatedAt.toISOString(),
+        })),
+        pagination: {
+          ...pagination,
+          returned: rows.length,
+        },
+      });
+    });
+  },
+);
 
 settlementBusinessRoutes.post(
   '/access',
