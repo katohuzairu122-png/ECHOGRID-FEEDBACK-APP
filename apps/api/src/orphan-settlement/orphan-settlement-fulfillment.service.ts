@@ -250,6 +250,13 @@ export class OrphanSettlementFulfillmentService {
   ): Promise<OrphanSettlementCompletionEvidence> {
     const repos = createRepositories(this.db);
     const settlement = await repos.orphanSettlements.findById(settlementRef);
+    if (settlement?.status === 'reversed') {
+      throw new AppError(
+        'Orphan settlement completion evidence has been invalidated by reversal.',
+        409,
+        'ORPHAN_SETTLEMENT_COMPLETION_EVIDENCE_INVALIDATED',
+      );
+    }
     if (
       !settlement ||
       settlement.status !== 'fulfilled' ||
