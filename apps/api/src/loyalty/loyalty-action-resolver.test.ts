@@ -41,6 +41,7 @@ function createRepos(
   campaigns = [] as ReturnType<typeof campaign>[],
   activeCommunityMembership = false,
   hasAvailableOrphan = false,
+  receivingBusinessStatus: 'active' | 'suspended' | 'archived' = 'active',
 ) {
   const customer = { id: CUSTOMER_ID, status: 'active' };
   const membership = activeMembership
@@ -114,7 +115,7 @@ function createRepos(
     businesses: {
       async findById(id: string) {
         return id === BUSINESS_ID
-          ? { id: BUSINESS_ID, status: 'active', isDeleted: false }
+          ? { id: BUSINESS_ID, status: receivingBusinessStatus, isDeleted: false }
           : undefined;
       },
     },
@@ -138,6 +139,7 @@ function resolver(
   campaigns = [] as ReturnType<typeof campaign>[],
   activeCommunityMembership = false,
   hasAvailableOrphan = false,
+  receivingBusinessStatus: 'active' | 'suspended' | 'archived' = 'active',
 ) {
   return new LoyaltyActionResolver(
     createRepos(
@@ -145,6 +147,7 @@ function resolver(
       campaigns,
       activeCommunityMembership,
       hasAvailableOrphan,
+      receivingBusinessStatus,
     ) as unknown as ConstructorParameters<typeof LoyaltyActionResolver>[0],
     { QR_TOKEN_SECRET: SECRET, QR_TOKEN_SECRET_PREVIOUS: undefined },
   );
@@ -235,6 +238,21 @@ describe('LoyaltyActionResolver', () => {
     expect(eligible).not.toHaveProperty('claimId');
     expect(eligible).not.toHaveProperty('settlementId');
     expect(eligible).not.toHaveProperty('rewardValue');
+  });
+
+  it('does not expose SETTLE_ORPHAN_REWARD for an inactive receiving business', async () => {
+    const result = await resolver(
+      false,
+      [],
+      false,
+      true,
+      'suspended',
+    ).resolveBusinessForCustomer({
+      businessQrToken: await businessQrToken(),
+      customerId: CUSTOMER_ID,
+    });
+
+    expect(result.actions).not.toContain('SETTLE_ORPHAN_REWARD');
   });
 
   it('exposes a general authenticated survey to a non-member without granting authority in the QR', async () => {
