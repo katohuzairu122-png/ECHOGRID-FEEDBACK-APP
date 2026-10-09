@@ -181,3 +181,32 @@ export const orphanSettlementCompletionEvidenceSchema = z.object({
 export type OrphanSettlementCompletionEvidence = z.infer<
   typeof orphanSettlementCompletionEvidenceSchema
 >;
+
+
+export const orphanSettlementReversalSchema = z.object({
+  reasonCode: z.string().trim().min(1).max(120),
+  evidenceReference: z.string().trim().min(1).max(500),
+  idempotencyKey: z.string().trim().min(8).max(200),
+  note: z.string().trim().min(1).max(2000).optional(),
+});
+export type OrphanSettlementReversalInput = z.infer<
+  typeof orphanSettlementReversalSchema
+>;
+
+export const orphanSettlementReversalEvidenceSchema = z.object({
+  evidenceVersion: z.literal('v1'),
+  settlementRef: z.uuid(),
+  claimId: z.uuid(),
+  customerId: z.uuid(),
+  originBusinessId: z.uuid(),
+  receivingBusinessId: z.uuid(),
+  receivingBranchId: z.uuid().nullable(),
+  originalFulfilledAt: z.string(),
+  reversedAt: z.string(),
+  reversalRef: z.uuid(),
+  reasonCode: z.string().min(1),
+  evidenceReference: z.string().min(1),
+});
+export type OrphanSettlementReversalEvidence = z.infer<
+  typeof orphanSettlementReversalEvidenceSchema
+>;
