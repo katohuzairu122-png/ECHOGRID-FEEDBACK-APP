@@ -1,4 +1,4 @@
-import { and, desc, eq } from 'drizzle-orm';
+import { and, desc, eq, inArray } from 'drizzle-orm';
 import { orphanSettlements } from '../db/schema';
 import { BaseRepository } from './base.repository';
 
@@ -54,7 +54,7 @@ export class OrphanSettlementRepository extends BaseRepository {
     return row;
   }
 
-  async authorizeCompletionReserved(
+  async authorizeCompletion(
     id: string,
     input: {
       completionAuthorizationId: string;
@@ -72,7 +72,10 @@ export class OrphanSettlementRepository extends BaseRepository {
       .where(
         and(
           eq(orphanSettlements.id, id),
-          eq(orphanSettlements.status, 'reserved'),
+          inArray(orphanSettlements.status, [
+            'reserved',
+            'completion_authorized',
+          ]),
         ),
       )
       .returning();
