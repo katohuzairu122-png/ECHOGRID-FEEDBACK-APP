@@ -162,11 +162,11 @@ describe.skipIf(!url)('Split 07 positive/concurrent provisional awards — isola
   }, 120000);
 
   it('enforces ten successful awards across eleven concurrent settlements and two branches', async () => {
-    const evidence=await Promise.all(Array.from({length:10},(_,i)=>fixture(branchIds[i%2]!)));
+    const evidence=await Promise.all(Array.from({length:11},(_,i)=>fixture(branchIds[i%2]!)));
     const results=await Promise.all(evidence.map(async row=>
       new PartnerProvisionalAwardService(await newDb()).decide(row)));
     expect(results.filter(r=>r.state==='provisional')).toHaveLength(9);
-    expect(results.filter(r=>r.state==='cap_exceeded')).toHaveLength(1);
+    expect(results.filter(r=>r.state==='cap_exceeded')).toHaveLength(2);
     const summary=await query<{awarded:string,provisional:string,available:string}>(
       `SELECT
        (SELECT coalesce(sum(award_units),0)::text FROM partner_credit_award_decisions WHERE business_id=$1) awarded,
@@ -174,6 +174,24 @@ describe.skipIf(!url)('Split 07 positive/concurrent provisional awards — isola
        (SELECT available::text FROM partner_credit_accounts WHERE business_id=$1) available`,[receiverId]);
     expect(summary.rows[0]).toMatchObject({awarded:'10',provisional:'10',available:'0'});
   }, 180000);
+
+  it('rolls back decision and lot when the ledger idempotency insert conflicts', async () => {
+    const evidence=await fixture(branchIds[0]!);
+    const account=await query<{id:string}>(
+      'SELECT id FROM partner_credit_accounts WHERE business_id=$1',[receiverId]);
+    accountId=account.rows[0]!.id;
+    const key='partner-provisional:v1:'+evidence.settlementRef;
+    await query(
+      "INSERT INTO partner_credit_ledger(account_id,entry_type,units,idempotency_key) VALUES($1,'provisional',1,$2)",
+      [accountId,key]);
+    const db=await newDb();
+    await expect(new PartnerProvisionalAwardService(db).decide(evidence)).rejects.toBeDefined();
+    const state=await query<{decisions:string,lots:string}>(
+      `SELECT (SELECT count(*)::text FROM partner_credit_award_decisions WHERE settlement_ref=$1) decisions,
+        (SELECT count(*)::text FROM partner_credit_lots l JOIN partner_credit_award_decisions d ON d.id=l.decision_id WHERE d.settlement_ref=$1) lots`,
+      [evidence.settlementRef]);
+    expect(state.rows[0]).toMatchObject({decisions:'0',lots:'0'});
+  }, 120000);
 
   it('rejects authoritative reversal before awarding any credits', async () => {
     const evidence=await fixture(branchIds[1]!);
