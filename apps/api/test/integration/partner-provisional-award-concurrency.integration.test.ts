@@ -162,22 +162,6 @@ describe.skipIf(!url)('Split 07 positive/concurrent provisional awards — isola
     expect(rows.rows[0]).toMatchObject({decisions:'1',lots:'1',ledger:'1',provisional:'1',available:'0'});
   }, 120000);
 
-  it('refuses early vesting and early expiration without credit mutations', async () => {
-    const evidence=await fixture(branchIds[0]!);
-    const db=await newDb();
-    const award=await new PartnerProvisionalAwardService(db).decide(evidence);
-    expect(award.state).toBe('provisional');
-    const lifecycle=new PartnerCreditLifecycleService(db);
-    await expect(lifecycle.vest(award.decisionId,new Date()))
-      .rejects.toThrow('PARTNER_VEST_NOT_ELIGIBLE');
-    await expect(lifecycle.expire(award.decisionId,new Date()))
-      .rejects.toThrow('PARTNER_EXPIRY_NOT_VESTED');
-    const balance=await query<{available:string;provisional:string}>(
-      'SELECT available::text,provisional::text FROM partner_credit_accounts WHERE business_id=$1',
-      [receiverId]);
-    expect(balance.rows[0]).toMatchObject({available:'0',provisional:'2'});
-  },120000);
-
   it('rolls back decision and lot when the ledger idempotency insert conflicts', async () => {
     const evidence=await fixture(branchIds[0]!);
     const account=await query<{id:string}>(
@@ -227,6 +211,23 @@ describe.skipIf(!url)('Split 07 positive/concurrent provisional awards — isola
       [receiverId,'PC-ECON/1',actorId,new Date(Date.now()-3600_000)],
     );
   }
+
+  it('refuses early vesting and early expiration without credit mutations', async () => {
+    await resetReceivingBusinessForReversalTests();
+    const evidence=await fixture(branchIds[0]!);
+    const db=await newDb();
+    const award=await new PartnerProvisionalAwardService(db).decide(evidence);
+    expect(award.state).toBe('provisional');
+    const lifecycle=new PartnerCreditLifecycleService(db);
+    await expect(lifecycle.vest(award.decisionId,new Date()))
+      .rejects.toThrow('PARTNER_VEST_NOT_ELIGIBLE');
+    await expect(lifecycle.expire(award.decisionId,new Date()))
+      .rejects.toThrow('PARTNER_EXPIRY_NOT_VESTED');
+    const balance=await query<{available:string;provisional:string}>(
+      'SELECT available::text,provisional::text FROM partner_credit_accounts WHERE business_id=$1',
+      [receiverId]);
+    expect(balance.rows[0]).toMatchObject({available:'0',provisional:'1'});
+  },120000);
 
   it('atomically compensates a prior provisional award when Split 06 reverses settlement', async () => {
     await resetReceivingBusinessForReversalTests();
