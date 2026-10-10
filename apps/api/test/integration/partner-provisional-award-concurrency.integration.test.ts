@@ -229,6 +229,37 @@ describe.skipIf(!url)('Split 07 positive/concurrent provisional awards — isola
     expect(balance.rows[0]).toMatchObject({available:'0',provisional:'1'});
   },120000);
 
+  it('moves one due provisional unit to available and expires at UTC anniversary exactly once', async () => {
+    await resetReceivingBusinessForReversalTests();
+    const evidence=await fixture(branchIds[0]!);
+    const db=await newDb();
+    const award=await new PartnerProvisionalAwardService(db).decide(evidence);
+    expect(award.state).toBe('provisional');
+    const lifecycle=new PartnerCreditLifecycleService(db);
+    const vestNow=new Date(Date.parse(evidence.fulfilledAt)+15*86400_000);
+    expect(await lifecycle.vest(award.decisionId,vestNow)).toBe('vested');
+    expect(await lifecycle.vest(award.decisionId,vestNow)).toBe('already_vested');
+    const before=await query<{provisional:string;available:string;expires_at:Date}>(
+      `SELECT a.provisional::text,a.available::text,l.expires_at
+       FROM partner_credit_accounts a JOIN partner_credit_lots l ON l.account_id=a.id
+       WHERE a.business_id=$1 AND l.decision_id=$2`,[receiverId,award.decisionId]);
+    expect(before.rows[0]).toMatchObject({provisional:'0',available:'1'});
+    const expiresAt=before.rows[0]!.expires_at;
+    await expect(lifecycle.expire(award.decisionId,new Date(expiresAt.getTime()-1)))
+      .rejects.toThrow('PARTNER_EXPIRY_NOT_ELIGIBLE');
+    expect(await lifecycle.expire(award.decisionId,expiresAt)).toBe('expired');
+    expect(await lifecycle.expire(award.decisionId,expiresAt)).toBe('already_expired');
+    const after=await query<{provisional:string;available:string;lot_status:string;vests:string;expiries:string}>(
+      `SELECT a.provisional::text,a.available::text,l.status AS lot_status,
+        (SELECT count(*)::text FROM partner_credit_ledger WHERE decision_id=$2 AND entry_type='vest') AS vests,
+        (SELECT count(*)::text FROM partner_credit_ledger WHERE decision_id=$2 AND entry_type='expire') AS expiries
+       FROM partner_credit_accounts a JOIN partner_credit_lots l ON l.account_id=a.id
+       WHERE a.business_id=$1 AND l.decision_id=$2`,[receiverId,award.decisionId]);
+    expect(after.rows[0]).toMatchObject({
+      provisional:'0',available:'0',lot_status:'expired',vests:'1',expiries:'1',
+    });
+  },120000);
+
   it('atomically compensates a prior provisional award when Split 06 reverses settlement', async () => {
     await resetReceivingBusinessForReversalTests();
     const evidence=await fixture(branchIds[0]!);
