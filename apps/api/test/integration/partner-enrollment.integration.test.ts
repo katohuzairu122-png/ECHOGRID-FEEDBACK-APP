@@ -21,13 +21,13 @@ describe.skipIf(!process.env.DATABASE_URL)('Split 07 Block 2 enrollment authorit
   afterAll(async () => { if (client) await client.end(); });
 
   it('denies enrollment with a non-admin platform actor', async () => {
-    await expect(service.enroll({ businessId, consentingUserId:userId, platformAdminId:userId, policyVersion:'PC-ECON/1' }))
+    await expect(service.enroll({ businessId, consentingUserId:userId, platformAdminId:userId, policyVersion:'PC-ECON/1', acceptanceRef: crypto.randomUUID() }))
       .rejects.toThrow('PARTNER_ENROLLMENT_ADMIN_REQUIRED');
   });
   it('does not accept an unrelated business user even if a platform admin invokes it', async () => {
     const admin = await client.query<{id:string}>('INSERT INTO users(email,password_hash,full_name,status,platform_role) VALUES($1,$2,$3,$4,$5) RETURNING id',
       ['s07-platform-'+crypto.randomUUID()+'@example.test','unused','Platform Admin','active','admin']);
-    await expect(service.enroll({businessId,consentingUserId:userId,platformAdminId:admin.rows[0]!.id,policyVersion:'PC-ECON/1'}))
+    await expect(service.enroll({businessId,consentingUserId:userId,platformAdminId:admin.rows[0]!.id,policyVersion:'PC-ECON/1',acceptanceRef:crypto.randomUUID()}))
       .rejects.toThrow('PARTNER_ENROLLMENT_BUSINESS_WIDE_CONSENT_REQUIRED');
     expect(await service.findForBusiness(businessId)).toBeUndefined();
   });
