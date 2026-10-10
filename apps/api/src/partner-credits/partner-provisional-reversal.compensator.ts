@@ -71,7 +71,9 @@ export class PartnerProvisionalReversalCompensator {
       availableUnits: 0,
     }).where(eq(partnerCreditLots.id, lot.id));
     await tx.update(partnerCreditAccounts).set({
-      provisional: sql`${partnerCreditAccounts.provisional} - 1`,
+      ...(decision.state === 'provisional'
+        ? { provisional: sql`${partnerCreditAccounts.provisional} - 1` }
+        : { available: sql`${partnerCreditAccounts.available} - 1` }),
       updatedAt: new Date(),
     }).where(eq(partnerCreditAccounts.id, account.id));
     await tx.update(partnerCreditAwardDecisions).set({ state: 'reversed' })
