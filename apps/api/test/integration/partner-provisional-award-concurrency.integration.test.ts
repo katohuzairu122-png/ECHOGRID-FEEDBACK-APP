@@ -180,6 +180,62 @@ describe.skipIf(!url)('Split 07 positive/concurrent provisional awards — isola
   }, 120000);
 
 
+  it('atomically compensates a prior provisional award when Split 06 reverses settlement', async () => {
+    const evidence=await fixture(branchIds[0]!);
+    const db=await newDb();
+    const awarded=await new PartnerProvisionalAwardService(db).decide(evidence);
+    expect(awarded.state).toBe('provisional');
+    const result=await new OrphanSettlementReversalService(db).reverse(evidence.settlementRef,{
+      reasonCode:'verified-fraud', evidenceReference:'s07-prior-award-'+crypto.randomUUID(),
+      idempotencyKey:'s07-compensate-'+crypto.randomUUID(),
+    },{actorUserId:platformAdminId});
+    expect(result.changed).toBe(true);
+    const state=await query<{
+      decision_state:string; lot_state:string; account_provisional:string;
+      ledger_sum:string; reversals:string;
+    }>(`SELECT
+       (SELECT state FROM partner_credit_award_decisions WHERE settlement_ref=$1) decision_state,
+       (SELECT l.status FROM partner_credit_lots l JOIN partner_credit_award_decisions d ON d.id=l.decision_id WHERE d.settlement_ref=$1) lot_state,
+       (SELECT provisional::text FROM partner_credit_accounts WHERE business_id=$2) account_provisional,
+       (SELECT sum(l.units)::text FROM partner_credit_ledger l JOIN partner_credit_award_decisions d ON d.id=l.decision_id WHERE d.settlement_ref=$1) ledger_sum,
+       (SELECT count(*)::text FROM partner_credit_ledger l JOIN partner_credit_award_decisions d ON d.id=l.decision_id WHERE d.settlement_ref=$1 AND l.entry_type='reverse') reversals`,
+      [evidence.settlementRef,receiverId]);
+    expect(state.rows[0]).toMatchObject({
+      decision_state:'reversed',lot_state:'reversed',account_provisional:'1',
+      ledger_sum:'0',reversals:'1',
+    });
+  },120000);
+
+  it('serializes simultaneous award versus authorized reversal without stranded credit', async () => {
+    const evidence=await fixture(branchIds[1]!);
+    const awardDb=await newDb(), reversalDb=await newDb();
+    const input={
+      reasonCode:'verified-fraud' as const,
+      evidenceReference:'s07-race-'+crypto.randomUUID(),
+      idempotencyKey:'s07-race-'+crypto.randomUUID(),
+    };
+    const [award,reversal]=await Promise.allSettled([
+      new PartnerProvisionalAwardService(awardDb).decide(evidence),
+      new OrphanSettlementReversalService(reversalDb).reverse(
+        evidence.settlementRef,input,{actorUserId:platformAdminId}),
+    ]);
+    expect(reversal.status).toBe('fulfilled');
+    if(reversal.status==='fulfilled') expect(reversal.value.changed).toBe(true);
+    // Either reversal locks first and the award fails closed, or award locks
+    // first and the same reversal transaction compensates it.
+    if(award.status==='fulfilled') expect(award.value.state).toBe('provisional');
+    const state=await query<{
+      decision_state:string|null; ledger_sum:string|null; reversal_count:string;
+    }>(`SELECT
+      (SELECT state FROM partner_credit_award_decisions WHERE settlement_ref=$1) decision_state,
+      (SELECT sum(l.units)::text FROM partner_credit_ledger l JOIN partner_credit_award_decisions d ON d.id=l.decision_id WHERE d.settlement_ref=$1) ledger_sum,
+      (SELECT count(*)::text FROM orphan_settlement_events WHERE settlement_id=$1 AND event_type='settlement_reversed') reversal_count`,[evidence.settlementRef]);
+    expect(state.rows[0]!.reversal_count).toBe('1');
+    if(state.rows[0]!.decision_state !== null) {
+      expect(state.rows[0]).toMatchObject({decision_state:'reversed',ledger_sum:'0'});
+    }
+  },120000);
+
   it('enforces ten successful awards across eleven concurrent settlements and two branches', async () => {
     const evidence=await Promise.all(Array.from({length:11},(_,i)=>fixture(branchIds[i%2]!)));
     const results=await Promise.all(evidence.map(async row=>
