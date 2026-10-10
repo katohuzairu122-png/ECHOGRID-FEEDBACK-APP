@@ -232,6 +232,25 @@ jobs:
       - name: Integration tests -- API (real Postgres)
         run: pnpm --filter @echo-grid-feedback/api test:integration
 
+      # Split 07: a distinct disposable database is required because the
+      # positive award tests temporarily disable four Block 1 denial triggers.
+      # NEVER run these tests against DATABASE_URL or any persistent database.
+      - name: Create isolated Partner Award test database
+        env:
+          PGPASSWORD: echogrid
+        run: |
+          psql -h localhost -p 5432 -U echogrid -d echogrid_test -v ON_ERROR_STOP=1 -c 'CREATE DATABASE echogrid_partner_award_test'
+
+      - name: Migrate isolated Partner Award test database
+        env:
+          DATABASE_URL: postgresql://echogrid:echogrid@localhost:5432/echogrid_partner_award_test
+        run: pnpm --filter @echo-grid-feedback/api db:migrate
+
+      - name: Validate provisional award positive, 11-way concurrency and rollback
+        env:
+          PARTNER_AWARD_TEST_DATABASE_URL: postgresql://echogrid:echogrid@localhost:5432/echogrid_partner_award_test
+        run: pnpm --filter @echo-grid-feedback/api exec vitest run --config vitest.integration.config.ts test/integration/partner-provisional-award-concurrency.integration.test.ts
+
       # ---- build gate ---------------------------------------------------
       # The gap this closes: deploy-api ran as soon as verify passed, and
       # deploy-web only discovered a broken build afterwards -- leaving a
