@@ -9,6 +9,7 @@ import { CustomerSettlementCompletionService } from '../../src/orphan-settlement
 import { OrphanSettlementFulfillmentService } from '../../src/orphan-settlement/orphan-settlement-fulfillment.service';
 import { OrphanSettlementReversalService } from '../../src/orphan-settlement/orphan-settlement-reversal.service';
 import { PartnerProvisionalAwardService } from '../../src/partner-credits/partner-provisional-award.service';
+import { PartnerCreditLifecycleService } from '../../src/partner-credits/partner-credit-lifecycle.service';
 import type { OrphanSettlementCompletionEvidence } from '@echo-grid-feedback/shared-types';
 
 /**
@@ -160,6 +161,22 @@ describe.skipIf(!url)('Split 07 positive/concurrent provisional awards — isola
     `,[evidence.settlementRef,receiverId]);
     expect(rows.rows[0]).toMatchObject({decisions:'1',lots:'1',ledger:'1',provisional:'1',available:'0'});
   }, 120000);
+
+  it('refuses early vesting and early expiration without credit mutations', async () => {
+    const evidence=await fixture(branchIds[0]!);
+    const db=await newDb();
+    const award=await new PartnerProvisionalAwardService(db).decide(evidence);
+    expect(award.state).toBe('provisional');
+    const lifecycle=new PartnerCreditLifecycleService(db);
+    await expect(lifecycle.vest(award.decisionId,new Date()))
+      .rejects.toThrow('PARTNER_VEST_NOT_ELIGIBLE');
+    await expect(lifecycle.expire(award.decisionId,new Date()))
+      .rejects.toThrow('PARTNER_EXPIRY_NOT_VESTED');
+    const balance=await query<{available:string;provisional:string}>(
+      'SELECT available::text,provisional::text FROM partner_credit_accounts WHERE business_id=$1',
+      [receiverId]);
+    expect(balance.rows[0]).toMatchObject({available:'0',provisional:'2'});
+  },120000);
 
   it('rolls back decision and lot when the ledger idempotency insert conflicts', async () => {
     const evidence=await fixture(branchIds[0]!);
