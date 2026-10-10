@@ -360,6 +360,9 @@ describe.skipIf(!url)('Split 07 positive/concurrent provisional awards — isola
     await query("UPDATE partner_credit_award_decisions SET state='vested' WHERE id=$1",[award.decisionId]);
     await query("UPDATE partner_credit_lots SET status='consumed',available_units=0 WHERE decision_id=$1",[award.decisionId]);
     await query("UPDATE partner_credit_accounts SET provisional=provisional-1 WHERE business_id=$1",[receiverId]);
+    const obligationCountBefore = (await query<{count:string}>(
+      'SELECT count(*)::text AS count FROM partner_credit_recovery_obligations'
+    )).rows[0]!.count;
     await expect(new OrphanSettlementReversalService(db).reverse(evidence.settlementRef,{
       reasonCode:'verified-fraud',evidenceReference:'consumed-'+crypto.randomUUID(),
       idempotencyKey:'s07-consumed-'+crypto.randomUUID(),
@@ -371,7 +374,7 @@ describe.skipIf(!url)('Split 07 positive/concurrent provisional awards — isola
        (SELECT count(*)::text FROM orphan_settlement_events WHERE settlement_id=$1 AND event_type='settlement_reversed') reversals,
        (SELECT count(*)::text FROM partner_credit_recovery_obligations) recovery`,
       [evidence.settlementRef,award.decisionId]);
-    expect(row.rows[0]).toMatchObject({settlement:'fulfilled',claim:'settled',decision:'vested',reversals:'0',recovery:'0'});
+    expect(row.rows[0]).toMatchObject({settlement:'fulfilled',claim:'settled',decision:'vested',reversals:'0',recovery:obligationCountBefore});
   },120000);
 
   it('serializes simultaneous award versus authorized reversal without stranded credit', async () => {
