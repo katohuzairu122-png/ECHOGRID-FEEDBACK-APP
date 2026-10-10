@@ -33,6 +33,7 @@ import { platformCommunityPointAdjustmentRoutes } from './platform/community-poi
 import { platformOpsRoutes } from './platform/ops.routes';
 import { platformOrphanSettlementRoutes } from './platform/orphan-settlement.routes';
 import { billingRoutes } from './billing/billing.routes';
+import { partnerConsentRoutes } from './partner-credits/partner-consent.routes';
 import { stripeWebhookRoutes } from './billing/stripe-webhook.routes';
 import { messagingRoutes } from './messaging/messaging.routes';
 import { messagingCustomerRoutes } from './messaging/messaging-customer.routes';
@@ -171,6 +172,7 @@ api.route('/orphan-settlements', orphanSettlementCustomerRoutes);
 api.route('/settlements', settlementBusinessRoutes);
 api.route('/surveys', surveyRoutes);
 api.route('/billing', billingRoutes);
+api.route('/partner-credits/consent', partnerConsentRoutes);
 // Platform Admin Console (Blocks 2-3) -- cross-tenant, gated by
 // requirePlatformRole, not resolveTenantContext. Two files, one prefix each,
 // matching the loyalty/loyalty-customer split's precedent of separate route
