@@ -10,6 +10,7 @@ import {
   type OrphanSettlementEvent,
 } from '../repositories';
 import { AppError } from '../lib/errors';
+import { PartnerProvisionalReversalCompensator } from '../partner-credits/partner-provisional-reversal.compensator';
 
 export interface OrphanSettlementReversalAuditContext {
   actorUserId: string;
@@ -167,6 +168,15 @@ export class OrphanSettlementReversalService {
         input,
         audit,
       );
+
+      // Explicit Split 07-owned compensating transition inside the same
+      // authoritative Split 06 transaction: any failure rolls back BOTH.
+      // No economic issuance is enabled by adding this integration.
+      await new PartnerProvisionalReversalCompensator().compensate(tx, {
+        settlementRef: reversedSettlement.id,
+        businessId: reversedSettlement.receivingBusinessId,
+        reversalEventId: eventResult.event.id,
+      });
 
       await repos.auditLog.record({
         businessId: reversedSettlement.receivingBusinessId,
