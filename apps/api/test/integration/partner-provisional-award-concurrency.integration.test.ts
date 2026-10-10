@@ -161,20 +161,6 @@ describe.skipIf(!url)('Split 07 positive/concurrent provisional awards — isola
     expect(rows.rows[0]).toMatchObject({decisions:'1',lots:'1',ledger:'1',provisional:'1',available:'0'});
   }, 120000);
 
-  it('enforces ten successful awards across eleven concurrent settlements and two branches', async () => {
-    const evidence=await Promise.all(Array.from({length:11},(_,i)=>fixture(branchIds[i%2]!)));
-    const results=await Promise.all(evidence.map(async row=>
-      new PartnerProvisionalAwardService(await newDb()).decide(row)));
-    expect(results.filter(r=>r.state==='provisional')).toHaveLength(9);
-    expect(results.filter(r=>r.state==='cap_exceeded')).toHaveLength(2);
-    const summary=await query<{awarded:string,provisional:string,available:string}>(
-      `SELECT
-       (SELECT coalesce(sum(award_units),0)::text FROM partner_credit_award_decisions WHERE business_id=$1) awarded,
-       (SELECT provisional::text FROM partner_credit_accounts WHERE business_id=$1) provisional,
-       (SELECT available::text FROM partner_credit_accounts WHERE business_id=$1) available`,[receiverId]);
-    expect(summary.rows[0]).toMatchObject({awarded:'10',provisional:'10',available:'0'});
-  }, 180000);
-
   it('rolls back decision and lot when the ledger idempotency insert conflicts', async () => {
     const evidence=await fixture(branchIds[0]!);
     const account=await query<{id:string}>(
@@ -192,6 +178,21 @@ describe.skipIf(!url)('Split 07 positive/concurrent provisional awards — isola
       [evidence.settlementRef]);
     expect(state.rows[0]).toMatchObject({decisions:'0',lots:'0'});
   }, 120000);
+
+
+  it('enforces ten successful awards across eleven concurrent settlements and two branches', async () => {
+    const evidence=await Promise.all(Array.from({length:11},(_,i)=>fixture(branchIds[i%2]!)));
+    const results=await Promise.all(evidence.map(async row=>
+      new PartnerProvisionalAwardService(await newDb()).decide(row)));
+    expect(results.filter(r=>r.state==='provisional')).toHaveLength(9);
+    expect(results.filter(r=>r.state==='cap_exceeded')).toHaveLength(2);
+    const summary=await query<{awarded:string,provisional:string,available:string}>(
+      `SELECT
+       (SELECT coalesce(sum(award_units),0)::text FROM partner_credit_award_decisions WHERE business_id=$1) awarded,
+       (SELECT provisional::text FROM partner_credit_accounts WHERE business_id=$1) provisional,
+       (SELECT available::text FROM partner_credit_accounts WHERE business_id=$1) available`,[receiverId]);
+    expect(summary.rows[0]).toMatchObject({awarded:'10',provisional:'10',available:'0'});
+  }, 180000);
 
   it('rejects authoritative reversal before awarding any credits', async () => {
     const evidence=await fixture(branchIds[1]!);
