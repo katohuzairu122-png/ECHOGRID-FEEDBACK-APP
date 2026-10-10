@@ -33,6 +33,7 @@ describe.skipIf(!url)('Split 07 positive/concurrent provisional awards — isola
     ['partner_credit_ledger','partner_credit_ledger_insert_disabled'],
     ['partner_credit_lots','partner_credit_lots_inert_guard'],
     ['partner_credit_accounts','partner_credit_accounts_inert_guard'],
+    ['partner_credit_recovery_obligations','partner_credit_recovery_insert_disabled'],
   ] as const;
 
   async function query<T extends Record<string, unknown> = Record<string, unknown>>(sql: string, params: unknown[] = []) {
@@ -260,6 +261,41 @@ describe.skipIf(!url)('Split 07 positive/concurrent provisional awards — isola
     });
   },120000);
 
+  it('offsets debt before vesting availability and never double-applies a recovery', async () => {
+    await resetReceivingBusinessForReversalTests();
+    const evidence=await fixture(branchIds[0]!);
+    const db=await newDb();
+    const award=await new PartnerProvisionalAwardService(db).decide(evidence);
+    expect(award.state).toBe('provisional');
+    const [account]= (await query<{id:string}>(
+      'SELECT id FROM partner_credit_accounts WHERE business_id=$1',[receiverId])).rows;
+    // This is a synthetic obligation injected only into the isolated,
+    // disposable test database. No Split 08 consumption proof exists yet.
+    const reversalRef=crypto.randomUUID();
+    await query(
+      'INSERT INTO partner_credit_recovery_obligations(account_id,reversal_ref,units_due,units_outstanding) VALUES($1,$2,1,1)',
+      [account!.id,reversalRef]);
+    await query('UPDATE partner_credit_accounts SET recovery_due=1 WHERE id=$1',[account!.id]);
+    const at=new Date(Date.parse(evidence.fulfilledAt)+15*86400_000);
+    const service=new PartnerCreditLifecycleService(db);
+    expect(await service.vest(award.decisionId,at)).toBe('vested');
+    expect(await service.vest(award.decisionId,at)).toBe('already_vested');
+    const result=await query<{
+      provisional:string;available:string;due:string;lot_status:string;
+      outstanding:string;offset_entries:string;vest_entries:string;
+    }>(`SELECT a.provisional::text,a.available::text,a.recovery_due::text AS due,
+        l.status AS lot_status,
+        (SELECT units_outstanding::text FROM partner_credit_recovery_obligations WHERE reversal_ref=$3) AS outstanding,
+        (SELECT count(*)::text FROM partner_credit_ledger WHERE decision_id=$2 AND entry_type='recovery_offset') AS offset_entries,
+        (SELECT count(*)::text FROM partner_credit_ledger WHERE decision_id=$2 AND entry_type='vest') AS vest_entries
+      FROM partner_credit_accounts a JOIN partner_credit_lots l ON l.account_id=a.id
+      WHERE a.business_id=$1 AND l.decision_id=$2`,[receiverId,award.decisionId,reversalRef]);
+    expect(result.rows[0]).toMatchObject({
+      provisional:'0',available:'0',due:'0',lot_status:'consumed',
+      outstanding:'0',offset_entries:'1',vest_entries:'1',
+    });
+  },120000);
+
   it('atomically compensates a prior provisional award when Split 06 reverses settlement', async () => {
     await resetReceivingBusinessForReversalTests();
     const evidence=await fixture(branchIds[0]!);
@@ -324,6 +360,9 @@ describe.skipIf(!url)('Split 07 positive/concurrent provisional awards — isola
     await query("UPDATE partner_credit_award_decisions SET state='vested' WHERE id=$1",[award.decisionId]);
     await query("UPDATE partner_credit_lots SET status='consumed',available_units=0 WHERE decision_id=$1",[award.decisionId]);
     await query("UPDATE partner_credit_accounts SET provisional=provisional-1 WHERE business_id=$1",[receiverId]);
+    const obligationCountBefore = (await query<{count:string}>(
+      'SELECT count(*)::text AS count FROM partner_credit_recovery_obligations'
+    )).rows[0]!.count;
     await expect(new OrphanSettlementReversalService(db).reverse(evidence.settlementRef,{
       reasonCode:'verified-fraud',evidenceReference:'consumed-'+crypto.randomUUID(),
       idempotencyKey:'s07-consumed-'+crypto.randomUUID(),
@@ -335,7 +374,7 @@ describe.skipIf(!url)('Split 07 positive/concurrent provisional awards — isola
        (SELECT count(*)::text FROM orphan_settlement_events WHERE settlement_id=$1 AND event_type='settlement_reversed') reversals,
        (SELECT count(*)::text FROM partner_credit_recovery_obligations) recovery`,
       [evidence.settlementRef,award.decisionId]);
-    expect(row.rows[0]).toMatchObject({settlement:'fulfilled',claim:'settled',decision:'vested',reversals:'0',recovery:'0'});
+    expect(row.rows[0]).toMatchObject({settlement:'fulfilled',claim:'settled',decision:'vested',reversals:'0',recovery:obligationCountBefore});
   },120000);
 
   it('serializes simultaneous award versus authorized reversal without stranded credit', async () => {

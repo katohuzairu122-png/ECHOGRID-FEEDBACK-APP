@@ -1,9 +1,10 @@
 import { and, eq, sql } from 'drizzle-orm';
+import { applyRecoveryAtVest } from './partner-recovery-offset.service';
 import type { Database } from '../db/client';
 import {
   orphanRewardClaims, orphanSettlementEvents, orphanSettlements,
   partnerCreditAccounts, partnerCreditAwardDecisions, partnerCreditLedger,
-  partnerCreditLots, partnerCreditPolicies, partnerCreditRecoveryObligations,
+  partnerCreditLots, partnerCreditPolicies,
 } from '../db/schema';
 
 /** UTC anniversary preserving the calendar month (clamp Feb 29 when necessary). */
@@ -72,26 +73,27 @@ export class PartnerCreditLifecycleService {
         .where(eq(partnerCreditAccounts.id, lot.accountId)).for('update');
       if (!account || account.businessId !== decision.businessId || account.provisional < 1)
         throw new Error('PARTNER_VEST_ACCOUNT_INVALID');
-      // Recovery must be serviced before availability. An existing positive
-      // obligation cannot be ignored; no offset writer has been authorized.
-      const [due] = await tx.select({id: partnerCreditRecoveryObligations.id})
-        .from(partnerCreditRecoveryObligations).where(and(
-          eq(partnerCreditRecoveryObligations.accountId, account.id),
-          sql`${partnerCreditRecoveryObligations.unitsOutstanding} > 0`)).limit(1);
-      if (due || account.recoveryDue !== 0)
-        throw new Error('PARTNER_VEST_RECOVERY_OFFSET_NOT_ACTIVATED');
+      // FIFO recovery offsets run inside this same settlement-locked vesting
+      // transaction. Existing debt receives the newly vesting unit before any
+      // credit becomes available for a future Split 08 reservation.
+      const recovery = await applyRecoveryAtVest(tx, {
+        accountId:account.id,decisionId:decision.id,
+        settlementRef:decision.settlementRef,now,recoveryDue:account.recoveryDue,
+      });
       const expiresAt = partnerExpiryAt(now);
       await tx.insert(partnerCreditLedger).values({
         accountId: account.id, decisionId: decision.id, entryType: 'vest', units: 1,
         idempotencyKey: `partner-vest:v1:${decision.settlementRef}`,
-        metadata: { movedFrom: 'provisional', expiresAt: expiresAt.toISOString() },
+        metadata: { movedFrom: 'provisional', expiresAt: expiresAt.toISOString(),
+          recoveryOffsetUnits: recovery.offsetUnits },
       });
       await tx.update(partnerCreditLots).set({
-        status: 'available', availableUnits: 1, expiresAt,
+        status: recovery.availableUnits === 1 ? 'available' : 'consumed',
+        availableUnits: recovery.availableUnits, expiresAt,
       }).where(eq(partnerCreditLots.id, lot.id));
       await tx.update(partnerCreditAccounts).set({
         provisional: sql`${partnerCreditAccounts.provisional} - 1`,
-        available: sql`${partnerCreditAccounts.available} + 1`,
+        available: sql`${partnerCreditAccounts.available} + ${recovery.availableUnits}`,
         updatedAt: now,
       }).where(eq(partnerCreditAccounts.id, account.id));
       await tx.update(partnerCreditAwardDecisions).set({state:'vested'})

@@ -1,0 +1,24 @@
+# ECHO GRID — Split 07 / Split 08 Consumption Authority Reconciliation (CE-1)
+**Status: CANDIDATE — NOT FROZEN OR AUTHORIZED FOR PRODUCTION.**
+
+## Domain-owner decision
+No authoritative Split 08 terminal credit-consumption/application table, verified invoice reference, reservation/allocation source, or durable idempotent application proof currently exists in the inspected Split 07 state. A client assertion, web request, staff claim, invoice estimate, webhook alone, manually patched `consumed` lot status, or syntactically valid CE-1 object is **not** consumption evidence. The contract cannot be declared frozen by Split 07 alone; Split 08 billing authority must approve and implement it.
+
+## Required CE-1 authority (Split 08 owned)
+An immutable, database-queryable terminal application keyed by `applicationRef`, unique billing period/application identity, authenticated business and effective subscription, a finalized eligible monthly invoice and successful service benefit application. It must record exact credit reservation and origin lot/decision IDs, integer applied units, provider/invoice reference, applied timestamp, idempotency, and eligibility-policy snapshot. Split 08 provides a transactionally verifiable read interface; Split 07 validates authoritative record and its references inside its own locked accounting transition. No money denomination flows to the Partner Credit unit ledger.
+
+## Split 07 reversal and recovered-consumption obligations
+For each authoritative Split 06 settlement reversal, the Split 07 handler must lock the settlement first, then award decision, lot, account, and the verified terminal Split 08 application. For a consumed unit, preserve invoice/application history, append a unique negative compensating ledger entry, mark the originating lot/decision reversed, create one `partner_credit_recovery_obligations` row uniquely keyed by reversal event UUID, and increment `partner_credit_accounts.recovery_due`. The obligation is strictly a future noncash credit offset, never a Stripe receivable, cash debt, or customer points debit. If the proof source is absent, ambiguous, or not terminal, reject and roll back the settlement reversal. **No such consumed-credit obligation creation code is enabled or implemented in this PR.**
+
+## Recovery application implemented on this candidate branch
+When a *new* credit vests, its valid Split 06 settlement is reverified and locked; the Split 07 lot, account and obligations are locked. Obligations are allocated deterministically by `created_at, id`, each with positive `units_outstanding`, under a single transaction. The full outstanding sum must equal the account `recovery_due` projection before any mutation. One newly vesting unit first offsets one due unit (or none when no debt). A unique `recovery_offset` ledger entry is appended for each allocated obligation; `units_outstanding` and account `recovery_due` decline together. If fully offset, the newly vesting unit has zero available balance and is marked consumed **by recovery offset** (ledger metadata distinguishes this from a Split 08 consumption). If no debt, vest normally into available and set UTC 12-month expiry. Replaying the same vested award creates no duplicate movements. These operations are internal, not a worker, API route, or provider call.
+
+## Conservation rules and release gates
+An award's `provisional` ledger event represents initial entitlement issuance. `vest` denotes a provisional-to-available transfer, NOT a second issuance. A `recovery_offset` denotes satisfaction of existing recovery debt, not an invoice or cash debit. Account projections, lot allocations, obligation outstanding and ledger entries must reconcile after every success or rollback. No negative balance; the account recovery debt must equal the sum of outstanding obligations at transition entry and exit. All transitions require non-Split08 reversal authority and deterministic idempotency.
+
+**Still required:** frozen CE-1 with Split 08 ownership approval; terminal consumption source + reservation writer; consumed-credit reversal + obligation writer; consumption-vs-reversal and offset-vs-new-award race tests; recovery-offset reversed-credit policy; expiry with partially consumed lots; independent ledger reconciliation; least-privilege database economic activation procedure; production rollout approvals.
+
+## Nonactivation guarantee
+Migration 0041's denial triggers remain enabled outside the disposable CI database, including the recovery-obligation insert guard. CI may manually seed simulated obligations only in the separately migrated disposable Postgres instance for accounting tests; those fixtures **do not demonstrate consumed-credit authority**. No Stripe, invoice, subscription, customer loyalty or Community Point mutations are added.
+
+**Final decision:** No final Block 2 lock. No live Partner Credit issuance, redemption, or consumed-credit recovery.
