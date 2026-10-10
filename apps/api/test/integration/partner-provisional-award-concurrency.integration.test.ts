@@ -180,7 +180,39 @@ describe.skipIf(!url)('Split 07 positive/concurrent provisional awards — isola
   }, 120000);
 
 
+  it('enforces ten successful awards across eleven concurrent settlements and two branches', async () => {
+    const evidence=await Promise.all(Array.from({length:11},(_,i)=>fixture(branchIds[i%2]!)));
+    const results=await Promise.all(evidence.map(async row=>
+      new PartnerProvisionalAwardService(await newDb()).decide(row)));
+    expect(results.filter(r=>r.state==='provisional')).toHaveLength(9);
+    expect(results.filter(r=>r.state==='cap_exceeded')).toHaveLength(2);
+    const summary=await query<{awarded:string,provisional:string,available:string}>(
+      `SELECT
+       (SELECT coalesce(sum(award_units),0)::text FROM partner_credit_award_decisions WHERE business_id=$1) awarded,
+       (SELECT provisional::text FROM partner_credit_accounts WHERE business_id=$1) provisional,
+       (SELECT available::text FROM partner_credit_accounts WHERE business_id=$1) available`,[receiverId]);
+    expect(summary.rows[0]).toMatchObject({awarded:'10',provisional:'10',available:'0'});
+  }, 180000);
+
+
+  async function resetReceivingBusinessForReversalTests() {
+    const tag=crypto.randomUUID();
+    const result=await query<{id:string}>(
+      'INSERT INTO businesses(name,slug,status) VALUES($1,$2,$3) RETURNING id',
+      ['Split 07 reversal cohort','s07-reversal-'+tag,'active']);
+    receiverId=result.rows[0]!.id;
+    branchIds=await Promise.all(['a','b'].map(async letter=>(await query<{id:string}>(
+      'INSERT INTO branches(business_id,name,slug) VALUES($1,$2,$3) RETURNING id',
+      [receiverId,'Reversal Cohort Branch '+letter,'s07-reversal-'+letter+'-'+tag]
+    )).rows[0]!.id));
+    await query(
+      "INSERT INTO partner_program_enrollments(business_id,status,policy_version,accepted_by_user_id,accepted_at,effective_at) VALUES($1,'active',$2,$3,$4,$4)",
+      [receiverId,'PC-ECON/1',actorId,new Date(Date.now()-3600_000)],
+    );
+  }
+
   it('atomically compensates a prior provisional award when Split 06 reverses settlement', async () => {
+    await resetReceivingBusinessForReversalTests();
     const evidence=await fixture(branchIds[0]!);
     const db=await newDb();
     const awarded=await new PartnerProvisionalAwardService(db).decide(evidence);
@@ -235,20 +267,6 @@ describe.skipIf(!url)('Split 07 positive/concurrent provisional awards — isola
       expect(state.rows[0]).toMatchObject({decision_state:'reversed',ledger_sum:'0'});
     }
   },120000);
-
-  it('enforces ten successful awards across eleven concurrent settlements and two branches', async () => {
-    const evidence=await Promise.all(Array.from({length:11},(_,i)=>fixture(branchIds[i%2]!)));
-    const results=await Promise.all(evidence.map(async row=>
-      new PartnerProvisionalAwardService(await newDb()).decide(row)));
-    expect(results.filter(r=>r.state==='provisional')).toHaveLength(9);
-    expect(results.filter(r=>r.state==='cap_exceeded')).toHaveLength(2);
-    const summary=await query<{awarded:string,provisional:string,available:string}>(
-      `SELECT
-       (SELECT coalesce(sum(award_units),0)::text FROM partner_credit_award_decisions WHERE business_id=$1) awarded,
-       (SELECT provisional::text FROM partner_credit_accounts WHERE business_id=$1) provisional,
-       (SELECT available::text FROM partner_credit_accounts WHERE business_id=$1) available`,[receiverId]);
-    expect(summary.rows[0]).toMatchObject({awarded:'10',provisional:'10',available:'0'});
-  }, 180000);
 
   it('rejects authoritative reversal before awarding any credits', async () => {
     const evidence=await fixture(branchIds[1]!);
