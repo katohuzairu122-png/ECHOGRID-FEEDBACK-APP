@@ -238,6 +238,57 @@ describe.skipIf(!url)('Split 07 positive/concurrent provisional awards — isola
     });
   },120000);
 
+  it('compensates an unencumbered vested lot without negative available balance', async () => {
+    const evidence=await fixture(branchIds[0]!);
+    const db=await newDb();
+    const award=await new PartnerProvisionalAwardService(db).decide(evidence);
+    expect(award.state).toBe('provisional');
+    // The vesting worker does not exist yet; create its exact projection
+    // preconditions only in this disposable test database.
+    await query("UPDATE partner_credit_award_decisions SET state='vested' WHERE id=$1",[award.decisionId]);
+    await query("UPDATE partner_credit_lots SET status='available',available_units=1 WHERE decision_id=$1",[award.decisionId]);
+    await query("UPDATE partner_credit_accounts SET provisional=provisional-1,available=available+1 WHERE business_id=$1",[receiverId]);
+    const reversed=await new OrphanSettlementReversalService(db).reverse(evidence.settlementRef,{
+      reasonCode:'verified-fraud',evidenceReference:'vested-'+crypto.randomUUID(),
+      idempotencyKey:'s07-vested-'+crypto.randomUUID(),
+    },{actorUserId:platformAdminId});
+    expect(reversed.changed).toBe(true);
+    const row=await query<{decision:string;lot:string;available:string;provisional:string;ledger_sum:string}>(
+      `SELECT (SELECT state FROM partner_credit_award_decisions WHERE id=$1) decision,
+       (SELECT status FROM partner_credit_lots WHERE decision_id=$1) lot,
+       (SELECT available::text FROM partner_credit_accounts WHERE business_id=$2) available,
+       (SELECT provisional::text FROM partner_credit_accounts WHERE business_id=$2) provisional,
+       (SELECT sum(units)::text FROM partner_credit_ledger WHERE decision_id=$1) ledger_sum`,
+      [award.decisionId,receiverId]);
+    expect(row.rows[0]).toMatchObject({
+      decision:'reversed',lot:'reversed',available:'0',provisional:'0',ledger_sum:'0',
+    });
+  },120000);
+
+  it('fails closed on consumed lot and atomically rolls back Split 06 reversal', async () => {
+    const evidence=await fixture(branchIds[1]!);
+    const db=await newDb();
+    const award=await new PartnerProvisionalAwardService(db).decide(evidence);
+    expect(award.state).toBe('provisional');
+    // Simulates the immutable consumption precondition; there is no active
+    // Split 08 application writer or authorized consumption evidence yet.
+    await query("UPDATE partner_credit_award_decisions SET state='vested' WHERE id=$1",[award.decisionId]);
+    await query("UPDATE partner_credit_lots SET status='consumed',available_units=0 WHERE decision_id=$1",[award.decisionId]);
+    await query("UPDATE partner_credit_accounts SET provisional=provisional-1 WHERE business_id=$1",[receiverId]);
+    await expect(new OrphanSettlementReversalService(db).reverse(evidence.settlementRef,{
+      reasonCode:'verified-fraud',evidenceReference:'consumed-'+crypto.randomUUID(),
+      idempotencyKey:'s07-consumed-'+crypto.randomUUID(),
+    },{actorUserId:platformAdminId})).rejects.toThrow('PARTNER_REVERSAL_LOT_STATE_UNSUPPORTED');
+    const row=await query<{settlement:string;claim:string;decision:string;reversals:string;recovery:string}>(
+      `SELECT (SELECT status FROM orphan_settlements WHERE id=$1) settlement,
+       (SELECT c.status FROM orphan_reward_claims c JOIN orphan_settlements s ON s.claim_id=c.id WHERE s.id=$1) claim,
+       (SELECT state FROM partner_credit_award_decisions WHERE id=$2) decision,
+       (SELECT count(*)::text FROM orphan_settlement_events WHERE settlement_id=$1 AND event_type='settlement_reversed') reversals,
+       (SELECT count(*)::text FROM partner_credit_recovery_obligations) recovery`,
+      [evidence.settlementRef,award.decisionId]);
+    expect(row.rows[0]).toMatchObject({settlement:'fulfilled',claim:'settled',decision:'vested',reversals:'0',recovery:'0'});
+  },120000);
+
   it('serializes simultaneous award versus authorized reversal without stranded credit', async () => {
     const evidence=await fixture(branchIds[1]!);
     const awardDb=await newDb(), reversalDb=await newDb();
