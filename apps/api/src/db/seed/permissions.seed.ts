@@ -100,6 +100,11 @@ const PERMISSIONS: NewPermission[] = [
     category: 'Billing',
   },
   {
+    key: 'partner_credits:view',
+    description: 'View business-wide Partner Credit account and ledger under explicit authorization.',
+    category: 'Partner Credits',
+  },
+  {
     key: 'settlement:view',
     description: 'Inspect customer-authorized orphan settlement claims for this business.',
     category: 'Settlement',
