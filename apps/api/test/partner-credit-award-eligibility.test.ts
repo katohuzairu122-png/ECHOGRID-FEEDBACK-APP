@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { partnerEarningMonthUtc, provisionalAwardEligibility } from '../../src/partner-credits/partner-credit-award-eligibility';
+import { partnerEarningMonthUtc, provisionalAwardEligibility } from '../src/partner-credits/partner-credit-award-eligibility';
 
 describe('Split 07 UTC award-preparation rules', () => {
   it('uses UTC month rather than receiving branch local timezone', () => {
