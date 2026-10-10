@@ -233,7 +233,7 @@ describe.skipIf(!url)('Split 07 positive/concurrent provisional awards — isola
        (SELECT count(*)::text FROM partner_credit_ledger l JOIN partner_credit_award_decisions d ON d.id=l.decision_id WHERE d.settlement_ref=$1 AND l.entry_type='reverse') reversals`,
       [evidence.settlementRef,receiverId]);
     expect(state.rows[0]).toMatchObject({
-      decision_state:'reversed',lot_state:'reversed',account_provisional:'1',
+      decision_state:'reversed',lot_state:'reversed',account_provisional:'0',
       ledger_sum:'0',reversals:'1',
     });
   },120000);
