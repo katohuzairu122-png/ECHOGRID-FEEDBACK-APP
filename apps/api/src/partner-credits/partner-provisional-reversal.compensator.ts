@@ -33,19 +33,23 @@ export class PartnerProvisionalReversalCompensator {
       if (!movement) throw new Error('PARTNER_REVERSAL_MISSING_COMPENSATION');
       return 'already_reversed';
     }
-    // Consumption, vesting and reservation transitions require an additional
-    // explicitly frozen recovery policy; do not silently subtract available.
-    if (decision.state !== 'provisional' || decision.awardUnits !== 1)
+    // Consumed, expired or reserved entitlements require independently verified
+    // application evidence and dedicated recovery-offset transitions. Available
+    // vested units may be reversed only while their exact lot is unencumbered.
+    if ((decision.state !== 'provisional' && decision.state !== 'vested') || decision.awardUnits !== 1)
       throw new Error('PARTNER_REVERSAL_RECOVERY_POLICY_NOT_IMPLEMENTED');
 
     const [lot] = await tx.select().from(partnerCreditLots)
       .where(eq(partnerCreditLots.decisionId, decision.id)).for('update');
-    if (!lot || lot.status !== 'provisional' || lot.units !== 1 || lot.availableUnits !== 0)
-      throw new Error('PARTNER_REVERSAL_LOT_NOT_PROVISIONAL');
+    if (!lot || lot.units !== 1 ||
+        !((decision.state === 'provisional' && lot.status === 'provisional' && lot.availableUnits === 0) ||
+          (decision.state === 'vested' && lot.status === 'available' && lot.availableUnits === 1)))
+      throw new Error('PARTNER_REVERSAL_LOT_STATE_UNSUPPORTED');
 
     const [account] = await tx.select().from(partnerCreditAccounts)
       .where(eq(partnerCreditAccounts.id, lot.accountId)).for('update');
-    if (!account || account.businessId !== input.businessId || account.provisional < 1)
+    if (!account || account.businessId !== input.businessId ||
+        (decision.state === 'provisional' ? account.provisional < 1 : account.available < 1))
       throw new Error('PARTNER_REVERSAL_ACCOUNT_INCONSISTENT');
 
     const [provisionalEntry] = await tx.select().from(partnerCreditLedger)
