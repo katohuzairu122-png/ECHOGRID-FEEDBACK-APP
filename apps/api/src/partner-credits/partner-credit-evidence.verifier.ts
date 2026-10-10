@@ -1,6 +1,8 @@
 import type { OrphanSettlementCompletionEvidence } from '@echo-grid-feedback/shared-types';
 import type { Database } from '../db/client';
 import { createRepositories } from '../repositories';
+import { and, eq } from 'drizzle-orm';
+import { orphanSettlementEvents } from '../db/schema';
 
 /** Block 2: fail-closed, read-only authoritative evidence revalidation.
  * No reward/point/credit mutation, enrollment or billing capability exists here.
@@ -48,8 +50,12 @@ export class PartnerCreditEvidenceVerifier {
           event.originBusinessId !== claim.originBusinessId ||
           event.receivingBusinessId !== settlement.receivingBusinessId ||
           event.receivingBranchId !== settlement.receivingBranchId) return null;
-      const events = await repos.orphanSettlementEvents.listForSettlement(settlement.id, { limit: 200 });
-      if (events.some(e => e.eventType === 'settlement_reversed')) return null;
+      const [reversal] = await tx.select({ id: orphanSettlementEvents.id })
+        .from(orphanSettlementEvents)
+        .where(and(eq(orphanSettlementEvents.settlementId, settlement.id),
+          eq(orphanSettlementEvents.eventType, 'settlement_reversed')))
+        .limit(1);
+      if (reversal) return null;
       return {
         settlementRef: settlement.id,
         receivingBusinessId: settlement.receivingBusinessId,
