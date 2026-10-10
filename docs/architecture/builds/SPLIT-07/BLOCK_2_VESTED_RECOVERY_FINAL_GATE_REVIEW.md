@@ -26,3 +26,5 @@ The database's `0041` economic denial triggers remain untouched. The PR contains
 
 ## Lock decision
 **BLOCK 2 NOT COMPLETE — no completion lock.** Split 07 implementation may continue only under the frozen domain boundaries. No retroactive awards or auto-Stripe credits.
+
+CI routing: PR #93 targets main to activate the repository's main-only validation workflow. PR #92 must merge first; the #93 comparison includes #92 changes until then. Final completion lock is still denied.
