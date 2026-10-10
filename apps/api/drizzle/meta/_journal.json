@@ -288,6 +288,13 @@
       "when": 1791583200000,
       "tag": "0040_split07_partner_credit_foundations",
       "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1791586800000,
+      "tag": "0041_split07_block1_integrity_guards",
+      "breakpoints": true
     }
   ]
 }
