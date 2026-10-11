@@ -5,7 +5,7 @@ import { verifyStripeInvoiceFinalization } from '../src/billing/stripe-invoice-f
 function stripeInvoiceRecord(overrides: Record<string, unknown> = {}): Pick<Stripe,'invoices'> {
   const record = {
     id:'in_test_invoice',customer:'cus_owner',status:'paid',
-    paid:true,amount_remaining:0,...overrides,
+    amount_remaining:0,...overrides,
   };
   return {invoices:{retrieve:async()=>record}} as unknown as Pick<Stripe,'invoices'>;
 }
@@ -22,7 +22,7 @@ describe('Split 08 Stripe invoice authority is not Partner Credit application au
     await expect(verifyStripeInvoiceFinalization(stripeInvoiceRecord(),{
       invoiceRef:'in_test_invoice',stripeCustomerId:'cus_other',
     })).rejects.toThrow('SPLIT08_INVOICE_CUSTOMER_MISMATCH');
-    await expect(verifyStripeInvoiceFinalization(stripeInvoiceRecord({paid:false}),{
+    await expect(verifyStripeInvoiceFinalization(stripeInvoiceRecord({status:'open'}),{
       invoiceRef:'in_test_invoice',stripeCustomerId:'cus_owner',
     })).rejects.toThrow('SPLIT08_INVOICE_NOT_TERMINAL_PAID');
     await expect(verifyStripeInvoiceFinalization(stripeInvoiceRecord({status:'open'}),{
