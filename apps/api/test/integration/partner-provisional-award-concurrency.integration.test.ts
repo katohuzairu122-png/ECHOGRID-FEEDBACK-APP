@@ -12,6 +12,7 @@ import { PartnerProvisionalAwardService } from '../../src/partner-credits/partne
 import { PartnerCreditLifecycleService } from '../../src/partner-credits/partner-credit-lifecycle.service';
 import { PartnerCreditReservationService } from '../../src/partner-credits/partner-credit-reservation.service';
 import { PartnerCreditTerminalEvidenceReader } from '../../src/billing/partner-credit-terminal-evidence.reader';
+import { Split08Ce1TenantIntegrityVerifier } from '../../src/billing/ce1-tenant-integrity.verifier';
 import type { OrphanSettlementCompletionEvidence } from '@echo-grid-feedback/shared-types';
 
 /**
@@ -277,6 +278,69 @@ describe.skipIf(!url)('Split 07 positive/concurrent provisional awards — isola
       [receiverId,'PC-ECON/1',actorId,new Date(Date.now()-3600_000)],
     );
   }
+
+  it('rejects cross-business CE-1 application and never treats stored reference as provider verification', async () => {
+    await resetReceivingBusinessForReversalTests();
+    const evidence=await fixture(branchIds[0]!);
+    const db=await newDb();
+    const awarded=await new PartnerProvisionalAwardService(db).decide(evidence);
+    expect(awarded.state).toBe('provisional');
+    const lot=(await query<{id:string;account_id:string}>(
+      'SELECT id,account_id FROM partner_credit_lots WHERE decision_id=$1',
+      [awarded.decisionId])).rows[0]!;
+    await query("UPDATE partner_credit_award_decisions SET state='vested' WHERE id=$1",[awarded.decisionId]);
+    await query("UPDATE partner_credit_lots SET status='consumed',available_units=0 WHERE id=$1",[lot.id]);
+    await query("UPDATE partner_credit_accounts SET provisional=provisional-1 WHERE id=$1",[lot.account_id]);
+    const tag=crypto.randomUUID();
+    const other=(await query<{id:string}>(
+      "INSERT INTO businesses(name,slug,status) VALUES('CE1 forged tenant',$1,'active') RETURNING id",
+      ['ce1-cross-tenant-'+tag])).rows[0]!;
+    const plan=(await query<{id:string}>(
+      "INSERT INTO subscription_plans(key,name,price_monthly_cents) VALUES($1,'CE1 test',0) RETURNING id",
+      ['ce1-plan-'+tag])).rows[0]!;
+    const subscription=(await query<{id:string}>(
+      "INSERT INTO business_subscriptions(business_id,plan_id,status,billing_interval) VALUES($1,$2,'active','month') RETURNING id",
+      [other.id,plan.id])).rows[0]!;
+    await query('ALTER TABLE partner_credit_reservations DISABLE TRIGGER partner_credit_reservations_inert_guard');
+    await query('ALTER TABLE billing_partner_credit_applications DISABLE TRIGGER billing_partner_credit_applications_inert_guard');
+    try {
+      const reservation=(await query<{id:string}>(`INSERT INTO partner_credit_reservations
+        (business_id,decision_id,lot_id,account_id,invoice_intent_ref,idempotency_key,expires_at,state,terminal_at)
+        VALUES($1,$2,$3,$4,$5,$6,$7,'consumed',$8) RETURNING id`,
+        [receiverId,awarded.decisionId,lot.id,lot.account_id,'intent-'+tag,'reserve-'+tag,
+          new Date(Date.now()+86400_000),new Date(Date.now()+60000)])).rows[0]!;
+      await query(`INSERT INTO billing_partner_credit_applications
+        (reservation_id,business_id,subscription_id,invoice_ref,provider_success_ref,idempotency_key,units_applied,terminal_state,applied_at)
+        VALUES($1,$2,$3,$4,$5,$6,1,'applied',now())`,
+        [reservation.id,receiverId,subscription.id,'inv-'+tag,'provider-'+tag,'apply-'+tag]);
+      const verifier=new Split08Ce1TenantIntegrityVerifier(db);
+      await expect(verifier.inspect(reservation.id))
+        .rejects.toThrow('CE1_APPLICATION_TENANT_OR_TERMINAL_MISMATCH');
+      const owned=(await query<{id:string}>(
+        "INSERT INTO business_subscriptions(business_id,plan_id,status,billing_interval) VALUES($1,$2,'active','month') RETURNING id",
+        [receiverId,plan.id])).rows[0]!;
+      await query('UPDATE billing_partner_credit_applications SET subscription_id=$1 WHERE reservation_id=$2',
+        [owned.id,reservation.id]);
+      const result=await verifier.inspect(reservation.id);
+      expect(result).toMatchObject({
+        structurallyConsistent:true,providerVerified:false,businessId:receiverId,
+      });
+      const foreignAccount=(await query<{id:string}>(
+        'INSERT INTO partner_credit_accounts(business_id) VALUES($1) RETURNING id',
+        [other.id])).rows[0]!;
+      await query('UPDATE partner_credit_reservations SET account_id=$1 WHERE id=$2',
+        [foreignAccount.id,reservation.id]);
+      await expect(verifier.inspect(reservation.id))
+        .rejects.toThrow('CE1_ACCOUNT_TENANT_MISMATCH');
+      await query('UPDATE partner_credit_reservations SET account_id=$1,business_id=$2 WHERE id=$3',
+        [lot.account_id,other.id,reservation.id]);
+      await expect(verifier.inspect(reservation.id))
+        .rejects.toThrow('CE1_SETTLEMENT_TENANT_MISMATCH');
+    } finally {
+      await query('ALTER TABLE billing_partner_credit_applications ENABLE TRIGGER billing_partner_credit_applications_inert_guard');
+      await query('ALTER TABLE partner_credit_reservations ENABLE TRIGGER partner_credit_reservations_inert_guard');
+    }
+  },120000);
 
   it('refuses early vesting and early expiration without credit mutations', async () => {
     await resetReceivingBusinessForReversalTests();
