@@ -44,7 +44,9 @@ export class Split08Ce1TenantIntegrityVerifier {
       const [lot] = await tx.select().from(partnerCreditLots)
         .where(eq(partnerCreditLots.id,reference.lotId)).for('update');
       if (!decision || !lot || decision.businessId !== reference.businessId ||
-          decision.settlementRef !== settlement.id || lot.decisionId !== decision.id)
+          decision.settlementRef !== settlement.id || lot.decisionId !== decision.id ||
+          decision.state !== 'vested' || lot.status !== 'consumed' ||
+          lot.availableUnits !== 0)
         throw new Error('CE1_DECISION_LOT_TENANT_MISMATCH');
 
       const [account] = await tx.select().from(partnerCreditAccounts)
