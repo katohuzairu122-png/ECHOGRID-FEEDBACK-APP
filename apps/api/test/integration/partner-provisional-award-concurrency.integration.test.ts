@@ -550,6 +550,71 @@ describe.skipIf(!url)('Split 07 positive/concurrent provisional awards — isola
       [evidence.settlementRef]);
     expect(result.rows[0]!.count).toBe('0');
   }, 120000);
+  it('serializes vested reservation against authoritative settlement reversal without double-spend', async () => {
+    await resetReceivingBusinessForReversalTests();
+    const evidence=await fixture(branchIds[0]!);
+    const setup=await newDb();
+    const awarded=await new PartnerProvisionalAwardService(setup).decide(evidence);
+    expect(awarded.state).toBe('provisional');
+    const vestAt=new Date(Date.parse(evidence.fulfilledAt)+15*86400_000);
+    expect(await new PartnerCreditLifecycleService(setup).vest(awarded.decisionId,vestAt))
+      .toBe('vested');
+    const reserveDb=await newDb();
+    const reversalDb=await newDb();
+    const input={
+      settlementRef:evidence.settlementRef,businessId:receiverId,
+      decisionId:awarded.decisionId,
+      invoiceIntentRef:'s08-race-intent-'+crypto.randomUUID(),
+      idempotencyKey:'s08-race-reserve-'+crypto.randomUUID(),
+      now:vestAt,expiresAt:new Date(vestAt.getTime()+86400_000),
+    };
+    const reversalInput={
+      reasonCode:'verified-fraud' as const,
+      evidenceReference:'s08-race-'+crypto.randomUUID(),
+      idempotencyKey:'s08-reversal-'+crypto.randomUUID(),
+    };
+    await query('ALTER TABLE partner_credit_reservations DISABLE TRIGGER partner_credit_reservations_inert_guard');
+    try {
+      const [reservation,reversal]=await Promise.allSettled([
+        new PartnerCreditReservationService(reserveDb).reserve(input),
+        new OrphanSettlementReversalService(reversalDb).reverse(evidence.settlementRef,
+          reversalInput,{actorUserId:platformAdminId}),
+      ]);
+      const row=(await query<{
+        settlement_state:string;decision_state:string;lot_state:string;
+        available:string;reserved:string;reservations:string;reversals:string;
+      }>(`SELECT
+          (SELECT status FROM orphan_settlements WHERE id=$1) settlement_state,
+          (SELECT state FROM partner_credit_award_decisions WHERE id=$2) decision_state,
+          (SELECT status FROM partner_credit_lots WHERE decision_id=$2) lot_state,
+          (SELECT a.available::text FROM partner_credit_accounts a
+            JOIN partner_credit_lots l ON l.account_id=a.id WHERE l.decision_id=$2) available,
+          (SELECT a.reserved::text FROM partner_credit_accounts a
+            JOIN partner_credit_lots l ON l.account_id=a.id WHERE l.decision_id=$2) reserved,
+          (SELECT count(*)::text FROM partner_credit_reservations WHERE decision_id=$2) reservations,
+          (SELECT count(*)::text FROM orphan_settlement_events
+            WHERE settlement_id=$1 AND event_type='settlement_reversed') reversals`,
+        [evidence.settlementRef,awarded.decisionId])).rows[0]!;
+      if (reservation.status==='fulfilled') {
+        // Settlement-first ordering means reversal cannot bypass a committed
+        // reservation; it must fail closed until CE-1 consumption is proven.
+        expect(reversal.status).toBe('rejected');
+        expect(row).toMatchObject({
+          settlement_state:'fulfilled',decision_state:'vested',lot_state:'reserved',
+          available:'0',reserved:'1',reservations:'1',reversals:'0',
+        });
+      } else {
+        expect(reversal.status).toBe('fulfilled');
+        expect(row).toMatchObject({
+          settlement_state:'reversed',decision_state:'reversed',lot_state:'reversed',
+          available:'0',reserved:'0',reservations:'0',reversals:'1',
+        });
+      }
+    } finally {
+      await query('ALTER TABLE partner_credit_reservations ENABLE TRIGGER partner_credit_reservations_inert_guard');
+    }
+  },120000);
+
   it('atomically reserves one vested unit, serializes replay and denies unauthorized release', async () => {
     await resetReceivingBusinessForReversalTests();
     const evidence=await fixture(branchIds[0]!);
