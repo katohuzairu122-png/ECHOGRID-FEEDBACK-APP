@@ -302,6 +302,13 @@
       "when": 1791696000000,
       "tag": "0042_split08_ce1_inert_evidence",
       "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1791730000000,
+      "tag": "0043_split07_stripe_subscription_observations",
+      "breakpoints": true
     }
   ]
 }
