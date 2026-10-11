@@ -21,7 +21,7 @@ export type ProviderSubscriptionObservation = {
 };
 export type ProviderWindowReconciliation =
   | { kind: 'rejected'; reason: string; historicalTierVerified: false; issuanceAuthorized: false }
-  | { kind: 'provider_observation_corroborrated'; reason: 'EFFECTIVE_WINDOW_UNPROVEN'; eventRef: string; historicalTierVerified: false; issuanceAuthorized: false };
+  | { kind: 'provider_observation_corroborated'; reason: 'EFFECTIVE_WINDOW_UNPROVEN'; eventRef: string; historicalTierVerified: false; issuanceAuthorized: false };
 
 export class ProviderSubscriptionEventReconciler {
   constructor(private readonly stripe: Pick<Stripe, 'events'>) {}
@@ -79,7 +79,7 @@ export class ProviderSubscriptionEventReconciler {
     // update, and current_period_start is a billing boundary, not an upgrade
     // timestamp. A later, separately audited effective-window proof is needed.
     return {
-      kind: 'provider_observation_corroborrated',
+      kind: 'provider_observation_corroborated',
       eventRef: event.id,
       reason: 'EFFECTIVE_WINDOW_UNPROVEN',
       historicalTierVerified: false,
