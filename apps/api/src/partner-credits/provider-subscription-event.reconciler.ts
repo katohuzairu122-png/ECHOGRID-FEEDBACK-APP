@@ -63,6 +63,7 @@ export class ProviderSubscriptionEventReconciler {
     const items = subscription.items?.data;
     if (!items || items.length !== 1) return fail('UNSUPPORTED_SUBSCRIPTION_ITEMS');
     const item = items[0];
+    if (!item) return fail('UNSUPPORTED_SUBSCRIPTION_ITEMS');
     const interval = item.price.recurring?.interval;
     const periodStart = item.current_period_start;
     const periodEnd = item.current_period_end;
