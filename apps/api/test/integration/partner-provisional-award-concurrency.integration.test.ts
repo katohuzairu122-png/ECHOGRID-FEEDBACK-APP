@@ -259,8 +259,17 @@ describe.skipIf(!url)('Split 07 positive/concurrent provisional awards — isola
       expect(result).toMatchObject({
         structurallyConsistent:true,providerVerified:false,businessId:receiverId,
       });
-      await query('UPDATE partner_credit_reservations SET account_id=(SELECT id FROM partner_credit_accounts WHERE business_id=$1) WHERE id=$2',
-        [receiverId,reservation.id]);
+      const foreignAccount=(await query<{id:string}>(
+        'INSERT INTO partner_credit_accounts(business_id) VALUES($1) RETURNING id',
+        [other.id])).rows[0]!;
+      await query('UPDATE partner_credit_reservations SET account_id=$1 WHERE id=$2',
+        [foreignAccount.id,reservation.id]);
+      await expect(verifier.inspect(reservation.id))
+        .rejects.toThrow('CE1_ACCOUNT_TENANT_MISMATCH');
+      await query('UPDATE partner_credit_reservations SET account_id=$1,business_id=$2 WHERE id=$3',
+        [lot.account_id,other.id,reservation.id]);
+      await expect(verifier.inspect(reservation.id))
+        .rejects.toThrow('CE1_SETTLEMENT_TENANT_MISMATCH');
     } finally {
       await query('ALTER TABLE billing_partner_credit_applications ENABLE TRIGGER billing_partner_credit_applications_inert_guard');
       await query('ALTER TABLE partner_credit_reservations ENABLE TRIGGER partner_credit_reservations_inert_guard');
