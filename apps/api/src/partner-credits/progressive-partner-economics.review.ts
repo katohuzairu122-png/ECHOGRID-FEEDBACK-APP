@@ -57,7 +57,7 @@ export function inspectProgressiveAwardCandidate(
   const valid = Boolean(
     catalogPlan && catalogPlan.isActive &&
     catalogPlan.currency === 'usd' && catalogPlan.priceMonthlyCents > 0 &&
-    snapshot.subscriptionId && snapshot.planId && snapshot.businessId &&
+    snapshot.subscriptionId.trim() && snapshot.planId.trim() && snapshot.businessId.trim() &&
     snapshot.stripeCustomerId.startsWith('cus_') &&
     snapshot.stripeSubscriptionId.startsWith('sub_') &&
     snapshot.stripePriceId.startsWith('price_') &&
@@ -98,7 +98,7 @@ export function quoteProgressiveRedemption(input: {
   redemptionAuthorized: false;
 } {
   const { eligibleInvoiceCents: cents, vestedUnexpiredAvailableUnits: available, currency } = input;
-  if (!Number.isSafeInteger(cents) || cents < 0 ||
+  if (!Number.isSafeInteger(cents) || cents < 0 || cents > Math.floor(Number.MAX_SAFE_INTEGER / PROPOSED_DISCOUNT_PERCENT) ||
       !Number.isSafeInteger(available) || available < 0 ||
       currency !== 'usd')
     throw new Error('PC_ECON2_REDEMPTION_QUOTE_INVALID');
