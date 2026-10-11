@@ -11287,6 +11287,422 @@
         }
       },
       "isRLSEnabled": false
+    },
+    "public.partner_credit_reservations": {
+      "name": "partner_credit_reservations",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "business_id": {
+          "name": "business_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "decision_id": {
+          "name": "decision_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "lot_id": {
+          "name": "lot_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "account_id": {
+          "name": "account_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "invoice_intent_ref": {
+          "name": "invoice_intent_ref",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "idempotency_key": {
+          "name": "idempotency_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "units": {
+          "name": "units",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 1
+        },
+        "state": {
+          "name": "state",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'reserved'"
+        },
+        "expires_at": {
+          "name": "expires_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "terminal_at": {
+          "name": "terminal_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "partner_credit_reservations_lot_key": {
+          "name": "partner_credit_reservations_lot_key",
+          "columns": [
+            {
+              "expression": "lot_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "partner_credit_reservations_invoice_intent_key": {
+          "name": "partner_credit_reservations_invoice_intent_key",
+          "columns": [
+            {
+              "expression": "business_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "invoice_intent_ref",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "partner_credit_reservations_business_state_idx": {
+          "name": "partner_credit_reservations_business_state_idx",
+          "columns": [
+            {
+              "expression": "business_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "state",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "partner_credit_reservations_business_id_businesses_id_fk": {
+          "name": "partner_credit_reservations_business_id_businesses_id_fk",
+          "tableFrom": "partner_credit_reservations",
+          "tableTo": "businesses",
+          "columnsFrom": [
+            "business_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "partner_credit_reservations_decision_id_partner_credit_award_decisions_id_fk": {
+          "name": "partner_credit_reservations_decision_id_partner_credit_award_decisions_id_fk",
+          "tableFrom": "partner_credit_reservations",
+          "tableTo": "partner_credit_award_decisions",
+          "columnsFrom": [
+            "decision_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "partner_credit_reservations_lot_id_partner_credit_lots_id_fk": {
+          "name": "partner_credit_reservations_lot_id_partner_credit_lots_id_fk",
+          "tableFrom": "partner_credit_reservations",
+          "tableTo": "partner_credit_lots",
+          "columnsFrom": [
+            "lot_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "partner_credit_reservations_account_id_partner_credit_accounts_id_fk": {
+          "name": "partner_credit_reservations_account_id_partner_credit_accounts_id_fk",
+          "tableFrom": "partner_credit_reservations",
+          "tableTo": "partner_credit_accounts",
+          "columnsFrom": [
+            "account_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "partner_credit_reservations_idempotency_key_unique": {
+          "name": "partner_credit_reservations_idempotency_key_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "idempotency_key"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "partner_credit_reservations_units_check": {
+          "name": "partner_credit_reservations_units_check",
+          "value": "\"partner_credit_reservations\".\"units\" = 1"
+        },
+        "partner_credit_reservations_state_check": {
+          "name": "partner_credit_reservations_state_check",
+          "value": "\"partner_credit_reservations\".\"state\" IN ('reserved','released','consumed')"
+        },
+        "partner_credit_reservations_terminal_consistency": {
+          "name": "partner_credit_reservations_terminal_consistency",
+          "value": "(\"partner_credit_reservations\".\"state\" = 'reserved' AND \"partner_credit_reservations\".\"terminal_at\" IS NULL) OR (\"partner_credit_reservations\".\"state\" IN ('released','consumed') AND \"partner_credit_reservations\".\"terminal_at\" IS NOT NULL)"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.billing_partner_credit_applications": {
+      "name": "billing_partner_credit_applications",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "reservation_id": {
+          "name": "reservation_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "business_id": {
+          "name": "business_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "subscription_id": {
+          "name": "subscription_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "invoice_ref": {
+          "name": "invoice_ref",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "provider_success_ref": {
+          "name": "provider_success_ref",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "idempotency_key": {
+          "name": "idempotency_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "units_applied": {
+          "name": "units_applied",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "terminal_state": {
+          "name": "terminal_state",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "applied_at": {
+          "name": "applied_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "billing_partner_credit_applications_invoice_once": {
+          "name": "billing_partner_credit_applications_invoice_once",
+          "columns": [
+            {
+              "expression": "business_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "invoice_ref",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "billing_partner_credit_applications_subscription_idx": {
+          "name": "billing_partner_credit_applications_subscription_idx",
+          "columns": [
+            {
+              "expression": "subscription_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "applied_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "billing_partner_credit_applications_reservation_id_partner_credit_reservations_id_fk": {
+          "name": "billing_partner_credit_applications_reservation_id_partner_credit_reservations_id_fk",
+          "tableFrom": "billing_partner_credit_applications",
+          "tableTo": "partner_credit_reservations",
+          "columnsFrom": [
+            "reservation_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "billing_partner_credit_applications_business_id_businesses_id_fk": {
+          "name": "billing_partner_credit_applications_business_id_businesses_id_fk",
+          "tableFrom": "billing_partner_credit_applications",
+          "tableTo": "businesses",
+          "columnsFrom": [
+            "business_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "billing_partner_credit_applications_subscription_id_business_subscriptions_id_fk": {
+          "name": "billing_partner_credit_applications_subscription_id_business_subscriptions_id_fk",
+          "tableFrom": "billing_partner_credit_applications",
+          "tableTo": "business_subscriptions",
+          "columnsFrom": [
+            "subscription_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "billing_partner_credit_applications_reservation_id_unique": {
+          "name": "billing_partner_credit_applications_reservation_id_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "reservation_id"
+          ]
+        },
+        "billing_partner_credit_applications_provider_success_ref_unique": {
+          "name": "billing_partner_credit_applications_provider_success_ref_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "provider_success_ref"
+          ]
+        },
+        "billing_partner_credit_applications_idempotency_key_unique": {
+          "name": "billing_partner_credit_applications_idempotency_key_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "idempotency_key"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "billing_partner_credit_applications_units_check": {
+          "name": "billing_partner_credit_applications_units_check",
+          "value": "\"billing_partner_credit_applications\".\"units_applied\" = 1"
+        },
+        "billing_partner_credit_applications_terminal_check": {
+          "name": "billing_partner_credit_applications_terminal_check",
+          "value": "\"billing_partner_credit_applications\".\"terminal_state\" = 'applied'"
+        }
+      },
+      "isRLSEnabled": false
     }
   },
   "enums": {},
