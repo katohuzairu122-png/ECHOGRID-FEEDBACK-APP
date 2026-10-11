@@ -36,6 +36,8 @@ describe.skipIf(!url)('Split 07 positive/concurrent provisional awards — isola
     ['partner_credit_lots','partner_credit_lots_inert_guard'],
     ['partner_credit_accounts','partner_credit_accounts_inert_guard'],
     ['partner_credit_recovery_obligations','partner_credit_recovery_insert_disabled'],
+    ['partner_credit_reservations','partner_credit_reservations_inert_guard'],
+    ['billing_partner_credit_applications','billing_partner_credit_applications_inert_guard'],
   ] as const;
 
   async function query<T extends Record<string, unknown> = Record<string, unknown>>(sql: string, params: unknown[] = []) {
@@ -164,6 +166,60 @@ describe.skipIf(!url)('Split 07 positive/concurrent provisional awards — isola
     `,[evidence.settlementRef,receiverId]);
     expect(rows.rows[0]).toMatchObject({decisions:'1',lots:'1',ledger:'1',provisional:'1',available:'0'});
   }, 120000);
+
+  it('enforces CE-1 persistence: one reservation per lot, invoice, application and provider reference', async () => {
+    const evidence=await fixture(branchIds[0]!);
+    const db=await newDb();
+    const award=await new PartnerProvisionalAwardService(db).decide(evidence);
+    expect(award.state).toBe('provisional');
+    const lot=(await query<{lot_id:string;account_id:string}>(`
+      SELECT id AS lot_id,account_id FROM partner_credit_lots WHERE decision_id=$1`,
+      [award.decisionId])).rows[0]!;
+    const key=crypto.randomUUID();
+    const reservation=(await query<{id:string}>(`
+      INSERT INTO partner_credit_reservations
+      (business_id,decision_id,lot_id,account_id,invoice_intent_ref,idempotency_key,expires_at)
+      VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id`,
+      [receiverId,award.decisionId,lot.lot_id,lot.account_id,'ce1-intent-'+key,'ce1-key-'+key,
+        new Date(Date.now()+86400_000)])).rows[0]!;
+    await expect(query(`
+      INSERT INTO partner_credit_reservations
+      (business_id,decision_id,lot_id,account_id,invoice_intent_ref,idempotency_key,expires_at)
+      VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+      [receiverId,award.decisionId,lot.lot_id,lot.account_id,'ce1-intent-other-'+key,'ce1-key-other-'+key,
+        new Date(Date.now()+86400_000)])).rejects.toMatchObject({code:'23505'});
+    const plan=(await query<{id:string}>(`
+      INSERT INTO subscription_plans(key,name,price_monthly_cents)
+      VALUES ($1,$2,0) RETURNING id`,['ce1-plan-'+key,'CE1 isolated test plan'])).rows[0]!;
+    const subscription=(await query<{id:string}>(`
+      INSERT INTO business_subscriptions(business_id,plan_id,status,billing_interval)
+      VALUES ($1,$2,'active','month') RETURNING id`,
+      [receiverId,plan.id])).rows[0]!;
+    const params=[reservation.id,receiverId,subscription.id,'ce1-invoice-'+key,
+      'ce1-provider-'+key,'ce1-apply-'+key];
+    const application=(await query<{id:string}>(`
+      INSERT INTO billing_partner_credit_applications
+      (reservation_id,business_id,subscription_id,invoice_ref,provider_success_ref,idempotency_key,units_applied,terminal_state,applied_at)
+      VALUES ($1,$2,$3,$4,$5,$6,1,'applied',now()) RETURNING id`,params)).rows[0]!;
+    expect(application.id).toBeTruthy();
+    await expect(query(`
+      INSERT INTO billing_partner_credit_applications
+      (reservation_id,business_id,subscription_id,invoice_ref,provider_success_ref,idempotency_key,units_applied,terminal_state,applied_at)
+      VALUES ($1,$2,$3,$4,$5,$6,1,'applied',now())`,
+      [reservation.id,receiverId,subscription.id,'another-invoice-'+key,'another-provider-'+key,'another-key-'+key]
+    )).rejects.toMatchObject({code:'23505'});
+    await expect(query(`INSERT INTO billing_partner_credit_applications
+      (reservation_id,business_id,subscription_id,invoice_ref,provider_success_ref,idempotency_key,units_applied,terminal_state,applied_at)
+      VALUES ($1,$2,$3,$4,$5,$6,2,'applied',now())`,
+      [crypto.randomUUID(),receiverId,subscription.id,'invalid-'+key,'p-invalid-'+key,'key-invalid-'+key]
+    )).rejects.toMatchObject({code:'23514'});
+    // Schema is deliberately inert: a synthetic "applied" row is NOT
+    // external payment proof, and must not mutate Partner Credit balances.
+    const account=(await query<{provisional:string;available:string;reserved:string}>(`
+      SELECT provisional::text,available::text,reserved::text
+      FROM partner_credit_accounts WHERE id=$1`,[lot.account_id])).rows[0]!;
+    expect(account).toMatchObject({provisional:'2',available:'0',reserved:'0'});
+  },120000);
 
   it('rolls back decision and lot when the ledger idempotency insert conflicts', async () => {
     const evidence=await fixture(branchIds[0]!);
