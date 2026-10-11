@@ -35,7 +35,7 @@ export class PartnerCreditStripeInvoiceAuthorityAdapter {
     const invoice = await this.stripe.invoices.retrieve(expected.invoiceRef);
     if (invoice.id !== expected.invoiceRef ||
         invoice.status !== 'paid' ||
-        invoice.paid !== true ||
+        // Stripe v22 Invoice has no `paid` boolean; `status` is authoritative.
         invoice.amount_remaining !== 0 ||
         invoice.livemode !== true) {
       return { kind: 'invoice_mismatch', reason: 'INVOICE_NOT_PAID_OR_NOT_LIVE' };
