@@ -44,7 +44,7 @@ export function auditSubscriptionHistory(input: {
     return deny('INVALID_INPUT');
   const ordered = [...input.changes].sort((a,b) =>
     a.createdSeconds-b.createdSeconds || a.eventId.localeCompare(b.eventId));
-  const seen = new Map<string,string>();
+  // Distinct price states with identical second-resolution timestamps have\n  // no provider-authoritative order. Fail before sorting can imply one.\n  const timestampPrices = new Map<number,string>();\n  for (const c of ordered) {\n    const existing = timestampPrices.get(c.createdSeconds);\n    if (existing !== undefined && existing !== c.observedPriceId)\n      return deny('PRICE_CHAIN_CONFLICT');\n    timestampPrices.set(c.createdSeconds,c.observedPriceId);\n  }\n  const seen = new Map<string,string>();
   const ids: string[] = [];
   let precedingPrice: string | null = null;
   let priorTimestamp: number | null = null;
