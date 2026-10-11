@@ -10,6 +10,8 @@ import { OrphanSettlementFulfillmentService } from '../../src/orphan-settlement/
 import { OrphanSettlementReversalService } from '../../src/orphan-settlement/orphan-settlement-reversal.service';
 import { PartnerProvisionalAwardService } from '../../src/partner-credits/partner-provisional-award.service';
 import { PartnerCreditLifecycleService } from '../../src/partner-credits/partner-credit-lifecycle.service';
+import { PartnerCreditReservationService } from '../../src/partner-credits/partner-credit-reservation.service';
+import { PartnerCreditTerminalEvidenceReader } from '../../src/billing/partner-credit-terminal-evidence.reader';
 import type { OrphanSettlementCompletionEvidence } from '@echo-grid-feedback/shared-types';
 
 /**
@@ -421,6 +423,50 @@ describe.skipIf(!url)('Split 07 positive/concurrent provisional awards — isola
       [evidence.settlementRef]);
     expect(result.rows[0]!.count).toBe('0');
   }, 120000);
+  it('atomically reserves one vested unit, serializes replay and denies unauthorized release', async () => {
+    await resetReceivingBusinessForReversalTests();
+    const evidence=await fixture(branchIds[0]!);
+    const db=await newDb();
+    const award=await new PartnerProvisionalAwardService(db).decide(evidence);
+    expect(award.state).toBe('provisional');
+    const vestAt=new Date(Date.parse(evidence.fulfilledAt)+15*86400_000);
+    expect(await new PartnerCreditLifecycleService(db).vest(award.decisionId,vestAt)).toBe('vested');
+    const input={
+      settlementRef:evidence.settlementRef,businessId:receiverId,decisionId:award.decisionId,
+      invoiceIntentRef:'s08-authorized-test-intent-'+crypto.randomUUID(),
+      idempotencyKey:'s08-test-reserve-'+crypto.randomUUID(),
+      now:vestAt,expiresAt:new Date(vestAt.getTime()+86400_000),
+    };
+    const service=new PartnerCreditReservationService(db);
+    await expect(service.reserve(input)).rejects.toThrow(
+      'Split 08 credit reservation/application writes disabled pending CE-1 freeze'
+    );
+    await query('ALTER TABLE partner_credit_reservations DISABLE TRIGGER partner_credit_reservations_inert_guard');
+    try {
+      const first=await service.reserve(input);
+      expect(first).toMatchObject({state:'reserved',replay:false});
+      expect(await service.reserve(input)).toMatchObject({
+        state:'reserved',replay:true,reservationId:first.reservationId,
+      });
+      await expect(service.reserve({...input,idempotencyKey:'s08-other-'+crypto.randomUUID()}))
+        .rejects.toThrow('PARTNER_RESERVE_LOT_NOT_ELIGIBLE');
+      await expect(service.release({reservationId:first.reservationId,businessId:receiverId,now:vestAt}))
+        .rejects.toThrow('SPLIT08_RELEASE_AUTHORITY_NOT_ESTABLISHED');
+      const balance=await query<{available:string;reserved:string;lot_status:string;reservations:string}>(
+        `SELECT a.available::text,a.reserved::text,l.status AS lot_status,
+          (SELECT count(*)::text FROM partner_credit_reservations WHERE lot_id=l.id) reservations
+         FROM partner_credit_lots l JOIN partner_credit_accounts a ON a.id=l.account_id
+         WHERE l.decision_id=$1`,[award.decisionId]);
+      expect(balance.rows[0]).toMatchObject({
+        available:'0',reserved:'1',lot_status:'reserved',reservations:'1',
+      });
+      expect(await new PartnerCreditTerminalEvidenceReader(db).inspect(crypto.randomUUID(),receiverId))
+        .toEqual({kind:'not_found'});
+    } finally {
+      await query('ALTER TABLE partner_credit_reservations ENABLE TRIGGER partner_credit_reservations_inert_guard');
+    }
+  },120000);
+
   it('persists inert CE-1 records only in isolated test DB with unique application and reservation keys', async () => {
     await resetReceivingBusinessForReversalTests();
     const evidence=await fixture(branchIds[0]!);
