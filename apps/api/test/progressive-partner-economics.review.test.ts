@@ -53,6 +53,27 @@ describe('PC-ECON/2 proposed progressive tier economics: never authorizing', () 
       expect(quote.discountCents*10).toBeLessThanOrEqual(cents*3);
     }
   });
+  it('rejects malformed tier evidence, unsafe balances, and absent provider verification', () => {
+    expect(inspectProgressiveAwardCandidate({
+      ...snapshot,stripePriceId:'not-a-price',
+    },0)).toMatchObject({state:'not_eligible',issuanceAuthorized:false});
+    expect(inspectProgressiveAwardCandidate({
+      ...snapshot,subscriptionId:' ',
+    },0)).toMatchObject({state:'not_eligible',issuanceAuthorized:false});
+    expect(() => inspectProgressiveAwardCandidate(snapshot,-1))
+      .toThrow('PC_ECON2_INVALID_MONTHLY_UNITS');
+    expect(() => quoteProgressiveRedemption({
+      eligibleInvoiceCents:Number.MAX_SAFE_INTEGER,
+      vestedUnexpiredAvailableUnits:1,currency:'usd',
+    })).toThrow('PC_ECON2_REDEMPTION_QUOTE_INVALID');
+    const quote=quoteProgressiveRedemption({
+      eligibleInvoiceCents:1001,vestedUnexpiredAvailableUnits:4,currency:'usd',
+    });
+    expect(quote).toMatchObject({
+      requiredUnits:3,discountCents:300,remainingEligibleFeeCents:701,
+      providerAmountVerified:false,redemptionAuthorized:false,
+    });
+  });
   it('rejects below-threshold partial discounts, unsupported currency and free invoices', () => {
     expect(quoteProgressiveRedemption({
       eligibleInvoiceCents:2900,vestedUnexpiredAvailableUnits:7,currency:'usd',
