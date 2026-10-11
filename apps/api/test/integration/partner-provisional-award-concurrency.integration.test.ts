@@ -225,6 +225,9 @@ describe.skipIf(!url)('Split 07 positive/concurrent provisional awards — isola
     const lot=(await query<{id:string;account_id:string}>(
       'SELECT id,account_id FROM partner_credit_lots WHERE decision_id=$1',
       [awarded.decisionId])).rows[0]!;
+    await query("UPDATE partner_credit_award_decisions SET state='vested' WHERE id=$1",[awarded.decisionId]);
+    await query("UPDATE partner_credit_lots SET status='consumed',available_units=0 WHERE id=$1",[lot.id]);
+    await query("UPDATE partner_credit_accounts SET provisional=provisional-1 WHERE id=$1",[lot.account_id]);
     const tag=crypto.randomUUID();
     const other=(await query<{id:string}>(
       "INSERT INTO businesses(name,slug,status) VALUES('CE1 forged tenant',$1,'active') RETURNING id",
