@@ -42,7 +42,7 @@ describe('PC-ECON/2 proposed progressive tier economics: never authorizing', () 
     expect(()=>inspectProgressiveAwardCandidate(snapshot,-1)).toThrow();
   });
   it('calculates a full threshold based on 30% of eligible cents, rounded down to whole $1 units', () => {
-    for (const [cents,units] of [[900,2],[2900,8],[5900,17],[1000,3],[3000,9],[5000,15]]) {
+    for (const [cents,units] of ([[900,2],[2900,8],[5900,17],[1000,3],[3000,9],[5000,15]] as const)) {
       const quote=quoteProgressiveRedemption({
         eligibleInvoiceCents:cents,vestedUnexpiredAvailableUnits:units,currency:'usd',
       });
