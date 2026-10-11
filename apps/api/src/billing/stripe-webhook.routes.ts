@@ -6,6 +6,7 @@ import { createRepositories } from '../repositories';
 import { AppError } from '../lib/errors';
 import { createStripeClient, createWebhookCryptoProvider } from './stripe-client';
 import { StripeWebhookService } from './stripe-webhook.service';
+import { recordVerifiedStripeSubscriptionObservation } from './stripe-subscription-history.recorder';
 
 /**
  * Mounted at the root app level in index.ts (app.route(...), NOT inside the
@@ -63,6 +64,8 @@ stripeWebhookRoutes.post('/', async (c) => {
   try {
     const service = new StripeWebhookService(createRepositories(db));
     await service.processEvent(event);
+    // Signature-verified provider observation only; never credit issuance authority.
+    await recordVerifiedStripeSubscriptionObservation(db, event);
   } finally {
     c.executionCtx.waitUntil(close());
   }
