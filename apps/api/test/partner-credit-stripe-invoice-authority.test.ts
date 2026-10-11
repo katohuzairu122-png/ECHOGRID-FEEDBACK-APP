@@ -7,7 +7,7 @@ const expected = {
   stripeSubscriptionId:'sub_owning_business',
 };
 const valid = {
-  id:'in_valid',status:'paid',paid:true,amount_remaining:0,livemode:true,
+  id:'in_valid',status:'paid',amount_remaining:0,livemode:true,
   customer:'cus_owning_business',
   parent:{type:'subscription_details',
     subscription_details:{subscription:'sub_owning_business'}},
@@ -36,7 +36,7 @@ describe('Split 08 provider invoice authority is not credit application authorit
   });
   it('rejects unpaid, draft, void, outstanding, test-mode or incorrect invoices',async()=>{
     const cases=[
-      {status:'draft'},{status:'void'}, {paid:false},{amount_remaining:1},
+      {status:'draft'},{status:'void'},{status:'open'},{amount_remaining:1},
       {livemode:false},{id:'in_another'},
     ];
     for(const changes of cases){
