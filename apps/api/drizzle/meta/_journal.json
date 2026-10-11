@@ -295,6 +295,13 @@
       "when": 1791586800000,
       "tag": "0041_split07_block1_integrity_guards",
       "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "7",
+      "when": 1791696000000,
+      "tag": "0042_split08_ce1_inert_evidence",
+      "breakpoints": true
     }
   ]
 }

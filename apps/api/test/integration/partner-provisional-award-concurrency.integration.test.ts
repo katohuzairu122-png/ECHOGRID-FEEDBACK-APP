@@ -421,4 +421,60 @@ describe.skipIf(!url)('Split 07 positive/concurrent provisional awards — isola
       [evidence.settlementRef]);
     expect(result.rows[0]!.count).toBe('0');
   }, 120000);
+  it('persists inert CE-1 records only in isolated test DB with unique application and reservation keys', async () => {
+    await resetReceivingBusinessForReversalTests();
+    const evidence=await fixture(branchIds[0]!);
+    const award=await new PartnerProvisionalAwardService(await newDb()).decide(evidence);
+    expect(award.state).toBe('provisional');
+    const source=await query<{lot_id:string;account_id:string}>(
+      'SELECT id AS lot_id,account_id FROM partner_credit_lots WHERE decision_id=$1',[award.decisionId]);
+    const lot=source.rows[0]!;
+    const expiresAt=new Date(Date.now()+86400_000);
+    const invoiceIntent='s08-intent-'+crypto.randomUUID();
+    const reservationSql=`INSERT INTO partner_credit_reservations
+      (business_id,decision_id,lot_id,account_id,invoice_intent_ref,idempotency_key,expires_at)
+      VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING id`;
+    const reserveArgs=[receiverId,award.decisionId,lot.lot_id,lot.account_id,invoiceIntent,'s08-reservation-'+crypto.randomUUID(),expiresAt];
+    // Production barrier must deny every write, even if all references exist.
+    await expect(query(reservationSql,reserveArgs)).rejects.toThrow(
+      'Split 08 credit reservation/application writes disabled pending CE-1 freeze'
+    );
+
+    await query('ALTER TABLE partner_credit_reservations DISABLE TRIGGER partner_credit_reservations_inert_guard');
+    await query('ALTER TABLE billing_partner_credit_applications DISABLE TRIGGER billing_partner_credit_applications_inert_guard');
+    try {
+      const reservation=(await query<{id:string}>(reservationSql,reserveArgs)).rows[0]!;
+      await expect(query(reservationSql,[...reserveArgs.slice(0,5),'s08-repeat-'+crypto.randomUUID(),expiresAt]))
+        .rejects.toMatchObject({code:'23505'});
+      const plan=(await query<{id:string}>(
+        "INSERT INTO subscription_plans(key,name,price_monthly_cents) VALUES($1,$2,0) RETURNING id",
+        ['s08-plan-'+crypto.randomUUID(),'Disposable CE1 Plan'])).rows[0]!;
+      const subscription=(await query<{id:string}>(
+        "INSERT INTO business_subscriptions(business_id,plan_id,status) VALUES($1,$2,'active') RETURNING id",
+        [receiverId,plan.id])).rows[0]!;
+      const appSql=`INSERT INTO billing_partner_credit_applications
+        (reservation_id,business_id,subscription_id,invoice_ref,provider_success_ref,idempotency_key,units_applied,terminal_state,applied_at)
+        VALUES($1,$2,$3,$4,$5,$6,1,'applied',$7) RETURNING id`;
+      const appArgs=[reservation.id,receiverId,subscription.id,'s08-invoice-'+crypto.randomUUID(),
+        's08-provider-'+crypto.randomUUID(),'s08-app-'+crypto.randomUUID(),new Date()];
+      const application=(await query<{id:string}>(appSql,appArgs)).rows[0]!;
+      expect(application.id).toBeTruthy();
+      await expect(query(appSql,[...appArgs.slice(0,4),'s08-other-provider-'+crypto.randomUUID(),
+        's08-other-key-'+crypto.randomUUID(),new Date()]))
+        .rejects.toMatchObject({code:'23505'});
+      await expect(query("UPDATE billing_partner_credit_applications SET terminal_state='reversed' WHERE id=$1",[application.id]))
+        .rejects.toMatchObject({code:'23514'});
+      const stored=await query<{state:string;terminal:string}>(
+        `SELECT r.state,a.terminal_state AS terminal FROM partner_credit_reservations r
+         JOIN billing_partner_credit_applications a ON a.reservation_id=r.id WHERE r.id=$1`,
+        [reservation.id]);
+      expect(stored.rows[0]).toEqual({state:'reserved',terminal:'applied'});
+      // Rows can be stored structurally but are NOT authoritative consumption:
+      // no Stripe verification or Partner Credit consumption mutation occurred.
+    } finally {
+      await query('ALTER TABLE billing_partner_credit_applications ENABLE TRIGGER billing_partner_credit_applications_inert_guard');
+      await query('ALTER TABLE partner_credit_reservations ENABLE TRIGGER partner_credit_reservations_inert_guard');
+    }
+  },120000);
+
 });
