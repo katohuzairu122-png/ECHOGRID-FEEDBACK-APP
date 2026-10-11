@@ -36,8 +36,6 @@ describe.skipIf(!url)('Split 07 positive/concurrent provisional awards — isola
     ['partner_credit_lots','partner_credit_lots_inert_guard'],
     ['partner_credit_accounts','partner_credit_accounts_inert_guard'],
     ['partner_credit_recovery_obligations','partner_credit_recovery_insert_disabled'],
-    ['partner_credit_reservations','partner_credit_reservations_inert_guard'],
-    ['billing_partner_credit_applications','billing_partner_credit_applications_inert_guard'],
   ] as const;
 
   async function query<T extends Record<string, unknown> = Record<string, unknown>>(sql: string, params: unknown[] = []) {
@@ -203,6 +201,9 @@ describe.skipIf(!url)('Split 07 positive/concurrent provisional awards — isola
 
   it('enforces CE-1 persistence: one reservation per lot, invoice, application and provider reference', async () => {
     await resetReceivingBusinessForReversalTests();
+    await query('ALTER TABLE partner_credit_reservations DISABLE TRIGGER partner_credit_reservations_inert_guard');
+    await query('ALTER TABLE billing_partner_credit_applications DISABLE TRIGGER billing_partner_credit_applications_inert_guard');
+    try {
     const evidence=await fixture(branchIds[0]!);
     const db=await newDb();
     const award=await new PartnerProvisionalAwardService(db).decide(evidence);
@@ -254,6 +255,10 @@ describe.skipIf(!url)('Split 07 positive/concurrent provisional awards — isola
       SELECT provisional::text,available::text,reserved::text
       FROM partner_credit_accounts WHERE id=$1`,[lot.account_id])).rows[0]!;
     expect(account).toMatchObject({provisional:'1',available:'0',reserved:'0'});
+    } finally {
+      await query('ALTER TABLE billing_partner_credit_applications ENABLE TRIGGER billing_partner_credit_applications_inert_guard');
+      await query('ALTER TABLE partner_credit_reservations ENABLE TRIGGER partner_credit_reservations_inert_guard');
+    }
   },120000);
 
 
