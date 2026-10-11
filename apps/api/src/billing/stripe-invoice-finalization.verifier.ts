@@ -19,8 +19,7 @@ export async function verifyStripeInvoiceFinalization(
     ? invoice.customer : invoice.customer?.id;
   if (invoice.id !== input.invoiceRef || customerId !== input.stripeCustomerId)
     throw new Error('SPLIT08_INVOICE_CUSTOMER_MISMATCH');
-  if (invoice.status !== 'paid' || invoice.paid !== true ||
-      invoice.amount_remaining !== 0)
+  if (invoice.status !== 'paid' || invoice.amount_remaining !== 0)
     throw new Error('SPLIT08_INVOICE_NOT_TERMINAL_PAID');
   // Stripe invoice payment confirms its payment status, NOT that a specific
   // one-unit noncash Partner Credit allocation changed invoice economics.
