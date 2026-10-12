@@ -53,7 +53,7 @@ export class IntegratedProviderTierAuthorityGate {
     const history = await this.retriever.retrieve({
       stripeSubscriptionId: input.subscriptionId,
       stripeCustomerId: input.customerId,
-      maxPages: input.maxPages,
+      ...(input.maxPages !== undefined ? { maxPages: input.maxPages } : {}),
     });
     if (history.status !== 'RETAINED_EVENTS_FETCHED')
       return deny('PROVIDER_HISTORY_' + history.status);
