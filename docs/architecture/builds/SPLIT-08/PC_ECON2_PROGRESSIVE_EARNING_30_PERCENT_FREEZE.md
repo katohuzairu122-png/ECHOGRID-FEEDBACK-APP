@@ -51,3 +51,9 @@ Tax treatment, proration, discounts, annual invoices, credits/credit notes, refu
 5. Run isolated PostgreSQL tests, fresh migrations, full CI and independent billing review before any activation.
 
 **Operational disposition:** No Stripe writes, migration, backfill, release of 0041/0042 triggers, economic issuance, or terminal consumption. Remain in draft review pending approval.
+
+## Proposed amendment PC-ECON/2-A01 — Growth-and-above redemption eligibility (non-activating)
+
+**Latest proposed eligibility overlay (not operationally frozen):** [PC-ECON/2-A01](../SPLIT-07/PC_ECON2_A01_GROWTH_AND_ABOVE_REDEMPTION_ELIGIBILITY.md) restricts **redemption** to provider-verified **Growth** and **Business** monthly USD subscriptions. **Starter may earn and retain**, but cannot redeem until eligible; **Free is excluded**; **Enterprise remains unapproved** until a separately negotiated policy. The plan-specific thresholds in the historical proposal tables above are illustrative economics, **not** Starter redemption authorization.
+
+Earning remains tied to the provider-verified historical tier at fulfillment; redemption requires a separate provider-authoritative eligible tier at the applicable invoice benefit-application instant. Upgrades/downgrades do not reprice, reset expiry, or invalidate already-finalized discounts. Maintain all 0041/0042/0044 write-denial guards, fail-closed status, original PC-ECON/1 behavior, and independent Split 07/08 ownership. This is a **documentation-only amendment**, not economic activation.
