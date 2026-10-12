@@ -49,7 +49,8 @@ export class MultiunitAtomicPreflight {
             COALESCE(SUM(award_units) FILTER (
               WHERE state IN ('provisional','vested','reversed')
             ),0)::text AS awarded_units,
-            COUNT(*) FILTER (WHERE settlement_ref = ${input.settlementId}::uuid)::text
+            (SELECT COUNT(*) FROM partner_credit_award_decisions prior
+              WHERE prior.settlement_ref = ${input.settlementId}::uuid)::text
               AS settlement_count
           FROM partner_credit_award_decisions
           WHERE business_id = ${input.businessId}::uuid
