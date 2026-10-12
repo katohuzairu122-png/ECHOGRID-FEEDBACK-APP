@@ -40,7 +40,6 @@ export function reviewHistoricalEffectiveTimeAuthority(
     return deny('INVALID_INPUT');
   if (!input.sources.length) return deny('NO_EVIDENCE');
   const refs: string[] = [];
-  let coverageClaimed = false;
   for (const source of input.sources) {
     if (!source.providerRef || (source.effectiveAt !== null &&
         (!(source.effectiveAt instanceof Date) || !Number.isFinite(source.effectiveAt.getTime()))))
@@ -48,12 +47,10 @@ export function reviewHistoricalEffectiveTimeAuthority(
     if (source.kind === 'immutable_provider_transition_receipt' &&
         source.immutableCapture && source.effectiveAt !== null)
       refs.push(source.providerRef);
-    if (source.completeFromSubscriptionInception) coverageClaimed = true;
   }
   // "Complete" is merely a self-reported boolean until an independently
   // validated provider-history completeness contract exists. Even receipts
   // are only candidates and cannot override the frozen economic SQL gates.
   if (!refs.length) return deny('UNPROVEN_TRANSITION_AUTHORITY');
-  return deny(coverageClaimed ? 'HISTORICAL_COMPLETENESS_UNPROVEN' :
-    'HISTORICAL_COMPLETENESS_UNPROVEN', refs);
+  return deny('HISTORICAL_COMPLETENESS_UNPROVEN', refs);
 }
