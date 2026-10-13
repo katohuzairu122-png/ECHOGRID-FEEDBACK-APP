@@ -12,6 +12,14 @@ const FEATURES = [
   { key: 'loyalty', Icon: LoyaltyIcon },
 ] as const;
 
+const LEGAL_LINKS = [
+  ['Support', '/support'],
+  ['Privacy', '/privacy'],
+  ['Terms', '/terms'],
+  ['Refunds', '/refunds'],
+  ['Cookies', '/cookies'],
+] as const;
+
 export default async function RootPage() {
   if (await hasSession()) redirect('/dashboard');
   const t = await getTranslations('landing');
@@ -61,7 +69,7 @@ export default async function RootPage() {
         </div></div>
       </section>
       <section id="businesses" className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-6 px-6 py-20"><div><h2 className="text-3xl font-bold">Build stronger customer relationships</h2><p className="mt-3 text-slate-600">Manage engagement across your business and branches.</p></div><Link href="/signup" className={buttonVariants({size:'lg'})}>{t('signupCta')}</Link></section>
-      <footer className="border-t px-6 py-8"><nav aria-label="Support and legal" className="mx-auto flex max-w-7xl flex-wrap gap-5 text-sm text-slate-600">{[['Support','/support'],['Privacy','/privacy'],['Terms','/terms'],['Refunds','/refunds'],['Cookies','/cookies']].map(([label,href])=><Link key={href} href={href}>{label}</Link>)}</nav></footer>
+      <footer className="border-t px-6 py-8"><nav aria-label="Support and legal" className="mx-auto flex max-w-7xl flex-wrap gap-5 text-sm text-slate-600">{LEGAL_LINKS.map(([label,href])=><Link key={href} href={href}>{label}</Link>)}</nav></footer>
     </main>
   );
 }
