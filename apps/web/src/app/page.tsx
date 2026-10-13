@@ -1,75 +1,328 @@
 import Link from 'next/link';
+import Image from 'next/image';
 import { getTranslations } from 'next-intl/server';
 import { redirect } from 'next/navigation';
 import { hasSession } from '@/lib/session';
-import { Logo, FeedbackIcon, InsightsIcon, ActionIcon, LoyaltyIcon } from '@/components/brand';
-import { buttonVariants } from '@/components/ui';
+import { Logo } from '@/components/brand';
+import { LandingIcon, type LandingIconName } from '@/components/landing/landing-icon';
+import {
+  DashboardPreview,
+  PhonePreview,
+  QrPreview,
+  type PreviewCopy,
+} from '@/components/landing/product-previews';
+import styles from '@/components/landing/landing.module.css';
+import { LANDING_PLANS } from '@/components/landing/landing-plans';
 
-const FEATURES = [
-  { key: 'feedback', Icon: FeedbackIcon },
-  { key: 'insights', Icon: InsightsIcon },
-  { key: 'action', Icon: ActionIcon },
-  { key: 'loyalty', Icon: LoyaltyIcon },
-] as const;
-
-const LEGAL_LINKS = [
-  ['Support', '/support'],
-  ['Privacy', '/privacy'],
-  ['Terms', '/terms'],
-  ['Refunds', '/refunds'],
-  ['Cookies', '/cookies'],
-] as const;
+const FEATURE_ICONS = ['qr', 'star', 'chat', 'chart', 'bell', 'shield'] as const;
+const STEP_ICONS = ['settings', 'qr', 'gift', 'chart'] as const;
+const CUSTOMER_ICONS = ['store', 'star', 'chat', 'chart', 'shield', 'gift'] as const;
+const INDUSTRY_ICONS = ['store', 'bag', 'fitness', 'bed', 'scissors', 'medical'] as const;
+const LEGAL_LINKS = ['support', 'privacy', 'terms', 'refunds', 'cookies'] as const;
 
 export default async function RootPage() {
   if (await hasSession()) redirect('/dashboard');
-  const t = await getTranslations('landing');
+  const t = await getTranslations('landing.marketing');
+  const copy: PreviewCopy = {
+    example: t('preview.example'),
+    customer: t('preview.customer'),
+    business: t('preview.business'),
+    welcome: t('preview.welcome'),
+    points: t('preview.points'),
+    separate: t('preview.separate'),
+    feedback: t('preview.feedback'),
+    rewards: t('preview.rewards'),
+    activity: t('preview.activity'),
+    scan: t('preview.scan'),
+    dashboard: t('preview.dashboard'),
+    customers: t('preview.customers'),
+    responses: t('preview.responses'),
+    branches: t('preview.branches'),
+    satisfaction: t('preview.satisfaction'),
+    trend: t('preview.trend'),
+    period: t('preview.period'),
+    qrCaption: t('preview.qrCaption'),
+  };
+  const nav = (
+    <>
+      <a href="#how-it-works">{t('nav.how')}</a>
+      <a href="#features">{t('nav.features')}</a>
+      <a href="#businesses">{t('nav.businesses')}</a>
+      <a href="#customers">{t('nav.customers')}</a>
+      <a href="#pricing">{t('nav.pricing')}</a>
+      <Link href="/support">{t('nav.resources')}</Link>
+    </>
+  );
+  const cta = (label: string) => (
+    <Link href="/signup" className={styles.primaryCta}>
+      {label}
+      <LandingIcon name="arrow" />
+    </Link>
+  );
+  const tile = (icon: LandingIconName, index: number) => (
+    <span
+      className={`${styles.iconTile} ${styles[['mint', 'gold', 'blue', 'purple', 'pink', 'mint'][index % 6]!]}`}
+    >
+      <LandingIcon name={icon} />
+    </span>
+  );
   return (
-    <main className="min-h-screen bg-white text-slate-950">
-      <header className="mx-auto flex w-full max-w-7xl flex-wrap items-center justify-between gap-4 px-6 py-5">
-        <Link href="/" aria-label="Echo Grid home"><Logo variant="full" iconSize={38} /></Link>
-        <nav aria-label="Main navigation" className="flex flex-wrap items-center gap-5 text-sm font-medium">
-          <a href="#features" className="hover:text-brand-600">Features</a>
-          <a href="#how-it-works" className="hover:text-brand-600">How it works</a>
-          <a href="#businesses" className="hover:text-brand-600">For businesses</a>
-          <Link href="/loyalty/login" className="hover:text-brand-600">For customers</Link>
-          <Link href="/login">{t('loginLink')}</Link>
-          <Link href="/signup" className={buttonVariants({ size:'sm' })}>{t('signupCta')}</Link>
-        </nav>
-      </header>
-      <section className="bg-slate-950 text-white">
-        <div className="mx-auto grid max-w-7xl items-center gap-12 px-6 py-20 lg:grid-cols-2 lg:py-28">
-          <div>
-            <p className="mb-4 text-sm font-semibold uppercase tracking-widest text-emerald-300">Engagement · Feedback · Loyalty</p>
-            <h1 className="text-4xl font-bold leading-tight tracking-tight md:text-6xl">
-              Turn every visit into <span className="text-emerald-400">lasting value.</span>
+    <main className={styles.landing}>
+      <a href="#main-content" className={styles.skipLink}>
+        {t('skip')}
+      </a>
+      <div className={styles.heroShell}>
+        <Image
+          src="/landing/cafe-hero.webp"
+          fill
+          unoptimized
+          preload
+          sizes="100vw"
+          alt=""
+          className={styles.heroPhoto}
+        />
+        <div className={styles.heroShade} />
+        <header className={styles.header}>
+          <Link href="/" aria-label={t('home')} className={styles.brand}>
+            <Logo variant="dark" iconSize={36} />
+          </Link>
+          <nav aria-label={t('mainNav')} className={styles.desktopNav}>
+            {nav}
+          </nav>
+          <div className={styles.headerActions}>
+            <Link href="/login" className={styles.signIn}>
+              {t('nav.signIn')}
+            </Link>
+            <Link href="/signup" className={styles.smallCta}>
+              {t('nav.start')}
+            </Link>
+          </div>
+          <details className={styles.mobileMenu}>
+            <summary>
+              {t('nav.menu')}
+              <span aria-hidden="true">☰</span>
+            </summary>
+            <nav aria-label={t('mainNav')}>
+              {nav}
+              <Link href="/login">{t('nav.signIn')}</Link>
+              <Link href="/signup">{t('nav.start')}</Link>
+            </nav>
+          </details>
+        </header>
+        <section id="main-content" tabIndex={-1} className={styles.hero}>
+          <div className={styles.heroCopy}>
+            <h1>
+              {t('hero.title')}
+              <br />
+              <span>{t('hero.accent')}</span>
             </h1>
-            <p className="mt-6 max-w-xl text-lg text-slate-300">Connect customers with feedback, business-specific loyalty and rewards through a single branch QR experience.</p>
-            <div className="mt-8 flex flex-wrap gap-4">
-              <Link href="/signup" className={buttonVariants({ size:'lg' })}>{t('signupCta')}</Link>
-              <a href="#how-it-works" className="rounded-md border border-slate-400 px-6 py-3 font-medium">How it works</a>
+            <p>{t('hero.description')}</p>
+            <div className={styles.ctaRow}>
+              {cta(t('startFree'))}
+              <a href="#how-it-works" className={styles.outlineCta}>
+                <LandingIcon name="play" />
+                {t('hero.watch')}
+              </a>
+            </div>
+            <div className={styles.heroProof}>
+              {(['store', 'chart', 'users'] as const).map((icon, i) => (
+                <div key={icon}>
+                  <LandingIcon name={icon} />
+                  <span>{t(`hero.proof${i}`)}</span>
+                </div>
+              ))}
             </div>
           </div>
-          <div aria-label="Echo Grid platform overview" className="rounded-3xl border border-emerald-800 bg-slate-900 p-8 shadow-2xl">
-            <div className="mb-7 flex items-center justify-between"><Logo variant="full" iconSize={30} /><span className="text-xs text-emerald-300">One connected experience</span></div>
-            <div className="grid gap-4 sm:grid-cols-2">
-              {FEATURES.map(({key,Icon})=><div key={key} className="rounded-xl bg-slate-800 p-5"><Icon className="mb-3 h-8 w-8 text-emerald-400"/><p className="font-semibold">{t(`features.${key}.title`)}</p><p className="mt-2 text-sm text-slate-300">{t(`features.${key}.description`)}</p></div>)}
+          <div className={styles.heroVisual}>
+            <PhonePreview copy={copy} />
+            <QrPreview copy={copy} />
+          </div>
+        </section>
+      </div>
+      <section
+        id="features"
+        className={`${styles.section} ${styles.features}`}
+        aria-labelledby="features-title"
+      >
+        <div className={styles.sectionHeading}>
+          <h2 id="features-title">{t('features.title')}</h2>
+          <p>{t('features.subtitle')}</p>
+        </div>
+        <div className={styles.featureGrid}>
+          {FEATURE_ICONS.map((icon, i) => (
+            <article key={icon}>
+              {tile(icon, i)}
+              <h3>{t(`features.items.${i}.title`)}</h3>
+              <p>{t(`features.items.${i}.description`)}</p>
+            </article>
+          ))}
+        </div>
+      </section>
+      <section
+        id="businesses"
+        className={`${styles.section} ${styles.businessSection}`}
+        aria-labelledby="business-title"
+      >
+        <div className={styles.businessGrid}>
+          <DashboardPreview copy={copy} />
+          <div className={styles.sectionCopy}>
+            <span className={styles.eyebrow}>{t('business.eyebrow')}</span>
+            <h2 id="business-title">
+              {t('business.title')}
+              <br />
+              <span>{t('business.accent')}</span>
+            </h2>
+            <p>{t('business.description')}</p>
+            <ul className={styles.checkList}>
+              {[0, 1, 2, 3].map((i) => (
+                <li key={i}>
+                  <LandingIcon name="check" />
+                  {t(`business.points.${i}`)}
+                </li>
+              ))}
+            </ul>
+            {cta(t('business.cta'))}
+          </div>
+        </div>
+      </section>
+      <section
+        id="how-it-works"
+        className={`${styles.section} ${styles.process}`}
+        aria-labelledby="process-title"
+      >
+        <div className={styles.sectionHeading}>
+          <span className={styles.eyebrow}>{t('process.eyebrow')}</span>
+          <h2 id="process-title">
+            {t('process.title')} <span>{t('process.accent')}</span>
+          </h2>
+          <p>{t('process.subtitle')}</p>
+        </div>
+        <ol className={styles.steps}>
+          {STEP_ICONS.map((icon, i) => (
+            <li key={icon}>
+              <span className={styles.stepNumber}>{i + 1}</span>
+              <div>
+                <h3>{t(`process.items.${i}.title`)}</h3>
+                <p>{t(`process.items.${i}.description`)}</p>
+              </div>
+              {tile(icon, i)}
+            </li>
+          ))}
+        </ol>
+      </section>
+      <section
+        id="customers"
+        className={`${styles.section} ${styles.customerSection}`}
+        aria-labelledby="customer-title"
+      >
+        <div className={styles.customerGrid}>
+          <div className={styles.sectionCopy}>
+            <span className={styles.eyebrow}>{t('customer.eyebrow')}</span>
+            <h2 id="customer-title">
+              {t('customer.title')}
+              <br />
+              <span>{t('customer.accent')}</span>
+            </h2>
+            <p>{t('customer.description')}</p>
+            <Link href="/loyalty/login" className={styles.primaryCta}>
+              {t('customer.cta')}
+              <LandingIcon name="arrow" />
+            </Link>
+          </div>
+          <div className={styles.customerPhone}>
+            <PhonePreview copy={copy} compact />
+          </div>
+          <div className={styles.customerBenefits}>
+            <h3>{t('customer.benefitsTitle')}</h3>
+            <div>
+              {CUSTOMER_ICONS.map((icon, i) => (
+                <article key={`${icon}-${i}`}>
+                  {tile(icon, i)}
+                  <div>
+                    <h4>{t(`customer.items.${i}.title`)}</h4>
+                    <p>{t(`customer.items.${i}.description`)}</p>
+                  </div>
+                </article>
+              ))}
             </div>
           </div>
         </div>
       </section>
-      <section id="features" className="mx-auto max-w-7xl px-6 py-20">
-        <h2 className="text-center text-3xl font-bold">Everything you need in one platform</h2>
-        <div className="mt-10 grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-          {FEATURES.map(({key,Icon})=><div key={key} className="rounded-2xl border border-slate-200 p-6"><Icon className="mb-4 h-9 w-9 text-brand-600"/><h3 className="font-semibold">{t(`features.${key}.title`)}</h3><p className="mt-3 text-sm text-slate-600">{t(`features.${key}.description`)}</p></div>)}
+      <section
+        className={`${styles.section} ${styles.industries}`}
+        aria-labelledby="industry-title"
+      >
+        <div className={styles.sectionHeading}>
+          <span className={styles.eyebrow}>{t('industry.eyebrow')}</span>
+          <h2 id="industry-title">{t('industry.title')}</h2>
+          <p>{t('industry.subtitle')}</p>
+        </div>
+        <div className={styles.industryGrid}>
+          {INDUSTRY_ICONS.map((icon, i) => (
+            <article key={icon}>
+              <div
+                className={styles.industryPhoto}
+                style={{ backgroundPosition: `${i * 20}% center` }}
+                aria-hidden="true"
+              />
+              {tile(icon, i)}
+              <h3>{t(`industry.items.${i}.title`)}</h3>
+              <p>{t(`industry.items.${i}.description`)}</p>
+            </article>
+          ))}
         </div>
       </section>
-      <section id="how-it-works" className="bg-slate-50 px-6 py-20">
-        <div className="mx-auto max-w-7xl"><h2 className="text-center text-3xl font-bold">How Echo Grid works</h2><div className="mt-10 grid gap-5 md:grid-cols-3">
-          {[['1','Set up your business','Create your business, branches and engagement settings.'],['2','Share your branch QR','Let customers choose feedback or eligible loyalty actions.'],['3','Learn and grow','Review feedback and engagement insights in your dashboard.']].map(([n,title,detail])=><div key={n} className="rounded-xl bg-white p-6 shadow-sm"><span className="text-lg font-bold text-brand-600">{n}</span><h3 className="mt-4 font-semibold">{title}</h3><p className="mt-2 text-sm text-slate-600">{detail}</p></div>)}
-        </div></div>
+      <section
+        id="pricing"
+        className={`${styles.section} ${styles.pricing}`}
+        aria-labelledby="pricing-title"
+      >
+        <div className={styles.sectionHeading}>
+          <h2 id="pricing-title">{t('pricing.title')}</h2>
+          <p>{t('pricing.subtitle')}</p>
+        </div>
+        <div className={styles.planGrid}>
+          {LANDING_PLANS.map(({ key, monthlyCents }) => (
+            <article key={key}>
+              <h3>{t(`pricing.${key}`)}</h3>
+              <p>
+                <strong>
+                  {monthlyCents === null ? t('pricing.custom') : `$${monthlyCents / 100}`}
+                </strong>
+                {monthlyCents !== null && <span> {t('pricing.month')}</span>}
+              </p>
+              <Link href={key === 'enterprise' ? '/support' : '/signup'}>
+                {key === 'enterprise' ? t('pricing.contact') : t('nav.start')}
+                <LandingIcon name="arrow" />
+              </Link>
+            </article>
+          ))}
+        </div>
+        <p className={styles.pricingNote}>{t('pricing.note')}</p>
       </section>
-      <section id="businesses" className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-6 px-6 py-20"><div><h2 className="text-3xl font-bold">Build stronger customer relationships</h2><p className="mt-3 text-slate-600">Manage engagement across your business and branches.</p></div><Link href="/signup" className={buttonVariants({size:'lg'})}>{t('signupCta')}</Link></section>
-      <footer className="border-t px-6 py-8"><nav aria-label="Support and legal" className="mx-auto flex max-w-7xl flex-wrap gap-5 text-sm text-slate-600">{LEGAL_LINKS.map(([label,href])=><Link key={href} href={href}>{label}</Link>)}</nav></footer>
+      <section className={styles.finalCta} aria-labelledby="final-title">
+        <div>
+          <h2 id="final-title">
+            {t('final.title')} <span>{t('final.accent')}</span>
+          </h2>
+          <p>{t('final.description')}</p>
+        </div>
+        {cta(t('startFree'))}
+      </section>
+      <footer className={styles.footer}>
+        <div className={styles.footerBrand}>
+          <Logo variant="horizontal" iconSize={29} />
+          <p>{t('footer.company')}</p>
+        </div>
+        <nav aria-label={t('footer.legal')}>
+          {LEGAL_LINKS.map((key) => (
+            <Link key={key} href={`/${key}`}>
+              {t(`footer.${key}`)}
+            </Link>
+          ))}
+        </nav>
+        <p>{t('footer.copyright')}</p>
+      </footer>
     </main>
   );
 }

@@ -18,5 +18,211 @@
       "title": "Build Loyalty",
       "description": "Reward customers. Strengthen relationships."
     }
+  },
+  "marketing": {
+    "skip": "Skip to content",
+    "home": "Echo Grid home",
+    "mainNav": "Main navigation",
+    "startFree": "Get Started for Free",
+    "nav": {
+      "how": "How It Works",
+      "features": "Features",
+      "businesses": "For Businesses",
+      "customers": "For Customers",
+      "pricing": "Pricing",
+      "resources": "Resources",
+      "signIn": "Sign In",
+      "start": "Get Started",
+      "menu": "Menu"
+    },
+    "hero": {
+      "title": "Turn Every Visit",
+      "accent": "Into Lasting Value",
+      "description": "Connect with customers, collect real feedback and build business-specific loyalty — all from a single branch QR code.",
+      "watch": "See How It Works",
+      "proof0": "Stronger customer relationships",
+      "proof1": "Real feedback and insights",
+      "proof2": "Built for businesses of any size"
+    },
+    "features": {
+      "title": "Everything You Need in One Platform",
+      "subtitle": "Feedback, loyalty and engagement tools for modern businesses.",
+      "items": {
+        "0": {
+          "title": "QR Engagement",
+          "description": "One branch QR connects customers to feedback and eligible loyalty actions."
+        },
+        "1": {
+          "title": "Loyalty & Rewards",
+          "description": "Business-specific programs help turn visits into lasting relationships."
+        },
+        "2": {
+          "title": "Customer Feedback",
+          "description": "Collect feedback and understand each customer experience."
+        },
+        "3": {
+          "title": "Analytics & Insights",
+          "description": "Review feedback trends, with AI summaries on eligible plans."
+        },
+        "4": {
+          "title": "Notifications",
+          "description": "Keep up with customer activity and configured updates."
+        },
+        "5": {
+          "title": "Secure by Design",
+          "description": "Authenticated actions, business permissions and isolated customer relationships."
+        }
+      }
+    },
+    "business": {
+      "eyebrow": "For businesses",
+      "title": "Grow Your Business",
+      "accent": "with Loyal Customers",
+      "description": "Listen, learn and build stronger relationships with tools for your business and branches.",
+      "points": {
+        "0": "Branch QR feedback and customer engagement",
+        "1": "Configurable business loyalty and rewards",
+        "2": "Feedback analytics and eligible-plan AI summaries",
+        "3": "Multi-branch access with permission controls"
+      },
+      "cta": "Get Started for Your Business"
+    },
+    "process": {
+      "eyebrow": "Simple process",
+      "title": "How Echo Grid",
+      "accent": "Works",
+      "subtitle": "Bring your business and customer experience together in four steps.",
+      "items": {
+        "0": {
+          "title": "Set Up Your Business",
+          "description": "Create your account, add branches and configure your engagement settings."
+        },
+        "1": {
+          "title": "Display Your QR Code",
+          "description": "Share your canonical branch QR in-store or through your own channels."
+        },
+        "2": {
+          "title": "Engage & Reward",
+          "description": "Customers give feedback and choose authenticated loyalty actions, subject to business rules."
+        },
+        "3": {
+          "title": "Track & Grow",
+          "description": "Review feedback and engagement trends in your business dashboard."
+        }
+      }
+    },
+    "customer": {
+      "eyebrow": "For customers",
+      "title": "Scan. Engage.",
+      "accent": "Build Loyalty.",
+      "description": "Join businesses you choose, give feedback and view eligible rewards — with one customer account and separate loyalty balances for each business.",
+      "cta": "Open Your Customer Account",
+      "benefitsTitle": "Your Customer Experience",
+      "items": {
+        "0": {
+          "title": "One customer identity",
+          "description": "Use your customer account with participating businesses."
+        },
+        "1": {
+          "title": "Business-specific rewards",
+          "description": "Earn eligible points under each business’s program rules."
+        },
+        "2": {
+          "title": "Give honest feedback",
+          "description": "Share your experience and help businesses improve."
+        },
+        "3": {
+          "title": "Track your activity",
+          "description": "View your loyalty activity and rewards per business."
+        },
+        "4": {
+          "title": "Separate relationships",
+          "description": "Each business has its own membership and loyalty balance."
+        },
+        "5": {
+          "title": "View available rewards",
+          "description": "Explore rewards offered by the businesses you join."
+        }
+      }
+    },
+    "industry": {
+      "eyebrow": "Built for your business",
+      "title": "Works for Every Type of Business",
+      "subtitle": "From local shops to multi-location teams, make every interaction count.",
+      "items": {
+        "0": {
+          "title": "Restaurants & Cafés",
+          "description": "Hear from guests and encourage repeat visits."
+        },
+        "1": {
+          "title": "Retail Stores",
+          "description": "Understand shoppers and build customer relationships."
+        },
+        "2": {
+          "title": "Fitness & Wellness",
+          "description": "Collect member feedback and support engagement."
+        },
+        "3": {
+          "title": "Hotels & Hospitality",
+          "description": "Learn from guest experiences across your locations."
+        },
+        "4": {
+          "title": "Beauty & Personal Care",
+          "description": "Build loyalty and listen to customer feedback."
+        },
+        "5": {
+          "title": "Clinics & Services",
+          "description": "Collect service feedback without sharing private records."
+        }
+      }
+    },
+    "pricing": {
+      "title": "A Plan for Your Business",
+      "subtitle": "Approved monthly subscription prices in USD.",
+      "free": "Free",
+      "starter": "Starter",
+      "growth": "Growth",
+      "business": "Business",
+      "enterprise": "Enterprise",
+      "custom": "Custom",
+      "month": "/ month",
+      "contact": "Contact us",
+      "note": "Free includes 25 monthly feedback responses. Paid plans have different branch, team and feature limits. Review the current plan details in billing before purchase; Enterprise requires a custom agreement."
+    },
+    "final": {
+      "title": "Ready to Build",
+      "accent": "Stronger Customer Relationships?",
+      "description": "Start with feedback. Create an engagement experience that grows with your business."
+    },
+    "footer": {
+      "company": "An INFINICUS company",
+      "legal": "Support and legal",
+      "support": "Support",
+      "privacy": "Privacy",
+      "terms": "Terms",
+      "refunds": "Refunds",
+      "cookies": "Cookies",
+      "copyright": "© Echo Grid · INFINICUS LLC. All rights reserved."
+    },
+    "preview": {
+      "example": "Illustrative preview · example data",
+      "customer": "Customer mobile preview",
+      "business": "Example business",
+      "welcome": "Welcome back",
+      "points": "Example Café points",
+      "separate": "This business only · example balance",
+      "feedback": "Give Feedback",
+      "rewards": "My Rewards",
+      "activity": "My Activity",
+      "scan": "Scan a QR",
+      "dashboard": "Business Dashboard",
+      "customers": "Customers",
+      "responses": "Feedback",
+      "branches": "Branches",
+      "satisfaction": "Average rating",
+      "trend": "Feedback trend — sample data",
+      "period": "Example month",
+      "qrCaption": "Illustrative QR · opens this website"
+    }
   }
 }

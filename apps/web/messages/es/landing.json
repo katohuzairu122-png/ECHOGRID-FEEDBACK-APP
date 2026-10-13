@@ -18,5 +18,211 @@
       "title": "Fideliza clientes",
       "description": "Recompensa a tus clientes. Fortalece las relaciones."
     }
+  },
+  "marketing": {
+    "skip": "Ir al contenido",
+    "home": "Inicio de Echo Grid",
+    "mainNav": "Navegación principal",
+    "startFree": "Empieza gratis",
+    "nav": {
+      "how": "Cómo funciona",
+      "features": "Funciones",
+      "businesses": "Para empresas",
+      "customers": "Para clientes",
+      "pricing": "Precios",
+      "resources": "Recursos",
+      "signIn": "Iniciar sesión",
+      "start": "Empezar",
+      "menu": "Menú"
+    },
+    "hero": {
+      "title": "Convierte cada visita",
+      "accent": "en valor duradero",
+      "description": "Conecta con tus clientes, recoge opiniones reales y fomenta la fidelidad de cada negocio con un único QR de sucursal.",
+      "watch": "Descubre cómo funciona",
+      "proof0": "Relaciones más fuertes",
+      "proof1": "Opiniones e información reales",
+      "proof2": "Para empresas de cualquier tamaño"
+    },
+    "features": {
+      "title": "Todo lo que necesitas en una plataforma",
+      "subtitle": "Herramientas de opiniones, fidelidad e interacción para empresas modernas.",
+      "items": {
+        "0": {
+          "title": "Interacción QR",
+          "description": "Un QR de sucursal conecta con opiniones y acciones de fidelidad permitidas."
+        },
+        "1": {
+          "title": "Fidelidad y recompensas",
+          "description": "Programas propios de cada negocio para construir relaciones duraderas."
+        },
+        "2": {
+          "title": "Opiniones de clientes",
+          "description": "Recoge opiniones y comprende la experiencia de cada cliente."
+        },
+        "3": {
+          "title": "Análisis e información",
+          "description": "Consulta tendencias y resúmenes de IA en planes compatibles."
+        },
+        "4": {
+          "title": "Notificaciones",
+          "description": "Sigue la actividad de clientes y las actualizaciones configuradas."
+        },
+        "5": {
+          "title": "Seguridad desde el diseño",
+          "description": "Acciones autenticadas, permisos y relaciones de clientes aisladas."
+        }
+      }
+    },
+    "business": {
+      "eyebrow": "Para empresas",
+      "title": "Haz crecer tu negocio",
+      "accent": "con clientes fieles",
+      "description": "Escucha, aprende y fortalece las relaciones con herramientas para tu negocio y sus sucursales.",
+      "points": {
+        "0": "Opiniones e interacción mediante QR de sucursal",
+        "1": "Fidelidad y recompensas configurables por negocio",
+        "2": "Análisis y resúmenes de IA en planes compatibles",
+        "3": "Acceso a varias sucursales con permisos"
+      },
+      "cta": "Empieza con tu negocio"
+    },
+    "process": {
+      "eyebrow": "Proceso sencillo",
+      "title": "Cómo",
+      "accent": "funciona Echo Grid",
+      "subtitle": "Une tu negocio y la experiencia del cliente en cuatro pasos.",
+      "items": {
+        "0": {
+          "title": "Configura tu negocio",
+          "description": "Crea tu cuenta, añade sucursales y configura la interacción."
+        },
+        "1": {
+          "title": "Muestra tu código QR",
+          "description": "Comparte el QR canónico de sucursal en tu local o tus propios canales."
+        },
+        "2": {
+          "title": "Interactúa y recompensa",
+          "description": "Los clientes opinan y eligen acciones autenticadas según las reglas del negocio."
+        },
+        "3": {
+          "title": "Analiza y crece",
+          "description": "Consulta opiniones y tendencias de interacción en tu panel."
+        }
+      }
+    },
+    "customer": {
+      "eyebrow": "Para clientes",
+      "title": "Escanea. Participa.",
+      "accent": "Construye fidelidad.",
+      "description": "Únete a los negocios que elijas, opina y consulta recompensas disponibles con una cuenta y saldos separados por negocio.",
+      "cta": "Abre tu cuenta de cliente",
+      "benefitsTitle": "Tu experiencia como cliente",
+      "items": {
+        "0": {
+          "title": "Una identidad de cliente",
+          "description": "Usa tu cuenta con los negocios participantes."
+        },
+        "1": {
+          "title": "Recompensas por negocio",
+          "description": "Obtén puntos según las reglas de cada programa."
+        },
+        "2": {
+          "title": "Opiniones sinceras",
+          "description": "Comparte tu experiencia y ayuda a mejorar."
+        },
+        "3": {
+          "title": "Consulta tu actividad",
+          "description": "Ve tu actividad y recompensas por negocio."
+        },
+        "4": {
+          "title": "Relaciones separadas",
+          "description": "Cada negocio tiene su propia membresía y saldo."
+        },
+        "5": {
+          "title": "Recompensas disponibles",
+          "description": "Explora las recompensas de los negocios a los que te unes."
+        }
+      }
+    },
+    "industry": {
+      "eyebrow": "Para tu negocio",
+      "title": "Para todo tipo de empresas",
+      "subtitle": "Desde comercios locales hasta equipos con varias sedes: cada interacción cuenta.",
+      "items": {
+        "0": {
+          "title": "Restaurantes y cafés",
+          "description": "Escucha a tus visitantes y fomenta su regreso."
+        },
+        "1": {
+          "title": "Tiendas",
+          "description": "Comprende a tus compradores y fortalece relaciones."
+        },
+        "2": {
+          "title": "Fitness y bienestar",
+          "description": "Recoge opiniones de miembros y fomenta la participación."
+        },
+        "3": {
+          "title": "Hoteles y hostelería",
+          "description": "Aprende de la experiencia de tus huéspedes."
+        },
+        "4": {
+          "title": "Belleza y cuidado personal",
+          "description": "Construye fidelidad y escucha a tus clientes."
+        },
+        "5": {
+          "title": "Clínicas y servicios",
+          "description": "Recoge opiniones del servicio sin compartir datos privados."
+        }
+      }
+    },
+    "pricing": {
+      "title": "Un plan para tu negocio",
+      "subtitle": "Precios mensuales aprobados en USD.",
+      "free": "Gratis",
+      "starter": "Starter",
+      "growth": "Growth",
+      "business": "Business",
+      "enterprise": "Enterprise",
+      "custom": "A medida",
+      "month": "/ mes",
+      "contact": "Contáctanos",
+      "note": "El plan gratuito incluye 25 respuestas al mes. Los planes de pago tienen distintos límites de sucursales, equipos y funciones. Revisa los detalles vigentes en facturación antes de comprar; Enterprise requiere un acuerdo personalizado."
+    },
+    "final": {
+      "title": "¿Listo para construir",
+      "accent": "relaciones más fuertes?",
+      "description": "Empieza con las opiniones y crea una experiencia que crezca con tu negocio."
+    },
+    "footer": {
+      "company": "Una empresa de INFINICUS",
+      "legal": "Soporte e información legal",
+      "support": "Soporte",
+      "privacy": "Privacidad",
+      "terms": "Condiciones",
+      "refunds": "Reembolsos",
+      "cookies": "Cookies",
+      "copyright": "© Echo Grid · INFINICUS LLC. Todos los derechos reservados."
+    },
+    "preview": {
+      "example": "Vista ilustrativa · datos de ejemplo",
+      "customer": "Vista móvil del cliente",
+      "business": "Negocio de ejemplo",
+      "welcome": "Bienvenido de nuevo",
+      "points": "Puntos del Café de ejemplo",
+      "separate": "Solo este negocio · saldo de ejemplo",
+      "feedback": "Dar opinión",
+      "rewards": "Mis recompensas",
+      "activity": "Mi actividad",
+      "scan": "Escanear QR",
+      "dashboard": "Panel del negocio",
+      "customers": "Clientes",
+      "responses": "Opiniones",
+      "branches": "Sucursales",
+      "satisfaction": "Valoración media",
+      "trend": "Tendencia — datos de ejemplo",
+      "period": "Mes de ejemplo",
+      "qrCaption": "QR ilustrativo · abre esta web"
+    }
   }
 }

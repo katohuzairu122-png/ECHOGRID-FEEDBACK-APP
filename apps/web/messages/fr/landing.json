@@ -18,5 +18,211 @@
       "title": "Fidélisez vos clients",
       "description": "Récompensez vos clients. Renforcez les relations."
     }
+  },
+  "marketing": {
+    "skip": "Aller au contenu",
+    "home": "Accueil Echo Grid",
+    "mainNav": "Navigation principale",
+    "startFree": "Commencer gratuitement",
+    "nav": {
+      "how": "Fonctionnement",
+      "features": "Fonctionnalités",
+      "businesses": "Entreprises",
+      "customers": "Clients",
+      "pricing": "Tarifs",
+      "resources": "Ressources",
+      "signIn": "Connexion",
+      "start": "Commencer",
+      "menu": "Menu"
+    },
+    "hero": {
+      "title": "Transformez chaque visite",
+      "accent": "en valeur durable",
+      "description": "Échangez avec vos clients, recueillez leurs avis et développez la fidélité propre à chaque entreprise avec un seul QR par établissement.",
+      "watch": "Voir le fonctionnement",
+      "proof0": "Des relations plus fortes",
+      "proof1": "Des avis et analyses utiles",
+      "proof2": "Pour toutes les entreprises"
+    },
+    "features": {
+      "title": "Tout ce dont vous avez besoin",
+      "subtitle": "Avis, fidélité et engagement sur une seule plateforme.",
+      "items": {
+        "0": {
+          "title": "Engagement QR",
+          "description": "Un QR d’établissement relie les clients aux avis et actions de fidélité autorisées."
+        },
+        "1": {
+          "title": "Fidélité et récompenses",
+          "description": "Des programmes propres à chaque entreprise pour des relations durables."
+        },
+        "2": {
+          "title": "Avis clients",
+          "description": "Recueillez des avis et comprenez chaque expérience."
+        },
+        "3": {
+          "title": "Analyses et tendances",
+          "description": "Consultez les tendances et les résumés IA des offres compatibles."
+        },
+        "4": {
+          "title": "Notifications",
+          "description": "Suivez l’activité des clients et les mises à jour configurées."
+        },
+        "5": {
+          "title": "Sécurité intégrée",
+          "description": "Actions authentifiées, autorisations et relations clients isolées."
+        }
+      }
+    },
+    "business": {
+      "eyebrow": "Pour les entreprises",
+      "title": "Développez votre activité",
+      "accent": "avec des clients fidèles",
+      "description": "Écoutez, apprenez et renforcez vos relations grâce à des outils pour vos établissements.",
+      "points": {
+        "0": "Avis et engagement via le QR d’établissement",
+        "1": "Programmes de fidélité et récompenses configurables",
+        "2": "Analyses et résumés IA des offres compatibles",
+        "3": "Plusieurs établissements avec contrôle des accès"
+      },
+      "cta": "Commencer pour votre entreprise"
+    },
+    "process": {
+      "eyebrow": "Un processus simple",
+      "title": "Comment Echo Grid",
+      "accent": "fonctionne",
+      "subtitle": "Reliez votre entreprise à l’expérience client en quatre étapes.",
+      "items": {
+        "0": {
+          "title": "Configurez votre entreprise",
+          "description": "Créez votre compte, ajoutez vos établissements et configurez l’engagement."
+        },
+        "1": {
+          "title": "Affichez votre QR",
+          "description": "Partagez le QR canonique de votre établissement sur place ou via vos canaux."
+        },
+        "2": {
+          "title": "Échangez et récompensez",
+          "description": "Les clients donnent leur avis et choisissent des actions authentifiées selon vos règles."
+        },
+        "3": {
+          "title": "Analysez et progressez",
+          "description": "Consultez les avis et tendances dans votre tableau de bord."
+        }
+      }
+    },
+    "customer": {
+      "eyebrow": "Pour les clients",
+      "title": "Scannez. Participez.",
+      "accent": "Développez votre fidélité.",
+      "description": "Rejoignez les entreprises de votre choix, donnez votre avis et consultez les récompenses avec un compte et des soldes distincts par entreprise.",
+      "cta": "Ouvrir votre compte client",
+      "benefitsTitle": "Votre expérience client",
+      "items": {
+        "0": {
+          "title": "Une identité client",
+          "description": "Utilisez votre compte auprès des entreprises participantes."
+        },
+        "1": {
+          "title": "Récompenses par entreprise",
+          "description": "Gagnez des points selon les règles de chaque programme."
+        },
+        "2": {
+          "title": "Des avis sincères",
+          "description": "Partagez votre expérience et contribuez aux améliorations."
+        },
+        "3": {
+          "title": "Suivez votre activité",
+          "description": "Consultez votre activité et vos récompenses par entreprise."
+        },
+        "4": {
+          "title": "Des relations distinctes",
+          "description": "Chaque entreprise possède son adhésion et son solde."
+        },
+        "5": {
+          "title": "Récompenses disponibles",
+          "description": "Découvrez les récompenses des entreprises rejointes."
+        }
+      }
+    },
+    "industry": {
+      "eyebrow": "Pour votre entreprise",
+      "title": "Pour tous les types d’entreprises",
+      "subtitle": "Du commerce local aux équipes multi-sites, chaque échange compte.",
+      "items": {
+        "0": {
+          "title": "Restaurants et cafés",
+          "description": "Écoutez vos visiteurs et encouragez leur retour."
+        },
+        "1": {
+          "title": "Commerces",
+          "description": "Comprenez vos clients et renforcez vos relations."
+        },
+        "2": {
+          "title": "Fitness et bien-être",
+          "description": "Recueillez les avis et soutenez l’engagement."
+        },
+        "3": {
+          "title": "Hôtels et accueil",
+          "description": "Apprenez de l’expérience de vos clients."
+        },
+        "4": {
+          "title": "Beauté et soins",
+          "description": "Développez la fidélité et écoutez les avis."
+        },
+        "5": {
+          "title": "Cliniques et services",
+          "description": "Recueillez des avis sans partager de dossiers privés."
+        }
+      }
+    },
+    "pricing": {
+      "title": "Une offre pour votre entreprise",
+      "subtitle": "Tarifs mensuels approuvés en USD.",
+      "free": "Gratuit",
+      "starter": "Starter",
+      "growth": "Growth",
+      "business": "Business",
+      "enterprise": "Enterprise",
+      "custom": "Sur mesure",
+      "month": "/ mois",
+      "contact": "Nous contacter",
+      "note": "L’offre gratuite inclut 25 réponses mensuelles. Les offres payantes ont des limites différentes pour les établissements, équipes et fonctionnalités. Consultez les détails dans la facturation avant tout achat ; Enterprise nécessite un accord personnalisé."
+    },
+    "final": {
+      "title": "Prêt à créer",
+      "accent": "des relations clients plus fortes ?",
+      "description": "Commencez par les avis et créez une expérience qui évolue avec votre entreprise."
+    },
+    "footer": {
+      "company": "Une entreprise INFINICUS",
+      "legal": "Assistance et mentions légales",
+      "support": "Assistance",
+      "privacy": "Confidentialité",
+      "terms": "Conditions",
+      "refunds": "Remboursements",
+      "cookies": "Cookies",
+      "copyright": "© Echo Grid · INFINICUS LLC. Tous droits réservés."
+    },
+    "preview": {
+      "example": "Aperçu illustratif · données fictives",
+      "customer": "Aperçu mobile client",
+      "business": "Entreprise fictive",
+      "welcome": "Bon retour",
+      "points": "Points du Café fictif",
+      "separate": "Cette entreprise uniquement · solde fictif",
+      "feedback": "Donner un avis",
+      "rewards": "Mes récompenses",
+      "activity": "Mon activité",
+      "scan": "Scanner un QR",
+      "dashboard": "Tableau de bord",
+      "customers": "Clients",
+      "responses": "Avis",
+      "branches": "Établissements",
+      "satisfaction": "Note moyenne",
+      "trend": "Tendance — données fictives",
+      "period": "Mois fictif",
+      "qrCaption": "QR illustratif · ouvre ce site"
+    }
   }
 }

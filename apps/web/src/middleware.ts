@@ -82,6 +82,17 @@ const PUBLIC_PATHS = [
 // visitor away from it.
 const ROOT_PATH = '/';
 
+// Exact public information/asset paths: never make all /landing or all '/' public.
+const PUBLIC_INFORMATION_PATHS = new Set([
+  '/support',
+  '/privacy',
+  '/terms',
+  '/refunds',
+  '/cookies',
+  '/landing/cafe-hero.webp',
+  '/landing/industries.webp',
+]);
+
 /**
  * Gates protected pages using the refresh-token cookie. When the short-lived
  * access cookie has expired, rotation happens here instead of inside a Server
@@ -92,7 +103,9 @@ const ROOT_PATH = '/';
 export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
   const isPublicPath =
-    pathname === ROOT_PATH || PUBLIC_PATHS.some((path) => pathname.startsWith(path));
+    pathname === ROOT_PATH ||
+    PUBLIC_INFORMATION_PATHS.has(pathname) ||
+    PUBLIC_PATHS.some((path) => pathname.startsWith(path));
   const isStaffAuthPath = STAFF_AUTH_PATHS.some((path) => pathname.startsWith(path));
   const hasAccessToken = request.cookies.has(ACCESS_TOKEN_COOKIE);
   const hasRefreshToken = request.cookies.has(REFRESH_TOKEN_COOKIE);
