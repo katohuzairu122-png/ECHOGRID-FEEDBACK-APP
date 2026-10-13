@@ -13,7 +13,7 @@ import {
   changePasswordSchema,
   updateProfileSchema,
 } from './auth.dto';
-import { createEmailService } from '../notifications/email.service';
+import { createAccountSecurityEmailService } from '../notifications/email.service';
 import { parseJsonBody } from '../lib/validate';
 import { ok } from '../lib/response';
 import { AppError } from '../lib/errors';
@@ -40,11 +40,11 @@ async function withAuthService<T>(
     },
     createDurableObjectPbkdf2Worker(c.env.PASSWORD_HASHER),
     {
-      // Same environment-gated factory the notifications module uses, so
-      // reset emails log to the console in dev/staging instead of spending
-      // real Resend quota -- and, more importantly, so a developer can read
-      // the reset link straight out of `wrangler dev` output.
-      email: createEmailService(c.env.ENVIRONMENT, {
+      // Real Resend delivery on staging and production; console-only in
+      // development so the reset link is readable in `wrangler dev` output.
+      // See createAccountSecurityEmailService for why staging differs from
+      // the notifications factory.
+      email: createAccountSecurityEmailService(c.env.ENVIRONMENT, {
         apiKey: c.env.RESEND_API_KEY,
         fromAddress: c.env.RESEND_FROM_ADDRESS,
       }),

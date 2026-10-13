@@ -86,3 +86,20 @@ export function createEmailService(
 ): EmailService {
   return environment === 'production' ? new ResendEmailService(credentials) : new ConsoleEmailService();
 }
+
+/**
+ * Account-recovery email (password reset / password changed) -- sends for
+ * real on staging as well as production. Under createEmailService() above,
+ * staging logged reset links to Workers Logs only, so a staging user could
+ * never recover their account and Resend showed no attempt at all. Only
+ * `development` keeps the console fallback, so `wrangler dev` still prints
+ * the reset link. Everything else (notifications, team invites) stays on
+ * createEmailService() and remains log-only on staging -- that traffic
+ * includes seeded/E2E addresses whose bounces would hurt sender reputation.
+ */
+export function createAccountSecurityEmailService(
+  environment: 'development' | 'staging' | 'production',
+  credentials: ResendCredentials,
+): EmailService {
+  return environment === 'development' ? new ConsoleEmailService() : new ResendEmailService(credentials);
+}
