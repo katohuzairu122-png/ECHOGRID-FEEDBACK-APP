@@ -23,6 +23,29 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+describe('middleware — public landing information', () => {
+  it.each([
+    '/support',
+    '/privacy',
+    '/terms',
+    '/refunds',
+    '/cookies',
+    '/landing/cafe-hero.webp',
+    '/landing/industries.webp',
+  ])('serves the exact public path %s without a staff session', async (path) => {
+    expect(redirectTarget(await middleware(request(path)))).toBeNull();
+  });
+  it.each([
+    '/landing/private',
+    '/support/private',
+    '/privacy-admin',
+    '/dashboard/billing',
+    '/platform',
+  ])('does not widen public access to %s', async (path) => {
+    expect(redirectTarget(await middleware(request(path)))).toBe('/login');
+  });
+});
+
 describe('middleware — account recovery paths', () => {
   it.each(['/forgot-password', '/reset-password'])(
     'serves %s to a signed-out visitor instead of redirecting to /login',
