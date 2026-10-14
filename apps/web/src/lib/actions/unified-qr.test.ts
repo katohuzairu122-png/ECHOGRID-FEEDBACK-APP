@@ -5,7 +5,7 @@ vi.mock('@/lib/api-client', async () => ({
   ...(await import('@/lib/api-error')),
 }));
 vi.mock('@/lib/business', () => ({ getActiveBusiness: mocks.business }));
-import { resolveStaffQrAction, staffQrTransactionAction } from './unified-qr';
+import { resolveStaffQrAction, staffQrTransactionAction, staffUnifiedQrAction } from './unified-qr';
 import { ApiError } from '@/lib/api-error';
 
 const result = {
@@ -25,6 +25,43 @@ beforeEach(() => {
   mocks.api.mockResolvedValue(result);
 });
 describe('staff QR action authorization', () => {
+  it('never trusts permissions carried in posted action state', async () => {
+    mocks.api.mockResolvedValue({ ...result, actions: ['VIEW_ALLOWED_MEMBERSHIP_STATE'] });
+    const state = await staffUnifiedQrAction(
+      { result: { ...result, membershipStatus: 'active', actions: ['GRANT_LOYALTY_PROGRESS'] } },
+      form({
+        operation: 'purchase',
+        token: 'qr',
+        businessId: 'business',
+        purchaseAmount: '12',
+        idempotencyKey: 'request-123',
+      }),
+    );
+    expect(state.error).toContain('not permitted');
+    expect(state.result?.actions).toEqual(['VIEW_ALLOWED_MEMBERSHIP_STATE']);
+    expect(mocks.api).toHaveBeenCalledTimes(1);
+  });
+
+  it('preserves the purchase key across an uncertain response and rotates it only for a new completed-purchase resolution', async () => {
+    mocks.api
+      .mockResolvedValueOnce(result)
+      .mockRejectedValueOnce(new ApiError('Connection interrupted', 500));
+    const failed = await staffQrTransactionAction(
+      'qr',
+      'branch',
+      'business',
+      {},
+      form({ operation: 'purchase', purchaseAmount: '12', idempotencyKey: 'stable-request-key' }),
+    );
+    expect(failed.purchaseRequestKey).toBe('stable-request-key');
+    const retry = await resolveStaffQrAction(failed, form({ token: 'qr', branchId: 'branch' }));
+    expect(retry.purchaseRequestKey).toBe('stable-request-key');
+    const next = await resolveStaffQrAction(
+      { ...retry, purchaseCompleted: true },
+      form({ token: 'qr', branchId: 'branch' }),
+    );
+    expect(next.purchaseRequestKey).not.toBe('stable-request-key');
+  });
   it('only resolves on a scan; never writes a purchase or redemption', async () => {
     await resolveStaffQrAction({}, form({ token: 'signed-qr', branchId: 'branch' }));
     expect(mocks.api).toHaveBeenCalledTimes(1);

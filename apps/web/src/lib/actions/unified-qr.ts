@@ -16,6 +16,8 @@ export interface StaffQrResult {
 }
 export interface StaffQrState {
   token?: string;
+  purchaseRequestKey?: string;
+  purchaseCompleted?: boolean;
   error?: string;
   result?: StaffQrResult;
   businessId?: string;
@@ -58,7 +60,19 @@ export async function resolveStaffQrAction(
   try {
     const token = String(form.get('token') ?? '');
     const { result, scope } = await resolve(token, String(form.get('branchId') ?? '').trim());
-    return { result, token, businessId: scope.businessId, branchId: scope.branchId };
+    return {
+      result,
+      token,
+      businessId: scope.businessId,
+      branchId: scope.branchId,
+      purchaseRequestKey:
+        !_prev.purchaseCompleted &&
+        _prev.token === token &&
+        _prev.businessId === scope.businessId &&
+        _prev.branchId === scope.branchId
+          ? (_prev.purchaseRequestKey ?? crypto.randomUUID())
+          : crypto.randomUUID(),
+    };
   } catch (err) {
     return failure(err);
   }
@@ -71,8 +85,17 @@ export async function staffQrTransactionAction(
   _prev: StaffQrState,
   form: FormData,
 ): Promise<StaffQrState> {
+  let verifiedState: StaffQrState = {};
   try {
     const { result, scope } = await resolve(token, branchId, businessId);
+    verifiedState = {
+      purchaseCompleted: Boolean(_prev.purchaseCompleted),
+      result,
+      token,
+      businessId: scope.businessId,
+      branchId: scope.branchId,
+      purchaseRequestKey: String(form.get('idempotencyKey') ?? _prev.purchaseRequestKey ?? ''),
+    };
     const operation = String(form.get('operation') ?? '');
     if (!result.loyaltyAccountId) throw new ApiError('No eligible loyalty membership.', 403);
     if (operation === 'purchase') {
@@ -91,7 +114,7 @@ export async function staffQrTransactionAction(
           channel: 'other',
         }),
       });
-      return { success: true };
+      return { ...verifiedState, success: true, purchaseCompleted: true };
     }
     if (!result.actions.includes('REDEEM_REWARD') || !['lookup', 'confirm'].includes(operation)) {
       throw new ApiError('Reward redemption is not permitted.', 403);
@@ -110,7 +133,7 @@ export async function staffQrTransactionAction(
     if (transaction.loyaltyAccountId !== result.loyaltyAccountId) {
       throw new ApiError('This reward does not belong to the scanned membership.', 403);
     }
-    if (operation === 'lookup') return { transaction };
+    if (operation === 'lookup') return { ...verifiedState, transaction };
     if (
       String(form.get('reviewedCode') ?? '')
         .trim()
@@ -119,8 +142,24 @@ export async function staffQrTransactionAction(
       throw new ApiError('Review this reward code before confirming the handoff.', 409);
     }
     await apiFetch(`/loyalty/redemptions/${code}/confirm`, { ...scope, method: 'POST' });
-    return { success: true };
+    return { ...verifiedState, success: true };
   } catch (err) {
-    return failure(err);
+    return { ...verifiedState, ...failure(err) };
   }
+}
+
+// A single state owner also preserves the resolved menu across native form
+// submissions before hydration. Previous state never grants authorization.
+export async function staffUnifiedQrAction(
+  prev: StaffQrState,
+  form: FormData,
+): Promise<StaffQrState> {
+  if (form.get('operation') === 'resolve') return resolveStaffQrAction(prev, form);
+  return staffQrTransactionAction(
+    String(form.get('token') ?? ''),
+    String(form.get('branchId') ?? ''),
+    String(form.get('businessId') ?? ''),
+    prev,
+    form,
+  );
 }
