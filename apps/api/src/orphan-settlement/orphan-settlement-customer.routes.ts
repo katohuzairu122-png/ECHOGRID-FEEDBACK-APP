@@ -1,7 +1,5 @@
 import { Hono, type Context } from 'hono';
-import {
-  orphanSettlementCompletionAuthorizationSchema,
-} from '@echo-grid-feedback/shared-types';
+import { orphanSettlementCompletionAuthorizationSchema } from '@echo-grid-feedback/shared-types';
 import type { Bindings } from '../config/env';
 import { createDb, type Database } from '../db/client';
 import {
@@ -13,6 +11,8 @@ import { parseJsonBody } from '../lib/validate';
 import { ok } from '../lib/response';
 import { CustomerSettlementCompletionService } from './customer-settlement-completion.service';
 import { OrphanSettlementTerminationService } from './orphan-settlement-termination.service';
+import { createRepositories } from '../repositories';
+import { AppError } from '../lib/errors';
 
 type Env = {
   Bindings: Bindings;
@@ -21,16 +21,9 @@ type Env = {
 
 export const orphanSettlementCustomerRoutes = new Hono<Env>();
 
-orphanSettlementCustomerRoutes.use(
-  '*',
-  customerAuthenticate,
-  rateLimit('PUBLIC_RATE_LIMITER'),
-);
+orphanSettlementCustomerRoutes.use('*', customerAuthenticate, rateLimit('PUBLIC_RATE_LIMITER'));
 
-async function withDb<T>(
-  c: Context<Env>,
-  fn: (db: Database) => Promise<T>,
-): Promise<T> {
+async function withDb<T>(c: Context<Env>, fn: (db: Database) => Promise<T>): Promise<T> {
   const { db, close } = await createDb(c.env.HYPERDRIVE);
   try {
     return await fn(db);
@@ -38,6 +31,35 @@ async function withDb<T>(
     c.executionCtx.waitUntil(close());
   }
 }
+
+orphanSettlementCustomerRoutes.get('/', async (c) => {
+  const limit = Number(c.req.query('limit') ?? 20);
+  const offset = Number(c.req.query('offset') ?? 0);
+  if (
+    !Number.isInteger(limit) ||
+    limit < 1 ||
+    limit > 200 ||
+    !Number.isInteger(offset) ||
+    offset < 0
+  ) {
+    throw new AppError('Invalid pagination.', 400, 'PAGINATION_INVALID');
+  }
+  return withDb(c, async (db) => {
+    const rows = await createRepositories(db).orphanSettlements.listForCustomer(
+      c.get('customerId'),
+      { limit, offset },
+    );
+    return ok(c, {
+      settlements: rows.map((row) => ({
+        id: row.id,
+        status: row.status,
+        receivingBusinessId: row.receivingBusinessId,
+        expiresAt: row.expiresAt.toISOString(),
+      })),
+      pagination: { limit, offset, returned: rows.length },
+    });
+  });
+});
 
 orphanSettlementCustomerRoutes.get('/:settlementId', async (c) =>
   withDb(c, async (db) => {
@@ -53,15 +75,12 @@ orphanSettlementCustomerRoutes.get('/:settlementId', async (c) =>
         receivingBusinessId: result.settlement.receivingBusinessId,
         receivingBranchId: result.settlement.receivingBranchId,
         status: result.settlement.status,
-        fulfillmentPolicyVersion:
-          result.settlement.fulfillmentPolicyVersion,
+        fulfillmentPolicyVersion: result.settlement.fulfillmentPolicyVersion,
         fulfillmentSnapshot: result.settlement.fulfillmentSnapshot,
         fulfillmentReference: result.settlement.fulfillmentReference,
         expiresAt: result.settlement.expiresAt.toISOString(),
-        completionAuthorizationId:
-          result.settlement.completionAuthorizationId,
-        completionAuthorizedAt:
-          result.settlement.completionAuthorizedAt?.toISOString() ?? null,
+        completionAuthorizationId: result.settlement.completionAuthorizationId,
+        completionAuthorizedAt: result.settlement.completionAuthorizedAt?.toISOString() ?? null,
       },
       claim: {
         id: result.claim.id,
@@ -72,92 +91,71 @@ orphanSettlementCustomerRoutes.get('/:settlementId', async (c) =>
   }),
 );
 
-orphanSettlementCustomerRoutes.post(
-  '/:settlementId/authorize-completion',
-  async (c) => {
-    const body = await parseJsonBody(
-      c.req.raw,
-      orphanSettlementCompletionAuthorizationSchema,
+orphanSettlementCustomerRoutes.post('/:settlementId/authorize-completion', async (c) => {
+  const body = await parseJsonBody(c.req.raw, orphanSettlementCompletionAuthorizationSchema);
+
+  return withDb(c, async (db) => {
+    const result = await new CustomerSettlementCompletionService(db).authorizeCompletion(
+      c.get('customerId'),
+      c.req.param('settlementId'),
+      body,
     );
 
-    return withDb(c, async (db) => {
-      const result =
-        await new CustomerSettlementCompletionService(
-          db,
-        ).authorizeCompletion(
-          c.get('customerId'),
-          c.req.param('settlementId'),
-          body,
-        );
-
-      return ok(
-        c,
-        {
-          settlement: {
-            id: result.settlement.id,
-            claimId: result.settlement.claimId,
-            receivingBusinessId:
-              result.settlement.receivingBusinessId,
-            receivingBranchId:
-              result.settlement.receivingBranchId,
-            status: result.settlement.status,
-            fulfillmentPolicyVersion:
-              result.settlement.fulfillmentPolicyVersion,
-            fulfillmentSnapshot:
-              result.settlement.fulfillmentSnapshot,
-            fulfillmentReference:
-              result.settlement.fulfillmentReference,
-            expiresAt: result.settlement.expiresAt.toISOString(),
-            completionAuthorizationId:
-              result.settlement.completionAuthorizationId,
-            completionAuthorizedAt:
-              result.settlement.completionAuthorizedAt?.toISOString() ??
-              null,
-          },
-          authorization: {
-            id: result.authorization.id,
-            actionType: result.authorization.actionType,
-            status: result.authorization.status,
-            receivingBusinessId: result.authorization.businessId,
-            resourceType: result.authorization.resourceType,
-            resourceId: result.authorization.resourceId,
-            scope: result.authorization.scope,
-            correlationId: result.authorization.correlationId,
-            expiresAt: result.authorization.expiresAt.toISOString(),
-          },
-          changed: result.changed,
-        },
-        result.changed ? 201 : 200,
-      );
-    });
-  },
-);
-
-
-orphanSettlementCustomerRoutes.post(
-  '/:settlementId/cancel',
-  async (c) =>
-    withDb(c, async (db) => {
-      const result =
-        await new OrphanSettlementTerminationService(db).cancelForCustomer(
-          c.get('customerId'),
-          c.req.param('settlementId'),
-        );
-
-      return ok(c, {
+    return ok(
+      c,
+      {
         settlement: {
           id: result.settlement.id,
           claimId: result.settlement.claimId,
           receivingBusinessId: result.settlement.receivingBusinessId,
           receivingBranchId: result.settlement.receivingBranchId,
           status: result.settlement.status,
+          fulfillmentPolicyVersion: result.settlement.fulfillmentPolicyVersion,
+          fulfillmentSnapshot: result.settlement.fulfillmentSnapshot,
+          fulfillmentReference: result.settlement.fulfillmentReference,
+          expiresAt: result.settlement.expiresAt.toISOString(),
+          completionAuthorizationId: result.settlement.completionAuthorizationId,
+          completionAuthorizedAt: result.settlement.completionAuthorizedAt?.toISOString() ?? null,
         },
-        claim: {
-          id: result.claim.id,
-          status: result.claim.status,
+        authorization: {
+          id: result.authorization.id,
+          actionType: result.authorization.actionType,
+          status: result.authorization.status,
+          receivingBusinessId: result.authorization.businessId,
+          resourceType: result.authorization.resourceType,
+          resourceId: result.authorization.resourceId,
+          scope: result.authorization.scope,
+          correlationId: result.authorization.correlationId,
+          expiresAt: result.authorization.expiresAt.toISOString(),
         },
-        claimReleased: result.claimReleased,
         changed: result.changed,
-      });
-    }),
+      },
+      result.changed ? 201 : 200,
+    );
+  });
+});
+
+orphanSettlementCustomerRoutes.post('/:settlementId/cancel', async (c) =>
+  withDb(c, async (db) => {
+    const result = await new OrphanSettlementTerminationService(db).cancelForCustomer(
+      c.get('customerId'),
+      c.req.param('settlementId'),
+    );
+
+    return ok(c, {
+      settlement: {
+        id: result.settlement.id,
+        claimId: result.settlement.claimId,
+        receivingBusinessId: result.settlement.receivingBusinessId,
+        receivingBranchId: result.settlement.receivingBranchId,
+        status: result.settlement.status,
+      },
+      claim: {
+        id: result.claim.id,
+        status: result.claim.status,
+      },
+      claimReleased: result.claimReleased,
+      changed: result.changed,
+    });
+  }),
 );

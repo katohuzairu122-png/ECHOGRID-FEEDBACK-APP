@@ -13,6 +13,7 @@ import { parseJsonBody } from '../lib/validate';
 import { ok } from '../lib/response';
 import { AppError } from '../lib/errors';
 import { BusinessService } from './business.service';
+import { BusinessActionContextService } from './business-action-context.service';
 
 type Env = {
   Bindings: Bindings;
@@ -54,6 +55,24 @@ businessRoutes.get('/', authenticate, async (c) => {
  * conflict, but keeping public/anonymous routes visually grouped together
  * at the top of the file matches qr.routes.ts's own convention.
  */
+// Discovery of the caller's own grants, like GET /businesses. This bootstraps
+// branch selection without asking a branch-scoped user to type an internal ID.
+// Each later action still passes through tenant and permission middleware.
+businessRoutes.get('/:id/action-contexts', authenticate, async (c) => {
+  const { db, close } = await createDb(c.env.HYPERDRIVE);
+  try {
+    return ok(
+      c,
+      await new BusinessActionContextService(createRepositories(db)).listForUser(
+        c.get('userId'),
+        c.req.param('id'),
+      ),
+    );
+  } finally {
+    c.executionCtx.waitUntil(close());
+  }
+});
+
 businessRoutes.get('/:id/public', rateLimit('PUBLIC_RATE_LIMITER'), async (c) => {
   const { db, close } = await createDb(c.env.HYPERDRIVE);
   try {

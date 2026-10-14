@@ -27,6 +27,9 @@ export default async function LoyaltyCustomerDashboardPage() {
   return (
     <div className="flex flex-col gap-6">
       <h1 className="text-2xl font-semibold text-neutral-900">{t('title')}</h1>
+      <Link href="/loyalty/dashboard/settlements" className="text-brand-700 underline">
+        Orphan reward settlement
+      </Link>
 
       {accounts.length === 0 ? (
         <Card>
