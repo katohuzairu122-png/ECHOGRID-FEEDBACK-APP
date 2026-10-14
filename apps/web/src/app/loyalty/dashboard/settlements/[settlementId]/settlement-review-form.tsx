@@ -4,7 +4,13 @@ import { customerSettlementReviewAction } from '@/lib/actions/settlements';
 import type { SettlementView } from '@/lib/settlement-types';
 import { Button } from '@/components/ui';
 
-export function SettlementReviewForm({ initial }: { initial: SettlementView }) {
+export function SettlementReviewForm({
+  initial,
+  businessName,
+}: {
+  initial: SettlementView;
+  businessName: string;
+}) {
   const [state, action, pending] = useActionState(
     customerSettlementReviewAction.bind(null, initial.id),
     {},
@@ -18,7 +24,7 @@ export function SettlementReviewForm({ initial }: { initial: SettlementView }) {
   return (
     <form action={action} className="space-y-4 rounded-xl border bg-white p-5">
       <p>Status: {current.status}</p>
-      <p>Receiving business: {current.receivingBusinessId}</p>
+      <p>Receiving business: {businessName}</p>
       <p>Reservation expires: {current.expiresAt}</p>
       {current.fulfillmentSnapshot && (
         <div className="space-y-2">
