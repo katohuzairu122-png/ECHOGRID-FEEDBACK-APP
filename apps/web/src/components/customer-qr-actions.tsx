@@ -1,12 +1,11 @@
 import Link from 'next/link';
-import type { ResolveBusinessQrActionsResultDto } from '@echo-grid-feedback/shared-types';
-import { customerApiFetch } from '@/lib/customer-api-client';
-import { hasCustomerSession } from '@/lib/customer-session';
+import { resolveOptionalQrActions } from '@/lib/optional-qr-actions';
 import { JoinQrMembership } from './join-qr-membership';
 
 export async function CustomerQrActions({ token }: { token: string }) {
   const next = `/feedback/${encodeURIComponent(token)}`;
-  if (!(await hasCustomerSession())) {
+  const result = await resolveOptionalQrActions(token);
+  if (!result) {
     return (
       <nav aria-label="Branch activities" className="mt-5 flex flex-wrap gap-3">
         <a href="#feedback-form" className="rounded-lg bg-brand-700 px-5 py-3 text-white">
@@ -21,15 +20,6 @@ export async function CustomerQrActions({ token }: { token: string }) {
       </nav>
     );
   }
-  const result = await customerApiFetch<ResolveBusinessQrActionsResultDto>(
-    '/loyalty/me/actions/resolve-business',
-    {
-      method: 'POST',
-      cache: 'no-store',
-      body: JSON.stringify({ businessQrToken: token }),
-    },
-    next,
-  );
   const actions = new Set(result.actions);
   return (
     <nav

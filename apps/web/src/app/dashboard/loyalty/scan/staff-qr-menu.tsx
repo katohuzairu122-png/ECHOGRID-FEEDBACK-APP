@@ -26,7 +26,7 @@ export function StaffQrMenu({
         <select
           id="branchId"
           name="branchId"
-          defaultValue={contexts[0]?.branchId ?? ''}
+          defaultValue={state.branchId ?? contexts[0]?.branchId ?? ''}
           className="w-full rounded border p-3"
         >
           {contexts.map((context) => (

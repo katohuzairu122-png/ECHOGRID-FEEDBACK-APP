@@ -2,11 +2,13 @@ import { describe, expect, it, vi } from 'vitest';
 import { BusinessActionContextService } from './business-action-context.service';
 function repos(grants: { branchId: string | null }[], active = true) {
   return {
+    permissions: { findEffectiveKeys: vi.fn().mockResolvedValue(new Set()) },
     userBusinessRoles: { listForUserAtBusiness: vi.fn().mockResolvedValue(grants) },
     businesses: {
       findById: vi.fn().mockResolvedValue({ status: active ? 'active' : 'suspended' }),
     },
     branches: {
+      listByBusiness: vi.fn().mockResolvedValue([]),
       findById: vi
         .fn()
         .mockImplementation(async (id: string, businessId: string) =>
@@ -21,6 +23,21 @@ function service(mock: ReturnType<typeof repos>) {
   );
 }
 describe('own business action contexts', () => {
+  it('offers other owned branches only to business-wide staff with branches:view', async () => {
+    const mock = repos([{ branchId: null }]);
+    mock.permissions.findEffectiveKeys.mockResolvedValue(new Set(['branches:view']));
+    mock.branches.listByBusiness.mockResolvedValue([
+      { id: 'branch-a', businessId: 'business-a', name: 'Main' },
+      { id: 'foreign', businessId: 'other-business', name: 'Private' },
+    ]);
+    expect(await service(mock).listForUser('staff', 'business-a')).toEqual([
+      { branchId: null, branchName: null },
+      { branchId: 'branch-a', branchName: 'Main' },
+    ]);
+    const restricted = repos([{ branchId: null }]);
+    await service(restricted).listForUser('staff', 'business-a');
+    expect(restricted.branches.listByBusiness).not.toHaveBeenCalled();
+  });
   it('returns only valid own branches and deduplicates grants', async () => {
     const mock = repos([
       { branchId: 'branch-a' },
