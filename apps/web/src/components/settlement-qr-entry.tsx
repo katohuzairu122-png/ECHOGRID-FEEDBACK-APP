@@ -1,19 +1,9 @@
 import Link from 'next/link';
-import type { ResolveBusinessQrActionsResultDto } from '@echo-grid-feedback/shared-types';
-import { hasCustomerSession } from '@/lib/customer-session';
-import { customerApiFetch } from '@/lib/customer-api-client';
+import { resolveOptionalQrActions } from '@/lib/optional-qr-actions';
 
 export async function SettlementQrEntry({ token }: { token: string }) {
-  if (!(await hasCustomerSession())) return null;
-  const result = await customerApiFetch<ResolveBusinessQrActionsResultDto>(
-    '/loyalty/me/actions/resolve-business',
-    {
-      method: 'POST',
-      cache: 'no-store',
-      body: JSON.stringify({ businessQrToken: token }),
-    },
-    `/feedback/${encodeURIComponent(token)}`,
-  );
+  const result = await resolveOptionalQrActions(token);
+  if (!result) return null;
   if (!result.actions.includes('SETTLE_ORPHAN_REWARD')) return null;
   return (
     <Link

@@ -114,6 +114,8 @@ export async function customerSettlementReviewAction(
     if (
       field(form, 'reviewedContract') !==
       JSON.stringify({
+        business: settlement.receivingBusinessId,
+        branch: settlement.receivingBranchId,
         policy: settlement.fulfillmentPolicyVersion,
         reference: settlement.fulfillmentReference,
         snapshot: settlement.fulfillmentSnapshot,

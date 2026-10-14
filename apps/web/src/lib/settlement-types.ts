@@ -10,6 +10,7 @@ export interface SettlementView {
   claimId: string;
   receivingBusinessId: string;
   receivingBranchId: string | null;
+  receivingBranchName?: string | null;
   status: string;
   expiresAt: string;
   fulfillmentPolicyVersion: string | null;

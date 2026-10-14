@@ -13,6 +13,7 @@ const NAV_ITEMS = [
   ['branches', '/dashboard/branches'],
   ['feedback', '/dashboard/feedback'],
   ['loyalty', '/dashboard/loyalty'],
+  ['settlements', '/dashboard/settlements'],
   ['messages', '/dashboard/messages'],
   ['analytics', '/dashboard/analytics'],
   ['notifications', '/dashboard/notifications'],
@@ -60,7 +61,11 @@ export async function DashboardNav() {
             items={NAV_ITEMS.map(([key, href]) => ({ href, label: t(`nav.${key}`) }))}
           />
         </div>
-        {activeBusiness && <div className="mt-3"><BusinessSwitcher businesses={businesses} activeBusinessId={activeBusiness.id} /></div>}
+        {activeBusiness && (
+          <div className="mt-3">
+            <BusinessSwitcher businesses={businesses} activeBusinessId={activeBusiness.id} />
+          </div>
+        )}
       </div>
     </header>
   );

@@ -17,7 +17,10 @@ export function SettlementReviewForm({
   );
   const [requestKey] = useState(() => crypto.randomUUID());
   const current = state.review ?? initial;
-  const canComplete = current.status === 'reserved' && !!current.fulfillmentSnapshot;
+  const canComplete =
+    current.status === 'reserved' &&
+    !!current.fulfillmentSnapshot &&
+    (!current.receivingBranchId || !!current.receivingBranchName);
   const canCancel = ['proposed', 'accepted', 'reserved', 'completion_authorized'].includes(
     current.status,
   );
@@ -25,6 +28,13 @@ export function SettlementReviewForm({
     <form action={action} className="space-y-4 rounded-xl border bg-white p-5">
       <p>Status: {current.status}</p>
       <p>Receiving business: {businessName}</p>
+      <p>
+        Receiving branch:{' '}
+        {current.receivingBranchId
+          ? (current.receivingBranchName ??
+            'Branch information unavailable; refresh before authorizing.')
+          : 'Business-wide fulfillment'}
+      </p>
       <p>Reservation expires: {current.expiresAt}</p>
       {current.fulfillmentSnapshot && (
         <div className="space-y-2">
@@ -43,6 +53,8 @@ export function SettlementReviewForm({
         type="hidden"
         name="reviewedContract"
         value={JSON.stringify({
+          business: current.receivingBusinessId,
+          branch: current.receivingBranchId,
           policy: current.fulfillmentPolicyVersion,
           reference: current.fulfillmentReference,
           snapshot: current.fulfillmentSnapshot,

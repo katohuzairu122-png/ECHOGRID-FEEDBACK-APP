@@ -17,7 +17,7 @@ export function BusinessSettlementForm({
         <select
           id="branchId"
           name="branchId"
-          defaultValue={contexts[0]?.branchId ?? ''}
+          defaultValue={state.branchId ?? contexts[0]?.branchId ?? ''}
           className="w-full rounded border p-3"
         >
           {contexts.map((context) => (
@@ -105,6 +105,13 @@ export function BusinessSettlementForm({
           <article key={settlement.id} className="space-y-3 rounded-xl border bg-white p-5">
             <h2 className="break-all font-semibold">Settlement {settlement.id}</h2>
             <p>Status: {settlement.status}</p>
+            {settlement.receivingBranchId && (
+              <p>
+                Receiving branch:{' '}
+                {contexts.find((context) => context.branchId === settlement.receivingBranchId)
+                  ?.branchName ?? 'Select the receiving branch to fulfill this request.'}
+              </p>
+            )}
             <p>Expires: {settlement.expiresAt}</p>
             <h3 className="font-semibold">{settlement.fulfillmentSnapshot?.title}</h3>
             <p>{settlement.fulfillmentSnapshot?.description}</p>
@@ -113,20 +120,22 @@ export function BusinessSettlementForm({
               Policy: {settlement.fulfillmentPolicyVersion}. Reference:{' '}
               {settlement.fulfillmentReference ?? 'None'}.
             </p>
-            {settlement.status === 'completion_authorized' && allowed.has('settlement:fulfill') && (
-              <form action={action} className="space-y-3">
-                <input type="hidden" name="settlementId" value={settlement.id} />
-                <input type="hidden" name="reviewedBusinessId" value={state.businessId} />
-                <input type="hidden" name="branchId" value={state.branchId ?? ''} />
-                <label className="flex gap-2">
-                  <input type="checkbox" name="consent" required />I confirm actual fulfillment of
-                  the customer-reviewed benefit.
-                </label>
-                <Button name="operation" value="fulfill" disabled={pending}>
-                  Confirm orphan settlement fulfillment
-                </Button>
-              </form>
-            )}
+            {settlement.status === 'completion_authorized' &&
+              allowed.has('settlement:fulfill') &&
+              settlement.receivingBranchId === (state.branchId ?? null) && (
+                <form action={action} className="space-y-3">
+                  <input type="hidden" name="settlementId" value={settlement.id} />
+                  <input type="hidden" name="reviewedBusinessId" value={state.businessId} />
+                  <input type="hidden" name="branchId" value={state.branchId ?? ''} />
+                  <label className="flex gap-2">
+                    <input type="checkbox" name="consent" required />I confirm actual fulfillment of
+                    the customer-reviewed benefit.
+                  </label>
+                  <Button name="operation" value="fulfill" disabled={pending}>
+                    Confirm orphan settlement fulfillment
+                  </Button>
+                </form>
+              )}
           </article>
         ))}
       {state.error && <p role="alert">{state.error}</p>}

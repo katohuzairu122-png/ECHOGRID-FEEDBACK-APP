@@ -67,6 +67,12 @@ orphanSettlementCustomerRoutes.get('/:settlementId', async (c) =>
       c.get('customerId'),
       c.req.param('settlementId'),
     );
+    const receivingBranch = result.settlement.receivingBranchId
+      ? await createRepositories(db).branches.findById(
+          result.settlement.receivingBranchId,
+          result.settlement.receivingBusinessId,
+        )
+      : undefined;
 
     return ok(c, {
       settlement: {
@@ -74,6 +80,7 @@ orphanSettlementCustomerRoutes.get('/:settlementId', async (c) =>
         claimId: result.settlement.claimId,
         receivingBusinessId: result.settlement.receivingBusinessId,
         receivingBranchId: result.settlement.receivingBranchId,
+        receivingBranchName: receivingBranch?.name ?? null,
         status: result.settlement.status,
         fulfillmentPolicyVersion: result.settlement.fulfillmentPolicyVersion,
         fulfillmentSnapshot: result.settlement.fulfillmentSnapshot,

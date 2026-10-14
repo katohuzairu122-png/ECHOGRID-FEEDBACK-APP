@@ -13,7 +13,8 @@
     "team": "Equipo",
     "billing": "Facturación",
     "support": "Soporte",
-    "logout": "Cerrar sesión"
+    "logout": "Cerrar sesión",
+    "settlements": "Liquidación de recompensas huérfanas"
   },
   "home": {
     "branchesTitle": "Sucursales",

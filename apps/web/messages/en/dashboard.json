@@ -13,7 +13,8 @@
     "team": "Team",
     "billing": "Billing",
     "support": "Support",
-    "logout": "Log out"
+    "logout": "Log out",
+    "settlements": "Orphan settlement"
   },
   "home": {
     "branchesTitle": "Branches",

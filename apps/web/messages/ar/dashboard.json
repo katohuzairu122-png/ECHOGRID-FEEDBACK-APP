@@ -13,7 +13,8 @@
     "team": "الفريق",
     "billing": "الفوترة",
     "support": "الدعم",
-    "logout": "تسجيل الخروج"
+    "logout": "تسجيل الخروج",
+    "settlements": "تسوية المكافآت اليتيمة"
   },
   "home": {
     "branchesTitle": "الفروع",
