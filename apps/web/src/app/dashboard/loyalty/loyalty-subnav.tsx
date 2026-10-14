@@ -9,7 +9,12 @@ export async function LoyaltySubnav() {
     { href: '/dashboard/loyalty/tiers', label: t('tiers') },
     { href: '/dashboard/loyalty/rewards', label: t('rewards') },
     { href: '/dashboard/loyalty/redeem', label: t('redeem') },
+    { href: '/dashboard/loyalty/scan', label: 'Customer QR' },
     { href: '/dashboard/loyalty/settings', label: t('settings') },
   ];
-  return <nav className="flex flex-wrap gap-2 border-b border-neutral-200 pb-3"><LoyaltySubnavLinks items={items} /></nav>;
+  return (
+    <nav className="flex flex-wrap gap-2 border-b border-neutral-200 pb-3">
+      <LoyaltySubnavLinks items={items} />
+    </nav>
+  );
 }

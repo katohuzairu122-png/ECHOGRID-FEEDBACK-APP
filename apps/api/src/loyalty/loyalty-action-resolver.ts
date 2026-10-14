@@ -70,7 +70,10 @@ export class LoyaltyActionResolver {
       throw new AppError('This customer QR code is no longer valid.', 404, 'CUSTOMER_QR_NOT_FOUND');
     }
 
-    const membership = await this.repos.customerMemberships.findActive(customer.id, input.businessId);
+    const membership = await this.repos.customerMemberships.findActive(
+      customer.id,
+      input.businessId,
+    );
     const account = membership
       ? await this.repos.loyaltyAccounts.findByCustomerAndBusiness(customer.id, input.businessId)
       : undefined;
@@ -78,8 +81,8 @@ export class LoyaltyActionResolver {
     const actions: LoyaltyResolvedAction[] = [];
     if (membership && account) {
       if (input.permissions.has('loyalty:view')) actions.push('VIEW_ALLOWED_MEMBERSHIP_STATE');
-      if (input.permissions.has('loyalty:manage')) {
-        actions.push('VALIDATE_PURCHASE', 'GRANT_LOYALTY_PROGRESS');
+      if (input.permissions.has('loyalty:manage') && account.status !== 'suspended') {
+        actions.push('VALIDATE_PURCHASE', 'GRANT_LOYALTY_PROGRESS', 'REDEEM_REWARD');
       }
     }
 
@@ -109,10 +112,18 @@ export class LoyaltyActionResolver {
     actions: LoyaltyResolvedAction[];
     surveyCampaigns: ResolvedSurveyCampaign[];
   }> {
-    const qrCode = await new QrCodeService(this.repos, this.secrets).resolveToken(input.businessQrToken);
-    const membership = await this.repos.customerMemberships.findActive(input.customerId, qrCode.businessId);
+    const qrCode = await new QrCodeService(this.repos, this.secrets).resolveToken(
+      input.businessQrToken,
+    );
+    const membership = await this.repos.customerMemberships.findActive(
+      input.customerId,
+      qrCode.businessId,
+    );
     const account = membership
-      ? await this.repos.loyaltyAccounts.findByCustomerAndBusiness(input.customerId, qrCode.businessId)
+      ? await this.repos.loyaltyAccounts.findByCustomerAndBusiness(
+          input.customerId,
+          qrCode.businessId,
+        )
       : undefined;
 
     const campaigns = await this.repos.surveys.listQrExposedForBusinessBranch(
@@ -144,11 +155,14 @@ export class LoyaltyActionResolver {
       });
     }
 
+    const receivingBusiness = await this.repos.businesses.findById(qrCode.businessId);
     const actions: LoyaltyResolvedAction[] = ['LEAVE_FEEDBACK'];
     if (!membership || !account) {
-      actions.unshift('JOIN_LOYALTY');
+      if (receivingBusiness?.status === 'active') actions.unshift('JOIN_LOYALTY');
     } else {
-      actions.unshift('OPEN_LOYALTY_CARD', 'VIEW_REWARDS', 'CHECK_IN');
+      actions.unshift('OPEN_LOYALTY_CARD', 'VIEW_REWARDS');
+      if (account.status !== 'suspended' && receivingBusiness?.status === 'active')
+        actions.splice(2, 0, 'CHECK_IN');
     }
     if (surveyCampaigns.length > 0) actions.push('TAKE_SURVEY');
 
@@ -156,7 +170,6 @@ export class LoyaltyActionResolver {
     // business is currently active and the customer owns at least one
     // available orphan claim from a different origin business. No claim ID,
     // reward value, settlement ID, or authorization state is returned.
-    const receivingBusiness = await this.repos.businesses.findById(qrCode.businessId);
     const canSettleOrphan =
       receivingBusiness?.status === 'active' &&
       (await this.repos.orphanRewardClaims.existsAvailableForCustomerExcludingBusiness(
