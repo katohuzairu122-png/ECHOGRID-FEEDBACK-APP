@@ -30,6 +30,9 @@ export default async function LoyaltyCustomerDashboardPage() {
       <Link href="/loyalty/dashboard/qr" className="text-brand-700 underline">
         Show my customer QR
       </Link>
+      <Link href="/loyalty/dashboard/settlements" className="text-brand-700 underline">
+        Orphan reward settlement
+      </Link>
 
       {accounts.length === 0 ? (
         <Card>

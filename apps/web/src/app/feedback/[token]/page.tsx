@@ -1,5 +1,6 @@
 import { notFound } from 'next/navigation';
 import { CustomerQrActions } from '@/components/customer-qr-actions';
+import { SettlementQrEntry } from '@/components/settlement-qr-entry';
 import { NextIntlClientProvider } from 'next-intl';
 import { resolveSupportedLocale, type QrResolveDto } from '@echo-grid-feedback/shared-types';
 import { publicApiFetch } from '@/lib/public-api-client';
@@ -61,6 +62,7 @@ export default async function FeedbackLandingPage({ params }: FeedbackLandingPag
           settlement.
         </p>
         <CustomerQrActions token={token} />
+        <SettlementQrEntry token={token} />
       </section>
       <div id="feedback-form">
         <FeedbackForm

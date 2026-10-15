@@ -14,7 +14,8 @@
     "billing": "Facturación",
     "support": "Soporte",
     "logout": "Cerrar sesión",
-    "customerQr": "QR del cliente"
+    "customerQr": "QR del cliente",
+    "settlements": "Liquidación de recompensas huérfanas"
   },
   "home": {
     "branchesTitle": "Sucursales",

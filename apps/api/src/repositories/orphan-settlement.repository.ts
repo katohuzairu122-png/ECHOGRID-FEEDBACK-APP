@@ -44,12 +44,7 @@ export class OrphanSettlementRepository extends BaseRepository {
         fulfillmentReference: input.fulfillmentReference ?? null,
         updatedAt: new Date(),
       })
-      .where(
-        and(
-          eq(orphanSettlements.id, id),
-          eq(orphanSettlements.status, 'proposed'),
-        ),
-      )
+      .where(and(eq(orphanSettlements.id, id), eq(orphanSettlements.status, 'proposed')))
       .returning();
     return row;
   }
@@ -72,10 +67,7 @@ export class OrphanSettlementRepository extends BaseRepository {
       .where(
         and(
           eq(orphanSettlements.id, id),
-          inArray(orphanSettlements.status, [
-            'reserved',
-            'completion_authorized',
-          ]),
+          inArray(orphanSettlements.status, ['reserved', 'completion_authorized']),
         ),
       )
       .returning();
@@ -98,10 +90,7 @@ export class OrphanSettlementRepository extends BaseRepository {
         updatedAt: new Date(),
       })
       .where(
-        and(
-          eq(orphanSettlements.id, id),
-          eq(orphanSettlements.status, 'completion_authorized'),
-        ),
+        and(eq(orphanSettlements.id, id), eq(orphanSettlements.status, 'completion_authorized')),
       )
       .returning();
     return row;
@@ -132,10 +121,7 @@ export class OrphanSettlementRepository extends BaseRepository {
     return row;
   }
 
-  async listExpiredActive(
-    cutoff: Date,
-    limit = 100,
-  ): Promise<OrphanSettlement[]> {
+  async listExpiredActive(cutoff: Date, limit = 100): Promise<OrphanSettlement[]> {
     return this.db.query.orphanSettlements.findMany({
       where: and(
         inArray(orphanSettlements.status, [
@@ -151,28 +137,19 @@ export class OrphanSettlementRepository extends BaseRepository {
     });
   }
 
-  async reverseFulfilled(
-    id: string,
-  ): Promise<OrphanSettlement | undefined> {
+  async reverseFulfilled(id: string): Promise<OrphanSettlement | undefined> {
     const [row] = await this.db
       .update(orphanSettlements)
       .set({
         status: 'reversed',
         updatedAt: new Date(),
       })
-      .where(
-        and(
-          eq(orphanSettlements.id, id),
-          eq(orphanSettlements.status, 'fulfilled'),
-        ),
-      )
+      .where(and(eq(orphanSettlements.id, id), eq(orphanSettlements.status, 'fulfilled')))
       .returning();
     return row;
   }
 
-  async findByIdempotencyKey(
-    idempotencyKey: string,
-  ): Promise<OrphanSettlement | undefined> {
+  async findByIdempotencyKey(idempotencyKey: string): Promise<OrphanSettlement | undefined> {
     return this.db.query.orphanSettlements.findFirst({
       where: eq(orphanSettlements.idempotencyKey, idempotencyKey),
     });
@@ -191,9 +168,7 @@ export class OrphanSettlementRepository extends BaseRepository {
 
     const existing = await this.findByIdempotencyKey(input.idempotencyKey);
     if (!existing) {
-      throw new Error(
-        'Orphan settlement conflict did not resolve to an existing row',
-      );
+      throw new Error('Orphan settlement conflict did not resolve to an existing row');
     }
     return { settlement: existing, inserted: false };
   }
@@ -210,6 +185,18 @@ export class OrphanSettlementRepository extends BaseRepository {
     });
   }
 
+  async listForCustomer(
+    customerId: string,
+    options: { limit: number; offset: number },
+  ): Promise<OrphanSettlement[]> {
+    return this.db.query.orphanSettlements.findMany({
+      where: eq(orphanSettlements.customerId, customerId),
+      orderBy: [desc(orphanSettlements.createdAt)],
+      limit: options.limit,
+      offset: options.offset,
+    });
+  }
+
   async listForReceivingBusiness(
     receivingBusinessId: string,
     options: {
@@ -221,9 +208,7 @@ export class OrphanSettlementRepository extends BaseRepository {
     return this.db.query.orphanSettlements.findMany({
       where: and(
         eq(orphanSettlements.receivingBusinessId, receivingBusinessId),
-        options.branchId
-          ? eq(orphanSettlements.receivingBranchId, options.branchId)
-          : undefined,
+        options.branchId ? eq(orphanSettlements.receivingBranchId, options.branchId) : undefined,
       ),
       orderBy: [desc(orphanSettlements.createdAt)],
       limit: Math.min(options.limit ?? 100, 200),

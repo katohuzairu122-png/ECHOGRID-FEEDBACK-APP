@@ -14,7 +14,8 @@
     "billing": "Facturation",
     "support": "Assistance",
     "logout": "Se déconnecter",
-    "customerQr": "QR client"
+    "customerQr": "QR client",
+    "settlements": "Règlement des récompenses orphelines"
   },
   "home": {
     "branchesTitle": "Succursales",

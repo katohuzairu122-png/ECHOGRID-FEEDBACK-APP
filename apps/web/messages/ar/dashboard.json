@@ -14,7 +14,8 @@
     "billing": "الفوترة",
     "support": "الدعم",
     "logout": "تسجيل الخروج",
-    "customerQr": "رمز QR للعميل"
+    "customerQr": "رمز QR للعميل",
+    "settlements": "تسوية المكافآت اليتيمة"
   },
   "home": {
     "branchesTitle": "الفروع",

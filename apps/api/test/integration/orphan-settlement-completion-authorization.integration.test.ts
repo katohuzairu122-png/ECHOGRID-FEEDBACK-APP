@@ -130,17 +130,16 @@ describe.skipIf(!process.env.DATABASE_URL)(
         reference: `offer-${crypto.randomUUID()}`,
       };
 
-      const accepted =
-        await new ReceivingBusinessSettlementService(db).acceptAndReserve({
-          businessId: receivingBusinessId,
-          branchId: receivingBranchId,
-          actorUserId,
-          settlementId: proposal.settlement.id,
-          acceptance: {
-            authorizationId: proposal.authorization.id,
-            fulfillment,
-          },
-        });
+      const accepted = await new ReceivingBusinessSettlementService(db).acceptAndReserve({
+        businessId: receivingBusinessId,
+        branchId: receivingBranchId,
+        actorUserId,
+        settlementId: proposal.settlement.id,
+        acceptance: {
+          authorizationId: proposal.authorization.id,
+          fulfillment,
+        },
+      });
 
       return {
         customerId: customer.id,
@@ -156,8 +155,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
       return {
         correlationId: `completion-${crypto.randomUUID()}`,
         idempotencyKey: `completion-${crypto.randomUUID()}`,
-        fulfillmentPolicyVersion:
-          ORPHAN_SETTLEMENT_FULFILLMENT_POLICY_VERSION,
+        fulfillmentPolicyVersion: ORPHAN_SETTLEMENT_FULFILLMENT_POLICY_VERSION,
         fulfillmentReference: reference,
       };
     }
@@ -166,18 +164,13 @@ describe.skipIf(!process.env.DATABASE_URL)(
       const fixture = await createReservedSettlement();
       const service = new CustomerSettlementCompletionService(db);
 
-      const review = await service.getReview(
-        fixture.customerId,
-        fixture.accepted.settlement.id,
-      );
+      const review = await service.getReview(fixture.customerId, fixture.accepted.settlement.id);
 
       expect(review.settlement.status).toBe('reserved');
       expect(review.settlement.fulfillmentPolicyVersion).toBe(
         ORPHAN_SETTLEMENT_FULFILLMENT_POLICY_VERSION,
       );
-      expect(review.settlement.fulfillmentReference).toBe(
-        fixture.fulfillment.reference,
-      );
+      expect(review.settlement.fulfillmentReference).toBe(fixture.fulfillment.reference);
       expect(review.settlement.fulfillmentSnapshot).toEqual({
         benefitType: 'voucher',
         title: fixture.fulfillment.title,
@@ -191,10 +184,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
       });
 
       await expect(
-        service.getReview(
-          otherCustomer.id,
-          fixture.accepted.settlement.id,
-        ),
+        service.getReview(otherCustomer.id, fixture.accepted.settlement.id),
       ).rejects.toMatchObject({
         status: 404,
         code: 'ORPHAN_SETTLEMENT_NOT_FOUND',
@@ -214,21 +204,15 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
       expect(result.changed).toBe(true);
       expect(result.settlement.status).toBe('completion_authorized');
-      expect(result.settlement.completionAuthorizationId).toBe(
-        result.authorization.id,
-      );
+      expect(result.settlement.completionAuthorizationId).toBe(result.authorization.id);
       expect(result.settlement.completionAuthorizedAt).not.toBeNull();
 
       expect(result.authorization.actionType).toBe('complete_settlement');
       expect(result.authorization.customerId).toBe(fixture.customerId);
       expect(result.authorization.businessId).toBe(receivingBusinessId);
       expect(result.authorization.resourceType).toBe('orphan_settlement');
-      expect(result.authorization.resourceId).toBe(
-        fixture.accepted.settlement.id,
-      );
-      expect(result.authorization.scope).toBe(
-        `settlement_completion:claim:${fixture.claim.id}`,
-      );
+      expect(result.authorization.resourceId).toBe(fixture.accepted.settlement.id);
+      expect(result.authorization.scope).toBe(`settlement_completion:claim:${fixture.claim.id}`);
       expect(result.authorization.status).toBe('active');
       expect(result.authorization.consumedAt).toBeNull();
       expect(result.authorization.expiresAt.getTime()).toBeLessThanOrEqual(
@@ -236,9 +220,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
       );
 
       expect(result.event.eventType).toBe('completion_authorized');
-      expect(result.event.customerActionAuthorizationId).toBe(
-        result.authorization.id,
-      );
+      expect(result.event.customerActionAuthorizationId).toBe(result.authorization.id);
       expect(result.event.actorUserId).toBeNull();
 
       const replay = await service.authorizeCompletion(
@@ -253,11 +235,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
       const events = await repos.orphanSettlementEvents.listForSettlement(
         fixture.accepted.settlement.id,
       );
-      expect(
-        events.filter(
-          (event) => event.eventType === 'completion_authorized',
-        ),
-      ).toHaveLength(1);
+      expect(events.filter((event) => event.eventType === 'completion_authorized')).toHaveLength(1);
     });
 
     it('rejects stale fulfillment acknowledgement and revoked settlement access consent', async () => {
@@ -265,24 +243,17 @@ describe.skipIf(!process.env.DATABASE_URL)(
       const service = new CustomerSettlementCompletionService(db);
 
       await expect(
-        service.authorizeCompletion(
-          stale.customerId,
-          stale.accepted.settlement.id,
-          {
-            ...completionInput(stale.fulfillment.reference),
-            fulfillmentReference: 'different-offer',
-          },
-        ),
+        service.authorizeCompletion(stale.customerId, stale.accepted.settlement.id, {
+          ...completionInput(stale.fulfillment.reference),
+          fulfillmentReference: 'different-offer',
+        }),
       ).rejects.toMatchObject({
         status: 409,
         code: 'ORPHAN_FULFILLMENT_ACKNOWLEDGEMENT_STALE',
       });
 
       const revoked = await createReservedSettlement();
-      await repos.consentGrants.revoke(
-        revoked.proposal.consent.id,
-        revoked.customerId,
-      );
+      await repos.consentGrants.revoke(revoked.proposal.consent.id, revoked.customerId);
 
       await expect(
         service.authorizeCompletion(
@@ -295,11 +266,9 @@ describe.skipIf(!process.env.DATABASE_URL)(
         code: 'ORPHAN_SETTLEMENT_CONSENT_INACTIVE',
       });
 
-      expect(
-        (await repos.orphanSettlements.findById(
-          revoked.accepted.settlement.id,
-        ))?.status,
-      ).toBe('reserved');
+      expect((await repos.orphanSettlements.findById(revoked.accepted.settlement.id))?.status).toBe(
+        'reserved',
+      );
     });
 
     it('will not overwrite a live completion authorization but permits explicit reauthorization after revocation', async () => {
@@ -323,10 +292,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         code: 'ORPHAN_COMPLETION_ALREADY_AUTHORIZED',
       });
 
-      await repos.customerActionAuthorizations.revoke(
-        first.authorization.id,
-        fixture.customerId,
-      );
+      await repos.customerActionAuthorizations.revoke(first.authorization.id, fixture.customerId);
 
       const second = await service.authorizeCompletion(
         fixture.customerId,
@@ -337,26 +303,16 @@ describe.skipIf(!process.env.DATABASE_URL)(
       expect(second.changed).toBe(true);
       expect(second.authorization.id).not.toBe(first.authorization.id);
       expect(second.authorization.status).toBe('active');
-      expect(second.settlement.completionAuthorizationId).toBe(
-        second.authorization.id,
-      );
+      expect(second.settlement.completionAuthorizationId).toBe(second.authorization.id);
 
       expect(
-        (
-          await repos.customerActionAuthorizations.findById(
-            first.authorization.id,
-          )
-        )?.status,
+        (await repos.customerActionAuthorizations.findById(first.authorization.id))?.status,
       ).toBe('revoked');
 
       const events = await repos.orphanSettlementEvents.listForSettlement(
         fixture.accepted.settlement.id,
       );
-      expect(
-        events.filter(
-          (event) => event.eventType === 'completion_authorized',
-        ),
-      ).toHaveLength(2);
+      expect(events.filter((event) => event.eventType === 'completion_authorized')).toHaveLength(2);
     });
 
     it('cannot reuse one completion idempotency key across another settlement or claim', async () => {
@@ -372,39 +328,46 @@ describe.skipIf(!process.env.DATABASE_URL)(
       );
 
       await expect(
-        service.authorizeCompletion(
-          second.customerId,
-          second.accepted.settlement.id,
-          {
-            ...sharedInput,
-            fulfillmentReference: second.fulfillment.reference,
-          },
-        ),
+        service.authorizeCompletion(second.customerId, second.accepted.settlement.id, {
+          ...sharedInput,
+          fulfillmentReference: second.fulfillment.reference,
+        }),
       ).rejects.toMatchObject({
         status: 409,
         code: 'ORPHAN_COMPLETION_IDEMPOTENCY_CONFLICT',
       });
 
-      expect(
-        (await repos.orphanSettlements.findById(
-          second.accepted.settlement.id,
-        ))?.status,
-      ).toBe('reserved');
+      expect((await repos.orphanSettlements.findById(second.accepted.settlement.id))?.status).toBe(
+        'reserved',
+      );
+    });
+
+    it('lists only the authenticated customer’s settlements for recovery of the consent interface', async () => {
+      const first = await createReservedSettlement();
+      const other = await createReservedSettlement();
+      const rows = await repos.orphanSettlements.listForCustomer(first.customerId, {
+        limit: 20,
+        offset: 0,
+      });
+      expect(rows.map((row) => row.id)).toContain(first.accepted.settlement.id);
+      expect(rows.map((row) => row.id)).not.toContain(other.accepted.settlement.id);
+      expect(rows.every((row) => row.customerId === first.customerId)).toBe(true);
+      await expect(
+        new CustomerSettlementCompletionService(db).getReview(
+          first.customerId,
+          other.accepted.settlement.id,
+        ),
+      ).rejects.toMatchObject({ status: 404 });
     });
 
     it('does not mutate business loyalty or Community Point ledgers during completion authorization', async () => {
       const fixture = await createReservedSettlement();
-      const loyaltyBefore = await repos.loyaltyTransactions.listForAccount(
-        fixture.account.id,
+      const loyaltyBefore = await repos.loyaltyTransactions.listForAccount(fixture.account.id);
+      const communityAccount = await repos.communityPointAccounts.findByCustomerId(
+        fixture.customerId,
       );
-      const communityAccount =
-        await repos.communityPointAccounts.findByCustomerId(
-          fixture.customerId,
-        );
       const communityBefore = communityAccount
-        ? await repos.communityPointTransactions.listForAccount(
-            communityAccount.id,
-          )
+        ? await repos.communityPointTransactions.listForAccount(communityAccount.id)
         : [];
 
       await new CustomerSettlementCompletionService(db).authorizeCompletion(
@@ -413,22 +376,19 @@ describe.skipIf(!process.env.DATABASE_URL)(
         completionInput(fixture.fulfillment.reference),
       );
 
-      expect(
-        await repos.loyaltyTransactions.listForAccount(fixture.account.id),
-      ).toEqual(loyaltyBefore);
+      expect(await repos.loyaltyTransactions.listForAccount(fixture.account.id)).toEqual(
+        loyaltyBefore,
+      );
 
-      const communityAfter =
-        await repos.communityPointAccounts.findByCustomerId(
-          fixture.customerId,
-        );
+      const communityAfter = await repos.communityPointAccounts.findByCustomerId(
+        fixture.customerId,
+      );
       expect(communityAfter).toEqual(communityAccount);
 
       if (communityAfter) {
-        expect(
-          await repos.communityPointTransactions.listForAccount(
-            communityAfter.id,
-          ),
-        ).toEqual(communityBefore);
+        expect(await repos.communityPointTransactions.listForAccount(communityAfter.id)).toEqual(
+          communityBefore,
+        );
       }
     });
   },
