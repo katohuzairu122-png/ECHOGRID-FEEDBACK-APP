@@ -1,5 +1,5 @@
 import { notFound } from 'next/navigation';
-import Link from 'next/link';
+import { CustomerQrActions } from '@/components/customer-qr-actions';
 import { NextIntlClientProvider } from 'next-intl';
 import { resolveSupportedLocale, type QrResolveDto } from '@echo-grid-feedback/shared-types';
 import { publicApiFetch } from '@/lib/public-api-client';
@@ -50,26 +50,27 @@ export default async function FeedbackLandingPage({ params }: FeedbackLandingPag
     <NextIntlClientProvider locale={locale} messages={messages} formats={formats}>
       <QrScanRecorder token={token} />
       <section aria-label="Branch QR actions" className="mx-auto w-full max-w-2xl px-4 pt-8">
-        <p className="text-sm font-semibold uppercase tracking-wide text-brand-600">Echo Grid · Branch engagement</p>
+        <p className="text-sm font-semibold uppercase tracking-wide text-brand-600">
+          Echo Grid · Branch engagement
+        </p>
         <h1 className="mt-2 text-2xl font-bold">{qr.businessName}</h1>
         <p className="mt-1 text-sm text-neutral-600">{qr.branchName}</p>
-        <p className="mt-5 text-sm text-neutral-700">Choose how you want to engage. Loyalty participation requires customer sign-in and server-side eligibility checks. Scanning alone does not authorize points, rewards or settlement.</p>
-        <nav aria-label="Available branch QR activities" className="mt-5 flex flex-wrap gap-3">
-          <a href="#feedback-form" className="rounded-lg bg-brand-600 px-5 py-3 text-sm font-semibold text-white">Leave feedback</a>
-          <Link href={`/loyalty/${encodeURIComponent(token)}`} className="rounded-lg border border-neutral-300 px-5 py-3 text-sm font-semibold text-neutral-900">Loyalty &amp; check-in</Link>
-          <Link href="/loyalty/login" className="rounded-lg border border-neutral-300 px-5 py-3 text-sm font-semibold text-neutral-900">My loyalty account</Link>
-        </nav>
+        <p className="mt-5 text-sm text-neutral-700">
+          Choose how you want to engage. Loyalty participation requires customer sign-in and
+          server-side eligibility checks. Scanning alone does not authorize points, rewards or
+          settlement.
+        </p>
+        <CustomerQrActions token={token} />
       </section>
       <div id="feedback-form">
-      <FeedbackForm
-        token={token}
-        branchName={qr.branchName}
-        businessName={qr.businessName}
-        submissionKey={crypto.randomUUID()}
-        feedbackForm={qr.feedbackForm ?? null}
-      />
+        <FeedbackForm
+          token={token}
+          branchName={qr.branchName}
+          businessName={qr.businessName}
+          submissionKey={crypto.randomUUID()}
+          feedbackForm={qr.feedbackForm ?? null}
+        />
       </div>
     </NextIntlClientProvider>
   );
 }
-

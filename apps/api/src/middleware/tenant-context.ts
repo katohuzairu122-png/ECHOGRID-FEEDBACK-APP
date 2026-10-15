@@ -63,7 +63,11 @@ export const resolveTenantContext = createMiddleware<{
     const businessWideAccess = membership.some((grant) => grant.branchId === null);
     if (!businessWideAccess) {
       if (!branchId) {
-        throw new AppError('A branch context is required for this role.', 403, 'BRANCH_CONTEXT_REQUIRED');
+        throw new AppError(
+          'A branch context is required for this role.',
+          403,
+          'BRANCH_CONTEXT_REQUIRED',
+        );
       }
       if (!membership.some((grant) => grant.branchId === branchId)) {
         throw new AppError('You do not have access to this branch.', 403, 'BRANCH_ACCESS_DENIED');
@@ -71,9 +75,12 @@ export const resolveTenantContext = createMiddleware<{
       // A role grant references a branch by id, but the schema cannot express
       // the composite invariant that the branch belongs to the same business.
       // Enforce it here before the branch becomes trusted request context.
-      if (!(await repos.branches.findById(branchId, businessId))) {
-        throw new AppError('You do not have access to this branch.', 403, 'BRANCH_ACCESS_DENIED');
-      }
+    }
+
+    // Even a business-wide role must not supply a branch belonging to a
+    // different tenant. Validate every supplied selector before trusting it.
+    if (branchId && !(await repos.branches.findById(branchId, businessId))) {
+      throw new AppError('You do not have access to this branch.', 403, 'BRANCH_ACCESS_DENIED');
     }
 
     const effectivePermissions = await authz.getEffectivePermissions(

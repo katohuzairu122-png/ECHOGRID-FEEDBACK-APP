@@ -13,7 +13,8 @@
     "team": "الفريق",
     "billing": "الفوترة",
     "support": "الدعم",
-    "logout": "تسجيل الخروج"
+    "logout": "تسجيل الخروج",
+    "customerQr": "رمز QR للعميل"
   },
   "home": {
     "branchesTitle": "الفروع",

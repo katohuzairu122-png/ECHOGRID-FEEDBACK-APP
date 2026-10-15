@@ -13,7 +13,8 @@
     "team": "Équipe",
     "billing": "Facturation",
     "support": "Assistance",
-    "logout": "Se déconnecter"
+    "logout": "Se déconnecter",
+    "customerQr": "QR client"
   },
   "home": {
     "branchesTitle": "Succursales",
