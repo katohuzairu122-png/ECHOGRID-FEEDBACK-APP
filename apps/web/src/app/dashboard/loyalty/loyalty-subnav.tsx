@@ -9,6 +9,7 @@ export async function LoyaltySubnav() {
     { href: '/dashboard/loyalty/tiers', label: t('tiers') },
     { href: '/dashboard/loyalty/rewards', label: t('rewards') },
     { href: '/dashboard/loyalty/redeem', label: t('redeem') },
+    { href: '/dashboard/loyalty/scan', label: 'Customer QR' },
     { href: '/dashboard/settlements', label: 'Orphan settlement' },
     { href: '/dashboard/loyalty/settings', label: t('settings') },
   ];

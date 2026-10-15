@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { sign } from 'hono/jwt';
 import { LoyaltyActionResolver } from './loyalty-action-resolver';
 import { signCustomerQrToken } from '../qr/customer-qr-token';
 import { signQrToken } from '../qr/qr-token';
@@ -154,13 +155,66 @@ function resolver(
 }
 
 async function businessQrToken() {
-  return signQrToken(
-    { qrCodeId: QR_ID, businessId: BUSINESS_ID, branchId: BRANCH_ID },
-    SECRET,
-  );
+  return signQrToken({ qrCodeId: QR_ID, businessId: BUSINESS_ID, branchId: BRANCH_ID }, SECRET);
 }
 
 describe('LoyaltyActionResolver', () => {
+  it('rejects invalid, foreign-signed and expired customer identities before exposing actions', async () => {
+    const expired = await sign(
+      { sub: CUSTOMER_ID, type: 'qr_customer', iat: 1, exp: 2, nonce: 'expired', sigVer: 1 },
+      SECRET,
+      'HS256',
+    );
+    for (const token of [
+      'invalid',
+      await signCustomerQrToken(CUSTOMER_ID, 'other-secret'),
+      expired,
+    ]) {
+      await expect(
+        resolver(true).resolveCustomerForStaff({
+          customerQrToken: token,
+          businessId: BUSINESS_ID,
+          permissions: new Set(['loyalty:view', 'loyalty:manage']),
+        }),
+      ).rejects.toMatchObject({ status: 404, code: 'CUSTOMER_QR_NOT_FOUND' });
+    }
+  });
+
+  it('does not expose another business relationship or loyalty write actions', async () => {
+    const result = await resolver(true).resolveCustomerForStaff({
+      customerQrToken: await signCustomerQrToken(CUSTOMER_ID, SECRET),
+      businessId: crypto.randomUUID(),
+      permissions: new Set(['loyalty:view', 'loyalty:manage']),
+    });
+    expect(result.loyaltyAccountId).toBeNull();
+    expect(result.actions).toEqual([]);
+  });
+
+  it('view-only staff cannot validate purchases, grant progress or redeem', async () => {
+    const result = await resolver(true).resolveCustomerForStaff({
+      customerQrToken: await signCustomerQrToken(CUSTOMER_ID, SECRET),
+      businessId: BUSINESS_ID,
+      permissions: new Set(['loyalty:view']),
+    });
+    expect(result.actions).toEqual(['VIEW_ALLOWED_MEMBERSHIP_STATE']);
+  });
+
+  it('does not offer enrollment or check-in at an inactive receiving business', async () => {
+    for (const member of [false, true]) {
+      const result = await resolver(
+        member,
+        [],
+        false,
+        false,
+        'suspended',
+      ).resolveBusinessForCustomer({
+        businessQrToken: await businessQrToken(),
+        customerId: CUSTOMER_ID,
+      });
+      expect(result.actions).not.toContain('JOIN_LOYALTY');
+      expect(result.actions).not.toContain('CHECK_IN');
+    }
+  });
   it('returns only permission-backed staff actions for this business relationship', async () => {
     const token = await signCustomerQrToken(CUSTOMER_ID, SECRET);
     const result = await resolver(true).resolveCustomerForStaff({
@@ -175,6 +229,7 @@ describe('LoyaltyActionResolver', () => {
       'VIEW_ALLOWED_MEMBERSHIP_STATE',
       'VALIDATE_PURCHASE',
       'GRANT_LOYALTY_PROGRESS',
+      'REDEEM_REWARD',
     ]);
   });
 
@@ -241,13 +296,7 @@ describe('LoyaltyActionResolver', () => {
   });
 
   it('does not expose SETTLE_ORPHAN_REWARD for an inactive receiving business', async () => {
-    const result = await resolver(
-      false,
-      [],
-      false,
-      true,
-      'suspended',
-    ).resolveBusinessForCustomer({
+    const result = await resolver(false, [], false, true, 'suspended').resolveBusinessForCustomer({
       businessQrToken: await businessQrToken(),
       customerId: CUSTOMER_ID,
     });

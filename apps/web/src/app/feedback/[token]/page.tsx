@@ -1,5 +1,6 @@
 import { notFound } from 'next/navigation';
-import Link from 'next/link';
+import { CustomerQrActions } from '@/components/customer-qr-actions';
+import { SettlementQrEntry } from '@/components/settlement-qr-entry';
 import { NextIntlClientProvider } from 'next-intl';
 import { resolveSupportedLocale, type QrResolveDto } from '@echo-grid-feedback/shared-types';
 import { publicApiFetch } from '@/lib/public-api-client';
@@ -8,7 +9,6 @@ import { loadMessages } from '@/i18n/load-messages';
 import { formats } from '@/i18n/formats';
 import { FeedbackForm } from './feedback-form';
 import { QrScanRecorder } from './qr-scan-recorder';
-import { SettlementQrEntry } from '@/components/settlement-qr-entry';
 
 interface FeedbackLandingPageProps {
   params: Promise<{ token: string }>;
@@ -61,26 +61,7 @@ export default async function FeedbackLandingPage({ params }: FeedbackLandingPag
           server-side eligibility checks. Scanning alone does not authorize points, rewards or
           settlement.
         </p>
-        <nav aria-label="Available branch QR activities" className="mt-5 flex flex-wrap gap-3">
-          <a
-            href="#feedback-form"
-            className="rounded-lg bg-brand-600 px-5 py-3 text-sm font-semibold text-white"
-          >
-            Leave feedback
-          </a>
-          <Link
-            href={`/loyalty/${encodeURIComponent(token)}`}
-            className="rounded-lg border border-neutral-300 px-5 py-3 text-sm font-semibold text-neutral-900"
-          >
-            Loyalty &amp; check-in
-          </Link>
-          <Link
-            href="/loyalty/login"
-            className="rounded-lg border border-neutral-300 px-5 py-3 text-sm font-semibold text-neutral-900"
-          >
-            My loyalty account
-          </Link>
-        </nav>
+        <CustomerQrActions token={token} />
         <SettlementQrEntry token={token} />
       </section>
       <div id="feedback-form">

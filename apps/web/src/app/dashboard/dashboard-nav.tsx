@@ -13,6 +13,7 @@ const NAV_ITEMS = [
   ['branches', '/dashboard/branches'],
   ['feedback', '/dashboard/feedback'],
   ['loyalty', '/dashboard/loyalty'],
+  ['customerQr', '/dashboard/loyalty/scan'],
   ['settlements', '/dashboard/settlements'],
   ['messages', '/dashboard/messages'],
   ['analytics', '/dashboard/analytics'],
