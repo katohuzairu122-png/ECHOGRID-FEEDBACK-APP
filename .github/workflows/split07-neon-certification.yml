@@ -1,0 +1,102 @@
+name: Split 07 isolated Neon certification
+on:
+  workflow_dispatch:
+    inputs:
+      expected_commit:
+        description: Full reviewed main SHA
+        required: true
+        type: string
+      confirmation:
+        description: Type CERTIFY_SPLIT07_AUDIT_ONLY
+        required: true
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: split07-isolated-neon-certification
+  cancel-in-progress: false
+jobs:
+  certify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      DATABASE_URL: ${{ secrets.SPLIT07_CERT_DATABASE_URL }}
+      SPLIT07_DISPOSABLE_DB: I_ACKNOWLEDGE
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - name: Verify explicit authorization and reviewed commit
+        env:
+          EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+          CONFIRMATION: ${{ inputs.confirmation }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$EXPECTED_COMMIT" =~ ^[0-9a-f]{40}$ ]]
+          test "$CONFIRMATION" = CERTIFY_SPLIT07_AUDIT_ONLY
+          test "$(git rev-parse HEAD)" = "$EXPECTED_COMMIT"
+          test -n "$DATABASE_URL"
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.9.0
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Enforce isolated direct Neon endpoint, TLS and empty baseline
+        working-directory: apps/api
+        run: |
+          node --input-type=module <<'NODE'
+          import { Client } from 'pg';
+          const u = new URL(process.env.DATABASE_URL || '');
+          const host = 'ep-morning-credit-auxl3l1d.c-10.us-east-1.aws.neon.tech';
+          const name = 'echogrid_split07_cert_clean';
+          if (!['postgres:', 'postgresql:'].includes(u.protocol) || u.hostname !== host ||
+              decodeURIComponent(u.pathname.slice(1)) !== name ||
+              (u.port && u.port !== '5432') ||
+              u.searchParams.get('sslmode') !== 'require' ||
+              u.searchParams.has('options')) throw Error('Audit URL guard failed');
+          const db = new Client({connectionString: process.env.DATABASE_URL});
+          try {
+            await db.connect();
+            const {rows:[r]} = await db.query("SELECT current_database() AS db, (SELECT count(*)::int FROM information_schema.tables WHERE table_schema='public') AS tables, to_regclass('drizzle.__drizzle_migrations') AS journal");
+            if (r.db !== name || r.tables !== 0 || r.journal !== null)
+              throw Error('Audit DB not empty; refusing migration');
+            console.log('PASS: clean isolated audit database and direct TLS host');
+          } finally { await db.end(); }
+          NODE
+      - name: Validate migration source
+        run: pnpm --filter @echo-grid-feedback/api db:check
+      - name: Apply Drizzle migration journal in order
+        run: pnpm --filter @echo-grid-feedback/api db:migrate
+      - name: Verify exact migration history
+        run: pnpm --filter @echo-grid-feedback/api db:verify:production
+      - name: Assert migration count and economic safeguards
+        working-directory: apps/api
+        run: |
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import { Client } from 'pg';
+          const db = new Client({connectionString:process.env.DATABASE_URL});
+          try {
+            await db.connect();
+            const count = await db.query('SELECT count(*)::int AS n FROM drizzle.__drizzle_migrations');
+            assert.equal(count.rows[0].n,45);
+            const names=['partner_credit_lots_inert_guard','partner_credit_ledger_insert_disabled','partner_credit_reservations_inert_guard','pc_multiunit_allocation_inert_guard','pc_multiunit_movement_inert_guard'];
+            const guards=await db.query('SELECT tgname FROM pg_trigger WHERE NOT tgisinternal AND tgenabled=$1 AND tgname=ANY($2::text[])',['O',names]);
+            assert.deepEqual(new Set(guards.rows.map(r=>r.tgname)),new Set(names));
+            const keys=['pc_multiunit_exact_conservation','pc_multiunit_lot_once','pc_multiunit_decision_once','partner_credit_multiunit_movements_idempotency_key_key'];
+            const constraints=await db.query('SELECT conname FROM pg_constraint WHERE convalidated AND conname=ANY($1::text[])',[keys]);
+            assert.deepEqual(new Set(constraints.rows.map(r=>r.conname)),new Set(keys));
+            console.log('PASS: 45 migrations, five enabled guards, four validated constraints');
+          } finally { await db.end(); }
+          NODE
+      - name: Test three-client isolation and rollback
+        working-directory: apps/api
+        run: node scripts/verify-split07-disposable-postgres.mjs
+      - name: Test independent lock and rollback
+        working-directory: apps/api
+        run: node scripts/test-split07-lock-concurrency.mjs
