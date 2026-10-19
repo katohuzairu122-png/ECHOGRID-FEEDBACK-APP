@@ -226,6 +226,12 @@ jobs:
       # fail on an unseeded database. Only this seed is needed: the others
       # bootstrap a platform admin, a plan catalog, or backfill existing
       # businesses, and no integration test touches any of those.
+      - name: Verify HETA evidence schema and append-only denials
+        env:
+          SPLIT07_DISPOSABLE_DB: I_ACKNOWLEDGE
+        working-directory: apps/api
+        run: node scripts/verify-heta-evidence-schema.mjs
+
       - name: Seed permission catalog
         run: pnpm --filter @echo-grid-feedback/api db:seed
 
@@ -406,7 +412,6 @@ jobs:
           name: block-2e-evidence
           path: .artifacts/block15/
           if-no-files-found: error
-
 
   block-2f-release:
     name: Block 2F Deployment Operations
