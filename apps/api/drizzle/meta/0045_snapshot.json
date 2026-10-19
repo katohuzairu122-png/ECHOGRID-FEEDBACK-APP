@@ -1,5 +1,5 @@
 {
-  "id": "6ef1e73f-2e1d-4146-adb2-c9e769894412",
+  "id": "172cfb33-359e-4826-9ecf-f5d2f05cc6cc",
   "prevId": "407c5ef1-b6c5-4d24-afb1-38c700000044",
   "version": "7",
   "dialect": "postgresql",
@@ -12041,15 +12041,15 @@
         },
         "stripe_evidence_control_cause_required": {
           "name": "stripe_evidence_control_cause_required",
-          "value": "\"stripe_evidence_control_events\".\"event_kind\" NOT IN ('ucw_opened','ucw_closed','heartbeat_gap_detected') OR \"stripe_evidence_control_events\".\"cause\" IN ('capture_off','precondition_failed','http_413','http_500','heartbeat_gap','oversize_unresolved','reconciliation_incomplete','unrecorded_mode_change')"
+          "value": "\"stripe_evidence_control_events\".\"event_kind\" NOT IN ('ucw_opened','ucw_closed','heartbeat_gap_detected') OR COALESCE(\"stripe_evidence_control_events\".\"cause\" IN ('capture_off','precondition_failed','http_413','http_500','heartbeat_gap','oversize_unresolved','reconciliation_incomplete','unrecorded_mode_change'), false)"
         },
         "stripe_evidence_control_attestation_result": {
           "name": "stripe_evidence_control_attestation_result",
-          "value": "\"stripe_evidence_control_events\".\"event_kind\" <> 'account_provenance_verified' OR \"stripe_evidence_control_events\".\"details\"->>'result' IN ('passed','failed')"
+          "value": "\"stripe_evidence_control_events\".\"event_kind\" <> 'account_provenance_verified' OR COALESCE(\"stripe_evidence_control_events\".\"details\"->>'result' IN ('passed','failed'), false)"
         },
         "stripe_evidence_control_kek_destroyed_claim": {
           "name": "stripe_evidence_control_kek_destroyed_claim",
-          "value": "\"stripe_evidence_control_events\".\"event_kind\" <> 'kek_destroyed' OR (\"stripe_evidence_control_events\".\"details\"->>'claim' IN ('irrecoverable_verified','conditional') AND (\"stripe_evidence_control_events\".\"details\"->>'claim' <> 'irrecoverable_verified' OR (jsonb_typeof(\"stripe_evidence_control_events\".\"details\"->'evidence') = 'object' AND \"stripe_evidence_control_events\".\"details\"->'evidence'->>'e1_custody_inventory' = 'true' AND \"stripe_evidence_control_events\".\"details\"->'evidence'->>'e2_two_person_attestation' = 'true' AND \"stripe_evidence_control_events\".\"details\"->'evidence'->>'e3_platform_evidence' = 'true' AND \"stripe_evidence_control_events\".\"details\"->'evidence'->>'e4_independent_signoff' = 'true' AND \"stripe_evidence_control_events\".\"details\"->'evidence'->>'e5_negative_tests_run' = 'true' AND jsonb_typeof(\"stripe_evidence_control_events\".\"details\"->'evidence_refs') = 'array' AND jsonb_array_length(\"stripe_evidence_control_events\".\"details\"->'evidence_refs') > 0)))"
+          "value": "\"stripe_evidence_control_events\".\"event_kind\" <> 'kek_destroyed' OR COALESCE((\"stripe_evidence_control_events\".\"details\"->>'claim' = 'conditional') OR (\"stripe_evidence_control_events\".\"details\"->>'claim' = 'irrecoverable_verified' AND jsonb_typeof(\"stripe_evidence_control_events\".\"details\"->'evidence') = 'object' AND \"stripe_evidence_control_events\".\"details\"->'evidence'->>'e1_custody_inventory' = 'true' AND \"stripe_evidence_control_events\".\"details\"->'evidence'->>'e2_two_person_attestation' = 'true' AND \"stripe_evidence_control_events\".\"details\"->'evidence'->>'e3_platform_evidence' = 'true' AND \"stripe_evidence_control_events\".\"details\"->'evidence'->>'e4_independent_signoff' = 'true' AND \"stripe_evidence_control_events\".\"details\"->'evidence'->>'e5_negative_tests_run' = 'true' AND jsonb_typeof(\"stripe_evidence_control_events\".\"details\"->'evidence_refs') = 'array' AND jsonb_array_length(\"stripe_evidence_control_events\".\"details\"->'evidence_refs') > 0), false)"
         }
       },
       "isRLSEnabled": false
@@ -12109,32 +12109,19 @@
           "default": "clock_timestamp()"
         }
       },
-      "indexes": {
-        "stripe_evidence_keys_cohort_kek_uq": {
-          "name": "stripe_evidence_keys_cohort_kek_uq",
-          "columns": [
-            {
-              "expression": "cohort",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "kek_version",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
+      "indexes": {},
       "foreignKeys": {},
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
+      "uniqueConstraints": {
+        "stripe_evidence_keys_cohort_kek_uq": {
+          "name": "stripe_evidence_keys_cohort_kek_uq",
+          "nullsNotDistinct": false,
+          "columns": [
+            "cohort",
+            "kek_version"
+          ]
+        }
+      },
       "policies": {},
       "checkConstraints": {
         "stripe_evidence_keys_cohort_check": {

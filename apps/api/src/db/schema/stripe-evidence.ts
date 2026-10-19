@@ -1,5 +1,5 @@
 import {
-  pgTable, uuid, text, timestamp, jsonb, boolean, bigint, integer, index, uniqueIndex, check, foreignKey, customType,
+  pgTable, uuid, text, timestamp, jsonb, boolean, bigint, integer, index, uniqueIndex, unique, check, foreignKey, customType,
 } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import { businesses } from './businesses';
@@ -40,9 +40,9 @@ export const stripeEvidenceControlEvents = pgTable('stripe_evidence_control_even
   check('stripe_evidence_control_kind_check', sql`${t.eventKind} IN ('account_provenance_verified','capture_mode_changed','capture_heartbeat','heartbeat_gap_detected','capture_precondition_failed','capture_error_observed','oversize_rejected','reconciliation_run','coverage_gap_unrecovered','ucw_opened','ucw_closed','kek_generated','kek_rotated','kek_destroyed','retention_policy_applied','legal_hold_set','legal_hold_released','forensic_export_registered','forensic_export_destroyed')`),
   check('stripe_evidence_control_details_check', sql`jsonb_typeof(${t.details}) = 'object' AND pg_column_size(${t.details}) <= 8192`),
   check('stripe_evidence_control_stream_dedupe_required', sql`${t.eventKind} NOT IN ('capture_heartbeat','heartbeat_gap_detected','capture_precondition_failed','capture_error_observed','oversize_rejected','ucw_opened','ucw_closed') OR (${t.stream} IS NOT NULL AND ${t.dedupeKey} IS NOT NULL)`),
-  check('stripe_evidence_control_cause_required', sql`${t.eventKind} NOT IN ('ucw_opened','ucw_closed','heartbeat_gap_detected') OR ${t.cause} IN ('capture_off','precondition_failed','http_413','http_500','heartbeat_gap','oversize_unresolved','reconciliation_incomplete','unrecorded_mode_change')`),
-  check('stripe_evidence_control_attestation_result', sql`${t.eventKind} <> 'account_provenance_verified' OR ${t.details}->>'result' IN ('passed','failed')`),
-  check('stripe_evidence_control_kek_destroyed_claim', sql`${t.eventKind} <> 'kek_destroyed' OR (${t.details}->>'claim' IN ('irrecoverable_verified','conditional') AND (${t.details}->>'claim' <> 'irrecoverable_verified' OR (jsonb_typeof(${t.details}->'evidence') = 'object' AND ${t.details}->'evidence'->>'e1_custody_inventory' = 'true' AND ${t.details}->'evidence'->>'e2_two_person_attestation' = 'true' AND ${t.details}->'evidence'->>'e3_platform_evidence' = 'true' AND ${t.details}->'evidence'->>'e4_independent_signoff' = 'true' AND ${t.details}->'evidence'->>'e5_negative_tests_run' = 'true' AND jsonb_typeof(${t.details}->'evidence_refs') = 'array' AND jsonb_array_length(${t.details}->'evidence_refs') > 0)))`),
+  check('stripe_evidence_control_cause_required', sql`${t.eventKind} NOT IN ('ucw_opened','ucw_closed','heartbeat_gap_detected') OR COALESCE(${t.cause} IN ('capture_off','precondition_failed','http_413','http_500','heartbeat_gap','oversize_unresolved','reconciliation_incomplete','unrecorded_mode_change'), false)`),
+  check('stripe_evidence_control_attestation_result', sql`${t.eventKind} <> 'account_provenance_verified' OR COALESCE(${t.details}->>'result' IN ('passed','failed'), false)`),
+  check('stripe_evidence_control_kek_destroyed_claim', sql`${t.eventKind} <> 'kek_destroyed' OR COALESCE((${t.details}->>'claim' = 'conditional') OR (${t.details}->>'claim' = 'irrecoverable_verified' AND jsonb_typeof(${t.details}->'evidence') = 'object' AND ${t.details}->'evidence'->>'e1_custody_inventory' = 'true' AND ${t.details}->'evidence'->>'e2_two_person_attestation' = 'true' AND ${t.details}->'evidence'->>'e3_platform_evidence' = 'true' AND ${t.details}->'evidence'->>'e4_independent_signoff' = 'true' AND ${t.details}->'evidence'->>'e5_negative_tests_run' = 'true' AND jsonb_typeof(${t.details}->'evidence_refs') = 'array' AND jsonb_array_length(${t.details}->'evidence_refs') > 0), false)`),
 ]);
 
 /** A.6 wrapped data keys. Append-only; destruction acts on KEKs outside the database. */
@@ -56,7 +56,8 @@ export const stripeEvidenceKeys = pgTable('stripe_evidence_keys', {
   dekFingerprint: bytea('dek_fingerprint').notNull(),
   createdAt: ts('created_at').notNull().default(sql`clock_timestamp()`),
 }, t => [
-  uniqueIndex('stripe_evidence_keys_cohort_kek_uq').on(t.cohort, t.kekVersion),
+  // A constraint (not an index) so it exists inside CREATE TABLE, before the composite FKs that reference it.
+  unique('stripe_evidence_keys_cohort_kek_uq').on(t.cohort, t.kekVersion),
   check('stripe_evidence_keys_cohort_check', sql`${t.cohort} ~ '^[0-9]{4}-(0[1-9]|1[0-2])(:[a-z0-9_]+)?$'`),
   check('stripe_evidence_keys_algorithm_check', sql`${t.wrapAlgorithm} = 'AES-256-GCM'`),
 ]);
