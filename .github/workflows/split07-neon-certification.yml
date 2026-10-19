@@ -84,16 +84,19 @@ jobs:
           try {
             await db.connect();
             const count = await db.query('SELECT count(*)::int AS n FROM drizzle.__drizzle_migrations');
-            assert.equal(count.rows[0].n,45);
+            assert.equal(count.rows[0].n,46);
             const names=['partner_credit_lots_inert_guard','partner_credit_ledger_insert_disabled','partner_credit_reservations_inert_guard','pc_multiunit_allocation_inert_guard','pc_multiunit_movement_inert_guard'];
             const guards=await db.query('SELECT tgname FROM pg_trigger WHERE NOT tgisinternal AND tgenabled=$1 AND tgname=ANY($2::text[])',['O',names]);
             assert.deepEqual(new Set(guards.rows.map(r=>r.tgname)),new Set(names));
             const keys=['pc_multiunit_exact_conservation','pc_multiunit_lot_once','pc_multiunit_decision_once','partner_credit_multiunit_movements_idempotency_key_key'];
             const constraints=await db.query('SELECT conname FROM pg_constraint WHERE convalidated AND conname=ANY($1::text[])',[keys]);
             assert.deepEqual(new Set(constraints.rows.map(r=>r.conname)),new Set(keys));
-            console.log('PASS: 45 migrations, five enabled guards, four validated constraints');
+            console.log('PASS: 46 migrations, five enabled guards, four validated constraints');
           } finally { await db.end(); }
           NODE
+      - name: Verify HETA evidence schema and append-only denials
+        working-directory: apps/api
+        run: node scripts/verify-heta-evidence-schema.mjs
       - name: Test three-client isolation and rollback
         working-directory: apps/api
         run: node scripts/verify-split07-disposable-postgres.mjs
