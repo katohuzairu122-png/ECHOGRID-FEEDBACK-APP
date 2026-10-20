@@ -1,0 +1,8 @@
+{
+  "sourceIdentifier": "heta-f1-keyring-test-remediation/E1-E6-v1",
+  "originalCommit": "86f709d62891a396fa040c14783faae6526e8a5c",
+  "originalGitBlob": "3755bc8ae519e2396b1cdbfef3a54b19e2be2fea",
+  "originalSha256": "145620753b3f10c57fbaacfb805f7f54fd695862c7d1c3b5d5c9de8468c5a8c3",
+  "sha256": "0330f74d0c7ff855632f78b1000aaa6aac219853895aa25bbd08f6a184551e03",
+  "scope": "Corrected test-only evaluation copy; no runtime export, custody/cohort policy approval or capture integration"
+}

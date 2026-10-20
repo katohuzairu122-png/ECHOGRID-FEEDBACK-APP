@@ -7,7 +7,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   EvidenceKeyringError,
   loadKeyring,
-} from '../../../test/fixtures/heta-f1-keyring-candidate';
+} from '../../../test/fixtures/heta-f1-keyring-remediated';
 import {
   createWrappedDek,
   EvidenceCryptoError,
@@ -68,7 +68,7 @@ async function cryptoFailure(run: Promise<unknown>, code: string) {
 }
 afterEach(() => vi.restoreAllMocks());
 
-describe('Block D — pinned candidate review, no runtime keyring adoption', () => {
+describe('Block D suite against Block E corrected test copy, no runtime adoption', () => {
   it('pins the exact upstream Git source, allowing only checkout CRLF normalization', () => {
     const fixture = new URL('../../../test/fixtures/heta-f1-keyring-candidate.ts', import.meta.url);
     const manifest = JSON.parse(
@@ -280,7 +280,7 @@ describe('Block D — pinned candidate review, no runtime keyring adoption', () 
   it('can retry a temporary import failure without a poisoned shared cache', async () => {
     const failure = new Error(MARKER);
     vi.spyOn(crypto.subtle, 'importKey').mockRejectedValueOnce(failure);
-    expect(await loadKeyring(good(), NOW).catch((e) => e)).toBe(failure);
+    await keyringFailure(loadKeyring(good(), NOW), 'KEYRING_IMPORT_FAILED');
     const recovered = await loadKeyring(good(), NOW);
     expect(recovered.activeFor(NOW).key.extractable).toBe(false);
   });
@@ -313,28 +313,30 @@ describe('Block D — pinned candidate review, no runtime keyring adoption', () 
         if (item.isDirectory()) walk(path);
         else if (item.name.endsWith('.ts') && !item.name.endsWith('.test.ts')) {
           expect(readFileSync(path, 'utf8'), path).not.toContain('heta-f1-keyring-candidate');
+          expect(readFileSync(path, 'utf8'), path).not.toContain('heta-f1-keyring-remediated');
         }
       }
     };
     walk(fileURLToPath(new URL('../../', import.meta.url)));
   });
-  it('CHARACTERIZATION: exposed entry objects can mutate subsequent key selection', async () => {
+  it('E6: public metadata mutation cannot change subsequent key selection', async () => {
     const loaded = await loadKeyring(good(), NOW);
-    loaded.entries[0]!.active = false;
-    expect(() => loaded.activeFor(NOW)).toThrow(EvidenceKeyringError);
+    const original = loaded.activeFor(NOW);
+    expect(Reflect.set(original, 'active', false)).toBe(false);
+    original.notAfter.setTime(0);
+    original.notBefore.setTime(new Date('2100-01-01').getTime());
+    expect(loaded.activeFor(NOW)).toBe(original);
+    expect(loaded.find(COHORT, VERSION)).toBe(original);
   });
 
-  describe('BLOCKED candidate controls — expected failures, not remediated security passes', () => {
-    it.fails(
-      'D-X1: redacts an import-provider exception containing synthetic secret markers',
-      async () => {
-        vi.spyOn(crypto.subtle, 'importKey').mockRejectedValue(new Error(MARKER));
-        const error = await loadKeyring(good(), NOW).catch((e) => e);
-        expect(error).toBeInstanceOf(EvidenceKeyringError);
-        expect(String(error)).not.toContain(MARKER);
-      },
-    );
-    it.fails('D-X2: clears decoded raw key bytes if provider import throws', async () => {
+  describe('Block E ordinary regression controls — no expected failures', () => {
+    it('E1 (D-X1): redacts an import-provider exception containing synthetic secret markers', async () => {
+      vi.spyOn(crypto.subtle, 'importKey').mockRejectedValue(new Error(MARKER));
+      const error = await loadKeyring(good(), NOW).catch((e) => e);
+      expect(error).toBeInstanceOf(EvidenceKeyringError);
+      expect(String(error)).not.toContain(MARKER);
+    });
+    it('E2 (D-X2): clears decoded raw key bytes if provider import throws', async () => {
       let captured: Uint8Array | undefined;
       vi.spyOn(crypto.subtle, 'importKey').mockImplementation(async (_format, data) => {
         captured = data as Uint8Array;
@@ -344,24 +346,21 @@ describe('Block D — pinned candidate review, no runtime keyring adoption', () 
       expect(captured).toBeDefined();
       expect(Array.from(captured!).every((n) => n === 0)).toBe(true);
     });
-    it.fails(
-      'D-X3: measures its declared byte limit in UTF-8 bytes rather than characters',
-      async () => {
-        const value = JSON.stringify({
-          v: 1,
-          keys: [entry(COHORT, VERSION, 1), entry('2099-02', VERSION, 2)],
-          note: 'é'.repeat(100),
-        });
-        expect(new TextEncoder().encode(value).length).toBeGreaterThan(value.length);
-        await keyringFailure(loadKeyring(value, NOW, value.length), 'KEYRING_TOO_LARGE');
-      },
-    );
+    it('E3 (D-X3): measures its declared byte limit in UTF-8 bytes rather than characters', async () => {
+      const value = JSON.stringify({
+        v: 1,
+        keys: [entry(COHORT, VERSION, 1), entry('2099-02', VERSION, 2)],
+        note: 'é'.repeat(100),
+      });
+      expect(new TextEncoder().encode(value).length).toBeGreaterThan(value.length);
+      await keyringFailure(loadKeyring(value, NOW, value.length), 'KEYRING_TOO_LARGE');
+    });
     for (const limit of [Number.NaN, Number.POSITIVE_INFINITY]) {
-      it.fails(`D-X4: cannot disable the input bound with ${String(limit)}`, async () => {
+      it(`E4 (D-X4): cannot disable the input bound with ${String(limit)}`, async () => {
         await expect(loadKeyring(good(), NOW, limit)).rejects.toBeInstanceOf(EvidenceKeyringError);
       });
     }
-    it.fails('D-X5: snapshots the supplied clock before asynchronous imports', async () => {
+    it('E5 (D-X5): snapshots the supplied clock before asynchronous imports', async () => {
       const now = new Date(NOW);
       const original = crypto.subtle.importKey.bind(crypto.subtle);
       vi.spyOn(crypto.subtle, 'importKey').mockImplementation(async (...args) => {
