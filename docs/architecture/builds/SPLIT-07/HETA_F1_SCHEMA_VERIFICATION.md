@@ -23,4 +23,6 @@ The fixtures contain synthetic byte buffers and labels. They are not encrypted p
 
 ## Next implementation prerequisite
 
+The [Block A boundary characterization report](HETA_F1_BOUNDARY_CHARACTERIZATION_BLOCK_A.md) separates enforced storage constraints from unresolved identity, malformed-context, attestation and RLS semantics. These additional tests do not approve capture integration or recover the original design.
+
 PR #140 references HETA-01-F1 Revision 3.3 and owner decisions H1–H20, but that exact design and decision record are not versioned in this baseline. Record and reconcile them before implementing the remaining evidence module, retention/key custody, capture or projection wiring. HETA-01G's unresolved acceptance gates remain unresolved. Historical-tier verification, Partner Credit issuance and redemption remain denied. Split 06 ownership and migrations 0041/0042/0044 are unchanged.
