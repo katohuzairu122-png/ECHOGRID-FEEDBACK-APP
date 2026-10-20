@@ -1,0 +1,8 @@
+{
+  "repository": "katohuzairu122-png/ECHOGRID-FEEDBACK-APP",
+  "commit": "86f709d62891a396fa040c14783faae6526e8a5c",
+  "sourcePath": "apps/api/src/billing/stripe-evidence/keyring.ts",
+  "gitBlob": "3755bc8ae519e2396b1cdbfef3a54b19e2be2fea",
+  "sha256": "145620753b3f10c57fbaacfb805f7f54fd695862c7d1c3b5d5c9de8468c5a8c3",
+  "scope": "Test-only unmodified candidate snapshot; no runtime adoption or policy approval"
+}
