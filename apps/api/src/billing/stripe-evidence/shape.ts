@@ -4,7 +4,7 @@
  */
 export const SHAPE_DEFECTS = [
   'missing_id', 'bad_id', 'missing_created', 'bad_created', 'missing_livemode', 'bad_livemode',
-  'missing_type', 'bad_type', 'missing_data_object', 'bad_data_object',
+  'missing_type', 'bad_type', 'missing_data_object', 'bad_data_object', 'bad_account',
 ] as const;
 export type ShapeDefect = (typeof SHAPE_DEFECTS)[number];
 export type ParseStatus = 'not_json' | 'json_non_object' | 'json_object_invalid_envelope';
@@ -55,6 +55,8 @@ export function classifyEnvelope(rawBody: string): ShapeResult {
   const data = doc.data;
   if (!isObj(data) || data.object === undefined) defects.push('missing_data_object');
   else if (!isObj(data.object)) defects.push('bad_data_object');
+  // A present but unusable Connect `account` cannot be stored under A.2's account CHECK, so the body is kept as a malformed receipt.
+  if (doc.account !== undefined && doc.account !== null && (typeof doc.account !== 'string' || !/^acct_[A-Za-z0-9]+$/.test(doc.account))) defects.push('bad_account');
   if (defects.length > 0) return { kind: 'malformed', parseStatus: 'json_object_invalid_envelope', defects };
 
   const request = isObj(doc.request) ? doc.request : {};

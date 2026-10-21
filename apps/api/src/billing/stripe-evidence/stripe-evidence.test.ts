@@ -177,6 +177,8 @@ describe('shape classification (A.2b / G.1, T35)', () => {
     ['empty type', { type: '' }, 'bad_type'],
     ['missing data', { data: undefined }, 'missing_data_object'],
     ['data.object array', { data: { object: [] } }, 'bad_data_object'],
+    ['unusable account', { account: 'not-an-account' }, 'bad_account'],
+    ['non-string account', { account: 5 }, 'bad_account'],
   ])('flags %s', (_n, over, defect) => {
     const r = classifyEnvelope(ev(over));
     expect(r).toMatchObject({ kind: 'malformed', parseStatus: 'json_object_invalid_envelope' });

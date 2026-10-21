@@ -139,10 +139,10 @@ describe.skipIf(!process.env.DATABASE_URL)('stripe evidence tables (migration 00
     it('T40: key rows enforce cohort pattern and uniqueness', async () => {
       const ins = (cohort: string, kek: string) =>
         attempt(`insert into stripe_evidence_keys(cohort,kek_version,wrapped_dek,wrap_nonce,wrap_algorithm,dek_fingerprint) values ($1,$2,$3,$4,'AES-256-GCM',$5)`, [cohort, kek, Buffer.alloc(48), NONCE, DIGEST]);
-      expect(await ins('2026-13', 'v1')).toMatch(/cohort_check/);
-      expect(await ins('2026-10', 'v1')).toBeNull();
-      expect(await ins('2026-10', 'v1')).toMatch(/cohort_kek_uq|duplicate key/);
-      expect(await ins('2026-10:legal_hold', 'v1')).toBeNull();
+      expect(await ins('2099-13', 'v1')).toMatch(/cohort_check/);
+      expect(await ins('2099-01', 'v1')).toBeNull();
+      expect(await ins('2099-01', 'v1')).toMatch(/cohort_kek_uq|duplicate key/);
+      expect(await ins('2099-01:legal_hold', 'v1')).toBeNull();
       const r = await c.query(`insert into stripe_evidence_control_events(event_kind,actor,details) values ('account_provenance_verified','test','{"result":"passed"}') returning id`);
       attestationId = r.rows[0].id;
     });
@@ -152,12 +152,12 @@ describe.skipIf(!process.env.DATABASE_URL)('stripe evidence tables (migration 00
       provider_created_unix,provider_created_at,received_at,payload_sha256,payload_ciphertext,payload_nonce,payload_key_cohort,kek_version,payload_bytes,
       sig_header_timestamp,sig_scheme,signing_secret_label,verified_at,verifier_version,retrieved_at,retrieval_run_id,retrieval_api_version,
       capture_mode,projection_mode,retention_policy_version,retain_until)
-      values ($1,$2,$3,false,$4,$5,$6,'customer.subscription.updated',1700000000,to_timestamp(1700000000),now(),$7,$8,$9,'2026-10','v1',10,
+      values ($1,$2,$3,false,$4,$5,$6,'customer.subscription.updated',1700000000,to_timestamp(1700000000),now(),$7,$8,$9,'2099-01','v1',10,
       $10,$11,$12,$13,$14,$15,$16,$17,'enforced','legacy','v1',now()+interval '1 year') returning id`;
     const sigGroup = [1700000001, 'v1', 'primary', new Date(), 'v1', null, null, null];
     const run = (
       recv: string, ev: string, scope: string, evtId: string, prov: string,
-      group: unknown[] = sigGroup, created?: never,
+      group: unknown[] = sigGroup,
     ) => attempt(eventSql, [recv, ev, scope, evtId, prov, attestationId, DIGEST, Buffer.from('x'), NONCE, ...group]);
 
     it('T36/T32/T03: scope, provenance groups and identity uniqueness', async () => {
@@ -179,7 +179,7 @@ describe.skipIf(!process.env.DATABASE_URL)('stripe evidence tables (migration 00
           `insert into stripe_provider_malformed_receipts(received_at,payload_sha256,payload_ciphertext,payload_nonce,payload_key_cohort,kek_version,payload_bytes,
             sig_header_timestamp,sig_scheme,signing_secret_label,verified_at,verifier_version,parse_status,shape_defects,reason_codes,receiving_account_id,attestation_event_id,
             capture_mode,projection_mode,retention_policy_version,retain_until)
-           values (now(),$1,$2,$3,'2026-10','v1',3,1700000001,$4,'primary',now(),'v1',$5,$6::text[],$7::text[],'acct_A',$8,'enforced','legacy','v1',now()+interval '1 year')`,
+           values (now(),$1,$2,$3,'2099-01','v1',3,1700000001,$4,'primary',now(),'v1',$5,$6::text[],$7::text[],'acct_A',$8,'enforced','legacy','v1',now()+interval '1 year')`,
           [digest, Buffer.from('x'), NONCE, scheme, status, defects, reasons, attestationId],
         );
       const d1 = Buffer.alloc(32, 1);
