@@ -3,3 +3,6 @@ export * from './keyring';
 export * from './shape';
 export * from './signature';
 export * from './evidence.store';
+export * from './control-events';
+export * from './capture.config';
+export * from './capture.handler';

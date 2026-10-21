@@ -128,6 +128,21 @@ export interface Bindings {
    * Webhooks section, not the same value as STRIPE_SECRET_KEY). */
   STRIPE_WEBHOOK_SECRET: string;
 
+  /** HETA-01-F1 durable Stripe event evidence. ALL OPTIONAL; unset or `off` = today's webhook behavior, unchanged.
+   * See billing/stripe-evidence/capture.config.ts for meaning, limits and the Class S precondition rules. Secrets
+   * (STRIPE_WEBHOOK_SECRET_PREVIOUS, EVIDENCE_KEK_KEYRING) are never provisioned by the repository. */
+  STRIPE_EVIDENCE_CAPTURE?: string;
+  STRIPE_PROJECTION_MODE?: string;
+  STRIPE_ACCOUNT_ID?: string;
+  STRIPE_EXPECTED_LIVEMODE?: string;
+  STRIPE_WEBHOOK_SECRET_PREVIOUS?: string;
+  EVIDENCE_KEK_KEYRING?: string;
+  EVIDENCE_RETENTION_POLICY_VERSION?: string;
+  EVIDENCE_RETENTION_DAYS?: string;
+  EVIDENCE_MAX_BODY_BYTES?: string;
+  EVIDENCE_L2_MAX_AGE_SECONDS?: string;
+  EVIDENCE_LEASE_SECONDS?: string;
+
   /** Comma-separated list of allowed CORS origins for apps/web's deployed
    * domain(s) (e.g. "https://app.example.com,https://staging.example.com").
    * [vars], not [secrets] -- an allow-list of origins isn't sensitive, same

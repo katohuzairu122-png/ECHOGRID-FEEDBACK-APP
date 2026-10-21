@@ -308,6 +308,19 @@ export class StripeEvidenceStore {
     });
   }
 
+  /** Idempotent annotation: a replay or a crash-recovery re-classification never duplicates the same annotation. */
+  async annotateOnce(eventRecordId: string, disposition: Annotation, reasonCodes: string[], info?: Record<string, unknown>): Promise<boolean> {
+    return this.db.transaction(async tx => {
+      await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${'stripe_evidence_annotate:' + eventRecordId}, 0))`);
+      const d = stripeProviderEventDispositions;
+      const existing = await tx.select({ id: d.id }).from(d)
+        .where(and(eq(d.eventRecordId, eventRecordId), eq(d.disposition, disposition), sql`${d.reasonCodes} = ${sql.raw(`ARRAY[${reasonCodes.map(c => `'${c.replace(/'/g, "''")}'`).join(',')}]::text[]`)}`)).limit(1);
+      if (existing.length > 0) return false;
+      await tx.insert(d).values({ eventRecordId, disposition, reasonCodes, actor: 'webhook', ruleVersion: CAPTURE_RULE_VERSION, detail: info ?? null });
+      return true;
+    });
+  }
+
   /** Forensic/test reader: decrypts a stored well-formed event, verifying the AAD binding and digest. Throws; never returns partial plaintext. */
   async readPayload(eventRecordId: string): Promise<Uint8Array> {
     const row = (await this.db.select().from(stripeProviderEvents).where(eq(stripeProviderEvents.id, eventRecordId)))[0];
