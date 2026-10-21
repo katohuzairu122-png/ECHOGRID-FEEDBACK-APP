@@ -323,6 +323,13 @@
       "when": 1792396452019,
       "tag": "0045_heta01_f1_stripe_evidence",
       "breakpoints": true
+    },
+    {
+      "idx": 46,
+      "version": "7",
+      "when": 1792564476401,
+      "tag": "0046_heta01_f1_malformed_bad_account",
+      "breakpoints": true
     }
   ]
 }

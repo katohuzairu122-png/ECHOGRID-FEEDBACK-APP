@@ -1,0 +1,42 @@
+# HETA-01-F1 operator tooling runbook (IMPL-1; nothing here is activated or deployed)
+
+Status: repository code only. These tools are not run by CI against any shared database, never provision a
+Cloudflare secret or binding, and never enable capture. `STRIPE_EVIDENCE_CAPTURE` stays unset/`off` until a
+separate, owner-authorized rollout (design E.5, stages S1-S3).
+
+## Preconditions for enabling capture (all fail closed; nothing here enables it)
+`STRIPE_EVIDENCE_CAPTURE` stays unset or `off`. For `enforced`, an authenticated request returns 503 and stores nothing unless ALL hold: `STRIPE_ACCOUNT_ID` and `STRIPE_EXPECTED_LIVEMODE` set; projection mode `legacy`; webhook secret set; retention policy version and days set (no default); `EVIDENCE_L2_MAX_AGE_SECONDS` set explicitly; **`EVIDENCE_DB_ROLE_RISK_ACK=owner-role-risk-accepted`** (the owner's recorded acceptance that capture runs under the current owner-role connection until the G6 role separation exists; it is a disclosure acknowledgement, not a certification); a valid keyring (current active KEK, at least one next cohort) whose KEKs can unwrap the cohort's DEK; a current passing L2 attestation; database reachable.
+
+## Safety rails common to every command
+- Database commands refuse to run unless `--expect-database <name>` equals `current_database()`. Evidence is append-only; a wrong target cannot be undone.
+- Key material is written only to new files with mode `0600` (`wx`: never overwritten) and is never printed. Output is JSON with codes, versions and booleans.
+- Keys and tokens are read from the environment (`STRIPE_RESTRICTED_READ_KEY`) or files, never from arguments.
+- Control events written here record versions, cohorts, custody locations, commit SHA and approval reference. No key and no key-derived value.
+
+## L2 attestation (`pnpm evidence:attest`)
+Environment: `STRIPE_RESTRICTED_READ_KEY` (an `rk_` restricted key with read on Account, Events and Webhook Endpoints; an `sk_` key is refused), `STRIPE_ACCOUNT_ID`, `STRIPE_EXPECTED_LIVEMODE` (`true|false`, never inferred), `ATTEST_ENDPOINT_URL` (exact `/webhooks/stripe` URL), `ATTEST_APPROVED_API_VERSIONS` (comma list, owner-approved), optional `ATTEST_REQUIRED_EVENT_TYPES`, `DATABASE_URL`.
+Run `pnpm evidence:attest -- --expect-database <name> [--dry-run]`. Exit 0 only on `passed`. Every non-dry attempt is appended as `account_provenance_verified`; a later failed attempt supersedes an earlier pass. Re-run before the configured attestation freshness bound (`EVIDENCE_L2_MAX_AGE_SECONDS`, 60 s to 1 year) elapses or capture preconditions fail with 503. **There is no default**: Revision 3.3 recommends 24 h and the G3 proposal 15 min; both are owner decisions, so the value must be set explicitly.
+Open fact P20: how the endpoint object exposes direct versus Connect scope is unconfirmed. The tool fails only on positive Connect evidence (`application` set) and records its basis in the event so the residual risk is explicit.
+
+## Keyring (`pnpm evidence:keyring -- <command>`)
+Generate and custody: `generate --cohort YYYY-MM --version v1 --out entry.json` (offline, 0600). Then `record-generated --cohort C --version V --locations worker_secret,primary_escrow --expect-database NAME` appends the custody inventory (`kek_generated`). A KEK must not exist in the database, repository, CI, logs, chat, backups or any unlisted location.
+Assemble: `assemble --entry a.json --entry b.json --at <ISO> --out keyring.json` validates with the Worker's own loader (current active KEK plus runway of at least one next cohort). The operator, not this tool, places the value as the `EVIDENCE_KEK_KEYRING` Worker secret.
+Rotation (two phases; the Worker never lacks a usable KEK for the cohort):
+1. `rotate-phase1 --keyring k.json --entry new.json --out k1.json` adds the new KEK INACTIVE; deploy k1 to the Worker.
+2. `rewrap --cohort C --from V1 --to V2 --old-entry old.json --new-entry new.json --expect-database NAME` verifies (dry run); add `--apply` to insert the re-wrapped row (same DEK, equal fingerprint) and a versions-only `kek_rotated` event.
+3. `rotate-phase2 --keyring k1.json --cohort C --from V1 --to V2 --expect-database NAME --out k2.json` removes the old entry and activates the new one, only if the remaining keyring unwraps the same DEK. Deploy k2.
+Rotation does not re-encrypt payloads and does not protect them if the DEK was already leaked.
+
+## Windowed reconciliation and backfill (`pnpm evidence:reconcile`)
+Environment: the same restricted key and account/mode variables as attestation, `EVIDENCE_L2_MAX_AGE_SECONDS` (required, no default), `EVIDENCE_KEK_KEYRING_FILE` (a file, never an argument), `EVIDENCE_RETENTION_POLICY_VERSION` and `EVIDENCE_RETENTION_DAYS` (no default is assumed), `DATABASE_URL`.
+Run `pnpm evidence:reconcile -- --from <ISO> --to <ISO> --expect-database <name> [--page-size 100 --max-pages 10 --max-events 1000 --types a,b] [--dry-run]`. It requires a current passing L2 attestation. It lists provider event identities in the explicit window, retrieves every identity absent locally with `events.retrieve` over plain `fetch` (so the stored bytes are the provider's exact response bytes), and ingests them as `api_retrieval` with `retrieval_run_id`; identities already present are confirmed once (`reconciliation_confirmed`).
+- Every run appends a `reconciliation_run` start event and a final manifest (window, limits, pages, listed count, digest of the listed identity set, counts, up to 10 error codes, truncation flags).
+- A run that hits a limit, sees an API error after bounded retries (4xx other than 429 is not retried), an invalid page, or an unstorable or mismatched retrieval is `incomplete` and also appends `coverage_gap_unrecovered`. A window older than the retrieval horizon (default 29 days) is `unrecovered_gap`. `reconciled_no_known_gaps` means only that the listing reached its end within its limits and every listed event is now captured. **It is never a statement of complete provider history and never certifies the window.** Rows whose event time falls inside an uncertified window are flagged `recovered_during_uncertified_window`; the window stays uncertified.
+- Exit 0 only for `reconciled_no_known_gaps` or a dry run.
+- Scheduling, cadence and window sizes are owner decisions (H16); no schedule exists in this repository.
+
+## Forensic reader (`pnpm evidence:forensic`)
+The only code that decrypts evidence (`src/billing/stripe-evidence/forensic.ts`); enforced by an ESLint rule and by `import-boundary.test.ts`. Commands: `list` (no decryption), `read-event` (reports verification and a digest by default; `--stdout` prints plaintext deliberately), `export-event` (new 0600 file, registered with a location label, never the path), `destroy-export` (zero-fill, unlink, record). Every decrypting call is audited BEFORE plaintext is produced; if the audit row cannot be written nothing is decrypted, and an attempt that fails for lack of a KEK is still audited. A failed decryption proves only that this keyring cannot decrypt it (design C.6), never that no other copy of a key exists.
+
+## Not provided here
+L3 per-event corroboration (`provider_corroborated`); the destruction procedure and its evidence package (design C.6, human steps); any Cloudflare, Stripe or Neon configuration; the reconciliation schedule (H16); the external watchdog host, its read-only role and its alert channel (H15); named forensic custodians (H9).

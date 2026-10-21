@@ -104,6 +104,37 @@ export default [
     },
   },
   {
+    /**
+     * HETA-01-F1 import boundary (design T24, B5). The six Stripe evidence tables may be imported only by the evidence
+     * module, the schema itself, and tests; the decrypt primitives only by the modules that need them. Enforced here for
+     * lint and by apps/api/src/billing/stripe-evidence/import-boundary.test.ts for CI (which also covers `export *`).
+     */
+    files: ['apps/api/src/**/*.ts', 'apps/api/scripts/**/*.ts'],
+    ignores: ['apps/api/src/billing/stripe-evidence/**', 'apps/api/src/db/schema/**', 'apps/api/src/**/*.test.ts'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['**/db/schema', '**/db/schema/index', '**/db/schema/stripe-evidence'],
+              importNames: [
+                'stripeProviderEvents', 'stripeProviderMalformedReceipts', 'stripeProviderEventDispositions',
+                'stripeProviderEventConflicts', 'stripeEvidenceControlEvents', 'stripeEvidenceKeys',
+              ],
+              message: 'Stripe evidence tables may only be used inside src/billing/stripe-evidence (HETA-01-F1 T24).',
+            },
+            {
+              group: ['**/stripe-evidence/envelope'],
+              importNames: ['openPayload', 'unwrapDek', 'rewrapDek'],
+              message: 'Evidence decryption is confined to stripe-evidence/forensic.ts (HETA-01-F1 B5).',
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
     ignores: [
       '**/dist/**',
       '**/.next/**',

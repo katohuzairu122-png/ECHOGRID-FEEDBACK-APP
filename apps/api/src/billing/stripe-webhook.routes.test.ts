@@ -253,3 +253,62 @@ describe('POST /webhooks/stripe -- accepted requests', () => {
     expect(ctx.waitUntil).toHaveBeenCalledOnce();
   });
 });
+
+/**
+ * HETA-01-F1: STRIPE_EVIDENCE_CAPTURE. `off` (and unset, covered by every test above) is today's behavior; any
+ * other value takes the evidence pipeline. These cover the route's mapping of pipeline results to HTTP; the
+ * pipeline itself is covered against a real database in test/integration/stripe-evidence-handler.
+ */
+describe('POST /webhooks/stripe -- STRIPE_EVIDENCE_CAPTURE routing', () => {
+  let consoleError: ReturnType<typeof vi.spyOn>;
+  beforeEach(() => {
+    vi.clearAllMocks();
+    consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+  });
+  afterEach(() => consoleError.mockRestore());
+
+  const postWith = (extra: Record<string, string>, body: string, headers: Record<string, string> = {}) =>
+    app.request('/webhooks/stripe', { method: 'POST', body, headers: { 'content-type': 'application/json', ...headers } }, { ...env, ...extra } as unknown as Bindings, executionCtx());
+
+  it('explicit `off` behaves exactly like unset (legacy path, event processed)', async () => {
+    const payload = eventPayload('evt_off_1');
+    const response = await postWith({ STRIPE_EVIDENCE_CAPTURE: 'off' }, payload, { 'stripe-signature': await signPayload(payload, WEBHOOK_SECRET) });
+    expect(response.status).toBe(200);
+    expect(mocks.processEvent).toHaveBeenCalledOnce();
+  });
+
+  it('enforced: missing and invalid signatures keep the existing 400 codes and open no database', async () => {
+    const payload = eventPayload('evt_enf_1');
+    const missing = await postWith({ STRIPE_EVIDENCE_CAPTURE: 'enforced' }, payload);
+    expect(missing.status).toBe(400);
+    expect(await errorCodeOf(missing)).toBe('MISSING_SIGNATURE');
+    const bad = await postWith({ STRIPE_EVIDENCE_CAPTURE: 'enforced' }, payload, { 'stripe-signature': await signPayload(payload, 'whsec_wrong') });
+    expect(bad.status).toBe(400);
+    expect(await errorCodeOf(bad)).toBe('INVALID_SIGNATURE');
+    expect(mocks.createDb).not.toHaveBeenCalled();
+    expect(mocks.processEvent).not.toHaveBeenCalled();
+  });
+
+  it('enforced: an authenticated request with unmet system preconditions is 503 and is never processed', async () => {
+    const payload = eventPayload('evt_enf_2');
+    const response = await postWith({ STRIPE_EVIDENCE_CAPTURE: 'enforced' }, payload, { 'stripe-signature': await signPayload(payload, WEBHOOK_SECRET) });
+    expect(response.status).toBe(503);
+    expect(await errorCodeOf(response)).toBe('CAPTURE_PRECONDITION_FAILED');
+    expect(mocks.processEvent).not.toHaveBeenCalled();
+  });
+
+  it('enforced: a body over the cap is 413 before authentication and is never processed', async () => {
+    const payload = eventPayload('evt_enf_3');
+    const response = await postWith({ STRIPE_EVIDENCE_CAPTURE: 'enforced', EVIDENCE_MAX_BODY_BYTES: '50' }, payload, { 'stripe-signature': 'garbage' });
+    expect(response.status).toBe(413);
+    expect(await errorCodeOf(response)).toBe('PAYLOAD_TOO_LARGE');
+    expect(mocks.processEvent).not.toHaveBeenCalled();
+  });
+
+  it('an unrecognised capture value fails closed instead of silently running as off', async () => {
+    const payload = eventPayload('evt_enf_4');
+    const response = await postWith({ STRIPE_EVIDENCE_CAPTURE: 'ENFORCED' }, payload, { 'stripe-signature': await signPayload(payload, WEBHOOK_SECRET) });
+    expect(response.status).toBe(503);
+    expect(mocks.processEvent).not.toHaveBeenCalled();
+  });
+});

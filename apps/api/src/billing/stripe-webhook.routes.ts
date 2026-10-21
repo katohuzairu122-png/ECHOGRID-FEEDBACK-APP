@@ -7,6 +7,7 @@ import { AppError } from '../lib/errors';
 import { createStripeClient, createWebhookCryptoProvider } from './stripe-client';
 import { StripeWebhookService } from './stripe-webhook.service';
 import { recordVerifiedStripeSubscriptionObservation } from './stripe-subscription-history.recorder';
+import { handleEnforcedCapture, isCaptureOff, maxBodyBytes } from './stripe-evidence';
 
 /**
  * Mounted at the root app level in index.ts (app.route(...), NOT inside the
@@ -28,6 +29,37 @@ import { recordVerifiedStripeSubscriptionObservation } from './stripe-subscripti
 export const stripeWebhookRoutes = new Hono<{ Bindings: Bindings }>();
 
 stripeWebhookRoutes.post('/', async (c) => {
+  // HETA-01-F1: with STRIPE_EVIDENCE_CAPTURE unset or `off` (the default) this branch is skipped and the
+  // code below runs exactly as before. Any other value takes the evidence pipeline (capture before legacy).
+  if (!isCaptureOff(c.env)) {
+    const declared = Number(c.req.header('content-length'));
+    const tooLarge = Number.isFinite(declared) && declared > maxBodyBytes(c.env);
+    const result = await handleEnforcedCapture({
+      rawBody: tooLarge ? '' : await c.req.text(),
+      signatureHeader: c.req.header('stripe-signature'),
+      contentLength: Number.isFinite(declared) ? declared : null,
+      env: c.env,
+      openDb: () => createDb(c.env.HYPERDRIVE),
+      runLegacy: async (event, db) => {
+        await new StripeWebhookService(createRepositories(db)).processEvent(event);
+        await recordVerifiedStripeSubscriptionObservation(db, event);
+      },
+      log: (msg, data) => console.error(msg, data ?? {}),
+    });
+    switch (result.status) {
+      case 200:
+        return c.json({ received: true });
+      case 400:
+        throw new AppError(result.body.error === 'MISSING_SIGNATURE' ? 'Missing Stripe-Signature header.' : 'Invalid webhook signature.', 400, result.body.error);
+      case 409:
+        throw new AppError('Event is being processed; retry later.', 409, result.body.error);
+      case 413:
+        return c.json({ success: false, error: { code: result.body.error, message: 'Payload too large.' } }, 413);
+      case 503:
+        return c.json({ success: false, error: { code: result.body.error, message: 'Event capture is unavailable; retry later.' } }, 503);
+    }
+  }
+
   const signature = c.req.header('stripe-signature');
   if (!signature) {
     throw new AppError('Missing Stripe-Signature header.', 400, 'MISSING_SIGNATURE');
