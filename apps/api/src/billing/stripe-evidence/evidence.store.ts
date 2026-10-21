@@ -8,7 +8,7 @@ import {
   stripeProviderMalformedReceipts,
 } from '../../db/schema';
 import {
-  createWrappedDek, equalBytes, EvidenceCryptoError, openPayload, sealPayload, sha256, unwrapDek,
+  createWrappedDek, equalBytes, EvidenceCryptoError, sealPayload, sha256, unwrapDek,
   type EnvelopeBinding, type SealedEnvelope,
 } from './envelope';
 import { cohortOf, EvidenceKeyringError, type LoadedKeyring } from './keyring';
@@ -52,6 +52,32 @@ export interface WellFormedCapture {
   signature: SignatureProvenance;
   receivedAt: Date;
   /** The passing `account_provenance_verified` control event in force. */
+  attestationEventId: string;
+  retention: Retention;
+}
+
+type ProvenanceInput =
+  | { kind: 'webhook_signature'; signature: SignatureProvenance }
+  | { kind: 'api_retrieval'; retrievedAt: Date; runId: string; apiVersion: string | null };
+
+interface EnvelopeCapture {
+  rawBody: Uint8Array;
+  envelope: WellFormedEnvelope;
+  receivedAt: Date;
+  attestationEventId: string;
+  retention: Retention;
+  prov: ProvenanceInput;
+}
+
+export interface RetrievedCapture {
+  /** The exact bytes of the provider's `events.retrieve` response body. */
+  rawBody: Uint8Array;
+  envelope: WellFormedEnvelope;
+  retrievedAt: Date;
+  /** The `reconciliation_run` control event that fetched it. */
+  retrievalRunId: string;
+  retrievalApiVersion: string | null;
+  receivedAt: Date;
   attestationEventId: string;
   retention: Retention;
 }
@@ -147,20 +173,40 @@ export class StripeEvidenceStore {
   }
 
   /** Tx1 for a well-formed envelope (G.2 step 5). Replays are idempotent; a different body under the same identity is a recorded conflict. */
-  async captureWellFormed(c: WellFormedCapture): Promise<CaptureResult> {
+  captureWellFormed(c: WellFormedCapture): Promise<CaptureResult> {
+    return this.captureEnvelope({ ...c, prov: { kind: 'webhook_signature', signature: c.signature } });
+  }
+
+  /**
+   * Reconciliation ingest (D.3): the exact bytes of a provider `events.retrieve` response, stored as `api_retrieval`
+   * provenance with `retrieval_run_id`. Never presented as webhook-signature evidence (the database CHECK enforces it).
+   */
+  captureRetrieved(c: RetrievedCapture): Promise<CaptureResult> {
+    return this.captureEnvelope({ ...c, prov: { kind: 'api_retrieval', retrievedAt: c.retrievedAt, runId: c.retrievalRunId, apiVersion: c.retrievalApiVersion } });
+  }
+
+  private async captureEnvelope(c: EnvelopeCapture): Promise<CaptureResult> {
     if (c.rawBody.length === 0) throw new EvidenceStoreError('EMPTY_BODY');
     const at = this.now();
     const e = c.envelope;
+    const p = c.prov;
     const eventAccountId = e.account ?? this.cfg.receivingAccountId;
     const identity = {
-      receivingAccountId: this.cfg.receivingAccountId, eventAccountId, livemode: e.livemode, stripeEventId: e.id, provenance: 'webhook_signature',
+      receivingAccountId: this.cfg.receivingAccountId, eventAccountId, livemode: e.livemode, stripeEventId: e.id, provenance: p.kind,
     };
+    const actor = p.kind === 'webhook_signature' ? 'webhook' : 'reconciliation';
     return this.db.transaction(async tx => {
       const { dek, cohort, kekVersion } = await this.dekFor(tx, at);
       const sealed = await this.seal(dek, c.rawBody, { table: 'stripe_provider_events', identity: eventIdentity(identity), cohort, kekVersion });
       const dataObject = e.dataObject;
       const str = (k: string) => (typeof dataObject[k] === 'string' ? (dataObject[k] as string) : null);
       const customerRaw = dataObject.customer;
+      const sig = p.kind === 'webhook_signature'
+        ? { sigHeaderTimestamp: p.signature.headerTimestamp, sigScheme: p.signature.scheme, signingSecretLabel: p.signature.secretLabel, verifiedAt: p.signature.verifiedAt, verifierVersion: p.signature.verifierVersion }
+        : {};
+      const retrieval = p.kind === 'api_retrieval'
+        ? { retrievedAt: p.retrievedAt, retrievalRunId: p.runId, retrievalApiVersion: p.apiVersion ?? 'unspecified' }
+        : {};
       const inserted = await tx
         .insert(stripeProviderEvents)
         .values({
@@ -178,11 +224,8 @@ export class StripeEvidenceStore {
           payloadKeyCohort: cohort,
           kekVersion,
           payloadBytes: sealed.payloadBytes,
-          sigHeaderTimestamp: c.signature.headerTimestamp,
-          sigScheme: c.signature.scheme,
-          signingSecretLabel: c.signature.secretLabel,
-          verifiedAt: c.signature.verifiedAt,
-          verifierVersion: c.signature.verifierVersion,
+          ...sig,
+          ...retrieval,
           stripeRequestId: e.requestId,
           stripeIdempotencyKey: e.idempotencyKey,
           // Advisory claims only (plaintext, never authority); attribution requires F2's verified binding.
@@ -199,7 +242,10 @@ export class StripeEvidenceStore {
         })
         .returning({ id: stripeProviderEvents.id });
       if (inserted[0]) {
-        await tx.insert(stripeProviderEventDispositions).values({ eventRecordId: inserted[0].id, disposition: 'capture_committed', actor: 'webhook', ruleVersion: CAPTURE_RULE_VERSION });
+        await tx.insert(stripeProviderEventDispositions).values({
+          eventRecordId: inserted[0].id, disposition: 'capture_committed', actor, ruleVersion: CAPTURE_RULE_VERSION,
+          reasonCodes: p.kind === 'api_retrieval' ? ['API_RETRIEVAL'] : [],
+        });
         return { outcome: 'captured', eventRecordId: inserted[0].id } as const;
       }
       const existing = (
@@ -214,24 +260,27 @@ export class StripeEvidenceStore {
       if (!existing) throw new Error('evidence row vanished after conflict'); // unreachable: rows are append-only
       if (equalBytes(new Uint8Array(existing.digest), sealed.payloadSha256)) return { outcome: 'replay', eventRecordId: existing.id } as const;
 
-      // Same identity, different body: keep the conflicting body as its own sealed evidence (idempotent by digest).
+      // Same identity and provenance, different body: keep the conflicting body as its own sealed evidence (idempotent by digest).
+      const kind = p.kind === 'webhook_signature' ? 'webhook_digest_mismatch' : 'provider_field_mismatch';
+      const reason = p.kind === 'webhook_signature' ? 'QR_DIGEST_CONFLICT' : 'QR_PROVIDER_FIELD_MISMATCH';
       const conflictSealed = await this.seal(dek, c.rawBody, {
-        table: 'stripe_provider_event_conflicts', identity: `${existing.id}|webhook_digest_mismatch|${hex(sealed.payloadSha256)}`, cohort, kekVersion,
+        table: 'stripe_provider_event_conflicts', identity: `${existing.id}|${kind}|${hex(sealed.payloadSha256)}`, cohort, kekVersion,
       });
       const conflict = await tx
         .insert(stripeProviderEventConflicts)
         .values({
-          eventRecordId: existing.id, conflictKind: 'webhook_digest_mismatch', conflictingProvenance: 'webhook_signature',
+          eventRecordId: existing.id, conflictKind: kind, conflictingProvenance: p.kind,
           conflictingSha256: buf(sealed.payloadSha256), payloadCiphertext: buf(conflictSealed.ciphertext), payloadNonce: buf(conflictSealed.nonce),
           payloadKeyCohort: cohort, kekVersion,
-          sigHeaderTimestamp: c.signature.headerTimestamp, sigScheme: c.signature.scheme, signingSecretLabel: c.signature.secretLabel,
-          verifiedAt: c.signature.verifiedAt, verifierVersion: c.signature.verifierVersion,
+          ...(p.kind === 'webhook_signature'
+            ? { sigHeaderTimestamp: p.signature.headerTimestamp, sigScheme: p.signature.scheme, signingSecretLabel: p.signature.secretLabel, verifiedAt: p.signature.verifiedAt, verifierVersion: p.signature.verifierVersion }
+            : { retrievedAt: p.retrievedAt, retrievalRunId: p.runId, retrievalApiVersion: p.apiVersion ?? 'unspecified' }),
         })
         .onConflictDoNothing({ target: [stripeProviderEventConflicts.eventRecordId, stripeProviderEventConflicts.conflictKind, stripeProviderEventConflicts.conflictingSha256] })
         .returning({ id: stripeProviderEventConflicts.id });
       if (conflict.length > 0) {
         await tx.insert(stripeProviderEventDispositions).values({
-          eventRecordId: existing.id, disposition: 'quarantined', reasonCodes: ['QR_DIGEST_CONFLICT'], actor: 'webhook', ruleVersion: CAPTURE_RULE_VERSION,
+          eventRecordId: existing.id, disposition: 'quarantined', reasonCodes: [reason], actor, ruleVersion: CAPTURE_RULE_VERSION,
           detail: { conflictingSha256: hex(sealed.payloadSha256) },
         });
       }
@@ -324,21 +373,6 @@ export class StripeEvidenceStore {
       if (existing.length > 0) return false;
       await tx.insert(d).values({ eventRecordId, disposition, reasonCodes, actor: 'webhook', ruleVersion: CAPTURE_RULE_VERSION, detail: info ?? null });
       return true;
-    });
-  }
-
-  /** Forensic/test reader: decrypts a stored well-formed event, verifying the AAD binding and digest. Throws; never returns partial plaintext. */
-  async readPayload(eventRecordId: string): Promise<Uint8Array> {
-    const row = (await this.db.select().from(stripeProviderEvents).where(eq(stripeProviderEvents.id, eventRecordId)))[0];
-    if (!row) throw new EvidenceStoreError('NO_SUCH_CLAIM');
-    // Any wrapped row of the cohort wraps the SAME DEK (rotation re-wraps it), so use whichever KEK the keyring still holds.
-    // The AAD below still binds the kek_version recorded on the event row, independent of which KEK unwrapped the DEK.
-    const keyRows = await this.db.select().from(stripeEvidenceKeys).where(eq(stripeEvidenceKeys.cohort, row.payloadKeyCohort));
-    const usable = await this.unwrapFirst(keyRows);
-    if (!usable) throw new EvidenceStoreError('KEK_UNAVAILABLE');
-    const dek = usable.dek;
-    return openPayload(dek, { ciphertext: row.payloadCiphertext, nonce: row.payloadNonce, payloadSha256: row.payloadSha256 }, {
-      table: 'stripe_provider_events', identity: eventIdentity(row), cohort: row.payloadKeyCohort, kekVersion: row.kekVersion,
     });
   }
 }

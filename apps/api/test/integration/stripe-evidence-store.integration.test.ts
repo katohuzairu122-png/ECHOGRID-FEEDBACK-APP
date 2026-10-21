@@ -3,7 +3,7 @@ import { Client } from 'pg';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { buildDb } from '../../src/db/client';
 import {
-  StripeEvidenceStore, loadKeyring, classifyEnvelope, cohortOf, EvidenceStoreError, type LoadedKeyring, type WellFormedCapture, type MalformedCapture,
+  StripeEvidenceStore, ForensicReader, loadKeyring, classifyEnvelope, cohortOf, EvidenceStoreError, type LoadedKeyring, type WellFormedCapture, type MalformedCapture,
 } from '../../src/billing/stripe-evidence';
 
 /**
@@ -42,6 +42,13 @@ describe.skipIf(!process.env.DATABASE_URL)('stripe evidence store (integration, 
     clients.push(c);
     return new StripeEvidenceStore(buildDb(c), { receivingAccountId: RECEIVING, keyring: kr, now });
   };
+  const CTX = { actor: 'test', reason: 'integration test' };
+  const readerFor = async (kr = keyring) => {
+    const c = new Client({ connectionString: process.env.DATABASE_URL });
+    await c.connect();
+    clients.push(c);
+    return new ForensicReader(buildDb(c), kr);
+  };
   const sql = async (text: string, params: unknown[] = []) => (await clients[0]!.query(text, params)).rows;
 
   const eventBody = (id: string, extra: Record<string, unknown> = {}) =>
@@ -73,7 +80,7 @@ describe.skipIf(!process.env.DATABASE_URL)('stripe evidence store (integration, 
     const body = eventBody(evtId());
     const r = await main.captureWellFormed(wellFormed(body));
     expect(r.outcome).toBe('captured');
-    expect(new TextDecoder().decode(await main.readPayload(r.eventRecordId))).toBe(body);
+    expect(new TextDecoder().decode(await (await readerFor()).readEvent(r.eventRecordId, CTX))).toBe(body);
     const row = (await sql('select * from stripe_provider_events where id=$1', [r.eventRecordId]))[0];
     expect(row).toMatchObject({ account_scope: 'direct', provenance: 'webhook_signature', stripe_subscription_id: 'sub_123', stripe_customer_id: 'cus_123', capture_mode: 'enforced', projection_mode: 'legacy' });
     expect(Buffer.from(row.payload_ciphertext).includes(Buffer.from('sub_123'))).toBe(false); // ciphertext, not plaintext
@@ -100,7 +107,7 @@ describe.skipIf(!process.env.DATABASE_URL)('stripe evidence store (integration, 
     expect((await sql('select count(*)::int n from stripe_provider_event_conflicts where event_record_id=$1', [c1.eventRecordId]))[0].n).toBe(1);
     expect((await sql(`select count(*)::int n from stripe_provider_event_dispositions where event_record_id=$1 and disposition='quarantined' and 'QR_DIGEST_CONFLICT'=any(reason_codes)`, [c1.eventRecordId]))[0].n).toBe(1);
     // the original evidence is untouched
-    expect(new TextDecoder().decode(await main.readPayload(c1.eventRecordId))).toBe(eventBody(id));
+    expect(new TextDecoder().decode(await (await readerFor()).readEvent(c1.eventRecordId, CTX))).toBe(eventBody(id));
   });
 
   it('T06: 12 concurrent identical deliveries on separate connections create one row; exactly one capture, the rest replay', async () => {
@@ -121,8 +128,8 @@ describe.skipIf(!process.env.DATABASE_URL)('stripe evidence store (integration, 
     expect(results.every(r => r.outcome === 'captured')).toBe(true);
     expect((await sql('select count(*)::int n from stripe_evidence_keys where cohort=$1', [cohortOf(future)]))[0].n).toBe(1);
     // every row decrypts via the single stored DEK
-    const reader = await newStore(keyring, () => new Date(future.getTime() + 86400000));
-    for (let i = 0; i < results.length; i++) expect(new TextDecoder().decode(await reader.readPayload(results[i]!.eventRecordId))).toBe(bodies[i]);
+    const reader = await readerFor();
+    for (let i = 0; i < results.length; i++) expect(new TextDecoder().decode(await reader.readEvent(results[i]!.eventRecordId, CTX))).toBe(bodies[i]);
   });
 
   it('T13: a cohort whose KEKs the Worker does not hold fails closed (no capture, no partial row)', async () => {

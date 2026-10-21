@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import Stripe from 'stripe';
+import { canonicalAad, createWrappedDek, unwrapDek, rewrapDek, sealPayload, openPayload, sha256, equalBytes } from './envelope';
 import {
-  canonicalAad, createWrappedDek, unwrapDek, rewrapDek, sealPayload, openPayload, sha256, equalBytes,
   loadKeyring, cohortOf, EvidenceKeyringError, classifyEnvelope, verifyWebhookSignature, VERIFIER_VERSION,
 } from './index';
 

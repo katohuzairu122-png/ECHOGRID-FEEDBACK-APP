@@ -8,7 +8,7 @@ import { join, resolve } from 'node:path';
 import { createHash, randomBytes } from 'node:crypto';
 import { buildDb, type Database } from '../../src/db/client';
 import {
-  StripeEvidenceStore, loadKeyring, classifyEnvelope, EvidenceStoreError, assembleKeyring, addKeyringEntry, completeRotation, generateKekEntry, importKek,
+  StripeEvidenceStore, ForensicReader, ForensicAccessError, loadKeyring, classifyEnvelope, assembleKeyring, addKeyringEntry, completeRotation, generateKekEntry, importKek,
   recordKekGenerated, rewrapCohort, verifyRemovalSafe, runAttestation, handleEnforcedCapture, DEFAULT_REQUIRED_EVENT_TYPES,
   type AttestationObservation, type CaptureEnv, type KeyringEntryJson,
 } from '../../src/billing/stripe-evidence';
@@ -137,6 +137,8 @@ describe.skipIf(!process.env.DATABASE_URL)('stripe evidence operator tooling (in
     let eventId = '';
     const bodyText = JSON.stringify({ id: `evt_r${randomBytes(6).toString('hex')}`, type: 'customer.subscription.updated', created: 1700000000, livemode: false, data: { object: { id: 'sub_rot', object: 'subscription', customer: 'cus_rot' } } });
 
+    const CTX = { actor: 'test', reason: 'rotation drill' };
+    const readerFor = async (ringJson: string, db: Database) => new ForensicReader(db, await loadKeyring(ringJson, NOW));
     const storeFor = async (ringJson: string, db: Database) => new StripeEvidenceStore(db, { receivingAccountId: receiving, keyring: await loadKeyring(ringJson, NOW), now: () => NOW });
 
     it('captures under v1, then phase 1 adds v2 inactive and the Worker still reads and writes', async () => {
@@ -150,8 +152,7 @@ describe.skipIf(!process.env.DATABASE_URL)('stripe evidence operator tooling (in
       expect(r.outcome).toBe('captured');
       eventId = r.eventRecordId;
       const ring1 = addKeyringEntry(ring0, fresh);
-      const store1 = await storeFor(ring1, db);
-      expect(new TextDecoder().decode(await store1.readPayload(eventId))).toBe(bodyText);
+      expect(new TextDecoder().decode(await (await readerFor(ring1, db)).readEvent(eventId, CTX))).toBe(bodyText);
     });
 
     it('rewrap without --apply verifies but writes nothing; with a wrong old KEK it fails and writes nothing', async () => {
@@ -193,21 +194,21 @@ describe.skipIf(!process.env.DATABASE_URL)('stripe evidence operator tooling (in
       const ring2 = completeRotation(ring1, cohort, 'r1', 'r2');
       expect(await verifyRemovalSafe(db, { cohort, removeVersion: 'r1', remainingKeyringJson: ring2, now: NOW })).toEqual({ safe: true, reasons: [] });
       const store2 = await storeFor(ring2, db);
-      expect(new TextDecoder().decode(await store2.readPayload(eventId))).toBe(bodyText);
+      expect(new TextDecoder().decode(await (await readerFor(ring2, db)).readEvent(eventId, CTX))).toBe(bodyText);
       const attestationId = (await rows(`select id from stripe_evidence_control_events where stream=$1 limit 1`, [`${receiving}:false`]))[0].id;
       const body2 = JSON.stringify({ id: `evt_r${randomBytes(6).toString('hex')}`, type: 'customer.subscription.created', created: 1700000001, livemode: false, data: { object: { id: 'sub_rot2', object: 'subscription' } } });
       const shape = classifyEnvelope(body2);
       if (shape.kind !== 'ok') throw new Error('fixture');
       const w = await store2.captureWellFormed({ rawBody: new TextEncoder().encode(body2), envelope: shape.envelope, signature: { headerTimestamp: 1, scheme: 'v1', secretLabel: 'p', verifiedAt: NOW, verifierVersion: 't' }, receivedAt: NOW, attestationEventId: attestationId, retention: { policyVersion: 'v', retainUntil: new Date(NOW.getTime() + 86400000) } });
       expect(w.outcome).toBe('captured');
-      expect(new TextDecoder().decode(await store2.readPayload(w.eventRecordId))).toBe(body2);
+      expect(new TextDecoder().decode(await (await readerFor(ring2, db)).readEvent(w.eventRecordId, CTX))).toBe(body2);
     });
 
     it('with every KEK for the cohort absent, the Worker cannot read (an application-level failure only; no irrecoverability is claimed)', async () => {
       const db = await newDb();
       const other = generateKekEntry({ cohort, kekVersion: 'zz' });
-      const noKeys = await storeFor(assembleKeyring([other, runway]), db);
-      await expect(noKeys.readPayload(eventId)).rejects.toBeInstanceOf(EvidenceStoreError);
+      const noKeys = await readerFor(assembleKeyring([other, runway]), db);
+      await expect(noKeys.readEvent(eventId, CTX)).rejects.toBeInstanceOf(ForensicAccessError);
     });
   });
 
