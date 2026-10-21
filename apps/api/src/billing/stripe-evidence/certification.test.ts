@@ -27,6 +27,16 @@ describe('target guard (checkTarget)', () => {
     ['sslmode missing', url({ query: '' }), 'SSLMODE'],
     ['sslmode prefer', url({ query: '?sslmode=prefer' }), 'SSLMODE'],
     ['options parameter', url({ query: '?sslmode=require&options=-c%20search_path%3Dpublic' }), 'OPTIONS_PARAMETER'],
+    ['host override parameter', url({ query: '?sslmode=require&host=ep-other-1.c-10.us-east-1.aws.neon.tech' }), 'QUERY_PARAMETER_NOT_ALLOWED'],
+    ['hostaddr override parameter', url({ query: '?sslmode=require&hostaddr=10.0.0.1' }), 'QUERY_PARAMETER_NOT_ALLOWED'],
+    ['dbname override parameter', url({ query: '?sslmode=require&dbname=neondb' }), 'QUERY_PARAMETER_NOT_ALLOWED'],
+    ['user override parameter', url({ query: '?sslmode=require&user=other' }), 'QUERY_PARAMETER_NOT_ALLOWED'],
+    ['port override parameter', url({ query: '?sslmode=require&port=6543' }), 'QUERY_PARAMETER_NOT_ALLOWED'],
+    ['ssl override parameter', url({ query: '?sslmode=require&ssl=false' }), 'QUERY_PARAMETER_NOT_ALLOWED'],
+    ['service parameter', url({ query: '?sslmode=require&service=x' }), 'QUERY_PARAMETER_NOT_ALLOWED'],
+    ['unknown parameter', url({ query: '?sslmode=require&application_name=x' }), 'QUERY_PARAMETER_NOT_ALLOWED'],
+    ['duplicate sslmode (require first)', url({ query: '?sslmode=require&sslmode=disable' }), 'SSLMODE_DUPLICATE'],
+    ['duplicate sslmode (require last)', url({ query: '?sslmode=disable&sslmode=require' }), 'SSLMODE_DUPLICATE'],
     ['non-default port', url({ port: '6543' }), 'PORT'],
     ['not a URL', 'not a url', 'URL_INVALID'],
     ['wrong protocol', url().replace('postgresql:', 'mysql:'), 'PROTOCOL'],
@@ -47,9 +57,10 @@ describe('target guard (checkTarget)', () => {
   });
 
   it('the local-test relaxation applies to localhost only, and never to a remote host', () => {
-    const local = 'postgresql://postgres:pw@127.0.0.1:55432/echogrid_heta01_f1_cert_x?x=1';
+    const local = 'postgresql://postgres:pw@127.0.0.1:55432/echogrid_heta01_f1_cert_x';
     expect(checkTarget(local, { host: '127.0.0.1', database: 'echogrid_heta01_f1_cert_x' }, { localTest: true })).toEqual([]);
     expect(checkTarget(local, { host: '127.0.0.1', database: 'echogrid_heta01_f1_cert_x' })).toEqual(expect.arrayContaining(['HOST_NOT_NEON', 'SSLMODE', 'PORT']));
+    expect(checkTarget(local + '?x=1', { host: '127.0.0.1', database: 'echogrid_heta01_f1_cert_x' }, { localTest: true })).toContain('QUERY_PARAMETER_NOT_ALLOWED');
     const remote = url({ query: '' });
     expect(checkTarget(remote, expected, { localTest: true })).toContain('SSLMODE');
     expect(LOCAL_TEST_ACK).toBe('I_ACKNOWLEDGE_LOCAL_DISPOSABLE');
