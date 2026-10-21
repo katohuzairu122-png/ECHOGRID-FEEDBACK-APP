@@ -60,6 +60,11 @@ export function checkTarget(urlString, expected, { localTest = false } = {}) {
   if (u.port && u.port !== '5432' && !relaxed) failures.push('PORT');
   if (!relaxed && u.searchParams.get('sslmode') !== 'require') failures.push('SSLMODE');
   if (u.searchParams.has('options')) failures.push('OPTIONS_PARAMETER');
+  // node-postgres lets query parameters (host, hostaddr, dbname, user, port, ssl, service, ...) override the URL authority and
+  // takes the LAST duplicate where URL.searchParams.get takes the first. Fail closed: sslmode is the only permitted key and it
+  // may appear at most once, so the validated authority is the authority pg connects to.
+  for (const key of new Set(u.searchParams.keys())) if (key !== 'sslmode' && key !== 'options') failures.push('QUERY_PARAMETER_NOT_ALLOWED');
+  if (u.searchParams.getAll('sslmode').length > 1) failures.push('SSLMODE_DUPLICATE');
   return [...new Set(failures)];
 }
 
