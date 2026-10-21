@@ -1,0 +1,272 @@
+{
+  "contract": "HETA-01-F1 migration 0045 catalog contract",
+  "designRevision": "3.3",
+  "migrationTag": "0045_heta01_f1_stripe_evidence",
+  "note": "Authoritative expected catalog for the six append-only Stripe evidence tables. Compared exactly by test/integration/stripe-evidence-catalog.integration.test.ts (T44). Changing it requires a new migration.",
+  "immutabilityFunction": "stripe_provider_evidence_immutable",
+  "tables": {
+    "stripe_evidence_control_events": {
+      "columns": [
+        "id",
+        "seq",
+        "event_kind",
+        "occurred_at",
+        "stream",
+        "cause",
+        "dedupe_key",
+        "window_start",
+        "window_end",
+        "actor",
+        "commit_sha",
+        "approval_ref",
+        "details"
+      ],
+      "checks": [
+        "stripe_evidence_control_attestation_result",
+        "stripe_evidence_control_cause_required",
+        "stripe_evidence_control_details_check",
+        "stripe_evidence_control_kek_destroyed_claim",
+        "stripe_evidence_control_kind_check",
+        "stripe_evidence_control_stream_dedupe_required"
+      ],
+      "uniques": [],
+      "foreignKeys": [],
+      "indexes": [
+        "stripe_evidence_control_dedupe_key_uq",
+        "stripe_evidence_control_stream_kind_seq_idx"
+      ],
+      "triggers": [
+        "stripe_evidence_control_events_no_truncate",
+        "stripe_evidence_control_events_no_update_delete"
+      ]
+    },
+    "stripe_evidence_keys": {
+      "columns": [
+        "id",
+        "cohort",
+        "kek_version",
+        "wrapped_dek",
+        "wrap_nonce",
+        "wrap_algorithm",
+        "dek_fingerprint",
+        "created_at"
+      ],
+      "checks": [
+        "stripe_evidence_keys_algorithm_check",
+        "stripe_evidence_keys_cohort_check"
+      ],
+      "uniques": [
+        "stripe_evidence_keys_cohort_kek_uq"
+      ],
+      "foreignKeys": [],
+      "indexes": [
+        "stripe_evidence_keys_cohort_kek_uq"
+      ],
+      "triggers": [
+        "stripe_evidence_keys_no_truncate",
+        "stripe_evidence_keys_no_update_delete"
+      ]
+    },
+    "stripe_provider_events": {
+      "columns": [
+        "id",
+        "receiving_account_id",
+        "event_account_id",
+        "account_scope",
+        "livemode",
+        "stripe_event_id",
+        "provenance",
+        "attestation_event_id",
+        "event_type",
+        "api_version",
+        "provider_created_unix",
+        "provider_created_at",
+        "received_at",
+        "committed_at",
+        "payload_sha256",
+        "payload_ciphertext",
+        "payload_nonce",
+        "payload_key_cohort",
+        "kek_version",
+        "payload_bytes",
+        "sig_header_timestamp",
+        "sig_scheme",
+        "signing_secret_label",
+        "verified_at",
+        "verifier_version",
+        "retrieved_at",
+        "retrieval_run_id",
+        "retrieval_api_version",
+        "stripe_request_id",
+        "stripe_idempotency_key",
+        "object_type",
+        "stripe_subscription_id",
+        "stripe_customer_id",
+        "claimed_business_id",
+        "capture_mode",
+        "projection_mode",
+        "retention_policy_version",
+        "retain_until"
+      ],
+      "checks": [
+        "stripe_provider_events_bytes_check",
+        "stripe_provider_events_capture_mode_check",
+        "stripe_provider_events_created_check",
+        "stripe_provider_events_digest_check",
+        "stripe_provider_events_event_acct_check",
+        "stripe_provider_events_event_id_check",
+        "stripe_provider_events_nonce_check",
+        "stripe_provider_events_projection_mode_check",
+        "stripe_provider_events_provenance_check",
+        "stripe_provider_events_provenance_groups_check",
+        "stripe_provider_events_receiving_acct_check",
+        "stripe_provider_events_scope_check",
+        "stripe_provider_events_sig_scheme_check"
+      ],
+      "uniques": [],
+      "foreignKeys": [
+        "stripe_provider_events_attestation_event_id_stripe_evidence_con",
+        "stripe_provider_events_key_fk",
+        "stripe_provider_events_retrieval_run_id_stripe_evidence_control"
+      ],
+      "indexes": [
+        "stripe_provider_events_customer_idx",
+        "stripe_provider_events_identity_uq",
+        "stripe_provider_events_received_at_idx",
+        "stripe_provider_events_subscription_created_idx"
+      ],
+      "triggers": [
+        "stripe_provider_events_no_truncate",
+        "stripe_provider_events_no_update_delete"
+      ]
+    },
+    "stripe_provider_malformed_receipts": {
+      "columns": [
+        "id",
+        "received_at",
+        "committed_at",
+        "payload_sha256",
+        "payload_ciphertext",
+        "payload_nonce",
+        "payload_key_cohort",
+        "kek_version",
+        "payload_bytes",
+        "sig_header_timestamp",
+        "sig_scheme",
+        "signing_secret_label",
+        "verified_at",
+        "verifier_version",
+        "parse_status",
+        "shape_defects",
+        "reason_codes",
+        "receiving_account_id",
+        "attestation_event_id",
+        "capture_mode",
+        "projection_mode",
+        "retention_policy_version",
+        "retain_until"
+      ],
+      "checks": [
+        "stripe_provider_malformed_receipts_acct_check",
+        "stripe_provider_malformed_receipts_bytes_check",
+        "stripe_provider_malformed_receipts_capture_mode_check",
+        "stripe_provider_malformed_receipts_defects_check",
+        "stripe_provider_malformed_receipts_digest_check",
+        "stripe_provider_malformed_receipts_nonce_check",
+        "stripe_provider_malformed_receipts_parse_status_check",
+        "stripe_provider_malformed_receipts_projection_mode_check",
+        "stripe_provider_malformed_receipts_reason_check",
+        "stripe_provider_malformed_receipts_sig_scheme_check"
+      ],
+      "uniques": [],
+      "foreignKeys": [
+        "stripe_provider_malformed_receipts_attestation_event_id_stripe_",
+        "stripe_provider_malformed_receipts_key_fk"
+      ],
+      "indexes": [
+        "stripe_provider_malformed_receipts_digest_uq",
+        "stripe_provider_malformed_receipts_received_at_idx"
+      ],
+      "triggers": [
+        "stripe_provider_malformed_receipts_no_truncate",
+        "stripe_provider_malformed_receipts_no_update_delete"
+      ]
+    },
+    "stripe_provider_event_dispositions": {
+      "columns": [
+        "id",
+        "seq",
+        "event_record_id",
+        "disposition",
+        "reason_codes",
+        "actor",
+        "rule_version",
+        "detail",
+        "created_at",
+        "business_id",
+        "attempt_no",
+        "claimant",
+        "lease_expires_at"
+      ],
+      "checks": [
+        "stripe_provider_event_dispositions_claim_fields_check",
+        "stripe_provider_event_dispositions_kind_check"
+      ],
+      "uniques": [],
+      "foreignKeys": [
+        "stripe_provider_event_dispositions_business_id_businesses_id_fk",
+        "stripe_provider_event_dispositions_event_record_id_stripe_provi"
+      ],
+      "indexes": [
+        "stripe_provider_event_dispositions_claim_uq",
+        "stripe_provider_event_dispositions_event_seq_idx"
+      ],
+      "triggers": [
+        "stripe_provider_event_dispositions_no_truncate",
+        "stripe_provider_event_dispositions_no_update_delete"
+      ]
+    },
+    "stripe_provider_event_conflicts": {
+      "columns": [
+        "id",
+        "event_record_id",
+        "conflict_kind",
+        "conflicting_provenance",
+        "conflicting_sha256",
+        "payload_ciphertext",
+        "payload_nonce",
+        "payload_key_cohort",
+        "kek_version",
+        "sig_header_timestamp",
+        "sig_scheme",
+        "signing_secret_label",
+        "verified_at",
+        "verifier_version",
+        "retrieved_at",
+        "retrieval_run_id",
+        "retrieval_api_version",
+        "detected_at"
+      ],
+      "checks": [
+        "stripe_provider_event_conflicts_digest_check",
+        "stripe_provider_event_conflicts_kind_check",
+        "stripe_provider_event_conflicts_nonce_check",
+        "stripe_provider_event_conflicts_provenance_check",
+        "stripe_provider_event_conflicts_provenance_groups_check"
+      ],
+      "uniques": [],
+      "foreignKeys": [
+        "stripe_provider_event_conflicts_event_record_id_stripe_provider",
+        "stripe_provider_event_conflicts_key_fk",
+        "stripe_provider_event_conflicts_retrieval_run_id_stripe_evidenc"
+      ],
+      "indexes": [
+        "stripe_provider_event_conflicts_idem_uq"
+      ],
+      "triggers": [
+        "stripe_provider_event_conflicts_no_truncate",
+        "stripe_provider_event_conflicts_no_update_delete"
+      ]
+    }
+  }
+}

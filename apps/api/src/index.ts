@@ -60,6 +60,7 @@ import { NotificationService } from './notifications/notification.service';
 import { computeRetryDelaySeconds } from './lib/backoff';
 import { notifyOps, alertOnFailure } from './lib/ops-alert';
 import { SubscriptionLifecycleService } from './billing/subscription-lifecycle.service';
+import { runStripeEvidenceHeartbeat } from './billing/stripe-evidence';
 
 // Durable Object classes must be exported from the Worker's main module for
 // wrangler to find them (see wrangler.toml's durable_objects.bindings /
@@ -511,6 +512,23 @@ async function scheduled(event: ScheduledController, env: Bindings, ctx: Executi
           detail: { cron: event.cron },
         },
         () => sweepStalePendingAiUsage(env),
+      ),
+    );
+    // HETA-01-F1 heartbeat (E.3). A no-op unless STRIPE_EVIDENCE_CAPTURE is set, so a deployment that has not
+    // applied migration 0045 and left the flag unset never touches the evidence tables. Its own waitUntil: a
+    // failure here must not stop the sweeps above or below, and is alerted by name.
+    ctx.waitUntil(
+      alertOnFailure(
+        env,
+        {
+          event: 'cron.stripe_evidence_heartbeat_failed',
+          severity: 'critical',
+          message: 'The Stripe evidence heartbeat failed. A heartbeat gap will open an uncertified coverage window.',
+          detail: { cron: event.cron },
+        },
+        async () => {
+          await runStripeEvidenceHeartbeat(env, event.scheduledTime);
+        },
       ),
     );
     ctx.waitUntil(

@@ -157,7 +157,7 @@ export const stripeProviderMalformedReceipts = pgTable('stripe_provider_malforme
   check('stripe_provider_malformed_receipts_bytes_check', sql`${t.payloadBytes} > 0 AND ${t.payloadBytes} <= 16777216`),
   check('stripe_provider_malformed_receipts_sig_scheme_check', sql`${t.sigScheme} = 'v1'`),
   check('stripe_provider_malformed_receipts_parse_status_check', sql`${t.parseStatus} IN ('not_json','json_non_object','json_object_invalid_envelope')`),
-  check('stripe_provider_malformed_receipts_defects_check', sql`cardinality(${t.shapeDefects}) > 0 AND ${t.shapeDefects} <@ ARRAY['missing_id','bad_id','missing_created','bad_created','missing_livemode','bad_livemode','missing_type','bad_type','missing_data_object','bad_data_object']::text[]`),
+  check('stripe_provider_malformed_receipts_defects_check', sql`cardinality(${t.shapeDefects}) > 0 AND ${t.shapeDefects} <@ ARRAY['missing_id','bad_id','missing_created','bad_created','missing_livemode','bad_livemode','missing_type','bad_type','missing_data_object','bad_data_object','bad_account']::text[]`),
   check('stripe_provider_malformed_receipts_reason_check', sql`'QR_SHAPE_INVALID' = ANY(${t.reasonCodes})`),
   check('stripe_provider_malformed_receipts_acct_check', sql`${t.receivingAccountId} ~ ${sql.raw(ACCT)}`),
   check('stripe_provider_malformed_receipts_capture_mode_check', sql`${t.captureMode} = 'enforced'`),
