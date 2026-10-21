@@ -9,3 +9,5 @@ export * from './capture.handler';
 export * from './ucw';
 export * from './watchdog';
 export * from './heartbeat';
+export * from './attestation';
+export * from './keyring-ops';

@@ -1,6 +1,6 @@
 import type Stripe from 'stripe';
 import type { Database } from '../../db/client';
-import { StripeEvidenceStore } from './evidence.store';
+import { EvidenceStoreError, StripeEvidenceStore } from './evidence.store';
 import { ControlEventWriter, type BucketKind } from './control-events';
 import { checkKeyring, maxBodyBytes, resolveConfig, streamForEnv, type CaptureEnv, type PreconditionCode } from './capture.config';
 import { classifyEnvelope } from './shape';
@@ -152,6 +152,12 @@ export async function handleEnforcedCapture(input: HandlerInput): Promise<Handle
       await store.recordOutcome(captured.eventRecordId, claim.attemptNo, inScope ? 'projection_applied' : 'projection_skipped');
       return { status: 200, body: { received: true, capture: 'processed' } };
     } catch (err) {
+      // G.1 Class S: the cohort's DEK exists but the Worker holds none of its KEKs (or none is active): a retryable system
+      // precondition, not an event-level failure. Nothing was stored (the transaction rolled back).
+      if (err instanceof EvidenceStoreError && err.code === 'KEK_UNAVAILABLE') {
+        await safely(log, 'capture_precondition_failed', () => control.bucket('capture_precondition_failed', stream, now(), { failed: ['KEK_UNAVAILABLE'] satisfies PreconditionCode[] }));
+        return { status: 503, body: { error: 'CAPTURE_PRECONDITION_FAILED' } };
+      }
       // Capture failure (or a rethrown legacy failure): record a bounded bucket where possible, then let it surface as a 500.
       await safely(log, 'capture_error_observed', () => control.bucket('capture_error_observed', stream, now(), { error: err instanceof Error ? err.name : 'unknown' }));
       throw err;

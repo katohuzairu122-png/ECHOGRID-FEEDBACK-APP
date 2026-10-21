@@ -8,7 +8,7 @@ import {
   stripeProviderMalformedReceipts,
 } from '../../db/schema';
 import {
-  createWrappedDek, equalBytes, openPayload, sealPayload, sha256, unwrapDek,
+  createWrappedDek, equalBytes, EvidenceCryptoError, openPayload, sealPayload, sha256, unwrapDek,
   type EnvelopeBinding, type SealedEnvelope,
 } from './envelope';
 import { cohortOf, EvidenceKeyringError, type LoadedKeyring } from './keyring';
@@ -129,8 +129,14 @@ export class StripeEvidenceStore {
     for (const r of rows) {
       const kek = this.cfg.keyring.find(r.cohort, r.kekVersion);
       if (!kek) continue;
-      const dek = await unwrapDek(kek.key, { wrappedDek: r.wrappedDek, wrapNonce: r.wrapNonce, dekFingerprint: r.dekFingerprint }, r.cohort, r.kekVersion);
-      return { dek, cohort: r.cohort, kekVersion: r.kekVersion };
+      try {
+        const dek = await unwrapDek(kek.key, { wrappedDek: r.wrappedDek, wrapNonce: r.wrapNonce, dekFingerprint: r.dekFingerprint }, r.cohort, r.kekVersion);
+        return { dek, cohort: r.cohort, kekVersion: r.kekVersion };
+      } catch (e) {
+        // A KEK that is present by label but cannot unwrap this row (wrong bytes, corrupted row) is simply not usable for it;
+        // the caller fails closed with KEK_UNAVAILABLE if no other wrapped row of the cohort unwraps.
+        if (!(e instanceof EvidenceCryptoError)) throw e;
+      }
     }
     return null;
   }
@@ -325,10 +331,12 @@ export class StripeEvidenceStore {
   async readPayload(eventRecordId: string): Promise<Uint8Array> {
     const row = (await this.db.select().from(stripeProviderEvents).where(eq(stripeProviderEvents.id, eventRecordId)))[0];
     if (!row) throw new EvidenceStoreError('NO_SUCH_CLAIM');
-    const kek = this.cfg.keyring.find(row.payloadKeyCohort, row.kekVersion);
-    if (!kek) throw new EvidenceStoreError('KEK_UNAVAILABLE');
-    const keyRow = (await this.db.select().from(stripeEvidenceKeys).where(and(eq(stripeEvidenceKeys.cohort, row.payloadKeyCohort), eq(stripeEvidenceKeys.kekVersion, row.kekVersion))))[0]!;
-    const dek = await unwrapDek(kek.key, { wrappedDek: keyRow.wrappedDek, wrapNonce: keyRow.wrapNonce, dekFingerprint: keyRow.dekFingerprint }, row.payloadKeyCohort, row.kekVersion);
+    // Any wrapped row of the cohort wraps the SAME DEK (rotation re-wraps it), so use whichever KEK the keyring still holds.
+    // The AAD below still binds the kek_version recorded on the event row, independent of which KEK unwrapped the DEK.
+    const keyRows = await this.db.select().from(stripeEvidenceKeys).where(eq(stripeEvidenceKeys.cohort, row.payloadKeyCohort));
+    const usable = await this.unwrapFirst(keyRows);
+    if (!usable) throw new EvidenceStoreError('KEK_UNAVAILABLE');
+    const dek = usable.dek;
     return openPayload(dek, { ciphertext: row.payloadCiphertext, nonce: row.payloadNonce, payloadSha256: row.payloadSha256 }, {
       table: 'stripe_provider_events', identity: eventIdentity(row), cohort: row.payloadKeyCohort, kekVersion: row.kekVersion,
     });
