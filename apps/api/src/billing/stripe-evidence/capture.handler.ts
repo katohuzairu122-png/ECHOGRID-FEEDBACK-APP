@@ -1,8 +1,8 @@
 import type Stripe from 'stripe';
 import type { Database } from '../../db/client';
 import { StripeEvidenceStore } from './evidence.store';
-import { ControlEventWriter, streamOf, type BucketKind } from './control-events';
-import { checkKeyring, maxBodyBytes, resolveConfig, type CaptureEnv, type PreconditionCode } from './capture.config';
+import { ControlEventWriter, type BucketKind } from './control-events';
+import { checkKeyring, maxBodyBytes, resolveConfig, streamForEnv, type CaptureEnv, type PreconditionCode } from './capture.config';
 import { classifyEnvelope } from './shape';
 import { verifyWebhookSignature } from './signature';
 
@@ -55,7 +55,7 @@ export async function handleEnforcedCapture(input: HandlerInput): Promise<Handle
   const log = input.log;
   const env = input.env;
   const cfgResult = resolveConfig(env);
-  const stream = streamOf(env.STRIPE_ACCOUNT_ID && /^acct_[A-Za-z0-9]+$/.test(env.STRIPE_ACCOUNT_ID) ? env.STRIPE_ACCOUNT_ID : 'unconfigured', env.STRIPE_EXPECTED_LIVEMODE === 'true' || env.STRIPE_EXPECTED_LIVEMODE === 'false' ? env.STRIPE_EXPECTED_LIVEMODE : 'unknown');
+  const stream = streamForEnv(env);
 
   const bucketOnce = async (kind: BucketKind, details: Record<string, unknown>) => {
     let conn: Awaited<ReturnType<HandlerInput['openDb']>> | null = null;

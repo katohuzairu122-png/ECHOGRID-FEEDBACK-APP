@@ -6,3 +6,6 @@ export * from './evidence.store';
 export * from './control-events';
 export * from './capture.config';
 export * from './capture.handler';
+export * from './ucw';
+export * from './watchdog';
+export * from './heartbeat';

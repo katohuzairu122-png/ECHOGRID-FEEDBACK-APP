@@ -32,6 +32,8 @@ export interface LoadedKeyring {
   entries: readonly KeyringEntry[];
   /** The active entry for the cohort of `at`, only if `at` lies in its window. */
   activeFor(at: Date): KeyringEntry;
+  /** Number of consecutive future month cohorts (after the current one) that already hold a usable active KEK. */
+  runwayCohorts(at: Date): number;
   /** Entry for an exact (cohort, kek_version), used to unwrap stored DEK rows. */
   find(cohort: string, kekVersion: string): KeyringEntry | undefined;
 }
@@ -112,6 +114,14 @@ export async function loadKeyring(secret: string | undefined, now: Date, maxByte
       const hit = entries.find(e => e.cohort === c && e.active && e.notBefore <= at && at < e.notAfter);
       if (!hit) throw new EvidenceKeyringError('KEYRING_NO_CURRENT_ACTIVE');
       return hit;
+    },
+    runwayCohorts(at: Date) {
+      let n = 0;
+      for (let c = nextMonth(cohortOf(at)); ; c = nextMonth(c)) {
+        const start = new Date(Date.UTC(Number(c.slice(0, 4)), Number(c.slice(5, 7)) - 1, 1));
+        if (!entries.some(e => e.cohort === c && e.active && e.notBefore <= start && e.notAfter > start)) return n;
+        n++;
+      }
     },
     find: (cohort, kekVersion) => entries.find(e => e.cohort === cohort && e.kekVersion === kekVersion),
   };

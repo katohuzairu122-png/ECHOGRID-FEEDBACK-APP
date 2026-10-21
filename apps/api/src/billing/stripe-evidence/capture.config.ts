@@ -92,3 +92,10 @@ export async function checkKeyring(env: CaptureEnv, now: Date): Promise<{ ok: tr
     return { ok: false, code: 'KEYRING_INVALID', detail: e instanceof EvidenceKeyringError ? e.code : 'KEYRING_ERROR' };
   }
 }
+
+/** Stream identity `<receiving_account_id>:<livemode>`; unusable configuration maps to a fixed `unconfigured:unknown` stream so failures stay recordable. */
+export function streamForEnv(env: CaptureEnv): string {
+  const acct = env.STRIPE_ACCOUNT_ID && /^acct_[A-Za-z0-9]+$/.test(env.STRIPE_ACCOUNT_ID) ? env.STRIPE_ACCOUNT_ID : 'unconfigured';
+  const live = env.STRIPE_EXPECTED_LIVEMODE === 'true' || env.STRIPE_EXPECTED_LIVEMODE === 'false' ? env.STRIPE_EXPECTED_LIVEMODE : 'unknown';
+  return `${acct}:${live}`;
+}
