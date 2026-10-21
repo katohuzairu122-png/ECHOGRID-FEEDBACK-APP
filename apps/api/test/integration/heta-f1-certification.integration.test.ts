@@ -33,6 +33,31 @@ describe.skipIf(!process.env.DATABASE_URL)('HETA-01-F1 certification script (int
     try { return (await c.query(sql, params)).rows; } finally { await c.end(); }
   };
 
+  /**
+   * Credential-context leak check. A bare substring test on the password is WRONG when the password is a word that also
+   * appears in non-secret names: in CI the role, the password and the database prefix are all "echogrid", so the harmless
+   * database name matched. Credentials can only leak as a URL, as `user:password@`, or as a value equal to the password.
+   */
+  const expectNoCredentialLeak = (raw: string, urlString: string) => {
+    const u = new URL(urlString);
+    const pw = decodeURIComponent(u.password);
+    expect(raw).not.toContain(urlString);
+    expect(raw).not.toMatch(/postgres(ql)?:\/\//i); // no connection-string scheme in any output
+    if (pw) {
+      expect(raw).not.toContain(`${u.username}:${pw}`);
+      expect(raw).not.toContain(`:${pw}@`);
+      expect(raw).not.toContain(encodeURIComponent(pw) === pw ? `:${pw}@` : encodeURIComponent(pw));
+      for (const line of raw.split('\n').filter(l => l.trim().startsWith('{'))) {
+        const walk = (v: unknown): void => {
+          if (typeof v === 'string') expect(v).not.toBe(pw);
+          else if (Array.isArray(v)) v.forEach(walk);
+          else if (v && typeof v === 'object') Object.values(v).forEach(walk);
+        };
+        walk(JSON.parse(line));
+      }
+    }
+  };
+
   beforeAll(async () => {
     admin = new Client({ connectionString: urlFor('postgres') });
     await admin.connect();
@@ -47,8 +72,22 @@ describe.skipIf(!process.env.DATABASE_URL)('HETA-01-F1 certification script (int
     const r = script('guard', names.clean);
     expect(r.status).toBe(0);
     expect(r.out).toMatchObject({ ok: true, failures: [] });
-    if (base.password && base.password.length >= 8) expect(r.raw).not.toContain(base.password);
-    expect(r.raw).not.toContain(urlFor(names.clean));
+    expectNoCredentialLeak(r.raw, urlFor(names.clean));
+    expect(r.raw).toContain(names.clean); // the non-secret database name IS reported; only credentials must never be
+  });
+
+  it('never leaks a credential on any path: a unique wrong password is absent from the success path and from an authentication failure', () => {
+    const marker = `Zq7-marker-${suffix}-pw`;
+    const withMarker = new URL(urlFor(names.clean));
+    withMarker.password = marker;
+    for (const phase of ['guard', 'certify'] as const) {
+      const r = run(['node', 'scripts/verify-heta-f1-certification.mjs', phase], names.clean, { DATABASE_URL: withMarker.toString() });
+      // Trust-authenticated servers accept any password (status 0 or 2); password-authenticated servers (CI) reject it (status 1).
+      expect([0, 1, 2]).toContain(r.status);
+      expect(r.stdout + r.stderr).not.toContain(marker);
+      expectNoCredentialLeak(r.stdout + r.stderr, withMarker.toString());
+      if (r.status === 1) expect(r.stderr.trim()).toMatch(/^certification script error: [A-Za-z]+$/); // one bare error-name token (pg reports 'error'), never a message
+    }
   });
 
   it('guard refuses a non-empty database and a database whose journal exists', async () => {
