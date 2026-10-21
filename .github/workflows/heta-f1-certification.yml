@@ -1,0 +1,85 @@
+name: HETA-01-F1 clean-database certification
+# MANUAL ONLY. Replays the repository's migration journal on an EMPTY, isolated database and certifies the result.
+# It certifies a clean migration replay (journal-derived history and hashes, the five Partner Credit write-denial guards,
+# the four conservation constraints, the evidence-table catalog contract, append-only denials). It does NOT certify
+# tenant isolation, RLS, database roles, historical-tier authority or provider completeness, and it enables nothing.
+# Prerequisites performed by an authorized owner OUTSIDE this workflow (design H.4): a new empty database named
+# echogrid_heta01_f1_cert_<suffix> on an isolated Neon audit branch, and a repository secret HETA_F1_CERT_DATABASE_URL
+# holding its DIRECT (non-pooled) URL with sslmode=require. The Split 07 certification database and every shared database
+# are refused by name. This workflow never creates a database or a secret and never touches staging or production.
+on:
+  workflow_dispatch:
+    inputs:
+      expected_commit:
+        description: Full reviewed main SHA (40 hex characters)
+        required: true
+        type: string
+      confirmation:
+        description: Type HETA_F1_CERTIFY_CLEAN_DATABASE_ONLY
+        required: true
+        type: string
+      expected_host:
+        description: Exact direct Neon host of the isolated audit endpoint
+        required: true
+        type: string
+      expected_database:
+        description: Exact empty database name (echogrid_heta01_f1_cert_<suffix>)
+        required: true
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: heta-f1-clean-database-certification
+  cancel-in-progress: false
+jobs:
+  certify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      DATABASE_URL: ${{ secrets.HETA_F1_CERT_DATABASE_URL }}
+      EXPECTED_HOST: ${{ inputs.expected_host }}
+      EXPECTED_DATABASE: ${{ inputs.expected_database }}
+      SPLIT07_DISPOSABLE_DB: I_ACKNOWLEDGE
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - name: Verify explicit authorization and reviewed commit
+        env:
+          EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+          CONFIRMATION: ${{ inputs.confirmation }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$EXPECTED_COMMIT" =~ ^[0-9a-f]{40}$ ]]
+          test "$CONFIRMATION" = HETA_F1_CERTIFY_CLEAN_DATABASE_ONLY
+          test "$(git rev-parse HEAD)" = "$EXPECTED_COMMIT"
+          test -n "$DATABASE_URL"
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.9.0
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Guard target (exact host and database, direct endpoint, TLS) and require an empty baseline
+        working-directory: apps/api
+        run: node scripts/verify-heta-f1-certification.mjs guard
+      - name: Validate migration source
+        run: pnpm --filter @echo-grid-feedback/api db:check
+      - name: Apply Drizzle migration journal in order
+        run: pnpm --filter @echo-grid-feedback/api db:migrate
+      - name: Certify journal-derived history, hashes, guards, constraints and evidence catalog
+        working-directory: apps/api
+        run: node scripts/verify-heta-f1-certification.mjs certify
+      - name: Verify HETA evidence schema and append-only denials
+        working-directory: apps/api
+        run: node scripts/verify-heta-evidence-schema.mjs
+      - name: Test three-client isolation and rollback
+        working-directory: apps/api
+        run: node scripts/verify-split07-disposable-postgres.mjs
+      - name: Test independent lock and rollback
+        working-directory: apps/api
+        run: node scripts/test-split07-lock-concurrency.mjs

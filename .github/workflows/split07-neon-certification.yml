@@ -79,19 +79,22 @@ jobs:
         run: |
           node --input-type=module <<'NODE'
           import assert from 'node:assert/strict';
+          import { readFileSync } from 'node:fs';
           import { Client } from 'pg';
+          // H13: derived from the repository journal, so adding a migration never silently breaks this workflow.
+          const expected = JSON.parse(readFileSync('drizzle/meta/_journal.json', 'utf8')).entries.length;
           const db = new Client({connectionString:process.env.DATABASE_URL});
           try {
             await db.connect();
             const count = await db.query('SELECT count(*)::int AS n FROM drizzle.__drizzle_migrations');
-            assert.equal(count.rows[0].n,47);
+            assert.equal(count.rows[0].n,expected);
             const names=['partner_credit_lots_inert_guard','partner_credit_ledger_insert_disabled','partner_credit_reservations_inert_guard','pc_multiunit_allocation_inert_guard','pc_multiunit_movement_inert_guard'];
             const guards=await db.query('SELECT tgname FROM pg_trigger WHERE NOT tgisinternal AND tgenabled=$1 AND tgname=ANY($2::text[])',['O',names]);
             assert.deepEqual(new Set(guards.rows.map(r=>r.tgname)),new Set(names));
             const keys=['pc_multiunit_exact_conservation','pc_multiunit_lot_once','pc_multiunit_decision_once','partner_credit_multiunit_movements_idempotency_key_key'];
             const constraints=await db.query('SELECT conname FROM pg_constraint WHERE convalidated AND conname=ANY($1::text[])',[keys]);
             assert.deepEqual(new Set(constraints.rows.map(r=>r.conname)),new Set(keys));
-            console.log('PASS: 47 migrations, five enabled guards, four validated constraints');
+            console.log(`PASS: ${expected} migrations (journal-derived), five enabled guards, four validated constraints`);
           } finally { await db.end(); }
           NODE
       - name: Verify HETA evidence schema and append-only denials
