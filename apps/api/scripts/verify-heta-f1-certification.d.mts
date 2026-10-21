@@ -17,3 +17,4 @@ export function evaluateCertification(input: {
 }): { ok: boolean; failures: string[] };
 export function readJournal(apiDir?: string): JournalEntry[];
 export function readContract(): Contract;
+export function clientConfig(urlString: string, opts?: { localTest?: boolean }): { host: string; port: number; database: string; user: string; password: string; ssl: false | { rejectUnauthorized: true; servername: string } };
