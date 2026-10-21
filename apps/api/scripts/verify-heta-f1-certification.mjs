@@ -96,6 +96,24 @@ export function evaluateCertification({ journal, applied, triggers, constraints,
   return { ok: failures.length === 0, failures };
 }
 
+/**
+ * Pure. Explicit node-postgres configuration derived from the VALIDATED URL. TLS verification is pinned here (certificate chain
+ * and host name) instead of relying on how a given pg version interprets sslmode=require, so a pg upgrade cannot silently weaken it.
+ * Only call after checkTarget returned no failures.
+ */
+export function clientConfig(urlString, { localTest = false } = {}) {
+  const u = new URL(urlString);
+  const local = localTest === true && ['localhost', '127.0.0.1'].includes(u.hostname);
+  return {
+    host: u.hostname,
+    port: u.port ? Number(u.port) : 5432,
+    database: decodeURIComponent(u.pathname.slice(1)),
+    user: decodeURIComponent(u.username),
+    password: decodeURIComponent(u.password),
+    ssl: local ? false : { rejectUnauthorized: true, servername: u.hostname },
+  };
+}
+
 /** Journal entries with the sha256 of each SQL file, exactly as Drizzle records it. */
 export function readJournal(apiDir = API) {
   const j = JSON.parse(readFileSync(path.join(apiDir, 'drizzle/meta/_journal.json'), 'utf8'));
@@ -140,7 +158,7 @@ async function main() {
     return;
   }
   const { default: pg } = await import('pg');
-  const db = new pg.Client({ connectionString: process.env.DATABASE_URL });
+  const db = new pg.Client(clientConfig(process.env.DATABASE_URL, { localTest }));
   try {
     await db.connect();
     const target = { host: expected.host, database: expected.database };
@@ -149,10 +167,19 @@ async function main() {
     if (phase === 'guard') {
       const ssl = (await db.query('select coalesce((select ssl from pg_stat_ssl where pid=pg_backend_pid()), false) as ssl')).rows[0].ssl;
       const base = (await db.query("select (select count(*)::int from information_schema.tables where table_schema='public') as tables, to_regclass('drizzle.__drizzle_migrations') as journal")).rows[0];
+      // F4: the whole database must be pristine, not only public tables: no relation in any non-system schema, no schema other than
+      // public, and no extension other than plpgsql (an extension or foreign schema could change what the migrations then do).
+      const wide = (await db.query(`select
+        (select count(*)::int from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname not in ('pg_catalog','information_schema') and n.nspname not like 'pg\\_toast%' and n.nspname not like 'pg\\_temp%' and c.relkind in ('r','p','v','m','S','f')) as relations,
+        (select count(*)::int from pg_namespace where nspname not in ('public','pg_catalog','information_schema') and nspname not like 'pg\\_toast%' and nspname not like 'pg\\_temp%') as schemas,
+        (select count(*)::int from pg_extension where extname <> 'plpgsql') as extensions`)).rows[0];
       const failures = [];
       if (!ssl && !localTest) failures.push('TLS_NOT_IN_USE');
       if (base.tables !== 0) failures.push(`NOT_EMPTY(public_tables=${base.tables})`);
       if (base.journal !== null) failures.push('NOT_EMPTY(migration_journal_exists)');
+      if (wide.relations > base.tables) failures.push(`NOT_EMPTY(relations=${wide.relations - base.tables})`);
+      if (wide.schemas !== 0) failures.push(`NOT_EMPTY(extra_schemas=${wide.schemas})`);
+      if (wide.extensions !== 0) failures.push(`NOT_EMPTY(extensions=${wide.extensions})`);
       console.log(JSON.stringify({ phase, ok: failures.length === 0, ...target, tls: ssl, failures }));
       process.exitCode = failures.length ? 2 : 0;
       return;

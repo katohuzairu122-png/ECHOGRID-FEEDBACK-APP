@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import {
-  CERT_DB_PATTERN, FORBIDDEN_DATABASES, GUARD_CONSTRAINTS, GUARD_TRIGGERS, LOCAL_TEST_ACK, checkTarget, evaluateCertification, readContract, readJournal,
+  CERT_DB_PATTERN, FORBIDDEN_DATABASES, GUARD_CONSTRAINTS, GUARD_TRIGGERS, LOCAL_TEST_ACK, checkTarget, clientConfig, evaluateCertification, readContract, readJournal,
 } from '../../../scripts/verify-heta-f1-certification.mjs';
 
 /**
@@ -69,6 +69,23 @@ describe('target guard (checkTarget)', () => {
   it('the certification database pattern is narrow', () => {
     expect(CERT_DB_PATTERN.test('echogrid_heta01_f1_cert_clean_01')).toBe(true);
     for (const bad of ['echogrid_split07_cert_clean', 'neondb', 'echogrid_heta01_f1_cert_', 'echogrid_heta01_f1_cert_UPPER', 'echogrid_heta01_f1_cert_a-b']) expect(CERT_DB_PATTERN.test(bad)).toBe(false);
+  });
+});
+
+describe('explicit client configuration (clientConfig)', () => {
+  it('pins certificate and host-name verification regardless of the sslmode alias, and carries no connection string', () => {
+    const c = clientConfig(url());
+    expect(c).toEqual({ host: HOST, port: 5432, database: DB, user: 'owner', password: 'secret', ssl: { rejectUnauthorized: true, servername: HOST } });
+    expect(Object.keys(c)).not.toContain('connectionString');
+  });
+  it('decodes credentials and honors an explicit port', () => {
+    expect(clientConfig(`postgresql://o%40x:p%2Fw@${HOST}:5432/${DB}?sslmode=require`)).toMatchObject({ user: 'o@x', password: 'p/w', port: 5432 });
+  });
+  it('disables TLS only for the acknowledged localhost relaxation, never for a remote host', () => {
+    const local = 'postgresql://postgres:pw@127.0.0.1:55432/echogrid_heta01_f1_cert_x';
+    expect(clientConfig(local, { localTest: true }).ssl).toBe(false);
+    expect(clientConfig(local).ssl).toMatchObject({ rejectUnauthorized: true });
+    expect(clientConfig(url(), { localTest: true }).ssl).toMatchObject({ rejectUnauthorized: true });
   });
 });
 

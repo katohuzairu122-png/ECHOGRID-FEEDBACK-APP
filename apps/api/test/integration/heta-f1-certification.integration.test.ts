@@ -97,6 +97,25 @@ describe.skipIf(!process.env.DATABASE_URL)('HETA-01-F1 certification script (int
     expect(r.out.failures).toEqual(['NOT_EMPTY(public_tables=1)']);
   });
 
+  it('guard refuses a database that is empty of public tables but not pristine: extra schema, sequence, extension', async () => {
+    for (const [sql, want] of [
+      ['create schema stray_schema', 'NOT_EMPTY(extra_schemas=1)'],
+      ['create sequence stray_seq', 'NOT_EMPTY(relations=1)'],
+      ['create extension if not exists pg_trgm', 'NOT_EMPTY(extensions=1)'],
+    ] as const) {
+      const db = `${names.dirty}_${want.replace(/\W/g, '').slice(8, 14).toLowerCase()}`;
+      await admin.query(`create database ${db}`);
+      try {
+        await onDb(db, sql);
+        const r = script('guard', db);
+        expect(r.status).toBe(2);
+        expect(r.out.failures).toContain(want);
+      } finally {
+        await admin.query(`drop database if exists ${db} with (force)`);
+      }
+    }
+  });
+
   it('guard refuses wrong pinning, a pre-existing shared database, and the relaxation without its acknowledgement', () => {
     expect(script('guard', names.clean, { EXPECTED_DATABASE: 'echogrid_heta01_f1_cert_other' }).out.failures).toContain('TARGET_DATABASE_MISMATCH');
     expect(script('guard', names.clean, { EXPECTED_HOST: 'localhost-not-the-host' }).out.failures).toContain('TARGET_HOST_MISMATCH');
