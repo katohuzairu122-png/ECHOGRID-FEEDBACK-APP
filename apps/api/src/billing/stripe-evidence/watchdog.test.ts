@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { evaluateWatchdog, DEFAULT_WATCHDOG_PARAMS, type WatchdogCode } from './watchdog';
 import { SLOT_SECONDS, slotOf, type UcwEvent } from './ucw';
 import { reportedMode, runStripeEvidenceHeartbeat } from './heartbeat';
+import { isCaptureOff } from './capture.config';
 
 const STREAM = 'acct_W:false';
 const NOW = new Date('2026-10-10T12:00:00Z');
@@ -76,5 +77,32 @@ describe('heartbeat job gating', () => {
   it('is a no-op that never opens a database connection when STRIPE_EVIDENCE_CAPTURE is unset', async () => {
     // HYPERDRIVE is deliberately absent: touching it would throw.
     await expect(runStripeEvidenceHeartbeat({} as never, Date.now())).resolves.toBeNull();
+  });
+
+  // B1: the heartbeat must share the webhook route's capture-off predicate. The HYPERDRIVE binding records every read, so
+  // "no database access" is asserted directly rather than inferred from the return value.
+  const envWith = (capture: string | undefined) => {
+    const reads: string[] = [];
+    const env = new Proxy({ ...(capture === undefined ? {} : { STRIPE_EVIDENCE_CAPTURE: capture }) } as Record<string, unknown>, {
+      get(t, k) {
+        if (k === 'HYPERDRIVE') { reads.push('HYPERDRIVE'); return { connectionString: 'postgresql://unreachable.invalid/none' }; }
+        return t[k as string];
+      },
+    });
+    return { env: env as never, reads };
+  };
+
+  it.each([['unset', undefined], ['empty string', ''], ['off', 'off']] as const)('capture %s: returns null and never reads the database binding', async (_n, v) => {
+    const { env, reads } = envWith(v);
+    await expect(runStripeEvidenceHeartbeat(env, Date.now())).resolves.toBeNull();
+    expect(reads).toEqual([]);
+    expect(isCaptureOff(env)).toBe(true);
+  });
+
+  it.each([['enforced', 'enforced'], ['invalid value', 'on'], ['wrong case', 'OFF'], ['whitespace', ' off']] as const)('capture %s: is NOT treated as disabled and proceeds toward the database', async (_n, v) => {
+    const { env, reads } = envWith(v);
+    expect(isCaptureOff(env)).toBe(false);
+    await expect(runStripeEvidenceHeartbeat(env, Date.now())).rejects.toBeDefined(); // unreachable host: the path was entered
+    expect(reads).toEqual(['HYPERDRIVE']);
   });
 });
