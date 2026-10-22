@@ -303,6 +303,10 @@ describe.skipIf(!url)('Split 07 positive/concurrent provisional awards — isola
       [other.id,plan.id])).rows[0]!;
     await query('ALTER TABLE partner_credit_reservations DISABLE TRIGGER partner_credit_reservations_inert_guard');
     await query('ALTER TABLE billing_partner_credit_applications DISABLE TRIGGER billing_partner_credit_applications_inert_guard');
+    // Since migration 0047 the database itself rejects these cross-tenant rows (see the next test). This test keeps proving the
+    // read-side verifier fail-closed as defense in depth, so it must build the forged rows with foreign-key enforcement off for
+    // this one disposable connection only (replica role skips FK triggers; it is reset in the finally block).
+    await query('SET session_replication_role = replica');
     try {
       const reservation=(await query<{id:string}>(`INSERT INTO partner_credit_reservations
         (business_id,decision_id,lot_id,account_id,invoice_intent_ref,idempotency_key,expires_at,state,terminal_at)
@@ -337,6 +341,48 @@ describe.skipIf(!url)('Split 07 positive/concurrent provisional awards — isola
       await expect(verifier.inspect(reservation.id))
         .rejects.toThrow('CE1_SETTLEMENT_TENANT_MISMATCH');
     } finally {
+      await query('RESET session_replication_role');
+      await query('ALTER TABLE billing_partner_credit_applications ENABLE TRIGGER billing_partner_credit_applications_inert_guard');
+      await query('ALTER TABLE partner_credit_reservations ENABLE TRIGGER partner_credit_reservations_inert_guard');
+    }
+  },120000);
+
+  it('database enforces CE-1 tenant integrity (0047): cross-business reservation and application rows are refused with FK violations', async () => {
+    await resetReceivingBusinessForReversalTests();
+    const evidence=await fixture(branchIds[0]!);
+    const awarded=await new PartnerProvisionalAwardService(await newDb()).decide(evidence);
+    const lot=(await query<{id:string;account_id:string}>('SELECT id,account_id FROM partner_credit_lots WHERE decision_id=$1',[awarded.decisionId])).rows[0]!;
+    const tag=crypto.randomUUID();
+    const other=(await query<{id:string}>("INSERT INTO businesses(name,slug,status) VALUES('CE1 db tenant',$1,'active') RETURNING id",['ce1-db-tenant-'+tag])).rows[0]!;
+    const foreignAccount=(await query<{id:string}>('INSERT INTO partner_credit_accounts(business_id) VALUES($1) RETURNING id',[other.id])).rows[0]!;
+    const reserve=(args:{business:string;decision:string;lot:string;account:string}) => query(
+      `INSERT INTO partner_credit_reservations(business_id,decision_id,lot_id,account_id,invoice_intent_ref,idempotency_key,expires_at)
+       VALUES($1,$2,$3,$4,$5,$6,$7)`,
+      [args.business,args.decision,args.lot,args.account,'intent-'+crypto.randomUUID(),'reserve-'+crypto.randomUUID(),new Date(Date.now()+86400_000)]);
+    await query('ALTER TABLE partner_credit_reservations DISABLE TRIGGER partner_credit_reservations_inert_guard');
+    await query('ALTER TABLE billing_partner_credit_applications DISABLE TRIGGER billing_partner_credit_applications_inert_guard');
+    try {
+      // account belongs to another business
+      await expect(reserve({business:receiverId,decision:awarded.decisionId,lot:lot.id,account:foreignAccount.id})).rejects.toMatchObject({code:'23503',constraint:expect.stringMatching(/account_business_fk|lot_decision_account_fk/)});
+      // reservation claims another business than the decision's
+      await expect(reserve({business:other.id,decision:awarded.decisionId,lot:lot.id,account:lot.account_id})).rejects.toMatchObject({code:'23503',constraint:'partner_credit_reservations_decision_business_fk'});
+      // lot paired with a decision/account it does not belong to
+      await expect(reserve({business:other.id,decision:awarded.decisionId,lot:lot.id,account:foreignAccount.id})).rejects.toMatchObject({code:'23503'});
+      // the matching tuple is accepted structurally (still not provider-verified consumption), then application tenant keys are checked
+      await reserve({business:receiverId,decision:awarded.decisionId,lot:lot.id,account:lot.account_id});
+      const reservation=(await query<{id:string}>('SELECT id FROM partner_credit_reservations WHERE lot_id=$1',[lot.id])).rows[0]!;
+      const plan=(await query<{id:string}>("INSERT INTO subscription_plans(key,name,price_monthly_cents) VALUES($1,'CE1 db test',0) RETURNING id",['ce1-db-plan-'+tag])).rows[0]!;
+      const foreignSub=(await query<{id:string}>("INSERT INTO business_subscriptions(business_id,plan_id,status,billing_interval) VALUES($1,$2,'active','month') RETURNING id",[other.id,plan.id])).rows[0]!;
+      const apply=(business:string,subscription:string) => query(
+        `INSERT INTO billing_partner_credit_applications(reservation_id,business_id,subscription_id,invoice_ref,provider_success_ref,idempotency_key,units_applied,terminal_state,applied_at)
+         VALUES($1,$2,$3,$4,$5,$6,1,'applied',now())`,
+        [reservation.id,business,subscription,'inv-'+crypto.randomUUID(),'provider-'+crypto.randomUUID(),'apply-'+crypto.randomUUID()]);
+      await expect(apply(receiverId,foreignSub.id)).rejects.toMatchObject({code:'23503',constraint:'billing_partner_credit_applications_subscription_business_fk'});
+      await expect(apply(other.id,foreignSub.id)).rejects.toMatchObject({code:'23503',constraint:'billing_partner_credit_applications_reservation_business_fk'});
+      const counts=await query<{r:string;a:string}>("SELECT (SELECT count(*) FROM partner_credit_reservations WHERE lot_id=$1)::text r,(SELECT count(*) FROM billing_partner_credit_applications WHERE reservation_id=$2)::text a",[lot.id,reservation.id]);
+      expect(counts.rows[0]).toEqual({r:'1',a:'0'});
+    } finally {
+      await query('DELETE FROM partner_credit_reservations WHERE lot_id=$1',[lot.id]);
       await query('ALTER TABLE billing_partner_credit_applications ENABLE TRIGGER billing_partner_credit_applications_inert_guard');
       await query('ALTER TABLE partner_credit_reservations ENABLE TRIGGER partner_credit_reservations_inert_guard');
     }
