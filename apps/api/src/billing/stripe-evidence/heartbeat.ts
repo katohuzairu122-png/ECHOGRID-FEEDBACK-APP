@@ -2,7 +2,7 @@ import { and, asc, desc, eq, gte, lt, ne, sql } from 'drizzle-orm';
 import type { Bindings } from '../../config/env';
 import { createDb, type Database } from '../../db/client';
 import { stripeEvidenceControlEvents, stripeProviderEvents } from '../../db/schema';
-import { checkKeyring, resolveConfig, streamForEnv, type CaptureEnv, type PreconditionCode } from './capture.config';
+import { checkKeyring, isCaptureOff, resolveConfig, streamForEnv, type CaptureEnv, type PreconditionCode } from './capture.config';
 import { ControlEventWriter } from './control-events';
 import { SLOT_SECONDS, DEFAULT_UCW_PARAMS, deriveUcw, heartbeatKey, planMaterialization, slotOf, type UcwEvent, type UcwParams } from './ucw';
 
@@ -103,11 +103,12 @@ export async function materializeUcw(db: Database, stream: string, now: Date, pa
 }
 
 /**
- * The scheduled job. Does nothing when STRIPE_EVIDENCE_CAPTURE is unset, so a deployment that has not applied
+ * The scheduled job. Does nothing in every capture-off state (STRIPE_EVIDENCE_CAPTURE unset, empty or `off`, the same predicate
+ * as the webhook route), so a deployment that has not applied
  * migration 0045 and has not set the flag never touches the evidence tables.
  */
 export async function runStripeEvidenceHeartbeat(env: Bindings, scheduledTimeMs: number): Promise<HeartbeatResult | null> {
-  if (env.STRIPE_EVIDENCE_CAPTURE === undefined) return null;
+  if (isCaptureOff(env)) return null;
   const { db, close } = await createDb(env.HYPERDRIVE);
   try {
     const now = new Date();
