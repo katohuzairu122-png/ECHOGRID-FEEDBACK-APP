@@ -159,6 +159,33 @@ describe('B3 production deployment governance (static workflow checks)', () => {
     expect(code(RELEASE)).not.toMatch(/db:migrate|drizzle-kit/);
   });
 
+  it('deploy-api re-checks, after approval and before any deploy step, that the authorized commit is still the tip of main; deploy-web does not', () => {
+    const api = job(RELEASE, 'deploy-api');
+    const check = api.indexOf('git fetch --no-tags origin main');
+    expect(check).toBeGreaterThan(0);
+    expect(check).toBeLessThan(api.indexOf('uses: cloudflare/wrangler-action@v3'));
+    expect(api).toContain('"$(git rev-parse FETCH_HEAD)" = "$AUTHORIZED"');
+    expect(job(RELEASE, 'deploy-web')).not.toContain('git fetch');
+  });
+
+  it('Cloudflare credentials are referenced only by the two protected deploy workflows; staging and production use separate environments', () => {
+    const holders = files.filter(f => /secrets\.CLOUDFLARE/.test(code(f))).sort();
+    expect(holders).toEqual(['deploy-production.yml', 'deploy-staging.yml']);
+    expect(code('deploy-staging.yml')).toMatch(/environment: staging/);
+    expect(code('deploy-staging.yml')).not.toMatch(/environment: production/);
+    for (const j of jobNames(RELEASE).filter(x => /secrets\./.test(job(RELEASE, x)))) expect(job(RELEASE, j)).toMatch(/^ {4}environment: production$/m);
+  });
+
+  it('release documentation never calls a dispatch a no-op or dry run, and classifies unverifiable gates honestly', () => {
+    const doc = readFileSync(resolve(dir, '../../docs/PRODUCTION-RELEASE.md'), 'utf8');
+    expect(doc).not.toMatch(/no-op release|dry-run dispatch|dry run dispatch/i);
+    expect(doc).toMatch(/never a dry run or a no-op/);
+    expect(doc).toMatch(/NOT VERIFIED — REQUIRES SEPARATE PRODUCTION RELEASE AUTHORIZATION/);
+    expect(doc).toMatch(/does \*\*not\*\* stop a job from reading a repository-level secret/);
+    expect(doc).toMatch(/UNRESOLVED until the first authorized release/);
+    expect(doc).toMatch(/Effective production protection is \*\*UNVERIFIED\*\*/);
+  });
+
   it('release documentation exists and states live enforcement is an owner action', () => {
     const doc = readFileSync(resolve(dir, '../../docs/PRODUCTION-RELEASE.md'), 'utf8');
     expect(doc).toMatch(/PENDING OWNER ACTION/);

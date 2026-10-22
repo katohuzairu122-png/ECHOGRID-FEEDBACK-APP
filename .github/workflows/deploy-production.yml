@@ -9,7 +9,8 @@ name: Deploy production
 #   3. `deploy-api`/`deploy-web`  run in the `production` GitHub environment. Independent approval comes from that
 #                   environment's REQUIRED REVIEWERS, an owner-controlled repository setting (see
 #                   docs/PRODUCTION-RELEASE.md). The typed phrase is a guard against typos, NOT approval: until required
-#                   reviewers are configured this gate is code-ready but NOT certified as an independent approval.
+#                   reviewers are configured this gate is code-ready but NOT certified as an independent approval. Each of the
+#                   two deploy jobs references the environment, so each is expected to request its own review.
 #   4. `block-2e..2h`  post-deployment runtime smoke and attestation, only for a release that deployed through this path.
 # API and web are two separate Cloudflare deployments, not an atomic transaction (docs/PRODUCTION-RELEASE.md).
 # Database migrations are NEVER run here; migrate-production.yml remains a separate authorization. A green release is not
@@ -88,6 +89,17 @@ jobs:
         env:
           AUTHORIZED: ${{ needs.authorize.outputs.commit }}
         run: test "$(git rev-parse HEAD)" = "$AUTHORIZED"
+      # Evaluated after the reviewer approved. If main moved while the release waited, nothing has deployed yet, so fail closed
+      # and require a fresh dispatch for the new tip. Deliberately NOT repeated in deploy-web: once the API has deployed, the pair
+      # must complete from the same commit.
+      - name: Confirm the authorized commit is still the tip of main (before anything deploys)
+        shell: bash
+        env:
+          AUTHORIZED: ${{ needs.authorize.outputs.commit }}
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin main
+          [ "$(git rev-parse FETCH_HEAD)" = "$AUTHORIZED" ] || { echo "main advanced while this release waited; dispatch again for the new tip"; exit 1; }
       - uses: pnpm/action-setup@v4
         with:
           version: 11.9.0
