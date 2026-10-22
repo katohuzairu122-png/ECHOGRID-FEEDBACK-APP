@@ -9,6 +9,7 @@ import { CustomerSettlementCompletionService } from '../../src/orphan-settlement
 import { OrphanSettlementFulfillmentService } from '../../src/orphan-settlement/orphan-settlement-fulfillment.service';
 import { OrphanSettlementReversalService } from '../../src/orphan-settlement/orphan-settlement-reversal.service';
 import { PartnerProvisionalAwardService } from '../../src/partner-credits/partner-provisional-award.service';
+import { PartnerCreditProjectionAudit } from '../../src/partner-credits/partner-credit-projection.audit';
 import { PartnerCreditLifecycleService } from '../../src/partner-credits/partner-credit-lifecycle.service';
 import { PartnerCreditReservationService } from '../../src/partner-credits/partner-credit-reservation.service';
 import { PartnerCreditTerminalEvidenceReader } from '../../src/billing/partner-credit-terminal-evidence.reader';
@@ -760,5 +761,44 @@ describe.skipIf(!url)('Split 07 positive/concurrent provisional awards — isola
       await query('ALTER TABLE partner_credit_reservations ENABLE TRIGGER partner_credit_reservations_inert_guard');
     }
   },120000);
+
+  // Runs LAST (tests in this file execute in order). Earlier scenarios in this file deliberately tamper with three accounts: one
+  // pre-inserts a ledger row to force an idempotency conflict, two set a lot to `consumed` by hand because no consumption writer
+  // exists. The audit must flag exactly those (ledger-net divergence only) and every account produced by the real service paths
+  // (award, vest, expire, offset, reversal, reservation) must audit clean.
+  it('projection audit: real-service accounts audit clean; only the three deliberately tampered fixtures diverge, and only on LEDGER_NET', async () => {
+    const r = await new PartnerCreditProjectionAudit(buildDb(admin)).inspect();
+    if (r.status === 'unavailable') throw new Error('audit unavailable: ' + r.reason);
+    expect(r.accountsInspected).toBeGreaterThanOrEqual(8);
+    expect(new Set(r.violations.map(v => v.code))).toEqual(new Set(r.violations.length ? ['LEDGER_NET'] : []));
+    const flagged = new Set(r.violations.map(v => v.accountId));
+    expect(flagged.size).toBe(3);
+    expect(r.accountsInspected - flagged.size).toBeGreaterThanOrEqual(5);
+  }, 60000);
+
+  it('projection audit detects each class of divergence on a clean account (mutations applied inside a rolled-back transaction)', async () => {
+    const clean = (await query<{ account_id: string; business_id: string }>(
+      `SELECT a.id AS account_id, a.business_id FROM partner_credit_accounts a
+        WHERE EXISTS (SELECT 1 FROM partner_credit_ledger g WHERE g.account_id=a.id AND g.entry_type='expire')
+          AND EXISTS (SELECT 1 FROM partner_credit_ledger g WHERE g.account_id=a.id AND g.entry_type='vest') LIMIT 1`)).rows[0]!;
+    const audit = new PartnerCreditProjectionAudit(buildDb(admin));
+    const scoped = () => audit.inspect({ businessId: clean.business_id });
+    const codes = async () => { const r = await scoped(); return r.status === 'inconsistent' ? [...new Set(r.violations.map(v => v.code))].sort() : r.status; };
+    const mutate = async (sql: string, params: unknown[] = []) => {
+      await query('BEGIN');
+      try { await query(sql, params); return await codes(); } finally { await query('ROLLBACK'); }
+    };
+    const acct = clean.account_id;
+    expect(await codes()).toBe('consistent');
+    expect(await mutate('UPDATE partner_credit_accounts SET available = available + 1 WHERE id=$1', [acct])).toEqual(expect.arrayContaining(['AVAILABLE_BUCKET', 'LEDGER_NET']));
+    expect(await mutate('UPDATE partner_credit_accounts SET provisional = provisional + 1 WHERE id=$1', [acct])).toEqual(expect.arrayContaining(['PROVISIONAL_BUCKET']));
+    expect(await mutate('UPDATE partner_credit_accounts SET reserved = reserved + 1 WHERE id=$1', [acct])).toEqual(expect.arrayContaining(['RESERVED_BUCKET']));
+    expect(await mutate('UPDATE partner_credit_accounts SET recovery_due = recovery_due + 1 WHERE id=$1', [acct])).toEqual(expect.arrayContaining(['RECOVERY_DUE']));
+    expect(await mutate("INSERT INTO partner_credit_ledger(account_id,entry_type,units,idempotency_key) VALUES($1,'expire',-1,$2)", [acct, 'audit-mutation-' + crypto.randomUUID()])).toEqual(expect.arrayContaining(['LEDGER_NET']));
+    expect(await mutate("UPDATE partner_credit_award_decisions SET state='ineligible' WHERE id=(SELECT decision_id FROM partner_credit_lots WHERE account_id=$1 LIMIT 1)", [acct])).toEqual(expect.arrayContaining(['LOT_DECISION_STATE']));
+    // The ledger is append-only (UPDATE/DELETE are refused), so a duplicated origin entry is the divergence that can be introduced.
+    expect(await mutate("INSERT INTO partner_credit_ledger(account_id,decision_id,entry_type,units,idempotency_key) SELECT account_id,decision_id,'provisional',1,$2 FROM partner_credit_lots WHERE account_id=$1 LIMIT 1", [acct, 'audit-dup-origin-' + crypto.randomUUID()])).toEqual(expect.arrayContaining(['LOT_LEDGER_ORIGIN']));
+    expect(await codes()).toBe('consistent'); // every mutation was rolled back
+  }, 60000);
 
 });
