@@ -103,7 +103,7 @@ describe('certification evaluation (evaluateCertification)', () => {
 
   it('the repository journal is complete, ordered, and hashed from the SQL files', () => {
     expect(journal.length).toBeGreaterThanOrEqual(47);
-    expect(journal.at(-1)!.tag).toMatch(/^0046_/);
+    expect(journal[46]!.tag).toMatch(/^0046_/); // the last migration known to the certification contract; later forward-only migrations may follow
     for (let i = 1; i < journal.length; i++) expect(journal[i]!.when).toBeGreaterThan(journal[i - 1]!.when);
     expect(journal.every(j => /^[0-9a-f]{64}$/.test(j.sha256))).toBe(true);
   });

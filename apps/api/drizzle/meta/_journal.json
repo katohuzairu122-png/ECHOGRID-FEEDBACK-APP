@@ -330,6 +330,13 @@
       "when": 1792564476401,
       "tag": "0046_heta01_f1_malformed_bad_account",
       "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1792694651254,
+      "tag": "0047_split08_ce1_composite_tenant_integrity",
+      "breakpoints": true
     }
   ]
 }

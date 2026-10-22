@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, timestamp, boolean, uniqueIndex, index, check } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, text, timestamp, boolean, uniqueIndex, index, check, unique } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import { businesses } from './businesses';
 import { subscriptionPlans } from './subscription-plans';
@@ -56,6 +56,8 @@ export const businessSubscriptions = pgTable(
     // One subscription per business -- also what the webhook sync's upsert
     // (ON CONFLICT (business_id)) relies on.
     uniqueIndex('business_subscriptions_business_id_key').on(table.businessId),
+    // Composite FK target so Split 08 credit applications can prove the subscription belongs to the same business.
+    unique('business_subscriptions_id_business_key').on(table.id, table.businessId),
     index('business_subscriptions_stripe_customer_id_idx').on(table.stripeCustomerId),
     index('business_subscriptions_stripe_subscription_id_idx').on(table.stripeSubscriptionId),
     // Supports a future platform-admin billing dashboard (Block 10) filtering

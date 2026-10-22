@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, integer, timestamp, jsonb, uniqueIndex, index, check } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, text, integer, timestamp, jsonb, uniqueIndex, index, check, unique } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import { businesses } from './businesses';
 import { users } from './users';
@@ -47,6 +47,8 @@ export const partnerCreditAccounts = pgTable('partner_credit_accounts', {
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 }, t => [
   uniqueIndex('partner_credit_accounts_business_key').on(t.businessId),
+  // Composite FK target (Split 08 tenant integrity): a CONSTRAINT, not an index, so it exists before dependent FKs are created.
+  unique('partner_credit_accounts_id_business_key').on(t.id, t.businessId),
   check('partner_credit_account_nonnegative_check', sql`${t.available} >= 0 AND ${t.provisional} >= 0 AND ${t.reserved} >= 0 AND ${t.recoveryDue} >= 0`),
 ]);
 
@@ -64,6 +66,7 @@ export const partnerCreditAwardDecisions = pgTable('partner_credit_award_decisio
   decidedAt: timestamp('decided_at', { withTimezone: true }).notNull().defaultNow(),
 }, t => [
   uniqueIndex('partner_credit_awards_settlement_key').on(t.settlementRef),
+  unique('partner_credit_awards_id_business_key').on(t.id, t.businessId),
   uniqueIndex('partner_credit_awards_idempotency_key').on(t.idempotencyKey),
   index('partner_credit_awards_business_month_idx').on(t.businessId,t.earningMonthUtc),
   check('partner_credit_awards_units_check', sql`${t.awardUnits} >= 0`),
@@ -82,6 +85,7 @@ export const partnerCreditLots = pgTable('partner_credit_lots', {
   expiresAt: timestamp('expires_at', { withTimezone: true }),
 }, t => [
   uniqueIndex('partner_credit_lots_decision_key').on(t.decisionId),
+  unique('partner_credit_lots_id_decision_account_key').on(t.id, t.decisionId, t.accountId),
   check('partner_credit_lots_units_check', sql`${t.units} > 0 AND ${t.availableUnits} >= 0 AND ${t.availableUnits} <= ${t.units}`),
   check('partner_credit_lots_state_check', sql`${t.status} IN ('provisional','available','reserved','consumed','expired','reversed')`),
 ]);
