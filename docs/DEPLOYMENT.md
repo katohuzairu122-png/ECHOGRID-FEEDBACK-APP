@@ -235,13 +235,12 @@ Go/no-go checklist before calling a deploy done:
 
 ## Continuous Deployment (Optional)
 
-`.github/workflows/ci-cd.yml` automates Step 6 (and only Step 6) once wired
-up: on every push/PR it checks for migration drift, typechecks, and runs both
-apps' fast unit test suites; on push to `main` (after that check passes) it
-deploys API then web, in the same order as the manual commands above. It
-deliberately does **not** run Steps 1–5 or 7 — resource provisioning,
-secrets, Stripe setup, migrations, and CORS origins all stay manual,
-deliberate steps, not something a merge to `main` should trigger silently.
+`.github/workflows/ci-cd.yml` is verification only: on every push/PR it checks for migration drift, typechecks, and runs the
+unit, integration and browser suites. It **deploys nothing** — merging to `main` no longer releases production (HETA-01-F1 B3).
+Step 6 is automated only by the manually dispatched `.github/workflows/deploy-production.yml`, which re-runs that gate, requires
+the exact reviewed `main` SHA, pauses for the `production` environment's required reviewers, then deploys API then web from that
+same commit and runs the post-deployment runtime gates. See `docs/PRODUCTION-RELEASE.md`. It deliberately does **not** run
+Steps 1–5 or 7 — resource provisioning, secrets, Stripe setup, migrations, and CORS origins all stay manual, deliberate steps.
 
 ### The migration drift check
 

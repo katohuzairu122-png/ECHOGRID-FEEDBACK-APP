@@ -42,7 +42,7 @@ function sha256(path) { return createHash('sha256').update(readFileSync(path)).d
 
 async function preflight() {
   await record('Final release files', () => {
-    const files = ['pnpm-lock.yaml', 'LICENSE', 'SECURITY.md', 'CHANGELOG.md', 'docs/LAUNCH-READINESS.md', 'docs/RELEASE-OWNERSHIP.md', '.github/workflows/ci-cd.yml'];
+    const files = ['pnpm-lock.yaml', 'LICENSE', 'SECURITY.md', 'CHANGELOG.md', 'docs/LAUNCH-READINESS.md', 'docs/RELEASE-OWNERSHIP.md', '.github/workflows/ci-cd.yml', '.github/workflows/deploy-production.yml'];
     for (const file of files) text(file);
     return `${files.length} release files present`;
   });
@@ -59,8 +59,9 @@ async function audit() {
   await record('Previous block controls are wired', () => {
     const pkg = JSON.parse(text('package.json'));
     for (const script of ['block14:e2e', 'block15:evidence', 'block16:evidence', 'block17:evidence']) if (!pkg.scripts?.[script]) throw new Error(`Missing predecessor gate ${script}`);
-    const workflow = text('.github/workflows/ci-cd.yml');
-    for (const job of ['block-2e-runtime:', 'block-2f-release:', 'block-2g-commercial:']) if (!workflow.includes(job)) throw new Error(`Workflow missing ${job}`);
+    // B3: the post-deployment runtime gates run only inside the manually authorized production release workflow.
+    const workflow = text('.github/workflows/deploy-production.yml');
+    for (const job of ['block-2e-runtime:', 'block-2f-release:', 'block-2g-commercial:']) if (!workflow.includes(job)) throw new Error(`Release workflow missing ${job}`);
     return 'E2E, hardening, operations, and commercial gates ordered';
   });
   await record('Security and release ownership', () => {
