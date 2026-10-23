@@ -337,6 +337,13 @@
       "when": 1792694651254,
       "tag": "0047_split08_ce1_composite_tenant_integrity",
       "breakpoints": true
+    },
+    {
+      "idx": 48,
+      "version": "7",
+      "when": 1792724205703,
+      "tag": "0048_split08_benefit_application_saga",
+      "breakpoints": true
     }
   ]
 }
