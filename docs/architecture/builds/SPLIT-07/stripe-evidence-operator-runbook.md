@@ -44,3 +44,9 @@ Owner-performed prerequisites (outside the workflow; design H.4): a new empty da
 
 ## Not provided here
 L3 per-event corroboration (`provider_corroborated`); the destruction procedure and its evidence package (design C.6, human steps); any Cloudflare, Stripe or Neon configuration; the reconciliation schedule (H16); the external watchdog host, its read-only role and its alert channel (H15); named forensic custodians (H9).
+
+## Least-privilege roles and RLS (G6) — separately applied asset, not yet used by the application
+
+`apps/api/scripts/sql/heta-evidence-least-privilege.sql` defines five NOLOGIN group roles (`heta_receipt_writer`, `heta_attestation`, `heta_reconciler`, `heta_tenant_projection`, `heta_forensic_reader`), the exact table privileges each needs, and defense-in-depth row-level security on the six evidence tables. It is **not** in the migration journal and no workflow applies it; a database owner applies it deliberately (idempotent: re-running converges, including revoking drift). It creates no login role, credential or membership, never grants UPDATE/DELETE/TRUNCATE, and leaves every guard, trigger and constraint untouched. `heta_tenant_projection` has no access to any evidence table.
+
+What it does **not** do: the application still connects as the database owner, which bypasses RLS (FORCE is deliberately not set because it would break that path). Making these roles effective means separate login roles, separate Hyperdrive bindings and a code cutover, each of which needs its own owner approval; none is done here. Applying it to a Neon database needs a role with `CREATEROLE` (e.g. `neon_superuser`) and has never been run on Neon. `apps/api/test/integration/heta-evidence-roles.integration.test.ts` applies it to a scratch PostgreSQL database and checks the full privilege matrix, role attributes, RLS behavior, idempotence and that existing triggers/constraints are unchanged.
