@@ -43,11 +43,27 @@ export async function createBenefitScratch(prefix: string) {
       `insert into partner_credit_reservations(business_id,decision_id,lot_id,account_id,invoice_intent_ref,idempotency_key,expires_at) values($1,$2,$3,$4,$5,$6,now()+interval '1 day') returning id`,
       [businessId, decision, lot, account, `intent-${n}`, `res-${dbName}-${n}`])).rows[0]!.id;
   };
+  const makeDecision = async (businessId: string, state: 'provisional' | 'vested' | 'reversed' | 'ineligible' = 'vested') => {
+    const n = ++seq;
+    return (await fx.query<{ id: string }>(
+      `insert into partner_credit_award_decisions(settlement_ref,business_id,policy_id,state,award_units,earning_month_utc,fulfilled_at,vest_at,idempotency_key)
+       values(gen_random_uuid(),$1,gen_random_uuid(),$2,1,'2026-10',now(),now(),$3) returning id`, [businessId, state, `dx-${dbName}-${n}`])).rows[0]!.id;
+  };
+  const makeUser = async (kind: 'admin' | 'suspended_admin' | 'member') => {
+    const n = ++seq;
+    return (await admin.query<{ id: string }>(
+      'insert into users(email,password_hash,full_name,status,platform_role) values($1,$2,$3,$4,$5) returning id',
+      [`u${n}-${dbName}@example.test`, 'not-used', `User ${n}`, kind === 'suspended_admin' ? 'suspended' : 'active', kind === 'member' ? null : 'admin'])).rows[0]!.id;
+  };
   const newService = async () => new BenefitApplicationSagaService(buildDb(await connect()));
   return {
-    dbName, urlFor, admin, rows, tenantA, tenantB, makeReservation, newService, connect,
+    dbName, urlFor, admin, rows, tenantA, tenantB, makeReservation, makeDecision, makeUser, newService, connect,
     disableSagaGuards: async () => {
       for (const t of ['benefit_application_intents', 'benefit_provider_attempts', 'benefit_provider_observations', 'benefit_application_compensations', 'benefit_application_transitions', 'benefit_reconciliation_attempts'])
+        await admin.query(`ALTER TABLE ${t} DISABLE TRIGGER ${t}_inert_guard`);
+    },
+    disableDisputeGuards: async () => {
+      for (const t of ['partner_credit_award_disputes', 'partner_credit_dispute_events', 'partner_credit_corrections'])
         await admin.query(`ALTER TABLE ${t} DISABLE TRIGGER ${t}_inert_guard`);
     },
     close: async () => {

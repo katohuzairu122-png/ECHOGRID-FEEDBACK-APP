@@ -1,5 +1,6 @@
 import { and, eq, sql } from 'drizzle-orm';
 import { applyRecoveryAtVest } from './partner-recovery-offset.service';
+import { hasActiveDisputeHold } from './partner-credit-dispute.service';
 import type { Database } from '../db/client';
 import {
   orphanRewardClaims, orphanSettlementEvents, orphanSettlements,
@@ -54,6 +55,8 @@ export class PartnerCreditLifecycleService {
           decision.businessId !== settlement.receivingBusinessId ||
           decision.fulfilledAt.toISOString() !== settlement.fulfilledAt.toISOString())
         throw new Error('PARTNER_VEST_DECISION_MISMATCH');
+      // A disputed award is held (Split 07 dispute overlay): it neither vests nor reports as vested while the dispute is unresolved.
+      if (await hasActiveDisputeHold(tx, decision.id)) throw new Error('PARTNER_VEST_DISPUTE_HOLD');
       if (decision.state === 'vested') return 'already_vested' as const;
       if (decision.state !== 'provisional' || decision.awardUnits !== 1 ||
           !decision.vestAt || decision.vestAt.getTime() > now.getTime() ||
@@ -114,6 +117,8 @@ export class PartnerCreditLifecycleService {
       const [decision] = await tx.select().from(partnerCreditAwardDecisions)
         .where(eq(partnerCreditAwardDecisions.id,decisionId)).for('update');
       if (!decision || decision.state !== 'vested') throw new Error('PARTNER_EXPIRY_NOT_VESTED');
+      // No irreversible reduction while the award is disputed; the stored expiry date is unchanged and applies once the hold is released.
+      if (await hasActiveDisputeHold(tx, decision.id)) throw new Error('PARTNER_EXPIRY_DISPUTE_HOLD');
       const [lot] = await tx.select().from(partnerCreditLots)
         .where(eq(partnerCreditLots.decisionId,decisionId)).for('update');
       if (lot?.status === 'expired') return 'already_expired' as const;
