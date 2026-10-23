@@ -136,3 +136,33 @@ export const benefitApplicationTransitions = pgTable('benefit_application_transi
   check('benefit_application_transitions_event_check', sql`${t.eventType} IN ('begin_apply','provider_observation','reverse','release_unused')`),
   check('benefit_application_transitions_effects_check', sql`jsonb_typeof(${t.effects}) = 'array'`),
 ]);
+
+/**
+ * Split 08 provider reconciliation attempts (migration 0049). INERT like the rest of the saga. One row per read-only provider re-query: inserted when
+ * the attempt starts and completed exactly once, so a crash between the two leaves a visible unfinished attempt that still counts. Stores only an
+ * outcome class and REDACTED error identifiers (code/type/status), never a provider message, header, payload or credential.
+ */
+export const benefitReconciliationAttempts = pgTable('benefit_reconciliation_attempts', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  intentId: uuid('intent_id').notNull(),
+  businessId: uuid('business_id').notNull(),
+  attemptNo: integer('attempt_no').notNull(),
+  reconcileKey: text('reconcile_key').notNull().unique(),
+  startedAt: timestamp('started_at', { withTimezone: true }).notNull(),
+  finishedAt: timestamp('finished_at', { withTimezone: true }),
+  outcome: text('outcome').$type<'effect_present' | 'absent_complete' | 'incomplete' | 'scope_mismatch' | 'error_retryable' | 'error_rate_limited' | 'error_permanent'>(),
+  detailCode: text('detail_code'),
+  httpStatus: integer('http_status'),
+  retryAfterMs: integer('retry_after_ms'),
+  nextRetryAt: timestamp('next_retry_at', { withTimezone: true }),
+  linesInspected: integer('lines_inspected'),
+  effectCount: integer('effect_count'),
+}, t => [
+  unique('benefit_reconciliation_attempts_intent_no_key').on(t.intentId, t.attemptNo),
+  index('benefit_reconciliation_attempts_intent_idx').on(t.intentId, t.attemptNo),
+  foreignKey({ name: 'benefit_reconciliation_attempts_intent_business_fk', columns: [t.intentId, t.businessId], foreignColumns: [benefitApplicationIntents.id, benefitApplicationIntents.businessId] }).onDelete('restrict'),
+  check('benefit_reconciliation_attempts_no_check', sql`${t.attemptNo} >= 1`),
+  check('benefit_reconciliation_attempts_outcome_check', sql`${t.outcome} IS NULL OR ${t.outcome} IN ('effect_present','absent_complete','incomplete','scope_mismatch','error_retryable','error_rate_limited','error_permanent')`),
+  check('benefit_reconciliation_attempts_finished_check', sql`(${t.outcome} IS NULL) = (${t.finishedAt} IS NULL)`),
+  check('benefit_reconciliation_attempts_counts_check', sql`(${t.linesInspected} IS NULL OR ${t.linesInspected} >= 0) AND (${t.effectCount} IS NULL OR ${t.effectCount} >= 0) AND (${t.retryAfterMs} IS NULL OR ${t.retryAfterMs} >= 0)`),
+]);
