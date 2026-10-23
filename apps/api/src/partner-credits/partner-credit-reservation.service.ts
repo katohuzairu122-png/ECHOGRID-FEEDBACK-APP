@@ -1,5 +1,6 @@
 import { and, eq, sql } from 'drizzle-orm';
 import type { Database } from '../db/client';
+import { hasActiveDisputeHold } from './partner-credit-dispute.service';
 import {
   orphanSettlements, orphanRewardClaims, orphanSettlementEvents,
   partnerCreditAwardDecisions, partnerCreditAccounts, partnerCreditLots,
@@ -46,6 +47,7 @@ export class PartnerCreditReservationService {
       if (!decision || decision.settlementRef !== settlement.id ||
           decision.businessId !== input.businessId || decision.state !== 'vested')
         throw new Error('PARTNER_RESERVE_AWARD_NOT_VESTED');
+      if (await hasActiveDisputeHold(tx, decision.id)) throw new Error('PARTNER_RESERVE_DISPUTE_HOLD');
       const [lot] = await tx.select().from(partnerCreditLots)
         .where(eq(partnerCreditLots.decisionId,decision.id)).for('update');
       if (!lot) throw new Error('PARTNER_RESERVE_LOT_MISSING');
