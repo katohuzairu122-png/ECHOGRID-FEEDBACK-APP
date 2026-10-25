@@ -55,18 +55,25 @@ describe('G6 non-owner connections to the Block G tables', () => {
     }
   });
 
-  it('reconciler login runs the work queue and records revisions end to end; fenced and guarded as before', async () => {
+  it.each([0, 1, 999])('reconciler login claims exactly at the due time (+%i ms); fenced and guarded as before', async (offsetMs) => {
     const c = await as('rec');
     const q = new HetaWorkQueue(buildDb(c));
-    const e = await q.enqueue({ kind: 'retrieve_event', subjectKey: 'evt_nonowner' });
-    const [w] = await q.claim({ owner: 'rec', leaseMs: 60_000, kinds: ['retrieve_event'] });
-    expect(w!.id).toBe(e.id);
-    expect(await q.complete(w!.id, w!.leaseToken)).toBe(true);
+    // Use the same explicit clock for enqueue, claim and completion. PostgreSQL's default
+    // clock_timestamp() has microseconds; an immediate JS Date can precede it within the same ms.
+    const dueAt = new Date(Date.UTC(2030, 0, 1) + offsetMs);
+    const e = await q.enqueue({ kind: 'retrieve_event', subjectKey: `evt_nonowner_${offsetMs}`, notBefore: dueAt });
+    expect(await q.claim({ owner: 'rec', leaseMs: 60_000, kinds: ['retrieve_event'], now: new Date(dueAt.getTime() - 1) })).toEqual([]);
+    const claimed = await q.claim({ owner: 'rec', leaseMs: 60_000, kinds: ['retrieve_event'], now: dueAt });
+    expect(claimed).toHaveLength(1);
+    const w = claimed[0]!;
+    expect(w.id).toBe(e.id);
+    expect(await q.complete(w.id, w.leaseToken, dueAt)).toBe(true);
+    expect(await q.complete(w.id, w.leaseToken, dueAt)).toBe(false);
     expect(await code(c.query('delete from heta_reconciliation_work'))).toBe('42501');
     expect(await code(c.query('truncate heta_reconciliation_work'))).toBe('42501');
     expect(await code(c.query("update heta_reconciliation_work set state='pending' where id=$1", [w!.id]))).toBe('P0001'); // allowed by grant, refused by the terminal-state guard
     const chain = new HetaRevisionChain(buildDb(c));
-    const r1 = await chain.append('nonowner:1', { state: 'active', effectiveFrom: new Date(Date.now() - 1000) }, null);
+    const r1 = await chain.append(`nonowner:queue:${offsetMs}`, { state: 'active', effectiveFrom: new Date(Date.now() - 1000) }, null);
     expect(r1.ok).toBe(true);
     expect(await code(c.query("update heta_record_revisions set state='revoked'"))).toBe('42501');
   });
@@ -74,8 +81,10 @@ describe('G6 non-owner connections to the Block G tables', () => {
   it('attestation login can append revisions and nothing else', async () => {
     const c = await as('att');
     const chain = new HetaRevisionChain(buildDb(c));
-    const head = (await chain.read('nonowner:1'))[0]!;
-    expect((await chain.append('nonowner:1', { state: 'revoked', effectiveFrom: new Date() }, head.id)).ok).toBe(true);
+    const scope = 'nonowner:attestation';
+    expect((await chain.append(scope, { state: 'active', effectiveFrom: new Date(0) }, null)).ok).toBe(true);
+    const head = (await chain.read(scope))[0]!;
+    expect((await chain.append(scope, { state: 'revoked', effectiveFrom: new Date(1) }, head.id)).ok).toBe(true);
     for (const t of ['heta_reconciliation_work', 'heta_provenance_comparisons', 'stripe_provider_events', 'stripe_evidence_keys'])
       expect(await code(c.query(`select 1 from ${t} limit 1`))).toBe('42501');
     expect(await code(c.query("insert into heta_reconciliation_work(kind,subject_key,dedupe_key) values('retrieve_event','x','retrieve_event:x')"))).toBe('42501');
@@ -90,6 +99,9 @@ describe('G6 non-owner connections to the Block G tables', () => {
   });
 
   it('RLS is the second wall: a role with a stray broad GRANT but no policy still sees zero rows', async () => {
+    const att = await as('att');
+    const chain = new HetaRevisionChain(buildDb(att));
+    expect((await chain.append('nonowner:rls', { state: 'active', effectiveFrom: new Date(0) }, null)).ok).toBe(true);
     await s.admin.query('GRANT SELECT ON heta_record_revisions TO heta_tenant_projection');
     try {
       const t = await as('ten');
