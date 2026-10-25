@@ -78,3 +78,47 @@ BEGIN
     END IF;
   END LOOP;
 END $$;
+
+-- ---------------------------------------------------------------------------------------------------------------------------------------------
+-- Block G persisted tables (migration 0051). Same posture: NOLOGIN groups only, least privilege, RLS enabled (not forced), idempotent.
+--   heta_reconciler  work queue: SELECT/INSERT/UPDATE (leases, retries; the 0051 guard still forbids DELETE, identity edits and any change to a terminal row),
+--                    comparisons: SELECT/INSERT (immutable), revisions: SELECT/INSERT (append-only chain)
+--   heta_attestation revisions: SELECT/INSERT (revoke / supersede an attestation); nothing else
+--   heta_forensic_reader read-only on all three
+--   heta_receipt_writer, heta_tenant_projection: no access
+-- Nobody gets DELETE or TRUNCATE; comparisons and revisions get no UPDATE either. Policy names use the prefix hetag_ so the evidence-table policy reset above is untouched.
+REVOKE ALL ON TABLE heta_reconciliation_work, heta_provenance_comparisons, heta_record_revisions
+  FROM PUBLIC, heta_receipt_writer, heta_attestation, heta_reconciler, heta_tenant_projection, heta_forensic_reader;
+GRANT SELECT, INSERT, UPDATE ON heta_reconciliation_work TO heta_reconciler;
+GRANT SELECT, INSERT ON heta_provenance_comparisons, heta_record_revisions TO heta_reconciler;
+GRANT SELECT, INSERT ON heta_record_revisions TO heta_attestation;
+GRANT SELECT ON heta_reconciliation_work, heta_provenance_comparisons, heta_record_revisions TO heta_forensic_reader;
+-- The comparison and chain triggers read stripe_provider_events / heta_record_revisions as the invoking role; heta_attestation therefore needs no evidence access
+-- (its inserts only touch heta_record_revisions), and heta_reconciler already holds SELECT on stripe_provider_events.
+
+ALTER TABLE heta_reconciliation_work ENABLE ROW LEVEL SECURITY;
+ALTER TABLE heta_provenance_comparisons ENABLE ROW LEVEL SECURITY;
+ALTER TABLE heta_record_revisions ENABLE ROW LEVEL SECURITY;
+
+DO $$
+DECLARE
+  t text; role text; cmd text; pol text; s text; parts text[];
+  spec text[] := ARRAY[
+    'heta_reconciliation_work|heta_reconciler|SIU', 'heta_provenance_comparisons|heta_reconciler|SI', 'heta_record_revisions|heta_reconciler|SI',
+    'heta_record_revisions|heta_attestation|SI',
+    'heta_reconciliation_work|heta_forensic_reader|S', 'heta_provenance_comparisons|heta_forensic_reader|S', 'heta_record_revisions|heta_forensic_reader|S'
+  ];
+BEGIN
+  FOR t IN SELECT unnest(ARRAY['heta_reconciliation_work','heta_provenance_comparisons','heta_record_revisions']) LOOP
+    FOR pol IN SELECT policyname FROM pg_policies WHERE schemaname = 'public' AND tablename = t AND policyname LIKE 'hetag\_%' LOOP
+      EXECUTE format('DROP POLICY %I ON %I', pol, t);
+    END LOOP;
+  END LOOP;
+  FOREACH s IN ARRAY spec LOOP
+    parts := string_to_array(s, '|');
+    t := parts[1]; role := parts[2]; cmd := parts[3];
+    IF position('S' IN cmd) > 0 THEN EXECUTE format('CREATE POLICY %I ON %I FOR SELECT TO %I USING (true)', 'hetag_' || substr(role, 6) || '_select', t, role); END IF;
+    IF position('I' IN cmd) > 0 THEN EXECUTE format('CREATE POLICY %I ON %I FOR INSERT TO %I WITH CHECK (true)', 'hetag_' || substr(role, 6) || '_insert', t, role); END IF;
+    IF position('U' IN cmd) > 0 THEN EXECUTE format('CREATE POLICY %I ON %I FOR UPDATE TO %I USING (true) WITH CHECK (true)', 'hetag_' || substr(role, 6) || '_update', t, role); END IF;
+  END LOOP;
+END $$;

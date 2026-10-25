@@ -187,8 +187,10 @@ try {
       'P0001',
     );
   }
-  // Truncate all six together so FK validation cannot mask the actual trigger denial.
-  await denied('all evidence TRUNCATE', () => db.query(`TRUNCATE ${tables.join(',')}`), 'P0001');
+  // Include the 0051 comparison table that references stripe_provider_events. PostgreSQL validates
+  // TRUNCATE foreign keys before firing triggers; test the actual append-only denial, not that FK error.
+  const truncateTargets = [...tables, 'heta_provenance_comparisons'];
+  await denied('all evidence TRUNCATE', () => db.query(`TRUNCATE ${truncateTargets.join(',')}`), 'P0001');
 
   for (const [kind, details, constraint] of [
     ['account_provenance_verified', {}, 'stripe_evidence_control_attestation_result'],

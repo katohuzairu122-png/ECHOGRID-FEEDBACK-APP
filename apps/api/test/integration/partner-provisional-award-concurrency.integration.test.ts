@@ -10,6 +10,7 @@ import { OrphanSettlementFulfillmentService } from '../../src/orphan-settlement/
 import { OrphanSettlementReversalService } from '../../src/orphan-settlement/orphan-settlement-reversal.service';
 import { PartnerProvisionalAwardService } from '../../src/partner-credits/partner-provisional-award.service';
 import { PartnerCreditProjectionAudit } from '../../src/partner-credits/partner-credit-projection.audit';
+import { PartnerCreditDisputeService } from '../../src/partner-credits/partner-credit-dispute.service';
 import { PartnerCreditLifecycleService } from '../../src/partner-credits/partner-credit-lifecycle.service';
 import { PartnerCreditReservationService } from '../../src/partner-credits/partner-credit-reservation.service';
 import { PartnerCreditTerminalEvidenceReader } from '../../src/billing/partner-credit-terminal-evidence.reader';
@@ -39,6 +40,8 @@ describe.skipIf(!url)('Split 07 positive/concurrent provisional awards — isola
     ['partner_credit_accounts','partner_credit_accounts_inert_guard'],
     ['partner_credit_recovery_obligations','partner_credit_recovery_insert_disabled'],
   ] as const;
+
+  const disputeTables = ['partner_credit_award_disputes','partner_credit_dispute_events','partner_credit_corrections'] as const;
 
   async function query<T extends Record<string, unknown> = Record<string, unknown>>(sql: string, params: unknown[] = []) {
     return admin.query<T>(sql, params);
@@ -139,12 +142,16 @@ describe.skipIf(!url)('Split 07 positive/concurrent provisional awards — isola
     // Dedicated disposable DB only: enable positive economic path for this test.
     for(const [table,trigger] of triggers)
       await query('ALTER TABLE '+table+' DISABLE TRIGGER '+trigger);
+    for(const table of disputeTables)
+      await query('ALTER TABLE '+table+' DISABLE TRIGGER '+table+'_inert_guard');
   }, 120000);
 
   afterAll(async () => {
     if (admin) {
       for(const [table,trigger] of triggers)
         await query('ALTER TABLE '+table+' ENABLE TRIGGER '+trigger);
+      for(const table of disputeTables)
+        await query('ALTER TABLE '+table+' ENABLE TRIGGER '+table+'_inert_guard');
     }
     await Promise.all(clients.map(c=>c.end()));
     if (admin) await admin.end();
@@ -761,6 +768,67 @@ describe.skipIf(!url)('Split 07 positive/concurrent provisional awards — isola
       await query('ALTER TABLE partner_credit_reservations ENABLE TRIGGER partner_credit_reservations_inert_guard');
     }
   },120000);
+
+  it('a disputed award is HELD: vest, expire and reserve are refused while the dispute is open or revoked, and resume after an upheld release', async () => {
+    await resetReceivingBusinessForReversalTests();
+    const evidence=await fixture(branchIds[0]!);
+    const db=await newDb();
+    const award=await new PartnerProvisionalAwardService(db).decide(evidence);
+    const lifecycle=new PartnerCreditLifecycleService(db);
+    const disputes=new PartnerCreditDisputeService(db);
+    const secondAdmin=(await query<{id:string}>("INSERT INTO users(email,password_hash,full_name,status,platform_role) VALUES($1,'x','Second Admin','active','admin') RETURNING id",['s07-admin2-'+crypto.randomUUID()+'@example.test'])).rows[0]!.id;
+    const snapshot=async()=>JSON.stringify((await query(`SELECT a.available,a.provisional,a.reserved,l.status,d.state,(SELECT count(*) FROM partner_credit_ledger WHERE decision_id=d.id) ledger
+      FROM partner_credit_award_decisions d JOIN partner_credit_lots l ON l.decision_id=d.id JOIN partner_credit_accounts a ON a.id=l.account_id WHERE d.id=$1`,[award.decisionId])).rows);
+    const vestAt=new Date(Date.parse(evidence.fulfilledAt)+15*86400_000);
+
+    // 1. provisional award disputed: vesting refused, nothing changes
+    const d1=await disputes.open({decisionId:award.decisionId,actorId:platformAdminId,evidenceRef:'case-77',dedupeKey:'s07-d1-'+crypto.randomUUID()});
+    const before=await snapshot();
+    await expect(lifecycle.vest(award.decisionId,vestAt)).rejects.toThrow('PARTNER_VEST_DISPUTE_HOLD');
+    expect(await snapshot()).toBe(before);
+    // 2. upheld: the hold lifts and vesting proceeds exactly as before
+    await disputes.resolve({disputeId:d1.disputeId,actorId:secondAdmin,outcome:'upheld',evidenceRef:'review-ok',dedupeKey:'s07-r1-'+crypto.randomUUID()});
+    expect(await lifecycle.vest(award.decisionId,vestAt)).toBe('vested');
+
+    // 3. vested award disputed: expiry and reservation refused
+    await query('ALTER TABLE partner_credit_reservations DISABLE TRIGGER partner_credit_reservations_inert_guard');
+    try {
+      const d2=await disputes.open({decisionId:award.decisionId,actorId:platformAdminId,evidenceRef:'case-78',dedupeKey:'s07-d2-'+crypto.randomUUID()});
+      const held=await snapshot();
+      const lot=(await query<{expires_at:Date}>('SELECT expires_at FROM partner_credit_lots WHERE decision_id=$1',[award.decisionId])).rows[0]!;
+      await expect(lifecycle.expire(award.decisionId,lot.expires_at)).rejects.toThrow('PARTNER_EXPIRY_DISPUTE_HOLD');
+      const reserveInput={settlementRef:evidence.settlementRef,businessId:receiverId,decisionId:award.decisionId,invoiceIntentRef:'s07-held-intent-'+crypto.randomUUID(),idempotencyKey:'s07-held-'+crypto.randomUUID(),now:vestAt,expiresAt:new Date(vestAt.getTime()+86400_000)};
+      await expect(new PartnerCreditReservationService(db).reserve(reserveInput)).rejects.toThrow('PARTNER_RESERVE_DISPUTE_HOLD');
+      expect(await snapshot()).toBe(held);
+      // 4. revoked (dual control) KEEPS the hold: still no reservation, no ledger/award mutation
+      const {correctionId}=await disputes.proposeRevocation({disputeId:d2.disputeId,actorId:platformAdminId});
+      await disputes.decideCorrection({correctionId,actorId:secondAdmin,approve:true});
+      await disputes.resolve({disputeId:d2.disputeId,actorId:platformAdminId,outcome:'revoked',evidenceRef:'final',dedupeKey:'s07-r2-'+crypto.randomUUID()});
+      await expect(new PartnerCreditReservationService(db).reserve(reserveInput)).rejects.toThrow('PARTNER_RESERVE_DISPUTE_HOLD');
+      expect(await snapshot()).toBe(held);
+      expect((await query('SELECT 1 FROM partner_credit_reservations WHERE decision_id=$1',[award.decisionId])).rowCount).toBe(0);
+    } finally {
+      await query('ALTER TABLE partner_credit_reservations ENABLE TRIGGER partner_credit_reservations_inert_guard');
+    }
+  },120000);
+
+  it('vest racing a dispute opening serializes without deadlock: either vest wins and the dispute holds the vested award, or the hold wins and vest is refused', async () => {
+    for (let round=0; round<3; round++) {
+      await resetReceivingBusinessForReversalTests();
+      const evidence=await fixture(branchIds[0]!);
+      const award=await new PartnerProvisionalAwardService(await newDb()).decide(evidence);
+      const vestAt=new Date(Date.parse(evidence.fulfilledAt)+15*86400_000);
+      const [v,o]=await Promise.allSettled([
+        new PartnerCreditLifecycleService(await newDb()).vest(award.decisionId,vestAt),
+        new PartnerCreditDisputeService(await newDb()).open({decisionId:award.decisionId,actorId:platformAdminId,evidenceRef:'race-'+round,dedupeKey:'s07-race-'+crypto.randomUUID()}),
+      ]);
+      expect(o.status).toBe('fulfilled'); // opening is always valid for a provisional or vested award
+      const vests=(await query<{n:string}>("SELECT count(*)::text n FROM partner_credit_ledger WHERE decision_id=$1 AND entry_type='vest'",[award.decisionId])).rows[0]!.n;
+      if (v.status==='fulfilled') expect(vests).toBe('1'); else { expect(String(v.reason)).toMatch(/PARTNER_VEST_DISPUTE_HOLD/); expect(vests).toBe('0'); }
+      const open=(await query<{n:string}>("SELECT count(*)::text n FROM partner_credit_award_disputes WHERE decision_id=$1 AND state='open'",[award.decisionId])).rows[0]!.n;
+      expect(open).toBe('1');
+    }
+  },180000);
 
   // Runs LAST (tests in this file execute in order). Earlier scenarios in this file deliberately tamper with three accounts: one
   // pre-inserts a ledger row to force an idempotency conflict, two set a lot to `consumed` by hand because no consumption writer
