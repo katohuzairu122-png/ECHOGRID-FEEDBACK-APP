@@ -1,6 +1,6 @@
 # S08-PIC/1 component coverage and owner decisions — 2026-10-25
 
-**Status: review packet only. NO decisions recorded; NO provider-write or production authorization.**
+**Status: draft-invoice timing approved for development only; remaining decisions unresolved. NO provider-write or production authorization.**
 
 This supplements the [readiness review](S08_PIC_1_READINESS_REVIEW.md) and leaves [S08-PIC/1](PROVIDER_INTEGRATION_CONTRACT_S08_PIC_1.md) unchanged. Baseline: `main` at `f2c0a5429c1903911a3cbc0c5a6d75ea82f6bf83`, after PR #174.
 
@@ -47,13 +47,15 @@ For all future acceptance fixtures, capture reservation, lot, account, immutable
 
 ## Owner decision record to complete
 
-**All fields below are UNDECIDED.** This is a reviewable decision template, not an approval request to run production operations. A completed development decision does not authorize Stripe calls, guard removal, production migrations, deployment, credit consumption or compensation.
+**D1/D3 timing is partially resolved for development only:** the owner selected option 1 in this work session: reduce the specific draft invoice before payment, with final consumption only after independent reconciliation and settlement. See the [timing decision record](OWNER_DECISION_S08_DRAFT_INVOICE_TIMING_2026-10-25.md). Exact instrument, authenticated attribution, tax treatment, allocation, detailed settlement evidence and accounting remain unresolved.
+
+**Remaining fields below are UNDECIDED.** This is a reviewable decision template, not an approval request to run production operations. A completed development decision does not authorize Stripe calls, guard removal, production migrations, deployment, credit consumption or compensation.
 
 | Decision | Concrete fields the owner must approve | Work stopped at this boundary |
 | --- | --- | --- |
-| D1: Stripe benefit instrument and attribution | Exact object/operation; permitted invoice lifecycle state; economic/tax treatment; independently retrievable effect reference; authenticated reservation attribution and how untracked/unattributed effects are held; policy version/effective scope. The existing negative-line metadata extractor remains a candidate only. | Do not choose or implement a provider-write adapter, or certify instrument-specific absence, before this decision. |
+| D1: Stripe benefit instrument and attribution | Exact object/operation; draft-invoice/pre-payment timing selected for development only; economic/tax treatment; independently retrievable effect reference; authenticated reservation attribution and how untracked/unattributed effects are held; policy version/effective scope. The existing negative-line metadata extractor remains a candidate only. | Do not choose or implement a provider-write adapter, or certify instrument-specific absence, before this decision. |
 | D2: Per-reservation amount allocation | Authoritative aggregate/per-credit calculation, rounding, deterministic residual allocation and ordering, invoice cap, currency and policy version. Specify each reservation's exact approved amount and the invariant relating their sum to the invoice benefit. | Do not choose residual allocation or pass arbitrary expected amounts as approved economic policy. |
-| D3: Invoice settlement eligibility/evidence | Required finalized/paid/settled state and source fields for the selected instrument; eligibility timing; treatment of zero/partial payment, annual periods, proration, cancellation and later refund/dispute. Explicitly adopt or reject the previous testing-only defaults. | Do not promote test eligibility defaults or a provider success response into final-consumption authority. |
+| D3: Invoice settlement eligibility/evidence | Required finalized/paid/settled state and source fields for final consumption; draft-invoice application followed by independent reconciliation and settlement selected for development only; treatment of zero/partial payment, annual periods, proration, cancellation and later refund/dispute. Explicitly adopt or reject the previous testing-only defaults. | Do not promote test eligibility defaults or a provider success response into final-consumption authority. |
 | D4: Consumption and compensation accounting | A reviewed transactional design within frozen Split 07/08 ownership, ledger vocabulary, lock order and conservation rules; the exact evidence and unresolved-obligation gates; separate authority for any compensating financial executor. | Do not implement a final ledger writer or reinterpret internal saga status/declarative compensation as a financial commit. |
 
 ### D2 example requiring an actual choice
@@ -76,4 +78,4 @@ The first economic decision to resolve is **D1: the Stripe adjustment instrument
 
 Until the relevant decisions are recorded, restrict work to review, documentation and non-activating checks that do not select an economic behavior. Any frozen-architecture conflict requires resolution before dependent development.
 
-S08-PIC/1 remains Proposed. No Stripe benefit writes, credit consumption, compensating financial execution, production migration, deployment, certification or financial activation. `historicalTierVerified`, `issuanceAuthorized` and `redemptionAuthorized` remain unchanged. Merging this packet records no D1–D4 approval.
+S08-PIC/1 remains Proposed. No Stripe benefit writes, credit consumption, compensating financial execution, production migration, deployment, certification or financial activation. `historicalTierVerified`, `issuanceAuthorized` and `redemptionAuthorized` remain unchanged. Merging this packet grants no additional approval beyond the explicitly recorded development-only timing decision.
