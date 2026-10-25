@@ -295,8 +295,9 @@ describe('S08-DEV-04 deterministic aggregate allocation', () => {
   });
 
   it('rejects malformed shapes and ineligible or authorizing calculator claims', async () => {
-    for (const bad of [null, undefined, {}, { ...fixture(), invoice: null }, { ...fixture(), reservations: null }, { ...fixture(), reservations: [null, null] }])
-      await denied(bad, bad && 'reservations' in bad && Array.isArray(bad.reservations) ? 'INVALID_IDENTITY' : 'INVALID_INPUT');
+    for (const bad of [null, undefined, {}, { ...fixture(), invoice: null }, { ...fixture(), reservations: null }])
+      await denied(bad, 'INVALID_INPUT');
+    await denied({ ...fixture(), reservations: [null, null] }, 'INVALID_IDENTITY');
     const f = fixture();
     for (const change of [{ eligible: false }, { providerVerified: true }, { consumptionAuthorized: true }])
       await denied({ ...f, benefit: { ...f.benefit, ...change } }, 'INVALID_INPUT');
