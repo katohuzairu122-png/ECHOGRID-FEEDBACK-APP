@@ -1,0 +1,26 @@
+name: Prepare Zod lockfile
+on:
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  lockfile:
+    if: github.head_ref == 'fix/zod-security-4-6-6'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.9.0
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Generate lockfile without lifecycle scripts
+        run: pnpm install --lockfile-only --ignore-scripts --no-frozen-lockfile
+      - name: Show generated lockfile diff
+        run: git diff -- pnpm-lock.yaml
