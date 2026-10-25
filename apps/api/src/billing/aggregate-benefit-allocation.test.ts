@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it, vi } from 'vitest';
 import { computeInvoiceBenefit } from './invoice-benefit.calculator';
 import {
@@ -318,7 +319,7 @@ describe('S08-DEV-04 deterministic aggregate allocation', () => {
       expect(error.providerVerified).toBe(false);
       expect(error.consumptionAuthorized).toBe(false);
       // Audit the dependency boundary as well as behavior: only the existing pure calculator is imported.
-      const text = readFileSync(new URL('./aggregate-benefit-allocation.ts', import.meta.url), 'utf8');
+      const text = readFileSync(fileURLToPath(new URL('./aggregate-benefit-allocation.ts', import.meta.url).href), 'utf8');
       const imports = [...text.matchAll(/from ['"]([^'"]+)['"]/g)].map(m => m[1]);
       expect(imports).toEqual(['./invoice-benefit.calculator']);
     } finally { vi.unstubAllGlobals(); }
