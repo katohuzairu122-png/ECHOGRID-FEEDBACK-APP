@@ -24,8 +24,9 @@ describe.skipIf(!process.env.DATABASE_URL)('S08-DEV-06 transactional freeze dura
   let fixture: Client;
   let businessId: string;
   let reservationId: string;
+  let concurrentReservationId: string;
   const connect = async () => { const c = new Client({ connectionString: url(name) }); await c.connect(); clients.push(c); return c; };
-  const input = (invoiceRef = 'in_freeze') => {
+  const input = (invoiceRef = 'in_freeze', selectedReservationId = reservationId) => {
     const benefit = computeInvoiceBenefit({
       invoiceId: invoiceRef, invoiceBusinessId: businessId, currency: 'usd', status: 'paid',
       amountDueMinor: 199, amountPaidMinor: 199, interval: 'month', trialOrFree: false,
@@ -33,7 +34,7 @@ describe.skipIf(!process.env.DATABASE_URL)('S08-DEV-06 transactional freeze dura
     }, { creditBusinessId: businessId, requestedUnits: 1, availableUnits: 1 });
     if (!benefit.eligible) throw new Error('fixture rejected');
     return { allocationPolicyVersion: AGGREGATE_ALLOCATION_POLICY, invoice: { businessId, invoiceRef, currency: 'usd' },
-      benefit, eligibleCreditBalance: 1, reservations: [{ id: reservationId, businessId, invoiceIntentRef: 'intent_freeze',
+      benefit, eligibleCreditBalance: 1, reservations: [{ id: selectedReservationId, businessId, invoiceIntentRef: 'intent_freeze',
         invoiceRef, currency: 'usd', units: 1 as const, state: 'reserved' as const, providerAttemptStarted: false as const }] };
   };
 
@@ -64,6 +65,12 @@ describe.skipIf(!process.env.DATABASE_URL)('S08-DEV-06 transactional freeze dura
        (business_id,decision_id,lot_id,account_id,invoice_intent_ref,idempotency_key,expires_at,state)
        VALUES ($1,gen_random_uuid(),gen_random_uuid(),gen_random_uuid(),'intent_freeze',$2,now()+interval '1 day','reserved') RETURNING id`,
       [businessId, name],
+    )).rows[0]!.id;
+    concurrentReservationId = (await fixture.query<{ id: string }>(
+      `INSERT INTO partner_credit_reservations
+       (business_id,decision_id,lot_id,account_id,invoice_intent_ref,idempotency_key,expires_at,state)
+       VALUES ($1,gen_random_uuid(),gen_random_uuid(),gen_random_uuid(),'intent_freeze',$2,now()+interval '1 day','reserved') RETURNING id`,
+      [businessId, name + '-concurrent'],
     )).rows[0]!.id;
     await fixture.query('SET session_replication_role = origin');
   }, 300_000);
@@ -105,7 +112,7 @@ describe.skipIf(!process.env.DATABASE_URL)('S08-DEV-06 transactional freeze dura
 
   it('concurrent duplicate submission converges to one parent and one child', async () => {
     const [a, b] = await Promise.all([connect(), connect()]);
-    const results = await Promise.all([freezeAllocationTransaction(a, input('in_concurrent')), freezeAllocationTransaction(b, input('in_concurrent'))]);
+    const results = await Promise.all([freezeAllocationTransaction(a, input('in_concurrent', concurrentReservationId)), freezeAllocationTransaction(b, input('in_concurrent', concurrentReservationId))]);
     expect(results[0]?.id).toBe(results[1]?.id);
     expect(results.filter(x => !x.replay)).toHaveLength(1);
     const totals = await a.query<{ n: number; children: number }>(
