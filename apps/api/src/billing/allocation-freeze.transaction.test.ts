@@ -58,4 +58,26 @@ describe('S08-DEV-06 fail-closed transactional writer', () => {
     expect(queries.at(-1)).toBe('ROLLBACK');
     expect(queries.some(x => x.includes('INSERT INTO'))).toBe(false);
   });
+  it('rolls back if a child item insert fails after parent insert', async () => {
+    const queries: string[] = [];
+    const client = {
+      query: vi.fn(async (sql: string) => {
+        queries.push(sql);
+        if (sql.includes('FROM partner_credit_reservations')) return {
+          rows: [{ id: reservationId, business_id: businessId, invoice_intent_ref: 'intent_1',
+            state: 'reserved', units: 1, expires: false }],
+        };
+        if (sql.includes('INSERT INTO s08_allocation_freezes')) return {
+          rows: [{ id: '22222222-2222-4222-8222-222222222222' }], rowCount: 1,
+        };
+        if (sql.includes('INSERT INTO s08_allocation_freeze_items')) throw new Error('simulated child failure');
+        return { rows: [], rowCount: 0 };
+      }),
+    } as unknown as PoolClient;
+    await expect(freezeAllocationTransaction(client, input())).rejects.toThrow('simulated child failure');
+    expect(queries.some(x => x.includes('INSERT INTO s08_allocation_freezes'))).toBe(true);
+    expect(queries.at(-1)).toBe('ROLLBACK');
+    expect(queries).not.toContain('COMMIT');
+  });
+
 });
