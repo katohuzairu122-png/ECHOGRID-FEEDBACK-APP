@@ -1,21 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import { freezeAggregateBenefitAllocation, AGGREGATE_ALLOCATION_POLICY, type AggregateAllocationInput } from './aggregate-benefit-allocation';
 import { verifyStoredAllocationSnapshot } from './stored-allocation-verifier';
-import { calculateInvoiceBenefit } from './invoice-benefit.calculator';
+import { computeInvoiceBenefit } from './invoice-benefit.calculator';
 
 const businessId = '11111111-1111-4111-8111-111111111111';
 const input = (): AggregateAllocationInput => {
-  const benefit = calculateInvoiceBenefit({
-    businessId,
-    invoiceBusinessId: businessId,
-    invoiceRef: 'in_fixture',
-    currency: 'usd',
-    eligibleBaseMinor: 199,
-    availableCredits: 2,
-    requestedCredits: 2,
-    // This fixture must conform to the existing calculator's policy;
-    // no new provider or payment authority is introduced.
-  } as Parameters<typeof calculateInvoiceBenefit>[0]);
+  const benefit = computeInvoiceBenefit({
+    invoiceId: 'in_fixture', invoiceBusinessId: businessId, currency: 'usd',
+    status: 'paid', amountDueMinor: 199, amountPaidMinor: 199,
+    interval: 'month', trialOrFree: false,
+    lines: [{ id: 'il_fixture', category: 'recurring_base', amountMinor: 199, currency: 'usd' }],
+  }, { creditBusinessId: businessId, requestedUnits: 2, availableUnits: 2 });
   if (!benefit.eligible) throw new Error('Fixture calculator rejected input');
   return {
     allocationPolicyVersion: AGGREGATE_ALLOCATION_POLICY,
