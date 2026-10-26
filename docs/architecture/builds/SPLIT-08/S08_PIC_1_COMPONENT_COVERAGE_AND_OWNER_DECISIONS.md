@@ -54,15 +54,15 @@ For all future acceptance fixtures, capture reservation, lot, account, immutable
 | Decision | Concrete fields the owner must approve | Work stopped at this boundary |
 | --- | --- | --- |
 | D1: Stripe benefit instrument and attribution | Negative Invoice Item per reservation explicitly targeting the draft invoice, original idempotency identity, authorized persisted intent and independent Invoice Item/line correlation are selected for development. Economic/tax treatment and policy version/effective scope remain open. The metadata-only candidate extractor is not sufficient. | No actual provider writes or instrument-specific absence certification. Do not choose unresolved tax/economic behavior; authenticated evidence binding remains unimplemented. |
-| D2: Per-reservation amount allocation | Authoritative aggregate/per-credit calculation, rounding, deterministic residual allocation and ordering, invoice cap, currency and policy version. Specify each reservation's exact approved amount and the invariant relating their sum to the invoice benefit. | Do not choose residual allocation or pass arbitrary expected amounts as approved economic policy. |
+| D2: Per-reservation amount allocation | S08-DEV-04 explicitly approves S08-AGG-ROUND/1 for development: one aggregate floor, equal whole-unit shares, residuals by ascending persisted reservation ID, reject any zero allocation, maximum 10 one-unit reservations and 10% benefit. See [block contract](S08_DEV_04_AGGREGATE_ALLOCATION.md). | Pure immutable artifact only. No persistence, caller-authorized economic values, provider writes or final consumption; validated source evidence and all remaining gates are still required. |
 | D3: Invoice settlement eligibility/evidence | Required finalized/paid/settled state and source fields for final consumption; draft-invoice application followed by independent reconciliation and settlement selected for development only; treatment of zero/partial payment, annual periods, proration, cancellation and later refund/dispute. Explicitly adopt or reject the previous testing-only defaults. | Do not promote test eligibility defaults or a provider success response into final-consumption authority. |
 | D4: Consumption and compensation accounting | A reviewed transactional design within frozen Split 07/08 ownership, ledger vocabulary, lock order and conservation rules; the exact evidence and unresolved-obligation gates; separate authority for any compensating financial executor. | Do not implement a final ledger writer or reinterpret internal saga status/declarative compensation as a financial commit. |
 
-### D2 example requiring an actual choice
+### D2 example — aggregate allocation selected by S08-DEV-04
 
 Eligible invoice base = **199 minor units**, eligible credits = **2**. Aggregate flooring gives `floor(199 × 2 / 100) = 3` minor units; separately flooring each credit gives `2 × floor(199 / 100) = 2`. Both cannot be authoritative for the same application.
 
-If the owner chooses aggregate flooring, the owner must also approve how the 3 minor units are attributed across the two reservations (including deterministic residual assignment). This packet selects neither calculation nor allocation. The adopted percentage and invoice cap are not changed.
+S08-DEV-04 selects aggregate flooring and assigns the residual to the lowest persisted reservation ID: 2 + 1. The approved development policy rejects the entire batch if any share would be zero. The adopted percentage and invoice cap are not changed. This resolves the allocation design only; no provider or ledger execution is authorized.
 
 For each D1–D4 decision, record:
 
@@ -74,7 +74,7 @@ For each D1–D4 decision, record:
 
 ## Development stop and release status
 
-**D1 instrument and attribution design are selected for development only** in S08-INSTRUMENT/1; economic/tax details remain unresolved. D2–D4 also remain required for their dependent work. Full server-authenticated identity binding is an implementation gap even after those decisions; no input tuple alone grants authority.
+**D1 instrument and attribution design are selected for development only** in S08-INSTRUMENT/1; economic/tax details remain unresolved. D2 allocation design is approved only for the pure S08-DEV-04 artifact. D3–D4 and the remaining D1 economic/tax details still block dependent financial work. Full server-authenticated identity binding is an implementation gap even after those decisions; no input tuple alone grants authority.
 
 Until the relevant decisions are recorded, restrict work to review, documentation and non-activating checks that do not select an economic behavior. Any frozen-architecture conflict requires resolution before dependent development.
 
