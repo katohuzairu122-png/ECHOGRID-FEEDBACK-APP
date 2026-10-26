@@ -49,7 +49,7 @@ export async function freezeAllocationTransaction(
               expires_at <= clock_timestamp() AS expires
        FROM partner_credit_reservations
        WHERE id = ANY($1::uuid[])
-       ORDER BY id COLLATE "C" FOR UPDATE`, [ids],
+       ORDER BY id FOR UPDATE`, [ids],
     );
     if (reservations.rows.length !== ids.length ||
         reservations.rows.some((row, i) =>
@@ -106,7 +106,7 @@ export async function freezeAllocationTransaction(
     }
     const items = await client.query<{ reservation_id: string; invoice_intent_ref: string; benefit_minor: string; provider_idempotency_key: string }>(
       `SELECT reservation_id, invoice_intent_ref, benefit_minor, provider_idempotency_key
-       FROM s08_allocation_freeze_items WHERE freeze_id=$1 ORDER BY reservation_id COLLATE "C"`, [id],
+       FROM s08_allocation_freeze_items WHERE freeze_id=$1 ORDER BY reservation_id`, [id],
     );
     if (items.rows.length !== candidate.allocations.length ||
         items.rows.some((row, i) => row.reservation_id !== candidate.allocations[i].reservationId ||
