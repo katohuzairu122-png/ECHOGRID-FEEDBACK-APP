@@ -59,6 +59,21 @@ export async function freezeAllocationTransaction(
       throw new AllocationFreezeConflict('RESERVATION_MISMATCH');
     }
 
+    // A caller-supplied providerAttemptStarted=false is never sufficient.
+    // Refuse a freeze if ANY reservation in this batch already has a persisted
+    // provider attempt, even if an intent's state has subsequently changed.
+    const attempts = await client.query<{ reservation_id: string }>(
+      `SELECT DISTINCT i.reservation_id
+       FROM benefit_application_intents i
+       JOIN benefit_provider_attempts a ON a.intent_id = i.id
+       WHERE i.reservation_id = ANY($1::uuid[])
+       LIMIT 1`,
+      [ids],
+    );
+    if (attempts.rows.length > 0) {
+      throw new AllocationFreezeConflict('RESERVATION_MISMATCH');
+    }
+
     // Invoice identity is fixed in the artifact; the surrounding trusted
     // application must separately verify live provider invoice authority.
     const inserted = await client.query<{ id: string }>(
