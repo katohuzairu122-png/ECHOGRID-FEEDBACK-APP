@@ -9,7 +9,8 @@ import { resolve } from 'node:path';
  */
 const dir = resolve(__dirname, '../../../.github/workflows');
 const files = readdirSync(dir).filter(f => f.endsWith('.yml'));
-const read = (n: string) => readFileSync(resolve(dir, n), 'utf8');
+// Git can check out workflows as CRLF on Windows; audit the same YAML text on every host.
+const read = (n: string) => readFileSync(resolve(dir, n), 'utf8').replace(/\r\n/g, '\n');
 const strip = (t: string) => t.split('\n').filter(l => !l.trim().startsWith('#')).join('\n');
 const code = (n: string) => strip(read(n));
 /** Text of one top-level job (from `  name:` to the next job or end of file). */
