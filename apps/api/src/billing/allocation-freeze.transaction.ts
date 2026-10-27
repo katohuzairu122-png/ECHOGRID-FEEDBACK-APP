@@ -15,7 +15,9 @@ import { verifyStoredAllocationSnapshot } from './stored-allocation-verifier';
  * existing schema. Therefore this writer is NOT a financial-authority gate.
  */
 export class AllocationFreezeConflict extends Error {
-  constructor(readonly reason: 'RESERVATION_MISMATCH' | 'CONFLICTING_FREEZE' | 'VERIFICATION_FAILED') {
+  constructor(
+    readonly reason: 'RESERVATION_MISMATCH' | 'CONFLICTING_FREEZE' | 'VERIFICATION_FAILED',
+  ) {
     super('Allocation freeze: ' + reason);
   }
 }
@@ -35,27 +37,43 @@ export interface StoredAllocationFreeze {
  * in one transaction; a rollback preserves zero writes.
  */
 export async function freezeAllocationTransaction(
-  client: PoolClient,
+  client: Pick<PoolClient, 'query'>,
   input: AggregateAllocationInput,
 ): Promise<StoredAllocationFreeze> {
   const candidate = await freezeAggregateBenefitAllocation(input);
   await client.query('BEGIN');
   try {
-    const ids = candidate.allocations.map(a => a.reservationId);
+    const ids = candidate.allocations.map((a) => a.reservationId);
     const reservations = await client.query<{
-      id: string; business_id: string; invoice_intent_ref: string; state: string; units: number; expires: boolean;
+      id: string;
+      business_id: string;
+      invoice_intent_ref: string;
+      state: string;
+      units: number;
+      expires: boolean;
     }>(
       `SELECT id, business_id, invoice_intent_ref, state, units,
               expires_at <= clock_timestamp() AS expires
        FROM partner_credit_reservations
        WHERE id = ANY($1::uuid[])
-       ORDER BY id FOR UPDATE`, [ids],
+       ORDER BY id FOR UPDATE`,
+      [ids],
     );
-    if (reservations.rows.length !== ids.length ||
-        reservations.rows.some((row, i) =>
-          row.id !== ids[i] || row.business_id !== candidate.businessId ||
-          row.invoice_intent_ref !== candidate.allocations[i].invoiceIntentRef ||
-          row.state !== 'reserved' || row.units !== 1 || row.expires)) {
+    if (
+      reservations.rows.length !== ids.length ||
+      reservations.rows.some((row, i) => {
+        const allocation = candidate.allocations[i];
+        return (
+          !allocation ||
+          row.id !== ids[i] ||
+          row.business_id !== candidate.businessId ||
+          row.invoice_intent_ref !== allocation.invoiceIntentRef ||
+          row.state !== 'reserved' ||
+          row.units !== 1 ||
+          row.expires
+        );
+      })
+    ) {
       throw new AllocationFreezeConflict('RESERVATION_MISMATCH');
     }
 
@@ -82,9 +100,16 @@ export async function freezeAllocationTransaction(
         aggregate_benefit_minor, reservation_count, artifact)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb)
        ON CONFLICT (business_id, invoice_ref) DO NOTHING RETURNING id`,
-      [candidate.businessId, candidate.invoiceRef, candidate.currency,
-       candidate.allocationPolicyVersion, candidate.allocationDigest,
-       candidate.aggregateBenefitMinor, candidate.allocations.length, JSON.stringify(candidate)],
+      [
+        candidate.businessId,
+        candidate.invoiceRef,
+        candidate.currency,
+        candidate.allocationPolicyVersion,
+        candidate.allocationDigest,
+        candidate.aggregateBenefitMinor,
+        candidate.allocations.length,
+        JSON.stringify(candidate),
+      ],
     );
     let id = inserted.rows[0]?.id;
     if (id) {
@@ -93,8 +118,14 @@ export async function freezeAllocationTransaction(
           `INSERT INTO s08_allocation_freeze_items
            (freeze_id, business_id, reservation_id, invoice_intent_ref, benefit_minor, provider_idempotency_key)
            VALUES ($1,$2,$3,$4,$5,$6)`,
-          [id, candidate.businessId, allocation.reservationId, allocation.invoiceIntentRef,
-           allocation.benefitMinor, allocation.providerIdempotencyKey],
+          [
+            id,
+            candidate.businessId,
+            allocation.reservationId,
+            allocation.invoiceIntentRef,
+            allocation.benefitMinor,
+            allocation.providerIdempotencyKey,
+          ],
         );
       }
     } else {
@@ -107,31 +138,58 @@ export async function freezeAllocationTransaction(
     }
 
     const saved = await client.query<{
-      artifact: unknown; allocation_digest: string; reservation_count: number;
+      artifact: unknown;
+      allocation_digest: string;
+      reservation_count: number;
     }>(
       `SELECT artifact, allocation_digest, reservation_count FROM s08_allocation_freezes WHERE id=$1`,
       [id],
     );
     const row = saved.rows[0];
-    const verified = row && await verifyStoredAllocationSnapshot(row.artifact, input);
-    if (!row || row.allocation_digest !== candidate.allocationDigest ||
-        row.reservation_count !== candidate.allocations.length ||
-        verified.status !== 'verified_snapshot') {
+    if (
+      !row ||
+      row.allocation_digest !== candidate.allocationDigest ||
+      row.reservation_count !== candidate.allocations.length
+    ) {
       throw new AllocationFreezeConflict('CONFLICTING_FREEZE');
     }
-    const items = await client.query<{ reservation_id: string; invoice_intent_ref: string; benefit_minor: string; provider_idempotency_key: string }>(
+    const verified = await verifyStoredAllocationSnapshot(row.artifact, input);
+    if (verified.status !== 'verified_snapshot') {
+      throw new AllocationFreezeConflict('CONFLICTING_FREEZE');
+    }
+    const items = await client.query<{
+      reservation_id: string;
+      invoice_intent_ref: string;
+      benefit_minor: string;
+      provider_idempotency_key: string;
+    }>(
       `SELECT reservation_id, invoice_intent_ref, benefit_minor, provider_idempotency_key
-       FROM s08_allocation_freeze_items WHERE freeze_id=$1 ORDER BY reservation_id`, [id],
+       FROM s08_allocation_freeze_items WHERE freeze_id=$1 ORDER BY reservation_id`,
+      [id],
     );
-    if (items.rows.length !== candidate.allocations.length ||
-        items.rows.some((row, i) => row.reservation_id !== candidate.allocations[i].reservationId ||
-          row.invoice_intent_ref !== candidate.allocations[i].invoiceIntentRef ||
-          BigInt(row.benefit_minor) !== BigInt(candidate.allocations[i].benefitMinor) ||
-          row.provider_idempotency_key !== candidate.allocations[i].providerIdempotencyKey)) {
+    if (
+      items.rows.length !== candidate.allocations.length ||
+      items.rows.some((row, i) => {
+        const allocation = candidate.allocations[i];
+        return (
+          !allocation ||
+          row.reservation_id !== allocation.reservationId ||
+          row.invoice_intent_ref !== allocation.invoiceIntentRef ||
+          BigInt(row.benefit_minor) !== BigInt(allocation.benefitMinor) ||
+          row.provider_idempotency_key !== allocation.providerIdempotencyKey
+        );
+      })
+    ) {
       throw new AllocationFreezeConflict('VERIFICATION_FAILED');
     }
     await client.query('COMMIT');
-    return { id, artifact: candidate, replay: inserted.rowCount === 0, providerVerified: false, consumptionAuthorized: false };
+    return {
+      id,
+      artifact: candidate,
+      replay: inserted.rowCount === 0,
+      providerVerified: false,
+      consumptionAuthorized: false,
+    };
   } catch (error) {
     await client.query('ROLLBACK');
     throw error;
