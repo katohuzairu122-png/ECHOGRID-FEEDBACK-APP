@@ -80,4 +80,26 @@ describe('S08-DEV-06 fail-closed transactional writer', () => {
     expect(queries).not.toContain('COMMIT');
   });
 
+  it('refuses an existing persisted provider attempt even when input claims no attempt', async () => {
+    const queries: string[] = [];
+    const client = {
+      query: vi.fn(async (sql: string) => {
+        queries.push(sql);
+        if (sql.includes('FROM partner_credit_reservations')) return {
+          rows: [{ id: reservationId, business_id: businessId,
+            invoice_intent_ref: 'intent_1', state: 'reserved', units: 1, expires: false }],
+        };
+        if (sql.includes('JOIN benefit_provider_attempts')) return {
+          rows: [{ reservation_id: reservationId }],
+        };
+        return { rows: [], rowCount: 0 };
+      }),
+    } as unknown as PoolClient;
+    await expect(freezeAllocationTransaction(client, input()))
+      .rejects.toMatchObject({ reason: 'RESERVATION_MISMATCH' });
+    expect(queries.some(q => q.includes('JOIN benefit_provider_attempts'))).toBe(true);
+    expect(queries.some(q => q.includes('INSERT INTO'))).toBe(false);
+    expect(queries.at(-1)).toBe('ROLLBACK');
+  });
+
 });
