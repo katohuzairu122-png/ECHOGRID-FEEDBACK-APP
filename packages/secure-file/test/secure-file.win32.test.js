@@ -15,7 +15,6 @@ import { SecureFile, writeSecretFileExclusive } from '../index.js';
 const win = process.platform === 'win32';
 const SECRET = Buffer.from('TOPSECRET-KEK-MATERIAL-0123456789');
 const code = (fn) => { try { fn(); } catch (e) { return e.code; } return 'NO_ERROR'; };
-const sh = (cmd) => spawnSync('cmd.exe', ['/d', '/s', '/c', cmd], { encoding: 'utf8' });
 const icacls = (p) => spawnSync('icacls.exe', [p], { encoding: 'utf8' }).stdout;
 
 describe('secure-file (Windows)', { skip: !win }, () => {
