@@ -51,6 +51,9 @@ typedef ULONG(NTAPI* RtlNtStatusToDosError_t)(NTSTATUS);
 #ifndef OBJ_CASE_INSENSITIVE
 #define OBJ_CASE_INSENSITIVE 0x00000040
 #endif
+#ifndef STATUS_FILE_IS_A_DIRECTORY
+#define STATUS_FILE_IS_A_DIRECTORY ((NTSTATUS)0xC00000BAL)
+#endif
 #ifndef STATUS_OBJECT_NAME_COLLISION
 #define STATUS_OBJECT_NAME_COLLISION ((NTSTATUS)0xC0000035L)
 #endif
@@ -225,7 +228,8 @@ sf_status sf_prepare(const char* path, sf_file** out) {
   NTSTATUS ns = open_rel(dir, comps[nc - 1], GENERIC_WRITE | GENERIC_READ | DELETE | READ_CONTROL | FILE_READ_ATTRIBUTES, FILE_CREATE, FILE_NON_DIRECTORY_FILE | FILE_OPEN_REPARSE_POINT, 0, sd, &fh);
   LocalFree(sd);
   if (ns < 0) {
-    sf_code c = ns == STATUS_OBJECT_NAME_COLLISION ? SF_E_EXISTS : SF_E_CREATE;
+    /* An existing name of ANY kind (file, symlink, junction/directory) means "exists"; NTFS reports an existing directory as FILE_IS_A_DIRECTORY before the collision. */
+    sf_code c = (ns == STATUS_OBJECT_NAME_COLLISION || ns == STATUS_FILE_IS_A_DIRECTORY) ? SF_E_EXISTS : SF_E_CREATE;
     long e = (long)pToDos(ns);
     close_h(&dir); LocalFree(user);
     return st(c, e);

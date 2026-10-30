@@ -21,7 +21,7 @@ describe('secure-file (Windows)', { skip: !win }, () => {
   let root;
   const d = (n) => { const p = join(root, n); mkdirSync(p); return p; };
   before(() => { root = mkdtempSync(join(tmpdir(), 'sf-')); });
-  after(() => rmSync(root, { recursive: true, force: true }));
+  after(() => rmSync(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }));
 
   it('creates the file with a protected owner-only DACL (no inherited ACE, no Everyone/Users/Administrators/SYSTEM) and exact bytes', () => {
     const p = join(d('acl'), 'k.json'); writeSecretFileExclusive(p, SECRET);
@@ -73,15 +73,51 @@ describe('secure-file (Windows)', { skip: !win }, () => {
     assert.equal(opened, false); f.abort();
   });
 
-  it('while the handle is open nobody can rename it, hard-link it, or widen its DACL (share mode 0 closes the substitution windows verify() also checks)', () => {
-    const dir = d('tamper'); const p = join(dir, 'k'); const f = SecureFile.prepare(p);
-    assert.throws(() => renameSync(p, join(dir, 'moved')));
-    assert.throws(() => linkSync(p, join(dir, 'alias')));
-    const grant = spawnSync('icacls.exe', [p, '/grant', 'Everyone:R'], { encoding: 'utf8' });
-    assert.notEqual(grant.status, 0, grant.stdout);
-    f.verify(); f.write(SECRET); f.close();
-    assert.ok(!icacls(p).includes('Everyone'));
-    assert.deepEqual(readFileSync(p), SECRET);
+  it('rename of the open file is blocked by share mode 0', () => {
+    const dir = d('rename'); const p = join(dir, 'k'); const f = SecureFile.prepare(p);
+    try { assert.throws(() => renameSync(p, join(dir, 'moved'))); } finally { f.abort(); }
+    assert.equal(existsSync(p), false);
+  });
+
+  // Measured on Windows 11 NTFS: share mode 0 does NOT stop CreateHardLink or a WRITE_DAC change (attribute-only opens bypass sharing checks), so the
+  // protection is the handle-based re-verification (link count, DACL) that runs in verify(), immediately before the first write, and before close.
+  it('a hard link planted after creation is detected; the secret is never written and the file is removed', () => {
+    const dir = d('hl'); const p = join(dir, 'k'); const alias = join(dir, 'alias'); const f = SecureFile.prepare(p);
+    try {
+      linkSync(p, alias);
+      assert.equal(code(() => f.verify()), 'VERIFY');
+    } finally { f.abort(); }
+    assert.equal(statSync(alias).size, 0, 'the alias never saw a secret');
+    assert.equal(existsSync(p), false);
+  });
+
+  it('a hard link planted between verify and write is detected before any secret byte is written', () => {
+    const dir = d('hl2'); const p = join(dir, 'k'); const alias = join(dir, 'alias'); const f = SecureFile.prepare(p);
+    try {
+      f.verify(); linkSync(p, alias);
+      assert.equal(code(() => f.write(SECRET)), 'VERIFY');
+    } finally { f.abort(); }
+    assert.equal(statSync(alias).size, 0);
+  });
+
+  it('a DACL widened after creation is detected by verify(); nothing is written and the file is removed', () => {
+    const dir = d('dacl'); const p = join(dir, 'k'); const f = SecureFile.prepare(p);
+    try {
+      const grant = spawnSync('icacls.exe', [p, '/grant', 'Everyone:R'], { encoding: 'utf8' });
+      assert.equal(grant.status, 0, 'precondition: the owner can widen the DACL while the handle is open: ' + grant.stdout + grant.stderr);
+      assert.equal(code(() => f.verify()), 'VERIFY');
+    } finally { f.abort(); }
+    assert.equal(existsSync(p), false);
+  });
+
+  it('a DACL widened between verify and write is detected before any secret byte is written', () => {
+    const dir = d('dacl2'); const p = join(dir, 'k'); const f = SecureFile.prepare(p);
+    try {
+      f.verify();
+      assert.equal(spawnSync('icacls.exe', [p, '/grant', 'Everyone:R'], { encoding: 'utf8' }).status, 0);
+      assert.equal(code(() => f.write(SECRET)), 'VERIFY');
+    } finally { f.abort(); }
+    assert.equal(existsSync(p), false);
   });
 
   it('after close the file stays owner-only and a second creation at the same name is refused', () => {
