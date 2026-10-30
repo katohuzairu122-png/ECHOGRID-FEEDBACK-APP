@@ -82,6 +82,27 @@ describe('secure-file (POSIX)', { skip: !posix }, () => {
     }
   });
 
+  it('applies the directory policy to EVERY ancestor, not only the immediate parent', () => {
+    const top = d('anc'); const mid = join(top, 'mid'); const leaf = join(mid, 'leaf'); mkdirSync(leaf, { recursive: true });
+    for (const p of [mid, leaf]) chmodSync(p, 0o700);
+    writeSecretFileExclusive(join(leaf, 'ok'), SECRET);
+    chmodSync(mid, 0o770); // group-writable ancestor: could be renamed/replaced by group members
+    assert.equal(code(() => writeSecretFileExclusive(join(leaf, 'k'), SECRET)), 'UNSAFE_PARENT');
+    chmodSync(mid, 0o757);
+    assert.equal(code(() => writeSecretFileExclusive(join(leaf, 'k'), SECRET)), 'UNSAFE_PARENT');
+    chmodSync(mid, 0o1777); // sticky world-writable ancestor is allowed (like /tmp)
+    writeSecretFileExclusive(join(leaf, 'k2'), SECRET);
+    chmodSync(mid, 0o700);
+    assert.deepEqual(readdirSync(leaf).sort(), ['k2', 'ok']);
+  });
+
+  it('refuses an ancestor owned by another user', { skip: process.geteuid() !== 0 }, () => {
+    const top = d('anc-own'); const mid = join(top, 'mid'); const leaf = join(mid, 'leaf'); mkdirSync(leaf, { recursive: true });
+    chmodSync(mid, 0o755); chmodSync(leaf, 0o700); chownSync(mid, 65534, 65534);
+    assert.equal(code(() => writeSecretFileExclusive(join(leaf, 'k'), SECRET)), 'UNSAFE_PARENT');
+    assert.deepEqual(readdirSync(leaf), []);
+  });
+
   it('fails closed on a filesystem that cannot guarantee owner-only semantics', () => {
     assert.equal(code(() => SecureFile.prepare('/proc/k')), 'UNSUPPORTED');
     assert.equal(code(() => SecureFile.prepare('/sys/kernel/k')), 'UNSUPPORTED');

@@ -75,6 +75,14 @@ sf_status sf_prepare(const char* path, sf_file** out) {
   int dirfd = open("/", O_RDONLY | O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW);
   if (dirfd < 0) return st(SF_E_CREATE, errno);
 
+  /* Ancestor policy: every directory on the path (including "/") must be owned by the caller or root and must not be group/other-writable unless sticky.
+   * Anyone who could rename or replace an ancestor could redirect the walk into a tree they control. */
+  {
+    struct stat rs;
+    if (fstat(dirfd, &rs) != 0) { int e = errno; close_quiet(dirfd); return st(SF_E_CREATE, e); }
+    sf_code rc = check_directory_safe(&rs, euid);
+    if (rc != SF_OK) { close_quiet(dirfd); return st(rc, 0); }
+  }
   char* p = buf + 1;
   char* name = NULL;
   for (;;) {
@@ -97,6 +105,10 @@ sf_status sf_prepare(const char* path, sf_file** out) {
       close_quiet(dirfd);
       return st(SF_E_CREATE, e);
     }
+    struct stat as;
+    if (fstat(next, &as) != 0) { int e = errno; close_quiet(next); close_quiet(dirfd); return st(SF_E_CREATE, e); }
+    sf_code ac = check_directory_safe(&as, euid);
+    if (ac != SF_OK) { close_quiet(next); close_quiet(dirfd); return st(ac, 0); }
     close_quiet(dirfd);
     dirfd = next;
     p = slash + 1;
@@ -190,7 +202,10 @@ void sf_abort(sf_file* f) {
   if (!f || f->state == ST_CLOSED || f->state == ST_ABORTED) return;
   if (f->dirfd >= 0) {
     struct stat es;
-    /* Remove only the file this handle created; a substituted entry is left alone. */
+    /* Remove only the file this handle created; a substituted entry is left alone. POSIX has no unlink-if-inode, so the check and the unlink are two steps.
+     * The window is closed against every principal except the caller's own uid and root: the parent and all ancestors are owned by us/root and not
+     * group/other-writable, or sticky (then only the owner of an entry may remove or rename it, and nobody else can free our name for a substitute).
+     * A same-uid attacker can already read and rewrite the file, so this is outside the threat model; it is a documented residual, not a silent one. */
     if (fstatat(f->dirfd, f->name, &es, AT_SYMLINK_NOFOLLOW) == 0 && es.st_dev == f->dev && es.st_ino == f->ino) unlinkat(f->dirfd, f->name, 0);
   }
   close_quiet(f->fd); f->fd = -1;
