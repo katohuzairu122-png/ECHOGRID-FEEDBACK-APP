@@ -1,7 +1,7 @@
 /* global Buffer, process */
 import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, rmSync, statSync, readFileSync, writeFileSync, symlinkSync, renameSync, existsSync, openSync, closeSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, rmSync, statSync, readFileSync, writeFileSync, symlinkSync, linkSync, renameSync, existsSync, openSync, closeSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { tmpdir, userInfo } from 'node:os';
 import { join } from 'node:path';
@@ -48,13 +48,14 @@ describe('secure-file (Windows)', { skip: !win }, () => {
 
   it('refuses a junction (mount point) in the path and creates nothing in its target', () => {
     const real = d('real'); const j = join(root, 'junction');
-    assert.equal(sh(`mklink /J "${j}" "${real}"`).status, 0);
+    symlinkSync(real, j, 'junction'); // Node creates a real NTFS junction (no privilege needed); a failure here is a test-setup error, not a pass
     assert.equal(code(() => writeSecretFileExclusive(join(j, 'k'), SECRET)), 'SYMLINK'); assert.equal(existsSync(join(real, 'k')), false);
+    assert.equal(code(() => writeSecretFileExclusive(join(root, 'junction'), SECRET)), 'EXISTS'); // junction as the final component is never followed or replaced
   });
 
-  it('refuses a directory symlink in the path and a file symlink as the target', { skip: false }, () => {
+  it('refuses a directory symlink in the path and a file symlink as the target', (t) => {
     const real = d('real2'); const l = join(root, 'dirlink');
-    try { symlinkSync(real, l, 'dir'); } catch (e) { if (e.code === 'EPERM') return; throw e; } // needs Developer Mode / privilege
+    try { symlinkSync(real, l, 'dir'); } catch (e) { if (e.code === 'EPERM') { t.skip('symlink creation needs Developer Mode or privilege'); return; } throw e; }
     assert.equal(code(() => writeSecretFileExclusive(join(l, 'k'), SECRET)), 'SYMLINK');
     const victim = join(real, 'victim'); writeFileSync(victim, 'V'); const fl = join(real, 'filelink'); symlinkSync(victim, fl, 'file');
     assert.ok(['EXISTS', 'SYMLINK'].includes(code(() => writeSecretFileExclusive(fl, SECRET)))); assert.equal(readFileSync(victim, 'utf8'), 'V');
@@ -73,14 +74,22 @@ describe('secure-file (Windows)', { skip: !win }, () => {
     assert.equal(opened, false); f.abort();
   });
 
-  it('share mode 0 blocks rename of the open file (DACL-widening, hard-link and substitution detection are NOT covered here; see report)', () => {
+  it('while the handle is open nobody can rename it, hard-link it, or widen its DACL (share mode 0 closes the substitution windows verify() also checks)', () => {
     const dir = d('tamper'); const p = join(dir, 'k'); const f = SecureFile.prepare(p);
-    // (share mode 0 blocks icacls while the handle is open; tamper cases are therefore exercised via abort paths and the substitution below)
-    f.abort();
-    const q = join(dir, 'q'); const g = SecureFile.prepare(q);
-    let moved = true; try { renameSync(q, join(dir, 'moved')); } catch { moved = false; }
-    assert.equal(moved, false, 'share mode 0 + no FILE_SHARE_DELETE prevents rename of the open file'); g.abort();
-    assert.equal(existsSync(q), false);
+    assert.throws(() => renameSync(p, join(dir, 'moved')));
+    assert.throws(() => linkSync(p, join(dir, 'alias')));
+    const grant = spawnSync('icacls.exe', [p, '/grant', 'Everyone:R'], { encoding: 'utf8' });
+    assert.notEqual(grant.status, 0, grant.stdout);
+    f.verify(); f.write(SECRET); f.close();
+    assert.ok(!icacls(p).includes('Everyone'));
+    assert.deepEqual(readFileSync(p), SECRET);
+  });
+
+  it('after close the file stays owner-only and a second creation at the same name is refused', () => {
+    const dir = d('after'); const p = join(dir, 'k'); writeSecretFileExclusive(p, SECRET);
+    assert.equal(code(() => writeSecretFileExclusive(p, Buffer.from('other'))), 'EXISTS');
+    assert.deepEqual(readFileSync(p), SECRET);
+    assert.equal(icacls(p).split(/\r?\n/).filter((l) => /:\(/.test(l)).length, 1);
   });
 
   it('abort removes the half-created file; verify failure removes it; error objects carry no path or secret', () => {
