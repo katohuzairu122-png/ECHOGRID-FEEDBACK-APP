@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "license": "UNLICENSED",
+  "engines": { "node": ">=22.0.0" },
   "type": "module",
   "description": "S08-SEC-FILE-1: native exclusive, owner-only, handle-verified secret file writer (DEV-01; not yet used by any operator tool).",
   "main": "./index.js",

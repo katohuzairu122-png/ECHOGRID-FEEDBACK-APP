@@ -6,6 +6,7 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <sys/statfs.h>
+#include <sys/xattr.h>
 #include <sys/types.h>
 #include <unistd.h>
 
@@ -131,13 +132,19 @@ sf_status sf_prepare(const char* path, sf_file** out) {
   /* From here the file exists: every failure must remove it, and only it. */
   struct stat fs;
   if (fstat(fd, &fs) != 0) {
+    /* Identity could not be read. Nothing was written and the name was just created exclusively, so the only thing that can be at it now is our empty file
+     * unless a same-uid/root actor intervened (outside the threat model); remove it. */
     int e = errno;
-    unlinkat(dirfd, name, 0); /* nothing was written; identity is unknown but we just created this exclusively */
+    unlinkat(dirfd, name, 0);
     close_quiet(fd); close_quiet(dirfd);
     return st(SF_E_CREATE, e);
   }
   sf_file* f = (sf_file*)calloc(1, sizeof(sf_file));
-  if (!f) { unlinkat(dirfd, name, 0); close_quiet(fd); close_quiet(dirfd); return st(SF_E_INTERNAL, ENOMEM); }
+  if (!f) { /* identity is known: remove only our own file */
+    struct stat cs;
+    if (fstatat(dirfd, name, &cs, AT_SYMLINK_NOFOLLOW) == 0 && cs.st_dev == fs.st_dev && cs.st_ino == fs.st_ino) unlinkat(dirfd, name, 0);
+    close_quiet(fd); close_quiet(dirfd); return st(SF_E_INTERNAL, ENOMEM);
+  }
   f->fd = fd; f->dirfd = dirfd; f->dev = fs.st_dev; f->ino = fs.st_ino; f->uid = euid; f->state = ST_PREPARED;
   memcpy(f->name, name, strlen(name) + 1);
   if (fchmod(fd, 0600) != 0) { int e = errno; sf_abort(f); sf_free(f); return st(SF_E_CREATE, e); }
@@ -153,7 +160,10 @@ static sf_status verify_locked(sf_file* f) {
   if (fs.st_uid != f->uid) return st(SF_E_VERIFY, 0);
   if (fs.st_nlink != 1) return st(SF_E_VERIFY, 0); /* a hard link elsewhere would expose the bytes */
   if (fs.st_dev != f->dev || fs.st_ino != f->ino) return st(SF_E_IDENTITY, 0);
-  if (f->written == 0 && fs.st_size != 0) return st(SF_E_VERIFY, 0);
+  if ((size_t)fs.st_size != f->written) return st(SF_E_VERIFY, 0); /* nothing but our own writes may have changed the length */
+  /* An extended POSIX ACL (inherited from a default ACL on the parent) would leave named-user/group entries on the file even though the mask is zero. */
+  if (fgetxattr(f->fd, "system.posix_acl_access", NULL, 0) >= 0) return st(SF_E_VERIFY, 0);
+  if (errno != ENODATA && errno != ENOTSUP) return st(SF_E_VERIFY, errno);
   /* The directory entry must still name exactly this file (not a rename-substituted one, not a symlink). */
   if (fstatat(f->dirfd, f->name, &es, AT_SYMLINK_NOFOLLOW) != 0) return st(SF_E_IDENTITY, errno);
   if (es.st_dev != f->dev || es.st_ino != f->ino || !S_ISREG(es.st_mode)) return st(SF_E_IDENTITY, 0);

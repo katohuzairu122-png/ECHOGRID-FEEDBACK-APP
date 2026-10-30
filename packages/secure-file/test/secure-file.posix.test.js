@@ -103,6 +103,22 @@ describe('secure-file (POSIX)', { skip: !posix }, () => {
     assert.deepEqual(readdirSync(leaf), []);
   });
 
+  it('rejects, rather than alters, over-long and ill-formed path strings (no truncation, no U+FFFD substitution)', () => {
+    const dir = d('strings');
+    const tail = '/kk';
+    const longPath = dir + '/' + 'a'.repeat(4094 - dir.length - 1 - tail.length) + tail + '\u20ac'; // multi-byte char straddles the 4096-byte limit
+    assert.ok(Buffer.byteLength(longPath) > 4096 - 1);
+    assert.equal(code(() => SecureFile.prepare(longPath)), 'ARGUMENT');
+    assert.equal(code(() => SecureFile.prepare(`${dir}/n\uD800`)), 'ARGUMENT'); // lone surrogate
+    assert.equal(code(() => SecureFile.prepare(`${dir}/n\uFFFD`)), 'ARGUMENT'); // literal replacement character
+    assert.deepEqual(readdirSync(dir), []);
+  });
+
+  it('SecureFile cannot be constructed directly, and a foreign object is not accepted as a handle', () => {
+    assert.throws(() => new SecureFile({}), TypeError);
+    assert.throws(() => new SecureFile(Symbol('x'), {}), TypeError);
+  });
+
   it('fails closed on a filesystem that cannot guarantee owner-only semantics', () => {
     assert.equal(code(() => SecureFile.prepare('/proc/k')), 'UNSUPPORTED');
     assert.equal(code(() => SecureFile.prepare('/sys/kernel/k')), 'UNSUPPORTED');
@@ -239,10 +255,10 @@ describe('secure-file (POSIX)', { skip: !posix }, () => {
     assert.equal(Number(r2.stdout.trim()), inheritedBefore);
   });
 
-  it('garbage-collecting an unfinished handle removes its half-created file', async () => {
+  it('garbage-collecting an unfinished handle removes its half-created file', { skip: typeof globalThis.gc !== 'function' }, async () => {
     const dir = d('gc'); const p = join(dir, 'k');
     (() => { SecureFile.prepare(p); })();
     if (typeof globalThis.gc === 'function') { for (let i = 0; i < 5 && existsSync(p); i++) { globalThis.gc(); await new Promise((r) => setTimeout(r, 20)); } assert.equal(existsSync(p), false); }
-    else assert.ok(true, 'run with --expose-gc to exercise the finalizer');
+    else return; // not exercised without --expose-gc (the test:native script passes it)
   });
 });

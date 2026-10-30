@@ -42,7 +42,7 @@ describe('secure-file (Windows)', { skip: !win }, () => {
 
   it('rejects relative, UNC, device-namespace, stream, dot, reserved-name, trailing-dot and bad-character paths', () => {
     const dir = d('paths');
-    const bad = ['k', '.\\k', `${dir}\\..\\k`, `${dir}\\.\\k`, `\\\\server\\share\\k`, `\\\\?\\${dir}\\k`, `\\\\.\\${dir}\\k`, `${dir}\\k:stream`, `${dir}\\CON`, `${dir}\\nul.txt`, `${dir}\\k.`, `${dir}\\k `, `${dir}\\a*b`, `${dir.replace('\\', '/')}/k`, 'C:k', ''];
+    const bad = ['k', '.\\k', `${dir}\\..\\k`, `${dir}\\.\\k`, `\\\\server\\share\\k`, `\\\\?\\${dir}\\k`, `\\\\.\\${dir}\\k`, `${dir}\\k:stream`, `${dir}\\CON`, `${dir}\\nul.txt`, `${dir}\\k.`, `${dir}\\k `, `${dir}\\a*b`, `${dir}\\k\\`, `${dir}\\`, `${dir.replace('\\', '/')}/k`, 'C:k', ''];
     for (const b of bad) assert.ok(['PATH', 'ARGUMENT'].includes(code(() => SecureFile.prepare(b))), b);
   });
 
@@ -73,7 +73,7 @@ describe('secure-file (Windows)', { skip: !win }, () => {
     assert.equal(opened, false); f.abort();
   });
 
-  it('detects a widened DACL after creation, a hard link, and rename substitution; cleanup never deletes a substituted file', () => {
+  it('share mode 0 blocks rename of the open file (DACL-widening, hard-link and substitution detection are NOT covered here; see report)', () => {
     const dir = d('tamper'); const p = join(dir, 'k'); const f = SecureFile.prepare(p);
     // (share mode 0 blocks icacls while the handle is open; tamper cases are therefore exercised via abort paths and the substitution below)
     f.abort();

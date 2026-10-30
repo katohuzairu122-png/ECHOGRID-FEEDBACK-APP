@@ -78,16 +78,21 @@ struct sf_file {
 static sf_status st(sf_code c, long e) { sf_status s; s.code = c; s.os_error = e; return s; }
 static NtCreateFile_t pNtCreateFile;
 static RtlNtStatusToDosError_t pToDos;
+static INIT_ONCE g_once = INIT_ONCE_STATIC_INIT;
 static void close_h(HANDLE* h) { if (*h && *h != INVALID_HANDLE_VALUE) CloseHandle(*h); *h = NULL; }
 
-static int load_ntdll(void) {
-  if (pNtCreateFile) return 1;
+/* Resolved exactly once and published atomically (InitOnce), so concurrent Worker threads never observe a half-initialised pair. */
+static BOOL CALLBACK load_ntdll_once(PINIT_ONCE o, PVOID p, PVOID* c) {
+  (void)o; (void)p; (void)c;
   HMODULE m = GetModuleHandleW(L"ntdll.dll");
-  if (!m) return 0;
-  pNtCreateFile = (NtCreateFile_t)(void*)GetProcAddress(m, "NtCreateFile");
-  pToDos = (RtlNtStatusToDosError_t)(void*)GetProcAddress(m, "RtlNtStatusToDosError");
-  return pNtCreateFile != NULL && pToDos != NULL;
+  if (!m) return FALSE;
+  NtCreateFile_t a = (NtCreateFile_t)(void*)GetProcAddress(m, "NtCreateFile");
+  RtlNtStatusToDosError_t b = (RtlNtStatusToDosError_t)(void*)GetProcAddress(m, "RtlNtStatusToDosError");
+  if (!a || !b) return FALSE;
+  pNtCreateFile = a; pToDos = b;
+  return TRUE;
 }
+static int load_ntdll(void) { return InitOnceExecuteOnce(&g_once, load_ntdll_once, NULL, NULL) ? 1 : 0; }
 
 /* Opens/creates `name` (UTF-16, no separators) relative to `parent`. */
 static NTSTATUS open_rel(HANDLE parent, const wchar_t* name, ACCESS_MASK access, ULONG disposition, ULONG options, ULONG share, PSECURITY_DESCRIPTOR sd, HANDLE* out) {
@@ -156,11 +161,12 @@ sf_status sf_prepare(const char* path, sf_file** out) {
   if (!path || path[0] == '\0') return st(SF_E_ARGUMENT, 0);
   if (strlen(path) >= SF_MAX_PATH_BYTES) return st(SF_E_ARGUMENT, 0);
   if (!load_ntdll()) return st(SF_E_UNSUPPORTED, 0);
-  static wchar_t w[SF_MAX_PATH_BYTES];
+  wchar_t w[SF_MAX_PATH_BYTES]; /* per call: no shared mutable state between threads (8 KB stack) */
   if (!utf8_to_wide(path, w, SF_MAX_PATH_BYTES)) return st(SF_E_ARGUMENT, 0);
   /* Drive-absolute DOS path only: "X:\..." */
   if (!(((w[0] >= L'A' && w[0] <= L'Z') || (w[0] >= L'a' && w[0] <= L'z')) && w[1] == L':' && w[2] == L'\\')) return st(SF_E_PATH, 0);
 
+  { size_t wl = wcslen(w); if (wl == 0 || w[wl - 1] == L'\\') return st(SF_E_PATH, 0); } /* a trailing separator would silently drop the last name */
   wchar_t* comps[256];
   int nc = 0;
   for (wchar_t* p = w + 3; *p;) {
@@ -184,7 +190,7 @@ sf_status sf_prepare(const char* path, sf_file** out) {
   if (ts.code != SF_OK) return ts;
 
   /* Open the volume root through the DOS-device namespace, then walk by handle. Drive type must be fixed. */
-  wchar_t root[4] = { w[0], L':', L'\\', 0 };
+  wchar_t root[4]; root[0] = w[0]; root[1] = L':'; root[2] = L'\\'; root[3] = 0;
   if (GetDriveTypeW(root) != DRIVE_FIXED) { LocalFree(user); LocalFree(sid_str); return st(SF_E_UNSUPPORTED, 0); }
   HANDLE dir = CreateFileW(root, FILE_READ_ATTRIBUTES | FILE_TRAVERSE | SYNCHRONIZE, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, NULL, OPEN_EXISTING,
                            FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT, NULL);
@@ -205,8 +211,10 @@ sf_status sf_prepare(const char* path, sf_file** out) {
   if (r.code != SF_OK) { close_h(&dir); LocalFree(user); LocalFree(sid_str); return r; }
 
   /* Owner-only, PROTECTED (no inheritance) descriptor, owner explicitly the token user. FA = FILE_ALL_ACCESS. */
-  wchar_t sddl[256];
-  _snwprintf(sddl, 256, L"O:%lsD:P(A;;FA;;;%ls)", sid_str, sid_str);
+  size_t sl = wcslen(sid_str);
+  if (sl > 180) { close_h(&dir); LocalFree(user); LocalFree(sid_str); return st(SF_E_INTERNAL, 0); }
+  wchar_t sddl[2 * 184 + 24];
+  if (swprintf(sddl, sizeof(sddl) / sizeof(sddl[0]), L"O:%ls" L"D:P(A;;FA;;;%ls)", sid_str, sid_str) < 0) { close_h(&dir); LocalFree(user); LocalFree(sid_str); return st(SF_E_INTERNAL, 0); }
   PSECURITY_DESCRIPTOR sd = NULL;
   if (!ConvertStringSecurityDescriptorToSecurityDescriptorW(sddl, SDDL_REVISION_1, &sd, NULL)) {
     DWORD e = GetLastError(); close_h(&dir); LocalFree(user); LocalFree(sid_str); return st(SF_E_CREATE, (long)e);
@@ -254,7 +262,7 @@ static sf_status verify_locked(sf_file* f) {
   else {
     ACCESS_ALLOWED_ACE* ace = NULL;
     if (!GetAce(dacl, 0, (LPVOID*)&ace) || ace->Header.AceType != ACCESS_ALLOWED_ACE_TYPE || (ace->Header.AceFlags & INHERITED_ACE) || !EqualSid((PSID)&ace->SidStart, f->user)) r = st(SF_E_VERIFY, 0);
-    else if ((ace->Mask & FILE_ALL_ACCESS) != FILE_ALL_ACCESS) r = st(SF_E_VERIFY, 0);
+    else if (ace->Mask != FILE_ALL_ACCESS) r = st(SF_E_VERIFY, 0); /* exact: no extra generic/maximum-allowed/system-security bits */
   }
   LocalFree(sd);
   return r;
@@ -298,7 +306,11 @@ void sf_abort(sf_file* f) {
   if (f->file) {
     /* Delete through the creating handle: identity is intrinsic, a substituted entry is never touched. */
     sf_disposition_ex di = { FILE_DISPOSITION_FLAG_DELETE | FILE_DISPOSITION_FLAG_POSIX_SEMANTICS };
-    SetFileInformationByHandle(f->file, SF_FileDispositionInfoEx, &di, sizeof(di));
+    if (!SetFileInformationByHandle(f->file, SF_FileDispositionInfoEx, &di, sizeof(di))) {
+      /* Older/other semantics: classic delete-on-close through the same handle. Never leave a half-written secret behind silently. */
+      FILE_DISPOSITION_INFO legacy; legacy.DeleteFile = TRUE;
+      SetFileInformationByHandle(f->file, FileDispositionInfo, &legacy, sizeof(legacy));
+    }
   }
   close_h(&f->file); close_h(&f->dir);
   f->state = ST_ABORTED;

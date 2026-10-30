@@ -8,16 +8,16 @@
 /* Node-API glue. Secrets enter only as Buffer/Uint8Array (never a JS string, which would leave immutable copies); errors carry code + OS error only. */
 #define NAPI_OK_OR(call) do { if ((call) != napi_ok) return NULL; } while (0)
 
+/* Type tag so unwrap() accepts only externals created by THIS addon (a foreign external would otherwise be cast to sf_file*). */
+static const napi_type_tag SF_TAG = { 0x5ecf11e0a5ec0001ULL, 0x08f11e1d0e5ec002ULL };
+
 static void throw_status(napi_env env, sf_status s) {
-  napi_value msg, err, code, os;
+  napi_value msg = NULL, err = NULL, code = NULL, os = NULL;
   char text[96];
   snprintf(text, sizeof text, "secure-file: %s", sf_code_name(s.code));
-  napi_create_string_utf8(env, text, NAPI_AUTO_LENGTH, &msg);
-  napi_create_error(env, NULL, msg, &err);
-  napi_create_string_utf8(env, sf_code_name(s.code), NAPI_AUTO_LENGTH, &code);
-  napi_create_int64(env, (int64_t)s.os_error, &os);
-  napi_set_named_property(env, err, "code", code);
-  napi_set_named_property(env, err, "osError", os);
+  if (napi_create_string_utf8(env, text, NAPI_AUTO_LENGTH, &msg) != napi_ok || napi_create_error(env, NULL, msg, &err) != napi_ok || !err) { napi_throw_error(env, NULL, "secure-file: INTERNAL"); return; }
+  if (napi_create_string_utf8(env, sf_code_name(s.code), NAPI_AUTO_LENGTH, &code) == napi_ok) napi_set_named_property(env, err, "code", code);
+  if (napi_create_int64(env, (int64_t)s.os_error, &os) == napi_ok) napi_set_named_property(env, err, "osError", os);
   napi_throw(env, err);
 }
 
@@ -27,7 +27,8 @@ static sf_file* unwrap(napi_env env, napi_callback_info info, size_t argc_want, 
   size_t argc = argc_want;
   if (napi_get_cb_info(env, info, &argc, argv, NULL, NULL) != napi_ok || argc < 1) { throw_status(env, (sf_status){ SF_E_ARGUMENT, 0 }); return NULL; }
   void* p = NULL;
-  if (napi_get_value_external(env, argv[0], &p) != napi_ok || !p) { throw_status(env, (sf_status){ SF_E_ARGUMENT, 0 }); return NULL; }
+  bool tagged = false;
+  if (napi_check_object_type_tag(env, argv[0], &SF_TAG, &tagged) != napi_ok || !tagged || napi_get_value_external(env, argv[0], &p) != napi_ok || !p) { throw_status(env, (sf_status){ SF_E_ARGUMENT, 0 }); return NULL; }
   return (sf_file*)p;
 }
 
@@ -36,13 +37,16 @@ static napi_value Prepare(napi_env env, napi_callback_info info) {
   NAPI_OK_OR(napi_get_cb_info(env, info, &argc, argv, NULL, NULL));
   napi_valuetype t;
   if (argc < 1 || napi_typeof(env, argv[0], &t) != napi_ok || t != napi_string) { throw_status(env, (sf_status){ SF_E_ARGUMENT, 0 }); return NULL; }
+  /* Measure first and reject, rather than let the engine truncate (at a character boundary) or substitute U+FFFD: the file must be created at exactly the path asked for. */
+  size_t need = 0;
+  if (napi_get_value_string_utf8(env, argv[0], NULL, 0, &need) != napi_ok || need == 0 || need >= SF_MAX_PATH_BYTES) { throw_status(env, (sf_status){ SF_E_ARGUMENT, 0 }); return NULL; }
   char path[SF_MAX_PATH_BYTES + 1]; size_t n = 0;
-  if (napi_get_value_string_utf8(env, argv[0], path, sizeof path, &n) != napi_ok || n == 0 || n >= SF_MAX_PATH_BYTES || strlen(path) != n) { throw_status(env, (sf_status){ SF_E_ARGUMENT, 0 }); return NULL; }
+  if (napi_get_value_string_utf8(env, argv[0], path, sizeof path, &n) != napi_ok || n != need || strlen(path) != n || strstr(path, "\xEF\xBF\xBD") != NULL) { throw_status(env, (sf_status){ SF_E_ARGUMENT, 0 }); return NULL; }
   sf_file* f = NULL;
   sf_status s = sf_prepare(path, &f);
   if (s.code != SF_OK) { throw_status(env, s); return NULL; }
   napi_value ext;
-  if (napi_create_external(env, f, finalize, NULL, &ext) != napi_ok) { sf_free(f); throw_status(env, (sf_status){ SF_E_INTERNAL, 0 }); return NULL; }
+  if (napi_create_external(env, f, finalize, NULL, &ext) != napi_ok || napi_type_tag_object(env, ext, &SF_TAG) != napi_ok) { sf_free(f); throw_status(env, (sf_status){ SF_E_INTERNAL, 0 }); return NULL; }
   return ext;
 }
 

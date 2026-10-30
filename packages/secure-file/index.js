@@ -6,11 +6,19 @@ import { createRequire } from 'node:module';
  */
 const native = createRequire(import.meta.url)('./build/Release/secure_file.node');
 
+const TOKEN = Symbol('SecureFile.construct');
+
 export class SecureFile {
   #h;
-  constructor(handle) { this.#h = handle; }
+  constructor(token, handle) {
+    if (token !== TOKEN) throw new TypeError('SecureFile is created with SecureFile.prepare()');
+    this.#h = handle;
+  }
   /** Creates the file exclusively with owner-only protection established at creation. Throws, leaving nothing behind, on any failure. */
-  static prepare(path) { return new SecureFile(native.prepare(path)); }
+  static prepare(path) {
+    if (typeof path !== 'string' || !path.isWellFormed()) { const e = new Error('secure-file: ARGUMENT'); e.code = 'ARGUMENT'; e.osError = 0; throw e; }
+    return new SecureFile(TOKEN, native.prepare(path));
+  }
   /** Verifies owner, protection, type, link count, identity and directory-entry binding through the open handle. A failure removes the file. */
   verify() { native.verify(this.#h); return this; }
   /** Writes bytes; legal only after verify(). A failure removes the file. */
