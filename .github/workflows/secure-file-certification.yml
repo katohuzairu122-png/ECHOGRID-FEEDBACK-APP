@@ -1,0 +1,102 @@
+name: Secure-file DEV-01 certification
+# Development verification only. No production credentials, environments or deployment.
+on:
+  push:
+    branches: [dev/s08-sec-file-1-dev01-r7]
+    paths: ['packages/secure-file/**', '.github/workflows/secure-file-certification.yml', 'pnpm-lock.yaml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  native:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-2022]
+        node: ['22', '24']
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    env:
+      CI: 'true'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.9.0
+          run_install: false
+      - name: Install pinned dependencies without lifecycle scripts
+        run: pnpm install --frozen-lockfile --ignore-scripts --registry=https://registry.npmjs.org
+      - name: Initialize exact-commit evidence
+        shell: bash
+        run: |
+          mkdir -p packages/secure-file/evidence
+          git rev-parse HEAD > packages/secure-file/evidence/commit.txt
+          node --version > packages/secure-file/evidence/node.txt
+      - name: Build actual native package
+        working-directory: packages/secure-file
+        run: pnpm build:native
+      - name: Linux platform evidence and prerequisite
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          exec > >(tee packages/secure-file/evidence/linux-platform.txt) 2>&1
+          git rev-parse HEAD
+          node --version
+          stat -c '%n uid=%u mode=%a' / /tmp
+          stat -f -c '%T' /tmp
+          cat /proc/sys/fs/protected_hardlinks
+          test "$(cat /proc/sys/fs/protected_hardlinks)" = 1
+      - name: Linux unprivileged and root suites
+        if: runner.os == 'Linux'
+        shell: bash
+        working-directory: packages/secure-file
+        run: |
+          set -euo pipefail
+          mkdir -p evidence
+          node --expose-gc --test --test-reporter=tap test/secure-file.posix.test.js | tee evidence/linux-user.tap
+          sudo env PATH="$PATH" node --expose-gc --test --test-reporter=tap test/secure-file.posix.test.js | tee evidence/linux-root.tap
+      - name: Linux fault injection
+        if: runner.os == 'Linux'
+        shell: bash
+        working-directory: packages/secure-file
+        run: |
+          set -euo pipefail
+          export NODE_INCLUDE_DIR="$HOME/.cache/node-gyp/$(node -p 'process.versions.node')/include/node"
+          node test/build-faults.mjs
+          node --expose-gc --test --test-reporter=tap test/faults.test.mjs | tee evidence/fault-user.tap
+          sudo env PATH="$PATH" node --expose-gc --test --test-reporter=tap test/faults.test.mjs | tee evidence/fault-root.tap
+          cc -Wall -Wextra -Werror test/hardlink-policy.c -o build/hardlink-policy
+          build/hardlink-policy
+      - name: Windows disposable NTFS preparation
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: packages/secure-file/test/ci/windows-fixture.ps1 -Operation Prepare 2>&1 | Tee-Object packages/secure-file/evidence/windows-platform.txt
+      - name: Windows actual native security suite
+        if: runner.os == 'Windows'
+        shell: pwsh
+        working-directory: packages/secure-file
+        run: |
+          New-Item -ItemType Directory -Force evidence | Out-Null
+          node --expose-gc --test --test-reporter=tap test/secure-file.win32.test.js 2>&1 | Tee-Object evidence/windows.tap
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Windows independent-user denial
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: packages/secure-file/test/ci/windows-fixture.ps1 -Operation Denial 2>&1 | Tee-Object packages/secure-file/evidence/windows-denial.txt
+      - name: Windows disposable fixture cleanup
+        if: always() && runner.os == 'Windows'
+        shell: pwsh
+        run: packages/secure-file/test/ci/windows-fixture.ps1 -Operation Cleanup
+      - name: Upload test evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: secure-file-${{ matrix.os }}-node${{ matrix.node }}-${{ github.sha }}
+          path: packages/secure-file/evidence/
+          if-no-files-found: warn
