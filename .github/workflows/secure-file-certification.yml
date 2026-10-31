@@ -2,7 +2,7 @@ name: Secure-file DEV-01 certification
 # Development verification only. No production credentials, environments or deployment.
 on:
   push:
-    branches: [dev/s08-sec-file-1-dev01-r7]
+    branches: [dev/s08-sec-file-1-dev01-r7, dev/s08-sec-file-1-dev01-r9]
     paths: ['packages/secure-file/**', '.github/workflows/secure-file-certification.yml', 'pnpm-lock.yaml']
   workflow_dispatch:
 permissions:
@@ -83,8 +83,12 @@ jobs:
         working-directory: packages/secure-file
         run: |
           New-Item -ItemType Directory -Force evidence | Out-Null
-          node --expose-gc --test --test-reporter=tap test/secure-file.win32.test.js 2>&1 | Tee-Object evidence/windows.tap
+          node --expose-gc --test --test-reporter=tap test/secure-file.win32.test.js test/secure-file.win32-ancestors.test.js 2>&1 | Tee-Object evidence/windows.tap
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Windows ancestor trust (distinct disposable account)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: packages/secure-file/test/ci/windows-fixture.ps1 -Operation Ancestor 2>&1 | Tee-Object packages/secure-file/evidence/windows-ancestor-fixture.txt
       - name: Windows independent-user denial
         if: runner.os == 'Windows'
         shell: pwsh

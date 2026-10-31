@@ -1,5 +1,5 @@
 # Isolated GitHub-hosted runner fixtures only. Never run against the owner's workstation.
-param([Parameter(Mandatory=$true)][ValidateSet('Prepare','Denial','Cleanup')][string]$Operation)
+param([Parameter(Mandatory=$true)][ValidateSet('Prepare','Denial','Ancestor','Cleanup')][string]$Operation)
 $ErrorActionPreference = 'Stop'
 if ($env:GITHUB_ACTIONS -ne 'true' -or $env:RUNNER_ENVIRONMENT -ne 'github-hosted') { throw 'Disposable hosted runner required' }
 $statePath = Join-Path $env:RUNNER_TEMP 'secure-file-fixture.json'
@@ -59,6 +59,37 @@ if (!(Test-Path -LiteralPath $statePath)) {
 $state = Get-Content $statePath -Raw | ConvertFrom-Json
 $expectedDisk = Join-Path $env:RUNNER_TEMP 'secure-file-test.vhd'
 if ($state.disk -ne $expectedDisk -or $state.user -notmatch '^sf[0-9a-f]{14}$' -or $state.letter -notmatch '^[WXYZ]$') { throw 'Untrusted fixture state; refusing resource operations' }
+if ($Operation -eq 'Ancestor') {
+  # R9: real distinct-account ancestor cases on the disposable NTFS volume. The account is the one created by Prepare and removed by Cleanup; no real data,
+  # no production credential. Each case is a directory tree whose ancestors are owned by, writable by, or merely readable by that account.
+  $letter = $state.letter
+  $base = Join-Path "${letter}:\" 'ancestor-cases'
+  New-Item -ItemType Directory -Path $base | Out-Null
+  $accountSid = (Get-LocalUser -Name $state.user).SID.Value
+  if ($accountSid -ne $state.userSid) { throw 'Account identity changed; refusing ancestor fixtures' }
+  function New-Case([string]$name, [string[]]$icaclsArgs) {
+    $dir = Join-Path $base $name
+    New-Item -ItemType Directory -Path (Join-Path $dir 'inner') -Force | Out-Null
+    if ($icaclsArgs.Count -gt 0) {
+      & icacls.exe $dir @icaclsArgs | Out-Null
+      if ($LASTEXITCODE -ne 0) { throw "Ancestor fixture '$name' could not be configured" }
+    }
+  }
+  New-Case 'private' @()
+  New-Case 'owned-by-account' @('/setowner', "*$accountSid")
+  New-Case 'account-modify' @('/grant', "*${accountSid}:(OI)(CI)(M)")
+  New-Case 'account-delete-child' @('/grant', "*${accountSid}:(DC)")
+  New-Case 'account-read-only' @('/grant', "*${accountSid}:(OI)(CI)(RX)")
+  $env:SF_ANCESTOR_CASES = $base
+  $env:SF_ACCOUNT_SID = $accountSid
+  Push-Location 'packages/secure-file'
+  try {
+    New-Item -ItemType Directory -Force evidence | Out-Null
+    node --expose-gc --test --test-reporter=tap test/secure-file.win32-accounts.test.js 2>&1 | Tee-Object evidence/windows-ancestors.tap
+    if ($LASTEXITCODE -ne 0) { throw 'Distinct-account ancestor tests failed' }
+  } finally { Pop-Location }
+  return
+}
 if ($Operation -eq 'Denial') {
   $dir = Join-Path "$($state.letter):\" 'denial'
   New-Item -ItemType Directory -Path $dir | Out-Null
