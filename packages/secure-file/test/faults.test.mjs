@@ -24,6 +24,14 @@ for (const fault of ['registration', 'tag']) {
     for (let i = 0; i < 5; ++i) { globalThis.gc(); await setTimeout(10); }
   });
 }
+it('missing native write argument fails with ARGUMENT before inspecting uninitialized argv', () => {
+  const p = join(dir, 'missing-write-arg');
+  const h = native.prepare(p);
+  native.verify(h);
+  const e = failure(() => native.write(h));
+  assert.equal(e.code, 'ARGUMENT');
+  assert.equal(existsSync(p), false);
+});
 it('repeated abort and garbage collection remove unfinished files', async () => {
   const p = join(dir, 'abort'); const h = native.prepare(p);
   native.abort(h); native.abort(h); assert.equal(existsSync(p), false);
