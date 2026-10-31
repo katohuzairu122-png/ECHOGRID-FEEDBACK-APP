@@ -20,7 +20,7 @@ const icacls = (p) => spawnSync('icacls.exe', [p], { encoding: 'utf8' }).stdout;
 describe('secure-file (Windows)', { skip: !win }, () => {
   let root;
   const d = (n) => { const p = join(root, n); mkdirSync(p); return p; };
-  before(() => { root = mkdtempSync(join(tmpdir(), 'sf-')); });
+  before(() => { root = mkdtempSync(join(process.env.SF_WINDOWS_TEST_ROOT || tmpdir(), 'sf-')); });
   after(() => rmSync(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }));
 
   it('creates the file with a protected owner-only DACL (no inherited ACE, no Everyone/Users/Administrators/SYSTEM) and exact bytes', () => {
@@ -32,6 +32,14 @@ describe('secure-file (Windows)', { skip: !win }, () => {
     assert.match(aces[0], new RegExp(userInfo().username.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i'));
     assert.ok(!/\(I\)/.test(out), 'no inherited ACE'); assert.ok(/\(F\)/.test(aces[0]), 'full control for owner only');
     for (const w of ['Everyone', 'BUILTIN\\Users', 'NT AUTHORITY\\SYSTEM', 'BUILTIN\\Administrators', 'Authenticated Users']) assert.ok(!out.includes(w), w);
+  });
+
+  it('rejects an ancestor granting mutation access to Everyone before creating a file', () => {
+    const parent = d('unsafe-parent'); const child = join(parent, 'child'); mkdirSync(child);
+    const grant = spawnSync('icacls.exe', [parent, '/grant', '*S-1-1-0:(WD,AD,DC)'], { encoding: 'utf8' });
+    assert.equal(grant.status, 0, 'ACL fixture setup failed');
+    assert.equal(code(() => writeSecretFileExclusive(join(child, 'k'), SECRET)), 'UNSAFE_PARENT');
+    assert.equal(existsSync(join(child, 'k')), false);
   });
 
   it('never overwrites an existing file', () => {
@@ -52,9 +60,9 @@ describe('secure-file (Windows)', { skip: !win }, () => {
     assert.equal(code(() => writeSecretFileExclusive(join(root, 'junction'), SECRET)), 'EXISTS'); // junction as the final component is never followed or replaced
   });
 
-  it('refuses a directory symlink in the path and a file symlink as the target', (t) => {
+  it('refuses a directory symlink in the path and a file symlink as the target', () => {
     const real = d('real2'); const l = join(root, 'dirlink');
-    try { symlinkSync(real, l, 'dir'); } catch (e) { if (e.code === 'EPERM') { t.skip('symlink creation needs Developer Mode or privilege'); return; } throw e; }
+    symlinkSync(real, l, 'dir'); // Setup failure is a failed test, never a security pass or skip.
     assert.equal(code(() => writeSecretFileExclusive(join(l, 'k'), SECRET)), 'SYMLINK');
     const victim = join(real, 'victim'); writeFileSync(victim, 'V'); const fl = join(real, 'filelink'); symlinkSync(victim, fl, 'file');
     assert.ok(['EXISTS', 'SYMLINK'].includes(code(() => writeSecretFileExclusive(fl, SECRET)))); assert.equal(readFileSync(victim, 'utf8'), 'V');

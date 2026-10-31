@@ -1,8 +1,8 @@
-/* global Buffer, process, setImmediate, setTimeout */
+/* global Buffer, process, URL, setTimeout */
 import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, mkdirSync, rmSync, statSync, readFileSync, writeFileSync, symlinkSync, linkSync, renameSync, chmodSync, chownSync, existsSync, lstatSync, readdirSync } from 'node:fs';
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { SecureFile, writeSecretFileExclusive } from '../index.js';
@@ -204,11 +204,58 @@ describe('secure-file (POSIX)', { skip: !posix }, () => {
     const p = join(d('empty'), 'k'); writeSecretFileExclusive(p, Buffer.alloc(0)); assert.equal(statSync(p).size, 0); assert.equal(mode(p), 0o600);
   });
 
-  it('exactly one of many concurrent creators wins; losers fail EXISTS and leave the winner intact', async () => {
+  it('exactly one of 16 barrier-released processes wins exclusive creation', { timeout: 15000 }, async (t) => {
     const p = join(d('race'), 'k');
-    const results = await Promise.all(Array.from({ length: 16 }, (_, i) => new Promise((res) => setImmediate(() => {
-      try { writeSecretFileExclusive(p, Buffer.from(`writer-${i}`)); res('ok'); } catch (e) { res(e.code); }
-    }))));
+    const moduleUrl = new URL('../index.js', import.meta.url).href;
+    const children = [];
+    t.after(async () => {
+      await Promise.all(children.map((child) => {
+        if (!child.pid || child.exitCode !== null || child.signalCode !== null) return Promise.resolve();
+        return new Promise((resolve) => { child.once('close', resolve); child.kill(); });
+      }));
+    });
+    const runners = Array.from({ length: 16 }, (_, i) => {
+      const script = `
+        import { writeSecretFileExclusive } from ${JSON.stringify(moduleUrl)};
+        process.once('message', () => {
+          let result;
+          try { writeSecretFileExclusive(${JSON.stringify(p)}, Buffer.from('writer-${i}')); result = 'ok'; }
+          catch (e) { result = e.code; }
+          process.send({ result }, () => process.disconnect());
+        });
+        process.send({ ready: true, pid: process.pid });`;
+      const child = spawn(process.execPath, ['--input-type=module', '-e', script], { stdio: ['ignore', 'ignore', 'pipe', 'ipc'] });
+      children.push(child);
+      let stderr = '', result, readyResolve, readyReject;
+      child.stderr.on('data', (chunk) => { stderr += chunk.toString(); });
+      const ready = new Promise((resolve, reject) => { readyResolve = resolve; readyReject = reject; });
+      const done = new Promise((resolve, reject) => {
+        child.on('error', (error) => { readyReject(error); reject(error); });
+        child.on('message', (message) => {
+          if (message.ready) readyResolve(message.pid);
+          else result = message.result;
+        });
+        // 'exit' can fire before the final IPC message is delivered; the IPC channel's 'disconnect' fires only after every message was, so settle on both.
+        let exited = false, disconnected = false, exitStatus, exitSignal;
+        const settle = () => {
+          if (!exited || !disconnected) return;
+          if (exitStatus !== 0 || result === undefined) {
+            const error = new Error(`creator failed: status=${exitStatus} signal=${exitSignal} ${stderr}`);
+            readyReject(error); reject(error);
+          } else resolve(result);
+        };
+        child.on('exit', (status, signal) => { exited = true; exitStatus = status; exitSignal = signal; settle(); });
+        child.on('disconnect', () => { disconnected = true; settle(); });
+      });
+      return { child, ready, done };
+    });
+    // Attach both rejection paths immediately; a failed child cannot become an unhandled rejection.
+    const completion = Promise.all(runners.map((r) => r.done));
+    completion.catch(() => {});
+    const pids = await Promise.all(runners.map((r) => r.ready));
+    assert.equal(new Set(pids).size, 16, 'all creators must be distinct live processes');
+    for (const runner of runners) runner.child.send('go');
+    const results = await completion;
     assert.equal(results.filter((r) => r === 'ok').length, 1);
     assert.equal(results.filter((r) => r === 'EXISTS').length, 15);
     assert.match(readFileSync(p, 'utf8'), /^writer-\d+$/); assert.equal(mode(p), 0o600);

@@ -76,13 +76,17 @@ struct sf_file {
   PSID user; /* LocalAlloc'd copy of the token user SID */
   size_t written;
   sf_state state;
+  sf_status cleanup;
 };
 
-static sf_status st(sf_code c, long e) { sf_status s; s.code = c; s.os_error = e; return s; }
+static sf_status st(sf_code c, long e) { sf_status s = {0}; s.code = c; s.os_error = e; return s; }
 static NtCreateFile_t pNtCreateFile;
 static RtlNtStatusToDosError_t pToDos;
 static INIT_ONCE g_once = INIT_ONCE_STATIC_INIT;
-static void close_h(HANDLE* h) { if (*h && *h != INVALID_HANDLE_VALUE) CloseHandle(*h); *h = NULL; }
+static long close_h(HANDLE* h) {
+  if (*h && *h != INVALID_HANDLE_VALUE && !CloseHandle(*h)) return (long)GetLastError();
+  *h = NULL; return 0;
+}
 
 /* Resolved exactly once and published atomically (InitOnce), so concurrent Worker threads never observe a half-initialised pair. */
 static BOOL CALLBACK load_ntdll_once(PINIT_ONCE o, PVOID p, PVOID* c) {
@@ -159,6 +163,53 @@ static sf_status volume_ok(HANDLE h) {
   return st(SF_OK, 0);
 }
 
+/* Ancestors may be owned/mutated only by the operator or privileged OS principals.
+ * This conservative allow-list does not infer access from account names or deny ACE ordering.
+ * Unknown ACE forms fail closed; read/traverse grants to other users are permitted.
+ * A separate dedicated NTFS tree may be required where stock volume ACLs grant creation to Users.
+ */
+static int trusted_sid(PSID sid, PSID user) {
+  return sid && IsValidSid(sid) && (EqualSid(sid, user) ||
+    IsWellKnownSid(sid, WinLocalSystemSid) || IsWellKnownSid(sid, WinBuiltinAdministratorsSid));
+}
+static sf_status directory_safe(HANDLE dir, PSID user) {
+  FILE_BASIC_INFO bi;
+  if (!GetFileInformationByHandleEx(dir, FileBasicInfo, &bi, sizeof(bi))) return st(SF_E_UNSAFE_PARENT, (long)GetLastError());
+  if (bi.FileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) return st(SF_E_SYMLINK, 0);
+  if (!(bi.FileAttributes & FILE_ATTRIBUTE_DIRECTORY)) return st(SF_E_NOT_DIRECTORY, 0);
+  PSID owner = NULL; PACL acl = NULL; PSECURITY_DESCRIPTOR sd = NULL;
+  DWORD e = GetSecurityInfo(dir, SE_FILE_OBJECT, OWNER_SECURITY_INFORMATION | DACL_SECURITY_INFORMATION,
+                           &owner, NULL, &acl, NULL, &sd);
+  if (e != ERROR_SUCCESS) return st(SF_E_UNSAFE_PARENT, (long)e);
+  sf_status result = st(SF_E_UNSAFE_PARENT, 0);
+  if (!sd || !IsValidSecurityDescriptor(sd) || !trusted_sid(owner, user) || !acl || !IsValidAcl(acl)) goto done;
+  for (DWORD i = 0; i < acl->AceCount; ++i) {
+    ACE_HEADER* header = NULL;
+    if (!GetAce(acl, i, (void**)&header)) goto done;
+    if (header->AceFlags & INHERIT_ONLY_ACE) continue;
+    /* Denies never widen permission; all complex allow/callback/object ACEs are unsupported. */
+    if (header->AceType == ACCESS_DENIED_ACE_TYPE) continue;
+    if (header->AceType != ACCESS_ALLOWED_ACE_TYPE || header->AceSize < sizeof(ACCESS_ALLOWED_ACE)) goto done;
+    ACCESS_ALLOWED_ACE* ace = (ACCESS_ALLOWED_ACE*)header;
+    PSID sid = (PSID)&ace->SidStart;
+    size_t available = header->AceSize - offsetof(ACCESS_ALLOWED_ACE, SidStart);
+    if (available < offsetof(SID, SubAuthority)) goto done;
+    SID* raw = (SID*)sid;
+    if (raw->SubAuthorityCount > SID_MAX_SUB_AUTHORITIES || GetSidLengthRequired(raw->SubAuthorityCount) > available) goto done;
+    if (!IsValidSid(sid)) goto done;
+    DWORD mask = ace->Mask;
+    GENERIC_MAPPING mapping = { FILE_GENERIC_READ, FILE_GENERIC_WRITE, FILE_GENERIC_EXECUTE, FILE_ALL_ACCESS };
+    MapGenericMask(&mask, &mapping);
+    const DWORD mutation = DELETE | WRITE_DAC | WRITE_OWNER | FILE_DELETE_CHILD |
+      FILE_ADD_FILE | FILE_ADD_SUBDIRECTORY | FILE_WRITE_EA | FILE_WRITE_ATTRIBUTES;
+    if ((mask & (mutation | MAXIMUM_ALLOWED | ACCESS_SYSTEM_SECURITY)) && !trusted_sid(sid, user)) goto done;
+  }
+  result = st(SF_OK, 0);
+done:
+  LocalFree(sd);
+  return result;
+}
+
 sf_status sf_prepare(const char* path, sf_file** out) {
   *out = NULL;
   if (!path || path[0] == '\0') return st(SF_E_ARGUMENT, 0);
@@ -195,19 +246,22 @@ sf_status sf_prepare(const char* path, sf_file** out) {
   /* Open the volume root through the DOS-device namespace, then walk by handle. Drive type must be fixed. */
   wchar_t root[4]; root[0] = w[0]; root[1] = L':'; root[2] = L'\\'; root[3] = 0;
   if (GetDriveTypeW(root) != DRIVE_FIXED) { LocalFree(user); LocalFree(sid_str); return st(SF_E_UNSUPPORTED, 0); }
-  HANDLE dir = CreateFileW(root, FILE_READ_ATTRIBUTES | FILE_TRAVERSE | SYNCHRONIZE, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, NULL, OPEN_EXISTING,
+  HANDLE dir = CreateFileW(root, READ_CONTROL | FILE_READ_ATTRIBUTES | FILE_TRAVERSE | SYNCHRONIZE, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, NULL, OPEN_EXISTING,
                            FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT, NULL);
   if (dir == INVALID_HANDLE_VALUE) { DWORD e = GetLastError(); LocalFree(user); LocalFree(sid_str); return st(SF_E_CREATE, (long)e); }
 
   sf_status r = volume_ok(dir);
+  if (r.code == SF_OK) r = directory_safe(dir, user);
   for (int i = 0; r.code == SF_OK && i < nc - 1; i++) {
     HANDLE next = NULL;
-    NTSTATUS ns = open_rel(dir, comps[i], FILE_READ_ATTRIBUTES | FILE_TRAVERSE | FILE_LIST_DIRECTORY, FILE_OPEN, FILE_DIRECTORY_FILE | FILE_OPEN_REPARSE_POINT, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, NULL, &next);
+    NTSTATUS ns = open_rel(dir, comps[i], READ_CONTROL | FILE_READ_ATTRIBUTES | FILE_TRAVERSE | FILE_LIST_DIRECTORY, FILE_OPEN, FILE_DIRECTORY_FILE | FILE_OPEN_REPARSE_POINT, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, NULL, &next);
     if (ns < 0) { r = st(SF_E_CREATE, (long)pToDos(ns)); break; }
     FILE_BASIC_INFO bi;
     if (!GetFileInformationByHandleEx(next, FileBasicInfo, &bi, sizeof(bi))) { r = st(SF_E_CREATE, (long)GetLastError()); CloseHandle(next); break; }
     if (bi.FileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) { r = st(SF_E_SYMLINK, 0); CloseHandle(next); break; }
     if (!(bi.FileAttributes & FILE_ATTRIBUTE_DIRECTORY)) { r = st(SF_E_NOT_DIRECTORY, 0); CloseHandle(next); break; }
+    r = directory_safe(next, user);
+    if (r.code != SF_OK) { CloseHandle(next); break; }
     CloseHandle(dir);
     dir = next;
   }
@@ -236,12 +290,17 @@ sf_status sf_prepare(const char* path, sf_file** out) {
   }
   sf_file* f = (sf_file*)calloc(1, sizeof(sf_file));
   if (!f) {
-    sf_disposition_ex di = { FILE_DISPOSITION_FLAG_DELETE | FILE_DISPOSITION_FLAG_POSIX_SEMANTICS };
-    SetFileInformationByHandle(fh, SF_FileDispositionInfoEx, &di, sizeof(di));
-    CloseHandle(fh); close_h(&dir); LocalFree(user); return st(SF_E_INTERNAL, 0);
+    sf_file temporary = {0}; temporary.file = fh; temporary.dir = dir; temporary.state = ST_PREPARED;
+    sf_status cleanup = sf_abort(&temporary), failure = st(SF_E_INTERNAL, ERROR_NOT_ENOUGH_MEMORY);
+    failure.cleanup_code = cleanup.code; failure.cleanup_os_error = cleanup.os_error;
+    LocalFree(user); return failure;
   }
   f->file = fh; f->dir = dir; f->user = user; f->state = ST_PREPARED;
-  if (!GetFileInformationByHandleEx(fh, FileIdInfo, &f->id, sizeof(f->id))) { long e = (long)GetLastError(); sf_abort(f); sf_free(f); return st(SF_E_UNSUPPORTED, e); }
+  if (!GetFileInformationByHandleEx(fh, FileIdInfo, &f->id, sizeof(f->id))) {
+    sf_status failure = st(SF_E_UNSUPPORTED, (long)GetLastError()), cleanup = sf_abort(f);
+    failure.cleanup_code = cleanup.code; failure.cleanup_os_error = cleanup.os_error;
+    sf_free(f); return failure;
+  }
   *out = f;
   return st(SF_OK, 0);
 }
@@ -252,6 +311,7 @@ static sf_status verify_locked(sf_file* f) {
   if (!GetFileInformationByHandleEx(f->file, FileBasicInfo, &bi, sizeof(bi)) || !GetFileInformationByHandleEx(f->file, FileStandardInfo, &si, sizeof(si)) ||
       !GetFileInformationByHandleEx(f->file, FileIdInfo, &id, sizeof(id))) return st(SF_E_VERIFY, (long)GetLastError());
   if ((bi.FileAttributes & (FILE_ATTRIBUTE_REPARSE_POINT | FILE_ATTRIBUTE_DIRECTORY)) || si.Directory) return st(SF_E_VERIFY, 0);
+  if (si.EndOfFile.QuadPart < 0 || (ULONGLONG)si.EndOfFile.QuadPart != f->written) return st(SF_E_VERIFY, 0);
   if (si.NumberOfLinks != 1 || si.DeletePending) return st(SF_E_VERIFY, 0);
   if (memcmp(&id, &f->id, sizeof(id)) != 0) return st(SF_E_IDENTITY, 0);
 
@@ -300,31 +360,43 @@ sf_status sf_close(sf_file* f) {
   if (!FlushFileBuffers(f->file)) { long e = (long)GetLastError(); sf_abort(f); return st(SF_E_FLUSH, e); }
   sf_status fin = verify_locked(f);
   if (fin.code != SF_OK) { sf_abort(f); return fin; }
-  close_h(&f->file); close_h(&f->dir);
+  long e = close_h(&f->file);
+  if (e != 0) { sf_abort(f); return st(SF_E_FLUSH, e); }
+  e = close_h(&f->dir);
+  if (e != 0) {
+    /* File is committed, but directory handle closure failed; never reopen the name. */
+    f->cleanup = st(SF_E_CLEANUP, e); f->state = ST_ABORTED;
+    return st(SF_E_FLUSH, e);
+  }
   f->state = ST_CLOSED;
   return st(SF_OK, 0);
 }
 
-void sf_abort(sf_file* f) {
-  if (!f || f->state == ST_CLOSED || f->state == ST_ABORTED) return;
+sf_status sf_abort(sf_file* f) {
+  if (!f) return st(SF_OK, 0);
+  if (f->state == ST_CLOSED || f->state == ST_ABORTED) return f->cleanup;
   if (f->file) {
-    /* Delete through the creating handle: identity is intrinsic, a substituted entry is never touched. */
+    /* The creating handle identifies the object even if FileIdInfo cannot be queried. */
     sf_disposition_ex di = { FILE_DISPOSITION_FLAG_DELETE | FILE_DISPOSITION_FLAG_POSIX_SEMANTICS };
     if (!SetFileInformationByHandle(f->file, SF_FileDispositionInfoEx, &di, sizeof(di))) {
-      /* Older/other semantics: classic delete-on-close through the same handle. Never leave a half-written secret behind silently. */
       FILE_DISPOSITION_INFO legacy; legacy.DeleteFile = TRUE;
-      SetFileInformationByHandle(f->file, FileDispositionInfo, &legacy, sizeof(legacy));
+      if (!SetFileInformationByHandle(f->file, FileDispositionInfo, &legacy, sizeof(legacy)))
+        f->cleanup = st(SF_E_CLEANUP, (long)GetLastError());
     }
   }
-  close_h(&f->file); close_h(&f->dir);
+  long file_close = close_h(&f->file), dir_close = close_h(&f->dir);
+  if (f->cleanup.code == SF_OK && (file_close != 0 || dir_close != 0))
+    f->cleanup = st(SF_E_CLEANUP, file_close != 0 ? file_close : dir_close);
   f->state = ST_ABORTED;
+  return f->cleanup;
 }
+sf_status sf_cleanup_result(sf_file* f) { return f ? f->cleanup : st(SF_OK, 0); }
 
 void sf_free(sf_file* f) { if (!f) return; sf_abort(f); if (f->user) LocalFree(f->user); free(f); }
 
 const char* sf_code_name(sf_code c) {
   switch (c) {
-    case SF_OK: return "OK"; case SF_E_ARGUMENT: return "ARGUMENT"; case SF_E_PATH: return "PATH"; case SF_E_SYMLINK: return "SYMLINK";
+    case SF_E_CLEANUP: return "CLEANUP"; case SF_OK: return "OK"; case SF_E_ARGUMENT: return "ARGUMENT"; case SF_E_PATH: return "PATH"; case SF_E_SYMLINK: return "SYMLINK";
     case SF_E_NOT_DIRECTORY: return "NOT_DIRECTORY"; case SF_E_UNSAFE_PARENT: return "UNSAFE_PARENT"; case SF_E_EXISTS: return "EXISTS";
     case SF_E_UNSUPPORTED: return "UNSUPPORTED"; case SF_E_CREATE: return "CREATE"; case SF_E_VERIFY: return "VERIFY"; case SF_E_IDENTITY: return "IDENTITY";
     case SF_E_STATE: return "STATE"; case SF_E_WRITE: return "WRITE"; case SF_E_FLUSH: return "FLUSH"; case SF_E_TOO_LARGE: return "TOO_LARGE";

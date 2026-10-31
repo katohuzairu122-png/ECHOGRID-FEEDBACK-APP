@@ -1,7 +1,7 @@
 export type SecureFileErrorCode =
   | 'ARGUMENT' | 'PATH' | 'SYMLINK' | 'NOT_DIRECTORY' | 'UNSAFE_PARENT' | 'EXISTS' | 'UNSUPPORTED' | 'CREATE' | 'VERIFY' | 'IDENTITY'
-  | 'STATE' | 'WRITE' | 'FLUSH' | 'TOO_LARGE' | 'INTERNAL';
-export interface SecureFileError extends Error { code: SecureFileErrorCode; osError: number }
+  | 'CLEANUP' | 'STATE' | 'WRITE' | 'FLUSH' | 'TOO_LARGE' | 'INTERNAL';
+export interface SecureFileError extends Error { code: SecureFileErrorCode; osError: number; cleanupError?: { code: SecureFileErrorCode; osError: number } }
 export declare class SecureFile {
   static prepare(path: string): SecureFile;
   verify(): this;
