@@ -82,12 +82,14 @@ if ($Operation -eq 'Ancestor') {
   New-Case 'account-read-only' @('/grant', "*${accountSid}:(OI)(CI)(RX)")
   $env:SF_ANCESTOR_CASES = $base
   $env:SF_ACCOUNT_SID = $accountSid
-  Push-Location 'packages/secure-file'
-  try {
-    New-Item -ItemType Directory -Force evidence | Out-Null
-    node --expose-gc --test --test-reporter=tap test/secure-file.win32-accounts.test.js 2>&1 | Tee-Object evidence/windows-ancestors.tap
-    if ($LASTEXITCODE -ne 0) { throw 'Distinct-account ancestor tests failed' }
-  } finally { Pop-Location }
+  # Absolute paths and no change of the working directory: the workflow pipes this script into Tee-Object with a repo-relative path, which would resolve
+  # against a changed location. node resolves the test's own imports relative to the test file.
+  $packageDir = (Resolve-Path 'packages/secure-file').Path
+  $evidenceDir = Join-Path $packageDir 'evidence'
+  New-Item -ItemType Directory -Force $evidenceDir | Out-Null
+  $testFile = Join-Path $packageDir 'test/secure-file.win32-accounts.test.js'
+  node --expose-gc --test --test-reporter=tap $testFile 2>&1 | Tee-Object (Join-Path $evidenceDir 'windows-ancestors.tap')
+  if ($LASTEXITCODE -ne 0) { throw 'Distinct-account ancestor tests failed' }
   return
 }
 if ($Operation -eq 'Denial') {
