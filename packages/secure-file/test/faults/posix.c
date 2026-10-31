@@ -33,13 +33,13 @@ static ssize_t test_write(int fd, const void* data, size_t len) {
 
 static int test_fstat(int fd, struct stat* result) {
   int r = fstat(fd, result);
-  if (r == 0 && S_ISREG(result->st_mode) && fault("identity")) { errno = EIO; return -1; }
+  if (r == 0 && (fcntl(fd, F_GETFL) & O_ACCMODE) == O_WRONLY && S_ISREG(result->st_mode) && fault("identity")) { errno = EIO; return -1; }
   return r;
 }
 
 static int test_close(int fd) {
   struct stat info;
-  int regular = fstat(fd, &info) == 0 && S_ISREG(info.st_mode);
+  int regular = (fcntl(fd, F_GETFL) & O_ACCMODE) == O_WRONLY && fstat(fd, &info) == 0 && S_ISREG(info.st_mode);
   int r = close(fd);
   if (regular && fault("close")) { errno = EIO; return -1; }
   return r;

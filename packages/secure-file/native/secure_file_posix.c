@@ -62,6 +62,48 @@ static int fs_supported(int fd) {
   }
 }
 
+/* Required kernel boundary: without protected_hardlinks, a foreign UID can link
+ * an owner-only file from a searchable directory. Link-count snapshots alone do
+ * not close the race. Read the real procfs setting through no-follow descriptors;
+ * unavailable, malformed, disabled or non-procfs evidence always fails closed.
+ * Changes by root/mount administrators remain outside the unprivileged threat model.
+ */
+static int hardlink_setting_enabled(const char* value, size_t size) {
+  return size == 2 && value[0] == '1' && value[1] == '\n';
+}
+
+static int hardlinks_protected(void) {
+  const char* components[] = { "sys", "fs", "protected_hardlinks" };
+  int fd = open("/proc", O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC);
+  if (fd < 0) return 0;
+  for (size_t i = 0; i < 3; ++i) {
+    struct statfs fs;
+    if (fstatfs(fd, &fs) != 0 || (unsigned long)fs.f_type != 0x9fa0UL) { close_quiet(fd); return 0; }
+    int flags = O_RDONLY | O_NOFOLLOW | O_CLOEXEC | O_NONBLOCK;
+    if (i < 2) flags |= O_DIRECTORY;
+    int next = openat(fd, components[i], flags);
+    close_quiet(fd);
+    if (next < 0) return 0;
+    fd = next;
+  }
+  struct statfs fs;
+  struct stat entry;
+  if (fstatfs(fd, &fs) != 0 || (unsigned long)fs.f_type != 0x9fa0UL ||
+      fstat(fd, &entry) != 0 || !S_ISREG(entry.st_mode) || entry.st_uid != 0) {
+    close_quiet(fd); return 0;
+  }
+  char value[8]; size_t used = 0;
+  while (used < sizeof(value)) {
+    ssize_t n = read(fd, value + used, sizeof(value) - used);
+    if (n < 0 && errno == EINTR) continue;
+    if (n < 0) { close_quiet(fd); return 0; }
+    if (n == 0) break;
+    used += (size_t)n;
+  }
+  close_quiet(fd);
+  return hardlink_setting_enabled(value, used);
+}
+
 static int fsync_retry(int fd) { int r; do { r = fsync(fd); } while (r != 0 && errno == EINTR); return r; }
 
 sf_status sf_prepare(const char* path, sf_file** out) {
@@ -122,6 +164,8 @@ sf_status sf_prepare(const char* path, sf_file** out) {
   if (dc != SF_OK) { close_quiet(dirfd); return st(dc, 0); }
   if (!fs_supported(dirfd)) { close_quiet(dirfd); return st(SF_E_UNSUPPORTED, 0); }
 
+  if (!hardlinks_protected()) { close_quiet(dirfd); return st(SF_E_UNSUPPORTED, 0); }
+
   int fd = openat(dirfd, name, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0600);
   if (fd < 0) {
     int e = errno;
@@ -162,6 +206,7 @@ sf_status sf_prepare(const char* path, sf_file** out) {
 }
 
 static sf_status verify_locked(sf_file* f) {
+  if (!hardlinks_protected()) return st(SF_E_UNSUPPORTED, 0);
   struct stat fs, es;
   if (fstat(f->fd, &fs) != 0) return st(SF_E_VERIFY, errno);
   if (!S_ISREG(fs.st_mode)) return st(SF_E_VERIFY, 0);
