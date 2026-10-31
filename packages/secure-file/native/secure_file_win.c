@@ -180,11 +180,15 @@ static sf_status volume_ok(HANDLE h) {
  * Unknown ACE forms fail closed; read/traverse grants to other users are permitted.
  * A separate dedicated NTFS tree may be required where stock volume ACLs grant creation to Users.
  */
-/* NT SERVICE\\TrustedInstaller (owner of OS-managed trees). Only SYSTEM-level code can run as it, which is the same trust as SYSTEM. */
+/* NT SERVICE\\TrustedInstaller = S-1-5-80-956008885-3418522649-1831038044-1853292631-2271478464 (owner of OS-managed trees). Only SYSTEM-level code can run as it,
+ * which is the same trust as SYSTEM. Compared field by field: no allocation, so no allocation failure path. */
 static int is_trusted_installer(PSID sid) {
-  PSID ti = NULL; int same = 0;
-  if (ConvertStringSidToSidW(L"S-1-5-80-956008885-3418522649-1831038044-1853292631-2271478464", &ti)) { same = EqualSid(sid, ti) ? 1 : 0; LocalFree(ti); }
-  return same;
+  static const DWORD sub[6] = { 80UL, 956008885UL, 3418522649UL, 1831038044UL, 1853292631UL, 2271478464UL };
+  static const SID_IDENTIFIER_AUTHORITY nt = SECURITY_NT_AUTHORITY;
+  if (!sid || !IsValidSid(sid) || *GetSidSubAuthorityCount(sid) != 6) return 0;
+  if (memcmp(GetSidIdentifierAuthority(sid), &nt, sizeof(nt)) != 0) return 0;
+  for (DWORD i = 0; i < 6; i++) if (*GetSidSubAuthority(sid, i) != sub[i]) return 0;
+  return 1;
 }
 static int trusted_sid(PSID sid, PSID user) {
   return sid && IsValidSid(sid) && (EqualSid(sid, user) || IsWellKnownSid(sid, WinLocalSystemSid) || IsWellKnownSid(sid, WinBuiltinAdministratorsSid) || is_trusted_installer(sid));

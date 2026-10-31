@@ -64,7 +64,7 @@ if ($Operation -eq 'Ancestor') {
   # no production credential. Each case is a directory tree whose ancestors are owned by, writable by, or merely readable by that account.
   $letter = $state.letter
   $base = Join-Path "${letter}:\" 'ancestor-cases'
-  New-Item -ItemType Directory -Path $base | Out-Null
+  New-Item -ItemType Directory -Path $base -Force | Out-Null
   $accountSid = (Get-LocalUser -Name $state.user).SID.Value
   if ($accountSid -ne $state.userSid) { throw 'Account identity changed; refusing ancestor fixtures' }
   function New-Case([string]$name, [string[]]$icaclsArgs) {
