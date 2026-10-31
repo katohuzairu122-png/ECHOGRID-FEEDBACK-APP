@@ -235,12 +235,17 @@ describe('secure-file (POSIX)', { skip: !posix }, () => {
           if (message.ready) readyResolve(message.pid);
           else result = message.result;
         });
-        child.on('exit', (status, signal) => {
-          if (status !== 0 || result === undefined) {
-            const error = new Error(`creator failed: status=${status} signal=${signal} ${stderr}`);
+        // 'exit' can fire before the final IPC message is delivered; the IPC channel's 'disconnect' fires only after every message was, so settle on both.
+        let exited = false, disconnected = false, exitStatus, exitSignal;
+        const settle = () => {
+          if (!exited || !disconnected) return;
+          if (exitStatus !== 0 || result === undefined) {
+            const error = new Error(`creator failed: status=${exitStatus} signal=${exitSignal} ${stderr}`);
             readyReject(error); reject(error);
           } else resolve(result);
-        });
+        };
+        child.on('exit', (status, signal) => { exited = true; exitStatus = status; exitSignal = signal; settle(); });
+        child.on('disconnect', () => { disconnected = true; settle(); });
       });
       return { child, ready, done };
     });
