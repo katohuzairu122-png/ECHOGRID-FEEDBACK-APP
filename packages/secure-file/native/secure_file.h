@@ -3,7 +3,7 @@
  *
  * Lifecycle: PREPARE -> VERIFY -> WRITE -> FLUSH/CLOSE. The file is created exclusively with owner-only protection established AT CREATION, every
  * security property is then verified through the OPEN HANDLE (the path is never reopened), secret bytes are written only after verification, and any
- * failure aborts: the half-written file is removed only if the directory entry still names the very file this handle created. There is no insecure
+ * failure attempts identity-safe cleanup. cleanup_code/cleanup_os_error report incomplete removal separately from the original failure. There is no insecure
  * fallback and no post-write permission repair. Errors carry a stable code and an OS error number only: never a path fragment or any secret byte.
  */
 #ifndef SECURE_FILE_H
@@ -26,13 +26,14 @@ typedef enum {
   SF_E_WRITE,           /* write failed or was short */
   SF_E_FLUSH,           /* flush/close failed */
   SF_E_TOO_LARGE,       /* total payload exceeds SF_MAX_BYTES */
+  SF_E_CLEANUP,
   SF_E_INTERNAL
 } sf_code;
 
 #define SF_MAX_BYTES (1u << 20) /* a keyring/KEK file is tiny; refuse anything that is not */
 #define SF_MAX_PATH_BYTES 4096
 
-typedef struct { sf_code code; long os_error; } sf_status;
+typedef struct { sf_code code; long os_error; sf_code cleanup_code; long cleanup_os_error; } sf_status;
 typedef struct sf_file sf_file;
 
 /* Creates the file (exclusive, owner-only). On success *out is a PREPARED handle. */
@@ -43,8 +44,10 @@ sf_status sf_verify(sf_file* f);
 sf_status sf_write(sf_file* f, const unsigned char* data, size_t len);
 /* Flushes data and the directory entry, closes. VERIFIED -> CLOSED. A failure aborts the file. */
 sf_status sf_close(sf_file* f);
-/* Idempotent: removes the file iff it is still the one this handle created, closes, and releases the handle. Safe on any state. */
-void sf_abort(sf_file* f);
+/* Attempts identity-safe removal and closure; repeated calls preserve the recorded outcome. Does not free storage. */
+sf_status sf_abort(sf_file* f);
+/* Last cleanup outcome; survives repeated abort. No paths or secret material. */
+sf_status sf_cleanup_result(sf_file* f);
 /* Releases the handle memory after sf_close/sf_abort. */
 void sf_free(sf_file* f);
 /* Stable code names for the JavaScript layer. */
