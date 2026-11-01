@@ -45,14 +45,20 @@ static void finalize(napi_env env, void* data, void* hint) {
 
 static sf_file* unwrap(napi_env env, napi_callback_info info, size_t argc_want, napi_value* argv) {
   size_t argc = argc_want;
-  if (napi_get_cb_info(env, info, &argc, argv, NULL, NULL) != napi_ok || argc < argc_want) { throw_status(env, (sf_status){ SF_E_ARGUMENT, 0, SF_OK, 0 }); return NULL; }
+  if (napi_get_cb_info(env, info, &argc, argv, NULL, NULL) != napi_ok || argc < 1) { throw_status(env, (sf_status){ SF_E_ARGUMENT, 0, SF_OK, 0 }); return NULL; }
   void* p = NULL;
   bool tagged = false;
+  napi_valuetype type;
+  if (napi_typeof(env, argv[0], &type) != napi_ok || type != napi_external) { throw_status(env, (sf_status){ SF_E_ARGUMENT, 0, SF_OK, 0 }); return NULL; }
   if (napi_check_object_type_tag(env, argv[0], &SF_TAG, &tagged) != napi_ok || !tagged || napi_get_value_external(env, argv[0], &p) != napi_ok || !p) { throw_status(env, (sf_status){ SF_E_ARGUMENT, 0, SF_OK, 0 }); return NULL; }
+  /* A validated handle still owns an unfinished file when a later argument is
+     absent. Abort it without reading the missing argv slot; preserve cleanup
+     failure separately from the original argument error. */
+  if (argc < argc_want) { sf_abort((sf_file*)p); throw_status(env, with_cleanup((sf_file*)p, (sf_status){ SF_E_ARGUMENT, 0, SF_OK, 0 })); return NULL; }
   return (sf_file*)p;
 }
 
-static napi_value Prepare(napi_env env, napi_callback_info info) {
+static napi_value PathOperation(napi_env env, napi_callback_info info, int destroy) {
   size_t argc = 1; napi_value argv[1];
   NAPI_OK_OR(napi_get_cb_info(env, info, &argc, argv, NULL, NULL));
   napi_valuetype t;
@@ -62,6 +68,7 @@ static napi_value Prepare(napi_env env, napi_callback_info info) {
   if (napi_get_value_string_utf8(env, argv[0], NULL, 0, &need) != napi_ok || need == 0 || need >= SF_MAX_PATH_BYTES) { throw_status(env, (sf_status){ SF_E_ARGUMENT, 0, SF_OK, 0 }); return NULL; }
   char path[SF_MAX_PATH_BYTES + 1]; size_t n = 0;
   if (napi_get_value_string_utf8(env, argv[0], path, sizeof path, &n) != napi_ok || n != need || strlen(path) != n || strstr(path, "\xEF\xBF\xBD") != NULL) { throw_status(env, (sf_status){ SF_E_ARGUMENT, 0, SF_OK, 0 }); return NULL; }
+  if (destroy) { sf_status result = sf_destroy(path); if (result.code != SF_OK) throw_status(env, result); return NULL; }
   sf_file* f = NULL;
   sf_status s = sf_prepare(path, &f);
   if (s.code != SF_OK) { throw_status(env, s); return NULL; }
@@ -76,6 +83,9 @@ static napi_value Prepare(napi_env env, napi_callback_info info) {
   }
   return ext;
 }
+
+static napi_value Prepare(napi_env env, napi_callback_info info) { return PathOperation(env, info, 0); }
+static napi_value Destroy(napi_env env, napi_callback_info info) { return PathOperation(env, info, 1); }
 
 static napi_value Verify(napi_env env, napi_callback_info info) {
   napi_value argv[1]; sf_file* f = unwrap(env, info, 1, argv); if (!f) return NULL;
@@ -107,6 +117,7 @@ static napi_value Init(napi_env env, napi_value exports) {
     { "prepare", NULL, Prepare, NULL, NULL, NULL, napi_default, NULL }, { "verify", NULL, Verify, NULL, NULL, NULL, napi_default, NULL },
     { "write", NULL, Write, NULL, NULL, NULL, napi_default, NULL },     { "close", NULL, Close, NULL, NULL, NULL, napi_default, NULL },
     { "abort", NULL, Abort, NULL, NULL, NULL, napi_default, NULL },
+    { "destroy", NULL, Destroy, NULL, NULL, NULL, napi_default, NULL },
   };
   napi_define_properties(env, exports, sizeof d / sizeof d[0], d);
   return exports;

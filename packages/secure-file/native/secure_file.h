@@ -27,7 +27,8 @@ typedef enum {
   SF_E_FLUSH,           /* flush/close failed */
   SF_E_TOO_LARGE,       /* total payload exceeds SF_MAX_BYTES */
   SF_E_CLEANUP,
-  SF_E_INTERNAL
+  SF_E_INTERNAL,
+  SF_E_MISSING
 } sf_code;
 
 #define SF_MAX_BYTES (1u << 20) /* a keyring/KEK file is tiny; refuse anything that is not */
@@ -38,6 +39,10 @@ typedef struct sf_file sf_file;
 
 /* Creates the file (exclusive, owner-only). On success *out is a PREPARED handle. */
 sf_status sf_prepare(const char* utf8_path, sf_file** out);
+/* Verify an existing owner-only file, zero through its handle, flush, and remove
+ * only that object. Verification failures never mutate/delete existing evidence.
+ * Best-effort sanitization, not physical secure erasure. */
+sf_status sf_destroy(const char* utf8_path);
 /* Verifies owner, protection, type, link count, identity and entry binding through the handle. PREPARED -> VERIFIED. */
 sf_status sf_verify(sf_file* f);
 /* Appends bytes. Only legal once VERIFIED. A failure aborts the file. */

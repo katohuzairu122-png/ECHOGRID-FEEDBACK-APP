@@ -5,7 +5,7 @@ import { mkdtempSync, rmSync, existsSync, statSync, renameSync, writeFileSync, r
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { setTimeout } from 'node:timers/promises';
-import { writeSecretFileExclusive } from '../build/Release/fault-wrapper.mjs';
+import { writeSecretFileExclusive, destroySecretFile } from '../build/Release/fault-wrapper.mjs';
 const native = createRequire(import.meta.url)('../build/Release/secure_file_faults.node');
 let dir;
 before(() => { dir = mkdtempSync(join(tmpdir(), 'sf-fault-')); });
@@ -31,6 +31,21 @@ it('missing native write argument fails with ARGUMENT before inspecting uninitia
   const e = failure(() => native.write(h));
   assert.equal(e.code, 'ARGUMENT');
   assert.equal(existsSync(p), false);
+  native.abort(h);
+});
+it('missing write argument preserves independent cleanup failure', () => {
+  const p = join(dir, 'missing-write-cleanup'); const h = native.prepare(p);
+  native.verify(h); process.env.SF_TEST_FAULT = 'cleanup';
+  try {
+    const e = failure(() => native.write(h));
+    assert.equal(e.code, 'ARGUMENT'); assert.equal(e.cleanupError.code, 'CLEANUP');
+    assert.equal(statSync(p).size, 0);
+  } finally { delete process.env.SF_TEST_FAULT; }
+});
+it('missing or foreign handles fail without dereferencing absent arguments', () => {
+  for (const args of [[], [undefined], [null], [{}]]) {
+    assert.equal(failure(() => native.write(...args)).code, 'ARGUMENT');
+  }
 });
 it('repeated abort and garbage collection remove unfinished files', async () => {
   const p = join(dir, 'abort'); const h = native.prepare(p);
@@ -96,4 +111,29 @@ it('file-close failure is reported rather than returning successful completion',
     assert.equal(failure(() => native.close(h)).code, 'FLUSH');
     assert.equal(existsSync(p), false);
   } finally { delete process.env.SF_TEST_FAULT; }
+});
+
+for (const fault of ['partial', 'cleanup', 'identity']) {
+  it(`existing destruction ${fault} failure never claims successful removal`, () => {
+    const p = join(dir, `destroy-${fault}`);
+    writeSecretFileExclusive(p, new Uint8Array([17, 29, 43]));
+    process.env.SF_TEST_FAULT = fault;
+    try {
+      const e = failure(() => destroySecretFile(p));
+      assert.equal(e.code, fault === 'partial' ? 'WRITE' : fault === 'cleanup' ? 'CLEANUP' : 'CREATE');
+      assert.equal(existsSync(p), true);
+      if (fault === 'identity') assert.deepEqual([...readFileSync(p)], [17, 29, 43]);
+      if (fault === 'partial') assert.deepEqual([...readFileSync(p)], [0, 29, 43]);
+    } finally { delete process.env.SF_TEST_FAULT; }
+  });
+}
+
+it('destruction never deletes a substituted destination or claims original removal', () => {
+  const p = join(dir, 'destroy-substitute'); writeSecretFileExclusive(p, new Uint8Array([17, 29, 43]));
+  process.env.SF_TEST_FAULT = 'destroy-substitute'; process.env.SF_TEST_PATH = p;
+  try {
+    assert.equal(failure(() => destroySecretFile(p)).code, 'IDENTITY');
+    assert.equal(readFileSync(p, 'utf8'), 'substitute');
+    assert.deepEqual([...readFileSync(p + '-original')], [0, 0, 0]);
+  } finally { delete process.env.SF_TEST_FAULT; delete process.env.SF_TEST_PATH; }
 });

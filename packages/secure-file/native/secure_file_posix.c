@@ -29,6 +29,7 @@ struct sf_file {
   ino_t ino;
   uid_t uid;
   size_t written;
+  int remove_on_abort; /* existing files are close-only until verified destruction */
   sf_state state;
   sf_status cleanup;
 };
@@ -106,7 +107,7 @@ static int hardlinks_protected(void) {
 
 static int fsync_retry(int fd) { int r; do { r = fsync(fd); } while (r != 0 && errno == EINTR); return r; }
 
-sf_status sf_prepare(const char* path, sf_file** out) {
+static sf_status open_file(const char* path, sf_file** out, int existing) {
   *out = NULL;
   if (!path || path[0] == '\0') return st(SF_E_ARGUMENT, 0);
   size_t n = strlen(path);
@@ -147,7 +148,7 @@ sf_status sf_prepare(const char* path, sf_file** out) {
         return st(sym ? SF_E_SYMLINK : SF_E_NOT_DIRECTORY, e);
       }
       close_quiet(dirfd);
-      return st(SF_E_CREATE, e);
+      return st(existing && e == ENOENT ? SF_E_MISSING : SF_E_CREATE, e);
     }
     struct stat as;
     if (fstat(next, &as) != 0) { int e = errno; close_quiet(next); close_quiet(dirfd); return st(SF_E_CREATE, e); }
@@ -166,10 +167,11 @@ sf_status sf_prepare(const char* path, sf_file** out) {
 
   if (!hardlinks_protected()) { close_quiet(dirfd); return st(SF_E_UNSUPPORTED, 0); }
 
-  int fd = openat(dirfd, name, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0600);
+  int fd = openat(dirfd, name, O_WRONLY | O_NOFOLLOW | O_CLOEXEC | O_NONBLOCK | (existing ? 0 : O_CREAT | O_EXCL), 0600);
   if (fd < 0) {
     int e = errno;
     close_quiet(dirfd);
+    if (existing && e == ENOENT) return st(SF_E_MISSING, e);
     if (e == EEXIST) return st(SF_E_EXISTS, e); /* includes an existing or dangling symlink: O_EXCL never follows it */
     if (e == ELOOP) return st(SF_E_SYMLINK, e);
     return st(SF_E_CREATE, e);
@@ -181,22 +183,23 @@ sf_status sf_prepare(const char* path, sf_file** out) {
     int e = errno;
     close_quiet(fd); close_quiet(dirfd);
     sf_status failure = st(SF_E_CREATE, e);
-    failure.cleanup_code = SF_E_IDENTITY;
+    if (!existing) failure.cleanup_code = SF_E_IDENTITY;
     return failure;
   }
   sf_file* f = (sf_file*)calloc(1, sizeof(sf_file));
   if (!f) {
     sf_file temporary = {0};
     temporary.fd = fd; temporary.dirfd = dirfd; temporary.dev = fs.st_dev; temporary.ino = fs.st_ino;
-    temporary.state = ST_PREPARED; memcpy(temporary.name, name, strlen(name) + 1);
+    temporary.state = ST_PREPARED; temporary.remove_on_abort = !existing; memcpy(temporary.name, name, strlen(name) + 1);
     sf_status cleanup = sf_abort(&temporary);
     sf_status failure = st(SF_E_INTERNAL, ENOMEM);
     failure.cleanup_code = cleanup.code; failure.cleanup_os_error = cleanup.os_error;
     return failure;
   }
-  f->fd = fd; f->dirfd = dirfd; f->dev = fs.st_dev; f->ino = fs.st_ino; f->uid = euid; f->state = ST_PREPARED;
+  f->fd = fd; f->dirfd = dirfd; f->dev = fs.st_dev; f->ino = fs.st_ino; f->uid = euid; f->state = ST_PREPARED; f->remove_on_abort = !existing;
+  if (existing) f->written = fs.st_size < 0 ? SF_MAX_BYTES + 1 : (unsigned long long)fs.st_size > SF_MAX_BYTES ? SF_MAX_BYTES + 1 : (size_t)fs.st_size;
   memcpy(f->name, name, strlen(name) + 1);
-  if (fchmod(fd, 0600) != 0) {
+  if (!existing && fchmod(fd, 0600) != 0) {
     sf_status failure = st(SF_E_CREATE, errno), cleanup = sf_abort(f);
     failure.cleanup_code = cleanup.code; failure.cleanup_os_error = cleanup.os_error;
     sf_free(f); return failure;
@@ -204,6 +207,8 @@ sf_status sf_prepare(const char* path, sf_file** out) {
   *out = f;
   return st(SF_OK, 0);
 }
+
+sf_status sf_prepare(const char* path, sf_file** out) { return open_file(path, out, 0); }
 
 static sf_status verify_locked(sf_file* f) {
   if (!hardlinks_protected()) return st(SF_E_UNSUPPORTED, 0);
@@ -222,6 +227,34 @@ static sf_status verify_locked(sf_file* f) {
   if (fstatat(f->dirfd, f->name, &es, AT_SYMLINK_NOFOLLOW) != 0) return st(SF_E_IDENTITY, errno);
   if (es.st_dev != f->dev || es.st_ino != f->ino || !S_ISREG(es.st_mode)) return st(SF_E_IDENTITY, 0);
   return st(SF_OK, 0);
+}
+
+
+sf_status sf_destroy(const char* path) {
+  sf_file* f = NULL;
+  sf_status result = open_file(path, &f, 1);
+  if (result.code != SF_OK) return result;
+  result = verify_locked(f);
+  if (result.code == SF_OK && f->written > SF_MAX_BYTES) result = st(SF_E_TOO_LARGE, 0);
+  unsigned char zeros[4096] = {0};
+  size_t done = 0;
+  while (result.code == SF_OK && done < f->written) {
+    size_t count = f->written - done;
+    if (count > sizeof zeros) count = sizeof zeros;
+    ssize_t n = write(f->fd, zeros, count);
+    if (n < 0 && errno == EINTR) continue;
+    if (n <= 0) { result = st(SF_E_WRITE, n < 0 ? errno : 0); break; }
+    done += (size_t)n;
+  }
+  if (result.code == SF_OK && fsync_retry(f->fd) != 0) result = st(SF_E_FLUSH, errno);
+  if (result.code == SF_OK) result = verify_locked(f);
+  if (result.code == SF_OK) f->remove_on_abort = 1;
+  /* On any earlier failure, close only: existing evidence is not ours to unlink. */
+  sf_status cleanup = sf_abort(f);
+  if (result.code == SF_OK) result = cleanup;
+  else { result.cleanup_code = cleanup.code; result.cleanup_os_error = cleanup.os_error; }
+  sf_free(f);
+  return result;
 }
 
 sf_status sf_verify(sf_file* f) {
@@ -269,7 +302,7 @@ sf_status sf_close(sf_file* f) {
 sf_status sf_abort(sf_file* f) {
   if (!f) return st(SF_OK, 0);
   if (f->state == ST_CLOSED || f->state == ST_ABORTED) return f->cleanup;
-  if (f->dirfd >= 0) {
+  if (f->remove_on_abort && f->dirfd >= 0) {
     struct stat es;
     if (fstatat(f->dirfd, f->name, &es, AT_SYMLINK_NOFOLLOW) != 0) {
       /* Missing/substituted names do not establish removal of our original inode. */
@@ -295,7 +328,7 @@ void sf_free(sf_file* f) { if (!f) return; sf_abort(f); free(f); }
 
 const char* sf_code_name(sf_code c) {
   switch (c) {
-    case SF_E_CLEANUP: return "CLEANUP"; case SF_OK: return "OK"; case SF_E_ARGUMENT: return "ARGUMENT"; case SF_E_PATH: return "PATH"; case SF_E_SYMLINK: return "SYMLINK";
+    case SF_E_MISSING: return "MISSING"; case SF_E_CLEANUP: return "CLEANUP"; case SF_OK: return "OK"; case SF_E_ARGUMENT: return "ARGUMENT"; case SF_E_PATH: return "PATH"; case SF_E_SYMLINK: return "SYMLINK";
     case SF_E_NOT_DIRECTORY: return "NOT_DIRECTORY"; case SF_E_UNSAFE_PARENT: return "UNSAFE_PARENT"; case SF_E_EXISTS: return "EXISTS";
     case SF_E_UNSUPPORTED: return "UNSUPPORTED"; case SF_E_CREATE: return "CREATE"; case SF_E_VERIFY: return "VERIFY"; case SF_E_IDENTITY: return "IDENTITY";
     case SF_E_STATE: return "STATE"; case SF_E_WRITE: return "WRITE"; case SF_E_FLUSH: return "FLUSH"; case SF_E_TOO_LARGE: return "TOO_LARGE";

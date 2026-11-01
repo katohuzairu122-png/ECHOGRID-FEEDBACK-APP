@@ -189,6 +189,9 @@ jobs:
       - name: Unit tests -- web
         run: pnpm --filter @echo-grid-feedback/web test
 
+      - name: Build operator-only secure-file native dependency
+        run: pnpm --filter @echo-grid-feedback/secure-file build:native
+
       # ---- integration tier -------------------------------------------
       # After the fast tier and before the builds. It was last when it
       # arrived; measurement moved it -- the whole tier costs 28 seconds in

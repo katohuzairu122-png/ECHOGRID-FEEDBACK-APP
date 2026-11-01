@@ -4,6 +4,7 @@
 #include <errno.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdio.h>
 static int test_unlinkat(int, const char*, int);
 static ssize_t test_write(int, const void*, size_t);
 static int test_fstat(int, struct stat*);
@@ -23,6 +24,16 @@ static int test_unlinkat(int fd, const char* name, int flags) {
   return unlinkat(fd, name, flags);
 }
 static ssize_t test_write(int fd, const void* data, size_t len) {
+  if (fault("destroy-substitute")) {
+    const char* path = getenv("SF_TEST_PATH");
+    if (!path || strlen(path) > 4000) { errno = EINVAL; return -1; }
+    char moved[4096]; snprintf(moved, sizeof moved, "%s-original", path);
+    if (rename(path, moved) != 0) return -1;
+    int other = open(path, O_WRONLY | O_CREAT | O_EXCL, 0600);
+    if (other < 0) return -1;
+    ssize_t n = write(other, "substitute", 10); close(other);
+    if (n != 10) { errno = EIO; return -1; }
+  }
   if (fault("partial") || fault("partial-cleanup")) {
     off_t position = lseek(fd, 0, SEEK_CUR);
     if (position > 0) { errno = EIO; return -1; }

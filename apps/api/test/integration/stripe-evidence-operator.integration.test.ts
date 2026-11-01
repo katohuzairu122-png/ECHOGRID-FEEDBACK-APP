@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { Client } from 'pg';
 import Stripe from 'stripe';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { existsSync, mkdtempSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, statSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { createHash, randomBytes } from 'node:crypto';
@@ -193,6 +193,27 @@ describe.skipIf(!process.env.DATABASE_URL)('stripe evidence operator tooling (in
       const ring1 = addKeyringEntry(ring0, fresh);
       const ring2 = completeRotation(ring1, cohort, 'r1', 'r2');
       expect(await verifyRemovalSafe(db, { cohort, removeVersion: 'r1', remainingKeyringJson: ring2, now: NOW })).toEqual({ safe: true, reasons: [] });
+      // Exercise the real phase-two CLI output after the guarded PostgreSQL check.
+      const directory = mkdtempSync(join(tmpdir(), 'phase2-cli-'));
+      const source = join(directory, 'phase1.json'), destination = join(directory, 'phase2.json');
+      try {
+        writeFileSync(source, ring1, { mode: 0o600, flag: 'wx' });
+        const database = (await rows('select current_database() as name'))[0].name as string;
+        const args = ['--import', 'tsx', 'scripts/stripe-evidence/keyring.ts', 'rotate-phase2', '--keyring', source,
+          '--cohort', cohort, '--from', 'r1', '--to', 'r2', '--at', NOW.toISOString(), '--expect-database', database, '--out', destination];
+        const run = () => spawnSync(process.execPath, args, { cwd: resolve(__dirname, '../..'), encoding: 'utf8', timeout: 20000 });
+        const result = run();
+        expect(result.status, result.stderr).toBe(0);
+        expect(JSON.parse(result.stdout)).toMatchObject({ phase: 2, safe: true, mode: '0600' });
+        expect(readFileSync(destination, 'utf8')).toBe(ring2);
+        expect(statSync(destination).mode & 0o777).toBe(0o600);
+        for (const entry of [old, fresh, runway]) expect(result.stdout + result.stderr).not.toContain(entry.key);
+        const duplicate = run();
+        expect(duplicate.status).toBe(1);
+        expect(JSON.parse(duplicate.stderr)).toMatchObject({ code: 'EXISTS' });
+        expect(readFileSync(destination, 'utf8')).toBe(ring2);
+      } finally { rmSync(directory, { recursive: true, force: true }); }
+
       const store2 = await storeFor(ring2, db);
       expect(new TextDecoder().decode(await (await readerFor(ring2, db)).readEvent(eventId, CTX))).toBe(bodyText);
       const attestationId = (await rows(`select id from stripe_evidence_control_events where stream=$1 limit 1`, [`${receiving}:false`]))[0].id;
@@ -242,7 +263,8 @@ describe.skipIf(!process.env.DATABASE_URL)('stripe evidence operator tooling (in
       expect(JSON.parse(v.stdout)).toMatchObject({ valid: false, code: 'KEYRING_SCHEMA' });
       const g = cli(['record-generated', '--cohort', '2099-01', '--version', 'x', '--locations', 'worker_secret', '--expect-database', 'definitely_not_this_database'], { DATABASE_URL: process.env.DATABASE_URL! });
       expect(g.status).not.toBe(0);
-      expect(g.stderr).toMatch(/refusing: connected database/);
+      expect(JSON.parse(g.stderr)).toEqual({ error: 'keyring operation failed', code: 'DATABASE_MISMATCH' });
+      expect(g.stderr).not.toContain('definitely_not_this_database');
     });
   });
 });

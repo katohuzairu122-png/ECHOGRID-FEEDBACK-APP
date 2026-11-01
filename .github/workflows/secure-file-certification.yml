@@ -2,8 +2,8 @@ name: Secure-file DEV-01 certification
 # Development verification only. No production credentials, environments or deployment.
 on:
   push:
-    branches: [dev/s08-sec-file-1-dev01-r7, dev/s08-sec-file-1-dev01-r9]
-    paths: ['packages/secure-file/**', '.github/workflows/secure-file-certification.yml', 'pnpm-lock.yaml']
+    branches: [dev/s08-sec-file-1-dev01-r7, dev/s08-sec-file-1-dev01-r9, dev/s08-sec-file-1-dev02]
+    paths: ['packages/secure-file/**', '.github/workflows/secure-file-certification.yml', 'pnpm-lock.yaml', 'apps/api/scripts/stripe-evidence/**', 'apps/api/test/operator/**', 'apps/api/src/billing/stripe-evidence/**', 'apps/api/vitest.operator.config.ts', 'apps/api/package.json']
   workflow_dispatch:
 permissions:
   contents: read
@@ -59,8 +59,8 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p evidence
-          node --expose-gc --test --test-reporter=tap test/secure-file.posix.test.js | tee evidence/linux-user.tap
-          sudo env PATH="$PATH" node --expose-gc --test --test-reporter=tap test/secure-file.posix.test.js | tee evidence/linux-root.tap
+          node --expose-gc --test --test-reporter=tap test/secure-file.posix.test.js test/destruction.test.js | tee evidence/linux-user.tap
+          sudo env PATH="$PATH" node --expose-gc --test --test-reporter=tap test/secure-file.posix.test.js test/destruction.test.js | tee evidence/linux-root.tap
       - name: Linux fault injection
         if: runner.os == 'Linux'
         shell: bash
@@ -83,7 +83,7 @@ jobs:
         working-directory: packages/secure-file
         run: |
           New-Item -ItemType Directory -Force evidence | Out-Null
-          node --expose-gc --test --test-reporter=tap test/secure-file.win32.test.js test/secure-file.win32-ancestors.test.js 2>&1 | Tee-Object evidence/windows.tap
+          node --expose-gc --test --test-reporter=tap test/secure-file.win32.test.js test/secure-file.win32-ancestors.test.js test/destruction.test.js 2>&1 | Tee-Object evidence/windows.tap
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Windows ancestor trust (distinct disposable account)
         if: runner.os == 'Windows'
@@ -93,6 +93,9 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: packages/secure-file/test/ci/windows-fixture.ps1 -Operation Denial 2>&1 | Tee-Object packages/secure-file/evidence/windows-denial.txt
+      - name: Operator keyring integration with real native files
+        working-directory: apps/api
+        run: pnpm exec vitest run --config vitest.operator.config.ts
       - name: Windows disposable fixture cleanup
         if: always() && runner.os == 'Windows'
         shell: pwsh

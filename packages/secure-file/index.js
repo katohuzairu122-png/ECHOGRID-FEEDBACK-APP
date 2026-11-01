@@ -43,3 +43,9 @@ export function writeSecretFileExclusive(path, bytes) {
     throw e;
   }
 }
+
+/** Verified-handle zeroing and removal of an existing owner-only file. No pathname reopen. */
+export function destroySecretFile(path) {
+  if (typeof path !== 'string' || !path.isWellFormed()) { const e = new Error('secure-file: ARGUMENT'); e.code = 'ARGUMENT'; e.osError = 0; throw e; }
+  native.destroy(path);
+}

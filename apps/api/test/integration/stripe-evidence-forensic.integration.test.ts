@@ -1,3 +1,4 @@
+import { forensicFiles } from '../../scripts/stripe-evidence/_secure-output';
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { Client } from 'pg';
 import { createHash, randomBytes } from 'node:crypto';
@@ -40,7 +41,7 @@ describe.skipIf(!process.env.DATABASE_URL)('forensic reader (integration, dispos
     const shape = classifyEnvelope(body);
     if (shape.kind !== 'ok') throw new Error('fixture');
     const cap = await store.captureWellFormed({ rawBody: new TextEncoder().encode(body), envelope: shape.envelope, signature: SIG, receivedAt: new Date(), attestationEventId: att, retention: RETENTION });
-    return { a, db, keyring, store, att, body, shape, eventId: cap.eventRecordId, reader: new ForensicReader(db, keyring) };
+    return { a, db, keyring, store, att, body, shape, eventId: cap.eventRecordId, reader: new ForensicReader(db, keyring, forensicFiles) };
   }
   const audits = async (recordId: string) => rows(`select actor, approval_ref, details from stripe_evidence_control_events where event_kind='forensic_export_registered' and details->>'recordId'=$1 order by seq`, [recordId]);
 
@@ -113,17 +114,19 @@ describe.skipIf(!process.env.DATABASE_URL)('forensic reader (integration, dispos
     await expect(f.reader.destroyExport(path, exportLabel, CTX)).rejects.toMatchObject({ code: 'EXPORT_MISSING' });
   });
 
-  it('destroyExport overwrites with zeros before unlinking (sanitization is best-effort; the record is what C.6 audits)', async () => {
+  it('destroyExport refuses hardlinked evidence without mutation or destruction audit', async () => {
     const f = await fixture();
     const path = join(dir, `z-${randomBytes(4).toString('hex')}.bin`);
-    writeFileSync(path, 'SECRET-PLAINTEXT');
+    writeFileSync(path, 'SECRET-PLAINTEXT', { mode: 0o600 });
     // observe the zero-fill by hard-linking the same inode before destruction
     const { linkSync } = await import('node:fs');
     const mirror = path + '.link';
     linkSync(path, mirror);
-    await f.reader.destroyExport(path, 'label-' + randomBytes(3).toString('hex'), CTX);
-    expect(readFileSync(mirror).every(b => b === 0)).toBe(true);
-    expect(readFileSync(mirror).length).toBe('SECRET-PLAINTEXT'.length);
+    const label = 'label-' + randomBytes(3).toString('hex');
+    await expect(f.reader.destroyExport(path, label, CTX)).rejects.toMatchObject({ code: 'VERIFY' });
+    expect(readFileSync(mirror, 'utf8')).toBe('SECRET-PLAINTEXT');
+    expect(readFileSync(path, 'utf8')).toBe('SECRET-PLAINTEXT');
+    expect(await rows(`select id from stripe_evidence_control_events where dedupe_key=$1`, [`fexd:${label}`])).toHaveLength(0);
   });
 
   it('lists evidence rows without decrypting anything', async () => {

@@ -2,6 +2,7 @@
 import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { ForensicReader, listEventRecords, loadKeyring } from '../../src/billing/stripe-evidence';
+import { forensicFiles, safeOutputError } from './_secure-output';
 import { connectGuarded, need, opt, parseArgs } from './_cli';
 
 /**
@@ -26,7 +27,7 @@ async function main() {
     const file = process.env.EVIDENCE_KEK_KEYRING_FILE;
     if (!file) throw new Error('EVIDENCE_KEK_KEYRING_FILE is required');
     // Forensic environments may hold older cohorts only: validate against a window that always contains the evaluation instant.
-    const reader = new ForensicReader(conn.db, await loadKeyring(readFileSync(file, 'utf8'), new Date()).catch(() => { throw new Error('keyring invalid for the current time'); }));
+    const reader = new ForensicReader(conn.db, await loadKeyring(readFileSync(file, 'utf8'), new Date()).catch(() => { throw new Error('keyring invalid for the current time'); }), forensicFiles);
     const ctx = { actor: need(a, 'actor'), reason: need(a, 'reason'), approvalRef: opt(a, 'approval-ref') };
     if (cmd === 'read-event') {
       const bytes = await reader.readEvent(need(a, 'id'), ctx);
@@ -45,4 +46,4 @@ async function main() {
   }
 }
 
-main().catch(e => { console.error('forensic script error:', e instanceof Error ? `${e.name}: ${e.message}` : String(e)); process.exitCode = 1; });
+main().catch(e => { console.error(JSON.stringify({ error: 'forensic operation failed', ...safeOutputError(e) })); process.exitCode = 1; });
