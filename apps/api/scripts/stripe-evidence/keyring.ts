@@ -1,5 +1,6 @@
 /* eslint-disable no-console -- operator CLI: stdout is its output channel (JSON only; never key material) */
-import { chmodSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
+import { safeOutputError, writeKeyringSecret } from './_secure-output';
 import {
   CUSTODY_LOCATIONS, addKeyringEntry, assembleKeyring, completeRotation, generateKekEntry, importKek, loadKeyring, recordKekGenerated, rewrapCohort,
   verifyRemovalSafe, type CustodyLocation, type KeyringEntryJson,
@@ -8,21 +9,16 @@ import { commitSha, connectGuarded, need, opt, parseArgs } from './_cli';
 
 /**
  * HETA-01-F1 operator keyring tool. Runs OFFLINE except record-generated / rewrap, which write append-only evidence.
- * KEY MATERIAL: files are created 0600, never overwritten, and key bytes are never printed. Nothing here provisions
+ * KEY MATERIAL: absolute outputs require an operator-owned private directory. Native creation enforces owner-only protection, never overwrites, and key bytes are never printed. Nothing here provisions
  * or reads a Cloudflare secret; the operator places the assembled value. Commands:
- *   generate --cohort YYYY-MM --version v1 [--inactive] --out entry.json
- *   assemble --entry a.json --entry b.json --at ISO --out keyring.json      (validates with the Worker's own loader)
+ *   generate --cohort YYYY-MM --version v1 [--inactive] --out /private/entry.json
+ *   assemble --entry a.json --entry b.json --at ISO --out /private/keyring.json      (validates with the Worker's own loader)
  *   validate --keyring keyring.json [--at ISO]                               (prints a code only)
  *   record-generated --cohort C --version V --locations worker_secret,primary_escrow --expect-database NAME
- *   rotate-phase1 --keyring k.json --entry new.json --out k1.json            (adds the new KEK INACTIVE)
+ *   rotate-phase1 --keyring k.json --entry new.json --out /private/k1.json            (adds the new KEK INACTIVE)
  *   rewrap --cohort C --from V1 --to V2 --old-entry old.json --new-entry new.json --expect-database NAME [--apply]
- *   rotate-phase2 --keyring k1.json --cohort C --from V1 --to V2 --at ISO --expect-database NAME --out k2.json
+ *   rotate-phase2 --keyring k1.json --cohort C --from V1 --to V2 --at ISO --expect-database NAME --out /private/k2.json
  */
-const writeSecret = (path: string, content: string) => {
-  if (existsSync(path)) throw new Error(`refusing to overwrite ${path}`);
-  writeFileSync(path, content, { mode: 0o600, flag: 'wx' });
-  chmodSync(path, 0o600);
-};
 const readEntry = (p: string) => JSON.parse(readFileSync(p, 'utf8')) as KeyringEntryJson;
 const atOf = (a: ReturnType<typeof parseArgs>) => new Date(opt(a, 'at') ?? new Date().toISOString());
 
@@ -32,16 +28,16 @@ async function main() {
   switch (cmd) {
     case 'generate': {
       const entry = generateKekEntry({ cohort: need(a, 'cohort'), kekVersion: need(a, 'version'), active: !a.flags.has('inactive') });
-      writeSecret(need(a, 'out'), JSON.stringify(entry, null, 2) + '\n');
-      console.log(JSON.stringify({ wrote: need(a, 'out'), cohort: entry.cohort, kek_version: entry.kek_version, active: entry.active, mode: '0600' }));
+      const protection = await writeKeyringSecret(need(a, 'out'), JSON.stringify(entry, null, 2) + '\n');
+      console.log(JSON.stringify({ wrote: need(a, 'out'), cohort: entry.cohort, kek_version: entry.kek_version, active: entry.active, ...protection }));
       return;
     }
     case 'assemble': {
       const entries = (a.opts.get('entry') ?? []).map(readEntry);
       const json = assembleKeyring(entries);
       await loadKeyring(json, atOf(a)); // fail closed here, not in production
-      writeSecret(need(a, 'out'), json);
-      console.log(JSON.stringify({ wrote: need(a, 'out'), entries: entries.length, valid: true }));
+      const protection = await writeKeyringSecret(need(a, 'out'), json);
+      console.log(JSON.stringify({ wrote: need(a, 'out'), entries: entries.length, valid: true, ...protection }));
       return;
     }
     case 'validate': {
@@ -63,8 +59,8 @@ async function main() {
     case 'rotate-phase1': {
       const out = addKeyringEntry(readFileSync(need(a, 'keyring'), 'utf8'), readEntry(need(a, 'entry')));
       await loadKeyring(out, atOf(a));
-      writeSecret(need(a, 'out'), out);
-      console.log(JSON.stringify({ wrote: need(a, 'out'), phase: 1, newEntryActive: false }));
+      const protection = await writeKeyringSecret(need(a, 'out'), out);
+      console.log(JSON.stringify({ wrote: need(a, 'out'), phase: 1, newEntryActive: false, ...protection }));
       return;
     }
     case 'rewrap': {
@@ -86,8 +82,8 @@ async function main() {
       try {
         const check = await verifyRemovalSafe(c.db, { cohort, removeVersion: from, remainingKeyringJson: next, now: atOf(a) });
         if (!check.safe) { console.log(JSON.stringify({ phase: 2, safe: false, reasons: check.reasons })); process.exitCode = 2; return; }
-        writeSecret(need(a, 'out'), next);
-        console.log(JSON.stringify({ wrote: need(a, 'out'), phase: 2, safe: true }));
+        const protection = await writeKeyringSecret(need(a, 'out'), next);
+        console.log(JSON.stringify({ wrote: need(a, 'out'), phase: 2, safe: true, ...protection }));
       } finally { await c.close(); }
       return;
     }
@@ -96,4 +92,4 @@ async function main() {
   }
 }
 
-main().catch(e => { console.error('keyring script error:', e instanceof Error ? e.message : String(e)); process.exitCode = 1; });
+main().catch(e => { console.error(JSON.stringify({ error: 'keyring operation failed', ...safeOutputError(e) })); process.exitCode = 1; });

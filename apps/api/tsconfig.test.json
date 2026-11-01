@@ -22,6 +22,7 @@
   "include": [
     "test/**/*.ts",
     "vitest.config.ts",
+    "vitest.operator.config.ts",
     "vitest.integration.config.ts",
     "vitest.workers.config.ts",
     "drizzle.config.ts"

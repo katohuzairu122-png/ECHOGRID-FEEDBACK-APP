@@ -2,8 +2,8 @@ name: Secure-file DEV-01 certification
 # Development verification only. No production credentials, environments or deployment.
 on:
   push:
-    branches: [dev/s08-sec-file-1-dev01-r7, dev/s08-sec-file-1-dev01-r9]
-    paths: ['packages/secure-file/**', '.github/workflows/secure-file-certification.yml', 'pnpm-lock.yaml']
+    branches: [dev/s08-sec-file-1-dev01-r7, dev/s08-sec-file-1-dev01-r9, dev/s08-sec-file-1-dev02]
+    paths: ['packages/secure-file/**', '.github/workflows/secure-file-certification.yml', 'pnpm-lock.yaml', 'apps/api/scripts/stripe-evidence/**', 'apps/api/test/operator/**', 'apps/api/src/billing/stripe-evidence/**', 'apps/api/vitest.operator.config.ts', 'apps/api/package.json']
   workflow_dispatch:
 permissions:
   contents: read
@@ -93,6 +93,9 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: packages/secure-file/test/ci/windows-fixture.ps1 -Operation Denial 2>&1 | Tee-Object packages/secure-file/evidence/windows-denial.txt
+      - name: Operator keyring integration with real native files
+        working-directory: apps/api
+        run: pnpm exec vitest run --config vitest.operator.config.ts
       - name: Windows disposable fixture cleanup
         if: always() && runner.os == 'Windows'
         shell: pwsh
