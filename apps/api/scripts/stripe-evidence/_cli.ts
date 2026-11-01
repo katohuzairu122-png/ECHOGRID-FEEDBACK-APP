@@ -39,7 +39,7 @@ export async function connectGuarded(expectDatabase: string): Promise<{ db: Data
   const name = (await c.query('select current_database() as n')).rows[0].n as string;
   if (name !== expectDatabase) {
     await c.end();
-    throw new Error(`refusing: connected database "${name}" does not equal --expect-database "${expectDatabase}"`);
+    throw Object.assign(new Error('refusing: connected database does not match the expected database'), { code: 'DATABASE_MISMATCH' });
   }
   return { db: buildDb(c), close: () => c.end(), name };
 }

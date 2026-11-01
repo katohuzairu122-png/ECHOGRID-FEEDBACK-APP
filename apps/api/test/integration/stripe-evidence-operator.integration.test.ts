@@ -242,7 +242,8 @@ describe.skipIf(!process.env.DATABASE_URL)('stripe evidence operator tooling (in
       expect(JSON.parse(v.stdout)).toMatchObject({ valid: false, code: 'KEYRING_SCHEMA' });
       const g = cli(['record-generated', '--cohort', '2099-01', '--version', 'x', '--locations', 'worker_secret', '--expect-database', 'definitely_not_this_database'], { DATABASE_URL: process.env.DATABASE_URL! });
       expect(g.status).not.toBe(0);
-      expect(g.stderr).toMatch(/refusing: connected database/);
+      expect(JSON.parse(g.stderr)).toEqual({ error: 'keyring operation failed', code: 'DATABASE_MISMATCH' });
+      expect(g.stderr).not.toContain('definitely_not_this_database');
     });
   });
 });

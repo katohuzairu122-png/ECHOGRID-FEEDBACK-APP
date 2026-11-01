@@ -14,7 +14,7 @@ import {
  */
 const monthsFrom = (d: Date, n: number) => new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + n, 1));
 const testKek = (cohort: string) => createHash('sha256').update(`heta01-f1-test-kek:${cohort}`).digest().toString('base64');
-const ring = () => JSON.stringify({ v: 1, keys: [0, 1, 2].map(n => { const s = monthsFrom(new Date(), n); return { cohort: cohortOf(s), kek_version: 'v1', alg: 'AES-256-GCM', key: testKek(cohortOf(s)), not_before: s.toISOString(), not_after: '2100-01-01T00:00:00Z', active: true }; }) });
+const ring = (at: Date) => JSON.stringify({ v: 1, keys: [0, 1, 2].map(n => { const s = monthsFrom(at, n); return { cohort: cohortOf(s), kek_version: 'v1', alg: 'AES-256-GCM', key: testKek(cohortOf(s)), not_before: s.toISOString(), not_after: '2100-01-01T00:00:00Z', active: true }; }) });
 
 describe.skipIf(!process.env.DATABASE_URL)('heartbeat, UCW materialization and watchdog (integration, disposable database)', () => {
   const clients: Client[] = [];
@@ -32,9 +32,10 @@ describe.skipIf(!process.env.DATABASE_URL)('heartbeat, UCW materialization and w
   const acct = () => `acct_B${randomBytes(6).toString('hex')}`;
   const envFor = (a: string, over: Partial<CaptureEnv> = {}): CaptureEnv => ({
     STRIPE_EVIDENCE_CAPTURE: 'enforced', STRIPE_ACCOUNT_ID: a, STRIPE_EXPECTED_LIVEMODE: 'false', STRIPE_WEBHOOK_SECRET: 'whsec_x',
-    EVIDENCE_KEK_KEYRING: ring(), EVIDENCE_RETENTION_POLICY_VERSION: 'test-v1', EVIDENCE_RETENTION_DAYS: '365', EVIDENCE_L2_MAX_AGE_SECONDS: '86400', EVIDENCE_DB_ROLE_RISK_ACK: 'owner-role-risk-accepted', ...over,
+    EVIDENCE_KEK_KEYRING: ring(T0), EVIDENCE_RETENTION_POLICY_VERSION: 'test-v1', EVIDENCE_RETENTION_DAYS: '365', EVIDENCE_L2_MAX_AGE_SECONDS: '86400', EVIDENCE_DB_ROLE_RISK_ACK: 'owner-role-risk-accepted', ...over,
   });
   const attest = async (a: string) => (await rows(`insert into stripe_evidence_control_events(event_kind,actor,stream,details) values ('account_provenance_verified','test',$1,'{"result":"passed"}') returning id`, [`${a}:false`]))[0].id;
+  // Keyring cohorts use this same timeline, including when six hours ago was in the previous month.
   // A deterministic timeline in the recent past so history windows and the retained-heartbeat logic apply.
   const T0 = new Date(Date.now() - 6 * 3600_000);
   const slotAt = (i: number) => slotOf(T0.getTime()) + i;

@@ -2,7 +2,7 @@ import { Buffer } from 'node:buffer';
 import { lstatSync } from 'node:fs';
 import { dirname, isAbsolute } from 'node:path';
 
-const FILE_CODES = new Set(['MISSING', 'ARGUMENT', 'PATH', 'SYMLINK', 'NOT_DIRECTORY', 'UNSAFE_PARENT', 'EXISTS', 'UNSUPPORTED', 'CREATE', 'VERIFY', 'IDENTITY', 'CLEANUP', 'STATE', 'WRITE', 'FLUSH', 'TOO_LARGE', 'INTERNAL']);
+const FILE_CODES = new Set(['DATABASE_MISMATCH', 'MISSING', 'ARGUMENT', 'PATH', 'SYMLINK', 'NOT_DIRECTORY', 'UNSAFE_PARENT', 'EXISTS', 'UNSUPPORTED', 'CREATE', 'VERIFY', 'IDENTITY', 'CLEANUP', 'STATE', 'WRITE', 'FLUSH', 'TOO_LARGE', 'INTERNAL']);
 const failure = (code: string) => Object.assign(new Error(`secure output: ${code}`), { code });
 
 /** Operator-only adapter. Never import into src/Worker barrels. No path canonicalization or fallback. */
