@@ -278,7 +278,7 @@ static sf_status open_file(const char* path, sf_file** out, int existing) {
   for (int i = 0; r.code == SF_OK && i < nc - 1; i++) {
     HANDLE next = NULL;
     NTSTATUS ns = open_rel(dir, comps[i], READ_CONTROL | FILE_READ_ATTRIBUTES | FILE_TRAVERSE | FILE_LIST_DIRECTORY, FILE_OPEN, FILE_DIRECTORY_FILE | FILE_OPEN_REPARSE_POINT, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, &next);
-    if (ns < 0) { r = st(SF_E_CREATE, (long)pToDos(ns)); break; }
+    if (ns < 0) { long e = (long)pToDos(ns); r = st(existing && (e == ERROR_FILE_NOT_FOUND || e == ERROR_PATH_NOT_FOUND) ? SF_E_MISSING : SF_E_CREATE, e); break; }
     FILE_BASIC_INFO bi;
     if (!GetFileInformationByHandleEx(next, FileBasicInfo, &bi, sizeof(bi))) { r = st(SF_E_CREATE, (long)GetLastError()); CloseHandle(next); break; }
     if (bi.FileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) { r = st(SF_E_SYMLINK, 0); CloseHandle(next); break; }

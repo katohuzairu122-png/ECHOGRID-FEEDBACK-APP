@@ -148,7 +148,7 @@ static sf_status open_file(const char* path, sf_file** out, int existing) {
         return st(sym ? SF_E_SYMLINK : SF_E_NOT_DIRECTORY, e);
       }
       close_quiet(dirfd);
-      return st(SF_E_CREATE, e);
+      return st(existing && e == ENOENT ? SF_E_MISSING : SF_E_CREATE, e);
     }
     struct stat as;
     if (fstat(next, &as) != 0) { int e = errno; close_quiet(next); close_quiet(dirfd); return st(SF_E_CREATE, e); }
@@ -197,7 +197,7 @@ static sf_status open_file(const char* path, sf_file** out, int existing) {
     return failure;
   }
   f->fd = fd; f->dirfd = dirfd; f->dev = fs.st_dev; f->ino = fs.st_ino; f->uid = euid; f->state = ST_PREPARED; f->remove_on_abort = !existing;
-  if (existing) f->written = fs.st_size < 0 ? SF_MAX_BYTES + 1 : (size_t)fs.st_size;
+  if (existing) f->written = fs.st_size < 0 ? SF_MAX_BYTES + 1 : (unsigned long long)fs.st_size > SF_MAX_BYTES ? SF_MAX_BYTES + 1 : (size_t)fs.st_size;
   memcpy(f->name, name, strlen(name) + 1);
   if (!existing && fchmod(fd, 0600) != 0) {
     sf_status failure = st(SF_E_CREATE, errno), cleanup = sf_abort(f);

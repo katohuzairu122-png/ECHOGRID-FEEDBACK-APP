@@ -127,3 +127,13 @@ for (const fault of ['partial', 'cleanup', 'identity']) {
     } finally { delete process.env.SF_TEST_FAULT; }
   });
 }
+
+it('destruction never deletes a substituted destination or claims original removal', () => {
+  const p = join(dir, 'destroy-substitute'); writeSecretFileExclusive(p, new Uint8Array([17, 29, 43]));
+  process.env.SF_TEST_FAULT = 'destroy-substitute'; process.env.SF_TEST_PATH = p;
+  try {
+    assert.equal(failure(() => destroySecretFile(p)).code, 'IDENTITY');
+    assert.equal(readFileSync(p, 'utf8'), 'substitute');
+    assert.deepEqual([...readFileSync(p + '-original')], [0, 0, 0]);
+  } finally { delete process.env.SF_TEST_FAULT; delete process.env.SF_TEST_PATH; }
+});

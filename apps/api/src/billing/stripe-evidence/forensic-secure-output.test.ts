@@ -44,6 +44,11 @@ describe('forensic secure output boundary', () => {
     await f.reader.destroyExport('/private/export', 'label', ctx);
     expect(order).toEqual(['destroy', 'audit']); expect(append).toHaveBeenCalledWith(expect.objectContaining({ kind: 'forensic_export_destroyed', dedupeKey: 'fexd:label' }));
   });
+  it('audit failure after removal is reported without claiming audit success', async () => {
+    const f = fixture(); const error = new Error('synthetic audit failure'); append.mockRejectedValue(error);
+    await expect(f.reader.destroyExport('/private/export', 'label', ctx)).rejects.toBe(error);
+    expect(f.files.destroy).toHaveBeenCalledTimes(1); expect(append).toHaveBeenCalledTimes(1);
+  });
   it('failed destruction never emits a successful destruction record', async () => {
     const f = fixture(); f.files.destroy.mockRejectedValue({ code: 'IDENTITY' });
     await expect(f.reader.destroyExport('/private/export', 'label', ctx)).rejects.toMatchObject({ code: 'IDENTITY' }); expect(append).not.toHaveBeenCalled();

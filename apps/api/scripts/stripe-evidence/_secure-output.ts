@@ -23,7 +23,11 @@ export const forensicFiles = {
     writeSecretFileExclusive(path, bytes);
   },
   async destroy(path: string): Promise<void> {
-    checkOutputPath(path);
+    try { checkOutputPath(path); }
+    catch (error) {
+      if ((error as { code?: string })?.code === 'ENOENT') throw failure('MISSING');
+      throw error;
+    }
     const { destroySecretFile } = await import('@echo-grid-feedback/secure-file');
     destroySecretFile(path);
   },

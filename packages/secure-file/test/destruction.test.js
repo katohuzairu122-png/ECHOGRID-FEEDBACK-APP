@@ -1,6 +1,9 @@
+import process from 'node:process';
+import { Buffer } from 'node:buffer';
 import { after, before, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync, readFileSync, existsSync, linkSync, symlinkSync, chmodSync, openSync, closeSync, readSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { writeSecretFileExclusive, destroySecretFile } from '../index.js';
@@ -22,7 +25,7 @@ it('hardlinked destinations and both contents remain untouched', () => {
 });
 it('symlink destinations never overwrite or delete the target', () => {
   const p = make('target'), alias = p + '-symlink'; symlinkSync(p, alias);
-  assert.throws(() => destroySecretFile(alias)); assert.deepEqual(readFileSync(p), bytes);
+  assert.throws(() => destroySecretFile(alias)); assert.equal(existsSync(alias), true); assert.deepEqual(readFileSync(p), bytes);
 });
 it('junction/symlink parent traversal is rejected before mutation', () => {
   const alias = dir + '-link'; symlinkSync(dir, alias, process.platform === 'win32' ? 'junction' : 'dir');
@@ -41,4 +44,12 @@ it('Linux retained reader observes zeroing before unlink without an extra hard l
   const p = make('zeroing'), fd = openSync(p, 'r');
   try { destroySecretFile(p); const seen = Buffer.alloc(bytes.length, 255); assert.equal(readSync(fd, seen, 0, seen.length, 0), bytes.length); assert.ok(seen.every(v => v === 0)); }
   finally { closeSync(fd); }
+});
+
+it('Windows permissive existing DACL is refused without repair or mutation', { skip: process.platform !== 'win32' }, () => {
+  const p = make('permissive-dacl'); execFileSync('icacls.exe', [p, '/grant', '*S-1-1-0:(R)']);
+  assert.throws(() => destroySecretFile(p), { code: 'VERIFY' }); assert.deepEqual(readFileSync(p), bytes);
+});
+it('missing ancestor reports MISSING without creating directories', () => {
+  assert.throws(() => destroySecretFile(join(dir, 'absent-parent', 'file')), { code: 'MISSING' });
 });
