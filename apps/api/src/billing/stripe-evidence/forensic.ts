@@ -1,4 +1,3 @@
-import { chmodSync, existsSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
 import { basename } from 'node:path';
 import { and, eq } from 'drizzle-orm';
 import type { Database } from '../../db/client';
@@ -16,7 +15,7 @@ import type { LoadedKeyring } from './keyring';
  * A failed decryption returns no partial plaintext and says only that THIS keyring could not decrypt it.
  */
 export class ForensicAccessError extends Error {
-  constructor(public readonly code: 'NOT_FOUND' | 'KEK_UNAVAILABLE' | 'AUDIT_FAILED' | 'BAD_AUDIT_CONTEXT' | 'EXPORT_EXISTS' | 'EXPORT_MISSING') {
+  constructor(public readonly code: 'NOT_FOUND' | 'KEK_UNAVAILABLE' | 'AUDIT_FAILED' | 'BAD_AUDIT_CONTEXT' | 'EXPORT_EXISTS' | 'EXPORT_MISSING' | 'SECURE_OUTPUT_UNAVAILABLE') {
     super(`Forensic access failure: ${code}`);
     this.name = 'ForensicAccessError';
   }
@@ -38,9 +37,15 @@ function checkContext(c: AuditContext): void {
   if (!c.actor.trim() || !c.reason.trim() || c.reason.length > 200) throw new ForensicAccessError('BAD_AUDIT_CONTEXT');
 }
 
+/** Supplied only by the operator CLI; Worker code never imports a native module. */
+export interface ForensicFileOperations {
+  write(path: string, bytes: Uint8Array): Promise<void>;
+  destroy(path: string): Promise<void>;
+}
+
 export class ForensicReader {
   private readonly control: ControlEventWriter;
-  constructor(private readonly db: Database, private readonly keyring: LoadedKeyring) {
+  constructor(private readonly db: Database, private readonly keyring: LoadedKeyring, private readonly files?: ForensicFileOperations) {
     this.control = new ControlEventWriter(db);
   }
 
@@ -104,26 +109,32 @@ export class ForensicReader {
   }
 
   /**
-   * Writes the plaintext of one event to a NEW 0600 file and registers the export (so C.6 can require its destruction).
+   * Writes the plaintext of one event to a NEW owner-only file and registers the export (so C.6 can require its destruction).
    * `locationLabel` is a non-secret name for where the file lives; the path itself is not recorded.
    */
   async exportEventToFile(eventRecordId: string, ctx: AuditContext, path: string, locationLabel: string): Promise<{ exportLabel: string }> {
-    if (existsSync(path)) throw new ForensicAccessError('EXPORT_EXISTS');
+    if (!this.files) throw new ForensicAccessError('SECURE_OUTPUT_UNAVAILABLE');
     const plaintext = await this.readEvent(eventRecordId, ctx); // audited read first
-    const exportLabel = crypto.randomUUID();
-    await this.audit('export', 'stripe_provider_events', eventRecordId, ctx, { exportLabel, locationLabel, file: basename(path).replace(/[^A-Za-z0-9._-]/g, '_').slice(0, 64) });
-    writeFileSync(path, plaintext, { mode: 0o600, flag: 'wx' });
-    chmodSync(path, 0o600);
-    return { exportLabel };
+    try {
+      const exportLabel = crypto.randomUUID();
+      await this.audit('export', 'stripe_provider_events', eventRecordId, ctx, { exportLabel, locationLabel, file: basename(path).replace(/[^A-Za-z0-9._-]/g, '_').slice(0, 64) });
+      await this.files.write(path, plaintext);
+      return { exportLabel };
+    } catch (error) {
+      if ((error as { code?: string })?.code === 'EXISTS') throw new ForensicAccessError('EXPORT_EXISTS');
+      throw error;
+    } finally { plaintext.fill(0); }
   }
 
   /** Overwrites and removes an exported file, then records `forensic_export_destroyed`. Best-effort sanitization; the record is what C.6 audits. */
   async destroyExport(path: string, exportLabel: string, ctx: AuditContext): Promise<void> {
     checkContext(ctx);
-    if (!existsSync(path)) throw new ForensicAccessError('EXPORT_MISSING');
-    const size = statSync(path).size;
-    writeFileSync(path, new Uint8Array(size)); // zero-fill before unlink
-    unlinkSync(path);
+    if (!this.files) throw new ForensicAccessError('SECURE_OUTPUT_UNAVAILABLE');
+    try { await this.files.destroy(path); }
+    catch (error) {
+      if ((error as { code?: string })?.code === 'MISSING') throw new ForensicAccessError('EXPORT_MISSING');
+      throw error;
+    }
     await this.control.append({ kind: 'forensic_export_destroyed', actor: ctx.actor, approvalRef: ctx.approvalRef, dedupeKey: `fexd:${exportLabel}`, details: { exportLabel, reason: ctx.reason } });
   }
 }

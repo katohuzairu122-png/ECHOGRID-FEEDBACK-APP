@@ -5,7 +5,7 @@ import { mkdtempSync, rmSync, existsSync, statSync, renameSync, writeFileSync, r
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { setTimeout } from 'node:timers/promises';
-import { writeSecretFileExclusive } from '../build/Release/fault-wrapper.mjs';
+import { writeSecretFileExclusive, destroySecretFile } from '../build/Release/fault-wrapper.mjs';
 const native = createRequire(import.meta.url)('../build/Release/secure_file_faults.node');
 let dir;
 before(() => { dir = mkdtempSync(join(tmpdir(), 'sf-fault-')); });
@@ -112,3 +112,18 @@ it('file-close failure is reported rather than returning successful completion',
     assert.equal(existsSync(p), false);
   } finally { delete process.env.SF_TEST_FAULT; }
 });
+
+for (const fault of ['partial', 'cleanup', 'identity']) {
+  it(`existing destruction ${fault} failure never claims successful removal`, () => {
+    const p = join(dir, `destroy-${fault}`);
+    writeSecretFileExclusive(p, new Uint8Array([17, 29, 43]));
+    process.env.SF_TEST_FAULT = fault;
+    try {
+      const e = failure(() => destroySecretFile(p));
+      assert.equal(e.code, fault === 'partial' ? 'WRITE' : fault === 'cleanup' ? 'CLEANUP' : 'CREATE');
+      assert.equal(existsSync(p), true);
+      if (fault === 'identity') assert.deepEqual([...readFileSync(p)], [17, 29, 43]);
+      if (fault === 'partial') assert.deepEqual([...readFileSync(p)], [0, 29, 43]);
+    } finally { delete process.env.SF_TEST_FAULT; }
+  });
+}

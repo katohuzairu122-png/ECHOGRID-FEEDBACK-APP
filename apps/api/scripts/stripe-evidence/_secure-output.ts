@@ -2,17 +2,35 @@ import { Buffer } from 'node:buffer';
 import { lstatSync } from 'node:fs';
 import { dirname, isAbsolute } from 'node:path';
 
-const FILE_CODES = new Set(['ARGUMENT', 'PATH', 'SYMLINK', 'NOT_DIRECTORY', 'UNSAFE_PARENT', 'EXISTS', 'UNSUPPORTED', 'CREATE', 'VERIFY', 'IDENTITY', 'CLEANUP', 'STATE', 'WRITE', 'FLUSH', 'TOO_LARGE', 'INTERNAL']);
+const FILE_CODES = new Set(['MISSING', 'ARGUMENT', 'PATH', 'SYMLINK', 'NOT_DIRECTORY', 'UNSAFE_PARENT', 'EXISTS', 'UNSUPPORTED', 'CREATE', 'VERIFY', 'IDENTITY', 'CLEANUP', 'STATE', 'WRITE', 'FLUSH', 'TOO_LARGE', 'INTERNAL']);
 const failure = (code: string) => Object.assign(new Error(`secure output: ${code}`), { code });
 
 /** Operator-only adapter. Never import into src/Worker barrels. No path canonicalization or fallback. */
-export async function writeKeyringSecret(path: string, content: string): Promise<{ protection: string; mode?: string }> {
+function checkOutputPath(path: string): void {
   if (!isAbsolute(path)) throw failure('PATH');
   if (process.platform !== 'linux' && process.platform !== 'win32') throw failure('UNSUPPORTED');
   if (process.platform === 'linux') {
     const parent = lstatSync(dirname(path));
     if (!parent.isDirectory() || parent.isSymbolicLink() || parent.uid !== process.geteuid?.() || (parent.mode & 0o7777) !== 0o700) throw failure('UNSAFE_PARENT');
   }
+ }
+
+/** Operator-only file adapter; never inject a pathname-based fallback. */
+export const forensicFiles = {
+  async write(path: string, bytes: Uint8Array): Promise<void> {
+    checkOutputPath(path);
+    const { writeSecretFileExclusive } = await import('@echo-grid-feedback/secure-file');
+    writeSecretFileExclusive(path, bytes);
+  },
+  async destroy(path: string): Promise<void> {
+    checkOutputPath(path);
+    const { destroySecretFile } = await import('@echo-grid-feedback/secure-file');
+    destroySecretFile(path);
+  },
+};
+
+export async function writeKeyringSecret(path: string, content: string): Promise<{ protection: string; mode?: string }> {
+  checkOutputPath(path);
   // Loading failures are fatal; read-only commands need not load a native binary.
   const { writeSecretFileExclusive } = await import('@echo-grid-feedback/secure-file');
   const bytes = Buffer.from(content, 'utf8');

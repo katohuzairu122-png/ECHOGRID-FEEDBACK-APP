@@ -81,6 +81,7 @@ struct sf_file {
   FILE_ID_INFO id;
   PSID user; /* LocalAlloc'd copy of the token user SID */
   size_t written;
+  int remove_on_abort; /* existing files are close-only until verified destruction */
   sf_state state;
   sf_status cleanup;
 };
@@ -231,7 +232,7 @@ done:
   return result;
 }
 
-sf_status sf_prepare(const char* path, sf_file** out) {
+static sf_status open_file(const char* path, sf_file** out, int existing) {
   *out = NULL;
   if (!path || path[0] == '\0') return st(SF_E_ARGUMENT, 0);
   if (strlen(path) >= SF_MAX_PATH_BYTES) return st(SF_E_ARGUMENT, 0);
@@ -302,33 +303,45 @@ sf_status sf_prepare(const char* path, sf_file** out) {
   LocalFree(sid_str);
 
   HANDLE fh = NULL;
-  NTSTATUS ns = open_rel(dir, comps[nc - 1], GENERIC_WRITE | GENERIC_READ | DELETE | READ_CONTROL | FILE_READ_ATTRIBUTES, FILE_CREATE, FILE_NON_DIRECTORY_FILE | FILE_OPEN_REPARSE_POINT, 0, sd, &fh);
+  NTSTATUS ns = open_rel(dir, comps[nc - 1], GENERIC_WRITE | GENERIC_READ | DELETE | READ_CONTROL | FILE_READ_ATTRIBUTES, (existing ? FILE_OPEN : FILE_CREATE), FILE_NON_DIRECTORY_FILE | FILE_OPEN_REPARSE_POINT, 0, existing ? NULL : sd, &fh);
   LocalFree(sd);
   if (ns < 0) {
     /* An existing name of ANY kind (file, symlink, junction/directory) means "exists"; NTFS reports an existing directory as FILE_IS_A_DIRECTORY before the collision. */
     sf_code c = (ns == STATUS_OBJECT_NAME_COLLISION || ns == STATUS_FILE_IS_A_DIRECTORY) ? SF_E_EXISTS : SF_E_CREATE;
     long e = (long)pToDos(ns);
+    if (existing && (e == ERROR_FILE_NOT_FOUND || e == ERROR_PATH_NOT_FOUND)) c = SF_E_MISSING;
     close_held(held, &nheld); close_h(&dir); LocalFree(user);
     return st(c, e);
   }
   sf_file* f = (sf_file*)calloc(1, sizeof(sf_file));
   if (!f) {
-    sf_file temporary = {0}; temporary.file = fh; temporary.dir = dir; temporary.state = ST_PREPARED;
+    sf_file temporary = {0}; temporary.file = fh; temporary.dir = dir; temporary.state = ST_PREPARED; temporary.remove_on_abort = !existing;
     memcpy(temporary.held, held, sizeof(HANDLE) * (size_t)nheld); temporary.nheld = nheld;
     sf_status cleanup = sf_abort(&temporary), failure = st(SF_E_INTERNAL, ERROR_NOT_ENOUGH_MEMORY);
     failure.cleanup_code = cleanup.code; failure.cleanup_os_error = cleanup.os_error;
     LocalFree(user); return failure;
   }
-  f->file = fh; f->dir = dir; f->user = user; f->state = ST_PREPARED;
+  f->file = fh; f->dir = dir; f->user = user; f->state = ST_PREPARED; f->remove_on_abort = !existing;
   memcpy(f->held, held, sizeof(HANDLE) * (size_t)nheld); f->nheld = nheld;
   if (!GetFileInformationByHandleEx(fh, FileIdInfo, &f->id, sizeof(f->id))) {
     sf_status failure = st(SF_E_UNSUPPORTED, (long)GetLastError()), cleanup = sf_abort(f);
     failure.cleanup_code = cleanup.code; failure.cleanup_os_error = cleanup.os_error;
     sf_free(f); return failure;
   }
+  if (existing) {
+    FILE_STANDARD_INFO si;
+    if (!GetFileInformationByHandleEx(fh, FileStandardInfo, &si, sizeof si) || si.EndOfFile.QuadPart < 0 || (ULONGLONG)si.EndOfFile.QuadPart > SF_MAX_BYTES) {
+      sf_status failure = st(SF_E_VERIFY, 0), cleanup = sf_abort(f);
+      failure.cleanup_code = cleanup.code; failure.cleanup_os_error = cleanup.os_error;
+      sf_free(f); return failure;
+    }
+    f->written = (size_t)si.EndOfFile.QuadPart;
+  }
   *out = f;
   return st(SF_OK, 0);
 }
+
+sf_status sf_prepare(const char* path, sf_file** out) { return open_file(path, out, 0); }
 
 static sf_status verify_locked(sf_file* f) {
   FILE_BASIC_INFO bi; FILE_STANDARD_INFO si; FILE_ID_INFO id;
@@ -355,6 +368,30 @@ static sf_status verify_locked(sf_file* f) {
   }
   LocalFree(sd);
   return r;
+}
+
+
+sf_status sf_destroy(const char* path) {
+  sf_file* f = NULL;
+  sf_status result = open_file(path, &f, 1);
+  if (result.code != SF_OK) return result;
+  result = verify_locked(f);
+  unsigned char zeros[4096] = {0};
+  size_t done = 0;
+  while (result.code == SF_OK && done < f->written) {
+    DWORD count = (DWORD)(f->written - done), n = 0;
+    if (count > sizeof zeros) count = sizeof zeros;
+    if (!WriteFile(f->file, zeros, count, &n, NULL) || n == 0) { result = st(SF_E_WRITE, (long)GetLastError()); break; }
+    done += n;
+  }
+  if (result.code == SF_OK && !FlushFileBuffers(f->file)) result = st(SF_E_FLUSH, (long)GetLastError());
+  if (result.code == SF_OK) result = verify_locked(f);
+  if (result.code == SF_OK) f->remove_on_abort = 1;
+  sf_status cleanup = sf_abort(f);
+  if (result.code == SF_OK) result = cleanup;
+  else { result.cleanup_code = cleanup.code; result.cleanup_os_error = cleanup.os_error; }
+  sf_free(f);
+  return result;
 }
 
 sf_status sf_verify(sf_file* f) {
@@ -401,7 +438,7 @@ sf_status sf_close(sf_file* f) {
 sf_status sf_abort(sf_file* f) {
   if (!f) return st(SF_OK, 0);
   if (f->state == ST_CLOSED || f->state == ST_ABORTED) return f->cleanup;
-  if (f->file) {
+  if (f->remove_on_abort && f->file) {
     /* The creating handle identifies the object even if FileIdInfo cannot be queried. */
     sf_disposition_ex di = { FILE_DISPOSITION_FLAG_DELETE | FILE_DISPOSITION_FLAG_POSIX_SEMANTICS };
     if (!SetFileInformationByHandle(f->file, SF_FileDispositionInfoEx, &di, sizeof(di))) {
@@ -423,7 +460,7 @@ void sf_free(sf_file* f) { if (!f) return; sf_abort(f); if (f->user) LocalFree(f
 
 const char* sf_code_name(sf_code c) {
   switch (c) {
-    case SF_E_CLEANUP: return "CLEANUP"; case SF_OK: return "OK"; case SF_E_ARGUMENT: return "ARGUMENT"; case SF_E_PATH: return "PATH"; case SF_E_SYMLINK: return "SYMLINK";
+    case SF_E_MISSING: return "MISSING"; case SF_E_CLEANUP: return "CLEANUP"; case SF_OK: return "OK"; case SF_E_ARGUMENT: return "ARGUMENT"; case SF_E_PATH: return "PATH"; case SF_E_SYMLINK: return "SYMLINK";
     case SF_E_NOT_DIRECTORY: return "NOT_DIRECTORY"; case SF_E_UNSAFE_PARENT: return "UNSAFE_PARENT"; case SF_E_EXISTS: return "EXISTS";
     case SF_E_UNSUPPORTED: return "UNSUPPORTED"; case SF_E_CREATE: return "CREATE"; case SF_E_VERIFY: return "VERIFY"; case SF_E_IDENTITY: return "IDENTITY";
     case SF_E_STATE: return "STATE"; case SF_E_WRITE: return "WRITE"; case SF_E_FLUSH: return "FLUSH"; case SF_E_TOO_LARGE: return "TOO_LARGE";

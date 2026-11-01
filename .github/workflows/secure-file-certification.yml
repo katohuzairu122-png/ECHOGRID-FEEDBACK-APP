@@ -59,8 +59,8 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p evidence
-          node --expose-gc --test --test-reporter=tap test/secure-file.posix.test.js | tee evidence/linux-user.tap
-          sudo env PATH="$PATH" node --expose-gc --test --test-reporter=tap test/secure-file.posix.test.js | tee evidence/linux-root.tap
+          node --expose-gc --test --test-reporter=tap test/secure-file.posix.test.js test/destruction.test.js | tee evidence/linux-user.tap
+          sudo env PATH="$PATH" node --expose-gc --test --test-reporter=tap test/secure-file.posix.test.js test/destruction.test.js | tee evidence/linux-root.tap
       - name: Linux fault injection
         if: runner.os == 'Linux'
         shell: bash
@@ -83,7 +83,7 @@ jobs:
         working-directory: packages/secure-file
         run: |
           New-Item -ItemType Directory -Force evidence | Out-Null
-          node --expose-gc --test --test-reporter=tap test/secure-file.win32.test.js test/secure-file.win32-ancestors.test.js 2>&1 | Tee-Object evidence/windows.tap
+          node --expose-gc --test --test-reporter=tap test/secure-file.win32.test.js test/secure-file.win32-ancestors.test.js test/destruction.test.js 2>&1 | Tee-Object evidence/windows.tap
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Windows ancestor trust (distinct disposable account)
         if: runner.os == 'Windows'
