@@ -31,6 +31,21 @@ it('missing native write argument fails with ARGUMENT before inspecting uninitia
   const e = failure(() => native.write(h));
   assert.equal(e.code, 'ARGUMENT');
   assert.equal(existsSync(p), false);
+  native.abort(h);
+});
+it('missing write argument preserves independent cleanup failure', () => {
+  const p = join(dir, 'missing-write-cleanup'); const h = native.prepare(p);
+  native.verify(h); process.env.SF_TEST_FAULT = 'cleanup';
+  try {
+    const e = failure(() => native.write(h));
+    assert.equal(e.code, 'ARGUMENT'); assert.equal(e.cleanupError.code, 'CLEANUP');
+    assert.equal(statSync(p).size, 0);
+  } finally { delete process.env.SF_TEST_FAULT; }
+});
+it('missing or foreign handles fail without dereferencing absent arguments', () => {
+  for (const args of [[], [undefined], [null], [{}]]) {
+    assert.equal(failure(() => native.write(...args)).code, 'ARGUMENT');
+  }
 });
 it('repeated abort and garbage collection remove unfinished files', async () => {
   const p = join(dir, 'abort'); const h = native.prepare(p);

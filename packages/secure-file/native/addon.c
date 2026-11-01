@@ -45,10 +45,16 @@ static void finalize(napi_env env, void* data, void* hint) {
 
 static sf_file* unwrap(napi_env env, napi_callback_info info, size_t argc_want, napi_value* argv) {
   size_t argc = argc_want;
-  if (napi_get_cb_info(env, info, &argc, argv, NULL, NULL) != napi_ok || argc < argc_want) { throw_status(env, (sf_status){ SF_E_ARGUMENT, 0, SF_OK, 0 }); return NULL; }
+  if (napi_get_cb_info(env, info, &argc, argv, NULL, NULL) != napi_ok || argc < 1) { throw_status(env, (sf_status){ SF_E_ARGUMENT, 0, SF_OK, 0 }); return NULL; }
   void* p = NULL;
   bool tagged = false;
+  napi_valuetype type;
+  if (napi_typeof(env, argv[0], &type) != napi_ok || type != napi_external) { throw_status(env, (sf_status){ SF_E_ARGUMENT, 0, SF_OK, 0 }); return NULL; }
   if (napi_check_object_type_tag(env, argv[0], &SF_TAG, &tagged) != napi_ok || !tagged || napi_get_value_external(env, argv[0], &p) != napi_ok || !p) { throw_status(env, (sf_status){ SF_E_ARGUMENT, 0, SF_OK, 0 }); return NULL; }
+  /* A validated handle still owns an unfinished file when a later argument is
+     absent. Abort it without reading the missing argv slot; preserve cleanup
+     failure separately from the original argument error. */
+  if (argc < argc_want) { sf_abort((sf_file*)p); throw_status(env, with_cleanup((sf_file*)p, (sf_status){ SF_E_ARGUMENT, 0, SF_OK, 0 })); return NULL; }
   return (sf_file*)p;
 }
 
