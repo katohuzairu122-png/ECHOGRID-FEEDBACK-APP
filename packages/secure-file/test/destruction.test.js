@@ -2,9 +2,10 @@ import process from 'node:process';
 import { Buffer } from 'node:buffer';
 import { after, before, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync, readFileSync, existsSync, linkSync, symlinkSync, chmodSync, openSync, closeSync, readSync } from 'node:fs';
+import { mkdtempSync, rmSync, readFileSync, existsSync, linkSync, symlinkSync, chmodSync, openSync, closeSync, readSync, copyFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
+import { fileURLToPath, URL } from 'node:url';
 import { join } from 'node:path';
 import { writeSecretFileExclusive, destroySecretFile } from '../index.js';
 let dir;
@@ -52,4 +53,18 @@ it('Windows permissive existing DACL is refused without repair or mutation', { s
 });
 it('missing ancestor reports MISSING without creating directories', () => {
   assert.throws(() => destroySecretFile(join(dir, 'absent-parent', 'file')), { code: 'MISSING' });
+});
+
+it('missing native binary fails loading without an insecure file fallback', () => {
+  const isolated = mkdtempSync(join(dir, 'missing-native-'));
+  const modulePath = join(isolated, 'index.mjs'), destination = join(isolated, 'never-written');
+  copyFileSync(fileURLToPath(new URL('../index.js', import.meta.url)), modulePath);
+  // A real isolated copy has no build/Release binary. No loader or ACL mocks.
+  const script = "import { pathToFileURL } from 'node:url'; await import(pathToFileURL(process.argv[1]).href).then(m => m.writeSecretFileExclusive(process.argv[2], new Uint8Array([17])));";
+  assert.throws(() => execFileSync(process.execPath, ['--input-type=module', '-e', script, modulePath, destination], { stdio: 'pipe' }), error => {
+    assert.equal(error.status, 1);
+    assert.match(error.stderr.toString(), /MODULE_NOT_FOUND/);
+    return true;
+  });
+  assert.equal(existsSync(destination), false);
 });
