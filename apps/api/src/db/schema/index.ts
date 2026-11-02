@@ -58,3 +58,5 @@ export * from './benefit-application-saga';
 export * from './partner-credit-disputes';
 
 export * from './heta-persisted-reconciliation';
+
+export * from './s08-allocation-freezes';

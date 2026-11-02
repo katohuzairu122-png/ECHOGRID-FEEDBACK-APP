@@ -1,4 +1,5 @@
 import { Client } from 'pg';
+import { seedScratchAllocation } from './s08-allocation-fixture';
 import { spawnSync } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import { resolve } from 'node:path';
@@ -20,7 +21,7 @@ export async function createBenefitScratch(prefix: string) {
   await root.connect();
   await root.query(`create database ${dbName}`);
   await root.end();
-  const m = spawnSync('pnpm', ['exec', 'drizzle-kit', 'migrate'], { cwd: api, encoding: 'utf8', timeout: 240_000, env: { ...process.env, DATABASE_URL: urlFor(dbName) } });
+  const m = spawnSync(process.execPath, [resolve(api, 'node_modules/drizzle-kit/bin.cjs'), 'migrate'], { cwd: api, encoding: 'utf8', timeout: 240_000, env: { ...process.env, DATABASE_URL: urlFor(dbName) } });
   if (m.status !== 0) throw new Error('scratch migrate failed');
   const connect = async () => { const c = new Client({ connectionString: urlFor(dbName) }); await c.connect(); clients.push(c); return c; };
   const admin = await connect();
@@ -57,6 +58,7 @@ export async function createBenefitScratch(prefix: string) {
   };
   const newService = async () => new BenefitApplicationSagaService(buildDb(await connect()));
   return {
+    seedAllocation: (intent: Parameters<typeof seedScratchAllocation>[1]) => seedScratchAllocation(fx, intent),
     dbName, urlFor, admin, rows, tenantA, tenantB, makeReservation, makeDecision, makeUser, newService, connect,
     disableSagaGuards: async () => {
       for (const t of ['benefit_application_intents', 'benefit_provider_attempts', 'benefit_provider_observations', 'benefit_application_compensations', 'benefit_application_transitions', 'benefit_reconciliation_attempts'])
