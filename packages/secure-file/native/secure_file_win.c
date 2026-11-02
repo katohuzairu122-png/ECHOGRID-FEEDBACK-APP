@@ -91,8 +91,11 @@ static NtCreateFile_t pNtCreateFile;
 static RtlNtStatusToDosError_t pToDos;
 static INIT_ONCE g_once = INIT_ONCE_STATIC_INIT;
 static long close_h(HANDLE* h) {
-  if (*h && *h != INVALID_HANDLE_VALUE && !CloseHandle(*h)) return (long)GetLastError();
-  *h = NULL; return 0;
+  /* Never retry an uncertain close using a numeric handle that may be reused. */
+  HANDLE owned = *h;
+  *h = NULL;
+  if (owned && owned != INVALID_HANDLE_VALUE && !CloseHandle(owned)) return (long)GetLastError();
+  return 0;
 }
 
 static long close_held(HANDLE* held, int* n) {
@@ -423,7 +426,12 @@ sf_status sf_close(sf_file* f) {
   sf_status fin = verify_locked(f);
   if (fin.code != SF_OK) { sf_abort(f); return fin; }
   long e = close_h(&f->file);
-  if (e != 0) { sf_abort(f); return st(SF_E_FLUSH, e); }
+  if (e != 0) {
+    /* close_h has relinquished the handle. Removal cannot be established and
+     * reopening the name could delete a substitute. Report uncertainty separately. */
+    f->cleanup = st(SF_E_CLEANUP, e);
+    sf_abort(f); return st(SF_E_FLUSH, e);
+  }
   e = close_h(&f->dir);
   { long he = close_held(f->held, &f->nheld); if (e == 0) e = he; }
   if (e != 0) {
