@@ -105,3 +105,107 @@ export async function verifyStoredAllocationSnapshot(
     consumptionAuthorized: false,
   };
 }
+
+/** Relational envelope as well as JSON must agree. This is integrity only,
+ * never authenticated provider evidence or permission to move credits. */
+export interface StoredAllocationParent {
+  id: string;
+  business_id: string;
+  invoice_ref: string;
+  currency: string;
+  policy_version: string;
+  allocation_digest: string;
+  aggregate_benefit_minor: string;
+  reservation_count: number;
+  provider_verified: boolean;
+  consumption_authorized: boolean;
+  artifact: unknown;
+}
+
+export interface StoredAllocationItem {
+  freeze_id: string;
+  business_id: string;
+  reservation_id: string;
+  invoice_intent_ref: string;
+  benefit_minor: string;
+  provider_idempotency_key: string;
+}
+
+export async function verifyStoredAllocationEvidence(
+  parent: StoredAllocationParent,
+  items: readonly StoredAllocationItem[],
+  source?: AggregateAllocationInput,
+): Promise<AllocationVerification> {
+  const rejected: AllocationVerification = {
+    status: 'rejected',
+    reason: 'content_mismatch',
+    providerVerified: false,
+    consumptionAuthorized: false,
+  };
+  try {
+    // With no independent source, reconstruct ONLY to check internal integrity.
+    // Neither a coherent persisted envelope nor this reconstruction is authority.
+    const a = parent.artifact as FrozenAggregateBenefitAllocation;
+    const input =
+      source ??
+      ({
+        allocationPolicyVersion: a.allocationPolicyVersion,
+        invoice: { businessId: a.businessId, invoiceRef: a.invoiceRef, currency: a.currency },
+        benefit: {
+          eligible: true,
+          policyVersion: a.benefitPolicyVersion,
+          unitsToApply: a.unitsToApply,
+          unitsNotApplied: 0,
+          eligibleBaseMinor: a.eligibleBaseMinor,
+          benefitMinor: a.aggregateBenefitMinor,
+          percentApplied: a.percentApplied,
+          currency: a.currency,
+          providerVerified: false,
+          consumptionAuthorized: false,
+        },
+        eligibleCreditBalance: a.eligibleCreditBalance,
+        reservations: a.allocations.map((item) => ({
+          id: item.reservationId,
+          businessId: a.businessId,
+          invoiceIntentRef: item.invoiceIntentRef,
+          invoiceRef: a.invoiceRef,
+          currency: a.currency,
+          units: item.units,
+          state: 'reserved',
+          providerAttemptStarted: false,
+        })),
+      } satisfies AggregateAllocationInput);
+    const result = await verifyStoredAllocationSnapshot(parent.artifact, input);
+    if (result.status !== 'verified_snapshot') return result;
+    const expected = result.artifact;
+    if (
+      parent.business_id !== expected.businessId ||
+      parent.invoice_ref !== expected.invoiceRef ||
+      parent.currency !== expected.currency ||
+      parent.policy_version !== expected.allocationPolicyVersion ||
+      parent.allocation_digest !== expected.allocationDigest ||
+      BigInt(parent.aggregate_benefit_minor) !== BigInt(expected.aggregateBenefitMinor) ||
+      parent.reservation_count !== expected.allocations.length ||
+      parent.provider_verified !== false ||
+      parent.consumption_authorized !== false ||
+      items.length !== expected.allocations.length
+    )
+      return rejected;
+    for (const [i, item] of items.entries()) {
+      const allocation = expected.allocations[i];
+      if (
+        !allocation ||
+        item.freeze_id !== parent.id ||
+        item.business_id !== expected.businessId ||
+        item.reservation_id !== allocation.reservationId ||
+        item.invoice_intent_ref !== allocation.invoiceIntentRef ||
+        BigInt(item.benefit_minor) !== BigInt(allocation.benefitMinor) ||
+        item.provider_idempotency_key !== allocation.providerIdempotencyKey
+      )
+        return rejected;
+    }
+    return result;
+  } catch {
+    return rejected;
+  }
+}

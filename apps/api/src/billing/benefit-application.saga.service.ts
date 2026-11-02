@@ -8,6 +8,7 @@ import {
   classifyPresentEffect, startApplication, transition,
   type ApplicationBase, type ApplicationEffect, type ApplicationEvent, type ApplicationState, type ProviderObservation, type RejectCode, type RetainCause,
 } from './invoice-benefit-application.saga';
+import { verifyStoredAllocationEvidence, type StoredAllocationParent, type StoredAllocationItem } from './stored-allocation-verifier';
 
 /**
  * Split 08 durable benefit-application saga service (migration 0048). INERT: the saga tables are write-denied by their own guard (like 0042) in every
@@ -26,7 +27,7 @@ export type IntentView = {
 
 export type SagaResult =
   | { ok: true; intent: IntentView; effects: ApplicationEffect[]; replay: boolean }
-  | { ok: false; code: RejectCode | 'NOT_FOUND'; intent: IntentView | null };
+  | { ok: false; code: RejectCode | 'NOT_FOUND' | 'ALLOCATION_REQUIRED' | 'ALLOCATION_MISMATCH'; intent: IntentView | null };
 
 export class BenefitSagaError extends Error {
   constructor(public readonly code: 'RESERVATION_NOT_FOUND' | 'RESERVATION_NOT_RESERVED' | 'RESERVATION_EXPIRED' | 'INTENT_CONFLICT' | 'INVALID_INPUT') {
@@ -78,6 +79,35 @@ async function stateOf(tx: Tx, r: Row): Promise<ApplicationState> {
 
 export class BenefitApplicationSagaService {
   constructor(private readonly db: Database) {}
+
+  /** Candidate storage is NOT migrated/activated. Preserve the pre-existing
+   * inert saga where neither table exists. Once installed, every new attempt
+   * requires the complete frozen envelope; partial installation fails closed.
+   * Reservation lock is held by the caller across this check and the attempt. */
+  private async allocationGate(tx: Tx, row: Row, invoiceIntentRef: string): Promise<'ALLOCATION_REQUIRED' | 'ALLOCATION_MISMATCH' | null> {
+    const presence = await tx.execute(sql`SELECT
+      to_regclass('s08_allocation_freezes') IS NOT NULL AS parent,
+      to_regclass('s08_allocation_freeze_items') IS NOT NULL AS child`);
+    const tables = presence.rows[0];
+    if (tables?.parent === false && tables?.child === false) return null;
+    if (tables?.parent !== true || tables?.child !== true) return 'ALLOCATION_REQUIRED';
+    const parents = await tx.execute(sql`SELECT f.* FROM s08_allocation_freezes f
+      JOIN s08_allocation_freeze_items i ON i.freeze_id=f.id AND i.business_id=f.business_id
+      WHERE i.reservation_id=${row.reservationId} AND f.business_id=${row.businessId}`);
+    const parent = parents.rows[0] as unknown as StoredAllocationParent | undefined;
+    if (!parent || parents.rows.length !== 1) return 'ALLOCATION_REQUIRED';
+    const children = await tx.execute(sql`SELECT * FROM s08_allocation_freeze_items
+      WHERE freeze_id=${parent.id} ORDER BY reservation_id`);
+    const verified = await verifyStoredAllocationEvidence(parent, children.rows as unknown as StoredAllocationItem[]);
+    if (verified.status !== 'verified_snapshot') return 'ALLOCATION_MISMATCH';
+    const artifact = verified.artifact;
+    const allocation = artifact.allocations.find(a => a.reservationId === row.reservationId);
+    if (!allocation || artifact.businessId !== row.businessId || artifact.invoiceRef !== row.invoiceRef ||
+        artifact.currency !== row.currency || artifact.benefitPolicyVersion !== row.policyVersion ||
+        allocation.units !== row.units || allocation.benefitMinor !== row.expectedBenefitMinor ||
+        allocation.invoiceIntentRef !== invoiceIntentRef) return 'ALLOCATION_MISMATCH';
+    return null;
+  }
 
   /** Idempotent: re-creating the intent for the same reservation with the same terms returns it; different terms are refused. */
   async createIntent(input: { reservationId: string; invoiceRef: string; expectedBenefitMinor: number; currency: string; policyVersion: string }, now = new Date()): Promise<IntentView> {
@@ -149,8 +179,21 @@ export class BenefitApplicationSagaService {
 
   private runOnce(intentId: string, event: ApplicationEvent): Promise<SagaResult> {
     return this.db.transaction(async tx => {
+      // Shared order with allocation freezing: reservation first, then intent.
+      // Never lock the intent before waiting for its reservation. The initial
+      // read resolves identity only; it is checked again after both locks.
+      let reservation: typeof partnerCreditReservations.$inferSelect | undefined;
+      if (event.type === 'begin_apply') {
+        const [identity] = await tx.select({ reservationId: benefitApplicationIntents.reservationId })
+          .from(benefitApplicationIntents).where(eq(benefitApplicationIntents.id, intentId));
+        if (!identity) return { ok: false, code: 'NOT_FOUND', intent: null } as const;
+        [reservation] = await tx.select().from(partnerCreditReservations)
+          .where(eq(partnerCreditReservations.id, identity.reservationId)).for('update');
+      }
       const [row] = await tx.select().from(benefitApplicationIntents).where(eq(benefitApplicationIntents.id, intentId)).for('update');
       if (!row) return { ok: false, code: 'NOT_FOUND', intent: null } as const;
+      if (event.type === 'begin_apply' && (!reservation || reservation.id !== row.reservationId || reservation.businessId !== row.businessId))
+        return { ok: false, code: 'NOT_FOUND', intent: null } as const;
       const before = await stateOf(tx, row);
       let ev = event;
       if (ev.type === 'provider_observation' && ev.observation?.status === 'effect_present' && before.kind !== 'consumed' && before.kind !== 'released' && typeof ev.observation.effectRef === 'string') {
@@ -161,6 +204,12 @@ export class BenefitApplicationSagaService {
       }
       const r = transition(before, ev);
       if (!r.ok) return { ok: false, code: r.code, intent: view(row) } as const;
+
+      if (ev.type === 'begin_apply' && !r.replay) {
+        if (!reservation || reservation.state !== 'reserved') throw new BenefitSagaError('RESERVATION_NOT_RESERVED');
+        const gate = await this.allocationGate(tx, row, reservation.invoiceIntentRef);
+        if (gate) return { ok: false, code: gate, intent: view(row) } as const;
+      }
 
       let next: Row = row;
       if (!r.replay) {
@@ -206,6 +255,13 @@ export class BenefitApplicationSagaService {
         intentId, businessId: row.businessId, eventType: ev.type, fromState: before.kind, toState: r.state.kind, replay: r.replay,
         attemptKey: 'attemptKey' in ev ? ev.attemptKey : null, effects: r.effects as unknown as Record<string, unknown>[], occurredAt: new Date(ev.at),
       });
+      // New attempts, unlike reconciliation/replay of an existing obligation,
+      // must still be unexpired at the last locked server-clock check.
+      if (ev.type === 'begin_apply' && !r.replay) {
+        const expired = await tx.execute(sql`SELECT id FROM partner_credit_reservations
+          WHERE id=${row.reservationId} AND expires_at <= clock_timestamp()`);
+        if (expired.rows.length) throw new BenefitSagaError('RESERVATION_EXPIRED');
+      }
       return { ok: true, intent: view(next), effects: r.effects, replay: r.replay } as const;
     });
   }
