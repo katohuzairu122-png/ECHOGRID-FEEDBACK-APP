@@ -40,6 +40,36 @@ describe('Split 08 benefit provider authority regression (pure, no Stripe or DB 
     expect(result.effects).toEqual([{ type: 'flag_for_reconciliation', reservationRef: base.reservationRef, cause: 'PROVIDER_UNREACHABLE' }]);
   });
 
+  it('stale confirmed-absence evidence retains the reservation rather than releasing it', () => {
+    const result = applyObservation({ status: 'effect_absent', checkedAt: 99 });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.state).toMatchObject({ kind: 'retained', cause: 'STALE_ABSENCE' });
+    expect(result.effects.every(effect => effect.type !== 'release' && effect.type !== 'consume')).toBe(true);
+  });
+
+  it('fresh confirmed-absence evidence releases exactly once without consumption', () => {
+    const result = applyObservation({ status: 'effect_absent', checkedAt: 100 });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.state).toMatchObject({ kind: 'released', cause: 'PROVIDER_CONFIRMED_NO_EFFECT' });
+    expect(result.effects).toEqual([{ type: 'release', reservationRef: base.reservationRef, units: base.units, cause: 'PROVIDER_CONFIRMED_NO_EFFECT' }]);
+    const replay = transition(result.state, { type: 'provider_observation', attemptKey: 'reservation-attempt', observation: { status: 'effect_absent', checkedAt: 101 }, at: 201 });
+    expect(replay).toMatchObject({ ok: true, replay: true, effects: [] });
+  });
+
+  it('an observation from a different attempt cannot consume a reservation', () => {
+    const begun = transition(startApplication(base), { type: 'begin_apply', attemptKey: 'authorized', at: 100 });
+    expect(begun.ok).toBe(true);
+    if (!begun.ok) return;
+    const result = transition(begun.state, { type: 'provider_observation', attemptKey: 'foreign', at: 200, observation: {
+      status: 'effect_present', effectRef: 'effect-1', attributedToReservationRef: base.reservationRef,
+      invoiceRef: base.invoiceRef, currency: base.currency, amountMinor: base.expectedBenefitMinor,
+    } });
+    expect(result).toMatchObject({ ok: false, code: 'ATTEMPT_MISMATCH' });
+    if (!result.ok) expect(result.state.kind).toBe('applying');
+  });
+
   it('an exact match alone produces one declarative consume effect and no release', () => {
     const result = applyObservation({
       status: 'effect_present', effectRef: 'effect-1', attributedToReservationRef: base.reservationRef,
