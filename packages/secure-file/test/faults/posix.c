@@ -9,21 +9,29 @@ static int test_unlinkat(int, const char*, int);
 static ssize_t test_write(int, const void*, size_t);
 static int test_fstat(int, struct stat*);
 static int test_close(int);
+static int test_fsync(int);
 #define unlinkat test_unlinkat
 #define write test_write
 #define fstat test_fstat
 #define close test_close
+#define fsync test_fsync
 #include "../../native/secure_file_posix.c"
 #undef unlinkat
 #undef write
 #undef fstat
 #undef close
+#undef fsync
 static int fault(const char* name) { const char* v = getenv("SF_TEST_FAULT"); return v && strcmp(v, name) == 0; }
 static int test_unlinkat(int fd, const char* name, int flags) {
-  if (fault("cleanup") || fault("partial-cleanup")) { errno = EACCES; return -1; }
+  if (fault("cleanup") || fault("partial-cleanup") || fault("disk-partial-cleanup") || fault("flush-full-cleanup")) { errno = EACCES; return -1; }
   return unlinkat(fd, name, flags);
 }
 static ssize_t test_write(int fd, const void* data, size_t len) {
+  if (fault("disk-full")) { errno = ENOSPC; return -1; }
+  if (fault("disk-partial") || fault("disk-partial-cleanup")) {
+    if (lseek(fd, 0, SEEK_CUR) > 0) { errno = ENOSPC; return -1; }
+    return write(fd, data, len > 1 ? 1 : len);
+  }
   if (fault("destroy-substitute")) {
     const char* path = getenv("SF_TEST_PATH");
     if (!path || strlen(path) > 4000) { errno = EINVAL; return -1; }
@@ -54,4 +62,13 @@ static int test_close(int fd) {
   int r = close(fd);
   if (regular && fault("close")) { errno = EIO; return -1; }
   return r;
+}
+
+static int test_fsync(int fd) {
+  if (fault("flush-full") || fault("flush-full-cleanup")) { errno = ENOSPC; return -1; }
+  if (fault("directory-flush")) {
+    struct stat info;
+    if (fstat(fd, &info) == 0 && S_ISDIR(info.st_mode)) { errno = EIO; return -1; }
+  }
+  return fsync(fd);
 }
