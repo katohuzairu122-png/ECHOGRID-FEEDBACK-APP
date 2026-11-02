@@ -2,7 +2,7 @@ name: Secure-file DEV-01 certification
 # Development verification only. No production credentials, environments or deployment.
 on:
   push:
-    branches: [dev/s08-sec-file-1-dev01-r7, dev/s08-sec-file-1-dev01-r9, dev/s08-sec-file-1-dev02]
+    branches: [dev/s08-sec-file-1-dev01-r7, dev/s08-sec-file-1-dev01-r9, dev/s08-sec-file-1-dev02, dev/s08-security-lifecycle-block04]
     paths: ['packages/secure-file/**', '.github/workflows/secure-file-certification.yml', 'pnpm-lock.yaml', 'apps/api/scripts/stripe-evidence/**', 'apps/api/test/operator/**', 'apps/api/src/billing/stripe-evidence/**', 'apps/api/vitest.operator.config.ts', 'apps/api/package.json']
   workflow_dispatch:
 permissions:
