@@ -1,3 +1,4 @@
+/* global process */
 /* Regression: an abrupt process exit after a verified write does not publish atomically.
  * This test documents an existing limitation, verifies confidential remnants, and
  * exercises explicit identity-safe recovery using synthetic bytes only.
