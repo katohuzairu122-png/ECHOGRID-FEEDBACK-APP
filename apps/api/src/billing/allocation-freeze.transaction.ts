@@ -4,7 +4,11 @@ import {
   type AggregateAllocationInput,
   type FrozenAggregateBenefitAllocation,
 } from './aggregate-benefit-allocation';
-import { verifyStoredAllocationSnapshot } from './stored-allocation-verifier';
+import {
+  verifyStoredAllocationEvidence,
+  type StoredAllocationParent,
+  type StoredAllocationItem,
+} from './stored-allocation-verifier';
 
 /**
  * S08-DEV-06 development-only guarded atomic writer. Requires the candidate
@@ -137,12 +141,8 @@ export async function freezeAllocationTransaction(
       if (!id) throw new AllocationFreezeConflict('CONFLICTING_FREEZE');
     }
 
-    const saved = await client.query<{
-      artifact: unknown;
-      allocation_digest: string;
-      reservation_count: number;
-    }>(
-      `SELECT artifact, allocation_digest, reservation_count FROM s08_allocation_freezes WHERE id=$1`,
+    const saved = await client.query<StoredAllocationParent>(
+      `SELECT * FROM s08_allocation_freezes WHERE id=$1`,
       [id],
     );
     const row = saved.rows[0];
@@ -153,35 +153,23 @@ export async function freezeAllocationTransaction(
     ) {
       throw new AllocationFreezeConflict('CONFLICTING_FREEZE');
     }
-    const verified = await verifyStoredAllocationSnapshot(row.artifact, input);
-    if (verified.status !== 'verified_snapshot') {
-      throw new AllocationFreezeConflict('CONFLICTING_FREEZE');
-    }
-    const items = await client.query<{
-      reservation_id: string;
-      invoice_intent_ref: string;
-      benefit_minor: string;
-      provider_idempotency_key: string;
-    }>(
-      `SELECT reservation_id, invoice_intent_ref, benefit_minor, provider_idempotency_key
-       FROM s08_allocation_freeze_items WHERE freeze_id=$1 ORDER BY reservation_id`,
+    const items = await client.query<StoredAllocationItem>(
+      `SELECT * FROM s08_allocation_freeze_items WHERE freeze_id=$1 ORDER BY reservation_id`,
       [id],
     );
-    if (
-      items.rows.length !== candidate.allocations.length ||
-      items.rows.some((row, i) => {
-        const allocation = candidate.allocations[i];
-        return (
-          !allocation ||
-          row.reservation_id !== allocation.reservationId ||
-          row.invoice_intent_ref !== allocation.invoiceIntentRef ||
-          BigInt(row.benefit_minor) !== BigInt(allocation.benefitMinor) ||
-          row.provider_idempotency_key !== allocation.providerIdempotencyKey
-        );
-      })
-    ) {
+    const verified = await verifyStoredAllocationEvidence(row, items.rows, input);
+    if (verified.status !== 'verified_snapshot') {
       throw new AllocationFreezeConflict('VERIFICATION_FAILED');
     }
+    // Acceptance point: last server-clock check under the reservation locks,
+    // immediately before COMMIT. A lock wait or elapsed work cannot reuse the
+    // expiry value projected by the initial SELECT. This is not WAL commit time.
+    const expired = await client.query(
+      `SELECT id FROM partner_credit_reservations
+       WHERE id = ANY($1::uuid[]) AND expires_at <= clock_timestamp() LIMIT 1`,
+      [ids],
+    );
+    if (expired.rows.length) throw new AllocationFreezeConflict('RESERVATION_MISMATCH');
     await client.query('COMMIT');
     return {
       id,
