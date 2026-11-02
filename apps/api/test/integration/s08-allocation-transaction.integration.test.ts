@@ -2,7 +2,6 @@ import { describe, expect, it, beforeAll, afterAll } from 'vitest';
 import { Client } from 'pg';
 import { randomBytes } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { computeInvoiceBenefit } from '../../src/billing/invoice-benefit.calculator';
 import { AGGREGATE_ALLOCATION_POLICY } from '../../src/billing/aggregate-benefit-allocation';
@@ -217,12 +216,7 @@ describe.skipIf(!process.env.DATABASE_URL)('S08-DEV-06 transactional freeze dura
           (migration.error?.message ?? migration.stderr ?? migration.stdout ?? '').slice(-500),
       );
     fixture = await connect();
-    const sql = readFileSync(
-      resolve(api, 'scripts/sql/s08-allocation-freeze.candidate.sql'),
-      'utf8',
-    );
-    await fixture.query(sql);
-    // Only the two proposed freeze table guards are disabled, in this unique test DB.
+    // Only the two migrated freeze table guards are disabled, in this unique test DB.
     for (const table of ['s08_allocation_freezes', 's08_allocation_freeze_items']) {
       await fixture.query(
         `ALTER TABLE ${table} DISABLE TRIGGER s08_allocation_${table === 's08_allocation_freezes' ? 'parent' : 'child'}_deny`,

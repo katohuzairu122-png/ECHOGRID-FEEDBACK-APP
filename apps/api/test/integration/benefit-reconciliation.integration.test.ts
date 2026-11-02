@@ -26,7 +26,9 @@ describe.skipIf(!process.env.DATABASE_URL)('Split 08 provider reconciliation (in
   const benefitLine = (i: IntentView, id = `ef_${i.reservationId}`, amount = -i.expectedBenefitMinor): ProviderInvoiceLine => ({ id, amount, currency: 'usd', metadata: { [RESERVATION_METADATA_KEY]: i.reservationId } });
   const attempted = async (at = new Date(0)) => {
     const i = await saga.createIntent({ reservationId: await s.makeReservation(s.tenantA), invoiceRef: `in_${++n}`, expectedBenefitMinor: 300, currency: 'usd', policyVersion: 'PC-BENEFIT/1' });
-    await saga.beginApply(i.id, 'att', at);
+    await s.seedAllocation(i);
+    const started = await saga.beginApply(i.id, 'att', at);
+    expect(started.ok).toBe(true);
     return i;
   };
   const clockAt = (ms: number) => () => new Date(ms);

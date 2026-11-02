@@ -1,14 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { readFileSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
-import { resolve } from 'node:path';
 import { Client } from 'pg';
 
-/** Synthetic guard checks on local disposable PostgreSQL; candidate DDL and fixtures roll back. */
+/** Synthetic guard checks on local disposable PostgreSQL; migrated guards remain installed; fixtures roll back. */
 describe.skipIf(!process.env.DATABASE_URL)(
   'S08-DEV-05 inert allocation freeze schema (disposable PostgreSQL)',
   () => {
-    it('rejects parent and child writes with guards enabled and rolls back the DDL', async () => {
+    it('rejects migrated parent and child writes and rolls back fixtures', async () => {
       const target = new URL(process.env.DATABASE_URL!);
       if (
         !['localhost', '127.0.0.1', '[::1]'].includes(target.hostname) ||
@@ -19,17 +17,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
       const client = new Client({ connectionString: target.toString() });
       await client.connect();
       try {
-        expect(
-          (await client.query("select to_regclass('s08_allocation_freezes') existing")).rows[0]
-            ?.existing,
-        ).toBeNull();
         await client.query('BEGIN');
-        await client.query(
-          readFileSync(
-            resolve(__dirname, '../../scripts/sql/s08-allocation-freeze.candidate.sql'),
-            'utf8',
-          ),
-        );
         const business = (
           await client.query<{ id: string }>(
             "insert into businesses(name,slug,status) values('Inert guard fixture',$1,'active') returning id",
@@ -66,7 +54,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
               "select to_regclass('s08_allocation_freezes') parent, to_regclass('s08_allocation_freeze_items') child",
             )
           ).rows[0],
-        ).toEqual({ parent: null, child: null });
+        ).toEqual({ parent: 's08_allocation_freezes', child: 's08_allocation_freeze_items' });
         expect(
           (await client.query('select id from businesses where id=$1', [business])).rowCount,
         ).toBe(0);

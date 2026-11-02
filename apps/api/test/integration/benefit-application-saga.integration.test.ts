@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { Client } from 'pg';
+import { seedScratchAllocation } from './helpers/s08-allocation-fixture';
 import { spawnSync } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import { resolve } from 'node:path';
@@ -44,7 +45,11 @@ describe.skipIf(!process.env.DATABASE_URL)('Split 08 durable benefit saga (integ
     return reservation;
   };
   const terms = (n = 1) => ({ invoiceRef: `in_${n}`, expectedBenefitMinor: 300, currency: 'usd', policyVersion: 'PC-BENEFIT/1' });
-  const newIntent = async (businessId = tenantA, n = ++seq) => svc.createIntent({ reservationId: await makeReservation(businessId), ...terms(n) });
+  const newIntent = async (businessId = tenantA, n = ++seq) => {
+    const intent = await svc.createIntent({ reservationId: await makeReservation(businessId), ...terms(n) });
+    await seedScratchAllocation(fx, intent);
+    return intent;
+  };
   const matched = (i: IntentView, ref = `ef_${randomBytes(4).toString('hex')}`): ProviderObservation => ({ status: 'effect_present', effectRef: ref, amountMinor: i.expectedBenefitMinor, currency: i.currency, invoiceRef: i.invoiceRef, attributedToReservationRef: i.reservationId });
   const okResult = <T extends { ok: boolean }>(r: T): Extract<T, { ok: true }> => { if (!r.ok) throw new Error('expected ok, got ' + JSON.stringify(r)); return r as Extract<T, { ok: true }>; };
   /** The credit-side rows of ONE reservation (its lot and account), the ledger size and the reservation state: the saga must leave all of them alone. */
@@ -56,7 +61,7 @@ describe.skipIf(!process.env.DATABASE_URL)('Split 08 durable benefit saga (integ
     admin = new Client({ connectionString: urlFor('postgres') });
     await admin.connect();
     await admin.query(`create database ${dbName}`);
-    const m = spawnSync('pnpm', ['exec', 'drizzle-kit', 'migrate'], { cwd: api, encoding: 'utf8', timeout: 240_000, env: { ...process.env, DATABASE_URL: urlFor(dbName) } });
+    const m = spawnSync(process.execPath, [resolve(api, 'node_modules/drizzle-kit/bin.cjs'), 'migrate'], { cwd: api, encoding: 'utf8', timeout: 240_000, env: { ...process.env, DATABASE_URL: urlFor(dbName) } });
     if (m.status !== 0) throw new Error('scratch migrate failed');
     await admin.end();
     admin = new Client({ connectionString: urlFor(dbName) });
