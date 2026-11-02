@@ -155,6 +155,41 @@ describe.skipIf(!process.env.DATABASE_URL)('S08-DEV-06 transactional freeze dura
     await fixture.query(`SELECT pg_sleep(GREATEST(0, EXTRACT(EPOCH FROM (expires_at-clock_timestamp()))+0.05))
       FROM partner_credit_reservations WHERE id=$1`, [id]);
   };
+  const backendGone = async (backend: number) => {
+    const until = Date.now() + 5000;
+    while (Date.now() < until) {
+      if ((await fixture.query('SELECT pid FROM pg_stat_activity WHERE pid=$1', [backend])).rowCount === 0) return;
+      await new Promise(resolve => setTimeout(resolve, 10));
+    }
+    throw new Error('Disposable backend did not exit');
+  };
+  const terminateScratchBackend = async (backend: number) => {
+    // The PID is obtained from a connection opened by this suite. Also require
+    // its exact unique scratch database before terminating a PostgreSQL backend.
+    const result = await fixture.query<{ terminated: boolean }>(`SELECT pg_terminate_backend(pid) terminated
+      FROM pg_stat_activity WHERE pid=$1 AND datname=$2 AND pid<>pg_backend_pid()`, [backend, name]);
+    expect(result.rows).toEqual([{ terminated: true }]);
+    await backendGone(backend);
+  };
+  const loseCommitAcknowledgement = (c: Client, boundary: 'before' | 'after') => {
+    let interrupted = false;
+    return new Proxy(c, {
+      get(target, property) {
+        if (property === 'query') return async (config: string | { text: string }, values?: unknown[]) => {
+          const text = typeof config === 'string' ? config : config.text;
+          if (!interrupted && text.trim().toLowerCase() === 'commit') {
+            interrupted = true;
+            if (boundary === 'before') await target.end();
+            else await target.query(config as string, values);
+            throw new Error('Simulated lost commit acknowledgement');
+          }
+          return target.query(config as string, values);
+        };
+        const value = Reflect.get(target, property);
+        return typeof value === 'function' ? value.bind(target) : value;
+      },
+    });
+  };
 
   beforeAll(async () => {
     if (
@@ -500,5 +535,118 @@ describe.skipIf(!process.env.DATABASE_URL)('S08-DEV-06 transactional freeze dura
     data.invoice.businessId = other; data.reservations[0]!.businessId = other;
     await expect(freezeAllocationTransaction(await connect(), data)).rejects.toMatchObject({ reason: 'RESERVATION_MISMATCH' });
     expect((await fixture.query('SELECT id FROM s08_allocation_freezes WHERE invoice_ref=$1', [data.invoice.invoiceRef])).rowCount).toBe(0);
+  });
+
+  it('replays and reconciles an existing attempt after expiry without originating another attempt', async () => {
+    await enableScratchSaga();
+    const data = await fresh('expired_obligation'); const id = data.reservations[0]!.id;
+    await freezeAllocationTransaction(await connect(), data);
+    const original = sagaFor(await connect()); const intent = await intentFor(original, data);
+    expect(await original.beginApply(intent.id, 'original-key')).toMatchObject({ ok: true, replay: false });
+    const before = (await fixture.query('SELECT * FROM benefit_provider_attempts WHERE intent_id=$1', [intent.id])).rows;
+    await fixtureOnly(async () => {
+      await fixture.query("UPDATE partner_credit_reservations SET expires_at=clock_timestamp()-interval '1 second' WHERE id=$1", [id]);
+    });
+    const recovered = sagaFor(await connect());
+    expect(await recovered.beginApply(intent.id, 'original-key')).toMatchObject({ ok: true, replay: true });
+    expect(await recovered.beginApply(intent.id, 'replacement-key')).toMatchObject({ ok: false, code: 'ATTEMPT_CONFLICT' });
+    expect(await recovered.recordObservation(intent.id, 'original-key', { status: 'unreachable' })).toMatchObject({
+      ok: true, intent: { state: 'retained', outcome: 'unresolved' },
+    });
+    expect(await recovered.beginApply(intent.id, 'original-key')).toMatchObject({ ok: true, replay: true });
+    expect((await fixture.query('SELECT * FROM benefit_provider_attempts WHERE intent_id=$1', [intent.id])).rows).toEqual(before);
+    expect((await fixture.query("SELECT id FROM benefit_application_transitions WHERE intent_id=$1 AND event_type='begin_apply' AND replay=false", [intent.id])).rowCount).toBe(1);
+  });
+
+  it.each(['parent', 'child'] as const)('backend termination after %s insertion rolls back the entire allocation', async phase => {
+    const data = await fresh(`terminated_${phase}`);
+    const c = await connect(); c.on('error', () => undefined);
+    const backend = await pid(c);
+    const hold = holdQuery(c, text => phase === 'parent'
+      ? text.includes('INSERT INTO s08_allocation_freezes')
+      : text.includes('INSERT INTO s08_allocation_freeze_items'));
+    const failed = expect(freezeAllocationTransaction(hold.proxy, data)).rejects.toThrow();
+    try { await hold.ready; await terminateScratchBackend(backend); } finally { hold.resume(); }
+    await failed;
+    expect((await fixture.query('SELECT id FROM s08_allocation_freezes WHERE invoice_ref=$1', [data.invoice.invoiceRef])).rowCount).toBe(0);
+    expect((await fixture.query('SELECT freeze_id FROM s08_allocation_freeze_items WHERE reservation_id=$1', [data.reservations[0]!.id])).rowCount).toBe(0);
+    const retried = await freezeAllocationTransaction(await connect(), data);
+    expect(retried).toMatchObject({ replay: false, providerVerified: false, consumptionAuthorized: false });
+    expect((await fixture.query('SELECT freeze_id FROM s08_allocation_freeze_items WHERE reservation_id=$1', [data.reservations[0]!.id])).rows).toEqual([{ freeze_id: retried.id }]);
+  });
+
+  it('backend termination after attempt insertion preserves the freeze and rolls back the saga transaction', async () => {
+    await enableScratchSaga();
+    const data = await fresh('terminated_attempt');
+    const frozen = await freezeAllocationTransaction(await connect(), data);
+    const c = await connect(); c.on('error', () => undefined); const backend = await pid(c);
+    const hold = holdQuery(c, text => text.toLowerCase().includes('insert into "benefit_provider_attempts"'));
+    const saga = sagaFor(hold.proxy); const intent = await intentFor(saga, data);
+    const failed = expect(saga.beginApply(intent.id, 'original-key')).rejects.toThrow();
+    try { await hold.ready; await terminateScratchBackend(backend); } finally { hold.resume(); }
+    await failed;
+    expect((await fixture.query('SELECT id FROM benefit_provider_attempts WHERE intent_id=$1', [intent.id])).rowCount).toBe(0);
+    expect((await fixture.query('SELECT id FROM benefit_application_transitions WHERE intent_id=$1', [intent.id])).rowCount).toBe(0);
+    const recovered = sagaFor(await connect());
+    expect((await recovered.get(intent.id))?.state).toBe('reserved');
+    expect(await recovered.beginApply(intent.id, 'original-key')).toMatchObject({ ok: true, replay: false });
+    expect((await fixture.query('SELECT id FROM benefit_provider_attempts WHERE intent_id=$1', [intent.id])).rowCount).toBe(1);
+    expect((await fixture.query('SELECT allocation_digest FROM s08_allocation_freezes WHERE id=$1', [frozen.id])).rows[0]?.allocation_digest).toBe(frozen.artifact.allocationDigest);
+  });
+
+  it.each(['before', 'after'] as const)('reconnect resolves an unknown freeze commit when transport fails %s server COMMIT', async boundary => {
+    const data = await fresh(`unknown_${boundary}`); const c = await connect(); const backend = await pid(c);
+    await expect(freezeAllocationTransaction(loseCommitAcknowledgement(c, boundary), data)).rejects.toThrow();
+    if (boundary === 'before') await backendGone(backend);
+    else await c.end();
+    const persisted = (await fixture.query('SELECT id,allocation_digest FROM s08_allocation_freezes WHERE invoice_ref=$1', [data.invoice.invoiceRef])).rows;
+    expect(persisted).toHaveLength(boundary === 'after' ? 1 : 0);
+    const result = await freezeAllocationTransaction(await connect(), data);
+    expect(result.replay).toBe(boundary === 'after');
+    expect(result.providerVerified).toBe(false); expect(result.consumptionAuthorized).toBe(false);
+    if (boundary === 'after') {
+      expect(result.id).toBe(persisted[0]?.id);
+      expect(result.artifact.allocationDigest).toBe(persisted[0]?.allocation_digest);
+    }
+    expect((await fixture.query('SELECT id FROM s08_allocation_freezes WHERE invoice_ref=$1', [data.invoice.invoiceRef])).rows).toEqual([{ id: result.id }]);
+    expect((await fixture.query('SELECT freeze_id FROM s08_allocation_freeze_items WHERE reservation_id=$1', [data.reservations[0]!.id])).rows).toEqual([{ freeze_id: result.id }]);
+  });
+
+  it('lost attempt commit acknowledgement replays the original durable operation after reconnect', async () => {
+    await enableScratchSaga();
+    const data = await fresh('unknown_attempt');
+    await freezeAllocationTransaction(await connect(), data);
+    const c = await connect(); const original = sagaFor(loseCommitAcknowledgement(c, 'after'));
+    const intent = await intentFor(sagaFor(c), data);
+    await expect(original.beginApply(intent.id, 'original-key')).rejects.toMatchObject({
+      cause: expect.objectContaining({ message: 'Simulated lost commit acknowledgement' }),
+    });
+    await c.end();
+    const before = (await fixture.query('SELECT * FROM benefit_provider_attempts WHERE intent_id=$1', [intent.id])).rows;
+    expect(before).toHaveLength(1);
+    const recovered = sagaFor(await connect());
+    expect(await recovered.beginApply(intent.id, 'original-key')).toMatchObject({ ok: true, replay: true });
+    expect(await recovered.beginApply(intent.id, 'replacement-key')).toMatchObject({ ok: false, code: 'ATTEMPT_CONFLICT' });
+    expect((await fixture.query('SELECT * FROM benefit_provider_attempts WHERE intent_id=$1', [intent.id])).rows).toEqual(before);
+    expect((await fixture.query("SELECT id FROM benefit_application_transitions WHERE intent_id=$1 AND event_type='begin_apply' AND replay=false", [intent.id])).rowCount).toBe(1);
+  });
+
+  it('an unknown committed freeze does not authorize a new attempt after reservation expiry', async () => {
+    await enableScratchSaga();
+    const data = await fresh('unknown_expired'); const id = data.reservations[0]!.id;
+    const original = await connect();
+    await expect(freezeAllocationTransaction(loseCommitAcknowledgement(original, 'after'), data)).rejects.toThrow();
+    await original.end();
+    const saga = sagaFor(await connect()); const intent = await intentFor(saga, data);
+    const before = (await fixture.query('SELECT * FROM s08_allocation_freezes WHERE invoice_ref=$1', [data.invoice.invoiceRef])).rows;
+    expect(before).toHaveLength(1);
+    await fixtureOnly(async () => {
+      await fixture.query("UPDATE partner_credit_reservations SET expires_at=clock_timestamp()-interval '1 second' WHERE id=$1", [id]);
+    });
+    await expect(freezeAllocationTransaction(await connect(), data)).rejects.toMatchObject({ reason: 'RESERVATION_MISMATCH' });
+    await expect(saga.beginApply(intent.id, 'original-key')).rejects.toMatchObject({ code: 'RESERVATION_EXPIRED' });
+    expect((await fixture.query('SELECT * FROM s08_allocation_freezes WHERE invoice_ref=$1', [data.invoice.invoiceRef])).rows).toEqual(before);
+    expect((await fixture.query('SELECT id FROM benefit_provider_attempts WHERE intent_id=$1', [intent.id])).rowCount).toBe(0);
+    expect((await saga.get(intent.id))?.state).toBe('reserved');
   });
 });
