@@ -1,6 +1,6 @@
 # S08-PRIVATE-VERIFIER-03 — Conditional authorization for temporary resource-only test
 
-**Owner approval:** 2026-11-03. **Purpose:** isolated test-only provisioning and identity verification. **Status:** AUTHORIZED FOR RESOURCE-ONLY CREATION; NOT YET EXECUTED.
+**Owner approval:** 2026-11-03. **Purpose:** isolated test-only provisioning and identity verification. **Status:** RESOURCE-ONLY CREATION REPORTED COMPLETE BY CODEX; independent Cloudflare API recheck from this session NOT PERFORMED.
 
 **Owner constraint:** "if its temporary for testing only proceed".
 
@@ -27,3 +27,25 @@
 | Test completion and owner-approved cleanup | PENDING |
 
 **Current verdict:** GO for conditional resource-only creation through the authorized Cloudflare session; **NO-GO** for claims of successful provisioning until verified API evidence is returned. No infrastructure mutation is performed by committing this record.
+
+## Post-creation evidence — owner-provided Codex report (2026-11-03)
+
+**Evidence class:** Codex-reported authenticated Cloudflare reads; not independently re-executed by the assistant. Preserve raw authenticated response references in an authorized private evidence store; no secrets in this record.
+
+| Property | Reported evidence |
+|---|---|
+| Account | INFINICUS LLC, `b0ca727d821092e2e14720223ac07edb` |
+| Resource name | `echo-grid-s08-stripe-test-verifier` |
+| Resource UUID | `4c3ac5ade3354c018e56f2307db5c028` |
+| Created | 2026-11-03 19:52:10.658785 Asia/Kuwait |
+| Operator | Wrangler OAuth session, owner-supplied operator identifier; no tokens included |
+| Pre-create inventory | Two Workers, exact target absent, lookup 404 code 10007 |
+| Resource-only creation | HTTP 200; authenticated lookups by name and UUID agreed |
+| Previously existing Workers | Both resource IDs preserved in post-create inventory |
+| Versions/deployments | 0 / 0 |
+| workers.dev and preview URLs | Both disabled |
+| Custom domains, zone routes, schedules and account queues | Reported 0 |
+| Script settings API | 404 code 10222; no executable version to inspect for runtime bindings |
+| Code upload, secrets, Stripe operations, PR merge, deletion | None reported |
+
+**Gate:** GO to accept the temporary *resource identity* as reported. NO-GO for code deployment or credential provisioning. The actual executable workload identity, runtime bindings and credential custody remain unprovisioned. Resource must be removed after authorized testing only following dependency verification and separate owner deletion authorization.
