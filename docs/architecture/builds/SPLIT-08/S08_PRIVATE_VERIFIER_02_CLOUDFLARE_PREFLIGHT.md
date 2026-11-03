@@ -5,12 +5,16 @@ Reviewed November 3, 2026 at main `2e622c41b357ae26b912a9f99bc3df01697fe93e`. PR
 | Finding | Classification | Evidence |
 | --- | --- | --- |
 | Cloudflare operator authentication | VERIFIED | Wrangler whoami succeeded with OAuth. It listed two account memberships and Workers permissions. |
-| Approved Cloudflare account | BLOCKED | Two accessible accounts. The repository leaves owner selection pending and records deployment account only through a secret reference. Access alone cannot establish selection. |
+| Approved Cloudflare account | OWNER-DESIGNATED (verification pending) | Owner explicitly designated INFINICUS LLC, account `b0ca727d821092e2e14720223ac07edb`, on 2026-11-03. Previously observed in authenticated Wrangler account membership; re-verify actual membership before API requests. Personal account `cf205213947e3617297373060fe4c15f` excluded. |
 | Repository contract | VERIFIED | Dedicated script name `echo-grid-s08-stripe-test-verifier`, `workers_dev=false`, inert 404 handler, no configured routes or triggers. |
 | Actual Worker UUID, existence, versions, deployments and effective restrictions | PENDING | Requires authenticated inspection in the selected account. |
 | Resource-only creation support | VERIFIED | Cloudflare documents creation of a standalone Worker resource before uploading a version. Availability in the selected account remains pending. [Create Worker](https://developers.cloudflare.com/api/resources/workers/subresources/beta/subresources/workers/methods/create/) · [Resource model](https://developers.cloudflare.com/changelog/post/2025-09-03-new-workers-api/) |
 | Credential custody | PENDING | Future Worker-scoped encrypted binding `STRIPE_TEST_VERIFIER_RESTRICTED_KEY`. Verify the exact account, UUID and deployment implications before a separately authorized secret operation. |
 | Stripe access | NOT APPLICABLE | This infrastructure block uses the owner-designated account as inventory metadata. |
+
+## Owner account designation — 2026-11-03
+
+The owner approved **INFINICUS LLC**, Cloudflare account ID `b0ca727d821092e2e14720223ac07edb`, as the exclusive account for the ECHO GRID S08 private verifier. The personal Cloudflare account `cf205213947e3617297373060fe4c15f` must not be used for this workload. This authorization permits **read-only Worker inventory inspection** in the designated account, not an implicit deployment or credential operation. Resource-only creation remains conditional on independently verified absence, correct permissions and a supported creation path; do not deploy executable code, attach routes/triggers, or install Stripe secrets. The Worker UUID and effective settings are **not yet verified**.
 
 ## Resource-only execution plan
 
@@ -19,4 +23,4 @@ Reviewed November 3, 2026 at main `2e622c41b357ae26b912a9f99bc3df01697fe93e`. PR
 3. For verified absence, use POST /accounts/{account_id}/workers/workers with the exact name and resource settings only. Keep code, versions and deployments outside this call. Verify the returned UUID with an independent GET and confirm zero versions/deployments and absence of invocation wiring. If resource-only creation is unavailable, retain the inert code deployment plan for separate authorization.
 4. Record non-secret evidence references and the resulting scope. A Worker UUID establishes resource identity. An executable revision and its trust boundary require separate evidence.
 
-No infrastructure mutation was performed during this preflight. GO for scoped inventory verification after account selection. Provisioning remains blocked pending the approved account.
+No infrastructure mutation was performed during this preflight. GO for scoped inventory verification in the owner-designated account. Resource creation remains conditional on authenticated absence verification, supported resource-only creation, and the previously stated owner scope; **no provisioning has yet been performed**.
