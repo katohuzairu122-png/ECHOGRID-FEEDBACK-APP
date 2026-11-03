@@ -561,4 +561,73 @@ describe.skipIf(!process.env.DATABASE_URL)('D4 final credit consumption and ledg
       expect(bad.status === 'inconsistent' && bad.violations.map(v => v.code)).toContain('CONSUMED_REVERSAL_EVIDENCE');
     });
   });
+  describe('owner ratification evidence (D4-03, D4-05, D4-06)', () => {
+    it('D4-03: an effect confirmed after the reservation deadline is classified for review, never recorded or consumed, and nothing is discarded or written', async () => {
+      const late = await scenario({ expiresInMs: 1_000, appliedOffsetMs: 3_000 });
+      const before = await credit(late);
+      const c = await applications.classify({ reservationId: late.reservationId, businessId: late.businessId });
+      expect(c).toMatchObject({ classification: 'EFFECT_AFTER_RESERVATION_DEADLINE', heldForReview: true, reservationId: late.reservationId, intentId: late.intentId });
+      if (c.heldForReview) { expect(c.lateByMs).toBeGreaterThan(0); expect(c.providerEffectRef).toMatch(/^ef_/); }
+      expect(await rejects(applications.record({ reservationId: late.reservationId, businessId: late.businessId }))).toMatch(/S08_APPLICATION_AFTER_RESERVATION_EXPIRY/);
+      expect(await rejects(consumption.consume({ reservationId: late.reservationId, businessId: late.businessId }))).toMatch(/PARTNER_CONSUME_APPLICATION_MISSING/);
+      // the evidence is preserved exactly: reservation, credit rows, saga intent (still confirmed with its provider effect) and the ledger are unchanged
+      expect(await credit(late)).toEqual(before);
+      expect((await rows<{ state: string; outcome: string; provider_effect_ref: string }>('select state, outcome, provider_effect_ref from benefit_application_intents where id=$1', [late.intentId]))[0])
+        .toMatchObject({ state: 'consumed', outcome: 'confirmed' });
+      const ok = await scenario();
+      expect(await applications.classify({ reservationId: ok.reservationId, businessId: ok.businessId })).toMatchObject({ classification: 'WITHIN_RESERVATION_DEADLINE', heldForReview: false });
+      const noSaga = await scenario({ sagaTo: 'reserved' });
+      expect(await applications.classify({ reservationId: noSaga.reservationId, businessId: noSaga.businessId })).toMatchObject({ classification: 'NO_RECONCILED_EFFECT', heldForReview: false });
+      expect(await rejects(applications.classify({ reservationId: ok.reservationId, businessId: noSaga.businessId }))).toMatch(/S08_APPLICATION_UNKNOWN_RESERVATION/);
+    });
+
+    it('D4-05: the database also requires the frozen allocation item to carry the reservation\'s own invoice-intent reference', async () => {
+      const s = await scenario(); await applications.record({ reservationId: s.reservationId, businessId: s.businessId });
+      await fxq("update s08_allocation_freeze_items set invoice_intent_ref = 'intent-substituted' where reservation_id=$1", [s.reservationId]);
+      expect(await rejects(admin.query("update partner_credit_reservations set state='consumed', terminal_at=now() where id=$1", [s.reservationId]))).toMatch(/frozen allocation of this reservation to match/);
+      expect((await credit(s)).reservation).toBe('reserved');
+    });
+
+    it('D4-06: the same reservation can never be applied twice (the database refuses it on any invoice, and the writer replays the one row)', async () => {
+      const s = await scenario();
+      const first = await applications.record({ reservationId: s.reservationId, businessId: s.businessId });
+      const again = await applications.record({ reservationId: s.reservationId, businessId: s.businessId });
+      expect(again).toMatchObject({ applicationId: first.applicationId, replay: true });
+      for (const invoiceRef of [s.invoiceRef, `${s.invoiceRef}_other`]) {
+        const sub = (await rows<{ id: string }>('select id from business_subscriptions where business_id=$1', [s.businessId]))[0]!.id;
+        const err = await rejects(fxq(
+          `insert into billing_partner_credit_applications(reservation_id,business_id,subscription_id,invoice_ref,provider_success_ref,idempotency_key,units_applied,terminal_state,applied_at)
+           values($1,$2,$3,$4,$5,$6,1,'applied',now())`, [s.reservationId, s.businessId, sub, invoiceRef, `ef_dup_${randomUUID()}`, `dup-${randomUUID()}`]));
+        expect(err).toMatch(/duplicate key value/);
+      }
+      expect((await credit(s)).applications).toBe(1);
+    });
+
+    it('D4-06: an invoice\'s applications correspond exactly to its frozen allocation items; an extra reservation without a frozen item cannot be applied', async () => {
+      const first = await scenario({ sagaTo: 'consumed' });
+      // a second credit of the same business and invoice, with a consumed saga but NO frozen allocation item
+      const n = ++seq;
+      await fxq('update partner_credit_accounts set reserved = 2 where id=$1', [first.accountId]);
+      const second = await forgeCredit(first.businessId, first.accountId, n, 86_400_000);
+      const intent = await saga.createIntent({ reservationId: second.reservationId, invoiceRef: first.invoiceRef, expectedBenefitMinor: 300, currency: 'usd', policyVersion: 'PC-BENEFIT/1' });
+      await saga.beginApply(intent.id, 'att-x', new Date(Date.now() - 500));
+      expect((await saga.recordObservation(intent.id, 'att-x', { status: 'effect_present', effectRef: `ef_${randomBytes(5).toString('hex')}`, amountMinor: 300, currency: 'usd', invoiceRef: first.invoiceRef, attributedToReservationRef: second.reservationId }, new Date())).ok).toBe(false);
+      expect(await rejects(applications.record({ reservationId: second.reservationId, businessId: first.businessId }))).toMatch(/S08_APPLICATION_(SAGA_NOT_RECONCILED|ALLOCATION_MISSING)/);
+      await applications.record({ reservationId: first.reservationId, businessId: first.businessId });
+      const apps = await rows<{ reservation_id: string }>('select reservation_id from billing_partner_credit_applications where business_id=$1 and invoice_ref=$2', [first.businessId, first.invoiceRef]);
+      const items = await rows<{ reservation_id: string }>(
+        'select it.reservation_id from s08_allocation_freeze_items it join s08_allocation_freezes f on f.id=it.freeze_id where f.business_id=$1 and f.invoice_ref=$2', [first.businessId, first.invoiceRef]);
+      expect(apps.map(a => a.reservation_id).sort()).toEqual(items.map(i => i.reservation_id).sort());
+      expect(apps).toHaveLength(1);
+    });
+
+    it('D4-06: business isolation — the key includes the business, so another business may use the same invoice reference but can never reach this reservation', async () => {
+      const a = await scenario(); const b = await scenario();
+      await applications.record({ reservationId: a.reservationId, businessId: a.businessId });
+      expect(await rejects(applications.record({ reservationId: a.reservationId, businessId: b.businessId }))).toMatch(/S08_APPLICATION_UNKNOWN_RESERVATION/);
+      const keys = await rows<{ def: string }>("select pg_get_constraintdef(oid) def from pg_constraint where conrelid='billing_partner_credit_applications'::regclass and contype='u' order by 1");
+      expect(keys.map(k => k.def)).toEqual(expect.arrayContaining(['UNIQUE (business_id, invoice_ref, reservation_id)', 'UNIQUE (reservation_id)']));
+      expect(keys.map(k => k.def)).not.toContain('UNIQUE (business_id, invoice_ref)');
+    });
+  });
 });
