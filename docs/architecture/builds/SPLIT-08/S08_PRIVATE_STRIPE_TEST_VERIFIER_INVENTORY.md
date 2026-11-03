@@ -1,7 +1,7 @@
 # S08 — Private Stripe test verifier inventory (approval pending)
 
 **Record ID:** `S08-STRIPE-PRIVATE-TEST-VERIFIER-001`  
-**Status:** `DRAFT / NOT APPROVED / EXECUTION DENIED`  
+**Status:** `OWNER ACCOUNT DESIGNATED / WORKLOAD AND CREDENTIAL APPROVAL PENDING / EXECUTION DENIED`  
 **Created:** 2026-11-03  
 **Purpose:** Inventory the exact account, test realm, workload, credential reference, and read scope required to qualify a *private*, read-only Stripe point-evidence verifier.
 
@@ -11,8 +11,8 @@ This document is an **inventory record to be completed and approved**. Its prese
 
 | Field | Value / required evidence |
 | --- | --- |
-| Stripe account ID expected from authenticated `GET /v1/account` | **PENDING — exact `acct_…` ID must be entered and verified** |
-| Stripe realm | **PENDING — must explicitly approve `test`; live mode is forbidden** |
+| Stripe account ID expected from authenticated `GET /v1/account` | **OWNER-DESIGNATED:** `acct_1TtKaUQ0xjd6eYbP` (Infinicus simulation engine); credential principal still must be independently verified |
+| Stripe realm | **OWNER-DESIGNATED:** `test`; connected Stripe account discovery reported `livemode=false` (not a private-verifier attestation) |
 | Credential owner / approved organization | **PENDING** |
 | Private verifier workload identity / service principal | **PENDING — immutable workload identity and environment binding** |
 | Verifier approved execution path | **PENDING — exact private job/service entry point, environment, repository revision and deployment/runner boundary** |
@@ -28,7 +28,7 @@ This document is an **inventory record to be completed and approved**. Its prese
 | Inventory approver and decision timestamp | **PENDING** |
 | Review/expiry/revocation status | **PENDING — fail closed if absent, expired, revoked or superseded** |
 
-The staging account ID used in an earlier, separate check is **not inherited** by this verifier. The responsible approver must explicitly bind that exact ID to this record, verify it against the credential's account principal and approve test-realm access. No implicit staging-to-verifier mapping is permitted.
+**Owner account designation (2026-11-03):** The owner explicitly designated `acct_1TtKaUQ0xjd6eYbP`, named **Infinicus simulation engine**, as ECHO GRID's approved *test-account selection* for this verifier. A connected Stripe account listing returned this account with `livemode=false`. This is a deliberate cross-project test account selection, not approval of credential custody, a workload identity, execution, or financial operations. The earlier staging account is not silently inherited; only this explicitly designated ID may be used, and `GET /v1/account` must still verify the principal under the eventual restricted credential. Connected-account discovery is not sufficient evidence of the private credential's identity.
 
 ## 2. Approval and execution gates
 
@@ -48,7 +48,7 @@ All of these conditions are mandatory **before** any private verifier read:
 - **Scope owner / approver:** PENDING
 - **Approval decision and timestamp:** PENDING
 - **Approval ticket / immutable evidence reference:** PENDING
-- **Account ID / test-realm approval reference:** PENDING
+- **Account ID / test-realm selection reference:** owner designation in the 2026-11-03 conversation; account `acct_1TtKaUQ0xjd6eYbP`, test realm; independent private credential identity attestation PENDING
 - **Workload identity and private execution-path approval reference:** PENDING
 - **Account and invoice read permission authorization reference:** PENDING
 - **Credential inventory location and version attestation reference:** PENDING
@@ -97,4 +97,4 @@ This template is not evidence that an authorized run occurred. The only permitte
 - [S08 method-profile acceptance review](S08_METHOD_PROFILE_ACCEPTANCE_REVIEW.md)
 - [S08 authenticated binding source contract](S08_AUTHENTICATED_BINDING_SOURCE_CONTRACT.md)
 
-**Current disposition:** `INVENTORY CREATED / VALUES PENDING / NO PROVIDER REQUESTS AUTHORIZED`. Do not enter a guessed Stripe account or credential version, and do not infer permission from CI, repository merge status or the earlier staging check.
+**Current disposition:** `ACCOUNT DESIGNATED / REMAINING INVENTORY AND PERMISSIONS PENDING / NO PRIVATE PROVIDER REQUESTS AUTHORIZED`. Do not enter a guessed credential version or workload identity, and do not infer private execution permission from CI, repository merge status or connected Stripe account discovery.
