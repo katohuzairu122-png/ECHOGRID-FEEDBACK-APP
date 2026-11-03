@@ -40,3 +40,14 @@ Proposed private transport alone does not establish authorization. The verifier 
 - Temporary retirement after test; record dependencies and obtain deletion authorization.
 
 **Verdict:** GO for **offline development review and tests**. NO-GO for deploying or invoking the verifier, creating a caller Worker, issuing keys, retrieving invoices or using evidence to authorize financial settlement.
+
+## Security remediation — independent review of initial PR #205 head
+
+Following the independent review of original commit `d7bfae4cfd74319af95fde1ae35d4f901bb9d642`, offline code was revised to address the contract-level findings:
+
+1. **Request-bound proof contract:** `authenticate(proof, canonicalRequest)` must cryptographically verify the exact canonical request bytes, including audience, method, inventory revision, nonce, Unix-millisecond timestamps and complete invoice scope; response must attest the exact request. The fake test authenticator demonstrates tamper denial, but is NOT cryptographic authentication and must never be deployed.
+2. **Consistent timing:** Request timestamps are Unix epoch **milliseconds**, 300,000 ms maximum lifetime, 30,000 ms maximum clock skew, replay-store TTL derived by `ceil(remainingMs / 1000)` and request expiry must not exceed approval expiry.
+3. **Scoped invoice requests:** The invoice method requires an exact approved, trusted invoice/business/customer/subscription scope in the policy and the request. These identifiers must ultimately be corroborated through independently authorized data and Stripe evidence; equality of strings alone is NOT tenant authority.
+4. **Collision-safe replay key:** JSON array encoding for principal/audience/revision/nonce; injected atomic one-use claim interface. Production-safe atomic durable implementation and concurrency verification are **still outstanding**.
+
+**Certification limitation:** No real signed proof verifier, bound transport identity, authoritative approval source or distributed atomic replay store has been integrated. The changes correct the *offline contract*; operational authentication, independent runtime security certification and deployment remain NO-GO. All tests are synthetic and not a security certification of Cloudflare runtime behavior.
