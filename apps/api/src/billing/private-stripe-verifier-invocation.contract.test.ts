@@ -5,7 +5,7 @@ import { authorizePrivateInvocation, type InvocationRequest, type InvocationPoli
 const request: InvocationRequest = {
   audience: 'worker:synthetic-account:synthetic-uuid',
   operation: 'GET /v1/account', inventoryRevision: 'synthetic-r1',
-  nonce: 'synthetic_nonce_123456789012345', issuedAt: 1000, expiresAt: 2000,
+  nonce: 'synthetic_nonce_123456789012345', issuedAt: 1300, expiresAt: 1600,
 };
 const policy: InvocationPolicy = {
   approved: true, revoked: false, callerPrincipal: 'synthetic-test-runner',
