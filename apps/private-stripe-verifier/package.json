@@ -1,0 +1,8 @@
+{
+  "name": "@echo-grid-feedback/private-stripe-test-verifier",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "license": "UNLICENSED",
+  "description": "Non-operational, isolated Cloudflare Worker identity for S08 Stripe test point-evidence verifier. No deploy scripts."
+}

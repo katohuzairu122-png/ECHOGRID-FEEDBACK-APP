@@ -1,0 +1,13 @@
+# S08-PRIVATE-VERIFIER-01 — designated Worker identity, not deployed or approved.
+# Explicitly private: no workers.dev hostname, public routes, or triggers.
+name = "echo-grid-s08-stripe-test-verifier"
+main = "src/index.ts"
+compatibility_date = "2026-10-01"
+workers_dev = false
+
+# Do NOT add routes, custom domains, cron or public triggers here.
+# Do NOT attach the main ECHO GRID API's STRIPE_SECRET_KEY.
+# Credential provisioning requires a separately approved, restricted TEST key
+# in the existing Cloudflare Workers secret store, bound only to this Worker:
+#   STRIPE_TEST_VERIFIER_RESTRICTED_KEY
+# No secret is configured, copied or created by this file.
