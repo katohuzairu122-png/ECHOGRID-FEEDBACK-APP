@@ -13,8 +13,8 @@ This document is an **inventory record to be completed and approved**. Its prese
 | --- | --- |
 | Stripe account ID expected from authenticated `GET /v1/account` | **OWNER-DESIGNATED:** `acct_1TtKaUQ0xjd6eYbP` (Infinicus simulation engine); credential principal still must be independently verified |
 | Stripe realm | **OWNER-DESIGNATED:** `test`; connected Stripe account discovery reported `livemode=false` (not a private-verifier attestation) |
-| Credential owner / approved organization | **PENDING** |
-| Private verifier workload identity / service principal | **DESIGNATED IN CODE, NOT PROVISIONED/APPROVED:** Cloudflare Worker script `echo-grid-s08-stripe-test-verifier`; Cloudflare account identity and runtime attestation PENDING |
+| Credential owner / approved organization | **Cloudflare workload account owner designated:** INFINICUS LLC (`b0ca727d821092e2e14720223ac07edb`); Stripe restricted credential owner, key custody, permissions and execution approval **PENDING** |
+| Private verifier workload identity / service principal | **OWNER-APPROVED TARGET ACCOUNT:** INFINICUS LLC (`b0ca727d821092e2e14720223ac07edb`); proposed Worker script `echo-grid-s08-stripe-test-verifier`; actual UUID, provisioned resource, executable identity and runtime attestation **PENDING** |
 | Verifier approved execution path | **PROPOSED, NOT APPROVED:** `apps/private-stripe-verifier/src/index.ts`, configured by `apps/private-stripe-verifier/wrangler.toml`; private Cloudflare Worker with `workers_dev=false`, no routes/triggers, and deny-all entry point; deployment account, immutable deployed revision and execution authorization PENDING |
 | Secret store / credential inventory locator | **PROPOSED STORE/BINDING, NOT PROVISIONED:** Cloudflare Workers encrypted secret binding `STRIPE_TEST_VERIFIER_RESTRICTED_KEY` on the dedicated Worker; exact Cloudflare account, secret inventory URI/ID and custody evidence PENDING |
 | Restricted credential version / revision | **PENDING — create a *new*, minimum-scope Stripe TEST restricted API key and inventory its immutable version; never reuse general API/production keys** |
@@ -29,6 +29,8 @@ This document is an **inventory record to be completed and approved**. Its prese
 | Review/expiry/revocation status | **PENDING — fail closed if absent, expired, revoked or superseded** |
 
 **Owner account designation (2026-11-03):** The owner explicitly designated `acct_1TtKaUQ0xjd6eYbP`, named **Infinicus simulation engine**, as ECHO GRID's approved *test-account selection* for this verifier. A connected Stripe account listing returned this account with `livemode=false`. This is a deliberate cross-project test account selection, not approval of credential custody, a workload identity, execution, or financial operations. The earlier staging account is not silently inherited; only this explicitly designated ID may be used, and `GET /v1/account` must still verify the principal under the eventual restricted credential. Connected-account discovery is not sufficient evidence of the private credential's identity.
+
+**Cloudflare account decision (2026-11-03):** Owner expressly selected INFINICUS LLC account `b0ca727d821092e2e14720223ac07edb` for this private verifier. The personal account `cf205213947e3617297373060fe4c15f` is excluded. This authorizes account-scoped Worker inventory inspection only at this stage; the actual Worker identity, resource existence, version, secret custody and read-execution approval are outstanding.
 
 ### Proposed environment boundary (not yet provisioned)
 
