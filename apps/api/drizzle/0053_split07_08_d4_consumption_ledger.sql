@@ -27,7 +27,7 @@ ALTER TABLE "billing_partner_credit_applications" DROP CONSTRAINT "billing_partn
 ALTER TABLE "billing_partner_credit_applications" ADD CONSTRAINT "billing_partner_credit_applications_invoice_reservation_key" UNIQUE ("business_id","invoice_ref","reservation_id");--> statement-breakpoint
 -- 3. Database-queryable consumption evidence verifier (CE-1: "no generated data structure is evidence by itself"). A reservation is CREATED reserved and may become
 --    `consumed` only when the verified application, a saga reconciled to `consumed` (same provider effect and invoice) AND the frozen allocation item for it (same
---    invoice, same benefit amount) all exist. `consumed` and `released` are terminal. The application row itself is deliberately NOT verified at insert: the
+--    invoice, same invoice-intent reference, same currency and benefit amount) all exist. `consumed` and `released` are terminal. The application row itself is deliberately NOT verified at insert: the
 --    0042/0047 persistence constraints are tested directly against bare rows and must keep behaving exactly as they do; consumption is where the evidence is judged.
 CREATE OR REPLACE FUNCTION partner_credit_reservation_consume_evidence() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
@@ -58,7 +58,7 @@ BEGIN
         JOIN s08_allocation_freezes f ON f.id = it.freeze_id AND f.business_id = it.business_id
         JOIN benefit_application_intents i ON i.reservation_id = it.reservation_id AND i.business_id = it.business_id
         JOIN billing_partner_credit_applications a ON a.reservation_id = it.reservation_id AND a.business_id = it.business_id
-       WHERE it.reservation_id = NEW.id AND it.business_id = NEW.business_id
+       WHERE it.reservation_id = NEW.id AND it.business_id = NEW.business_id AND it.invoice_intent_ref = NEW.invoice_intent_ref
          AND f.invoice_ref = a.invoice_ref AND f.currency = i.currency AND it.benefit_minor = i.expected_benefit_minor
     ) THEN
       RAISE EXCEPTION 'Consumption requires the frozen allocation of this reservation to match the applied invoice, currency and amount';

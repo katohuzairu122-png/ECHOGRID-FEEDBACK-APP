@@ -21,8 +21,33 @@ import {
  *   - the business has an `active` subscription (the only status eligible to receive a benefit).
  * It never touches lots, accounts or the ledger: moving the credit is the separate Split 07 consumption transaction.
  */
+export type HeldEffectClassification =
+  | { classification: 'EFFECT_AFTER_RESERVATION_DEADLINE'; heldForReview: true; reservationId: string; intentId: string; providerEffectRef: string; appliedAt: Date; reservationExpiresAt: Date; lateByMs: number }
+  | { classification: 'WITHIN_RESERVATION_DEADLINE' | 'NO_RECONCILED_EFFECT'; heldForReview: false; reservationId: string };
+
 export class BenefitTerminalApplicationService {
   constructor(private readonly db: Database) {}
+
+  /**
+   * D4-03: read-only classification of a provider effect that landed after its reservation's own deadline. Such an effect is never recorded or consumed
+   * (record() and the consumer refuse it), and it is never discarded: the saga intent, provider effect reference and reservation stay exactly as they are
+   * and this returns the evidence an operator needs to review and reconcile it. It writes nothing, issues no refund and makes no compensating financial write.
+   */
+  async classify(input: { reservationId: string; businessId: string }): Promise<HeldEffectClassification> {
+    if (!input.reservationId || !input.businessId) throw new Error('S08_APPLICATION_INPUT_INVALID');
+    const [reservation] = await this.db.select().from(partnerCreditReservations).where(eq(partnerCreditReservations.id, input.reservationId)).limit(1);
+    if (!reservation || reservation.businessId !== input.businessId) throw new Error('S08_APPLICATION_UNKNOWN_RESERVATION');
+    const [intent] = await this.db.select().from(benefitApplicationIntents)
+      .where(and(eq(benefitApplicationIntents.reservationId, reservation.id), eq(benefitApplicationIntents.businessId, input.businessId))).limit(1);
+    if (!intent || intent.state !== 'consumed' || intent.outcome !== 'confirmed' || !intent.providerEffectRef || !intent.appliedAt)
+      return { classification: 'NO_RECONCILED_EFFECT', heldForReview: false, reservationId: reservation.id };
+    if (intent.appliedAt > reservation.expiresAt)
+      return {
+        classification: 'EFFECT_AFTER_RESERVATION_DEADLINE', heldForReview: true, reservationId: reservation.id, intentId: intent.id, providerEffectRef: intent.providerEffectRef,
+        appliedAt: intent.appliedAt, reservationExpiresAt: reservation.expiresAt, lateByMs: intent.appliedAt.getTime() - reservation.expiresAt.getTime(),
+      };
+    return { classification: 'WITHIN_RESERVATION_DEADLINE', heldForReview: false, reservationId: reservation.id };
+  }
 
   async record(input: { reservationId: string; businessId: string }): Promise<{ applicationId: string; providerSuccessRef: string; replay: boolean }> {
     if (!input.reservationId || !input.businessId) throw new Error('S08_APPLICATION_INPUT_INVALID');
