@@ -14,10 +14,10 @@ This document is an **inventory record to be completed and approved**. Its prese
 | Stripe account ID expected from authenticated `GET /v1/account` | **OWNER-DESIGNATED:** `acct_1TtKaUQ0xjd6eYbP` (Infinicus simulation engine); credential principal still must be independently verified |
 | Stripe realm | **OWNER-DESIGNATED:** `test`; connected Stripe account discovery reported `livemode=false` (not a private-verifier attestation) |
 | Credential owner / approved organization | **PENDING** |
-| Private verifier workload identity / service principal | **PENDING — immutable workload identity and environment binding** |
-| Verifier approved execution path | **PENDING — exact private job/service entry point, environment, repository revision and deployment/runner boundary** |
-| Secret store / credential inventory locator | **PENDING — inventory URI or identifier only, no secret value** |
-| Restricted credential version / revision | **PENDING — immutable inventory version; record rotation/supersession** |
+| Private verifier workload identity / service principal | **DESIGNATED IN CODE, NOT PROVISIONED/APPROVED:** Cloudflare Worker script `echo-grid-s08-stripe-test-verifier`; Cloudflare account identity and runtime attestation PENDING |
+| Verifier approved execution path | **PROPOSED, NOT APPROVED:** `apps/private-stripe-verifier/src/index.ts`, configured by `apps/private-stripe-verifier/wrangler.toml`; private Cloudflare Worker with `workers_dev=false`, no routes/triggers, and deny-all entry point; deployment account, immutable deployed revision and execution authorization PENDING |
+| Secret store / credential inventory locator | **PROPOSED STORE/BINDING, NOT PROVISIONED:** Cloudflare Workers encrypted secret binding `STRIPE_TEST_VERIFIER_RESTRICTED_KEY` on the dedicated Worker; exact Cloudflare account, secret inventory URI/ID and custody evidence PENDING |
+| Restricted credential version / revision | **PENDING — create a *new*, minimum-scope Stripe TEST restricted API key and inventory its immutable version; never reuse general API/production keys** |
 | Permitted Stripe API operation 1 | **PENDING APPROVAL** — proposed `GET /v1/account`, only for principal/account confirmation |
 | Permitted Stripe API operation 2 | **PENDING APPROVAL** — proposed `GET /v1/invoices/{id}`, exact trusted locally selected invoice in the approved account |
 | API version | `2026-05-27.dahlia` — repository's proposed explicitly pinned invoice read version; reverify at execution |
@@ -29,6 +29,15 @@ This document is an **inventory record to be completed and approved**. Its prese
 | Review/expiry/revocation status | **PENDING — fail closed if absent, expired, revoked or superseded** |
 
 **Owner account designation (2026-11-03):** The owner explicitly designated `acct_1TtKaUQ0xjd6eYbP`, named **Infinicus simulation engine**, as ECHO GRID's approved *test-account selection* for this verifier. A connected Stripe account listing returned this account with `livemode=false`. This is a deliberate cross-project test account selection, not approval of credential custody, a workload identity, execution, or financial operations. The earlier staging account is not silently inherited; only this explicitly designated ID may be used, and `GET /v1/account` must still verify the principal under the eventual restricted credential. Connected-account discovery is not sufficient evidence of the private credential's identity.
+
+### Proposed environment boundary (not yet provisioned)
+
+- **Platform:** Cloudflare Workers (same infrastructure family as ECHO GRID, separately scoped service).
+- **Script identifier:** `echo-grid-s08-stripe-test-verifier` (repository designation only; Cloudflare resource existence has **not** been verified).
+- **Source:** `apps/private-stripe-verifier/src/index.ts`; configuration `apps/private-stripe-verifier/wrangler.toml`. Private service has no public routes or workers.dev subdomain; its current handler returns 404 and contains no Stripe network code.
+- **Credential slot:** `STRIPE_TEST_VERIFIER_RESTRICTED_KEY` (name only). Actual secret must be issued as restricted TEST API key from the approved Stripe account and written directly by the authorized operator to this Worker's existing Cloudflare secret store. No secret or key-material transit through GitHub, chat or CI.
+- **Remaining authority checks:** Cloudflare organization/account owner, deployment/runner attestation, exact workload IAM privileges, Stripe restricted-key method permissions, secret inventory/version, and separate scope/read approval are all **PENDING**. A script name is not a cryptographic workload identity.
+- **Do not deploy:** Private execution path and credential bindings are architectural preparations only. No code push or PR approval authorizes deployment or network access.
 
 ## 2. Approval and execution gates
 
