@@ -588,6 +588,21 @@ describe.skipIf(!process.env.DATABASE_URL)('D4 final credit consumption and ledg
       expect((await credit(s)).reservation).toBe('reserved');
     });
 
+    it('D4-05: the database refuses consumption when the provider effect or invoice differs from the application (service bypassed)', async () => {
+      // (state/outcome of a saga are already pinned by benefit_application_intents_shape_check, so 'consumed' without 'confirmed' is unrepresentable; the trigger's
+      // matching clause is defence in depth and the effect/invoice agreement below is what only the trigger can judge)
+      for (const [label, change] of [
+        ['provider effect differs', "provider_effect_ref='ef_other_'||substr(md5(random()::text),1,8)"],
+        ['invoice differs', "invoice_ref='in_other_'||substr(md5(random()::text),1,8)"],
+      ] as const) {
+        const s = await scenario(); await applications.record({ reservationId: s.reservationId, businessId: s.businessId });
+        await fxq(`update benefit_application_intents set ${change} where id=$1`, [s.intentId]);
+        expect(await rejects(admin.query("update partner_credit_reservations set state='consumed', terminal_at=now() where id=$1", [s.reservationId])), label)
+          .toMatch(/verified Split 08 terminal application and a reconciled saga/);
+        expect((await credit(s)).reservation, label).toBe('reserved');
+      }
+    });
+
     it('D4-06: the same reservation can never be applied twice (the database refuses it on any invoice, and the writer replays the one row)', async () => {
       const s = await scenario();
       const first = await applications.record({ reservationId: s.reservationId, businessId: s.businessId });
