@@ -358,7 +358,7 @@ describe.skipIf(!process.env.DATABASE_URL)('D4 final credit consumption and ledg
       const s = await consumed(); const event = randomUUID();
       const before = await credit(s);
       expect(await reverse(s, event)).toBe('recovery_obligation_created');
-      expect(await credit(s)).toMatchObject({ reservation: 'consumed', applications: 1, lot: 'reversed', decision: 'reversed', available: 0, provisional: 0, reserved: 0, recovery_due: 1, obligations: 1, ledger: before.ledger + 1 });
+      expect(await credit(s)).toMatchObject({ reservation: 'consumed', applications: 1, lot: 'reversed', decision: 'reversed', available: 0, provisional: 0, reserved: 0, recovery_due: 1, obligations: 1, ledger: Number(before.ledger) + 1 });
       const ob = (await rows<{ reversal_ref: string; units_due: number; units_outstanding: number }>('select reversal_ref, units_due, units_outstanding from partner_credit_recovery_obligations where account_id=$1', [s.accountId]))[0]!;
       expect(ob).toEqual({ reversal_ref: event, units_due: 1, units_outstanding: 1 });
       const entries = await rows<{ entry_type: string; units: number }>('select entry_type, units from partner_credit_ledger where decision_id=$1 order by occurred_at, entry_type', [s.decisionId]);
