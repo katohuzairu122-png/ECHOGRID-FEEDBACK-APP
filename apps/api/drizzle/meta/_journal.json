@@ -372,6 +372,13 @@
       "when": 1793644324212,
       "tag": "0052_s08_inert_allocation_freezes",
       "breakpoints": true
+    },
+    {
+      "idx": 53,
+      "version": "7",
+      "when": 1793727117201,
+      "tag": "0053_split07_08_d4_consumption_ledger",
+      "breakpoints": true
     }
   ]
 }

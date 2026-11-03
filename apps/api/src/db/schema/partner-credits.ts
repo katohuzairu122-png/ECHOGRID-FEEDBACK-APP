@@ -94,7 +94,7 @@ export const partnerCreditLedger = pgTable('partner_credit_ledger', {
   id: uuid('id').primaryKey().defaultRandom(),
   accountId: uuid('account_id').notNull().references(() => partnerCreditAccounts.id, { onDelete: 'restrict' }),
   decisionId: uuid('decision_id').references(() => partnerCreditAwardDecisions.id, { onDelete: 'restrict' }),
-  entryType: text('entry_type').$type<'provisional'|'vest'|'expire'|'reverse'|'recovery_offset'|'admin_adjustment'>().notNull(),
+  entryType: text('entry_type').$type<'provisional'|'vest'|'expire'|'reverse'|'recovery_offset'|'admin_adjustment'|'consume'|'consumed_reversal'>().notNull(),
   units: integer('units').notNull(),
   idempotencyKey: text('idempotency_key').notNull(),
   metadata: jsonb('metadata').$type<Record<string, unknown>>(),
@@ -103,7 +103,12 @@ export const partnerCreditLedger = pgTable('partner_credit_ledger', {
   uniqueIndex('partner_credit_ledger_idempotency_key').on(t.idempotencyKey),
   index('partner_credit_ledger_account_date_idx').on(t.accountId,t.occurredAt),
   check('partner_credit_ledger_nonzero_check', sql`${t.units} <> 0`),
-  check('partner_credit_ledger_type_check', sql`${t.entryType} IN ('provisional','vest','expire','reverse','recovery_offset','admin_adjustment')`),
+  check('partner_credit_ledger_type_check', sql`${t.entryType} IN ('provisional','vest','expire','reverse','recovery_offset','admin_adjustment','consume','consumed_reversal')`),
+  // D4 vocabulary (migration 0053). `consume` leaves the buckets (-1, counted in the ledger identity); `consumed_reversal` records that a reversal reached an
+  // already-consumed credit and originated a recovery obligation (+1, informational: the debt is not a balance, so it is NOT counted in the identity).
+  check('partner_credit_ledger_d4_units_check', sql`(${t.entryType} = 'consume' AND ${t.units} = -1) OR (${t.entryType} = 'consumed_reversal' AND ${t.units} = 1) OR ${t.entryType} NOT IN ('consume','consumed_reversal')`),
+  uniqueIndex('partner_credit_ledger_one_consume_per_decision').on(t.decisionId).where(sql`${t.entryType} = 'consume'`),
+  uniqueIndex('partner_credit_ledger_one_consumed_reversal_per_decision').on(t.decisionId).where(sql`${t.entryType} = 'consumed_reversal'`),
 ]);
 
 export const partnerCreditRecoveryObligations = pgTable('partner_credit_recovery_obligations', {
