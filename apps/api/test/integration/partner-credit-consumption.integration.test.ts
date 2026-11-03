@@ -603,6 +603,43 @@ describe.skipIf(!process.env.DATABASE_URL)('D4 final credit consumption and ledg
       }
     });
 
+    it('review M2: the database and the consumer refuse an application whose applied_at is not the reconciled saga\'s own (a forged early timestamp cannot defeat the deadline)', async () => {
+      const edited = await scenario(); await applications.record({ reservationId: edited.reservationId, businessId: edited.businessId });
+      await fxq("update billing_partner_credit_applications set applied_at = applied_at - interval '1 second' where reservation_id=$1", [edited.reservationId]);
+      expect(await rejects(admin.query("update partner_credit_reservations set state='consumed', terminal_at=now() where id=$1", [edited.reservationId]))).toMatch(/reconciled saga/);
+      expect(await rejects(consumption.consume({ reservationId: edited.reservationId, businessId: edited.businessId }))).toMatch(/PARTNER_CONSUME_APPLICATION_NOT_AUTHORITATIVE/);
+      // late real effect + bare application carrying an early timestamp
+      const late = await scenario({ expiresInMs: 1_000, appliedOffsetMs: 3_000 });
+      const intent = (await rows<{ provider_effect_ref: string; invoice_ref: string }>('select provider_effect_ref, invoice_ref from benefit_application_intents where id=$1', [late.intentId]))[0]!;
+      const sub = (await rows<{ id: string }>('select id from business_subscriptions where business_id=$1', [late.businessId]))[0]!.id;
+      await fxq(`insert into billing_partner_credit_applications(reservation_id,business_id,subscription_id,invoice_ref,provider_success_ref,idempotency_key,units_applied,terminal_state,applied_at)
+                 values($1,$2,$3,$4,$5,$6,1,'applied',now() - interval '1 hour')`, [late.reservationId, late.businessId, sub, intent.invoice_ref, intent.provider_effect_ref, `forged-${randomUUID()}`]);
+      expect(await rejects(admin.query("update partner_credit_reservations set state='consumed', terminal_at=now() where id=$1", [late.reservationId]))).toMatch(/reconciled saga/);
+      expect(await rejects(consumption.consume({ reservationId: late.reservationId, businessId: late.businessId }))).toMatch(/PARTNER_CONSUME_APPLICATION_NOT_AUTHORITATIVE/);
+      expect((await credit(late)).reservation).toBe('reserved');
+    });
+
+    it('review M1: terminal_at is never earlier than the application\'s applied_at, even when the caller passes an earlier clock', async () => {
+      const s = await scenario({ appliedOffsetMs: 1_000 }); await applications.record({ reservationId: s.reservationId, businessId: s.businessId });
+      await consumption.consume({ reservationId: s.reservationId, businessId: s.businessId, now: new Date(Date.now() - 60_000) });
+      const r = (await rows<{ ok: boolean }>('select r.terminal_at >= a.applied_at ok from partner_credit_reservations r join billing_partner_credit_applications a on a.reservation_id=r.id where r.id=$1', [s.reservationId]))[0]!;
+      expect(r.ok).toBe(true);
+    });
+
+    it('review L2: a consumed reservation is immutable in every column, not only its state', async () => {
+      const s = await scenario(); await applications.record({ reservationId: s.reservationId, businessId: s.businessId });
+      await consumption.consume({ reservationId: s.reservationId, businessId: s.businessId });
+      for (const set of ["expires_at = expires_at + interval '1 day'", 'terminal_at = now()', "invoice_intent_ref = 'tampered'"])
+        expect(await rejects(admin.query(`update partner_credit_reservations set ${set} where id=$1`, [s.reservationId])), set).toMatch(/terminal state is immutable/);
+    });
+
+    it('review L1: the audit flags a consumed reservation whose lot never became consumed', async () => {
+      const s = await scenario();
+      await fxq("update partner_credit_reservations set state='consumed', terminal_at=now() where id=$1", [s.reservationId]);
+      const r = await audit(s.businessId);
+      expect(r.status === 'inconsistent' && r.violations.map(v => v.code)).toContain('CONSUMED_RESERVATION_LOT_MISMATCH');
+    });
+
     it('D4-06: the same reservation can never be applied twice (the database refuses it on any invoice, and the writer replays the one row)', async () => {
       const s = await scenario();
       const first = await applications.record({ reservationId: s.reservationId, businessId: s.businessId });

@@ -56,7 +56,8 @@ export class PartnerCreditConsumptionService {
       const [intent] = await tx.select().from(benefitApplicationIntents)
         .where(and(eq(benefitApplicationIntents.reservationId, reservation.id), eq(benefitApplicationIntents.businessId, input.businessId))).limit(1);
       if (application.businessId !== input.businessId || application.terminalState !== 'applied' || application.unitsApplied !== reservation.units ||
-          !intent || intent.state !== 'consumed' || intent.outcome !== 'confirmed' || intent.providerEffectRef !== application.providerSuccessRef || intent.invoiceRef !== application.invoiceRef)
+          !intent || intent.state !== 'consumed' || intent.outcome !== 'confirmed' || intent.providerEffectRef !== application.providerSuccessRef || intent.invoiceRef !== application.invoiceRef ||
+          intent.appliedAt?.getTime() !== application.appliedAt.getTime())
         throw new Error('PARTNER_CONSUME_APPLICATION_NOT_AUTHORITATIVE');
       if (application.appliedAt > reservation.expiresAt) throw new Error('PARTNER_CONSUME_APPLICATION_AFTER_EXPIRY');
 
@@ -85,7 +86,7 @@ export class PartnerCreditConsumptionService {
       if (reservation.state !== 'reserved' || lot.status !== 'reserved' || lot.availableUnits !== 0 || account.reserved < 1) throw new Error('PARTNER_CONSUME_NOT_CONSUMABLE');
       if (await hasActiveDisputeHold(tx, decision.id)) throw new Error('PARTNER_CONSUME_DISPUTE_HOLD');
 
-      await tx.update(partnerCreditReservations).set({ state: 'consumed', terminalAt: now }).where(eq(partnerCreditReservations.id, reservation.id));
+      await tx.update(partnerCreditReservations).set({ state: 'consumed', terminalAt: application.appliedAt > now ? application.appliedAt : now }).where(eq(partnerCreditReservations.id, reservation.id));
       await tx.update(partnerCreditLots).set({ status: 'consumed', availableUnits: 0 }).where(eq(partnerCreditLots.id, lot.id));
       await tx.update(partnerCreditAccounts).set({ reserved: sql`${partnerCreditAccounts.reserved} - 1`, updatedAt: now }).where(eq(partnerCreditAccounts.id, account.id));
       await tx.insert(partnerCreditLedger).values({

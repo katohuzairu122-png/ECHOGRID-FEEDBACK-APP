@@ -40,6 +40,12 @@ BEGIN
   IF OLD.state IN ('consumed','released') AND NEW.state IS DISTINCT FROM OLD.state THEN
     RAISE EXCEPTION 'Partner Credit reservation in a terminal state cannot change';
   END IF;
+  IF OLD.state IN ('consumed','released') AND (
+       NEW.expires_at IS DISTINCT FROM OLD.expires_at OR NEW.units IS DISTINCT FROM OLD.units OR NEW.terminal_at IS DISTINCT FROM OLD.terminal_at OR
+       NEW.invoice_intent_ref IS DISTINCT FROM OLD.invoice_intent_ref OR NEW.lot_id IS DISTINCT FROM OLD.lot_id OR NEW.decision_id IS DISTINCT FROM OLD.decision_id OR
+       NEW.account_id IS DISTINCT FROM OLD.account_id OR NEW.business_id IS DISTINCT FROM OLD.business_id) THEN
+    RAISE EXCEPTION 'Partner Credit reservation in a terminal state is immutable';
+  END IF;
   IF NEW.state = 'consumed' AND OLD.state <> 'consumed' THEN
     IF OLD.state <> 'reserved' THEN
       RAISE EXCEPTION 'Only a reserved reservation can be consumed';
@@ -50,6 +56,7 @@ BEGIN
        WHERE a.reservation_id = NEW.id AND a.business_id = NEW.business_id
          AND a.terminal_state = 'applied' AND a.units_applied = NEW.units
          AND i.state = 'consumed' AND i.outcome = 'confirmed' AND i.provider_effect_ref = a.provider_success_ref AND i.invoice_ref = a.invoice_ref
+         AND i.units = NEW.units AND a.applied_at = i.applied_at AND i.applied_at <= NEW.expires_at
     ) THEN
       RAISE EXCEPTION 'Consumption requires the verified Split 08 terminal application and a reconciled saga for this reservation';
     END IF;
