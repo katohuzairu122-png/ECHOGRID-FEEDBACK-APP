@@ -35,6 +35,8 @@ This document is an **inventory record to be completed and approved**. Its prese
 
 > **Ownership boundary correction (2026-11-03):** ECHO GRID has **not** been transferred to INFINICUS LLC. The owner's earlier approval identified the INFINICUS LLC Cloudflare account as a *proposed verifier hosting destination*, not a transfer of project ownership, repositories, billing, credentials, or financial responsibility. Until a separately documented cross-entity hosting arrangement and access/custody authorization is approved, **do not create the Worker, deploy code, attach bindings, or provision credentials in the INFINICUS LLC account**. Read-only inspection of the selected account remains the only authorized infrastructure action.
 
+**Owner operating model (2026-11-03):** ECHO GRID remains independently operated and uses INFINICUS LLC as an infrastructure hosting provider. This is **not an ownership transfer**. See [S08-PV02-HOSTING-01](S08_PRIVATE_VERIFIER_02_HOSTING_OPERATING_MODEL.md) for distinct operational, infrastructure, credential and provisioning authority boundaries. The hosting decision does not itself authorize Worker creation, code deployment or secret issuance.
+
 ### Proposed environment boundary (not yet provisioned)
 
 - **Platform:** Cloudflare Workers (same infrastructure family as ECHO GRID, separately scoped service).
