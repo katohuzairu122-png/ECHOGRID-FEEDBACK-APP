@@ -20,11 +20,23 @@ ALTER TABLE "partner_credit_ledger" ADD CONSTRAINT "partner_credit_ledger_type_c
 ALTER TABLE "partner_credit_ledger" ADD CONSTRAINT "partner_credit_ledger_d4_units_check" CHECK (("partner_credit_ledger"."entry_type" = 'consume' AND "partner_credit_ledger"."units" = -1) OR ("partner_credit_ledger"."entry_type" = 'consumed_reversal' AND "partner_credit_ledger"."units" = 1) OR "partner_credit_ledger"."entry_type" NOT IN ('consume','consumed_reversal'));--> statement-breakpoint
 CREATE UNIQUE INDEX "partner_credit_ledger_one_consume_per_decision" ON "partner_credit_ledger" USING btree ("decision_id") WHERE "partner_credit_ledger"."entry_type" = 'consume';--> statement-breakpoint
 CREATE UNIQUE INDEX "partner_credit_ledger_one_consumed_reversal_per_decision" ON "partner_credit_ledger" USING btree ("decision_id") WHERE "partner_credit_ledger"."entry_type" = 'consumed_reversal';--> statement-breakpoint
--- 2. Database-queryable consumption evidence verifier (CE-1: "no generated data structure is evidence by itself"). A reservation may become `consumed` only
---    when the trusted Split 08 terminal application row exists for exactly that reservation and business, applied, same units, AND the saga intent for it is
---    in the reconciled `consumed` state with the same provider effect. `consumed` is terminal; `released` is terminal.
+-- 2. Application key. 0042 made it UNIQUE (business_id, invoice_ref), but the approved aggregate allocation (S08-AGG-ROUND/1) places up to 10 reservations on ONE
+--    invoice, so a second reservation could never be recorded. The key becomes per reservation; the number of applications an invoice can have is bounded by its
+--    frozen allocation items, which the verifier below requires for every application.
+ALTER TABLE "billing_partner_credit_applications" DROP CONSTRAINT "billing_partner_credit_applications_invoice_once";--> statement-breakpoint
+ALTER TABLE "billing_partner_credit_applications" ADD CONSTRAINT "billing_partner_credit_applications_invoice_reservation_key" UNIQUE ("business_id","invoice_ref","reservation_id");--> statement-breakpoint
+-- 3. Database-queryable consumption evidence verifier (CE-1: "no generated data structure is evidence by itself"). A reservation is CREATED reserved and may become
+--    `consumed` only when the verified application, a saga reconciled to `consumed` (same provider effect and invoice) AND the frozen allocation item for it (same
+--    invoice, same benefit amount) all exist. `consumed` and `released` are terminal. The application row itself is deliberately NOT verified at insert: the
+--    0042/0047 persistence constraints are tested directly against bare rows and must keep behaving exactly as they do; consumption is where the evidence is judged.
 CREATE OR REPLACE FUNCTION partner_credit_reservation_consume_evidence() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
+  IF TG_OP = 'INSERT' THEN
+    IF NEW.state <> 'reserved' THEN
+      RAISE EXCEPTION 'A Partner Credit reservation is created reserved; it becomes consumed or released only by a verified transition';
+    END IF;
+    RETURN NEW;
+  END IF;
   IF OLD.state IN ('consumed','released') AND NEW.state IS DISTINCT FROM OLD.state THEN
     RAISE EXCEPTION 'Partner Credit reservation in a terminal state cannot change';
   END IF;
@@ -41,23 +53,35 @@ BEGIN
     ) THEN
       RAISE EXCEPTION 'Consumption requires the verified Split 08 terminal application and a reconciled saga for this reservation';
     END IF;
+    IF NOT EXISTS (
+      SELECT 1 FROM s08_allocation_freeze_items it
+        JOIN s08_allocation_freezes f ON f.id = it.freeze_id AND f.business_id = it.business_id
+        JOIN benefit_application_intents i ON i.reservation_id = it.reservation_id AND i.business_id = it.business_id
+        JOIN billing_partner_credit_applications a ON a.reservation_id = it.reservation_id AND a.business_id = it.business_id
+       WHERE it.reservation_id = NEW.id AND it.business_id = NEW.business_id
+         AND f.invoice_ref = a.invoice_ref AND f.currency = i.currency AND it.benefit_minor = i.expected_benefit_minor
+    ) THEN
+      RAISE EXCEPTION 'Consumption requires the frozen allocation of this reservation to match the applied invoice, currency and amount';
+    END IF;
   END IF;
   RETURN NEW;
 END;
 $$;--> statement-breakpoint
 CREATE TRIGGER partner_credit_reservations_consume_evidence
- BEFORE UPDATE ON partner_credit_reservations
+ BEFORE INSERT OR UPDATE ON partner_credit_reservations
  FOR EACH ROW EXECUTE FUNCTION partner_credit_reservation_consume_evidence();--> statement-breakpoint
--- 3. A lot may become `consumed` only from `reserved`, only once its reservation is consumed, and may leave `consumed` only to `reversed` (consumed-credit
---    reversal preserves the consumption history in the reservation, application and ledger).
+-- 4. Lot transitions. Invoice consumption is `reserved` -> `consumed` and requires its reservation to be consumed. The pre-existing vest path that lets a recovery
+--    debt absorb the vesting unit (`provisional` -> `consumed`, written by the lifecycle service) is deliberately left exactly as it was. Nothing else may
+--    become `consumed`, and a consumed lot may only be reversed (the reservation, application and ledger keep the history).
 CREATE OR REPLACE FUNCTION partner_credit_lot_consume_transition() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
   IF NEW.status = 'consumed' AND OLD.status <> 'consumed' THEN
-    IF OLD.status <> 'reserved' THEN
-      RAISE EXCEPTION 'Only a reserved lot can be consumed';
-    END IF;
-    IF NOT EXISTS (SELECT 1 FROM partner_credit_reservations r WHERE r.lot_id = NEW.id AND r.state = 'consumed') THEN
-      RAISE EXCEPTION 'A lot is consumed only after its reservation is consumed';
+    IF OLD.status = 'reserved' THEN
+      IF NOT EXISTS (SELECT 1 FROM partner_credit_reservations r WHERE r.lot_id = NEW.id AND r.state = 'consumed') THEN
+        RAISE EXCEPTION 'A reserved lot is consumed only after its reservation is consumed';
+      END IF;
+    ELSIF OLD.status <> 'provisional' THEN
+      RAISE EXCEPTION 'A lot becomes consumed only from reserved (invoice consumption) or provisional (recovery-offset vest)';
     END IF;
   END IF;
   IF OLD.status = 'consumed' AND NEW.status NOT IN ('consumed','reversed') THEN
@@ -69,7 +93,7 @@ $$;--> statement-breakpoint
 CREATE TRIGGER partner_credit_lots_consume_transition
  BEFORE UPDATE ON partner_credit_lots
  FOR EACH ROW EXECUTE FUNCTION partner_credit_lot_consume_transition();--> statement-breakpoint
--- 4. D4 ledger rows are written only against a consumed reservation of exactly that decision and account.
+-- 5. D4 ledger rows are written only against a consumed reservation of exactly that decision and account.
 CREATE OR REPLACE FUNCTION partner_credit_ledger_d4_evidence() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
   IF NEW.entry_type IN ('consume','consumed_reversal') THEN

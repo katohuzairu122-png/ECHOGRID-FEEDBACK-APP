@@ -1,8 +1,9 @@
 import { and, eq } from 'drizzle-orm';
 import type { Database } from '../db/client';
+import { hasActiveDisputeHold } from '../partner-credits/partner-credit-dispute.service';
 import {
-  benefitApplicationIntents, billingPartnerCreditApplications, businessSubscriptions, partnerCreditReservations,
-  s08AllocationFreezeItems, s08AllocationFreezes,
+  benefitApplicationIntents, billingPartnerCreditApplications, businessSubscriptions, orphanSettlementEvents, orphanSettlements, partnerCreditAwardDecisions,
+  partnerCreditReservations, s08AllocationFreezeItems, s08AllocationFreezes,
 } from '../db/schema';
 
 /**
@@ -49,6 +50,18 @@ export class BenefitTerminalApplicationService {
       if (reservation.state !== 'reserved') throw new Error('S08_APPLICATION_RESERVATION_NOT_ACTIVE');
       if (intent.appliedAt > reservation.expiresAt) throw new Error('S08_APPLICATION_AFTER_RESERVATION_EXPIRY');
       if (intent.units !== reservation.units) throw new Error('S08_APPLICATION_UNITS_MISMATCH');
+
+      // The credit must still be one Split 07 could consume. Recording an immutable "applied" row for an award that is disputed, reversed or no longer vested
+      // would strand the unit as reserved (consumption refuses in those states), so those cases are refused here, before anything is written. These are read
+      // without locks (this writer takes no Split 07 lock); consumption re-verifies all of them under lock.
+      const [decision] = await tx.select().from(partnerCreditAwardDecisions).where(eq(partnerCreditAwardDecisions.id, reservation.decisionId)).limit(1);
+      if (!decision || decision.businessId !== input.businessId || decision.state !== 'vested') throw new Error('S08_APPLICATION_AWARD_NOT_VESTED');
+      const [settlement] = await tx.select().from(orphanSettlements).where(eq(orphanSettlements.id, decision.settlementRef)).limit(1);
+      if (!settlement || settlement.status !== 'fulfilled' || settlement.receivingBusinessId !== input.businessId) throw new Error('S08_APPLICATION_SETTLEMENT_INVALID');
+      const [reversal] = await tx.select({ id: orphanSettlementEvents.id }).from(orphanSettlementEvents)
+        .where(and(eq(orphanSettlementEvents.settlementId, settlement.id), eq(orphanSettlementEvents.eventType, 'settlement_reversed'))).limit(1);
+      if (reversal) throw new Error('S08_APPLICATION_REVERSAL_PRESENT');
+      if (await hasActiveDisputeHold(tx, decision.id)) throw new Error('S08_APPLICATION_DISPUTE_HOLD');
 
       // The amount actually applied must be the amount the owner-approved allocation froze for this reservation on this invoice.
       const [item] = await tx.select().from(s08AllocationFreezeItems)

@@ -1,5 +1,5 @@
 {
-  "id": "689f1660-e8b7-4b10-aacf-65fa4d94acb1",
+  "id": "cb5ac050-4fea-4cd8-ad21-3aad7f7f4ae2",
   "prevId": "10334aeb-7cb4-49ca-bf75-ab8ace7d4c05",
   "version": "7",
   "dialect": "postgresql",
@@ -11435,8 +11435,8 @@
         }
       },
       "indexes": {
-        "billing_partner_credit_applications_invoice_once": {
-          "name": "billing_partner_credit_applications_invoice_once",
+        "billing_partner_credit_applications_invoice_reservation_key": {
+          "name": "billing_partner_credit_applications_invoice_reservation_key",
           "columns": [
             {
               "expression": "business_id",
@@ -11446,6 +11446,12 @@
             },
             {
               "expression": "invoice_ref",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "reservation_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"

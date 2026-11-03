@@ -83,11 +83,16 @@ export class PartnerCreditProjectionAudit {
           UNION ALL
           SELECT l.account_id, 'CONSUMED_LOT_EVIDENCE', COUNT(*)::bigint, 0::bigint FROM lot l
            WHERE l.status = 'consumed'
-             AND NOT ((SELECT COUNT(*) FROM partner_credit_ledger g WHERE g.decision_id = l.decision_id AND g.account_id = l.account_id
-                         AND g.entry_type = 'consume' AND g.units = -1) = 1
-                      AND EXISTS (SELECT 1 FROM partner_credit_reservations r
-                                    JOIN billing_partner_credit_applications ap ON ap.reservation_id = r.id AND ap.terminal_state = 'applied'
-                                   WHERE r.lot_id = l.id AND r.state = 'consumed'))
+             AND NOT (
+                  -- consumed through an invoice: one consume entry, a consumed reservation and its terminal application
+                  ((SELECT COUNT(*) FROM partner_credit_ledger g WHERE g.decision_id = l.decision_id AND g.account_id = l.account_id
+                      AND g.entry_type = 'consume' AND g.units = -1) = 1
+                   AND EXISTS (SELECT 1 FROM partner_credit_reservations r
+                                 JOIN billing_partner_credit_applications ap ON ap.reservation_id = r.id AND ap.terminal_state = 'applied'
+                                WHERE r.lot_id = l.id AND r.state = 'consumed'))
+                  -- absorbed by a recovery debt at vest (the pre-existing lifecycle path): never reserved, and it carries its recovery_offset entry
+                  OR (NOT EXISTS (SELECT 1 FROM partner_credit_reservations r WHERE r.lot_id = l.id)
+                      AND EXISTS (SELECT 1 FROM partner_credit_ledger g WHERE g.decision_id = l.decision_id AND g.account_id = l.account_id AND g.entry_type = 'recovery_offset')))
            GROUP BY l.account_id
           UNION ALL
           SELECT g.account_id, 'CONSUME_ENTRY_WITHOUT_LOT', COUNT(*)::bigint, 0::bigint
@@ -99,7 +104,10 @@ export class PartnerCreditProjectionAudit {
           SELECT g.account_id, 'CONSUMED_REVERSAL_EVIDENCE', COUNT(*)::bigint, 0::bigint
             FROM partner_credit_ledger g JOIN acct a ON a.id = g.account_id
            WHERE g.entry_type = 'consumed_reversal'
-             AND NOT (EXISTS (SELECT 1 FROM partner_credit_ledger c WHERE c.decision_id = g.decision_id AND c.account_id = g.account_id AND c.entry_type = 'consume')
+             AND NOT (EXISTS (SELECT 1 FROM partner_credit_ledger c
+                                JOIN partner_credit_lots cl ON cl.decision_id = c.decision_id
+                                JOIN partner_credit_reservations cr ON cr.lot_id = cl.id AND cr.state = 'consumed'
+                               WHERE c.decision_id = g.decision_id AND c.account_id = g.account_id AND c.entry_type = 'consume' AND c.metadata->>'reservationId' = cr.id::text)
                       AND EXISTS (SELECT 1 FROM partner_credit_recovery_obligations o
                                    WHERE o.account_id = g.account_id AND o.units_due = 1 AND o.reversal_ref::text = g.metadata->>'reversalEventId')
                       AND EXISTS (SELECT 1 FROM partner_credit_lots x WHERE x.decision_id = g.decision_id AND x.status = 'reversed'))

@@ -43,7 +43,13 @@ export class PartnerProvisionalReversalCompensator {
       .where(eq(partnerCreditLots.decisionId, decision.id)).for('update');
     // D4: a credit that was already CONSUMED against an invoice cannot be taken back from the invoice (Split 08 owns that history). The reversal instead
     // originates one recovery obligation that future earned credits offset, preserving the consumption history exactly.
-    if (decision.state === 'vested' && lot && lot.status === 'consumed') return this.compensateConsumed(tx, decision, lot, input);
+    // Only a lot consumed through an invoice (it has a consumed reservation) takes this path. A lot a recovery debt absorbed at vest, or one set by hand without
+    // evidence, still falls through to the original fail-closed error below, exactly as before D4.
+    if (decision.state === 'vested' && lot && lot.status === 'consumed') {
+      const [consumedReservation] = await tx.select({ id: partnerCreditReservations.id }).from(partnerCreditReservations)
+        .where(and(eq(partnerCreditReservations.lotId, lot.id), eq(partnerCreditReservations.state, 'consumed'))).limit(1);
+      if (consumedReservation) return this.compensateConsumed(tx, decision, lot, input);
+    }
     if (!lot || lot.units !== 1 ||
         !((decision.state === 'provisional' && lot.status === 'provisional' && lot.availableUnits === 0) ||
           (decision.state === 'vested' && lot.status === 'available' && lot.availableUnits === 1)))

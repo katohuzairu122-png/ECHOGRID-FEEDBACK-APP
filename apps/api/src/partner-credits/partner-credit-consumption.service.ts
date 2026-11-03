@@ -40,13 +40,9 @@ export class PartnerCreditConsumptionService {
       if (!decisionRef) throw new Error('PARTNER_CONSUME_DECISION_MISSING');
 
       const [settlement] = await tx.select().from(orphanSettlements).where(eq(orphanSettlements.id, decisionRef.settlementRef)).for('update');
-      if (!settlement || settlement.status !== 'fulfilled' || settlement.receivingBusinessId !== input.businessId) throw new Error('PARTNER_CONSUME_SETTLEMENT_INVALID');
-      const [reversal] = await tx.select({ id: orphanSettlementEvents.id }).from(orphanSettlementEvents)
-        .where(and(eq(orphanSettlementEvents.settlementId, settlement.id), eq(orphanSettlementEvents.eventType, 'settlement_reversed'))).limit(1);
-      if (reversal) throw new Error('PARTNER_CONSUME_REVERSAL_PRESENT');
+      if (!settlement || settlement.receivingBusinessId !== input.businessId) throw new Error('PARTNER_CONSUME_SETTLEMENT_INVALID');
       const [decision] = await tx.select().from(partnerCreditAwardDecisions).where(eq(partnerCreditAwardDecisions.id, probe.decisionId)).for('update');
-      if (!decision || decision.settlementRef !== settlement.id || decision.businessId !== input.businessId || decision.state !== 'vested' || decision.awardUnits !== 1)
-        throw new Error('PARTNER_CONSUME_AWARD_NOT_VESTED');
+      if (!decision || decision.settlementRef !== settlement.id || decision.businessId !== input.businessId || decision.awardUnits !== 1) throw new Error('PARTNER_CONSUME_AWARD_NOT_VESTED');
       const [lot] = await tx.select().from(partnerCreditLots).where(eq(partnerCreditLots.decisionId, decision.id)).for('update');
       if (!lot || lot.units !== 1) throw new Error('PARTNER_CONSUME_LOT_MISSING');
       const [account] = await tx.select().from(partnerCreditAccounts).where(eq(partnerCreditAccounts.id, lot.accountId)).for('update');
@@ -64,13 +60,27 @@ export class PartnerCreditConsumptionService {
         throw new Error('PARTNER_CONSUME_APPLICATION_NOT_AUTHORITATIVE');
       if (application.appliedAt > reservation.expiresAt) throw new Error('PARTNER_CONSUME_APPLICATION_AFTER_EXPIRY');
 
-      // Replay: an already consumed reservation whose every side agrees returns the same result and writes nothing.
+      // Replay is decided BEFORE the "still vested / not reversed" gates, so a retry after the credit was consumed and later reversed still returns the same
+      // result and writes nothing. A consumed reservation whose sides disagree is a conflict, never a silent success.
       const [entry] = await tx.select().from(partnerCreditLedger).where(eq(partnerCreditLedger.idempotencyKey, ledgerKey)).limit(1);
       if (reservation.state === 'consumed') {
-        if (lot.status !== 'consumed' || !entry || entry.entryType !== 'consume' || entry.units !== -1 || entry.accountId !== account.id || entry.decisionId !== decision.id)
-          throw new Error('PARTNER_CONSUME_REPLAY_CONFLICT');
+        const entryOk = !!entry && entry.entryType === 'consume' && entry.units === -1 && entry.accountId === account.id && entry.decisionId === decision.id;
+        let lotOk = lot.status === 'consumed' && decision.state === 'vested';
+        if (lot.status === 'reversed' && decision.state === 'reversed') {
+          // consumed and later reversed: the reversal must have left its own consumed_reversal entry, otherwise the sides disagree
+          const [reversalEntry] = await tx.select({ id: partnerCreditLedger.id }).from(partnerCreditLedger)
+            .where(and(eq(partnerCreditLedger.decisionId, decision.id), eq(partnerCreditLedger.entryType, 'consumed_reversal'))).limit(1);
+          lotOk = !!reversalEntry;
+        }
+        if (!entryOk || !lotOk) throw new Error('PARTNER_CONSUME_REPLAY_CONFLICT');
         return { state: 'consumed', replay: true, ledgerKey };
       }
+
+      if (settlement.status !== 'fulfilled') throw new Error('PARTNER_CONSUME_SETTLEMENT_INVALID');
+      const [reversal] = await tx.select({ id: orphanSettlementEvents.id }).from(orphanSettlementEvents)
+        .where(and(eq(orphanSettlementEvents.settlementId, settlement.id), eq(orphanSettlementEvents.eventType, 'settlement_reversed'))).limit(1);
+      if (reversal) throw new Error('PARTNER_CONSUME_REVERSAL_PRESENT');
+      if (decision.state !== 'vested') throw new Error('PARTNER_CONSUME_AWARD_NOT_VESTED');
       if (entry) throw new Error('PARTNER_CONSUME_LEDGER_WITHOUT_CONSUMPTION');
       if (reservation.state !== 'reserved' || lot.status !== 'reserved' || lot.availableUnits !== 0 || account.reserved < 1) throw new Error('PARTNER_CONSUME_NOT_CONSUMABLE');
       if (await hasActiveDisputeHold(tx, decision.id)) throw new Error('PARTNER_CONSUME_DISPUTE_HOLD');

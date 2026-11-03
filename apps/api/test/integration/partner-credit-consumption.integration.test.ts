@@ -10,6 +10,8 @@ import { PartnerCreditConsumptionService } from '../../src/partner-credits/partn
 import { PartnerProvisionalReversalCompensator } from '../../src/partner-credits/partner-provisional-reversal.compensator';
 import { PartnerCreditProjectionAudit } from '../../src/partner-credits/partner-credit-projection.audit';
 import { seedScratchAllocation } from './helpers/s08-allocation-fixture';
+import { freezeAggregateBenefitAllocation } from '../../src/billing/aggregate-benefit-allocation';
+import { computeInvoiceBenefit } from '../../src/billing/invoice-benefit.calculator';
 
 /**
  * D4 final credit consumption and ledger accounting on PostgreSQL, in a SCRATCH database created and dropped here on the disposable server named by
@@ -48,11 +50,8 @@ describe.skipIf(!process.env.DATABASE_URL)('D4 final credit consumption and ledg
   let dbApp: ReturnType<typeof buildDb>;
   let planId: string;
 
-  interface Scenario { businessId: string; settlementId: string; decisionId: string; lotId: string; accountId: string; reservationId: string; intentId: string; invoiceRef: string }
-  /** A vested, single-unit credit that is RESERVED for one invoice, with its provisional and vest ledger entries, an allocation freeze and a saga intent. */
-  async function scenario(opts: { sagaTo?: 'none' | 'reserved' | 'applying' | 'consumed'; subscription?: 'active' | 'trialing' | 'none'; allocate?: boolean; expiresInMs?: number; appliedOffsetMs?: number } = {}): Promise<Scenario> {
-    const n = ++seq; const o = { sagaTo: 'consumed', subscription: 'active', allocate: true, expiresInMs: 86_400_000, appliedOffsetMs: 1_000, ...opts };
-    const businessId = (await rows<{ id: string }>("insert into businesses(name,slug,status) values($1,$2,'active') returning id", [`D4 ${n}`, `d4-${dbName}-${n}`]))[0]!.id;
+  /** One vested, single-unit credit RESERVED for an invoice: claim, fulfilled settlement, decision, reserved lot, provisional and vest ledger entries, reservation. */
+  async function forgeCredit(businessId: string, accountId: string, n: number, expiresInMs: number) {
     const user = randomUUID();
     const claimId = (await fxq<{ id: string }>(
       `insert into orphan_reward_claims(customer_id,origin_business_id,origin_loyalty_account_id,origin_loyalty_transaction_id,orphan_reason,source_reward_type,source_reward_snapshot,status,settled_at)
@@ -62,7 +61,6 @@ describe.skipIf(!process.env.DATABASE_URL)('D4 final credit consumption and ledg
          fulfilled_by_user_id,fulfilled_at,fulfillment_policy_version,fulfillment_snapshot,expires_at,idempotency_key)
        values($1,$2,$3,'fulfilled',$4,$5,now(),$6,now(),$5,now(),'v1','{}'::jsonb,now()+interval '30 days',$7) returning id`,
       [claimId, randomUUID(), businessId, randomUUID(), user, randomUUID(), `d4-settle-${dbName}-${n}`]))[0]!.id;
-    const accountId = (await fxq<{ id: string }>('insert into partner_credit_accounts(business_id,reserved) values($1,1) returning id', [businessId]))[0]!.id;
     const decisionId = (await fxq<{ id: string }>(
       `insert into partner_credit_award_decisions(settlement_ref,business_id,policy_id,state,award_units,earning_month_utc,fulfilled_at,vest_at,idempotency_key)
        values($1,$2,$3,'vested',1,'2026-10',now(),now(),$4) returning id`, [settlementId, businessId, randomUUID(), `d4-dec-${dbName}-${n}`]))[0]!.id;
@@ -71,7 +69,17 @@ describe.skipIf(!process.env.DATABASE_URL)('D4 final credit consumption and ledg
     await fxq(`insert into partner_credit_ledger(account_id,decision_id,entry_type,units,idempotency_key) values($1,$2,'provisional',1,$3),($1,$2,'vest',1,$4)`, [accountId, decisionId, `d4-prov-${dbName}-${n}`, `d4-vest-${dbName}-${n}`]);
     const reservationId = (await fxq<{ id: string }>(
       `insert into partner_credit_reservations(business_id,decision_id,lot_id,account_id,invoice_intent_ref,idempotency_key,expires_at) values($1,$2,$3,$4,$5,$6,$7) returning id`,
-      [businessId, decisionId, lotId, accountId, `intent-${n}`, `d4-res-${dbName}-${n}`, new Date(Date.now() + o.expiresInMs)]))[0]!.id;
+      [businessId, decisionId, lotId, accountId, `intent-${n}`, `d4-res-${dbName}-${n}`, new Date(Date.now() + expiresInMs)]))[0]!.id;
+    return { settlementId, decisionId, lotId, reservationId };
+  }
+
+  interface Scenario { businessId: string; settlementId: string; decisionId: string; lotId: string; accountId: string; reservationId: string; intentId: string; invoiceRef: string }
+  /** A vested, single-unit credit that is RESERVED for one invoice, with its provisional and vest ledger entries, an allocation freeze and a saga intent. */
+  async function scenario(opts: { sagaTo?: 'none' | 'reserved' | 'applying' | 'consumed'; subscription?: 'active' | 'trialing' | 'none'; allocate?: boolean; expiresInMs?: number; appliedOffsetMs?: number } = {}): Promise<Scenario> {
+    const n = ++seq; const o = { sagaTo: 'consumed', subscription: 'active', allocate: true, expiresInMs: 86_400_000, appliedOffsetMs: 1_000, ...opts };
+    const businessId = (await rows<{ id: string }>("insert into businesses(name,slug,status) values($1,$2,'active') returning id", [`D4 ${n}`, `d4-${dbName}-${n}`]))[0]!.id;
+    const accountId = (await fxq<{ id: string }>('insert into partner_credit_accounts(business_id,reserved) values($1,1) returning id', [businessId]))[0]!.id;
+    const { settlementId, decisionId, lotId, reservationId } = await forgeCredit(businessId, accountId, n, o.expiresInMs);
     if (o.subscription !== 'none') await fxq("insert into business_subscriptions(business_id,plan_id,status,billing_interval) values($1,$2,$3,'month')", [businessId, planId, o.subscription]);
     const invoiceRef = `in_d4_${n}`;
     let intentId = '';
@@ -430,6 +438,127 @@ describe.skipIf(!process.env.DATABASE_URL)('D4 final credit consumption and ledg
       expect(await audit(s.businessId)).toMatchObject({ status: 'consistent' });
       await dbApp.transaction(tx => compensator.compensate(tx, { settlementRef: s.settlementId, businessId: s.businessId, reversalEventId: randomUUID() }));
       expect(await audit(s.businessId)).toMatchObject({ status: 'consistent' });
+    });
+  });
+
+  describe('independent-review fixes', () => {
+    const consumedScenario = async () => {
+      const s = await scenario(); await applications.record({ reservationId: s.reservationId, businessId: s.businessId });
+      await consumption.consume({ reservationId: s.reservationId, businessId: s.businessId }); return s;
+    };
+
+    it('one invoice with TWO reservations (aggregate allocation): both applications are recorded, both credits consumed, and the audit is consistent', async () => {
+      // two credits of ONE business on ONE invoice, frozen together by the real aggregate allocation (S08-AGG-ROUND/1), then applied and consumed
+      const first = await scenario({ sagaTo: 'reserved', allocate: false });
+      const n = ++seq;
+      await fxq('update partner_credit_accounts set reserved = 2 where id=$1', [first.accountId]);
+      const second = await forgeCredit(first.businessId, first.accountId, n, 86_400_000);
+      const terms = { invoiceRef: first.invoiceRef, expectedBenefitMinor: 300, currency: 'usd', policyVersion: 'PC-BENEFIT/1' };
+      const intent2 = await saga.createIntent({ reservationId: second.reservationId, ...terms });
+      const intent1 = (await saga.get(first.intentId))!;
+      const base = 300 * 100; // 1% per credit, two credits => aggregate 600, 300 each
+      const benefit = computeInvoiceBenefit(
+        { invoiceId: first.invoiceRef, invoiceBusinessId: first.businessId, currency: 'usd', status: 'paid', amountDueMinor: base, amountPaidMinor: base, interval: 'month', trialOrFree: false,
+          lines: [{ id: 'synthetic_base', category: 'recurring_base', amountMinor: base, currency: 'usd' }] },
+        { creditBusinessId: first.businessId, requestedUnits: 2, availableUnits: 2 });
+      if (!benefit.eligible) throw new Error('synthetic two-credit benefit denied');
+      const refs = await fxq<{ id: string; invoice_intent_ref: string }>('select id, invoice_intent_ref from partner_credit_reservations where id = any($1)', [[first.reservationId, second.reservationId]]);
+      const artifact = await freezeAggregateBenefitAllocation({
+        allocationPolicyVersion: 'S08-AGG-ROUND/1', invoice: { businessId: first.businessId, invoiceRef: first.invoiceRef, currency: 'usd' }, benefit, eligibleCreditBalance: 2,
+        reservations: refs.map(r => ({ id: r.id, businessId: first.businessId, invoiceIntentRef: r.invoice_intent_ref, invoiceRef: first.invoiceRef, currency: 'usd', units: 1, state: 'reserved' as const, providerAttemptStarted: false })),
+      });
+      const parent = (await fxq<{ id: string }>(
+        `insert into s08_allocation_freezes(business_id,invoice_ref,currency,policy_version,allocation_digest,aggregate_benefit_minor,reservation_count,artifact) values($1,$2,'usd',$3,$4,$5,2,$6::jsonb) returning id`,
+        [first.businessId, first.invoiceRef, artifact.allocationPolicyVersion, artifact.allocationDigest, artifact.aggregateBenefitMinor, JSON.stringify(artifact)]))[0]!.id;
+      for (const item of artifact.allocations)
+        await fxq(`insert into s08_allocation_freeze_items(freeze_id,business_id,reservation_id,invoice_intent_ref,benefit_minor,provider_idempotency_key) values($1,$2,$3,$4,$5,$6)`, [parent, first.businessId, item.reservationId, item.invoiceIntentRef, item.benefitMinor, item.providerIdempotencyKey]);
+      expect(artifact.allocations.map(a => Number(a.benefitMinor))).toEqual([300, 300]);
+      for (const [intent, res] of [[intent1, first.reservationId], [intent2, second.reservationId]] as const) {
+        const begin = await saga.beginApply(intent.id, 'att-agg', new Date(Date.now() - 500));
+        if (!begin.ok) throw new Error('begin failed: ' + JSON.stringify({ code: (begin as { code?: string }).code, detail: (begin as { detail?: string }).detail }));
+        const done = await saga.recordObservation(intent.id, 'att-agg', { status: 'effect_present', effectRef: `ef_${randomBytes(5).toString('hex')}`, amountMinor: 300, currency: 'usd', invoiceRef: first.invoiceRef, attributedToReservationRef: res }, new Date());
+        if (!done.ok) throw new Error('not consumed: ' + JSON.stringify({ code: (done as { code?: string }).code }));
+      }
+      await applications.record({ reservationId: first.reservationId, businessId: first.businessId });
+      await applications.record({ reservationId: second.reservationId, businessId: first.businessId });
+      await consumption.consume({ reservationId: first.reservationId, businessId: first.businessId });
+      await consumption.consume({ reservationId: second.reservationId, businessId: first.businessId });
+      expect((await rows('select count(*)::int n from billing_partner_credit_applications where business_id=$1 and invoice_ref=$2', [first.businessId, first.invoiceRef]))[0]).toEqual({ n: 2 });
+      expect((await rows<{ reserved: number }>('select reserved from partner_credit_accounts where id=$1', [first.accountId]))[0]).toEqual({ reserved: 0 });
+      expect(await audit(first.businessId)).toMatchObject({ status: 'consistent' });
+    });
+
+    it('the application writer refuses an award that is disputed, no longer vested, or reversed, before writing anything (the unit would otherwise be stranded)', async () => {
+      const hold = await scenario();
+      await fxq("insert into partner_credit_award_disputes(business_id,decision_id,state) values($1,$2,'open')", [hold.businessId, hold.decisionId]);
+      expect(await rejects(applications.record({ reservationId: hold.reservationId, businessId: hold.businessId }))).toMatch(/S08_APPLICATION_DISPUTE_HOLD/);
+      const notVested = await scenario(); await fxq("update partner_credit_award_decisions set state='provisional' where id=$1", [notVested.decisionId]);
+      expect(await rejects(applications.record({ reservationId: notVested.reservationId, businessId: notVested.businessId }))).toMatch(/S08_APPLICATION_AWARD_NOT_VESTED/);
+      const reversed = await scenario();
+      await fxq(`insert into orphan_settlement_events(settlement_id,claim_id,customer_id,event_type,origin_business_id,idempotency_key) select id,claim_id,customer_id,'settlement_reversed',$2,$3 from orphan_settlements where id=$1`, [reversed.settlementId, randomUUID(), `rev-${randomUUID()}`]);
+      expect(await rejects(applications.record({ reservationId: reversed.reservationId, businessId: reversed.businessId }))).toMatch(/S08_APPLICATION_REVERSAL_PRESENT/);
+      const unsettled = await scenario(); await fxq("update orphan_settlements set status='cancelled' where id=$1", [unsettled.settlementId]);
+      expect(await rejects(applications.record({ reservationId: unsettled.reservationId, businessId: unsettled.businessId }))).toMatch(/S08_APPLICATION_SETTLEMENT_INVALID/);
+      for (const s of [hold, notVested, reversed, unsettled]) expect((await credit(s)).applications).toBe(0);
+    });
+
+    it('the database refuses to INSERT a reservation that is already consumed (the verifier cannot be bypassed by creating the row in its final state)', async () => {
+      const s = await scenario();
+      expect(await rejects(admin.query(
+        `insert into partner_credit_reservations(business_id,decision_id,lot_id,account_id,invoice_intent_ref,idempotency_key,expires_at,state,terminal_at) values($1,$2,$3,$4,$5,$6,now()+interval '1 day','consumed',now())`,
+        [s.businessId, s.decisionId, s.lotId, s.accountId, `forged-${randomUUID()}`, `forged-${randomUUID()}`]))).toMatch(/created reserved/);
+      expect(await rejects(admin.query(
+        `insert into partner_credit_reservations(business_id,decision_id,lot_id,account_id,invoice_intent_ref,idempotency_key,expires_at,state,terminal_at) values($1,$2,$3,$4,$5,$6,now()+interval '1 day','released',now())`,
+        [s.businessId, s.decisionId, s.lotId, s.accountId, `forged-${randomUUID()}`, `forged-${randomUUID()}`]))).toMatch(/created reserved/);
+    });
+
+    it('the database also refuses to consume when the frozen allocation no longer matches the applied invoice, currency or amount', async () => {
+      const s = await scenario(); await applications.record({ reservationId: s.reservationId, businessId: s.businessId });
+      await fxq('update s08_allocation_freeze_items set benefit_minor = benefit_minor + 1 where reservation_id=$1', [s.reservationId]);
+      expect(await rejects(admin.query("update partner_credit_reservations set state='consumed', terminal_at=now() where id=$1", [s.reservationId]))).toMatch(/frozen allocation of this reservation to match/);
+      const noItem = await scenario(); await applications.record({ reservationId: noItem.reservationId, businessId: noItem.businessId });
+      await fxq('delete from s08_allocation_freeze_items where reservation_id=$1', [noItem.reservationId]);
+      expect(await rejects(admin.query("update partner_credit_reservations set state='consumed', terminal_at=now() where id=$1", [noItem.reservationId]))).toMatch(/frozen allocation of this reservation to match/);
+    });
+
+    it('lot transitions: the recovery-offset vest path (provisional -> consumed) is untouched, while available/expired/other states can never become consumed', async () => {
+      const s = await scenario();
+      await fxq("update partner_credit_lots set status='provisional', available_units=0 where id=$1", [s.lotId]);
+      await admin.query("update partner_credit_lots set status='consumed' where id=$1", [s.lotId]); // the existing vest-with-offset write
+      const t = await scenario();
+      await fxq("update partner_credit_lots set status='available', available_units=1 where id=$1", [t.lotId]);
+      expect(await rejects(admin.query("update partner_credit_lots set status='consumed', available_units=0 where id=$1", [t.lotId]))).toMatch(/only from reserved .* or provisional/);
+    });
+
+    it('consume is idempotent even AFTER a consumed-credit reversal (replay returns the same result and writes nothing)', async () => {
+      const s = await consumedScenario();
+      await dbApp.transaction(tx => compensator.compensate(tx, { settlementRef: s.settlementId, businessId: s.businessId, reversalEventId: randomUUID() }));
+      const before = await credit(s);
+      expect(await consumption.consume({ reservationId: s.reservationId, businessId: s.businessId })).toEqual({ state: 'consumed', replay: true, ledgerKey: `partner-consume:v1:${s.reservationId}` });
+      expect(await credit(s)).toEqual(before);
+    });
+
+    it('a lot consumed WITHOUT a consumed reservation (debt-absorbed or forged) still fails closed in reversal with the original error, never as a recovery obligation', async () => {
+      const s = await scenario();
+      await fxq("update partner_credit_lots set status='consumed' where id=$1", [s.lotId]); // no consumed reservation, no application
+      expect(await rejects(dbApp.transaction(tx => compensator.compensate(tx, { settlementRef: s.settlementId, businessId: s.businessId, reversalEventId: randomUUID() })))).toMatch(/PARTNER_REVERSAL_LOT_STATE_UNSUPPORTED/);
+      expect((await credit(s)).obligations).toBe(0);
+    });
+
+    it('the audit accepts a lot absorbed by a recovery debt at vest, and rejects a consumed-reversal whose consume entry belongs to a different reservation', async () => {
+      const businessId = (await rows<{ id: string }>("insert into businesses(name,slug,status) values('D4 offset',$1,'active') returning id", [`d4-offset-${dbName}`]))[0]!.id;
+      const accountId = (await fxq<{ id: string }>('insert into partner_credit_accounts(business_id) values($1) returning id', [businessId]))[0]!.id;
+      const decisionId = (await fxq<{ id: string }>(`insert into partner_credit_award_decisions(settlement_ref,business_id,policy_id,state,award_units,earning_month_utc,fulfilled_at,vest_at,idempotency_key) values($1,$2,$3,'vested',1,'2026-10',now(),now(),$4) returning id`, [randomUUID(), businessId, randomUUID(), `d4-off-dec-${dbName}`]))[0]!.id;
+      await fxq(`insert into partner_credit_lots(decision_id,account_id,units,available_units,status,vest_at,expires_at) values($1,$2,1,0,'consumed',now(),now()+interval '1 year')`, [decisionId, accountId]);
+      await fxq(`insert into partner_credit_ledger(account_id,decision_id,entry_type,units,idempotency_key) values($1,$2,'provisional',1,$3),($1,$2,'vest',1,$4),($1,$2,'recovery_offset',-1,$5)`, [accountId, decisionId, `o1-${randomUUID()}`, `o2-${randomUUID()}`, `o3-${randomUUID()}`]);
+      const r = await audit(businessId);
+      expect(r).toMatchObject({ status: 'consistent' });
+      const s = await consumedScenario();
+      await dbApp.transaction(tx => compensator.compensate(tx, { settlementRef: s.settlementId, businessId: s.businessId, reversalEventId: randomUUID() }));
+      expect(await audit(s.businessId)).toMatchObject({ status: 'consistent' });
+      await fxq("update partner_credit_ledger set metadata = jsonb_set(metadata, '{reservationId}', to_jsonb($2::text)) where decision_id=$1 and entry_type='consume'", [s.decisionId, randomUUID()]);
+      const bad = await audit(s.businessId);
+      expect(bad.status === 'inconsistent' && bad.violations.map(v => v.code)).toContain('CONSUMED_REVERSAL_EVIDENCE');
     });
   });
 });
