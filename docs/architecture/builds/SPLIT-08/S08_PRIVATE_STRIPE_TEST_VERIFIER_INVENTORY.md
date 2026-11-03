@@ -13,8 +13,8 @@ This document is an **inventory record to be completed and approved**. Its prese
 | --- | --- |
 | Stripe account ID expected from authenticated `GET /v1/account` | **OWNER-DESIGNATED:** `acct_1TtKaUQ0xjd6eYbP` (Infinicus simulation engine); credential principal still must be independently verified |
 | Stripe realm | **OWNER-DESIGNATED:** `test`; connected Stripe account discovery reported `livemode=false` (not a private-verifier attestation) |
-| Credential owner / approved organization | **PENDING** |
-| Private verifier workload identity / service principal | **DESIGNATED IN CODE, NOT PROVISIONED/APPROVED:** Cloudflare Worker script `echo-grid-s08-stripe-test-verifier`; Cloudflare account identity and runtime attestation PENDING |
+| Credential owner / approved organization | **ECHO GRID ownership transfer NOT COMPLETE.** INFINICUS LLC (`b0ca727d821092e2e14720223ac07edb`) is proposed Cloudflare hosting account only; credential owner, cross-entity custody, permissions and execution approval **PENDING** |
+| Private verifier workload identity / service principal | **PROPOSED HOSTING TARGET — NOT OWNERSHIP TRANSFER:** INFINICUS LLC (`b0ca727d821092e2e14720223ac07edb`); proposed Worker script `echo-grid-s08-stripe-test-verifier`; actual UUID, provisioned resource, executable identity and runtime attestation **PENDING** |
 | Verifier approved execution path | **PROPOSED, NOT APPROVED:** `apps/private-stripe-verifier/src/index.ts`, configured by `apps/private-stripe-verifier/wrangler.toml`; private Cloudflare Worker with `workers_dev=false`, no routes/triggers, and deny-all entry point; deployment account, immutable deployed revision and execution authorization PENDING |
 | Secret store / credential inventory locator | **PROPOSED STORE/BINDING, NOT PROVISIONED:** Cloudflare Workers encrypted secret binding `STRIPE_TEST_VERIFIER_RESTRICTED_KEY` on the dedicated Worker; exact Cloudflare account, secret inventory URI/ID and custody evidence PENDING |
 | Restricted credential version / revision | **PENDING — create a *new*, minimum-scope Stripe TEST restricted API key and inventory its immutable version; never reuse general API/production keys** |
@@ -29,6 +29,13 @@ This document is an **inventory record to be completed and approved**. Its prese
 | Review/expiry/revocation status | **PENDING — fail closed if absent, expired, revoked or superseded** |
 
 **Owner account designation (2026-11-03):** The owner explicitly designated `acct_1TtKaUQ0xjd6eYbP`, named **Infinicus simulation engine**, as ECHO GRID's approved *test-account selection* for this verifier. A connected Stripe account listing returned this account with `livemode=false`. This is a deliberate cross-project test account selection, not approval of credential custody, a workload identity, execution, or financial operations. The earlier staging account is not silently inherited; only this explicitly designated ID may be used, and `GET /v1/account` must still verify the principal under the eventual restricted credential. Connected-account discovery is not sufficient evidence of the private credential's identity.
+
+**Cloudflare account decision (2026-11-03):** Owner identified INFINICUS LLC account `b0ca727d821092e2e14720223ac07edb` for this private verifier. The personal account `cf205213947e3617297373060fe4c15f` is excluded. This authorizes account-scoped Worker inventory inspection only at this stage; the actual Worker identity, resource existence, version, secret custody and read-execution approval are outstanding.
+
+
+> **Ownership boundary correction (2026-11-03):** ECHO GRID has **not** been transferred to INFINICUS LLC. The owner's earlier approval identified the INFINICUS LLC Cloudflare account as a *proposed verifier hosting destination*, not a transfer of project ownership, repositories, billing, credentials, or financial responsibility. Until a separately documented cross-entity hosting arrangement and access/custody authorization is approved, **do not create the Worker, deploy code, attach bindings, or provision credentials in the INFINICUS LLC account**. Read-only inspection of the selected account remains the only authorized infrastructure action.
+
+**Owner operating model (2026-11-03):** ECHO GRID remains independently operated and uses INFINICUS LLC as an infrastructure hosting provider. This is **not an ownership transfer**. See [S08-PV02-HOSTING-01](S08_PRIVATE_VERIFIER_02_HOSTING_OPERATING_MODEL.md) for distinct operational, infrastructure, credential and provisioning authority boundaries. The hosting decision does not itself authorize Worker creation, code deployment or secret issuance.
 
 ### Proposed environment boundary (not yet provisioned)
 
