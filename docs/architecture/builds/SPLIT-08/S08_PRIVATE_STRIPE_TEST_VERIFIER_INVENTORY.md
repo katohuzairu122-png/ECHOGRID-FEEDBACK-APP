@@ -56,7 +56,42 @@ All of these conditions are mandatory **before** any private verifier read:
 
 **Activation criterion:** A separately signed/traceable authorization references this exact record ID and immutable revision and verifies every field and gate above. A completed form without authorization remains **NO-GO**.
 
-## 4. Related source decisions
+## 4. Preflight decision matrix (offline specification; not an execution report)
+
+For each case, the private verifier must fail closed and produce an audit-safe rejection classification. No test in this section uses or requests a real credential.
+
+| Case | Expected result |
+| --- | --- |
+| Current draft inventory with any `PENDING` field | **DENY / INVENTORY_INCOMPLETE**; no provider request |
+| Inventory document exists or PR/CI passes, but no approval | **DENY / APPROVAL_MISSING**; repository state is not authority |
+| Account `acct_…` missing or differs from authenticated account principal | **DENY / ACCOUNT_MISMATCH**; do not request an invoice |
+| Real account from earlier staging check but no verifier-specific approval | **DENY / SCOPE_UNAPPROVED** |
+| Missing or revoked credential inventory version | **DENY / CREDENTIAL_UNVERIFIED**; do not retrieve a secret |
+| Workload identity, execution path, or runner environment differs | **DENY / WORKLOAD_UNAPPROVED** |
+| Missing account-read or invoice-read authorization | **DENY / METHOD_UNAPPROVED** |
+| A Connect/Stripe-Account override is supplied under a direct-account approval | **DENY / ACCOUNT_OVERRIDE** |
+| Scoped invoice response has `livemode=true`, missing mode, or unknown mode | **DENY / REALM_MISMATCH** |
+| Invoice response ID, customer or subscription parent differs from trusted binding | **DENY / INVOICE_BINDING_MISMATCH** |
+| Invoice is ambiguous, unavailable, or its source/revision evidence is incomplete | **DENY / OBSERVATION_UNQUALIFIED** |
+| Approved, current inventory and workload; account identity matches; scoped invoice has `livemode=false` and exact trusted binding | **POINT OBSERVATION ONLY**; no operation/consumption authority |
+
+**Order of operations:** Validate signed approval and inventory revisions *before* resolving the credential or contacting Stripe. Validate the credential's account identity before invoice retrieval. Any failure ends the attempt; do not fall back to a different account, test invoice, key, API version or verification method. Capture each denial using only inventory IDs and non-sensitive error codes.
+
+**Evidence receipt template (future authorized run only):**
+
+- Inventory record ID and approved immutable revision: **PENDING**
+- Approver, decision reference, scope expiration and revocation check: **PENDING**
+- Workload principal and approved execution path attestation: **PENDING**
+- Credential inventory locator and version, never the secret: **PENDING**
+- Exact expected/observed account ID and required test realm: **PENDING**
+- Exact authorized invoice reference and trusted binding revision: **PENDING**
+- API version, request ID (redacted as required), request-start/receipt timestamps and uncertainty: **PENDING**
+- Observed `livemode=false`, invoice identity, subscription parent and currency/amount comparison: **PENDING**
+- Immutable observation reference, digest, verdict and reviewer: **PENDING**
+
+This template is not evidence that an authorized run occurred. The only permitted verdict before completed approval is **NOT EXECUTED / DENY**.
+
+## 5. Related source decisions
 
 - [S08 test-mode point evidence profile](S08_TEST_MODE_POINT_EVIDENCE_PROFILE.md)
 - [S08 method-profile acceptance review](S08_METHOD_PROFILE_ACCEPTANCE_REVIEW.md)
