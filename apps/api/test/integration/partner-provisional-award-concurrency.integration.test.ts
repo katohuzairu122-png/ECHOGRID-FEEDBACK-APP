@@ -297,7 +297,10 @@ describe.skipIf(!url)('Split 07 positive/concurrent provisional awards — isola
       'SELECT id,account_id FROM partner_credit_lots WHERE decision_id=$1',
       [awarded.decisionId])).rows[0]!;
     await query("UPDATE partner_credit_award_decisions SET state='vested' WHERE id=$1",[awarded.decisionId]);
+    // forged fixture (no consumption or offset evidence): bypass the 0057 lot-evidence trigger on this connection only
+    await query('SET session_replication_role = replica');
     await query("UPDATE partner_credit_lots SET status='consumed',available_units=0 WHERE id=$1",[lot.id]);
+    await query('RESET session_replication_role');
     await query("UPDATE partner_credit_accounts SET provisional=provisional-1 WHERE id=$1",[lot.account_id]);
     const tag=crypto.randomUUID();
     const other=(await query<{id:string}>(
@@ -541,7 +544,9 @@ describe.skipIf(!url)('Split 07 positive/concurrent provisional awards — isola
     // Simulates the immutable consumption precondition; there is no active
     // Split 08 application writer or authorized consumption evidence yet.
     await query("UPDATE partner_credit_award_decisions SET state='vested' WHERE id=$1",[award.decisionId]);
+    await query('SET session_replication_role = replica'); // forged fixture: bypass the 0057 lot-evidence trigger on this connection only
     await query("UPDATE partner_credit_lots SET status='consumed',available_units=0 WHERE decision_id=$1",[award.decisionId]);
+    await query('RESET session_replication_role');
     await query("UPDATE partner_credit_accounts SET provisional=provisional-1 WHERE business_id=$1",[receiverId]);
     const obligationCountBefore = (await query<{count:string}>(
       'SELECT count(*)::text AS count FROM partner_credit_recovery_obligations'
@@ -840,11 +845,18 @@ describe.skipIf(!url)('Split 07 positive/concurrent provisional awards — isola
     expect(r.accountsInspected).toBeGreaterThanOrEqual(8);
     // D4: the two hand-forged `consumed` lots have no consumption evidence, so they now ALSO trip CONSUMED_LOT_EVIDENCE (stricter than before); the idempotency-conflict
     // fixture still diverges on LEDGER_NET only, and every real-service account (including the debt-absorbed vest) audits clean.
-    expect(new Set(r.violations.map(v => v.code))).toEqual(new Set(['LEDGER_NET', 'CONSUMED_LOT_EVIDENCE']));
+    // L4 (0057 follow-up): the bare CE-1 application fixtures (inserted directly to exercise the 0042 uniqueness/FK constraints) have no frozen allocation item, so the audit
+    // now also reports them as APPLICATION_ALLOCATION_EVIDENCE; no real-service account is affected.
+    expect(new Set(r.violations.map(v => v.code))).toEqual(new Set(['LEDGER_NET', 'CONSUMED_LOT_EVIDENCE', 'APPLICATION_ALLOCATION_EVIDENCE']));
+    expect(r.violations.filter(v => v.code === 'APPLICATION_ALLOCATION_EVIDENCE').length).toBeGreaterThanOrEqual(1);
     expect(r.violations.filter(v => v.code === 'CONSUMED_LOT_EVIDENCE')).toHaveLength(2);
     const flagged = new Set(r.violations.map(v => v.accountId));
-    expect(flagged.size).toBe(3);
-    expect(r.accountsInspected - flagged.size).toBeGreaterThanOrEqual(5);
+    // exactly the three tampered fixtures, plus the accounts whose ONLY fault is a bare application fixture (flagged on APPLICATION_ALLOCATION_EVIDENCE alone)
+    const onlyApplication = [...flagged].filter(id => r.violations.filter(v => v.accountId === id).every(v => v.code === 'APPLICATION_ALLOCATION_EVIDENCE'));
+    expect(flagged.size - onlyApplication.length).toBe(3);
+    expect(onlyApplication.length).toBeGreaterThanOrEqual(1);
+    // the same quantity the test always asserted: accounts not flagged by any pre-existing check stay at least 5 (the application-only accounts were counted clean before the new check)
+    expect(r.accountsInspected - (flagged.size - onlyApplication.length)).toBeGreaterThanOrEqual(5);
   }, 60000);
 
   it('projection audit detects each class of divergence on a clean account (mutations applied inside a rolled-back transaction)', async () => {
