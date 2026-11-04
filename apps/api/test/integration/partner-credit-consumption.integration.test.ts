@@ -640,6 +640,22 @@ describe.skipIf(!process.env.DATABASE_URL)('D4 final credit consumption and ledg
       expect(r.status === 'inconsistent' && r.violations.map(v => v.code)).toContain('CONSUMED_RESERVATION_LOT_MISMATCH');
     });
 
+    it('hardening (0056): the database refuses to consume with terminal_at earlier than the application\'s applied_at, and accepts it at applied_at', async () => {
+      const s = await scenario(); await applications.record({ reservationId: s.reservationId, businessId: s.businessId });
+      expect(await rejects(admin.query("update partner_credit_reservations set state='consumed', terminal_at=(select applied_at - interval '1 second' from billing_partner_credit_applications where reservation_id=$1) where id=$1", [s.reservationId])))
+        .toMatch(/cannot be terminal before its application was applied/);
+      expect((await credit(s)).reservation).toBe('reserved');
+      await admin.query("update partner_credit_reservations set state='consumed', terminal_at=(select applied_at from billing_partner_credit_applications where reservation_id=$1) where id=$1", [s.reservationId]);
+      expect((await credit(s)).reservation).toBe('consumed');
+    });
+
+    it('hardening (0056): a consumed reservation is also immutable in id, idempotency_key and created_at', async () => {
+      const s = await scenario(); await applications.record({ reservationId: s.reservationId, businessId: s.businessId });
+      await consumption.consume({ reservationId: s.reservationId, businessId: s.businessId });
+      for (const set of ["id = gen_random_uuid()", "idempotency_key = 'tampered-' || gen_random_uuid()::text", "created_at = created_at - interval '1 day'"])
+        expect(await rejects(admin.query(`update partner_credit_reservations set ${set} where id=$1`, [s.reservationId])), set).toMatch(/terminal state is immutable/);
+    });
+
     it('D4-06: the same reservation can never be applied twice (the database refuses it on any invoice, and the writer replays the one row)', async () => {
       const s = await scenario();
       const first = await applications.record({ reservationId: s.reservationId, businessId: s.businessId });
