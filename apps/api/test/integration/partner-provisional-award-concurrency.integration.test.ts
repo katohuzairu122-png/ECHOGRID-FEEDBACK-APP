@@ -838,7 +838,10 @@ describe.skipIf(!url)('Split 07 positive/concurrent provisional awards — isola
     const r = await new PartnerCreditProjectionAudit(buildDb(admin)).inspect();
     if (r.status === 'unavailable') throw new Error('audit unavailable: ' + r.reason);
     expect(r.accountsInspected).toBeGreaterThanOrEqual(8);
-    expect(new Set(r.violations.map(v => v.code))).toEqual(new Set(r.violations.length ? ['LEDGER_NET'] : []));
+    // D4: the two hand-forged `consumed` lots have no consumption evidence, so they now ALSO trip CONSUMED_LOT_EVIDENCE (stricter than before); the idempotency-conflict
+    // fixture still diverges on LEDGER_NET only, and every real-service account (including the debt-absorbed vest) audits clean.
+    expect(new Set(r.violations.map(v => v.code))).toEqual(new Set(['LEDGER_NET', 'CONSUMED_LOT_EVIDENCE']));
+    expect(r.violations.filter(v => v.code === 'CONSUMED_LOT_EVIDENCE')).toHaveLength(2);
     const flagged = new Set(r.violations.map(v => v.accountId));
     expect(flagged.size).toBe(3);
     expect(r.accountsInspected - flagged.size).toBeGreaterThanOrEqual(5);

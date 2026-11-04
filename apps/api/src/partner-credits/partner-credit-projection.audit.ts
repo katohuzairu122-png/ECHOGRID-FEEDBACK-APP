@@ -11,7 +11,8 @@ import type { Db } from '../db/client';
  */
 export type ProjectionViolationCode =
   | 'PROVISIONAL_BUCKET' | 'AVAILABLE_BUCKET' | 'RESERVED_BUCKET' | 'RECOVERY_DUE'
-  | 'LEDGER_NET' | 'LOT_DECISION_STATE' | 'LOT_BUSINESS_MISMATCH' | 'LOT_LEDGER_ORIGIN' | 'DECISION_WITHOUT_LOT';
+  | 'LEDGER_NET' | 'LOT_DECISION_STATE' | 'LOT_BUSINESS_MISMATCH' | 'LOT_LEDGER_ORIGIN' | 'DECISION_WITHOUT_LOT'
+  | 'CONSUMED_LOT_EVIDENCE' | 'CONSUME_ENTRY_WITHOUT_LOT' | 'CONSUMED_REVERSAL_EVIDENCE' | 'CONSUMED_RESERVATION_LOT_MISMATCH';
 
 export interface ProjectionViolation {
   accountId: string;
@@ -26,10 +27,10 @@ export type ProjectionAuditResult =
   | { status: 'unavailable'; reason: 'INVALID_INPUT' | 'DATABASE_UNAVAILABLE' | 'ROW_SHAPE_INVALID' };
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-const CODES = new Set<string>(['PROVISIONAL_BUCKET', 'AVAILABLE_BUCKET', 'RESERVED_BUCKET', 'RECOVERY_DUE', 'LEDGER_NET', 'LOT_DECISION_STATE', 'LOT_BUSINESS_MISMATCH', 'LOT_LEDGER_ORIGIN', 'DECISION_WITHOUT_LOT']);
+const CODES = new Set<string>(['PROVISIONAL_BUCKET', 'AVAILABLE_BUCKET', 'RESERVED_BUCKET', 'RECOVERY_DUE', 'LEDGER_NET', 'LOT_DECISION_STATE', 'LOT_BUSINESS_MISMATCH', 'LOT_LEDGER_ORIGIN', 'DECISION_WITHOUT_LOT', 'CONSUMED_LOT_EVIDENCE', 'CONSUME_ENTRY_WITHOUT_LOT', 'CONSUMED_REVERSAL_EVIDENCE', 'CONSUMED_RESERVATION_LOT_MISMATCH']);
 
-/** Ledger identity: provisional +1, vest = zero-net bucket transfer, reverse/expire/recovery_offset are reductions. */
-export const LEDGER_NET_ENTRY_TYPES = ['provisional', 'reverse', 'expire', 'recovery_offset'] as const;
+/** Ledger identity: provisional +1, vest = zero-net bucket transfer, reverse/expire/recovery_offset/consume are reductions; consumed_reversal records a debt, not a balance. */
+export const LEDGER_NET_ENTRY_TYPES = ['provisional', 'reverse', 'expire', 'recovery_offset', 'consume'] as const;
 
 export class PartnerCreditProjectionAudit {
   constructor(private readonly db: Pick<Db, 'execute'>) {}
@@ -63,7 +64,7 @@ export class PartnerCreditProjectionAudit {
           UNION ALL
           SELECT a.id, 'LEDGER_NET',
                  COALESCE((SELECT SUM(g.units) FROM partner_credit_ledger g WHERE g.account_id = a.id
-                           AND g.entry_type IN ('provisional','reverse','expire','recovery_offset')), 0)::bigint,
+                           AND g.entry_type IN ('provisional','reverse','expire','recovery_offset','consume')), 0)::bigint,
                  (a.provisional + a.available + a.reserved)::bigint FROM acct a
           UNION ALL
           SELECT l.account_id, 'LOT_DECISION_STATE', COUNT(*)::bigint, 0::bigint FROM lot l
@@ -79,6 +80,43 @@ export class PartnerCreditProjectionAudit {
            WHERE (SELECT COUNT(*) FROM partner_credit_ledger g WHERE g.decision_id = l.decision_id
                     AND g.account_id = l.account_id AND g.entry_type = 'provisional' AND g.units = 1) <> 1
            GROUP BY l.account_id
+          UNION ALL
+          SELECT l.account_id, 'CONSUMED_LOT_EVIDENCE', COUNT(*)::bigint, 0::bigint FROM lot l
+           WHERE l.status = 'consumed'
+             AND NOT (
+                  -- consumed through an invoice: one consume entry, a consumed reservation and its terminal application
+                  ((SELECT COUNT(*) FROM partner_credit_ledger g WHERE g.decision_id = l.decision_id AND g.account_id = l.account_id
+                      AND g.entry_type = 'consume' AND g.units = -1) = 1
+                   AND EXISTS (SELECT 1 FROM partner_credit_reservations r
+                                 JOIN billing_partner_credit_applications ap ON ap.reservation_id = r.id AND ap.terminal_state = 'applied'
+                                WHERE r.lot_id = l.id AND r.state = 'consumed'))
+                  -- absorbed by a recovery debt at vest (the pre-existing lifecycle path): never reserved, and it carries its recovery_offset entry
+                  OR (NOT EXISTS (SELECT 1 FROM partner_credit_reservations r WHERE r.lot_id = l.id)
+                      AND EXISTS (SELECT 1 FROM partner_credit_ledger g WHERE g.decision_id = l.decision_id AND g.account_id = l.account_id AND g.entry_type = 'recovery_offset')))
+           GROUP BY l.account_id
+          UNION ALL
+          SELECT g.account_id, 'CONSUME_ENTRY_WITHOUT_LOT', COUNT(*)::bigint, 0::bigint
+            FROM partner_credit_ledger g JOIN acct a ON a.id = g.account_id
+           WHERE g.entry_type = 'consume'
+             AND NOT EXISTS (SELECT 1 FROM partner_credit_lots x WHERE x.decision_id = g.decision_id AND x.account_id = g.account_id AND x.status IN ('consumed','reversed'))
+           GROUP BY g.account_id
+          UNION ALL
+          SELECT r.account_id, 'CONSUMED_RESERVATION_LOT_MISMATCH', COUNT(*)::bigint, 0::bigint
+            FROM partner_credit_reservations r JOIN acct a ON a.id = r.account_id JOIN partner_credit_lots l ON l.id = r.lot_id
+           WHERE r.state = 'consumed' AND l.status NOT IN ('consumed','reversed')
+           GROUP BY r.account_id
+          UNION ALL
+          SELECT g.account_id, 'CONSUMED_REVERSAL_EVIDENCE', COUNT(*)::bigint, 0::bigint
+            FROM partner_credit_ledger g JOIN acct a ON a.id = g.account_id
+           WHERE g.entry_type = 'consumed_reversal'
+             AND NOT (EXISTS (SELECT 1 FROM partner_credit_ledger c
+                                JOIN partner_credit_lots cl ON cl.decision_id = c.decision_id
+                                JOIN partner_credit_reservations cr ON cr.lot_id = cl.id AND cr.state = 'consumed'
+                               WHERE c.decision_id = g.decision_id AND c.account_id = g.account_id AND c.entry_type = 'consume' AND c.metadata->>'reservationId' = cr.id::text)
+                      AND EXISTS (SELECT 1 FROM partner_credit_recovery_obligations o
+                                   WHERE o.account_id = g.account_id AND o.units_due = 1 AND o.reversal_ref::text = g.metadata->>'reversalEventId')
+                      AND EXISTS (SELECT 1 FROM partner_credit_lots x WHERE x.decision_id = g.decision_id AND x.status = 'reversed'))
+           GROUP BY g.account_id
           UNION ALL
           SELECT a.id, 'DECISION_WITHOUT_LOT', COUNT(*)::bigint, 0::bigint FROM acct a
             JOIN partner_credit_award_decisions d ON d.business_id = a.business_id

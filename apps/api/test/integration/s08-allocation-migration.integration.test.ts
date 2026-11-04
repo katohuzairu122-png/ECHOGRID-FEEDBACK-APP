@@ -18,7 +18,8 @@ describe.skipIf(!process.env.DATABASE_URL)('S08 0052 inert allocation migration'
   const journal = JSON.parse(readFileSync(join(folder, 'meta/_journal.json'), 'utf8')) as {
     entries: { idx: number; tag: string }[];
   };
-  const last = journal.entries.at(-1)!;
+  // The migration under test is 0052 itself, not whatever happens to be last in the journal: later migrations (0053+) must not change what this suite proves.
+  const last = journal.entries.find((e) => e.tag === '0052_s08_inert_allocation_freezes')!;
   const tables = ['s08_allocation_freezes', 's08_allocation_freeze_items'];
   const guards = [
     'partner_credit_ledger_insert_disabled',
@@ -49,7 +50,7 @@ describe.skipIf(!process.env.DATABASE_URL)('S08 0052 inert allocation migration'
     const dir = mkdtempSync(join(tmpdir(), 'echogrid-s08-migrations-'));
     folders.push(dir);
     mkdirSync(join(dir, 'meta'));
-    const entries = journal.entries.filter((e) => includeLast || e.idx < last.idx);
+    const entries = journal.entries.filter((e) => (includeLast ? e.idx <= last.idx : e.idx < last.idx));
     writeFileSync(join(dir, 'meta/_journal.json'), JSON.stringify({ ...journal, entries }));
     for (const e of entries)
       writeFileSync(join(dir, e.tag + '.sql'), readFileSync(join(folder, e.tag + '.sql')));

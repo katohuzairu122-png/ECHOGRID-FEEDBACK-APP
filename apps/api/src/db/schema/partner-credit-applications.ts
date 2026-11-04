@@ -47,7 +47,9 @@ export const billingPartnerCreditApplications = pgTable('billing_partner_credit_
   appliedAt: timestamp('applied_at',{withTimezone:true}).notNull(),
   createdAt: timestamp('created_at',{withTimezone:true}).notNull().defaultNow(),
 }, t => [
-  uniqueIndex('billing_partner_credit_applications_invoice_once').on(t.businessId,t.invoiceRef),
+  // D4 (0053): was UNIQUE(business_id, invoice_ref). The approved aggregate allocation (S08-AGG-ROUND/1) puts up to 10 reservations on ONE invoice, so the natural key is per reservation; the
+  // number of applications for an invoice is bounded by its frozen allocation items, which the database verifier requires for every application.
+  uniqueIndex('billing_partner_credit_applications_invoice_reservation_key').on(t.businessId,t.invoiceRef,t.reservationId),
   foreignKey({ name: 'billing_partner_credit_applications_reservation_business_fk', columns: [t.reservationId, t.businessId], foreignColumns: [partnerCreditReservations.id, partnerCreditReservations.businessId] }).onDelete('restrict'),
   foreignKey({ name: 'billing_partner_credit_applications_subscription_business_fk', columns: [t.subscriptionId, t.businessId], foreignColumns: [businessSubscriptions.id, businessSubscriptions.businessId] }).onDelete('restrict'),
   index('billing_partner_credit_applications_subscription_idx').on(t.subscriptionId,t.appliedAt),
