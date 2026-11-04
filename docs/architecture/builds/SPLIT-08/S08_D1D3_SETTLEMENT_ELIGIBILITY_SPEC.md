@@ -1,8 +1,8 @@
 # S08-D1D3 — Settlement eligibility specification (design only)
 
 **Status: DESIGN ONLY. No code, schema, migration, provider call or ledger write is introduced or authorized. Financial activation: NO-GO.**
-Baseline: `main` at `ae9740478c48075f2b5f65f1c33106e8b4fe82b2`.
-Decision source: owner decision `S08-D1D3/1` is **PROPOSED, not merged policy**: it lives in draft PR #218 (head `ea7fdc77db13204128d4c25e6de6727f20a9546a`) and is not on `main`. Every rule below that cites D1-a to D3-g is a design proposal conditional on #218 being merged; if #218 changes, this specification must be revised. Companion documents: [refund/dispute classifier](S08_D1D3_REFUND_DISPUTE_CLASSIFIER_SPEC.md), [evidence and trust boundaries](S08_D1D3_EVIDENCE_AND_TRUST_BOUNDARIES.md), [acceptance matrix](S08_D1D3_ACCEPTANCE_MATRIX.md).
+Baseline: `main` at `f02be05`, which differs from the originally reviewed `ae9740478c48075f2b5f65f1c33106e8b4fe82b2` only by the added decision record.
+Decision source: owner decision [S08-D1D3/1](OWNER_DECISION_S08_D1_D3_ECONOMIC_AND_SETTLEMENT_2026-11-04.md), **merged to `main`** by PR #218 (merge commit `f02be05`); it authorizes architecture specifications and mock-provider development only, not implementation or any provider write. Rules below that cite D1-a to D3-g implement the recorded owner answers; the owner's D3-g change (partial refunds held) is preserved. Companion documents: [refund/dispute classifier](S08_D1D3_REFUND_DISPUTE_CLASSIFIER_SPEC.md), [evidence and trust boundaries](S08_D1D3_EVIDENCE_AND_TRUST_BOUNDARIES.md), [acceptance matrix](S08_D1D3_ACCEPTANCE_MATRIX.md).
 
 This is a design review against the repository, not executable integration certification. Nothing here has been run against Stripe, test mode or otherwise.
 
@@ -62,12 +62,12 @@ All must hold, each proven by the evidence snapshot (never by a webhook body, ca
 
 ## 4. D1 benefit economics (preserved, not extended)
 
-Recorded as proposed in #218 and preserved without addition:
+Recorded in S08-D1D3/1 and preserved without addition:
 
 - **Instrument (S08-INSTRUMENT/1, approved for development):** one negative Invoice Item per reservation, explicitly attached to the draft invoice named by the persisted intent, with idempotency key `benefit-apply:v1:<reservationId>`. No pending item for a future invoice, no other invoice, no subscription change.
-- **D1-a (proposed):** the item is treated as reducing the taxable base **for development simulation only**. No live-tax approval; jurisdiction-specific adviser confirmation required before any live use. The classifier verifies amounts, never tax outcomes; it must not infer tax compliance from Stripe defaults.
-- **D1-b (proposed):** the eligible base is after existing invoice discounts; the benefit item is non-discountable; the invoice total can never be negative. The classifier verifies the proven benefit line does not exceed the frozen amount and that the observed invoice total is not negative.
-- **D1-c (proposed):** policy `PC-BENEFIT/1`, immutable after certification, prospective from the recorded approval date (proposed 2026-11-04), one verified Stripe mode per environment. The classifier takes `policyVersion` from the frozen allocation and refuses a snapshot whose policy version differs.
+- **D1-a (owner decision, development only):** the item is treated as reducing the taxable base **for development simulation only**. No live-tax approval; jurisdiction-specific adviser confirmation required before any live use. The classifier verifies amounts, never tax outcomes; it must not infer tax compliance from Stripe defaults.
+- **D1-b (owner decision, development only):** the eligible base is after existing invoice discounts; the benefit item is non-discountable; the invoice total can never be negative. The classifier verifies the proven benefit line does not exceed the frozen amount and that the observed invoice total is not negative.
+- **D1-c (owner decision, development only):** policy `PC-BENEFIT/1`, immutable after certification, prospective from the recorded approval date (recorded 2026-11-04), one verified Stripe mode per environment. The classifier takes `policyVersion` from the frozen allocation and refuses a snapshot whose policy version differs.
 - **D2:** `S08-AGG-ROUND/1`. **No recomputation after the allocation freeze.** The classifier compares provider evidence to the frozen artifact; it never recalculates a benefit.
 
 **Unresolved provider/tax behavior (not assumed):** how Stripe computes tax on a negative Invoice Item, how it interacts with existing discounts and tax inclusivity, and whether a non-discountable negative item keeps the total non-negative in every case are unverified for API version `2026-05-27.dahlia`. The specification requires these to be proven in a separately authorized test-mode run before any implementation claims compliance. Stripe defaults do not establish policy compliance.

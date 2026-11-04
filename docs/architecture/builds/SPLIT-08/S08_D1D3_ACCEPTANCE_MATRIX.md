@@ -1,7 +1,7 @@
 # S08-D1D3 — Acceptance matrix and open questions (design only)
 
 **Status: DESIGN ONLY. These are required future acceptance scenarios; none has been run. Nothing is certified. Financial activation: NO-GO.**
-Baseline: `main` at `ae9740478c48075f2b5f65f1c33106e8b4fe82b2`. Decision source `S08-D1D3/1` is **PROPOSED** in draft PR #218 (head `ea7fdc77db13204128d4c25e6de6727f20a9546a`), not merged policy. Companions: [settlement eligibility](S08_D1D3_SETTLEMENT_ELIGIBILITY_SPEC.md), [refund/dispute classifier](S08_D1D3_REFUND_DISPUTE_CLASSIFIER_SPEC.md), [evidence and trust boundaries](S08_D1D3_EVIDENCE_AND_TRUST_BOUNDARIES.md).
+Baseline: `main` at `f02be05`, which differs from the originally reviewed `ae9740478c48075f2b5f65f1c33106e8b4fe82b2` only by the added decision record. Decision source: owner decision [S08-D1D3/1](OWNER_DECISION_S08_D1_D3_ECONOMIC_AND_SETTLEMENT_2026-11-04.md), **merged to `main`** by PR #218 (merge commit `f02be05`); it authorizes architecture specifications and mock-provider development only, not implementation or any provider write. Companions: [settlement eligibility](S08_D1D3_SETTLEMENT_ELIGIBILITY_SPEC.md), [refund/dispute classifier](S08_D1D3_REFUND_DISPUTE_CLASSIFIER_SPEC.md), [evidence and trust boundaries](S08_D1D3_EVIDENCE_AND_TRUST_BOUNDARIES.md).
 
 All scenarios run **only** on a mock provider and a disposable database until a separate owner authorization says otherwise. "Expected" is the required design behavior, not an observed result. Every scenario also asserts: the reservation is not released, no ledger/lot/account row changes, and no provider call is made by the classifier.
 

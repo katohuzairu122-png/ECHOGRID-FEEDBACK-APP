@@ -1,7 +1,7 @@
 # S08-D1D3 — Evidence provenance, trust boundaries and proposed contracts (design only)
 
 **Status: DESIGN ONLY. No code, schema, migration, provider call or ledger write is introduced or authorized. Financial activation: NO-GO.**
-Baseline: `main` at `ae9740478c48075f2b5f65f1c33106e8b4fe82b2`. Decision source `S08-D1D3/1` is **PROPOSED** in draft PR #218 (head `ea7fdc77db13204128d4c25e6de6727f20a9546a`), not merged policy. Companions: [settlement eligibility](S08_D1D3_SETTLEMENT_ELIGIBILITY_SPEC.md), [refund/dispute classifier](S08_D1D3_REFUND_DISPUTE_CLASSIFIER_SPEC.md), [acceptance matrix](S08_D1D3_ACCEPTANCE_MATRIX.md). A design review is not executable integration certification.
+Baseline: `main` at `f02be05`, which differs from the originally reviewed `ae9740478c48075f2b5f65f1c33106e8b4fe82b2` only by the added decision record. Decision source: owner decision [S08-D1D3/1](OWNER_DECISION_S08_D1_D3_ECONOMIC_AND_SETTLEMENT_2026-11-04.md), **merged to `main`** by PR #218 (merge commit `f02be05`); it authorizes architecture specifications and mock-provider development only, not implementation or any provider write. Companions: [settlement eligibility](S08_D1D3_SETTLEMENT_ELIGIBILITY_SPEC.md), [refund/dispute classifier](S08_D1D3_REFUND_DISPUTE_CLASSIFIER_SPEC.md), [acceptance matrix](S08_D1D3_ACCEPTANCE_MATRIX.md). A design review is not executable integration certification.
 
 ## 1. The three authorities (kept separate)
 
@@ -32,7 +32,7 @@ Business id; intent, reservation and invoice references; provider account id; mo
 ## 4. Tenant, account and mode separation
 
 - Every proposed row carries `business_id`, enforced by composite foreign keys to the intent/reservation of the same business (the repository's existing pattern), so another business's snapshot cannot be attached.
-- Account and mode are **configuration**, one verified Stripe mode per environment (proposed D1-c). The expected values are never taken from the provider response. A test-mode snapshot can never classify a live-mode environment and vice versa; the mismatch is a stored UNRESOLVED snapshot, never silently dropped.
+- Account and mode are **configuration**, one verified Stripe mode per environment (owner decision D1-c). The expected values are never taken from the provider response. A test-mode snapshot can never classify a live-mode environment and vice versa; the mismatch is a stored UNRESOLVED snapshot, never silently dropped.
 - Classifier inputs are tenant-checked before any provider read: a request naming another business's reservation is rejected before a read is made.
 
 ## 5. Proposed future contracts (illustrative; no migration, no code)

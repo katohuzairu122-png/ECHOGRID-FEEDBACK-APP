@@ -1,7 +1,7 @@
 # S08-D1D3 — Refund and payment-dispute classifier specification (design only)
 
 **Status: DESIGN ONLY. No code, schema, migration, provider call or ledger write is introduced or authorized. Financial activation: NO-GO.**
-Baseline: `main` at `ae9740478c48075f2b5f65f1c33106e8b4fe82b2`. Decision source `S08-D1D3/1` (D3-g) is **PROPOSED** in draft PR #218 (head `ea7fdc77db13204128d4c25e6de6727f20a9546a`), not merged policy. Companions: [settlement eligibility](S08_D1D3_SETTLEMENT_ELIGIBILITY_SPEC.md), [evidence and trust boundaries](S08_D1D3_EVIDENCE_AND_TRUST_BOUNDARIES.md), [acceptance matrix](S08_D1D3_ACCEPTANCE_MATRIX.md). A design review is not executable integration certification.
+Baseline: `main` at `f02be05`, which differs from the originally reviewed `ae9740478c48075f2b5f65f1c33106e8b4fe82b2` only by the added decision record. Decision source: owner decision [S08-D1D3/1](OWNER_DECISION_S08_D1_D3_ECONOMIC_AND_SETTLEMENT_2026-11-04.md), **merged to `main`** by PR #218 (merge commit `f02be05`); it authorizes architecture specifications and mock-provider development only, not implementation or any provider write. Companions: [settlement eligibility](S08_D1D3_SETTLEMENT_ELIGIBILITY_SPEC.md), [evidence and trust boundaries](S08_D1D3_EVIDENCE_AND_TRUST_BOUNDARIES.md), [acceptance matrix](S08_D1D3_ACCEPTANCE_MATRIX.md). A design review is not executable integration certification.
 
 ## 1. Naming: "dispute" here is a Stripe payment dispute
 
@@ -63,7 +63,7 @@ Classification and **reconciliation hold only** (D3-g). The classifier reports `
 
 ## 9. Future boundary for triggering the consumed-credit reversal (not connected in this block)
 
-D3-g (proposed): a fully refunded payment or lost dispute **may** initiate the existing consumed-credit reversal and recovery-obligation process after independent verification. This design fixes only the boundary a future, separately authorized block must respect.
+D3-g (owner decision, development only): a fully refunded payment or lost dispute **may** initiate the existing consumed-credit reversal and recovery-obligation process after independent verification. This design fixes only the boundary a future, separately authorized block must respect.
 
 **Preconditions (all required, checked by the accounting authority under the existing lock order, not by the classifier):**
 1. A stored immutable classification of `FULL_REFUND_VERIFIED` or `DISPUTE_LOST_VERIFIED` with extent full, from a fresh complete snapshot (freshness window per the settlement specification), with no newer snapshot of a different class.
