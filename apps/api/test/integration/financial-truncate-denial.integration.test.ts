@@ -14,8 +14,16 @@ import { resolve } from 'node:path';
 const PROTECTED = [
   'benefit_application_intents', 'billing_partner_credit_applications', 'partner_credit_accounts', 'partner_credit_award_decisions', 'partner_credit_ledger',
   'partner_credit_lots', 'partner_credit_multiunit_lot_allocations', 'partner_credit_multiunit_movements', 'partner_credit_recovery_obligations',
-  'partner_credit_reservations', 'stripe_subscription_tier_observations',
+  'partner_credit_reservations', 'stripe_subscription_tier_observations', 'partner_credit_policies',
 ] as const;
+/** Truncate-only triggers from earlier migrations (0045, 0048, 0049, 0050, 0051): untouched except that 0054 makes them ENABLE ALWAYS. */
+const LEGACY = [
+  'benefit_application_compensations', 'benefit_application_transitions', 'benefit_provider_attempts', 'benefit_provider_observations', 'benefit_reconciliation_attempts',
+  'heta_provenance_comparisons', 'heta_reconciliation_work', 'heta_record_revisions', 'partner_credit_award_disputes', 'partner_credit_corrections', 'partner_credit_dispute_events',
+  'stripe_evidence_control_events', 'stripe_evidence_keys', 'stripe_provider_event_conflicts', 'stripe_provider_event_dispositions', 'stripe_provider_events', 'stripe_provider_malformed_receipts',
+] as const;
+/** Tables with a row trigger that are NOT frozen financial evidence; a new guarded table must either get a truncate trigger or be added here deliberately. */
+const NOT_EVIDENCE = ['business_subscriptions', 'feedback'] as const;
 
 describe.skipIf(!process.env.DATABASE_URL)('Split 07/08 financial TRUNCATE denial (integration, scratch database)', () => {
   const base = new URL(process.env.DATABASE_URL!);
@@ -43,23 +51,42 @@ describe.skipIf(!process.env.DATABASE_URL)('Split 07/08 financial TRUNCATE denia
     await root.connect(); await root.query(`drop database if exists ${dbName} with (force)`); await root.end();
   });
 
-  it('every protected table has a BEFORE TRUNCATE statement trigger that is ENABLE ALWAYS', async () => {
+  it('every protected table has a BEFORE TRUNCATE statement trigger that is ENABLE ALWAYS, and so does every earlier truncate-only trigger', async () => {
     const r = await admin.query<{ t: string; enabled: string; stmt: boolean }>(
       `select tgrelid::regclass::text t, tgenabled::text enabled, (tgtype & 1) = 0 stmt from pg_trigger
-        where not tgisinternal and (tgtype & 32) = 32 and (tgtype & 2) = 2 and tgrelid::regclass::text = any($1)`, [PROTECTED]);
-    expect(r.rows.map(x => x.t).sort()).toEqual([...PROTECTED].sort());
+        where not tgisinternal and (tgtype & 32) = 32 and (tgtype & 2) = 2 and tgrelid::regclass::text = any($1)`, [[...PROTECTED, ...LEGACY]]);
+    expect(r.rows.map(x => x.t).sort()).toEqual([...PROTECTED, ...LEGACY].sort());
     for (const row of r.rows) { expect(row.enabled, row.t).toBe('A'); expect(row.stmt, row.t).toBe(true); }
   });
 
-  it('structural guard: no table with an immutability or inert write guard may lack a BEFORE TRUNCATE trigger', async () => {
+  it('structural guard: every table with a row-level write guard has a BEFORE TRUNCATE trigger, except the two named non-evidence tables', async () => {
     const r = await admin.query<{ t: string }>(
       `select distinct g.tgrelid::regclass::text t from pg_trigger g
         where not g.tgisinternal and (g.tgtype & 32) = 0
-          and g.tgname ~ '(inert|append_only|immutab|insert_disabled|no_update|deny|guard|disabled|no_delete)'
           and not exists (select 1 from pg_trigger x where x.tgrelid = g.tgrelid and not x.tgisinternal and (x.tgtype & 32) = 32)
         order by 1`);
-    expect(r.rows.map(x => x.t)).toEqual([]);
+    expect(r.rows.map(x => x.t).filter(t => !(NOT_EVIDENCE as readonly string[]).includes(t))).toEqual([]);
   });
+
+  /** Runs `truncate <table> cascade` with every OTHER table's truncate trigger disabled (inside a rolled-back transaction), so only the table's own trigger can deny it. */
+  async function ownTriggerDenial(table: string, replica: boolean) {
+    const c = await connect();
+    await c.query('begin');
+    try {
+      if (replica) await c.query('SET LOCAL session_replication_role = replica');
+      const others = await c.query<{ t: string; n: string }>(
+        `select tgrelid::regclass::text t, tgname n from pg_trigger where not tgisinternal and (tgtype & 32) = 32 and tgrelid::regclass::text <> $1`, [table]);
+      for (const o of others.rows) await c.query(`alter table ${o.t} disable trigger ${o.n}`);
+      return await rejects(c.query(`truncate ${table} cascade`));
+    } finally { await c.query('rollback'); await c.end(); }
+  }
+  for (const table of [...PROTECTED, ...LEGACY]) {
+    it(`${table}: its own truncate trigger denies TRUNCATE ... CASCADE, in a normal and a replica-role session, with every other table's trigger disabled`, async () => {
+      const strict = (PROTECTED as readonly string[]).includes(table) ? new RegExp(`FINANCIAL_EVIDENCE_TRUNCATE_DENIED \\(${table}\\)`) : /append-only|denied|deny|truncate/i;
+      expect(await ownTriggerDenial(table, false), `${table} normal`).toMatch(strict);
+      expect(await ownTriggerDenial(table, true), `${table} replica`).toMatch(strict);
+    });
+  }
 
   // A plain TRUNCATE of a table that foreign keys reference is also refused by PostgreSQL itself, before any trigger runs; CASCADE (and the replica-role
   // session, where FK triggers are off but that static rule still applies) is what reaches the triggers, and every table in the cascade set carries a denial.
@@ -107,15 +134,18 @@ describe.skipIf(!process.env.DATABASE_URL)('Split 07/08 financial TRUNCATE denia
     expect(enabled.rows[0]?.tgenabled).toBe('O');
   });
 
-  it('the migration refuses to adopt pre-existing objects and leaves nothing behind when it fails', async () => {
-    const sql = readFileSync(resolve(api, 'drizzle/0054_split07_08_financial_truncate_denial.sql'), 'utf8').split('--> statement-breakpoint').map(s => s.trim()).filter(Boolean);
+  it('the migration refuses to adopt pre-existing objects: the function and every trigger statement fails when its object already exists, and the whole file leaves nothing behind', async () => {
+    const stmts = readFileSync(resolve(api, 'drizzle/0054_split07_08_financial_truncate_denial.sql'), 'utf8').split('--> statement-breakpoint').map(x => x.replace(/^(\s*--.*\n)+/g, '').trim()).filter(Boolean);
+    const creates = stmts.filter(x => /^CREATE (FUNCTION|TRIGGER)/.test(x));
+    expect(creates).toHaveLength(PROTECTED.length + 1);
     const c = await connect();
-    await c.query('begin');
-    let failure = '';
-    try { for (const stmt of sql) await c.query(stmt); } catch (e) { failure = errText(e); }
-    await c.query('rollback');
-    expect(failure).toMatch(/already exists/);
-    const left = await admin.query("select count(*)::int n from pg_trigger where tgname like '%\\_no\\_truncate' and tgrelid::regclass::text = any($1)", [PROTECTED]);
-    expect(left.rows[0]!.n).toBe(PROTECTED.length); // the originals are intact after the rollback
+    for (const stmt of creates) {
+      await c.query('begin');
+      const failure = await rejects(c.query(stmt));
+      await c.query('rollback');
+      expect(failure, stmt.slice(0, 80)).toMatch(/already exists/);
+    }
+    const left = await admin.query("select count(*)::int n from pg_trigger where tgname like '%\\_no\\_truncate' and tgrelid::regclass::text = any($1)", [[...PROTECTED, ...LEGACY]]);
+    expect(left.rows[0]!.n).toBe(PROTECTED.length + LEGACY.length);
   });
 });
