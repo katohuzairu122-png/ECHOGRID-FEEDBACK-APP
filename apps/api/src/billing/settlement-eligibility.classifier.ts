@@ -171,13 +171,13 @@ const SAFE_REF = /^[A-Za-z0-9_:./-]{1,128}$/;
 const safeRef = (s: unknown): string | null => (typeof s === 'string' && SAFE_REF.test(s) ? s : null);
 const DIGEST = /^[0-9a-f]{64}$/;
 /** Keys that would let a caller assert financial authority. Any truthy occurrence anywhere in the input is refused. */
-const AUTHORITY_KEYS: ReadonlySet<string> = new Set(['consumptionAuthorized', 'providerVerified', 'settlementAuthorized', 'financialAuthority', 'authorized', 'trusted', 'verified', 'eligible', 'approved']);
+const AUTHORITY_KEYS: ReadonlySet<string> = new Set(['consumptionauthorized', 'providerverified', 'settlementauthorized', 'financialauthority', 'authorized', 'trusted', 'verified', 'eligible', 'approved']); // compared lower-case
 
 function assertsAuthority(value: unknown, depth = 0): boolean {
   if (depth > 8 || value === null || typeof value !== 'object') return false;
   if (Array.isArray(value)) return value.some(v => assertsAuthority(v, depth + 1));
   for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
-    if (AUTHORITY_KEYS.has(k) && v !== false && v !== undefined && v !== null) {
+    if (AUTHORITY_KEYS.has(k.toLowerCase()) && v !== false && v !== undefined && v !== null) {
       // the frozen allocation legitimately carries the literal `false` flags; anything else (true, strings, numbers) is an assertion
       return true;
     }
@@ -240,6 +240,8 @@ function evaluate(ctx: SettlementClassifierContext, ev: MockSettlementEvidence, 
 
   // P7: arithmetic coherence and duplicate lines
   const items = ev.lines.items;
+  // a non-integer timestamp would make `createdAt < effectiveFrom` false and silently skip the policy-applicability rule, so it is refused here
+  if (!isNonNegInt(inv.createdAtMs)) return U('INPUT_INVALID');
   if (new Set(items.map(l => l.lineRef)).size !== items.length) return U('DUPLICATE_LINE');
   if (![inv.amountDueMinor, inv.amountPaidMinor, inv.amountRemainingMinor].every(isNonNegInt) || !isInt(inv.totalMinor) || inv.totalMinor < 0 ||
       inv.amountPaidMinor + inv.amountRemainingMinor !== inv.amountDueMinor || items.some(l => !isInt(l.amountMinor)) ||

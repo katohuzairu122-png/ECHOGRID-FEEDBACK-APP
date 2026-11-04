@@ -292,6 +292,12 @@ describe('S08-D1D3-DEV-01 mock settlement eligibility classifier', () => {
       ];
       for (const a of attacks) { const r = run(a); expectU(r, 'CALLER_AUTHORITY_ASSERTED'); expect(r.manualReviewRequired).toBe(true); expect(r.grantsFinancialAuthority).toBe(false); }
     });
+    it('authority keys are matched case-insensitively', () => {
+      for (const k of ['ConsumptionAuthorized', 'PROVIDERVERIFIED', 'Trusted']) expectU(run((_, e) => { e.invoice[k] = true; }), 'CALLER_AUTHORITY_ASSERTED');
+    });
+    it('a non-integer invoice creation time can never skip the policy-applicability rule', () => {
+      for (const v of [Number.NaN, undefined, null, '5000', 1.5, -1]) expectU(run((_, e) => { e.invoice.createdAtMs = v; }), 'INPUT_INVALID');
+    });
     it('the legitimate literal false flags on the frozen allocation are not an assertion', () => { expect(run().verdict).toBe('ELIGIBLE'); });
     it('a webhook-style assertion ("paid") without matching independent facts cannot make the invoice eligible', () => {
       expectU(run((_, e) => { e.invoice.status = 'paid'; e.invoice.amountRemainingMinor = 2700; e.invoice.amountPaidMinor = 0; sync(e); }), 'PAID_WITH_REMAINING');

@@ -5,7 +5,7 @@ Implements [the settlement eligibility specification](S08_D1D3_SETTLEMENT_ELIGIB
 
 ## Files
 - `apps/api/src/billing/settlement-eligibility.classifier.ts` — `classifySettlement(context, evidence)`. Type-only import of the frozen allocation contract; nothing else.
-- `apps/api/src/billing/settlement-eligibility.classifier.test.ts` — 54 tests (the 30 required scenarios, adversarial, determinism, purity, mutation-hardening).
+- `apps/api/src/billing/settlement-eligibility.classifier.test.ts` — 56 tests (the 30 required scenarios, adversarial, determinism, purity, mutation-hardening).
 
 ## Contract
 - **Trusted context** (`SettlementClassifierContext`): injected clock, policy version, policy effective instant, freshness window, and the expected business, reservation, intent, invoice, customer, subscription, currency, provider account, provider mode, reservation expiry and the frozen allocation (`S08-AGG-ROUND/1`, reused as-is, never recalculated). Expected values come from configuration and persisted records, never from the evidence.
