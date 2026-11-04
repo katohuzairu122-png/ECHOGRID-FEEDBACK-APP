@@ -73,7 +73,9 @@ describe('S08 verifier private invocation remediation (synthetic offline only)',
     const different = { ...r, invoiceScope: { ...invoiceScope, invoiceId: 'in_OTHER' } };
     expect(await check(different, policy, makeDeps(), NOW, makeProof(different)))
       .toEqual({ allowed: false, reason: 'SCOPE_MISMATCH' });
-    expect(await check(r, { ...policy, invoiceScope: undefined }, makeDeps(), NOW, makeProof(r)))
+    // a policy that carries no invoice scope at all (the key is omitted, not set to undefined, under exactOptionalPropertyTypes)
+    const { invoiceScope: _omitted, ...policyWithoutScope } = policy;
+    expect(await check(r, policyWithoutScope, makeDeps(), NOW, makeProof(r)))
       .toEqual({ allowed: false, reason: 'SCOPE_MISMATCH' });
   });
 
