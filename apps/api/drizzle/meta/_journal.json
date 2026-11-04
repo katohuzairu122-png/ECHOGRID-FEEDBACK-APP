@@ -414,6 +414,13 @@
       "when": 1793796259500,
       "tag": "0058_r10_settlement_reversal_vocabulary",
       "breakpoints": true
+    },
+    {
+      "idx": 59,
+      "version": "7",
+      "when": 1793806714143,
+      "tag": "0059_r10_obligation_delete_denial",
+      "breakpoints": true
     }
   ]
 }
