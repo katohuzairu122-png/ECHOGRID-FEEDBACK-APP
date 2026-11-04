@@ -393,6 +393,13 @@
       "when": 1793761490251,
       "tag": "0055_s08_allocation_truncate_always",
       "breakpoints": true
+    },
+    {
+      "idx": 56,
+      "version": "7",
+      "when": 1793762503829,
+      "tag": "0056_d4_terminal_reservation_hardening",
+      "breakpoints": true
     }
   ]
 }
