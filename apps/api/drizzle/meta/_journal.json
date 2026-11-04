@@ -379,6 +379,13 @@
       "when": 1793728860176,
       "tag": "0053_split07_08_d4_consumption_ledger",
       "breakpoints": true
+    },
+    {
+      "idx": 54,
+      "version": "7",
+      "when": 1793758132982,
+      "tag": "0054_split07_08_financial_truncate_denial",
+      "breakpoints": true
     }
   ]
 }
