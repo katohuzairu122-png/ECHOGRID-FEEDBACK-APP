@@ -22,9 +22,17 @@ export const partnerCreditAwardDecisionSchema = z.object({
   earningMonthUtc: z.string().regex(/^\d{4}-\d{2}$/),
   fulfilledAt: z.string(), vestAt: z.string().nullable(),
 });
+/**
+ * The Partner Credit ledger vocabulary, equal to the `partner_credit_ledger_type_check` constraint: the six original types (0040), `consume` and `consumed_reversal`
+ * (D4, 0053) and the informational `reversal_noop` and `recovery_restored` (R10, 0058). An integration test pins this list to the live constraint.
+ */
+export const partnerCreditLedgerEntryTypes = [
+  'provisional','vest','expire','reverse','recovery_offset','admin_adjustment',
+  'consume','consumed_reversal','reversal_noop','recovery_restored',
+] as const;
 export const partnerCreditLedgerEntrySchema = z.object({
   id: z.uuid(), businessId: z.uuid(), accountId: z.uuid(),
-  entryType: z.enum(['provisional','vest','expire','reverse','recovery_offset','admin_adjustment']),
+  entryType: z.enum(partnerCreditLedgerEntryTypes),
   units: z.number().int().refine(n => n !== 0),
   idempotencyKey: z.string().min(1), occurredAt: z.string(),
 });

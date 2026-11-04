@@ -9,6 +9,7 @@ import { unwindCredit, type UnwindCause } from '../../src/partner-credits/partne
 import { PartnerProvisionalReversalCompensator } from '../../src/partner-credits/partner-provisional-reversal.compensator';
 import { PartnerCreditDeferredReversalReader } from '../../src/partner-credits/partner-credit-deferred-reversal.reader';
 import { PartnerCreditProjectionAudit } from '../../src/partner-credits/partner-credit-projection.audit';
+import { partnerCreditLedgerEntryTypes } from '@echo-grid-feedback/shared-types';
 
 /**
  * R10 (Block 1): the shared unwind routine, the new ledger evidence, the extended lot rules and the obligation guard, on a real PostgreSQL SCRATCH database created and
@@ -342,6 +343,118 @@ describe.skipIf(!process.env.DATABASE_URL)('R10 shared unwind routine (integrati
       await fxq('update partner_credit_recovery_obligations set units_outstanding = 1 where id=$1', [conserve.obligationId]);
       await fxq('update partner_credit_accounts set recovery_due = 1 where id=$1', [conserve.accountId]);
       expect(await codes(conserve.businessId)).toContain('OBLIGATION_CONSERVATION');
+    });
+  });
+
+  describe('R10 hardening LOW-A1: an already-reversed decision needs its CANONICAL compensation entry', () => {
+    const counts = async (c: Cred) => (await rows(
+      `select (select count(*)::int from partner_credit_ledger where decision_id=$1) ledger,
+              (select count(*)::int from partner_credit_recovery_obligations where account_id=$2) obligations,
+              (select recovery_due from partner_credit_accounts where id=$2) recovery_due`, [c.decisionId, c.accountId]))[0]!;
+    it('fails closed (PARTNER_REVERSAL_MISSING_COMPENSATION) when the decision is reversed and the ledger holds no canonical entry; unrelated entries and wrong keys do not satisfy it', async () => {
+      const bare = await credit('available');
+      await fxq("update partner_credit_award_decisions set state='reversed' where id=$1", [bare.decisionId]);
+      const bareBefore = await counts(bare);
+      expect(await rejects(unwind(bare, reversalCause()))).toMatch(/PARTNER_REVERSAL_MISSING_COMPENSATION/);
+      expect(await counts(bare)).toEqual(bareBefore);
+      // an unrelated ledger entry on the same decision is not compensation
+      const unrelated = await credit('available');
+      await fxq("update partner_credit_award_decisions set state='reversed' where id=$1", [unrelated.decisionId]);
+      await fxq("insert into partner_credit_ledger(account_id,decision_id,entry_type,units,idempotency_key) values($1,$2,'admin_adjustment',-1,$3)", [unrelated.accountId, unrelated.decisionId, `adj-${randomUUID()}`]);
+      expect(await rejects(unwind(unrelated, reversalCause()))).toMatch(/PARTNER_REVERSAL_MISSING_COMPENSATION/);
+      // a reversal-class entry under a WRONG idempotency key (another settlement's canonical key, a stale key version) is not the canonical entry
+      const wrongKey = await credit('available');
+      await fxq("update partner_credit_award_decisions set state='reversed' where id=$1", [wrongKey.decisionId]);
+      await fxq("insert into partner_credit_ledger(account_id,decision_id,entry_type,units,idempotency_key) values($1,$2,'reverse',-1,$3)", [wrongKey.accountId, wrongKey.decisionId, `partner-reversal:v1:${randomUUID()}`]);
+      await fxq("insert into partner_credit_ledger(account_id,decision_id,entry_type,units,idempotency_key) values($1,$2,'consumed_reversal',1,$3)", [wrongKey.accountId, wrongKey.decisionId, `partner-reversal:v0:${wrongKey.settlementId}`]);
+      const wrongBefore = await counts(wrongKey);
+      expect(await rejects(unwind(wrongKey, reversalCause()))).toMatch(/PARTNER_REVERSAL_MISSING_COMPENSATION/);
+      expect(await counts(wrongKey)).toEqual(wrongBefore);
+    });
+    it('a correctly compensated reversal replays idempotently under either cause, with no second ledger entry and no second obligation', async () => {
+      for (const kind of ['provisional', 'available', 'expired', 'offset_consumed'] as const) {
+        const c = await credit(kind);
+        await unwind(c, reversalCause());
+        const done = await counts(c); const doneState = await state(c);
+        for (const cause of [reversalCause(), revocationCause(), reversalCause()]) expect(await unwind(c, cause)).toBe('already_reversed');
+        expect(await counts(c)).toEqual(done);
+        expect(await state(c)).toEqual(doneState);
+        expect(await audit(c.businessId)).toMatchObject({ status: 'consistent' });
+      }
+    });
+  });
+
+  describe('R10 hardening LOW-A2: recovery_restored evidence has exactly the required relationship to the recorded offset', () => {
+    const restore = (db: Client, c: Cred, units: number, meta: Record<string, unknown> | null, key = `r-${randomUUID()}`) =>
+      db.query("insert into partner_credit_ledger(account_id,decision_id,entry_type,units,idempotency_key,metadata) values($1,$2,'recovery_restored',$3,$4,$5::jsonb)", [c.accountId, c.decisionId, units, key, meta === null ? null : JSON.stringify(meta)]);
+    it('the units must equal the recorded offset exactly: a restoration of one unit cannot reinstate a fabricated two-unit offset', async () => {
+      const c = await credit('offset_consumed');
+      await restore(admin, c, 1, { obligationId: c.obligationId }); // the genuine one-unit offset is restored by exactly one unit
+      const forged = await credit('offset_consumed');
+      // the fixture connection (replica role) swaps the genuine offset for a fabricated two-unit one; the service path can never write that
+      await fxq("delete from partner_credit_ledger where decision_id=$1 and entry_type='recovery_offset'", [forged.decisionId]);
+      await fxq("insert into partner_credit_ledger(account_id,decision_id,entry_type,units,idempotency_key,metadata) values($1,$2,'recovery_offset',-2,$3,$4::jsonb)", [forged.accountId, forged.decisionId, `forged-${randomUUID()}`, JSON.stringify({ obligationId: forged.obligationId, offsetUnits: 2 })]);
+      expect(await rejects(restore(admin, forged, 1, { obligationId: forged.obligationId }))).toMatch(/reinstates exactly the one recorded offset/);
+      expect(await rejects(restore(admin, forged, 2, { obligationId: forged.obligationId }))).toMatch(/r10_units_check|violates check/); // a two-unit restoration is not allowed at all
+    });
+    it('rejects fabricated or mismatched evidence: wrong obligation, wrong decision, wrong account, no obligation, and a duplicate restoration', async () => {
+      const c = await credit('offset_consumed'); const other = await credit('offset_consumed');
+      expect(await rejects(restore(admin, c, 1, { obligationId: other.obligationId }))).toMatch(/reinstates exactly the one recorded offset/); // another decision's obligation
+      expect(await rejects(admin.query("insert into partner_credit_ledger(account_id,decision_id,entry_type,units,idempotency_key,metadata) values($1,$2,'recovery_restored',1,$3,$4::jsonb)", [other.accountId, c.decisionId, `r-${randomUUID()}`, JSON.stringify({ obligationId: c.obligationId })]))).toMatch(/reinstates exactly the one recorded offset/); // wrong account for the decision
+      expect(await rejects(restore(admin, c, 1, {}))).toMatch(/names its decision and its obligation/);
+      expect(await rejects(restore(admin, c, 1, { obligationId: null }))).toMatch(/names its decision and its obligation/);
+      await restore(admin, c, 1, { obligationId: c.obligationId });
+      expect(await rejects(restore(admin, c, 1, { obligationId: c.obligationId }))).toMatch(/one_recovery_restored_per_decision|duplicate key|reinstates exactly/);
+      expect((await rows<{ n: number }>("select count(*)::int n from partner_credit_ledger where decision_id=$1 and entry_type='recovery_restored'", [c.decisionId]))[0]!.n).toBe(1);
+    });
+    it('no restoration can lift an obligation above its due units: the service refuses it and the database refuses the update, writing nothing', async () => {
+      const c = await credit('offset_consumed');
+      await fxq('update partner_credit_recovery_obligations set units_outstanding = units_due where id=$1', [c.obligationId]); // nothing outstanding was ever offset
+      await fxq('update partner_credit_accounts set recovery_due = 1 where id=$1', [c.accountId]);
+      expect(await rejects(unwind(c, reversalCause()))).toMatch(/PARTNER_REVERSAL_RESTORE_UNPROVABLE/);
+      expect(await state(c)).toMatchObject({ decision: 'vested', lot: 'consumed', reversal_entries: 0 });
+      const d = await credit('offset_consumed');
+      expect(await rejects(admin.query('update partner_credit_recovery_obligations set units_outstanding = units_due + 1 where id=$1', [d.obligationId]))).toMatch(/outstanding units must equal|units_outstanding|violates check/);
+      expect((await rows<{ units_outstanding: number }>('select units_outstanding from partner_credit_recovery_obligations where id=$1', [d.obligationId]))[0]!.units_outstanding).toBe(0);
+    });
+  });
+
+  describe('R10 hardening LOW-B: the shared-types ledger vocabulary equals the live database constraint', () => {
+    it('lists exactly the entry types that partner_credit_ledger_type_check allows', async () => {
+      const [def] = await rows<{ def: string }>("select pg_get_constraintdef(oid) def from pg_constraint where conname='partner_credit_ledger_type_check'");
+      const live = [...def!.def.matchAll(/'([a-z_]+)'/g)].map(m => m[1]!).sort();
+      expect(live.length).toBeGreaterThanOrEqual(10);
+      expect([...partnerCreditLedgerEntryTypes].sort()).toEqual(live);
+    });
+  });
+
+  describe('R10 hardening LOW-C: recovery obligations cannot be deleted', () => {
+    it('denies DELETE for the table owner session, a privileged role holding DELETE, a role without the privilege and a replica-role session; nothing is removed', async () => {
+      const c = await credit('offset_consumed');
+      const before = (await rows<{ n: number }>('select count(*)::int n from partner_credit_recovery_obligations where account_id=$1', [c.accountId]))[0]!.n;
+      // the trigger is ENABLE ALWAYS and BEFORE ROW DELETE
+      expect((await rows<{ tgenabled: string; tgtype: number }>("select tgenabled, tgtype::int from pg_trigger where tgname='partner_credit_recovery_obligations_no_delete'"))[0]).toEqual({ tgenabled: 'A', tgtype: 11 });
+      expect(await rejects(admin.query('delete from partner_credit_recovery_obligations where id=$1', [c.obligationId]))).toMatch(/PARTNER_CREDIT_OBLIGATION_DELETE_DENIED/);
+      expect(await rejects(fx.query('delete from partner_credit_recovery_obligations where id=$1', [c.obligationId]))).toMatch(/PARTNER_CREDIT_OBLIGATION_DELETE_DENIED/); // fixture connection runs in replica role
+      for (const [role, grant] of [['r10_hard_privileged', true], ['r10_hard_plain', false]] as const) {
+        await admin.query(`do $$ begin if not exists (select 1 from pg_roles where rolname='${role}') then create role ${role} nologin; end if; end $$`);
+        await admin.query(`grant usage on schema public to ${role}`);
+        await admin.query(`grant select on partner_credit_recovery_obligations to ${role}`);
+        if (grant) await admin.query(`grant delete on partner_credit_recovery_obligations to ${role}`);
+        await admin.query(`set role ${role}`);
+        const msg = await rejects(admin.query('delete from partner_credit_recovery_obligations where id=$1', [c.obligationId]));
+        await admin.query('reset role');
+        expect(msg).toMatch(grant ? /PARTNER_CREDIT_OBLIGATION_DELETE_DENIED/ : /permission denied/);
+      }
+      expect((await rows<{ n: number }>('select count(*)::int n from partner_credit_recovery_obligations where account_id=$1', [c.accountId]))[0]!.n).toBe(before);
+      expect(await audit(c.businessId)).toMatchObject({ status: 'consistent' });
+    });
+    it('the guarded legitimate writes are unaffected: insert, the conservation-checked update, and the full restoration all still work', async () => {
+      const c = await credit('offset_consumed');
+      expect(await unwind(c, reversalCause())).toBe('recovery_restored'); // updates units_outstanding under the conservation guard
+      expect((await rows<{ units_outstanding: number }>('select units_outstanding from partner_credit_recovery_obligations where id=$1', [c.obligationId]))[0]!.units_outstanding).toBe(1);
+      expect(await rejects(admin.query('delete from partner_credit_recovery_obligations where id=$1', [c.obligationId]))).toMatch(/PARTNER_CREDIT_OBLIGATION_DELETE_DENIED/);
+      expect(await audit(c.businessId)).toMatchObject({ status: 'consistent' });
     });
   });
 });
