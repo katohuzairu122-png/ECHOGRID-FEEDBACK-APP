@@ -8,6 +8,7 @@ import { buildDb } from '../../src/db/client';
 import { BenefitApplicationSagaService } from '../../src/billing/benefit-application.saga.service';
 import { BenefitTerminalApplicationService } from '../../src/billing/benefit-terminal-application.service';
 import { PartnerCreditConsumptionService } from '../../src/partner-credits/partner-credit-consumption.service';
+import { unwindCredit, type UnwindCause } from '../../src/partner-credits/partner-credit-unwind';
 import { PartnerProvisionalReversalCompensator } from '../../src/partner-credits/partner-provisional-reversal.compensator';
 import { PartnerCreditProjectionAudit } from '../../src/partner-credits/partner-credit-projection.audit';
 import { seedScratchAllocation } from './helpers/s08-allocation-fixture';
@@ -399,10 +400,12 @@ describe.skipIf(!process.env.DATABASE_URL)('D4 final credit consumption and ledg
       expect(await credit(u)).toEqual(beforeU);
     });
 
-    it('still refuses a credit that is merely RESERVED (regression: only a verified consumption can be reversed into a debt)', async () => {
+    it('defers a credit that is merely RESERVED: nothing is written and the credit is left exactly as it was (R10, O2a)', async () => {
       const s = await scenario();
-      expect(await rejects(reverse(s))).toMatch(/PARTNER_REVERSAL_LOT_STATE_UNSUPPORTED/);
-      expect((await credit(s)).obligations).toBe(0);
+      const before = await credit(s);
+      expect(await dbApp.transaction(tx => compensator.compensate(tx, { settlementRef: s.settlementId, businessId: s.businessId, reversalEventId: randomUUID() }))).toBe('deferred_credit_in_use');
+      expect(await credit(s)).toEqual(before);
+      expect(before).toMatchObject({ lot: 'reserved', decision: 'vested', obligations: 0 });
     });
 
     it('a second reversal event against the same consumed decision cannot create a second obligation', async () => {
@@ -714,6 +717,32 @@ describe.skipIf(!process.env.DATABASE_URL)('D4 final credit consumption and ledg
       expect(captured).toEqual([{ isolationLevel: 'repeatable read', accessMode: 'read only' }]);
       const probe = await rejects(dbApp.transaction(async tx => { await tx.execute(sql`update partner_credit_reservations set units = units where id = ${late.reservationId}`); }, captured[0] as never));
       expect(probe).toMatch(/read-only transaction/);
+    });
+
+    it('R10 shared unwind, consumed through an invoice: a revocation cause creates the same one obligation, audit-compatible, and is exactly-once against a settlement reversal in either order', async () => {
+      const unwindAs = async (c: Scenario, cause: UnwindCause) => dbApp.transaction(async tx => {
+        await tx.execute(sql`select id from orphan_settlements where id = ${c.settlementId} for update`);
+        return unwindCredit(tx, { settlementRef: c.settlementId, businessId: c.businessId, cause });
+      });
+      const first = await scenario(); await applications.record({ reservationId: first.reservationId, businessId: first.businessId });
+      await consumption.consume({ reservationId: first.reservationId, businessId: first.businessId });
+      const correctionId = randomUUID();
+      expect(await unwindAs(first, { source: 'revocation', correctionId })).toBe('recovery_obligation_created');
+      const [obligation] = await rows<{ reversal_ref: string; units_due: number; units_outstanding: number }>('select reversal_ref, units_due, units_outstanding from partner_credit_recovery_obligations where account_id=$1', [first.accountId]);
+      expect(obligation).toMatchObject({ reversal_ref: correctionId, units_due: 1, units_outstanding: 1 });
+      const [entry] = await rows<{ idempotency_key: string; metadata: Record<string, unknown> }>("select idempotency_key, metadata from partner_credit_ledger where decision_id=$1 and entry_type='consumed_reversal'", [first.decisionId]);
+      expect(entry!.idempotency_key).toBe(`partner-reversal:v1:${first.settlementId}`);
+      expect(entry!.metadata).toMatchObject({ source: 'revocation', correctionId, reversalEventId: correctionId }); // the existing audit join (reversal_ref = metadata.reversalEventId) passes
+      expect(await audit(first.businessId)).toMatchObject({ status: 'consistent' });
+      expect(await dbApp.transaction(tx => compensator.compensate(tx, { settlementRef: first.settlementId, businessId: first.businessId, reversalEventId: randomUUID() }))).toBe('already_reversed');
+      expect((await credit(first)).obligations).toBe(1);
+      // the other order: the settlement reversal first, then the revocation executor
+      const second = await scenario(); await applications.record({ reservationId: second.reservationId, businessId: second.businessId });
+      await consumption.consume({ reservationId: second.reservationId, businessId: second.businessId });
+      expect(await dbApp.transaction(tx => compensator.compensate(tx, { settlementRef: second.settlementId, businessId: second.businessId, reversalEventId: randomUUID() }))).toBe('recovery_obligation_created');
+      expect(await unwindAs(second, { source: 'revocation', correctionId: randomUUID() })).toBe('already_reversed');
+      expect((await credit(second)).obligations).toBe(1);
+      expect(await audit(second.businessId)).toMatchObject({ status: 'consistent' });
     });
 
     it('D4-06: the same reservation can never be applied twice (the database refuses it on any invoice, and the writer replays the one row)', async () => {
