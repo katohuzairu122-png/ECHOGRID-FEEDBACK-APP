@@ -2,6 +2,8 @@
 
 **Status: draft-invoice timing plus negative Invoice Item/independent attribution design approved for development only; remaining economic decisions unresolved. NO provider-write or production authorization.**
 
+> **Update 2026-11-04:** the economic/tax residue of D1 and the D3 settlement rules were decided for development only in [S08-D1D3/1](OWNER_DECISION_S08_D1_D3_ECONOMIC_AND_SETTLEMENT_2026-11-04.md). Rows below that call them unresolved predate it; the partial-refund policy and every activation gate remain open.
+
 This supplements the [readiness review](S08_PIC_1_READINESS_REVIEW.md) and leaves [S08-PIC/1](PROVIDER_INTEGRATION_CONTRACT_S08_PIC_1.md) unchanged. Baseline: `main` at `f2c0a5429c1903911a3cbc0c5a6d75ea82f6bf83`, after PR #174.
 
 ## What the integration proves
