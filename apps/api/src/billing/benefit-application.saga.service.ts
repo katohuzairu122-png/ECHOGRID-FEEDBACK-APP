@@ -2,7 +2,7 @@ import { and, asc, eq, inArray, lt, ne, sql } from 'drizzle-orm';
 import type { Database } from '../db/client';
 import {
   benefitApplicationCompensations, benefitApplicationIntents, benefitApplicationTransitions, benefitProviderAttempts, benefitProviderObservations,
-  partnerCreditReservations,
+  orphanSettlements, partnerCreditAwardDecisions, partnerCreditReservations,
 } from '../db/schema';
 import {
   classifyPresentEffect, startApplication, transition,
@@ -27,7 +27,7 @@ export type IntentView = {
 
 export type SagaResult =
   | { ok: true; intent: IntentView; effects: ApplicationEffect[]; replay: boolean }
-  | { ok: false; code: RejectCode | 'NOT_FOUND' | 'ALLOCATION_REQUIRED' | 'ALLOCATION_MISMATCH'; intent: IntentView | null };
+  | { ok: false; code: RejectCode | 'NOT_FOUND' | 'ALLOCATION_REQUIRED' | 'ALLOCATION_MISMATCH' | 'SETTLEMENT_NOT_FULFILLED'; intent: IntentView | null };
 
 export class BenefitSagaError extends Error {
   constructor(public readonly code: 'RESERVATION_NOT_FOUND' | 'RESERVATION_NOT_RESERVED' | 'RESERVATION_EXPIRED' | 'INTENT_CONFLICT' | 'INVALID_INPUT') {
@@ -84,6 +84,13 @@ export class BenefitApplicationSagaService {
    * inert saga where neither table exists. Once installed, every new attempt
    * requires the complete frozen envelope; partial installation fails closed.
    * Reservation lock is held by the caller across this check and the attempt. */
+  private async settlementUnfulfilled(tx: Tx, decisionId: string): Promise<boolean> {
+    const [d] = await tx.select({ settlementRef: partnerCreditAwardDecisions.settlementRef }).from(partnerCreditAwardDecisions).where(eq(partnerCreditAwardDecisions.id, decisionId));
+    if (!d) return true;
+    const [st] = await tx.select({ status: orphanSettlements.status }).from(orphanSettlements).where(eq(orphanSettlements.id, d.settlementRef));
+    return !st || st.status !== 'fulfilled';
+  }
+
   private async allocationGate(tx: Tx, row: Row, invoiceIntentRef: string): Promise<'ALLOCATION_REQUIRED' | 'ALLOCATION_MISMATCH' | null> {
     const presence = await tx.execute(sql`SELECT
       to_regclass('s08_allocation_freezes') IS NOT NULL AS parent,
@@ -207,6 +214,11 @@ export class BenefitApplicationSagaService {
 
       if (ev.type === 'begin_apply' && !r.replay) {
         if (!reservation || reservation.state !== 'reserved') throw new BenefitSagaError('RESERVATION_NOT_RESERVED');
+        // R10: a settlement reversal of a reserved credit now commits and leaves the reservation in place, so a provider attempt must not START for a settlement that
+        // is no longer fulfilled. This is an unlocked read (the saga does not take the settlement lock, to keep its reservation-then-intent order); the settlement
+        // reversal's deferred branch locks this reservation, so the two serialize, and an attempt that already began is visible to the revocation executor as a
+        // started provider attempt (it blocks until the outcome is known).
+        if (await this.settlementUnfulfilled(tx, reservation.decisionId)) return { ok: false, code: 'SETTLEMENT_NOT_FULFILLED', intent: view(row) } as const;
         const gate = await this.allocationGate(tx, row, reservation.invoiceIntentRef);
         if (gate) return { ok: false, code: gate, intent: view(row) } as const;
       }

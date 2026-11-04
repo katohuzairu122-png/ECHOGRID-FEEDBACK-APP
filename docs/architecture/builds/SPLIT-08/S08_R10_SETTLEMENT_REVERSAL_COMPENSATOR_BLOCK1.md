@@ -8,7 +8,7 @@
 |---|---|---|
 | Shared unwind routine | `src/partner-credits/partner-credit-unwind.ts` | The one routine that unwinds an award, used by the compensator now and by the Block 2 executor later (so they cannot diverge). Takes a **cause**: a settlement reversal event, or a revocation correction. |
 | Compensator | `partner-provisional-reversal.compensator.ts` | A thin wrapper over the routine; its public API is unchanged. |
-| Deferred-work reader | `partner-credit-deferred-reversal.reader.ts` | Read-only. Derives the pending work of a deferred reversal from persisted state: settlement `reversed`, decision still `vested`, lot `reserved`. No deferral table (owner decision O2a). |
+| Deferred-work reader | `partner-credit-deferred-reversal.reader.ts` | Read-only. Derives the pending work of a deferred reversal from persisted state: settlement `reversed`, decision still `vested`, lot `reserved` or `available` (an available lot is a reservation released after the reversal; either way the credit side is unfinished). No deferral table (owner decision O2a). |
 | Migration 0058 | `drizzle/0058_r10_settlement_reversal_vocabulary.sql` | Two informational ledger types, their database evidence triggers, the extended lot rule, and an obligation guard (below). |
 | Projection audit | `partner-credit-projection.audit.ts` | Three new checks: `REVERSAL_NOOP_EVIDENCE`, `RECOVERY_RESTORED_EVIDENCE`, `OBLIGATION_CONSERVATION`. |
 
@@ -35,6 +35,12 @@ O2a (deferred reversal, derived state) and O7 (the G1 checklist) are implemented
 
 ## Reader inventory (acceptance X-3)
 No change was needed in `ce1-tenant-integrity.verifier`, `partner-credit-application-integrity.reader` or `partner-credit-terminal-evidence.reader` (they inspect a live consumed credit, have no callers outside tests, and correctly reject a reversed one), `partner-consumption-authority.contract` (it classifies lot status only, and no lot status is added), the multi-unit conservation audit (it does not read ledger types) or `partner-credit.repository` (read-only; its TypeScript type follows the schema). The only source writers of recovery obligations are the vest offset (update) and the compensator (insert).
+
+## Review remediation (independent review of 639f086: CHANGES REQUIRED, no HIGH)
+- **MEDIUM-1 saga gate.** The benefit-application saga never read the settlement, so a reserved credit whose settlement had been reversed could proceed to a provider effect. `begin_apply` now refuses with `SETTLEMENT_NOT_FULFILLED` (writes nothing) unless the decision's settlement is `fulfilled`. The read is unlocked by design: the saga keeps its reservation-then-intent lock order and never takes the settlement lock. Residual window: a reversal that commits after the gate read but before the effect is not blocked by the gate; the deferred branch now locks the reservation, so the two serialise at the reservation, and the deferred reader lists the credit for the later (Block 2) executor. The gate narrows the window; it does not claim to close it.
+- **LOW-2 reader.** Also lists a vested award on a reversed settlement whose lot is `available`.
+- **LOW-3 deferred branch.** Locks the account then the reservation and validates (account reserved bucket at least 1; reservation `reserved` and for the same business, decision and account) before deferring; otherwise fails closed with `PARTNER_REVERSAL_LOT_STATE_UNSUPPORTED`.
+- New tests: saga refusal and recovery; reader lists an available lot and still excludes expired and provisional; deferred branch waits on a held reservation lock; deferred branch fails closed on a missing reservation or an empty reserved bucket. Each fix was mutation-checked (gate disabled, lock removed, validation removed, reader filter reverted): every mutant failed exactly the new test.
 
 ## Existing tests changed (purpose unchanged)
 Two tests asserted that a settlement reversal of a reserved credit is rejected; under owner decision O2a it now commits and defers, so they now assert exactly that, that nothing is written, and that no double-spend can occur: the D4 "merely RESERVED" regression, and the isolated award suite's reservation-versus-reversal race (the reservation-first branch now expects the reversal to commit with the credit still reserved, listed by the reader).

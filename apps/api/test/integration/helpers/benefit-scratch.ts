@@ -36,9 +36,18 @@ export async function createBenefitScratch(prefix: string) {
   const makeReservation = async (businessId: string) => {
     const n = ++seq;
     const account = (await fx.query<{ id: string }>('insert into partner_credit_accounts(business_id) values($1) on conflict (business_id) do update set business_id=excluded.business_id returning id', [businessId])).rows[0]!.id;
+    // the saga refuses a reservation whose settlement is not fulfilled (R10 review MEDIUM-1): forge the fulfilled settlement the decision stands on
+    const claim = (await fx.query<{ id: string }>(
+      `insert into orphan_reward_claims(customer_id,origin_business_id,origin_loyalty_account_id,origin_loyalty_transaction_id,orphan_reason,source_reward_type,source_reward_snapshot,status,settled_at)
+       values(gen_random_uuid(),gen_random_uuid(),gen_random_uuid(),gen_random_uuid(),'origin_business_archived','voucher','{}'::jsonb,'settled',now()) returning id`)).rows[0]!.id;
+    const settlement = (await fx.query<{ id: string }>(
+      `insert into orphan_settlements(claim_id,customer_id,receiving_business_id,status,access_authorization_id,accepted_by_user_id,accepted_at,completion_authorization_id,completion_authorized_at,
+         fulfilled_by_user_id,fulfilled_at,fulfillment_policy_version,fulfillment_snapshot,expires_at,idempotency_key)
+       values($1,gen_random_uuid(),$2,'fulfilled',gen_random_uuid(),gen_random_uuid(),now(),gen_random_uuid(),now(),gen_random_uuid(),now(),'v1','{}'::jsonb,now()+interval '30 days',$3) returning id`,
+      [claim, businessId, `fx-settle-${dbName}-${n}`])).rows[0]!.id;
     const decision = (await fx.query<{ id: string }>(
       `insert into partner_credit_award_decisions(settlement_ref,business_id,policy_id,state,award_units,earning_month_utc,fulfilled_at,vest_at,idempotency_key)
-       values(gen_random_uuid(),$1,gen_random_uuid(),'vested',1,'2026-10',now(),now(),$2) returning id`, [businessId, `fx-${dbName}-${n}`])).rows[0]!.id;
+       values($1,$2,gen_random_uuid(),'vested',1,'2026-10',now(),now(),$3) returning id`, [settlement, businessId, `fx-${dbName}-${n}`])).rows[0]!.id;
     const lot = (await fx.query<{ id: string }>(`insert into partner_credit_lots(decision_id,account_id,units,available_units,status,vest_at,expires_at) values($1,$2,1,0,'reserved',now(),now()+interval '1 year') returning id`, [decision, account])).rows[0]!.id;
     return (await fx.query<{ id: string }>(
       `insert into partner_credit_reservations(business_id,decision_id,lot_id,account_id,invoice_intent_ref,idempotency_key,expires_at) values($1,$2,$3,$4,$5,$6,now()+interval '1 day') returning id`,
