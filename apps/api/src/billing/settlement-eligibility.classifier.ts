@@ -164,16 +164,16 @@ const REQUIREMENT: Readonly<Partial<Record<SettlementReason, string>>> = {
 };
 
 type Out = { verdict: SettlementVerdict; codes: SettlementReason[] };
-const isInt = (n: unknown): n is number => typeof n === 'number' && Number.isSafeInteger(n);
-const isNonNegInt = (n: unknown): n is number => isInt(n) && n >= 0;
-const isStr = (s: unknown): s is string => typeof s === 'string' && s.length > 0;
-const SAFE_REF = /^[A-Za-z0-9_:./-]{1,128}$/;
-const safeRef = (s: unknown): string | null => (typeof s === 'string' && SAFE_REF.test(s) ? s : null);
-const DIGEST = /^[0-9a-f]{64}$/;
+export const isInt = (n: unknown): n is number => typeof n === 'number' && Number.isSafeInteger(n);
+export const isNonNegInt = (n: unknown): n is number => isInt(n) && n >= 0;
+export const isStr = (s: unknown): s is string => typeof s === 'string' && s.length > 0;
+export const SAFE_REF = /^[A-Za-z0-9_:./-]{1,128}$/;
+export const safeRef = (s: unknown): string | null => (typeof s === 'string' && SAFE_REF.test(s) ? s : null);
+export const DIGEST = /^[0-9a-f]{64}$/;
 /** Keys that would let a caller assert financial authority. Any truthy occurrence anywhere in the input is refused. */
 const AUTHORITY_KEYS: ReadonlySet<string> = new Set(['consumptionauthorized', 'providerverified', 'settlementauthorized', 'financialauthority', 'authorized', 'trusted', 'verified', 'eligible', 'approved']); // compared lower-case
 
-function assertsAuthority(value: unknown, depth = 0): boolean {
+export function assertsAuthority(value: unknown, depth = 0): boolean {
   if (depth > 8 || value === null || typeof value !== 'object') return false;
   if (Array.isArray(value)) return value.some(v => assertsAuthority(v, depth + 1));
   for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
