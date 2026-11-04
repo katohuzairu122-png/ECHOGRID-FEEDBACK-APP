@@ -137,10 +137,32 @@ describe.skipIf(!process.env.DATABASE_URL)('S08 0052 inert allocation migration'
       "INSERT INTO businesses(id,name,slug,status) VALUES($1::uuid,'Synthetic upgrade fixture',$1::text,'active')",
       [business],
     );
+    // the saga refuses a reservation whose settlement is not fulfilled (R10 review MEDIUM-1): forge the fulfilled settlement and decision it stands on
+    const claim = (
+      await c.query<{ id: string }>(
+        `INSERT INTO orphan_reward_claims(customer_id,origin_business_id,origin_loyalty_account_id,origin_loyalty_transaction_id,orphan_reason,source_reward_type,source_reward_snapshot,status,settled_at)
+         VALUES (gen_random_uuid(),gen_random_uuid(),gen_random_uuid(),gen_random_uuid(),'origin_business_archived','voucher','{}'::jsonb,'settled',now()) RETURNING id`,
+      )
+    ).rows[0]!.id;
+    const settlement = (
+      await c.query<{ id: string }>(
+        `INSERT INTO orphan_settlements(claim_id,customer_id,receiving_business_id,status,access_authorization_id,accepted_by_user_id,accepted_at,completion_authorization_id,completion_authorized_at,
+           fulfilled_by_user_id,fulfilled_at,fulfillment_policy_version,fulfillment_snapshot,expires_at,idempotency_key)
+         VALUES ($1,gen_random_uuid(),$2,'fulfilled',gen_random_uuid(),gen_random_uuid(),now(),gen_random_uuid(),now(),gen_random_uuid(),now(),'v1','{}'::jsonb,now()+interval '30 days',$3) RETURNING id`,
+        [claim, business, `legacy_settle_${reservation}`],
+      )
+    ).rows[0]!.id;
+    const decision = (
+      await c.query<{ id: string }>(
+        `INSERT INTO partner_credit_award_decisions(settlement_ref,business_id,policy_id,state,award_units,earning_month_utc,fulfilled_at,vest_at,idempotency_key)
+         VALUES ($1,$2,gen_random_uuid(),'vested',1,'2026-10',now(),now(),$3) RETURNING id`,
+        [settlement, business, `legacy_dec_${reservation}`],
+      )
+    ).rows[0]!.id;
     await c.query(
       `INSERT INTO partner_credit_reservations(id,business_id,decision_id,lot_id,account_id,invoice_intent_ref,idempotency_key,expires_at)
-      VALUES($1::uuid,$2,gen_random_uuid(),gen_random_uuid(),gen_random_uuid(),'legacy_intent',$1::text,clock_timestamp()+interval '1 day')`,
-      [reservation, business],
+      VALUES($1::uuid,$2,$3,gen_random_uuid(),gen_random_uuid(),'legacy_intent',$1::text,clock_timestamp()+interval '1 day')`,
+      [reservation, business, decision],
     );
     await c.query(
       `INSERT INTO benefit_application_intents(id,business_id,reservation_id,invoice_ref,expected_benefit_minor,currency,policy_version)

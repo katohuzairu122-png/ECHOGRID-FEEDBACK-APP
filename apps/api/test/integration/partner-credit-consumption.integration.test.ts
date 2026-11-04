@@ -218,6 +218,17 @@ describe.skipIf(!process.env.DATABASE_URL)('D4 final credit consumption and ledg
       expect((await credit(s)).applications).toBe(0);
     });
 
+    it('the saga refuses to begin applying a benefit once the settlement is no longer fulfilled, and writes nothing', async () => {
+      const s = await scenario({ sagaTo: 'reserved' });
+      const intentBefore = (await rows('select state, attempt_key from benefit_application_intents where id=$1', [s.intentId]))[0];
+      await fxq("update orphan_settlements set status='reversed' where id=$1", [s.settlementId]);
+      const r = await saga.beginApply(s.intentId, 'att-late', new Date());
+      expect(r).toMatchObject({ ok: false, code: 'SETTLEMENT_NOT_FULFILLED' });
+      expect((await rows('select state, attempt_key from benefit_application_intents where id=$1', [s.intentId]))[0]).toEqual(intentBefore);
+      await fxq("update orphan_settlements set status='fulfilled' where id=$1", [s.settlementId]);
+      expect(await saga.beginApply(s.intentId, 'att-ok', new Date())).toMatchObject({ ok: true });
+    });
+
     it('refuses without a saga, without a frozen allocation, and with a substituted amount, invoice or currency', async () => {
       const none = await scenario({ sagaTo: 'none' });
       expect(await rejects(applications.record({ reservationId: none.reservationId, businessId: none.businessId }))).toMatch(/S08_APPLICATION_NO_SAGA/);

@@ -76,7 +76,14 @@ export async function unwindCredit(tx: Transaction, input: Input): Promise<Unwin
     if (lot.status === 'expired') return closeExpired(tx, decision, lot, input);
     if (lot.status === 'reserved') {
       if (lot.units !== 1 || lot.availableUnits !== 0) throw new Error('PARTNER_REVERSAL_LOT_STATE_UNSUPPORTED');
-      return 'deferred_credit_in_use'; // nothing is written; see the header
+      // Nothing is written, but the credit is VALIDATED and its reservation is LOCKED (account, then reservation, the shared order): the saga's begin_apply holds this same
+      // reservation lock, so a provider attempt and this reversal serialize; an attempt that began first is visible as a started intent and is handled as policy case D.
+      const [account] = await tx.select().from(partnerCreditAccounts).where(eq(partnerCreditAccounts.id, lot.accountId)).for('update');
+      const [reservation] = await tx.select().from(partnerCreditReservations).where(eq(partnerCreditReservations.lotId, lot.id)).for('update');
+      if (!account || account.businessId !== input.businessId || account.reserved < 1 ||
+          !reservation || reservation.state !== 'reserved' || reservation.businessId !== input.businessId || reservation.decisionId !== decision.id || reservation.accountId !== account.id)
+        throw new Error('PARTNER_REVERSAL_LOT_STATE_UNSUPPORTED');
+      return 'deferred_credit_in_use';
     }
   }
 

@@ -197,10 +197,37 @@ describe.skipIf(!process.env.DATABASE_URL)('R10 shared unwind routine (integrati
       await fxq("update orphan_settlements set status='reversed' where id=$1", [c.settlementId]);
       expect((await reader.list({ businessId: c.businessId })).map(x => x.decisionId)).toEqual([c.decisionId]);
       expect((await reader.list({ businessId: randomUUID() }))).toEqual([]);
-      const available = await credit('available'); // a reversed settlement whose lot is not reserved is not pending work for the reader
+      // a reversed settlement whose lot is still AVAILABLE is pending work too (a reservation may have been released since)
+      const available = await credit('available');
       await fxq("update orphan_settlements set status='reversed' where id=$1", [available.settlementId]);
-      expect((await reader.list({ businessId: available.businessId }))).toEqual([]);
+      expect((await reader.list({ businessId: available.businessId })).map(x => x.decisionId)).toEqual([available.decisionId]);
+      // expired and provisional lots on a reversed settlement are not listed
+      for (const kind of ['expired', 'provisional'] as const) {
+        const other = await credit(kind);
+        await fxq("update orphan_settlements set status='reversed' where id=$1", [other.settlementId]);
+        expect((await reader.list({ businessId: other.businessId }))).toEqual([]);
+      }
       expect(await audit(c.businessId)).toMatchObject({ status: 'consistent' });
+    });
+    it('waits for a concurrently held reservation lock and re-validates before deferring', async () => {
+      const c = await credit('reserved');
+      const holder = await connect();
+      await holder.query('begin');
+      await holder.query('select 1 from partner_credit_reservations where decision_id=$1 for update', [c.decisionId]);
+      let done = false;
+      const p = unwind(c, reversalCause()).then(r => { done = true; return r; });
+      await new Promise(r => setTimeout(r, 400));
+      expect(done).toBe(false);
+      await holder.query('commit');
+      expect(await p).toBe('deferred_credit_in_use');
+    });
+    it('refuses to defer when the reservation row is missing or the account does not show it reserved', async () => {
+      const noRes = await credit('reserved');
+      await fxq('delete from partner_credit_reservations where decision_id=$1', [noRes.decisionId]);
+      expect(await rejects(unwind(noRes, reversalCause()))).toMatch(/PARTNER_REVERSAL_LOT_STATE_UNSUPPORTED/);
+      const noBucket = await credit('reserved');
+      await fxq('update partner_credit_accounts set reserved = 0 where id=$1', [noBucket.accountId]);
+      expect(await rejects(unwind(noBucket, reversalCause()))).toMatch(/PARTNER_REVERSAL_LOT_STATE_UNSUPPORTED/);
     });
   });
 

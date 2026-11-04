@@ -93,10 +93,22 @@ describe.skipIf(!process.env.DATABASE_URL)('S08-DEV-06 transactional freeze dura
     const ref = `intent_${tag}_${randomBytes(5).toString('hex')}`;
     let id = '';
     await fixtureOnly(async () => {
+      // the saga refuses a reservation whose settlement is not fulfilled (R10 review MEDIUM-1): forge the fulfilled settlement and decision it stands on
+      const claim = (await fixture.query<{ id: string }>(
+        `INSERT INTO orphan_reward_claims(customer_id,origin_business_id,origin_loyalty_account_id,origin_loyalty_transaction_id,orphan_reason,source_reward_type,source_reward_snapshot,status,settled_at)
+         VALUES (gen_random_uuid(),gen_random_uuid(),gen_random_uuid(),gen_random_uuid(),'origin_business_archived','voucher','{}'::jsonb,'settled',now()) RETURNING id`)).rows[0]!.id;
+      const settlement = (await fixture.query<{ id: string }>(
+        `INSERT INTO orphan_settlements(claim_id,customer_id,receiving_business_id,status,access_authorization_id,accepted_by_user_id,accepted_at,completion_authorization_id,completion_authorized_at,
+           fulfilled_by_user_id,fulfilled_at,fulfillment_policy_version,fulfillment_snapshot,expires_at,idempotency_key)
+         VALUES ($1,gen_random_uuid(),$2,'fulfilled',gen_random_uuid(),gen_random_uuid(),now(),gen_random_uuid(),now(),gen_random_uuid(),now(),'v1','{}'::jsonb,now()+interval '30 days',$3) RETURNING id`,
+        [claim, tenant, `settle_${ref}`])).rows[0]!.id;
+      const decision = (await fixture.query<{ id: string }>(
+        `INSERT INTO partner_credit_award_decisions(settlement_ref,business_id,policy_id,state,award_units,earning_month_utc,fulfilled_at,vest_at,idempotency_key)
+         VALUES ($1,$2,gen_random_uuid(),'vested',1,'2026-10',now(),now(),$3) RETURNING id`, [settlement, tenant, `dec_${ref}`])).rows[0]!.id;
       id = (await fixture.query<{ id: string }>(`INSERT INTO partner_credit_reservations
         (business_id,decision_id,lot_id,account_id,invoice_intent_ref,idempotency_key,expires_at,state)
-        VALUES ($1,gen_random_uuid(),gen_random_uuid(),gen_random_uuid(),$2,$2,clock_timestamp()+interval '1 day','reserved') RETURNING id`,
-      [tenant, ref])).rows[0]!.id;
+        VALUES ($1,$3,gen_random_uuid(),gen_random_uuid(),$2,$2,clock_timestamp()+interval '1 day','reserved') RETURNING id`,
+      [tenant, ref, decision])).rows[0]!.id;
     });
     const data = input(`in_${ref}`, id);
     data.invoice.businessId = tenant;
