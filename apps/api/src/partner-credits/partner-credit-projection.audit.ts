@@ -12,7 +12,7 @@ import type { Db } from '../db/client';
 export type ProjectionViolationCode =
   | 'PROVISIONAL_BUCKET' | 'AVAILABLE_BUCKET' | 'RESERVED_BUCKET' | 'RECOVERY_DUE'
   | 'LEDGER_NET' | 'LOT_DECISION_STATE' | 'LOT_BUSINESS_MISMATCH' | 'LOT_LEDGER_ORIGIN' | 'DECISION_WITHOUT_LOT'
-  | 'CONSUMED_LOT_EVIDENCE' | 'CONSUME_ENTRY_WITHOUT_LOT' | 'CONSUMED_REVERSAL_EVIDENCE' | 'CONSUMED_RESERVATION_LOT_MISMATCH' | 'APPLICATION_ALLOCATION_EVIDENCE';
+  | 'CONSUMED_LOT_EVIDENCE' | 'CONSUME_ENTRY_WITHOUT_LOT' | 'CONSUMED_REVERSAL_EVIDENCE' | 'CONSUMED_RESERVATION_LOT_MISMATCH' | 'APPLICATION_ALLOCATION_EVIDENCE' | 'REVERSAL_NOOP_EVIDENCE' | 'RECOVERY_RESTORED_EVIDENCE' | 'OBLIGATION_CONSERVATION';
 
 export interface ProjectionViolation {
   accountId: string;
@@ -27,7 +27,7 @@ export type ProjectionAuditResult =
   | { status: 'unavailable'; reason: 'INVALID_INPUT' | 'DATABASE_UNAVAILABLE' | 'ROW_SHAPE_INVALID' };
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-const CODES = new Set<string>(['PROVISIONAL_BUCKET', 'AVAILABLE_BUCKET', 'RESERVED_BUCKET', 'RECOVERY_DUE', 'LEDGER_NET', 'LOT_DECISION_STATE', 'LOT_BUSINESS_MISMATCH', 'LOT_LEDGER_ORIGIN', 'DECISION_WITHOUT_LOT', 'CONSUMED_LOT_EVIDENCE', 'CONSUME_ENTRY_WITHOUT_LOT', 'CONSUMED_REVERSAL_EVIDENCE', 'CONSUMED_RESERVATION_LOT_MISMATCH', 'APPLICATION_ALLOCATION_EVIDENCE']);
+const CODES = new Set<string>(['PROVISIONAL_BUCKET', 'AVAILABLE_BUCKET', 'RESERVED_BUCKET', 'RECOVERY_DUE', 'LEDGER_NET', 'LOT_DECISION_STATE', 'LOT_BUSINESS_MISMATCH', 'LOT_LEDGER_ORIGIN', 'DECISION_WITHOUT_LOT', 'CONSUMED_LOT_EVIDENCE', 'CONSUME_ENTRY_WITHOUT_LOT', 'CONSUMED_REVERSAL_EVIDENCE', 'CONSUMED_RESERVATION_LOT_MISMATCH', 'APPLICATION_ALLOCATION_EVIDENCE', 'REVERSAL_NOOP_EVIDENCE', 'RECOVERY_RESTORED_EVIDENCE', 'OBLIGATION_CONSERVATION']);
 
 /** Ledger identity: provisional +1, vest = zero-net bucket transfer, reverse/expire/recovery_offset/consume are reductions; consumed_reversal records a debt, not a balance. */
 export const LEDGER_NET_ENTRY_TYPES = ['provisional', 'reverse', 'expire', 'recovery_offset', 'consume'] as const;
@@ -100,6 +100,31 @@ export class PartnerCreditProjectionAudit {
            WHERE g.entry_type = 'consume'
              AND NOT EXISTS (SELECT 1 FROM partner_credit_lots x WHERE x.decision_id = g.decision_id AND x.account_id = g.account_id AND x.status IN ('consumed','reversed'))
            GROUP BY g.account_id
+          UNION ALL
+          SELECT g.account_id, 'REVERSAL_NOOP_EVIDENCE', COUNT(*)::bigint, 0::bigint
+            FROM partner_credit_ledger g JOIN acct a ON a.id = g.account_id
+           WHERE g.entry_type = 'reversal_noop'
+             AND NOT (EXISTS (SELECT 1 FROM partner_credit_lots l JOIN partner_credit_award_decisions d ON d.id = l.decision_id
+                               WHERE l.decision_id = g.decision_id AND l.account_id = g.account_id AND l.status = 'reversed' AND d.state = 'reversed')
+                      AND EXISTS (SELECT 1 FROM partner_credit_ledger x WHERE x.decision_id = g.decision_id AND x.account_id = g.account_id AND x.entry_type = 'expire'))
+           GROUP BY g.account_id
+          UNION ALL
+          SELECT g.account_id, 'RECOVERY_RESTORED_EVIDENCE', COUNT(*)::bigint, 0::bigint
+            FROM partner_credit_ledger g JOIN acct a ON a.id = g.account_id
+           WHERE g.entry_type = 'recovery_restored'
+             AND NOT (EXISTS (SELECT 1 FROM partner_credit_lots l JOIN partner_credit_award_decisions d ON d.id = l.decision_id
+                               WHERE l.decision_id = g.decision_id AND l.account_id = g.account_id AND l.status = 'reversed' AND d.state = 'reversed')
+                      AND EXISTS (SELECT 1 FROM partner_credit_ledger x WHERE x.decision_id = g.decision_id AND x.account_id = g.account_id AND x.entry_type = 'recovery_offset'
+                                   AND x.metadata->>'obligationId' = g.metadata->>'obligationId' AND x.units = -g.units)
+                      AND EXISTS (SELECT 1 FROM partner_credit_recovery_obligations o WHERE o.id::text = g.metadata->>'obligationId' AND o.account_id = g.account_id))
+           GROUP BY g.account_id
+          UNION ALL
+          SELECT o.account_id, 'OBLIGATION_CONSERVATION', COUNT(*)::bigint, 0::bigint
+            FROM partner_credit_recovery_obligations o JOIN acct a ON a.id = o.account_id
+           WHERE o.units_outstanding <> o.units_due
+                 - COALESCE((SELECT SUM(-g.units) FROM partner_credit_ledger g WHERE g.entry_type = 'recovery_offset' AND g.account_id = o.account_id AND g.metadata->>'obligationId' = o.id::text), 0)
+                 + COALESCE((SELECT SUM(g.units) FROM partner_credit_ledger g WHERE g.entry_type = 'recovery_restored' AND g.account_id = o.account_id AND g.metadata->>'obligationId' = o.id::text), 0)
+           GROUP BY o.account_id
           UNION ALL
           SELECT r.account_id, 'APPLICATION_ALLOCATION_EVIDENCE', COUNT(*)::bigint, 0::bigint
             FROM billing_partner_credit_applications ap

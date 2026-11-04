@@ -9,6 +9,7 @@ import { CustomerSettlementCompletionService } from '../../src/orphan-settlement
 import { OrphanSettlementFulfillmentService } from '../../src/orphan-settlement/orphan-settlement-fulfillment.service';
 import { OrphanSettlementReversalService } from '../../src/orphan-settlement/orphan-settlement-reversal.service';
 import { PartnerProvisionalAwardService } from '../../src/partner-credits/partner-provisional-award.service';
+import { PartnerCreditDeferredReversalReader } from '../../src/partner-credits/partner-credit-deferred-reversal.reader';
 import { PartnerCreditProjectionAudit } from '../../src/partner-credits/partner-credit-projection.audit';
 import { PartnerCreditDisputeService } from '../../src/partner-credits/partner-credit-dispute.service';
 import { PartnerCreditLifecycleService } from '../../src/partner-credits/partner-credit-lifecycle.service';
@@ -655,13 +656,16 @@ describe.skipIf(!url)('Split 07 positive/concurrent provisional awards — isola
             WHERE settlement_id=$1 AND event_type='settlement_reversed') reversals`,
         [evidence.settlementRef,awarded.decisionId])).rows[0]!;
       if (reservation.status==='fulfilled') {
-        // Settlement-first ordering means reversal cannot bypass a committed
-        // reservation; it must fail closed until CE-1 consumption is proven.
-        expect(reversal.status).toBe('rejected');
+        // Settlement-first ordering means reversal cannot bypass a committed reservation. R10 (owner decision O2a): the settlement reversal now COMMITS and defers the
+        // credit side. The reserved credit is left exactly as it was (still reserved, never consumed or released, no ledger entry), so there is still no double-spend;
+        // the pending work is derived from this persisted state and finished later under release authority.
+        expect(reversal.status).toBe('fulfilled');
         expect(row).toMatchObject({
-          settlement_state:'fulfilled',decision_state:'vested',lot_state:'reserved',
-          available:'0',reserved:'1',reservations:'1',reversals:'0',
+          settlement_state:'reversed',decision_state:'vested',lot_state:'reserved',
+          available:'0',reserved:'1',reservations:'1',reversals:'1',
         });
+        const pending=await new PartnerCreditDeferredReversalReader(buildDb(admin)).list({businessId:receiverId});
+        expect(pending.map(p=>p.decisionId)).toContain(awarded.decisionId);
       } else {
         expect(reversal.status).toBe('fulfilled');
         expect(row).toMatchObject({
