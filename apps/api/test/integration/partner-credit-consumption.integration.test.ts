@@ -3,6 +3,7 @@ import { Client } from 'pg';
 import { spawnSync } from 'node:child_process';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
+import { sql } from 'drizzle-orm';
 import { buildDb } from '../../src/db/client';
 import { BenefitApplicationSagaService } from '../../src/billing/benefit-application.saga.service';
 import { BenefitTerminalApplicationService } from '../../src/billing/benefit-terminal-application.service';
@@ -524,7 +525,9 @@ describe.skipIf(!process.env.DATABASE_URL)('D4 final credit consumption and ledg
     it('lot transitions: the recovery-offset vest path (provisional -> consumed) is untouched, while available/expired/other states can never become consumed', async () => {
       const s = await scenario();
       await fxq("update partner_credit_lots set status='provisional', available_units=0 where id=$1", [s.lotId]);
-      await admin.query("update partner_credit_lots set status='consumed' where id=$1", [s.lotId]); // the existing vest-with-offset write
+      // the vest-with-offset write: its recovery_offset ledger entry exists before the lot update (0057 requires it)
+      await fxq("insert into partner_credit_ledger(account_id,decision_id,entry_type,units,idempotency_key) values($1,$2,'recovery_offset',-1,$3)", [s.accountId, s.decisionId, `offset-${randomUUID()}`]);
+      await admin.query("update partner_credit_lots set status='consumed' where id=$1", [s.lotId]);
       const t = await scenario();
       await fxq("update partner_credit_lots set status='available', available_units=1 where id=$1", [t.lotId]);
       expect(await rejects(admin.query("update partner_credit_lots set status='consumed', available_units=0 where id=$1", [t.lotId]))).toMatch(/only from reserved .* or provisional/);
@@ -654,6 +657,63 @@ describe.skipIf(!process.env.DATABASE_URL)('D4 final credit consumption and ledg
       await consumption.consume({ reservationId: s.reservationId, businessId: s.businessId });
       for (const set of ["id = gen_random_uuid()", "idempotency_key = 'tampered-' || gen_random_uuid()::text", "created_at = created_at - interval '1 day'"])
         expect(await rejects(admin.query(`update partner_credit_reservations set ${set} where id=$1`, [s.reservationId])), set).toMatch(/terminal state is immutable/);
+    });
+
+    it('L3 (0057): provisional -> consumed needs a recovery_offset ledger entry, consumed -> reversed needs a consumed_reversal entry (the real writers create them first)', async () => {
+      // provisional -> consumed: refused without the offset entry, accepted with it
+      const v = await scenario();
+      await fxq("update partner_credit_lots set status='provisional', available_units=0 where id=$1", [v.lotId]);
+      expect(await rejects(admin.query("update partner_credit_lots set status='consumed' where id=$1", [v.lotId]))).toMatch(/only when a recovery offset absorbed its vesting unit/);
+      await fxq("insert into partner_credit_ledger(account_id,decision_id,entry_type,units,idempotency_key) values($1,$2,'recovery_offset',-1,$3)", [v.accountId, v.decisionId, `offset-${randomUUID()}`]);
+      await admin.query("update partner_credit_lots set status='consumed' where id=$1", [v.lotId]);
+      // an offset entry of ANOTHER decision is not evidence for this lot
+      const w = await scenario();
+      await fxq("update partner_credit_lots set status='provisional', available_units=0 where id=$1", [w.lotId]);
+      await fxq("insert into partner_credit_ledger(account_id,decision_id,entry_type,units,idempotency_key) values($1,$2,'recovery_offset',-1,$3)", [w.accountId, v.decisionId, `offset-${randomUUID()}`]);
+      expect(await rejects(admin.query("update partner_credit_lots set status='consumed' where id=$1", [w.lotId]))).toMatch(/only when a recovery offset absorbed its vesting unit/);
+      // consumed -> reversed: refused by hand without the consumed_reversal entry, accepted through the real compensator
+      const c = await scenario(); await applications.record({ reservationId: c.reservationId, businessId: c.businessId });
+      await consumption.consume({ reservationId: c.reservationId, businessId: c.businessId });
+      expect(await rejects(admin.query("update partner_credit_lots set status='reversed' where id=$1", [c.lotId]))).toMatch(/reversed only after its consumed reversal was recorded/);
+      expect((await credit(c)).lot).toBe('consumed');
+      await dbApp.transaction(tx => compensator.compensate(tx, { settlementRef: c.settlementId, businessId: c.businessId, reversalEventId: randomUUID() }));
+      expect((await credit(c)).lot).toBe('reversed');
+      // a consumed_reversal entry recorded under ANOTHER account is not evidence for this lot
+      const d = await scenario(); await applications.record({ reservationId: d.reservationId, businessId: d.businessId });
+      await consumption.consume({ reservationId: d.reservationId, businessId: d.businessId });
+      await fxq("insert into partner_credit_ledger(account_id,decision_id,entry_type,units,idempotency_key) values($1,$2,'consumed_reversal',1,$3)", [c.accountId, d.decisionId, `wrong-account-${randomUUID()}`]);
+      expect(await rejects(admin.query("update partner_credit_lots set status='reversed' where id=$1", [d.lotId]))).toMatch(/reversed only after its consumed reversal was recorded/);
+    });
+
+    it('L4 (audit): an application with no matching frozen allocation item is reported as APPLICATION_ALLOCATION_EVIDENCE; real-service applications are not', async () => {
+      const real = await scenario(); await applications.record({ reservationId: real.reservationId, businessId: real.businessId });
+      expect(await audit(real.businessId)).toMatchObject({ status: 'consistent' });
+      const bare = await scenario({ sagaTo: 'reserved', allocate: false });
+      const sub = (await rows<{ id: string }>('select id from business_subscriptions where business_id=$1', [bare.businessId]))[0]!.id;
+      await fxq(`insert into billing_partner_credit_applications(reservation_id,business_id,subscription_id,invoice_ref,provider_success_ref,idempotency_key,units_applied,terminal_state,applied_at)
+                 values($1,$2,$3,$4,$5,$6,1,'applied',now())`, [bare.reservationId, bare.businessId, sub, bare.invoiceRef, `ef_bare_${randomUUID()}`, `bare-${randomUUID()}`]);
+      const r = await audit(bare.businessId);
+      expect(r.status === 'inconsistent' && r.violations.map(v => v.code)).toContain('APPLICATION_ALLOCATION_EVIDENCE');
+      // a frozen item for another invoice is not evidence for this application
+      await fxq("update billing_partner_credit_applications set invoice_ref = invoice_ref || '_x' where reservation_id=$1", [real.reservationId]);
+      const r2 = await audit(real.businessId);
+      expect(r2.status === 'inconsistent' && r2.violations.map(v => v.code)).toContain('APPLICATION_ALLOCATION_EVIDENCE');
+    });
+
+    it('L5: classify() reads one consistent snapshot in a read-only transaction and writes nothing', async () => {
+      const late = await scenario({ expiresInMs: 1_000, appliedOffsetMs: 3_000 });
+      const before = await credit(late);
+      for (let i = 0; i < 3; i++)
+        expect(await applications.classify({ reservationId: late.reservationId, businessId: late.businessId })).toMatchObject({ classification: 'EFFECT_AFTER_RESERVATION_DEADLINE', heldForReview: true });
+      expect(await credit(late)).toEqual(before);
+      // classify() itself must open a REPEATABLE READ, READ ONLY transaction: capture the options it passes through a wrapper and prove those options forbid a write
+      const captured: unknown[] = [];
+      const real = buildDb(await connect());
+      const spy = new Proxy(real, { get(t, prop, r) { return prop === 'transaction' ? (fn: never, cfg: unknown) => { captured.push(cfg); return (t.transaction as (f: never, c: unknown) => unknown)(fn, cfg); } : Reflect.get(t, prop, r); } });
+      await new BenefitTerminalApplicationService(spy as typeof real).classify({ reservationId: late.reservationId, businessId: late.businessId });
+      expect(captured).toEqual([{ isolationLevel: 'repeatable read', accessMode: 'read only' }]);
+      const probe = await rejects(dbApp.transaction(async tx => { await tx.execute(sql`update partner_credit_reservations set units = units where id = ${late.reservationId}`); }, captured[0] as never));
+      expect(probe).toMatch(/read-only transaction/);
     });
 
     it('D4-06: the same reservation can never be applied twice (the database refuses it on any invoice, and the writer replays the one row)', async () => {
