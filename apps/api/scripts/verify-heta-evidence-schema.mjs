@@ -63,16 +63,18 @@ try {
   );
   for (const table of tables) {
     // BEFORE ROW UPDATE/DELETE = 27; BEFORE STATEMENT TRUNCATE = 34.
-    for (const [suffix, type] of [
-      ['no_update_delete', 27],
-      ['no_truncate', 34],
+    // Migration 0054 makes the truncate trigger ENABLE ALWAYS ('A') so it also fires under session_replication_role = replica; the row-level
+    // trigger stays ENABLE ORIGIN ('O'). Each is asserted exactly, so a later weakening of either is caught.
+    for (const [suffix, type, enabled] of [
+      ['no_update_delete', 27, 'O'],
+      ['no_truncate', 34, 'A'],
     ]) {
       const trigger = triggers.rows.find(
         (t) => t.relname === table && t.tgname === `${table}_${suffix}`,
       );
       assert.ok(trigger, `${table}: missing ${suffix}`);
       assert.equal(trigger.tgtype, type);
-      assert.equal(trigger.tgenabled, 'O');
+      assert.equal(trigger.tgenabled, enabled, `${table}: ${suffix} enablement`);
       assert.equal(trigger.proname, 'stripe_provider_evidence_immutable');
       checks++;
     }
