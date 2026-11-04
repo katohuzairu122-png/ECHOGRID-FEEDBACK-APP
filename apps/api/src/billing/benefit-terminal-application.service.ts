@@ -35,18 +35,22 @@ export class BenefitTerminalApplicationService {
    */
   async classify(input: { reservationId: string; businessId: string }): Promise<HeldEffectClassification> {
     if (!input.reservationId || !input.businessId) throw new Error('S08_APPLICATION_INPUT_INVALID');
-    const [reservation] = await this.db.select().from(partnerCreditReservations).where(eq(partnerCreditReservations.id, input.reservationId)).limit(1);
-    if (!reservation || reservation.businessId !== input.businessId) throw new Error('S08_APPLICATION_UNKNOWN_RESERVATION');
-    const [intent] = await this.db.select().from(benefitApplicationIntents)
-      .where(and(eq(benefitApplicationIntents.reservationId, reservation.id), eq(benefitApplicationIntents.businessId, input.businessId))).limit(1);
-    if (!intent || intent.state !== 'consumed' || intent.outcome !== 'confirmed' || !intent.providerEffectRef || !intent.appliedAt)
-      return { classification: 'NO_RECONCILED_EFFECT', heldForReview: false, reservationId: reservation.id };
-    if (intent.appliedAt > reservation.expiresAt)
-      return {
-        classification: 'EFFECT_AFTER_RESERVATION_DEADLINE', heldForReview: true, reservationId: reservation.id, intentId: intent.id, providerEffectRef: intent.providerEffectRef,
-        appliedAt: intent.appliedAt, reservationExpiresAt: reservation.expiresAt, lateByMs: intent.appliedAt.getTime() - reservation.expiresAt.getTime(),
-      };
-    return { classification: 'WITHIN_RESERVATION_DEADLINE', heldForReview: false, reservationId: reservation.id };
+    // One REPEATABLE READ, READ ONLY transaction: the reservation and the saga intent are read from the same snapshot (no torn read between a concurrent reconcile and the
+    // deadline comparison), and the transaction cannot write by construction. It takes no locks; the answer is the state at that snapshot.
+    return this.db.transaction(async tx => {
+      const [reservation] = await tx.select().from(partnerCreditReservations).where(eq(partnerCreditReservations.id, input.reservationId)).limit(1);
+      if (!reservation || reservation.businessId !== input.businessId) throw new Error('S08_APPLICATION_UNKNOWN_RESERVATION');
+      const [intent] = await tx.select().from(benefitApplicationIntents)
+        .where(and(eq(benefitApplicationIntents.reservationId, reservation.id), eq(benefitApplicationIntents.businessId, input.businessId))).limit(1);
+      if (!intent || intent.state !== 'consumed' || intent.outcome !== 'confirmed' || !intent.providerEffectRef || !intent.appliedAt)
+        return { classification: 'NO_RECONCILED_EFFECT', heldForReview: false, reservationId: reservation.id } as HeldEffectClassification;
+      if (intent.appliedAt > reservation.expiresAt)
+        return {
+          classification: 'EFFECT_AFTER_RESERVATION_DEADLINE', heldForReview: true, reservationId: reservation.id, intentId: intent.id, providerEffectRef: intent.providerEffectRef,
+          appliedAt: intent.appliedAt, reservationExpiresAt: reservation.expiresAt, lateByMs: intent.appliedAt.getTime() - reservation.expiresAt.getTime(),
+        } as HeldEffectClassification;
+      return { classification: 'WITHIN_RESERVATION_DEADLINE', heldForReview: false, reservationId: reservation.id } as HeldEffectClassification;
+    }, { isolationLevel: 'repeatable read', accessMode: 'read only' });
   }
 
   async record(input: { reservationId: string; businessId: string }): Promise<{ applicationId: string; providerSuccessRef: string; replay: boolean }> {
