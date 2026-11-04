@@ -82,11 +82,25 @@ describe.skipIf(!process.env.DATABASE_URL)('Split 07/08 financial TRUNCATE denia
   }
   for (const table of [...PROTECTED, ...LEGACY]) {
     it(`${table}: its own truncate trigger denies TRUNCATE ... CASCADE, in a normal and a replica-role session, with every other table's trigger disabled`, async () => {
-      const strict = (PROTECTED as readonly string[]).includes(table) ? new RegExp(`FINANCIAL_EVIDENCE_TRUNCATE_DENIED \\(${table}\\)`) : /append-only|denied|deny|truncate/i;
-      expect(await ownTriggerDenial(table, false), `${table} normal`).toMatch(strict);
-      expect(await ownTriggerDenial(table, true), `${table} replica`).toMatch(strict);
+      const isNew = (PROTECTED as readonly string[]).includes(table);
+      const check = (msg: string, label: string) => {
+        if (isNew) expect(msg, label).toMatch(new RegExp(`FINANCIAL_EVIDENCE_TRUNCATE_DENIED \\(${table}\\)`));
+        // an earlier trigger raises its own message: it must be a raised denial, never PostgreSQL's foreign-key rule, a permission error or a success
+        else { expect(msg, label).not.toBe(''); expect(msg, label).not.toMatch(/referenced in a foreign key|permission denied|must be owner/i); }
+      };
+      check(await ownTriggerDenial(table, false), `${table} normal`);
+      check(await ownTriggerDenial(table, true), `${table} replica`);
     });
   }
+
+  it('pins the one documented exception: the only truncate triggers that are not ENABLE ALWAYS are the two 0052 allocation triggers', async () => {
+    const r = await admin.query<{ t: string; n: string }>(
+      `select tgrelid::regclass::text t, tgname n from pg_trigger where not tgisinternal and (tgtype & 32) = 32 and tgenabled <> 'A' order by 1`);
+    expect(r.rows.map(x => `${x.t}:${x.n}`)).toEqual(['s08_allocation_freeze_items:s08_allocation_child_deny', 's08_allocation_freezes:s08_allocation_parent_deny']);
+    // still denied in a normal session; the replica-role gap is a documented follow-up (their fixtures forge rows on a replica-role connection)
+    const c = await connect();
+    for (const t of ['s08_allocation_freezes', 's08_allocation_freeze_items']) expect(await rejects(c.query(`truncate ${t} cascade`)), t).toMatch(/S08_ALLOCATION_INERT|FINANCIAL_EVIDENCE_TRUNCATE_DENIED|append-only/);
+  });
 
   // A plain TRUNCATE of a table that foreign keys reference is also refused by PostgreSQL itself, before any trigger runs; CASCADE (and the replica-role
   // session, where FK triggers are off but that static rule still applies) is what reaches the triggers, and every table in the cascade set carries a denial.
