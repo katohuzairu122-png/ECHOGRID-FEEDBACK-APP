@@ -386,6 +386,13 @@
       "when": 1793758132982,
       "tag": "0054_split07_08_financial_truncate_denial",
       "breakpoints": true
+    },
+    {
+      "idx": 55,
+      "version": "7",
+      "when": 1793761490251,
+      "tag": "0055_s08_allocation_truncate_always",
+      "breakpoints": true
     }
   ]
 }

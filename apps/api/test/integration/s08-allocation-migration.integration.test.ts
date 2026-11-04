@@ -211,7 +211,13 @@ describe.skipIf(!process.env.DATABASE_URL)('S08 0052 inert allocation migration'
     const installed = await catalog(c);
     freshCatalog = installed;
     expect(installed.constraints.length).toBeGreaterThan(12);
-    expect(installed.triggers.map((t) => t.tgenabled)).toEqual(['O', 'O']);
+    // the two 0052 statement triggers (ENABLE ORIGIN) and, from 0055, one truncate-only ENABLE ALWAYS sibling for each table
+    expect(installed.triggers.map((t) => `${t.tgname}:${t.tgenabled}`)).toEqual([
+      's08_allocation_child_deny:O',
+      's08_allocation_child_truncate_always:A',
+      's08_allocation_parent_deny:O',
+      's08_allocation_parent_truncate_always:A',
+    ]);
   });
   it('upgrades populated 0051 without changing legacy rows; schema equals fresh replay; rerun is inert', async () => {
     const c = await database();
@@ -399,9 +405,13 @@ describe.skipIf(!process.env.DATABASE_URL)('S08 0052 inert allocation migration'
       await expect(insert(p, a.business, b.reservation)).rejects.toMatchObject({ code: '23503' });
       await expect(insert(p, b.business, b.reservation)).rejects.toMatchObject({ code: '23503' });
       await insert();
-      await expect(
-        c.query('DELETE FROM s08_allocation_freezes WHERE id=$1', [p]),
-      ).rejects.toMatchObject({ code: '23503' });
+      // The child FK is ON DELETE RESTRICT. PostgreSQL 16/17 reports 23503 (foreign_key_violation); PostgreSQL 18 reports 23001 (restrict_violation) for the same
+      // refusal. Either code is the restriction doing its job; the insert-side FK checks above stay strictly 23503 on every version.
+      const restricted = await c.query('DELETE FROM s08_allocation_freezes WHERE id=$1', [p]).then(
+        () => undefined,
+        (e: { code?: string }) => e,
+      );
+      expect(['23503', '23001']).toContain(restricted?.code);
       await expect(
         c.query(
           "INSERT INTO s08_allocation_freeze_items VALUES($1,$2,$3,'legacy_intent',0,'zero')",

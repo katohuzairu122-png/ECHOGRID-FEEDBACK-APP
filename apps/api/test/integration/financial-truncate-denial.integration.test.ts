@@ -93,11 +93,12 @@ describe.skipIf(!process.env.DATABASE_URL)('Split 07/08 financial TRUNCATE denia
     });
   }
 
-  it('pins the one documented exception: the only truncate triggers that are not ENABLE ALWAYS are the two 0052 allocation triggers', async () => {
+  it('pins the remaining ORIGIN truncate triggers: only the two 0052 allocation triggers, and their tables also carry an ENABLE ALWAYS truncate trigger (0055)', async () => {
     const r = await admin.query<{ t: string; n: string }>(
       `select tgrelid::regclass::text t, tgname n from pg_trigger where not tgisinternal and (tgtype & 32) = 32 and tgenabled <> 'A' order by 1`);
     expect(r.rows.map(x => `${x.t}:${x.n}`)).toEqual(['s08_allocation_freeze_items:s08_allocation_child_deny', 's08_allocation_freezes:s08_allocation_parent_deny']);
-    // still denied in a normal session; the replica-role gap is a documented follow-up (their fixtures forge rows on a replica-role connection)
+    const always = await admin.query<{ t: string }>(`select tgrelid::regclass::text t from pg_trigger where not tgisinternal and (tgtype & 32) = 32 and tgenabled = 'A' and tgrelid::regclass::text = any($1) order by 1`, [['s08_allocation_freezes', 's08_allocation_freeze_items']]);
+    expect(always.rows.map(x => x.t)).toEqual(['s08_allocation_freeze_items', 's08_allocation_freezes']);
     const c = await connect();
     for (const t of ['s08_allocation_freezes', 's08_allocation_freeze_items']) expect(await rejects(c.query(`truncate ${t} cascade`)), t).toMatch(/S08_ALLOCATION_INERT|FINANCIAL_EVIDENCE_TRUNCATE_DENIED|append-only/);
   });
