@@ -6,7 +6,7 @@ import {
   classifySettlement, benefitIdempotencyKey, MOCK_EVIDENCE_KIND, SETTLEMENT_CLASSIFIER_VERSION, SUPPORTED_ALLOCATION_POLICY_VERSION, SUPPORTED_BENEFIT_POLICY_VERSION,
   type SettlementClassifierContext, type MockSettlementEvidence,
 } from './settlement-eligibility.classifier';
-import { AGGREGATE_ALLOCATION_POLICY } from './aggregate-benefit-allocation';
+import { AGGREGATE_ALLOCATION_POLICY, freezeAggregateBenefitAllocation } from './aggregate-benefit-allocation';
 import { INVOICE_BENEFIT_POLICY_V1 } from './invoice-benefit.calculator';
 
 /**
@@ -31,7 +31,7 @@ function build(mutate?: (ctx: any, ev: any) => void): [SettlementClassifierConte
       providerAccountId: 'acct_1', providerMode: 'test', reservationExpiresAtMs: 9_500_000,
       frozenAllocation: {
         artifactVersion: 1, allocationPolicyVersion: 'S08-AGG-ROUND/1', benefitPolicyVersion: 'PC-BENEFIT/1', businessId: 'biz-1', invoiceRef: 'in_1', currency: 'usd',
-        eligibleBaseMinor: 3000, eligibleCreditBalance: 1, unitsToApply: 1, aggregateBenefitMinor: 300, percentApplied: 10,
+        eligibleBaseMinor: 3000, eligibleCreditBalance: 1, unitsToApply: 1, aggregateBenefitMinor: 300, percentApplied: 1, // 1 credit = 1 % (PC-BENEFIT/1); 300 sits exactly at the 10 % cap of the 3000 base, which the validation allows
         allocations: [{ reservationId: 'res-1', invoiceIntentRef: 'intent-1', units: 1, benefitMinor: 300, providerIdempotencyKey: KEY }],
         allocationDigest: D('a'), providerVerified: false, consumptionAuthorized: false,
       },
@@ -85,9 +85,11 @@ describe('S08-D1D3-DEV-01 mock settlement eligibility classifier', () => {
     it('multiple credits on one invoice: another reservation\'s allocated benefit line is accepted, within the frozen aggregate', () => {
       const other = benefitIdempotencyKey('res-2');
       const r = run((c, e) => {
-        c.expected.frozenAllocation.allocations.push({ reservationId: 'res-2', invoiceIntentRef: 'intent-2', units: 1, benefitMinor: 300, providerIdempotencyKey: other });
-        c.expected.frozenAllocation.aggregateBenefitMinor = 600;
-        e.lines.items.push({ lineRef: 'il_ben2', amountMinor: -300, currency: 'usd', category: 'benefit', parentItemRef: 'ii_ben2', parentItemKey: other, labelReservationRef: null }); setTotal(e, 2400);
+        const f = c.expected.frozenAllocation; // a consistent two-credit freeze: 2 units, 2 %, base 6000, aggregate 600 (cap 10 % = 600)
+        f.allocations.push({ reservationId: 'res-2', invoiceIntentRef: 'intent-2', units: 1, benefitMinor: 300, providerIdempotencyKey: other });
+        f.aggregateBenefitMinor = 600; f.unitsToApply = 2; f.percentApplied = 2; f.eligibleCreditBalance = 2; f.eligibleBaseMinor = 6000;
+        e.lines.items[0].amountMinor = 6000;
+        e.lines.items.push({ lineRef: 'il_ben2', amountMinor: -300, currency: 'usd', category: 'benefit', parentItemRef: 'ii_ben2', parentItemKey: other, labelReservationRef: null }); setTotal(e, 5400);
       });
       expect(r.verdict).toBe('ELIGIBLE');
     });
@@ -140,6 +142,26 @@ describe('S08-D1D3-DEV-01 mock settlement eligibility classifier', () => {
       expectU(run((_, e) => { e.benefitItem.currency = 'eur'; }), 'CURRENCY_MISMATCH');
       expectU(run((_, e) => { e.lines.items[1].currency = 'eur'; }), 'CURRENCY_MISMATCH');
     });
+    it('F-3: EVERY invoice line must carry exactly the invoice currency; nothing is converted', () => {
+      const base = (e: any) => e.lines.items[0];
+      // a mismatched recurring-base line, with arithmetic that still adds up
+      expectU(run((_, e) => { base(e).currency = 'eur'; }), 'CURRENCY_MISMATCH');
+      // missing, null, empty and malformed currencies on the base line
+      for (const v of [undefined, null, '', 'USD', 'us', 'usdd', 'u$d', ' usd', 'usd ', 123, {}, [], true]) expectU(run((_, e) => { base(e).currency = v; }), 'CURRENCY_MISMATCH');
+      // non-base lines count too: tax, proration, other
+      for (const category of ['tax', 'proration', 'other']) {
+        expectU(run((_, e) => { e.lines.items.push({ lineRef: 'il_x', amountMinor: 100, currency: 'eur', category, parentItemRef: null, parentItemKey: null, labelReservationRef: null }); setTotal(e, 2800); }), 'CURRENCY_MISMATCH');
+        expect(run((_, e) => { e.lines.items.push({ lineRef: 'il_x', amountMinor: 100, currency: 'usd', category, parentItemRef: null, parentItemKey: null, labelReservationRef: null }); setTotal(e, 2800); }).verdict).toBe('ELIGIBLE'); // matched-currency control: the extra line is outside the eligible base
+      }
+      // mixed-currency invoice: lines in two currencies that the total happens to reconcile
+      expectU(run((_, e) => { e.lines.items.push({ lineRef: 'il_y', amountMinor: 50, currency: 'eur', category: 'other', parentItemRef: null, parentItemKey: null, labelReservationRef: null }); setTotal(e, 2750); }), 'CURRENCY_MISMATCH');
+      // a currency mismatch inside otherwise valid benefit evidence
+      expectU(run((_, e) => { e.lines.items[1].currency = 'eur'; }), 'CURRENCY_MISMATCH');
+      expectU(run((_, e) => { e.benefitItem.currency = 'eur'; }), 'CURRENCY_MISMATCH');
+      // a malformed EXPECTED currency cannot be matched by an equally malformed invoice
+      expectU(run((c, e) => { c.expected.currency = 'USD'; c.expected.frozenAllocation.currency = 'USD'; e.invoice.currency = 'USD'; e.lines.items.forEach((l: any) => { l.currency = 'USD'; }); e.benefitItem.currency = 'USD'; }), 'INPUT_INVALID');
+      expect(run().verdict).toBe('ELIGIBLE'); // all-matching control
+    });
     it('9. a wrong reservation is UNRESOLVED (binding, intent and a foreign benefit key)', () => {
       expectU(run((_, e) => { e.binding.reservationId = 'res-9'; }), 'RESERVATION_MISMATCH');
       expectU(run((_, e) => { e.binding.intentRef = 'intent-9'; }), 'RESERVATION_MISMATCH');
@@ -169,6 +191,107 @@ describe('S08-D1D3-DEV-01 mock settlement eligibility classifier', () => {
     });
   });
 
+  describe('F-8: frozen allocation integrity and line identifiers', () => {
+    const fa = (f: (a: any) => void) => (c: any) => f(c.expected.frozenAllocation);
+    const expectFrozen = (m: (c: any, e: any) => void) => { const r = run(m); expectU(r, 'FROZEN_ALLOCATION_MISMATCH'); expect(r.manualReviewRequired).toBe(true); expect(r.verdict).not.toBe('ELIGIBLE'); };
+    it('allocationDigest must be the canonical lowercase SHA-256 hex (64 characters); arbitrary non-empty strings are rejected', () => {
+      for (const v of ['x', 'not-a-digest', '', ' ', 'A'.repeat(64), 'g'.repeat(64), 'a'.repeat(63), 'a'.repeat(65), ` ${'a'.repeat(63)}`, 123, null, undefined, {}, [], true]) expectFrozen(fa(a => { a.allocationDigest = v; }));
+      expect(run(fa(a => { a.allocationDigest = 'f'.repeat(64); })).verdict).toBe('ELIGIBLE'); // any well-formed digest value: valid control
+    });
+    it('artifactVersion must be the supported version (1); missing or unknown versions are rejected', () => {
+      for (const v of [0, 2, -1, 1.5, '1', null, undefined, Number.NaN, {}, []]) expectFrozen(fa(a => { a.artifactVersion = v; }));
+    });
+    it('each allocation\'s units must be exactly 1', () => {
+      for (const v of [0, 2, -1, 1.5, '1', null, undefined, Number.NaN, Infinity, {}]) expectFrozen(fa(a => { a.allocations[0].units = v; }));
+    });
+    it('unitsToApply must be a safe integer from 1 to 10 that equals the number of allocations', () => {
+      for (const v of [0, -1, 11, 1.5, 2, '1', null, undefined, Number.NaN, Infinity, Number.MAX_SAFE_INTEGER + 1, {}]) expectFrozen(fa(a => { a.unitsToApply = v; }));
+    });
+    it('percentApplied must be an integer equal to unitsToApply x 1 % and within the 10 % cap', () => {
+      for (const v of [0, 2, 10, 11, -1, 1.5, 0.99, '1', null, undefined, Number.NaN, Infinity, {}]) expectFrozen(fa(a => { a.percentApplied = v; }));
+    });
+    it('eligibleCreditBalance must be a safe integer not below unitsToApply', () => {
+      for (const v of [0, -1, 1.5, '1', null, undefined, Number.NaN, Infinity, Number.MAX_SAFE_INTEGER + 1]) expectFrozen(fa(a => { a.eligibleCreditBalance = v; }));
+      expect(run(fa(a => { a.eligibleCreditBalance = 25; })).verdict).toBe('ELIGIBLE'); // a larger balance is legitimate
+    });
+    it('benefit amounts must be positive safe integers that add up to the aggregate and stay within the approved 10 % cap', () => {
+      for (const v of [0, -300, 1.5, '300', null, undefined, Number.NaN, Infinity, Number.MAX_SAFE_INTEGER + 1]) {
+        expectFrozen(fa(a => { a.allocations[0].benefitMinor = v; }));
+        expectFrozen(fa(a => { a.aggregateBenefitMinor = v; }));
+      }
+      expectFrozen(fa(a => { a.allocations[0].benefitMinor = 299; })); // no longer sums to the aggregate
+      expectFrozen(fa(a => { a.eligibleBaseMinor = 2999; })); // aggregate above 10 % of the base
+      for (const v of [-1, 1.5, '3000', null, undefined, Number.NaN]) expectFrozen(fa(a => { a.eligibleBaseMinor = v; }));
+    });
+    it('every allocation key must be the derived benefit-apply:v1 key of its own reservation, with usable identifiers, no duplicates, ascending order', () => {
+      for (const v of ['benefit-apply:v1:res-9', 'benefit-apply:v2:res-1', 'x', '', null, undefined, 7]) expectFrozen(fa(a => { a.allocations[0].providerIdempotencyKey = v; }));
+      for (const v of ['', ' ', 'res 1', null, undefined, 7, 'x'.repeat(256)]) { expectFrozen(fa(a => { a.allocations[0].reservationId = v; })); expectFrozen(fa(a => { a.allocations[0].invoiceIntentRef = v; })); }
+      const two = (a: any) => { a.allocations.push({ reservationId: 'res-2', invoiceIntentRef: 'intent-2', units: 1, benefitMinor: 300, providerIdempotencyKey: benefitIdempotencyKey('res-2') }); a.aggregateBenefitMinor = 600; a.unitsToApply = 2; a.percentApplied = 2; a.eligibleCreditBalance = 2; a.eligibleBaseMinor = 6000; };
+      expectFrozen(c => { two(c.expected.frozenAllocation); c.expected.frozenAllocation.allocations[1].reservationId = 'res-1'; c.expected.frozenAllocation.allocations[1].providerIdempotencyKey = KEY; }); // duplicate reservation
+      expectFrozen(c => { two(c.expected.frozenAllocation); c.expected.frozenAllocation.allocations[1].invoiceIntentRef = 'intent-1'; }); // duplicate intent
+      expectFrozen(c => { two(c.expected.frozenAllocation); c.expected.frozenAllocation.allocations.reverse(); }); // not in the freeze's ascending order
+    });
+    it('the allocation must belong to the expected tenant, invoice, currency and the evaluated reservation and intent', () => {
+      for (const f of [(a: any) => { a.businessId = 'biz-2'; }, (a: any) => { a.invoiceRef = 'in_2'; }, (a: any) => { a.currency = 'eur'; }, (a: any) => { a.allocations[0].invoiceIntentRef = 'intent-9'; }, (a: any) => { a.allocationPolicyVersion = 'S08-AGG-ROUND/2'; },
+        (a: any) => { a.allocations = 'nope'; }, (a: any) => { delete a.allocations; }]) expectU(run(fa(f)), 'FROZEN_ALLOCATION_MISMATCH');
+      // asserted authority flags on the artifact are refused even earlier, by the authority-assertion scan
+      expectU(run(fa(a => { a.providerVerified = true; })), 'CALLER_AUTHORITY_ASSERTED'); expectU(run(fa(a => { a.consumptionAuthorized = true; })), 'CALLER_AUTHORITY_ASSERTED');
+      // an unusable expected reference: the evidence binding differs, and even an evidence binding that "matches" the bad value is refused
+      expectU(run(c => { c.expected.reservationId = ''; }), 'RESERVATION_MISMATCH'); expectU(run(c => { c.expected.intentRef = 'a b'; }), 'RESERVATION_MISMATCH');
+      expectU(run((c, e) => { c.expected.reservationId = ''; e.binding.reservationId = ''; }), 'FROZEN_ALLOCATION_MISMATCH');
+      expectU(run((c, e) => { c.expected.intentRef = 'a b'; e.binding.intentRef = 'a b'; }), 'FROZEN_ALLOCATION_MISMATCH');
+    });
+    it('invoice-line identifiers must be non-empty, unambiguous strings; an empty item/parent reference can never "match" another empty one', () => {
+      for (const v of ['', ' ', 'il base', 'il\tbase', null, undefined, 123, {}, [], true, 'x'.repeat(256)]) {
+        expectU(run((_, e) => { e.lines.items[0].lineRef = v; }), 'INPUT_INVALID');
+        expectU(run((_, e) => { e.lines.items[1].lineRef = v; }), 'INPUT_INVALID');
+        expectU(run((_, e) => { e.benefitItem.itemRef = v; e.lines.items[1].parentItemRef = v; }), 'ATTRIBUTION_MISMATCH'); // both sides equal AND bad
+        expectU(run((_, e) => { e.benefitItem.itemRef = v; }), 'ATTRIBUTION_MISMATCH');
+        expectU(run((_, e) => { e.lines.items[1].parentItemRef = v; }), 'ATTRIBUTION_MISMATCH');
+      }
+      expect(run((_, e) => { e.benefitItem.itemRef = 'ii_other'; e.lines.items[1].parentItemRef = 'ii_other'; }).verdict).toBe('ELIGIBLE'); // well-formed control
+    });
+    it('a non-string identifier or currency that is consistent everywhere (numbers, arrays) is still refused: String(x) is never accepted as a reference', () => {
+      // reservation id 123 in the context, the evidence binding AND the allocation, with the matching derived key
+      expectU(run((c, e) => { c.expected.reservationId = 123; e.binding.reservationId = 123; const a = c.expected.frozenAllocation.allocations[0]; a.reservationId = 123; a.providerIdempotencyKey = benefitIdempotencyKey('123'); }), 'FROZEN_ALLOCATION_MISMATCH');
+      expectU(run((c, e) => { c.expected.intentRef = ['intent-1']; e.binding.intentRef = c.expected.intentRef; c.expected.frozenAllocation.allocations[0].invoiceIntentRef = c.expected.intentRef; }), 'FROZEN_ALLOCATION_MISMATCH');
+      const arr = ['usd']; // the SAME array object everywhere, so strict equality alone would hold
+      expectU(run((c, e) => { c.expected.currency = arr; c.expected.frozenAllocation.currency = arr; e.invoice.currency = arr; e.lines.items.forEach((l: any) => { l.currency = arr; }); e.benefitItem.currency = arr; }), 'INPUT_INVALID');
+      expectU(run((_, e) => { e.lines.items[0].lineRef = ['il_base']; }), 'INPUT_INVALID');
+      expectU(run((_, e) => { e.benefitItem.itemRef = ['ii_ben']; e.lines.items[1].parentItemRef = e.benefitItem.itemRef; }), 'ATTRIBUTION_MISMATCH');
+    });
+    it('the copied policy bounds equal the real ones (drift guard)', () => {
+      expect(INVOICE_BENEFIT_POLICY_V1.percentPerCredit).toBe(1); expect(INVOICE_BENEFIT_POLICY_V1.maxPercent).toBe(10);
+    });
+    it('COMPATIBILITY CONTROL: artifacts produced by the real freezeAggregateBenefitAllocation are accepted unchanged (one and several credits)', async () => {
+      const biz = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+      const ids = ['33333333-3333-4333-8333-333333333333', '11111111-1111-4111-8111-111111111111', '22222222-2222-4222-8222-222222222222'];
+      for (const count of [1, 3]) {
+        const frozen = await freezeAggregateBenefitAllocation({
+          allocationPolicyVersion: AGGREGATE_ALLOCATION_POLICY, invoice: { businessId: biz, invoiceRef: 'in_real1', currency: 'usd' }, eligibleCreditBalance: count,
+          benefit: { eligible: true, policyVersion: 'PC-BENEFIT/1', currency: 'usd', eligibleBaseMinor: 30_000, benefitMinor: 300 * count, unitsToApply: count, unitsNotApplied: 0, percentApplied: count, providerVerified: false, consumptionAuthorized: false } as any,
+          reservations: ids.slice(0, count).map((id, i) => ({ id, businessId: biz, invoiceIntentRef: `intent-${i}`, invoiceRef: 'in_real1', currency: 'usd', units: 1 as const, state: 'reserved' as const, providerAttemptStarted: false as const })),
+        });
+        expect(frozen.allocationDigest).toMatch(/^[0-9a-f]{64}$/); expect(frozen.allocations).toHaveLength(count);
+        const own = frozen.allocations[count - 1]!;
+        const shape = (c: any, e: any, allocation: unknown) => {
+          Object.assign(c.expected, { businessId: biz, invoiceRef: 'in_real1', reservationId: own.reservationId, intentRef: own.invoiceIntentRef, frozenAllocation: allocation });
+          e.binding = { businessId: biz, reservationId: own.reservationId, intentRef: own.invoiceIntentRef }; e.invoice.id = 'in_real1';
+          e.lines.items = [{ lineRef: 'il_base', amountMinor: 30_000, currency: 'usd', category: 'recurring_base', parentItemRef: null, parentItemKey: null, labelReservationRef: null },
+            ...frozen.allocations.map((a, i) => ({ lineRef: `il_ben${i}`, amountMinor: -a.benefitMinor, currency: 'usd', category: 'benefit', parentItemRef: `ii_${i}`, parentItemKey: a.providerIdempotencyKey, labelReservationRef: null }))];
+          const k = frozen.allocations.indexOf(own);
+          e.benefitItem = { itemRef: `ii_${k}`, invoiceRef: 'in_real1', idempotencyKey: own.providerIdempotencyKey, amountMinor: -own.benefitMinor, currency: 'usd', discountable: false };
+          setTotal(e, 30_000 - frozen.aggregateBenefitMinor);
+        };
+        const r = run((c, e) => shape(c, e, frozen));
+        expect(r.verdict, JSON.stringify(r.reasonCodes)).toBe('ELIGIBLE');
+        // and the same real artifact with one field tampered is refused
+        expectU(run((c, e) => shape(c, e, { ...frozen, allocationDigest: 'tampered' })), 'FROZEN_ALLOCATION_MISMATCH');
+        expectU(run((c, e) => shape(c, e, { ...frozen, unitsToApply: frozen.unitsToApply + 1 })), 'FROZEN_ALLOCATION_MISMATCH');
+      }
+    });
+  });
+
   describe('scope: tenant, account, mode, invoice', () => {
     it('10. a wrong tenant is UNRESOLVED with manual review', () => { const r = run((_, e) => { e.binding.businessId = 'biz-2'; }); expectU(r, 'TENANT_MISMATCH'); expect(r.manualReviewRequired).toBe(true); });
     it('11. a wrong Stripe account is UNRESOLVED', () => { const r = run((_, e) => { e.provider.accountId = 'acct_other'; }); expectU(r, 'SCOPE_MISMATCH'); expect(r.manualReviewRequired).toBe(true); });
@@ -194,6 +317,15 @@ describe('S08-D1D3-DEV-01 mock settlement eligibility classifier', () => {
       expectU(run((_, e) => { e.lines.complete = false; }), 'INCOMPLETE_EVIDENCE');
       expectU(run((_, e) => { e.provenance.complete = false; }), 'INCOMPLETE_EVIDENCE');
       expectU(run((_, e) => { e.provenance.readAfter = null; }), 'INCOMPLETE_EVIDENCE');
+    });
+    it('F-2: completeness must be exactly boolean true; no other value (false, null, undefined, "true", "false", "yes", 1, {}, []) establishes it', () => {
+      const bad: unknown[] = [false, null, undefined, 'true', 'false', 'yes', '', 1, 0, -1, 1.5, Number.NaN, {}, [], [true], Symbol.for('x')];
+      for (const v of bad) {
+        for (const set of [(e: any) => { e.provenance.complete = v; }, (e: any) => { e.lines.complete = v; }]) {
+          const r = run((_, e) => set(e)); expectU(r, 'INCOMPLETE_EVIDENCE'); expect(r.verdict).not.toBe('ELIGIBLE');
+        }
+      }
+      expect(run((_, e) => { e.provenance.complete = true; e.lines.complete = true; }).verdict).toBe('ELIGIBLE'); // valid control
     });
     it('20. payment status changing during observation is UNRESOLVED (unstable)', () => {
       expectU(run((_, e) => { e.provenance.readAfter = { ...e.provenance.readAfter, status: 'open' }; }), 'EVIDENCE_UNSTABLE');
@@ -247,6 +379,39 @@ describe('S08-D1D3-DEV-01 mock settlement eligibility classifier', () => {
   });
 
   describe('policy', () => {
+    it('F-7: settlement cannot precede invoice creation, and nothing may be later than the observation that reported it', () => {
+      // fixtures: createdAt 5000, paidAt 9_000_000, observedAt NOW-1000 = 9_999_000
+      const r = run((_, e) => { e.invoice.paidAtMs = 4_999; }); expectU(r, 'TEMPORAL_INCOHERENCE'); expect(r.manualReviewRequired).toBe(true); // an impossible timeline is an evidence-integrity problem
+      expectU(run((_, e) => { e.invoice.paidAtMs = 0; }), 'TEMPORAL_INCOHERENCE'); // epoch: chronologically before creation
+      expect(run((_, e) => { e.invoice.paidAtMs = 5_000; }).verdict).toBe('ELIGIBLE'); // settled at the creation instant: coherent
+      expectU(run((_, e) => { e.invoice.createdAtMs = 9_000_001; }), 'TEMPORAL_INCOHERENCE'); // created after it was settled
+      expectU(run((_, e) => { e.invoice.paidAtMs = 9_999_001; e.invoice.createdAtMs = 5_000; }), 'TEMPORAL_INCOHERENCE'); // settled after the evidence was observed
+      expectU(run((_, e) => { e.provenance.observedAtMs = 4_999; }), 'TEMPORAL_INCOHERENCE'); // observed before the invoice existed
+      expectU(run((_, e) => { e.invoice.status = 'void'; e.invoice.amountPaidMinor = 0; e.invoice.amountRemainingMinor = 2700; e.invoice.paidAtMs = null; e.invoice.voidedAtMs = 4_000; sync(e); }), 'TEMPORAL_INCOHERENCE'); // voided before creation
+      expectI(run((_, e) => { e.invoice.status = 'void'; e.invoice.amountPaidMinor = 0; e.invoice.amountRemainingMinor = 2700; e.invoice.paidAtMs = null; e.invoice.voidedAtMs = 8_000_000; sync(e); }), 'INVOICE_VOID'); // valid void control
+      expect(run().verdict).toBe('ELIGIBLE'); // valid chronology control
+    });
+    it('F-7: invalid timestamps (negative, non-finite, fractional, non-numeric, missing) can never establish eligibility', () => {
+      const bad: unknown[] = [-1, -1_000, Number.NaN, Infinity, -Infinity, 1.5, '9000000', {}, [], true];
+      for (const v of bad) {
+        expectU(run((_, e) => { e.invoice.paidAtMs = v; }), 'INPUT_INVALID');
+        expectU(run((_, e) => { e.invoice.createdAtMs = v; }), 'INPUT_INVALID');
+        expectU(run((_, e) => { e.provenance.observedAtMs = v; }), 'INPUT_INVALID');
+        expectU(run((_, e) => { e.invoice.voidedAtMs = v; }), 'INPUT_INVALID');
+      }
+      // missing required timestamps
+      for (const f of [(e: any) => { delete e.invoice.createdAtMs; }, (e: any) => { e.invoice.createdAtMs = null; }, (e: any) => { delete e.provenance.observedAtMs; }, (e: any) => { e.provenance.observedAtMs = null; }])
+        expectU(run((_, e) => f(e)), 'INPUT_INVALID');
+      for (const v of [null, undefined]) expectU(run((_, e) => { e.invoice.paidAtMs = v; }), 'SETTLEMENT_TIME_MISSING');
+    });
+    it('F-7: the policy effective instant must be explicitly supplied as a positive safe integer; no default is invented', () => {
+      for (const v of [null, undefined, 0, -1, -1_000, Number.NaN, Infinity, 1.5, '1000', {}, [], true, Number.MAX_SAFE_INTEGER + 1]) expectU(run(c => { c.policy.effectiveFromMs = v; }), 'POLICY_EFFECTIVE_DATE_UNAVAILABLE');
+      expectU(run(c => { delete c.policy.effectiveFromMs; }), 'POLICY_EFFECTIVE_DATE_UNAVAILABLE');
+      // exact boundary under the existing contract: created strictly before the instant => not effective; at the instant => effective
+      expectI(run((_, e) => { e.invoice.createdAtMs = 999; }), 'POLICY_NOT_EFFECTIVE');
+      expect(run((_, e) => { e.invoice.createdAtMs = 1_000; }).verdict).toBe('ELIGIBLE');
+      expect(run((_, e) => { e.invoice.createdAtMs = 1_001; }).verdict).toBe('ELIGIBLE');
+    });
     it('27. a missing or different policy version is UNRESOLVED', () => {
       for (const v of [null, '']) expectU(run(c => { c.policy.version = v; }), 'POLICY_VERSION_MISSING');
       expectU(run(c => { c.expected.frozenAllocation.benefitPolicyVersion = ''; }), 'POLICY_VERSION_MISSING');

@@ -5,7 +5,7 @@ Implements [the settlement eligibility specification](S08_D1D3_SETTLEMENT_ELIGIB
 
 ## Files
 - `apps/api/src/billing/settlement-eligibility.classifier.ts` — `classifySettlement(context, evidence)`. Type-only import of the frozen allocation contract; nothing else.
-- `apps/api/src/billing/settlement-eligibility.classifier.test.ts` — 56 tests (the 30 required scenarios, adversarial, determinism, purity, mutation-hardening).
+- `apps/api/src/billing/settlement-eligibility.classifier.test.ts` — 73 tests (the 30 required scenarios, adversarial, determinism, purity, mutation-hardening, and the D1/D3-REMEDIATION-01 tests).
 
 ## Contract
 - **Trusted context** (`SettlementClassifierContext`): injected clock, policy version, policy effective instant, freshness window, and the expected business, reservation, intent, invoice, customer, subscription, currency, provider account, provider mode, reservation expiry and the frozen allocation (`S08-AGG-ROUND/1`, reused as-is, never recalculated). Expected values come from configuration and persisted records, never from the evidence.
@@ -43,3 +43,12 @@ Matrix row **S-G14** says non-benefit lines differing from the frozen base after
 
 ## Not done (separate blocks)
 Refund/dispute classifier; the consumption settlement gate (the existing D4 path still has none: finding R-4); verifier expansion and any Stripe read; persistence of snapshots; refund-triggered reversal; reservation release (R10 Block 2); any migration.
+
+## Remediation 01 (D1/D3-VERIFY-01 findings F-2, F-3, F-7, F-8)
+The verification run found gaps that the original tests did not exercise. Corrected here, with no change to any decided rule:
+- **F-2:** `provenance.complete` and `lines.complete` must be exactly `true`; a truthy non-boolean (`"false"`, `1`, `{}`) is malformed input, never completeness. The same fix applies to the refund/dispute classifier.
+- **F-3:** every invoice line, not only the benefit line, must carry exactly the invoice currency (lowercase alpha-3); nothing is converted. A malformed expected currency is `INPUT_INVALID`.
+- **F-7:** the invoice timeline must be coherent (every timestamp a non-negative safe integer; settlement or voiding cannot precede creation; nothing later than the observation that reported it) or the result is `TEMPORAL_INCOHERENCE` / `INPUT_INVALID`. The policy effective instant must be an explicitly supplied **positive** safe integer (`0`, the epoch default, is "unavailable"). No instant is chosen: Q14 stays open.
+- **F-8:** the frozen allocation is validated against its own contract: `artifactVersion` 1, lowercase SHA-256 hex digest, units 1 per allocation, 1 to 10 credits equal to `unitsToApply`, `percentApplied` equal to `unitsToApply` x 1 % and at most 10 %, positive safe-integer amounts that sum to the aggregate within the 10 % cap, derived `benefit-apply:v1` keys, unique and ascending identifiers; every invoice line, item and parent reference must be a non-empty, whitespace-free string. The artifact is validated, never recalculated.
+- Fixtures were corrected: the earlier shared fixture said `percentApplied: 10` for a single credit, which the real freeze never produces. A test now feeds artifacts produced by the real `freezeAggregateBenefitAllocation` (one and three credits) through the classifier unchanged.
+Not addressed here: F-1 (no consumption settlement gate), F-4, F-5, F-6, and the Q12/Q13 policy items.

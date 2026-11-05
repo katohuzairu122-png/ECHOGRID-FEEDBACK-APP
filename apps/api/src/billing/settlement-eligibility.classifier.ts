@@ -17,6 +17,16 @@ export const SETTLEMENT_CLASSIFIER_VERSION = 'S08-D1D3-SETTLEMENT/1' as const;
 export const SUPPORTED_BENEFIT_POLICY_VERSION = 'PC-BENEFIT/1' as const;
 export const SUPPORTED_ALLOCATION_POLICY_VERSION = 'S08-AGG-ROUND/1' as const;
 export const MOCK_EVIDENCE_KIND = 'MOCK_SYNTHETIC' as const;
+// Policy bounds of the frozen-allocation contract (aggregate-benefit-allocation.ts and PC-BENEFIT/1: 1 credit = 1 %, at most 10 %, 1 to 10 credits per batch). They are
+// copied, not imported, to keep this module free of runtime dependencies; a test pins them to the real policy object.
+const ALLOCATION_ARTIFACT_VERSION = 1;
+const PERCENT_PER_CREDIT = 1;
+const MAX_BENEFIT_PERCENT = 10;
+const MAX_CREDITS_PER_BATCH = 10;
+const REFERENCE = /^\S{1,255}$/u; // the allocation contract's identifier form: 1 to 255 non-whitespace characters
+const isRef = (x: unknown): x is string => typeof x === 'string' && REFERENCE.test(x); // a STRING of the identifier form; String(123) or String(['a']) must never pass
+const CURRENCY = /^[a-z]{3}$/; // the repository's canonical currency form (lowercase ISO-4217 alpha-3), as used by the allocation freeze and the provider adapter
+const isCurrency = (x: unknown): x is string => typeof x === 'string' && CURRENCY.test(x);
 export const benefitIdempotencyKey = (reservationId: string) => `benefit-apply:v1:${reservationId}`;
 
 export type SettlementVerdict = 'ELIGIBLE' | 'INELIGIBLE' | 'UNRESOLVED';
@@ -124,7 +134,7 @@ export type SettlementReason =
   | 'REFUND_PENDING' | 'REFUND_PARTIAL' | 'REFUNDED' | 'REFUND_EVIDENCE_UNKNOWN'
   | 'DISPUTE_OPEN' | 'PAYMENT_DISPUTE_LOST' | 'DISPUTE_EVIDENCE_UNKNOWN' | 'CANCELLATION_EVIDENCE_UNKNOWN'
   | 'BENEFIT_LINE_MISSING' | 'ATTRIBUTION_MISMATCH' | 'AMOUNT_MISMATCH' | 'DUPLICATE_EFFECT' | 'UNEXPECTED_BENEFIT_LINE' | 'BENEFIT_DISCOUNTABLE'
-  | 'EVIDENCE_DRIFT' | 'PRORATION_ONLY_BASE'
+  | 'EVIDENCE_DRIFT' | 'PRORATION_ONLY_BASE' | 'TEMPORAL_INCOHERENCE'
   | 'RESERVATION_EXPIRY_UNKNOWN' | 'SETTLED_AFTER_EXPIRY'
   | 'FRESHNESS_POLICY_UNAVAILABLE' | 'STALE_EVIDENCE' | 'EVIDENCE_FROM_FUTURE';
 
@@ -148,7 +158,7 @@ export interface SettlementClassification {
 const MANUAL_REVIEW: ReadonlySet<SettlementReason> = new Set<SettlementReason>([
   'TENANT_MISMATCH', 'RESERVATION_MISMATCH', 'FROZEN_ALLOCATION_MISMATCH', 'SCOPE_MISMATCH', 'CALLER_AUTHORITY_ASSERTED', 'EVIDENCE_KIND_UNSUPPORTED',
   'OUT_OF_BAND', 'INVOICE_UNCOLLECTIBLE', 'INVOICE_VOID', 'NO_ECONOMIC_BENEFIT', 'CONTRADICTORY_EVIDENCE', 'ATTRIBUTION_MISMATCH', 'DUPLICATE_EFFECT',
-  'UNEXPECTED_BENEFIT_LINE', 'AMOUNT_MISMATCH', 'EVIDENCE_DRIFT', 'PRORATION_ONLY_BASE', 'SETTLED_AFTER_EXPIRY', 'DISPUTE_OPEN', 'PAYMENT_DISPUTE_LOST',
+  'UNEXPECTED_BENEFIT_LINE', 'AMOUNT_MISMATCH', 'EVIDENCE_DRIFT', 'PRORATION_ONLY_BASE', 'TEMPORAL_INCOHERENCE', 'SETTLED_AFTER_EXPIRY', 'DISPUTE_OPEN', 'PAYMENT_DISPUTE_LOST',
   'REFUND_PARTIAL', 'REFUNDED', 'SETTLEMENT_SOURCE_UNKNOWN', 'AMOUNTS_INCONSISTENT', 'PAID_WITH_REMAINING', 'DUPLICATE_LINE', 'BENEFIT_DISCOUNTABLE',
 ]);
 
@@ -158,7 +168,7 @@ const REQUIREMENT: Readonly<Partial<Record<SettlementReason, string>>> = {
   POLICY_VERSION_MISSING: 'a policy version', POLICY_VERSION_MISMATCH: 'matching policy versions', NOT_SETTLED: 'invoice status paid', PARTIAL_PAYMENT: 'full payment',
   SETTLED_AFTER_EXPIRY: 'an owner decision on settlement after reservation expiry (OQ-3)', RESERVATION_EXPIRY_UNKNOWN: 'the reservation expiry', SCOPE_MISMATCH: 'evidence from the configured account and mode',
   ATTRIBUTION_MISMATCH: 'item-to-line correlation proven by the provider', BENEFIT_LINE_MISSING: 'the verified benefit line', DISPUTE_OPEN: 'a final dispute outcome', REFUND_PENDING: 'a final refund state',
-  REFUND_PARTIAL: 'a separate owner-approved partial-refund policy (OQ-11)', SETTLEMENT_SOURCE_UNKNOWN: 'the settlement source (OQ-1)', EVIDENCE_DRIFT: 'owner review of post-freeze invoice change',
+  REFUND_PARTIAL: 'a separate owner-approved partial-refund policy (OQ-11)', SETTLEMENT_SOURCE_UNKNOWN: 'the settlement source (OQ-1)', EVIDENCE_DRIFT: 'owner review of post-freeze invoice change', TEMPORAL_INCOHERENCE: 'a coherent invoice timeline (created, settled, observed)',
   PRORATION_ONLY_BASE: 'owner review (proration excluded from the base)', CONTRADICTORY_EVIDENCE: 'consistent provider evidence', TENANT_MISMATCH: 'tenant-matching evidence',
   RESERVATION_MISMATCH: 'reservation-matching evidence', FROZEN_ALLOCATION_MISMATCH: 'a valid frozen allocation', EVIDENCE_MISSING: 'the missing evidence section', INPUT_INVALID: 'well-formed evidence',
 };
@@ -186,6 +196,35 @@ export function assertsAuthority(value: unknown, depth = 0): boolean {
   return false;
 }
 
+/**
+ * F-8: structural integrity of the frozen allocation, taken from the freeze contract itself. It VALIDATES the artifact; it never recalculates a benefit or re-derives an
+ * allocation. The digest is the lowercase SHA-256 hex the freeze produces (it cannot be recomputed here: the module is synchronous and dependency-free).
+ */
+function frozenAllocationValid(f: FrozenAggregateBenefitAllocation, e: SettlementClassifierContext['expected']): boolean {
+  if (!f || f.artifactVersion !== ALLOCATION_ARTIFACT_VERSION || f.allocationPolicyVersion !== SUPPORTED_ALLOCATION_POLICY_VERSION) return false;
+  if (f.providerVerified !== false || f.consumptionAuthorized !== false) return false;
+  if (f.businessId !== e.businessId || f.invoiceRef !== e.invoiceRef || f.currency !== e.currency) return false;
+  if (typeof f.allocationDigest !== 'string' || !DIGEST.test(f.allocationDigest)) return false;
+  if (!Array.isArray(f.allocations)) return false;
+  const n = f.allocations.length;
+  if (!isInt(f.unitsToApply) || f.unitsToApply < 1 || f.unitsToApply > MAX_CREDITS_PER_BATCH || f.unitsToApply !== n) return false;
+  if (!isInt(f.percentApplied) || f.percentApplied !== f.unitsToApply * PERCENT_PER_CREDIT || f.percentApplied > MAX_BENEFIT_PERCENT) return false;
+  if (!isNonNegInt(f.eligibleCreditBalance) || f.eligibleCreditBalance < f.unitsToApply) return false;
+  if (!isNonNegInt(f.eligibleBaseMinor) || !isInt(f.aggregateBenefitMinor) || f.aggregateBenefitMinor <= 0) return false;
+  if (BigInt(f.aggregateBenefitMinor) * 100n > BigInt(f.eligibleBaseMinor) * BigInt(MAX_BENEFIT_PERCENT)) return false; // the approved cap, not a recalculation
+  let sum = 0n; let previous: string | null = null;
+  const ids = new Set<string>(); const intents = new Set<string>();
+  for (const a of f.allocations) {
+    if (!a || !isRef(a.reservationId) || !isRef(a.invoiceIntentRef) || a.units !== 1 || !isInt(a.benefitMinor) || a.benefitMinor <= 0 ||
+        a.providerIdempotencyKey !== benefitIdempotencyKey(a.reservationId)) return false;
+    if (ids.has(a.reservationId) || intents.has(a.invoiceIntentRef)) return false;
+    if (previous !== null && !(previous < a.reservationId)) return false; // the freeze emits allocations in ascending reservation-id order
+    ids.add(a.reservationId); intents.add(a.invoiceIntentRef); previous = a.reservationId;
+    sum += BigInt(a.benefitMinor);
+  }
+  return sum === BigInt(f.aggregateBenefitMinor);
+}
+
 const fingerprintEqual = (a: ReadFingerprint, b: ReadFingerprint) =>
   a.status === b.status && a.amountDueMinor === b.amountDueMinor && a.amountPaidMinor === b.amountPaidMinor && a.amountRemainingMinor === b.amountRemainingMinor &&
   a.totalMinor === b.totalMinor && a.lineCount === b.lineCount;
@@ -204,12 +243,9 @@ function evaluate(ctx: SettlementClassifierContext, ev: MockSettlementEvidence, 
   // P1: tenant, reservation, intent and the frozen allocation the evidence must belong to
   if (ev.binding.businessId !== e.businessId) return U('TENANT_MISMATCH');
   if (ev.binding.reservationId !== e.reservationId || ev.binding.intentRef !== e.intentRef) return U('RESERVATION_MISMATCH');
-  const own = frozen.allocations.find(a => a.reservationId === e.reservationId);
-  const sum = frozen.allocations.reduce((n, a) => n + a.benefitMinor, 0);
-  if (frozen.businessId !== e.businessId || frozen.invoiceRef !== e.invoiceRef || frozen.currency !== e.currency || frozen.allocationPolicyVersion !== SUPPORTED_ALLOCATION_POLICY_VERSION ||
-      frozen.providerVerified !== false || frozen.consumptionAuthorized !== false || !own || own.providerIdempotencyKey !== ourKey || own.invoiceIntentRef !== e.intentRef ||
-      !isInt(own.benefitMinor) || own.benefitMinor <= 0 || sum !== frozen.aggregateBenefitMinor || !isNonNegInt(frozen.eligibleBaseMinor) || !isStr(frozen.allocationDigest))
-    return U('FROZEN_ALLOCATION_MISMATCH');
+  if (!isRef(e.reservationId) || !isRef(e.intentRef)) return U('FROZEN_ALLOCATION_MISMATCH');
+  const own = Array.isArray(frozen.allocations) ? frozen.allocations.find(a => a?.reservationId === e.reservationId) : undefined;
+  if (!frozenAllocationValid(frozen, e) || !own || own.invoiceIntentRef !== e.intentRef) return U('FROZEN_ALLOCATION_MISMATCH');
 
   // P2: provider outcome
   if (ev.provenance.providerOutcome !== 'ok') return U('PROVIDER_UNREACHABLE');
@@ -219,16 +255,19 @@ function evaluate(ctx: SettlementClassifierContext, ev: MockSettlementEvidence, 
   if (ev.provider.accountId !== e.providerAccountId) scope.push('SCOPE_MISMATCH');
   if (ev.provider.mode !== e.providerMode) scope.push('SCOPE_MISMATCH');
   if (ev.invoice.id !== e.invoiceRef || ev.invoice.customerRef !== e.customerRef || ev.invoice.subscriptionRef !== e.subscriptionRef) scope.push('SCOPE_MISMATCH');
+  if (!isCurrency(e.currency)) return U('INPUT_INVALID'); // the expected currency must itself be a well-formed currency, or no comparison means anything
   if (ev.invoice.currency !== e.currency) scope.push('CURRENCY_MISMATCH');
   if (scope.length) return U(...new Set(scope));
 
   // P4: policy version (a recorded-policy dependency; absent or different is never guessed)
   if (!isStr(ctx.policy.version) || !isStr(frozen.benefitPolicyVersion)) return U('POLICY_VERSION_MISSING');
   if (ctx.policy.version !== SUPPORTED_BENEFIT_POLICY_VERSION || frozen.benefitPolicyVersion !== ctx.policy.version) return U('POLICY_VERSION_MISMATCH');
-  if (!isNonNegInt(ctx.policy.effectiveFromMs)) return U('POLICY_EFFECTIVE_DATE_UNAVAILABLE');
+  // The policy instant must be explicitly supplied as a positive safe integer; null, undefined, 0 (the epoch default), negatives, fractions and non-numbers are all "unavailable". No value is chosen here (Q14).
+  if (!isInt(ctx.policy.effectiveFromMs) || ctx.policy.effectiveFromMs <= 0) return U('POLICY_EFFECTIVE_DATE_UNAVAILABLE');
 
   // P5: completeness
-  if (!ev.provenance.complete || !ev.lines.complete) return U('INCOMPLETE_EVIDENCE');
+  // Completeness must be EXACTLY the boolean true: a truthy string, number or object ("false", 1, {}) is malformed input, never completeness.
+  if (ev.provenance.complete !== true || ev.lines.complete !== true) return U('INCOMPLETE_EVIDENCE');
 
   // P6: stability across the bracketing reads
   const { readBefore, readAfter } = ev.provenance;
@@ -242,10 +281,21 @@ function evaluate(ctx: SettlementClassifierContext, ev: MockSettlementEvidence, 
   const items = ev.lines.items;
   // a non-integer timestamp would make `createdAt < effectiveFrom` false and silently skip the policy-applicability rule, so it is refused here
   if (!isNonNegInt(inv.createdAtMs)) return U('INPUT_INVALID');
+  // Every line is summed into the total, so EVERY line (not only the benefit line) must carry exactly the invoice currency. Nothing is converted.
+  if (items.some(l => !isCurrency(l?.currency) || l.currency !== inv.currency)) return U('CURRENCY_MISMATCH');
+  // F-8: every line needs a usable identifier (non-empty, no whitespace); an absent or ambiguous reference cannot be told apart from another line
+  if (items.some(l => !isRef(l?.lineRef))) return U('INPUT_INVALID');
   if (new Set(items.map(l => l.lineRef)).size !== items.length) return U('DUPLICATE_LINE');
   if (![inv.amountDueMinor, inv.amountPaidMinor, inv.amountRemainingMinor].every(isNonNegInt) || !isInt(inv.totalMinor) || inv.totalMinor < 0 ||
       inv.amountPaidMinor + inv.amountRemainingMinor !== inv.amountDueMinor || items.some(l => !isInt(l.amountMinor)) ||
       items.reduce((n, l) => n + l.amountMinor, 0) !== inv.totalMinor) return U('AMOUNTS_INCONSISTENT');
+
+  // P7b: the invoice timeline must be well-formed and coherent before any status-based decision: every supplied timestamp is a non-negative safe integer, settlement/void cannot
+  // precede creation, and nothing may be later than the observation that reported it. Structural invariants only: no policy instant is chosen.
+  if (!isNonNegInt(ev.provenance.observedAtMs)) return U('INPUT_INVALID');
+  for (const t of [inv.paidAtMs, inv.voidedAtMs]) if (t != null && !isNonNegInt(t)) return U('INPUT_INVALID');
+  if (inv.createdAtMs > ev.provenance.observedAtMs) return U('TEMPORAL_INCOHERENCE');
+  for (const t of [inv.paidAtMs, inv.voidedAtMs]) if (t != null && ((t as number) < inv.createdAtMs || (t as number) > ev.provenance.observedAtMs)) return U('TEMPORAL_INCOHERENCE');
 
   // P8: invoice state, settlement source and policy applicability (the only phase that can disqualify)
   if (inv.status === 'void') return inv.paidAtMs != null ? U('CONTRADICTORY_EVIDENCE') : out('INELIGIBLE', 'INVOICE_VOID');
@@ -287,6 +337,8 @@ function evaluate(ctx: SettlementClassifierContext, ev: MockSettlementEvidence, 
   const line = ours[0];
   if (!item || !line) return U('BENEFIT_LINE_MISSING');
   const c10: SettlementReason[] = [];
+  // F-8: an empty or ambiguous item/parent reference could match another empty reference; correlation needs real identifiers on both sides
+  if (!isRef(item.itemRef) || !isRef(line.parentItemRef)) c10.push('ATTRIBUTION_MISMATCH');
   if (item.invoiceRef !== e.invoiceRef || item.idempotencyKey !== ourKey || line.parentItemRef !== item.itemRef) c10.push('ATTRIBUTION_MISMATCH');
   if (item.currency !== e.currency || line.currency !== e.currency) c10.push('CURRENCY_MISMATCH');
   if (item.amountMinor !== -(own.benefitMinor) || line.amountMinor !== -(own.benefitMinor)) c10.push('AMOUNT_MISMATCH');

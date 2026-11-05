@@ -42,3 +42,6 @@ Covered at classifier level: wrong account or mode, cross-business substitution,
 
 ## Not done (separate blocks)
 Refund-triggered reversal and the new unwind cause (OQ-12); the consumption settlement gate; verifier expansion and any Stripe read (OQ-9); snapshot persistence; reservation release (R10 Block 2); any migration. The classifier is not integrated with the settlement classifier's output either: a future block must tie `paidMinor` here to the settled amount there.
+
+## Remediation 01
+**F-2:** `provenance.complete`, `refunds.complete` and `disputes.complete` must each be exactly `true`; any other value (`"false"`, `1`, `{}`) is treated as incomplete (`PROVIDER_UNREACHABLE`, `INCOMPLETE_EVIDENCE`) and can never yield `NO_REFUND` or any verified class. Covered by an independent test per field.
