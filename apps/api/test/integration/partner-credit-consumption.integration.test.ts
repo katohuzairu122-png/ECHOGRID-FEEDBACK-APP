@@ -15,7 +15,7 @@ import {
   type SettlementEvidenceSigner, type SettlementGateConfig,
 } from '../../src/partner-credits/partner-credit-settlement-authorization';
 import { MOCK_EVIDENCE_KIND, type MockSettlementEvidence } from '../../src/billing/settlement-eligibility.classifier';
-import { buildMockEvidence, classifyBundle, ScriptedReadTransport, StripeReadOnlyEvidenceAdapter, syntheticStripeInvoice } from '../../src/billing/stripe-read';
+import { acquireMockExtendedEvidence, buildMockEvidence, classifyBundle, MockExtendedSource, onePage, ScriptedReadTransport, StripeReadOnlyEvidenceAdapter, syntheticStripeInvoice } from '../../src/billing/stripe-read';
 import { unwindCredit, type UnwindCause } from '../../src/partner-credits/partner-credit-unwind';
 import { PartnerProvisionalReversalCompensator } from '../../src/partner-credits/partner-provisional-reversal.compensator';
 import { PartnerCreditProjectionAudit } from '../../src/partner-credits/partner-credit-projection.audit';
@@ -1691,6 +1691,51 @@ describe.skipIf(!process.env.DATABASE_URL)('D4 final credit consumption and ledg
         values($1,$2,$3,$4,$5,$6,$7,$8,'ELIGIBLE',ARRAY['ALL_CONDITIONS_VERIFIED'],$9,'STRIPE_TEST_READ',$10,'x',$11,$12,$13,1,$14,$15)`,
         [stored.business_id, stored.reservation_id, stored.decision_id, stored.invoice_ref, stored.provider_account_id, stored.provider_mode, stored.allocation_digest, stored.policy_version, stored.classifier_version, stored.billing_interval,
           'e'.repeat(64), stored.observed_at_ms, 'f'.repeat(64), stored.signing_key_id, stored.signature]))).toMatch(/evidence_kind_check|SETTLEMENT_AUTH_DIGEST_MISMATCH/);
+    });
+
+    it('DEV-07: the source-shaped chain (paged lines, settling payment, refund/dispute history through the normalizers) -> classifiers -> signed recorder -> gate -> consumption; any unresolved or contradictory history leaves the credit unconsumed', async () => {
+      const mk = async (s: Scenario, p: Awaited<ReturnType<typeof persisted>>, fx: { refunds?: unknown[]; disputes?: unknown[]; payments?: unknown[]; lineAmount?: number } = {}) => {
+        const alloc = p.ctx.expected.frozenAllocation.allocations.find((a: any) => a.reservationId === s.reservationId);
+        const base = p.ctx.expected.frozenAllocation.eligibleBaseMinor;
+        const created = (p.rawInvoice as any).created; const paid = (p.rawInvoice as any).status_transitions.paid_at; const total = (p.rawInvoice as any).total;
+        const line = (id: string, amount: number, parent: unknown) => ({ id, object: 'line_item', amount, currency: 'usd', invoice: s.invoiceRef, livemode: false, metadata: {}, parent });
+        const payment = { id: 'inpay_dev07', object: 'invoice_payment', amount_paid: total, amount_requested: total, created, currency: 'usd', invoice: s.invoiceRef, is_default: true, livemode: false,
+          payment: { type: 'payment_intent', payment_intent: `pi_dev07_${s.invoiceRef}` }, status: 'paid', status_transitions: { paid_at: paid, canceled_at: null } };
+        const r = await acquireMockExtendedEvidence({
+          scope: p.scope, accountId: GATE_CFG.providerAccountId, observedAtMs: p.now - 1_000, apiVersion: '2026-05-27.dahlia', invoiceBefore: p.rawInvoice,
+          source: new MockExtendedSource({
+            lines: onePage([line('il_base', base, { type: 'subscription_item_details', invoice_item_details: null, subscription_item_details: { invoice_item: null, proration: false, subscription: p.scope.subscriptionId, subscription_item: 'si_1' } }),
+              line('il_ben', -alloc.benefitMinor, { type: 'invoice_item_details', subscription_item_details: null, invoice_item_details: { invoice_item: 'ii_ben', proration: false, subscription: p.scope.subscriptionId } })]),
+            payments: onePage(fx.payments ?? [payment]), refunds: onePage(fx.refunds ?? []), disputes: onePage(fx.disputes ?? []) }),
+          frozen: [{ reservationId: s.reservationId, providerIdempotencyKey: alloc.providerIdempotencyKey, benefitMinor: alloc.benefitMinor }], idempotency: [{ parentItemRef: 'ii_ben', idempotencyKey: alloc.providerIdempotencyKey }],
+          billingInterval: 'month', cancellation: 'none', benefitItem: { itemRef: 'ii_ben', invoiceRef: s.invoiceRef, idempotencyKey: alloc.providerIdempotencyKey, amountMinor: -alloc.benefitMinor, currency: 'usd', discountable: false },
+        });
+        if (!r.ok) throw new Error(`denied ${r.denied}`);
+        const rd = { nowMs: p.now, policy: { version: 'PC-BENEFIT/1', freshnessWindowMs: GATE_CFG.freshnessWindowMs }, expected: { businessId: s.businessId, invoiceRef: s.invoiceRef, paymentRef: `pi_dev07_${s.invoiceRef}`, currency: 'usd',
+          providerAccountId: GATE_CFG.providerAccountId, providerMode: GATE_CFG.providerMode, consumedAtMs: null } };
+        return classifyBundle(p.ctx as any, r.evidence, p.binding, rd as any);
+      };
+      const ok = await prepare(); const okP = await persisted(ok);
+      const good = await mk(ok, okP);
+      expect(good.settlement).toMatchObject({ verdict: 'ELIGIBLE', grantsFinancialAuthority: false });
+      expect(good.refundDispute?.classification).toBe('NO_REFUND');
+      await recorder.record({ reservationId: ok.reservationId, businessId: ok.businessId, evidence: good.settlementEvidence! });
+      expect((await consumption.consume({ reservationId: ok.reservationId, businessId: ok.businessId })).replay).toBe(false);
+      expect(await consumeEntries(ok)).toBe(1);
+
+      const dispute = (s: Scenario) => ({ id: 'dp_dev07', object: 'dispute', amount: 100, charge: 'ch_1', created: 1, currency: 'usd', livemode: false, payment_intent: `pi_dev07_${s.invoiceRef}`, status: 'needs_response' });
+      const refund = (s: Scenario) => ({ id: 're_dev07', object: 'refund', amount: 100, charge: 'ch_1', created: 1, currency: 'usd', payment_intent: `pi_dev07_${s.invoiceRef}`, status: 'succeeded' });
+      for (const [label, fx] of [['open dispute', (s: Scenario) => ({ disputes: [dispute(s)] })], ['partial refund', (s: Scenario) => ({ refunds: [refund(s)] })],
+        ['refund and dispute overlap', (s: Scenario) => ({ refunds: [refund(s)], disputes: [{ ...dispute(s), status: 'lost' }] })], ['no settling payment', () => ({ payments: [] })]] as const) {
+        const s = await prepare(); const p = await persisted(s);
+        const c = await mk(s, p, fx(s));
+        expect(c.settlement.verdict, label).not.toBe('ELIGIBLE');
+        if (c.settlementEvidence) await recorder.record({ reservationId: s.reservationId, businessId: s.businessId, evidence: c.settlementEvidence });
+        const before = await credit(s);
+        expect(await rejects(consumption.consume({ reservationId: s.reservationId, businessId: s.businessId })), label).toMatch(/PARTNER_CONSUME_SETTLEMENT_NOT_AUTHORIZED \((NOT_ELIGIBLE|AUTHORIZATION_MISSING)\)/);
+        expect(await credit(s), label).toEqual(before);
+        expect(await consumeEntries(s), label).toBe(0);
+      }
     });
 
     it('22b. with no authorization recorded from real evidence, consumption stays refused and leaves no trace', async () => {

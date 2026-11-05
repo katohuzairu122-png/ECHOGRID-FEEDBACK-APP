@@ -1,5 +1,5 @@
 import {
-  contradictory, established, unresolved, verified,
+  contradictory, established, unresolved, verified, EVIDENCE_CONTRACT_VERSION,
   type EvidenceOrigin, type Field, type InvoiceFacts, type MockLineAttribution, type NormalizedStripeEvidence, type SettlingPayment,
 } from './evidence-types';
 import type { InvoiceFingerprint } from './invoice-normalizer';
@@ -35,6 +35,9 @@ export interface BundleParts {
   readonly settlingPayment: Field<SettlingPayment>;
   readonly refunds: Field<Readonly<{ items: readonly MockRefund[] }>>;
   readonly disputes: Field<Readonly<{ items: readonly MockPaymentDispute[] }>>;
+  readonly schemaDrift?: readonly string[];
+  /** Cross-category contradictions found by the acquirer (for example an undetermined refund/dispute overlap). The facts stay as read; completeness is lost. */
+  readonly extraContradictions?: readonly string[];
 }
 
 /** Assembles the normalized evidence. `complete` and `stable` are COMPUTED here; nothing in the parts can assert them. */
@@ -45,20 +48,23 @@ export async function assembleEvidence(p: BundleParts): Promise<NormalizedStripe
   let stable: Field<true>;
   if (fpEqual && sameFacts) stable = verified(true as const, p.origin, 'PROVIDER_SCHEMA');
   else { contradictions.push('EVIDENCE_UNSTABLE'); stable = contradictory<true>('EVIDENCE_UNSTABLE'); }
-  for (const f of [p.refunds, p.disputes, p.settlingPayment, p.lineAttribution, p.billingInterval, p.benefitItem, p.cancellation]) if (f.state === 'CONTRADICTORY' && f.reason) contradictions.push(f.reason);
+  for (const f of [p.refunds, p.disputes, p.settlingPayment, p.lineAttribution, p.billingInterval, p.benefitItem, p.cancellation, p.facts.lines]) if (f.state === 'CONTRADICTORY' && f.reason) contradictions.push(f.reason);
+  contradictions.push(...(p.extraContradictions ?? []));
+  const schemaDrift = [...new Set(p.schemaDrift ?? [])].sort();
   const i = p.facts;
   const required: Array<Field<unknown>> = [p.accountId, p.mode, i.id, i.status, i.currency, i.customerRef, i.subscriptionRef, i.createdAtMs, i.paidAtMs, i.voidedAtMs, i.amounts, i.lines,
     p.lineAttribution, p.billingInterval, p.benefitItem, p.cancellation, p.settlingPayment, p.refunds, p.disputes, stable];
-  const complete = contradictions.length === 0 && required.every(f => established(f));
+  const complete = contradictions.length === 0 && schemaDrift.length === 0 && required.every(f => established(f));
+  const uniqueContradictions = [...new Set(contradictions)];
   const body = {
-    origin: p.origin, observedAtMs: p.observedAtMs, requested: p.requested, accountId: p.accountId, mode: p.mode, invoice: p.facts, lineAttribution: p.lineAttribution,
-    billingInterval: p.billingInterval, benefitItem: p.benefitItem, cancellation: p.cancellation, settlingPayment: p.settlingPayment, refunds: p.refunds, disputes: p.disputes, stable, contradictions, complete,
+    contractVersion: EVIDENCE_CONTRACT_VERSION, origin: p.origin, observedAtMs: p.observedAtMs, requested: p.requested, accountId: p.accountId, mode: p.mode, invoice: p.facts, lineAttribution: p.lineAttribution,
+    billingInterval: p.billingInterval, benefitItem: p.benefitItem, cancellation: p.cancellation, settlingPayment: p.settlingPayment, refunds: p.refunds, disputes: p.disputes, stable, contradictions: uniqueContradictions, schemaDrift, complete,
   };
   // The digest excludes observedAtMs on purpose: two reads of unchanged provider state taken at different instants are the SAME evidence (idempotent duplicate retrieval).
   const { observedAtMs: _observed, ...digestBody } = body;
   void _observed;
   const digest = await sha256Hex(canonicalJson(digestBody));
-  return { ...body, invoice: p.facts, contradictions: Object.freeze(contradictions), digest };
+  return { ...body, invoice: p.facts, contradictions: Object.freeze(uniqueContradictions), schemaDrift: Object.freeze(schemaDrift), digest };
 }
 
 export const NO_REAL_MAPPING = Object.freeze({
