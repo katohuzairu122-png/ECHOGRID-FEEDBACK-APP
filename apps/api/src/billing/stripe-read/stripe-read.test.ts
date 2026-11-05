@@ -178,7 +178,11 @@ describe('real test-mode evidence acquisition (mocked transport)', () => {
     expect(transport.calls[0]).toEqual({ method: 'ACCOUNT_RETRIEVE_CURRENT', invoiceId: null });
     expect(out.evidence.accountId).toMatchObject({ state: 'VERIFIED', value: ACCT, origin: 'STRIPE_TEST_READ' });
     expect(out.evidence.mode).toMatchObject({ state: 'VERIFIED', value: 'test' });
-    expect(events.map(e => `${e.event}:${e.methodId}`)).toEqual(['stripe_read.attempt:ACCOUNT_RETRIEVE_CURRENT', 'stripe_read.success:ACCOUNT_RETRIEVE_CURRENT', 'stripe_read.attempt:INVOICE_RETRIEVE', 'stripe_read.attempt:INVOICE_RETRIEVE', 'stripe_read.success:INVOICE_RETRIEVE']);
+    // DEV-08: the four unauthorized reads are now ASKED FOR and denied at runtime inside the provider, so the denial is part of the audit stream (and no transport call is made for them)
+    expect(events.map(e => `${e.event}:${e.methodId}`)).toEqual(['stripe_read.attempt:ACCOUNT_RETRIEVE_CURRENT', 'stripe_read.success:ACCOUNT_RETRIEVE_CURRENT', 'stripe_read.attempt:INVOICE_RETRIEVE', 'stripe_read.attempt:INVOICE_RETRIEVE', 'stripe_read.success:INVOICE_RETRIEVE',
+      'stripe_read.denied:INVOICE_LINES_LIST', 'stripe_read.denied:PAYMENT_RETRIEVE', 'stripe_read.denied:REFUNDS_LIST', 'stripe_read.denied:DISPUTES_LIST']);
+    expect(events.every(e => e.origin === 'STRIPE_TEST_READ')).toBe(true);
+    expect(transport.calls.map(c => c.method)).toEqual(['ACCOUNT_RETRIEVE_CURRENT', 'INVOICE_RETRIEVE', 'INVOICE_RETRIEVE']);
   });
 
   it('2. authorized test-mode invoice retrieval succeeds; fields are verified with their source and mapping, and the observation time is the server clock', async () => {

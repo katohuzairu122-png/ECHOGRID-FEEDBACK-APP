@@ -1,13 +1,10 @@
-import { assembleEvidence } from './bundle-builder';
-import { sealBundle } from './evidence-origin';
-import { confirmedAbsent, unresolved, verified, type Field, type InvoiceFacts, type NormalizedStripeEvidence, type SettlingPayment } from './evidence-types';
-import { normalizeInvoice, type NormalizeDenial, type TrustedInvoiceScope } from './invoice-normalizer';
-import { normalizeLinePages, type FrozenReference, type IdempotencyEvidence } from './line-normalizer';
+import { acquireEvidence } from './evidence-engine';
+import type { NormalizedStripeEvidence } from './evidence-types';
+import type { NormalizeDenial, TrustedInvoiceScope } from './invoice-normalizer';
+import type { FrozenReference, IdempotencyEvidence } from './line-normalizer';
 import type { PageRecord } from './pagination';
-import { normalizeInvoicePayments } from './payment-normalizer';
-import { profileFor } from './provider-profiles';
-import { crossCheckHistories, normalizeDisputePages, normalizeRefundPages, type PaymentTarget } from './refund-dispute-normalizer';
-import type { MockPaymentDispute, MockRefund } from '../refund-dispute.classifier';
+import type { ListRead, ReadProvider, Slot } from './read-provider';
+import type { PaymentTarget } from './refund-dispute-normalizer';
 import type { CancellationEvidence, MockBenefitItem } from '../settlement-eligibility.classifier';
 
 /**
@@ -50,7 +47,7 @@ export function pagesOf(data: ReadonlyArray<{ id: string }>, size: number): Page
   return out;
 }
 
-export type Slot<T> = T | 'absent' | 'unresolved';
+export type { Slot } from './read-provider';
 export interface ExtendedMockInput {
   readonly scope: TrustedInvoiceScope;
   readonly accountId: string;
@@ -69,65 +66,27 @@ export interface ExtendedMockInput {
 }
 export type ExtendedMockResult = { ok: true; evidence: NormalizedStripeEvidence } | { ok: false; denied: NormalizeDenial | 'METHOD_NOT_AUTHORIZED' };
 
-const slot = <T>(v: Slot<T>, reason: string): Field<T> => (v === 'unresolved' ? unresolved<T>(reason) : v === 'absent' ? confirmedAbsent<T>('MOCK_FIXTURE', 'MOCK') : verified(v, 'MOCK_FIXTURE', 'MOCK'));
-const allUnresolved = (reason: string): InvoiceFacts => ({
-  id: unresolved(reason), status: unresolved(reason), currency: unresolved(reason), customerRef: unresolved(reason), subscriptionRef: unresolved(reason), createdAtMs: unresolved(reason),
-  paidAtMs: unresolved(reason), voidedAtMs: unresolved(reason), amounts: unresolved(reason), lines: unresolved(reason),
-});
-
+/**
+ * DEV-07 entry point, kept for its callers: since DEV-08 it is a thin wrapper that adapts the fixture source to the shared evidence engine (there is one acquisition implementation).
+ * Behaviour is unchanged: a non-mock source is refused before any read; an API version without a profile yields a bundle in which everything is UNRESOLVED.
+ */
 export async function acquireMockExtendedEvidence(input: ExtendedMockInput): Promise<ExtendedMockResult> {
-  // a real source can never be plugged in here: anything that is not the mock source is refused before any read
   if (!input?.source || input.source.sourceKind !== 'MOCK_FIXTURE') return { ok: false, denied: 'METHOD_NOT_AUTHORIZED' };
-  const profile = profileFor(input.apiVersion);
-  const requested = { businessId: input.scope.businessId, invoiceId: input.scope.invoiceId, expectedAccountId: input.accountId };
-  const base = { origin: 'MOCK_FIXTURE' as const, observedAtMs: input.observedAtMs, requested, accountId: verified(input.accountId, 'MOCK_FIXTURE', 'MOCK'), mode: verified('test' as const, 'MOCK_FIXTURE', 'MOCK') };
-  const noFp = { status: null, dueMinor: null, paidMinor: null, remainingMinor: null, totalMinor: null, lineCount: null };
-  const rest = { billingInterval: input.billingInterval === 'unresolved' ? unresolved<'month' | 'year'>('MOCK_INTERVAL_UNRESOLVED') : verified(input.billingInterval, 'MOCK_FIXTURE' as const, 'MOCK' as const),
-    benefitItem: slot(input.benefitItem, 'MOCK_BENEFIT_ITEM_UNRESOLVED'), cancellation: input.cancellation === 'unresolved' ? unresolved<Exclude<CancellationEvidence, 'unknown'>>('MOCK_CANCELLATION_UNRESOLVED') : verified(input.cancellation, 'MOCK_FIXTURE' as const, 'MOCK' as const) };
-  if (!profile) {
-    // no mapping profile for this API version: nothing is mapped, nothing is read, everything is UNRESOLVED
-    const u = unresolved<never>('API_VERSION_UNSUPPORTED');
-    const facts = allUnresolved('API_VERSION_UNSUPPORTED');
-    const evidence = await assembleEvidence({ ...base, facts, factsAfter: facts, fingerprintBefore: noFp, fingerprintAfter: noFp, invoiceContradictions: [], lineAttribution: u, settlingPayment: u, refunds: u, disputes: u, ...rest,
-      schemaDrift: ['API_VERSION_UNSUPPORTED'] });
-    return { ok: true, evidence: sealBundle(evidence, 'MOCK_FIXTURE') };
-  }
-
-  const a = normalizeInvoice(input.invoiceBefore, input.scope, input.observedAtMs, 'MOCK_FIXTURE', 'PROVIDER_SCHEMA');
-  const b = normalizeInvoice(input.invoiceAfter ?? input.invoiceBefore, input.scope, input.observedAtMs, 'MOCK_FIXTURE', 'PROVIDER_SCHEMA');
-  if (a.denied) return { ok: false, denied: a.denied };
-  if (b.denied) return { ok: false, denied: b.denied };
-  const f = a.facts;
-  const drift: string[] = [];
-
-  // lines (paged)
-  const amounts = f.amounts.state === 'VERIFIED' ? f.amounts.value! : null;
-  const lineN = f.currency.state === 'VERIFIED'
-    ? normalizeLinePages(await input.source.listInvoiceLines(input.scope.invoiceId), { invoiceId: input.scope.invoiceId, currency: f.currency.value!, totalMinor: amounts ? amounts.totalMinor : null, profile }, { origin: 'MOCK_FIXTURE', frozen: input.frozen, idempotency: input.idempotency })
-    : { lines: unresolved('INVOICE_CURRENCY_UNRESOLVED') as InvoiceFacts['lines'], attribution: unresolved('INVOICE_CURRENCY_UNRESOLVED') as Field<never>, drift: [] as string[] };
-  drift.push(...lineN.drift);
-
-  // the settling payment, and only then its refund and dispute history
-  let payment: Field<SettlingPayment> = unresolved('INVOICE_CORE_UNRESOLVED');
-  if (f.status.state === 'VERIFIED' && f.currency.state === 'VERIFIED' && f.createdAtMs.state === 'VERIFIED' && amounts) {
-    const p = normalizeInvoicePayments(await input.source.listInvoicePayments(input.scope.invoiceId),
-      { invoiceId: input.scope.invoiceId, currency: f.currency.value!, invoiceStatus: f.status.value!, invoicePaidMinor: amounts.paidMinor, invoiceCreatedAtMs: f.createdAtMs.value!, observedAtMs: input.observedAtMs, profile }, 'MOCK_FIXTURE');
-    payment = p.payment; drift.push(...p.drift);
-  }
-  let refunds: Field<{ items: readonly MockRefund[] }> = unresolved('PAYMENT_TARGET_UNKNOWN');
-  let disputes: Field<{ items: readonly MockPaymentDispute[] }> = unresolved('PAYMENT_TARGET_UNKNOWN');
-  if (payment.state === 'VERIFIED' && payment.value!.details && amounts && f.currency.state === 'VERIFIED') {
-    const target: PaymentTarget = { kind: payment.value!.details.kind, ref: payment.value!.ref };
-    const ctx = { businessId: input.scope.businessId, invoiceId: input.scope.invoiceId, paymentRef: payment.value!.ref, target, currency: f.currency.value!, paidMinor: amounts.paidMinor, profile };
-    const r = normalizeRefundPages(await input.source.listRefunds(target), ctx, 'MOCK_FIXTURE');
-    const d = normalizeDisputePages(await input.source.listDisputes(target), ctx, 'MOCK_FIXTURE');
-    refunds = r.refunds; disputes = d.disputes; drift.push(...r.drift, ...d.drift);
-  }
-  const facts: InvoiceFacts = { ...f, lines: lineN.lines };
-  const factsAfter: InvoiceFacts = { ...b.facts, lines: lineN.lines };
-  const evidence = await assembleEvidence({
-    ...base, facts, factsAfter, fingerprintBefore: a.fingerprint, fingerprintAfter: b.fingerprint, invoiceContradictions: a.contradictions,
-    lineAttribution: lineN.attribution, settlingPayment: payment, refunds, disputes, ...rest, schemaDrift: drift, extraContradictions: crossCheckHistories(refunds, disputes),
-  });
-  return { ok: true, evidence: sealBundle(evidence, 'MOCK_FIXTURE') };
+  const src = input.source;
+  const asPages = async (read: () => Promise<readonly PageRecord[]>): Promise<ListRead> => ({ ok: true, pages: await read() });
+  const provider: ReadProvider = {
+    kind: 'MOCK_FIXTURE', apiVersion: input.apiVersion,
+    async preflight() { return { ok: true } as const; },
+    async getAccount() { return { ok: true, body: { object: 'account', id: input.accountId } } as const; },
+    async getInvoice() { return { ok: true, body: input.invoiceAfter !== undefined && calls++ > 0 ? input.invoiceAfter : input.invoiceBefore } as const; },
+    listInvoiceLines: s => asPages(() => src.listInvoiceLines(s.invoiceId)),
+    listInvoicePayments: s => asPages(() => src.listInvoicePayments(s.invoiceId)),
+    async listRefunds(_s, target) { return target === null ? ({ ok: false, kind: 'DENIED', reason: 'NO_TARGET' } as const) : asPages(() => src.listRefunds(target)); },
+    async listDisputes(_s, target) { return target === null ? ({ ok: false, kind: 'DENIED', reason: 'NO_TARGET' } as const) : asPages(() => src.listDisputes(target)); },
+    async supplement() { return { billingInterval: input.billingInterval, benefitItem: input.benefitItem, cancellation: input.cancellation, idempotency: input.idempotency }; },
+  };
+  let calls = 0;
+  const out = await acquireEvidence({ provider, clock: () => input.observedAtMs, audit: () => undefined, onUnsupportedVersion: 'UNRESOLVED' }, input.scope, input.accountId, input.frozen);
+  if (out.ok) return { ok: true, evidence: out.evidence };
+  return { ok: false, denied: out.kind === 'DENIED' ? (out.reason as NormalizeDenial) : 'METHOD_NOT_AUTHORIZED' };
 }
