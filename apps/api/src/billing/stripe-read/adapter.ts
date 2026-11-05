@@ -3,7 +3,8 @@ import { normalizeInvoice, type NormalizeDenial, type TrustedInvoiceScope } from
 import { assembleEvidence, NO_REAL_MAPPING } from './bundle-builder';
 import { sealBundle } from './evidence-origin';
 import { verified, type NormalizedStripeEvidence } from './evidence-types';
-import { ProviderReadError, type StripeReadTransport } from './transport';
+import { ProviderReadError, STRIPE_API_VERSION, type StripeReadTransport } from './transport';
+import { profileFor } from './provider-profiles';
 
 /**
  * S08-D1D3-DEV-06: the read-only Stripe evidence adapter. One purpose-built operation, `acquire`: confirm the account, read the invoice twice (bracketing reads), normalize, and
@@ -16,7 +17,7 @@ export type AuditSink = (event: ReadAuditEvent) => void;
 
 export type AcquireDenial =
   | 'UNKNOWN_METHOD' | 'METHOD_NOT_AUTHORIZED' | 'AUTHORIZATION_MISSING' | 'AUTHORIZATION_INVALID' | 'AUTHORIZATION_EXPIRED' | 'AUTHORIZATION_REVOKED' | 'METHOD_NOT_APPROVED' | 'REALM_NOT_TEST' | 'ACCOUNT_NOT_APPROVED'
-  | 'ACCOUNT_MISMATCH' | 'ACCOUNT_RESPONSE_INVALID' | 'INVALID_REQUEST' | NormalizeDenial;
+  | 'ACCOUNT_MISMATCH' | 'ACCOUNT_RESPONSE_INVALID' | 'INVALID_REQUEST' | 'UNSUPPORTED_API_VERSION' | NormalizeDenial;
 export type AcquireOutcome =
   | Readonly<{ ok: true; evidence: NormalizedStripeEvidence }>
   | Readonly<{ ok: false; kind: 'DENIED'; reason: AcquireDenial }>
@@ -26,7 +27,7 @@ const INVOICE_ID = /^in_[A-Za-z0-9]+$/;
 const TOKEN = /^[A-Za-z0-9][A-Za-z0-9:_./-]{0,159}$/;
 
 export class StripeReadOnlyEvidenceAdapter {
-  constructor(private readonly deps: Readonly<{ transport: StripeReadTransport; authorization: ReadAuthorization | null; clock: () => number; audit: AuditSink }>) {}
+  constructor(private readonly deps: Readonly<{ transport: StripeReadTransport; authorization: ReadAuthorization | null; clock: () => number; audit: AuditSink; /** The API version the transport reads with; defaults to the pinned one. A version with no mapping profile is refused. */ apiVersion?: string }>) {}
 
   private emit(event: AuditEventName, methodId: ReadMethodId | 'UNKNOWN', reason: string | null, scope: { businessId?: string; invoiceId?: string } | null): void {
     try { this.deps.audit({ event, methodId, reason, businessId: scope?.businessId ?? null, invoiceId: scope?.invoiceId ?? null, atMs: this.deps.clock() }); } catch { /* an audit failure never changes the decision */ }
@@ -38,6 +39,7 @@ export class StripeReadOnlyEvidenceAdapter {
       this.emit('stripe_read.denied', 'UNKNOWN', 'INVALID_REQUEST', null);
       return { ok: false, kind: 'DENIED', reason: 'INVALID_REQUEST' };
     }
+    if (profileFor(this.deps.apiVersion ?? STRIPE_API_VERSION) === null) { this.emit('stripe_read.denied', 'UNKNOWN', 'UNSUPPORTED_API_VERSION', audit); return { ok: false, kind: 'DENIED', reason: 'UNSUPPORTED_API_VERSION' }; }
     const now = this.deps.clock();
     for (const id of ['ACCOUNT_RETRIEVE_CURRENT', 'INVOICE_RETRIEVE'] as const) {
       const d = decideCapability(id, this.deps.authorization, now);

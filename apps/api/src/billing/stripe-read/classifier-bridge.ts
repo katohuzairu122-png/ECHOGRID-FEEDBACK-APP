@@ -1,5 +1,5 @@
 import { sealedOriginOf } from './evidence-origin';
-import { established, type NormalizedStripeEvidence } from './evidence-types';
+import { established, EVIDENCE_CONTRACT_VERSION, type NormalizedStripeEvidence } from './evidence-types';
 import {
   classifySettlement, MOCK_EVIDENCE_KIND, type DisputeEvidence, type MockInvoiceLine, type MockSettlementEvidence, type RefundEvidence, type SettlementClassification, type SettlementClassifierContext,
 } from '../settlement-eligibility.classifier';
@@ -57,7 +57,7 @@ function refundDisputeEvidence(b: NormalizedStripeEvidence): MockRefundDisputeEv
   const fp = { paidMinor: inv.amounts.value!.paidMinor, refundCount: refunds.length, disputeCount: disputes.length, contentDigest: b.digest };
   return {
     provenance: { evidenceKind: MOCK_EVIDENCE_KIND, origin: EVIDENCE_ORIGIN, snapshotRef: `mock:${b.digest.slice(0, 32)}`, snapshotDigest: b.digest, observedAtMs: b.observedAtMs, providerOutcome: 'ok',
-      complete: b.complete && established(b.refunds) && established(b.disputes), readBefore: fp, readAfter: fp },
+      complete: b.stable.state === 'VERIFIED' && established(b.refunds) && established(b.disputes), readBefore: fp, readAfter: fp }, // completeness of THIS history only: the D3 classifier must see (and itself judge) contradictions in it, not be pre-empted by unrelated invoice findings
     binding: { businessId: b.requested.businessId },
     provider: { accountId: b.accountId.value as string, mode: 'test' },
     payment: { ref: b.settlingPayment.value!.ref, invoiceRef: b.requested.invoiceId, currency: inv.currency.value as string, paidMinor: inv.amounts.value!.paidMinor },
@@ -75,7 +75,7 @@ function settlementEvidence(b: NormalizedStripeEvidence, binding: ClassifierBind
   const attributed = attribution !== null && i.lines.value!.items.every(l => attribution.has(l.lineRef));
   const items: MockInvoiceLine[] = i.lines.value!.items.map(l => {
     const at = attribution?.get(l.lineRef);
-    return { lineRef: l.lineRef, amountMinor: l.amountMinor, currency: l.currency, category: at?.category ?? 'other', parentItemRef: at?.parentItemRef ?? null, parentItemKey: at?.parentItemKey ?? null, labelReservationRef: null };
+    return { lineRef: l.lineRef, amountMinor: l.amountMinor, currency: l.currency, category: at?.category ?? 'other', parentItemRef: at?.parentItemRef ?? null, parentItemKey: at?.parentItemKey ?? null, labelReservationRef: at?.labelReservationRef ?? null };
   });
   const fp = { status: i.status.value as string, amountDueMinor: a.dueMinor, amountPaidMinor: a.paidMinor, amountRemainingMinor: a.remainingMinor, totalMinor: a.totalMinor, lineCount: items.length };
   const payment = b.settlingPayment.state === 'VERIFIED' ? b.settlingPayment.value! : null;
@@ -102,7 +102,7 @@ export function classifyBundle(
   const sealedOrigin = sealedOriginOf(bundle);
   const origin: BridgeOrigin = sealedOrigin ?? 'UNSEALED';
   // A bundle claiming one origin while sealed with another is as untrusted as an unsealed one.
-  if (sealedOrigin === null || bundle.origin !== sealedOrigin || sealedOrigin === 'STRIPE_TEST_READ') {
+  if (sealedOrigin === null || bundle.origin !== sealedOrigin || sealedOrigin === 'STRIPE_TEST_READ' || bundle.contractVersion !== EVIDENCE_CONTRACT_VERSION) {
     const labelled = { provenance: { evidenceKind: sealedOrigin === 'STRIPE_TEST_READ' ? 'STRIPE_TEST_READ' : 'UNSEALED' } } as unknown as MockSettlementEvidence;
     // the classifier's own rule rejects any evidence kind other than the mock kind; nothing is relaxed for real evidence
     const full = { ...labelled, binding, provider: { accountId: 'x', mode: 'test' }, invoice: {}, lines: { items: [] }, settlement: {}, events: {} } as unknown as MockSettlementEvidence;
@@ -110,6 +110,9 @@ export function classifyBundle(
   }
   let refund = refundExtent(bundle, bundle.invoice.amounts.state === 'VERIFIED' ? bundle.invoice.amounts.value!.paidMinor : money(null));
   let dispute = disputeState(bundle);
+  // Any contradiction in the bundle (an undetermined refund/dispute overlap, several disputes, a payment-loss total that cannot be right, a timeline conflict) is preserved and forces manual review:
+  // the refund and dispute states become "unknown" so no positive classification can rest on evidence that disagrees with itself.
+  if (bundle.contradictions.length > 0 || bundle.schemaDrift.length > 0) { refund = 'unknown'; dispute = 'unknown'; }
   let rd: RefundDisputeClassification | null = null;
   const rdEvidence = refundDisputeCtx ? refundDisputeEvidence(bundle) : null;
   if (refundDisputeCtx) {

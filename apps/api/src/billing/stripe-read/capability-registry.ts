@@ -35,10 +35,10 @@ const method = (id: ReadMethodId, pathTemplate: string, authorization: ReadAutho
 export const READ_METHODS: Readonly<Record<ReadMethodId, ReadMethod>> = Object.freeze({
   ACCOUNT_RETRIEVE_CURRENT: method('ACCOUNT_RETRIEVE_CURRENT', '/v1/account', 'APPROVAL_REQUIRED', 'none (no parameters, no Stripe-Account header)', 'object=account, id=acct_*'),
   INVOICE_RETRIEVE: method('INVOICE_RETRIEVE', '/v1/invoices/{id}', 'APPROVAL_REQUIRED', 'id=in_*, no expand, no other parameters', 'object=invoice with the fields listed in invoice-normalizer.ts'),
-  INVOICE_LINES_LIST: method('INVOICE_LINES_LIST', '/v1/invoices/{id}/lines', 'NOT_AUTHORIZED', 'id=in_*, starting_after, limit', 'UNSPECIFIED until Q1/Q2'),
-  PAYMENT_RETRIEVE: method('PAYMENT_RETRIEVE', '/v1/invoice_payments', 'NOT_AUTHORIZED', 'invoice=in_*', 'UNSPECIFIED until Q1/Q2'),
-  REFUNDS_LIST: method('REFUNDS_LIST', '/v1/refunds', 'NOT_AUTHORIZED', 'payment reference', 'UNSPECIFIED until Q1/Q2'),
-  DISPUTES_LIST: method('DISPUTES_LIST', '/v1/disputes', 'NOT_AUTHORIZED', 'payment reference', 'UNSPECIFIED until Q1/Q2'),
+  INVOICE_LINES_LIST: method('INVOICE_LINES_LIST', '/v1/invoices/{id}/lines', 'NOT_AUTHORIZED', 'id=in_*, starting_after, limit', 'list of line_item per profile stripe-2026-05-27.dahlia/schema-v1 (SDK shape, unproven live; normalizer: line-normalizer.ts)'),
+  PAYMENT_RETRIEVE: method('PAYMENT_RETRIEVE', '/v1/invoice_payments', 'NOT_AUTHORIZED', 'invoice=in_*', 'list of invoice_payment per profile stripe-2026-05-27.dahlia/schema-v1 (SDK shape, unproven live; normalizer: payment-normalizer.ts)'),
+  REFUNDS_LIST: method('REFUNDS_LIST', '/v1/refunds', 'NOT_AUTHORIZED', 'payment reference', 'list of refund per profile stripe-2026-05-27.dahlia/schema-v1 (SDK shape, unproven live; normalizer: refund-dispute-normalizer.ts)'),
+  DISPUTES_LIST: method('DISPUTES_LIST', '/v1/disputes', 'NOT_AUTHORIZED', 'payment reference', 'list of dispute per profile stripe-2026-05-27.dahlia/schema-v1 (SDK shape, unproven live; normalizer: refund-dispute-normalizer.ts)'),
 });
 
 /** Only these two may ever be performed by the real transport. Not configurable. */

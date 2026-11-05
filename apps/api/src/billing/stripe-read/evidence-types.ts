@@ -6,6 +6,8 @@ import type { LineCategory, MockBenefitItem, CancellationEvidence } from '../set
  * anything that was not positively established: missing evidence (UNRESOLVED) and confirmed absence (CONFIRMED_ABSENT, only ever from a successful, complete read that
  * included the field) are different values, and neither can be produced from a caller assertion.
  */
+/** Version of THIS evidence contract (field set, states and rules). Bumped when any of them changes. */
+export const EVIDENCE_CONTRACT_VERSION = 'S08-STRIPE-EVIDENCE/1' as const;
 export type FieldState = 'VERIFIED' | 'CONFIRMED_ABSENT' | 'UNRESOLVED' | 'CONTRADICTORY';
 export type EvidenceOrigin = 'STRIPE_TEST_READ' | 'MOCK_FIXTURE';
 /** PROVIDER_SCHEMA: the field name/shape is taken from the pinned Stripe SDK type definitions (shape only, NOT yet proven live: Q1/Q2). MOCK: a synthetic fixture. NONE: no mapping exists. */
@@ -27,7 +29,11 @@ export const established = <T>(f: Field<T> | undefined): f is Field<T> => !!f &&
 
 export type InvoiceStatusValue = 'draft' | 'open' | 'paid' | 'void' | 'uncollectible';
 export interface NormalizedLine { readonly lineRef: string; readonly amountMinor: number; readonly currency: string }
-export interface MockLineAttribution { readonly lineRef: string; readonly category: LineCategory; readonly parentItemRef: string | null; readonly parentItemKey: string | null }
+export interface MockLineAttribution {
+  readonly lineRef: string; readonly category: LineCategory; readonly parentItemRef: string | null; readonly parentItemKey: string | null;
+  /** The untrusted metadata label, preserved for review only. Never evidence of attribution. */
+  readonly labelReservationRef?: string | null;
+}
 
 export interface InvoiceFacts {
   readonly id: Field<string>;
@@ -43,9 +49,19 @@ export interface InvoiceFacts {
   readonly lines: Field<Readonly<{ items: readonly NormalizedLine[]; pageComplete: boolean }>>;
 }
 
-export interface SettlingPayment { readonly ref: string; readonly source: 'stripe_payment' | 'out_of_band' }
+/** Identity and amounts of the one payment that settled the invoice (present for evidence derived from a payment read). */
+export interface PaymentDetails {
+  /** The provider's invoice-payment record id. */
+  readonly paymentRecordRef: string;
+  readonly kind: 'payment_intent' | 'charge';
+  readonly amountMinor: number;
+  readonly currency: string;
+  readonly paidAtMs: number;
+}
+export interface SettlingPayment { readonly ref: string; readonly source: 'stripe_payment' | 'out_of_band'; readonly details?: PaymentDetails }
 
 export interface NormalizedStripeEvidence {
+  readonly contractVersion: typeof EVIDENCE_CONTRACT_VERSION;
   readonly origin: EvidenceOrigin;
   /** The trusted SERVER clock when the read finished. Never copied from a response or a caller. */
   readonly observedAtMs: number;
@@ -66,6 +82,8 @@ export interface NormalizedStripeEvidence {
   /** Stability across the two bracketing invoice reads. */
   readonly stable: Field<true>;
   readonly contradictions: readonly string[];
+  /** Schema drift seen while normalizing (unknown enum values, wrong types, unsupported API version). Drifted facts are UNRESOLVED; this list is for diagnosis and also prevents completeness. */
+  readonly schemaDrift: readonly string[];
   /** Computed here from the fields, never taken from a caller or the provider. True only when every category is positively established and nothing contradicts. */
   readonly complete: boolean;
   /** SHA-256 of the canonical normalized content: equal inputs give equal digests (duplicate retrieval is idempotent). */
