@@ -20,6 +20,8 @@ describe.skipIf(!process.env.DATABASE_URL)('D1/D3-DEV-05 settlement authority: n
   const password = randomBytes(12).toString('hex'); // synthetic, per run
   const urlFor = (name: string, user?: string) => { const u = new URL(base.toString()); u.pathname = `/${name}`; if (user) { u.username = user; u.password = password; } return u.toString(); };
   const SETTLEMENT_ROLES = ['settlement_recorder', 'settlement_consumer', 'settlement_authority_reader', 'settlement_tenant_reader', 'settlement_auditor'];
+  /** DEV-10 (migration 0062) group roles; the migrator is given the same ADMIN OPTION when another database already created them. */
+  const READ_AUTH_ROLES = ['stripe_read_auth_lifecycle', 'stripe_read_auth_admin', 'stripe_read_auth_verifier', 'stripe_read_auth_tenant_reader', 'stripe_read_auth_auditor'];
   const clients: Client[] = [];
   let root: Client;
   let owner: Client;
@@ -33,7 +35,7 @@ describe.skipIf(!process.env.DATABASE_URL)('D1/D3-DEV-05 settlement authority: n
     await root.query(`create role ${migrator} login createrole password '${password}'`);
     for (const l of [appLogin, recorderLogin]) await root.query(`create role ${l} login password '${password}'`);
     // the group roles may already exist (created by another database's migration, by a superuser): the migrator is then given ADMIN OPTION, which is what creating them itself would have given it
-    for (const r of SETTLEMENT_ROLES) {
+    for (const r of [...SETTLEMENT_ROLES, ...READ_AUTH_ROLES]) {
       if ((await root.query('select 1 from pg_roles where rolname=$1', [r])).rowCount) await root.query(`grant ${r} to ${migrator} with admin option, inherit false, set false`);
     }
     await root.query(`create database ${dbName} owner ${migrator}`);
@@ -64,6 +66,20 @@ describe.skipIf(!process.env.DATABASE_URL)('D1/D3-DEV-05 settlement authority: n
     expect((await tryQ(owner, 'SET ROLE settlement_authority_reader')).error).toMatch(/permission denied to set role|must be able to SET ROLE/);
     // the roles are safe
     expect((await db.query("select count(*)::int n from pg_roles where rolname = any($1) and (rolsuper or rolbypassrls or rolcanlogin or rolcreaterole)", [SETTLEMENT_ROLES])).rows[0].n).toBe(0);
+  });
+
+  it('M1b. migration 0062 (DEV-10) applies for a non-superuser owner too: definer functions belong to the narrow lifecycle role, its temporary schema CREATE and SET membership are gone, and the roles are safe', async () => {
+    const db = new Client({ connectionString: urlFor(dbName) }); await db.connect(); clients.push(db);
+    expect((await db.query("select pg_get_userbyid(relowner) o, relrowsecurity r, relforcerowsecurity f from pg_class where relname='stripe_read_authorizations'")).rows).toEqual([{ o: migrator, r: true, f: true }]);
+    const fns = (await db.query("select proname, pg_get_userbyid(proowner) o from pg_proc where prosecdef and proname like 'stripe_read_auth_%' order by 1")).rows;
+    expect(fns.length).toBe(7); expect(fns.every(f => f.o === 'stripe_read_auth_lifecycle')).toBe(true);
+    expect((await db.query("select has_schema_privilege('stripe_read_auth_lifecycle','public','CREATE') c")).rows[0].c).toBe(false);
+    expect((await db.query("select pg_has_role($1,'stripe_read_auth_lifecycle','SET') s", [migrator])).rows[0].s).toBe(false);
+    expect((await tryQ(owner, 'SET ROLE stripe_read_auth_lifecycle')).error).toMatch(/permission denied to set role|must be able to SET ROLE/);
+    expect((await db.query("select count(*)::int n from pg_roles where rolname = any($1) and (rolsuper or rolbypassrls or rolcanlogin or rolcreaterole)", [READ_AUTH_ROLES])).rows[0].n).toBe(0);
+    // approval is disabled in the migrated database, and the table owner is still bound by forced RLS (it reads nothing)
+    expect((await db.query('select approval_enabled from stripe_read_authorization_policy')).rows).toEqual([{ approval_enabled: false }]);
+    expect((await tryQ(owner, 'select count(*)::int n from stripe_read_authorizations')).rows).toEqual([{ n: 0 }]);
   });
 
   it('M2. the owner of the table is still bound by forced RLS: it reads nothing and cannot insert evidence', async () => {

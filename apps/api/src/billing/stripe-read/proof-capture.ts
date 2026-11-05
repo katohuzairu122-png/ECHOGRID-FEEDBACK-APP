@@ -2,20 +2,21 @@ import { canonicalJson, sha256Hex } from './bundle-builder';
 import { PERFORMABLE_METHODS, type FailureClass, type ReadMethodId } from './capability-registry';
 import { evaluateCompatibility, mappingKey, MAPPING_CONTRACT_VERSION, observeShape, type CompatibilityResult, type MappingRegistry, type MappingVerification, type ShapeObservation } from './mapping-authority';
 import { profileFor } from './provider-profiles';
-import { checkRead, type GateDenial, type ReadGate } from './read-gate';
+import type { GateDenial } from './read-gate';
 import { makeEmitter, type AuditSink } from './read-types';
-import { CredentialDenied, ProviderReadError, STRIPE_API_VERSION, type CredentialDenial, type PerformableMethod, type StripeReadTransport } from './transport';
+import { STRIPE_API_VERSION, type CredentialDenial, type PerformableMethod } from './transport';
+import type { ObservationDenial, ObservationVerifier, RuntimeDenial, TrustedReadRuntime } from './trusted-runtime';
 
 /**
  * S08-D1D3-DEV-09: test-mode PROOF infrastructure. A proof is an immutable record of what ONE authorized, GET-only test-mode read returned, reduced to what a mapping decision needs: the shape (types, and
  * the values of enum-typed mapped fields only), a fingerprint of the response, the API version, the verified account and mode, the trusted capture time, the authorization used and where the bytes came from.
  * No raw body, id, amount, name or metadata is stored.
  *
- * WHERE THE BYTES CAME FROM decides what a proof can do. Only `REAL_NETWORK` (the transport used the platform fetch) can move a mapping to TEST_MODE_VERIFIED. A proof captured through an injected
- * transport (a test double), or produced from a fixture, is recorded and can be compared with the mappings, and can even reveal drift in a report, but it cannot raise any status. Nothing here contacts
+ * WHERE THE BYTES CAME FROM decides what a proof can do, and (DEV-10) that is established by a VERIFIED, SIGNED observation from a trusted runtime, never by a field the transport or an adapter reports. Only a
+ * verified `REAL_NETWORK` observation can move a mapping to TEST_MODE_VERIFIED. A proof captured through the synthetic runtime, or produced from a fixture, is recorded and can be compared with the mappings, and can even reveal drift in a report, but it cannot raise any status. Nothing here contacts
  * Stripe by itself: capture needs a transport, an approved authorization record for the exact method (PROOF purpose) and a credential bound to the account and workload, none of which exist yet.
  */
-export type CaptureOrigin = 'REAL_NETWORK' | 'INJECTED_TRANSPORT' | 'SYNTHETIC_FIXTURE';
+export type CaptureOrigin = 'REAL_NETWORK' | 'SYNTHETIC_RUNTIME';
 export interface ProofRecord {
   readonly proofId: string;
   readonly mappingContractVersion: typeof MAPPING_CONTRACT_VERSION;
@@ -25,6 +26,10 @@ export interface ProofRecord {
   readonly accountId: string;
   readonly workloadId: string;
   readonly authorizationId: string;
+  readonly authorizationVersion: number;
+  /** The signing key and request id of the verified observation the proof was built from (DEV-10). */
+  readonly runtimeKeyId: string;
+  readonly observationRequestId: string;
   readonly capturedAtMs: number;
   readonly captureOrigin: CaptureOrigin;
   readonly mode: 'test';
@@ -59,7 +64,7 @@ export function createInMemoryProofStore(): ProofStore {
 
 /** Builds a sealed proof from one response body. Exposed for fixtures and tests; only `captureProof` supplies REAL_NETWORK. */
 export async function buildProof(i: Readonly<{
-  methodId: ReadMethodId; apiVersion: string; businessId: string; accountId: string; workloadId: string; authorizationId: string; capturedAtMs: number; captureOrigin: CaptureOrigin; subject: string; body: unknown; mapping: MappingRegistry;
+  methodId: ReadMethodId; apiVersion: string; businessId: string; accountId: string; workloadId: string; authorizationId: string; authorizationVersion: number; runtimeKeyId: string; observationRequestId: string; capturedAtMs: number; captureOrigin: CaptureOrigin; subject: string; body: unknown; mapping: MappingRegistry;
 }>): Promise<ProofRecord> {
   const mappings = i.mapping.for(i.methodId, i.apiVersion);
   const shape = observeShape(i.body, mappings);
@@ -69,7 +74,7 @@ export async function buildProof(i: Readonly<{
   const shapeFingerprint = await sha256Hex(canonicalJson(shape));
   const proofId = await sha256Hex(canonicalJson([i.methodId, i.apiVersion, i.accountId, i.workloadId, i.captureOrigin, responseFingerprint]));
   const rec: ProofRecord = Object.freeze({
-    proofId, mappingContractVersion: MAPPING_CONTRACT_VERSION, methodId: i.methodId, apiVersion: i.apiVersion, businessId: i.businessId, accountId: i.accountId, workloadId: i.workloadId, authorizationId: i.authorizationId,
+    proofId, mappingContractVersion: MAPPING_CONTRACT_VERSION, methodId: i.methodId, apiVersion: i.apiVersion, businessId: i.businessId, accountId: i.accountId, workloadId: i.workloadId, authorizationId: i.authorizationId, authorizationVersion: i.authorizationVersion, runtimeKeyId: i.runtimeKeyId, observationRequestId: i.observationRequestId,
     capturedAtMs: i.capturedAtMs, captureOrigin: i.captureOrigin, mode: 'test' as const, accountVerified: true as const, subjectHash: await sha256Hex(`proof-subject|${i.subject}`), responseFingerprint, shapeFingerprint, shape,
     compatibility: Object.freeze(compatibility), drift: Object.freeze(drift),
   });
@@ -77,7 +82,7 @@ export async function buildProof(i: Readonly<{
   return rec;
 }
 
-export type ProofDenial = GateDenial | CredentialDenial | 'INVALID_REQUEST' | 'UNSUPPORTED_API_VERSION' | 'ACCOUNT_MISMATCH' | 'ACCOUNT_RESPONSE_INVALID' | 'OBJECT_MISMATCH' | 'INVOICE_IDENTITY_MISMATCH' | 'REALM_MISMATCH';
+export type ProofDenial = GateDenial | CredentialDenial | 'INVALID_REQUEST' | 'UNSUPPORTED_API_VERSION' | 'ACCOUNT_MISMATCH' | 'ACCOUNT_RESPONSE_INVALID' | 'OBJECT_MISMATCH' | 'INVOICE_IDENTITY_MISMATCH' | 'REALM_MISMATCH' | RuntimeDenial | ObservationDenial;
 export type ProofOutcome =
   | Readonly<{ ok: true; proof: ProofRecord; duplicate: boolean }>
   | Readonly<{ ok: false; kind: 'DENIED'; reason: ProofDenial }>
@@ -92,7 +97,7 @@ const TOKEN = /^[A-Za-z0-9][A-Za-z0-9:_./-]{0,159}$/;
  * target read, check the response's own identity and mode, then minimize, fingerprint and append. Every request is gated immediately before it is made. Provider detail never leaves: failures are classes.
  */
 export async function captureProof(
-  deps: Readonly<{ transport: StripeReadTransport; gate: ReadGate; store: ProofStore; clock: () => number; audit: AuditSink; apiVersion?: string }>,
+  deps: Readonly<{ runtime: TrustedReadRuntime; verifier: ObservationVerifier; store: ProofStore; clock: () => number; audit: AuditSink; apiVersion?: string }>,
   req: Readonly<{ businessId: string; accountId: string; methodId: ReadMethodId; invoiceId?: string }>,
 ): Promise<ProofOutcome> {
   const emit = makeEmitter(deps.audit, deps.clock, 'STRIPE_TEST_READ');
@@ -100,22 +105,21 @@ export async function captureProof(
   const apiVersion = deps.apiVersion ?? STRIPE_API_VERSION;
   if (!req || !TOKEN.test(String(req.businessId)) || !ACCOUNT.test(String(req.accountId)) || !PERFORMABLE_METHODS.includes(req.methodId) || (req.methodId === 'INVOICE_RETRIEVE' && !INVOICE_ID.test(String(req.invoiceId)))) return deny('INVALID_REQUEST');
   if (profileFor(apiVersion) === null) return deny('UNSUPPORTED_API_VERSION');
-  const binding = { accountId: req.accountId, workloadId: deps.gate.workloadId };
   const scope = { businessId: req.businessId, invoiceId: req.invoiceId ?? '' };
-  let authorizationId = '';
+  let authorization = { id: '', version: 0, keyId: '', requestId: '' };
 
-  const read = async (method: PerformableMethod, params?: { invoiceId: string }): Promise<{ ok: true; body: unknown } | { ok: false; out: ProofOutcome }> => {
-    const g = await checkRead(deps.gate, { businessId: req.businessId, accountId: req.accountId, methodId: method, apiVersion, purpose: 'PROOF' }, deps.clock()); // immediately before THIS request
-    if (!g.ok) return { ok: false, out: deny(g.reason, method) };
-    if (method === req.methodId) authorizationId = g.authorizationId;
-    emit('stripe_read.attempt', method, null, scope);
-    try { return { ok: true, body: await deps.transport.get(method, params, binding) }; }
-    catch (e) {
-      if (e instanceof CredentialDenied) return { ok: false, out: deny(e.code, method) };
-      const failureClass: FailureClass = e instanceof ProviderReadError ? e.failureClass : 'NETWORK';
-      emit('stripe_read.failure', method, failureClass, scope);
-      return { ok: false, out: { ok: false, kind: 'PROVIDER_FAILURE', failureClass } };
+  const read = async (method: PerformableMethod, invoiceId?: string): Promise<{ ok: true; body: unknown } | { ok: false; out: ProofOutcome }> => {
+    emit('stripe_read.attempt', method, null, scope); // the runtime gates this request (PROOF purpose) immediately before making it
+    const out = await deps.runtime.read({ businessId: req.businessId, accountId: req.accountId, methodId: method, ...(invoiceId ? { invoiceId } : {}), apiVersion, purpose: 'PROOF' });
+    if (!out.ok) {
+      if (out.kind === 'DENIED') return { ok: false, out: deny(out.reason, method) };
+      emit('stripe_read.failure', method, out.failureClass, scope);
+      return { ok: false, out: { ok: false, kind: 'PROVIDER_FAILURE', failureClass: out.failureClass } };
     }
+    const v = await deps.verifier.verify(out.observation, { kind: deps.runtime.kind, businessId: req.businessId, accountId: req.accountId, workloadId: deps.runtime.workloadId, methodId: method, subject: method === 'INVOICE_RETRIEVE' ? (invoiceId as string) : req.accountId, apiVersion });
+    if (!v.ok) return { ok: false, out: deny(v.reason, method) };
+    if (method === req.methodId) authorization = { id: v.claims.authorizationId, version: v.claims.authorizationVersion, keyId: v.claims.keyId, requestId: v.claims.requestId };
+    return { ok: true, body: v.body };
   };
 
   // 1. account and mode verification: the credential must belong to the approved account (this read is the proof itself when the method is the account read)
@@ -126,7 +130,7 @@ export async function captureProof(
   if (ab.id !== req.accountId) return deny('ACCOUNT_MISMATCH', 'ACCOUNT_RETRIEVE_CURRENT');
   let body = acc.body; let subject = req.accountId;
   if (req.methodId === 'INVOICE_RETRIEVE') {
-    const inv = await read('INVOICE_RETRIEVE', { invoiceId: req.invoiceId as string });
+    const inv = await read('INVOICE_RETRIEVE', req.invoiceId as string);
     if (!inv.ok) return inv.out;
     const ib = inv.body as { object?: unknown; id?: unknown; livemode?: unknown } | null;
     if (!ib || typeof ib !== 'object' || ib.object !== 'invoice') return deny('OBJECT_MISMATCH', 'INVOICE_RETRIEVE');
@@ -134,8 +138,9 @@ export async function captureProof(
     if (ib.livemode !== false) return deny('REALM_MISMATCH', 'INVOICE_RETRIEVE'); // wrong-mode response evidence is never recorded
     body = inv.body; subject = req.invoiceId as string;
   }
-  const origin: CaptureOrigin = deps.transport.networkSource === 'GLOBAL_FETCH' ? 'REAL_NETWORK' : deps.transport.networkSource === 'INJECTED' ? 'INJECTED_TRANSPORT' : 'SYNTHETIC_FIXTURE';
-  const proof = await buildProof({ methodId: req.methodId, apiVersion, businessId: req.businessId, accountId: req.accountId, workloadId: deps.gate.workloadId, authorizationId, capturedAtMs: deps.clock(), captureOrigin: origin, subject, body, mapping: deps.gate.mapping });
+  const origin: CaptureOrigin = deps.runtime.kind === 'REAL_NETWORK' ? 'REAL_NETWORK' : 'SYNTHETIC_RUNTIME'; // the verifier accepted the observation as exactly this kind
+  const proof = await buildProof({ methodId: req.methodId, apiVersion, businessId: req.businessId, accountId: req.accountId, workloadId: deps.runtime.workloadId, authorizationId: authorization.id, authorizationVersion: authorization.version,
+    runtimeKeyId: authorization.keyId, observationRequestId: authorization.requestId, capturedAtMs: deps.clock(), captureOrigin: origin, subject, body, mapping: deps.runtime.mapping });
   const { record, duplicate } = deps.store.append(proof);
   emit('stripe_read.success', req.methodId, duplicate ? 'DUPLICATE_PROOF' : null, scope);
   return { ok: true, proof: record, duplicate };

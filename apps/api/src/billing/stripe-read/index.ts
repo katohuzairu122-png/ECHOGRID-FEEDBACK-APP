@@ -15,7 +15,7 @@ export * from './payment-normalizer';
 export * from './refund-dispute-normalizer';
 export { acquireMockExtendedEvidence, MockExtendedSource, onePage, pagesOf, type ExtendedReadSource, type ExtendedMockInput, type ExtendedMockResult } from './extended-source';
 export * from './read-types';
-export { createRealReadProvider, createMockReadProvider, NO_SUPPLEMENT, type ReadProvider, type MockReadProvider, type MockProviderFixtures, type ObjectRead, type ListRead, type Supplement } from './read-provider';
+export { createRealReadProvider, createMockReadProvider, NO_SUPPLEMENT, type RealReadProvider, type ReadProvider, type MockReadProvider, type MockProviderFixtures, type ObjectRead, type ListRead, type Supplement } from './read-provider';
 export { acquireEvidence, type EngineDeps } from './evidence-engine';
 export * from './acquisition-pipeline';
 export * from './read-authorization';
@@ -23,3 +23,9 @@ export * from './read-gate';
 export * from './mapping-authority';
 export { captureProof, applyProof, createInMemoryProofStore, isSealedProof, type ProofRecord, type ProofStore, type ProofOutcome, type ProofApplication, type CaptureOrigin } from './proof-capture';
 export { syntheticProofResponses, PROOF_ACCOUNT_ID, PROOF_INVOICE_ID } from './proof-fixtures';
+export {
+  createTrustedStripeRuntime, createObservationVerifier, createRuntimeSigner, observationMessage, isIssuedObservation, OBSERVATION_CONTRACT_VERSION,
+  type TrustedReadRuntime, type RuntimeSigner, type TrustedKeyEntry, type TrustedKeyRing, type KeyRingSource, type KeyPurpose, type ObservationKind, type ObservationClaims, type SignedObservation,
+  type ObservationVerifier, type VerifiedObservation, type ExpectedBinding, type ObservationDenial, type RuntimeDenial, type RuntimeReadRequest, type RuntimeReadResult, type KeyDenial,
+} from './trusted-runtime';
+export { createDurableAuthorizationStore, READ_AUTH_VERIFIER_ROLE, recordFromRow } from './durable-authorization';

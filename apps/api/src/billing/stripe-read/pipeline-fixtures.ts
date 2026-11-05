@@ -5,7 +5,14 @@ import type { ReadAuthorization } from './capability-registry';
 import type { TrustedInvoiceScope } from './invoice-normalizer';
 import { syntheticStripeInvoice } from './mock-provider';
 import type { InvocationPair } from './trusted-evidence-service';
-import { createMockReadProvider, type MockProviderFixtures } from './read-provider';
+import { createMockReadProvider, createRealReadProvider, type MockProviderFixtures, type RealReadProvider } from './read-provider';
+import { StripeReadOnlyEvidenceAdapter } from './adapter';
+import { createObservationVerifier, type KeyPurpose, type RuntimeSigner, type TrustedKeyEntry, type TrustedKeyRing, type TrustedReadRuntime } from './trusted-runtime';
+import { createSyntheticTrustedRuntime } from './synthetic-runtime';
+import type { AuditSink } from './read-types';
+import type { StripeReadTransport } from './transport';
+import { generateKeyPairSync, sign as nodeSign } from 'node:crypto';
+import { captureProof, type ProofStore } from './proof-capture';
 import { onePage } from './extended-source';
 
 /**
@@ -102,7 +109,7 @@ export function verifiedMapping(ops: readonly string[] = ['ACCOUNT_RETRIEVE_CURR
 
 export function recordFor(methodId: string, over: Partial<ReadAuthorizationRecord> = {}): ReadAuthorizationRecord {
   return { authorizationId: `auth-${methodId}`, businessId: 'biz-1', accountId: ACCT, realm: 'test', workloadId: WORKLOAD, methodId: methodId as never, state: 'PENDING', approvedBy: null, validFromMs: 1, expiresAtMs: NOW + 3_600_000,
-    revokedAtMs: null, inventoryRecordId: 'S08-STRIPE-PRIVATE-TEST-VERIFIER-001', inventoryRevision: 'rev-synthetic-1', ...over };
+    revokedAtMs: null, version: 1, inventoryRecordId: 'S08-STRIPE-PRIVATE-TEST-VERIFIER-001', inventoryRevision: 'rev-synthetic-1', ...over };
 }
 
 /** A gate built from a legacy-shaped authorization description: one APPROVED record per listed method (or PENDING / REVOKED as described), a read-only store, this workload and a mapping state. */
@@ -119,4 +126,43 @@ export function gateFor(auth: ReadAuthorization | null, o: { mapping?: MappingRe
   }
   const gate: ReadGate = { store, workloadId: o.workloadId ?? WORKLOAD, mapping: o.mapping ?? verifiedMapping() };
   return Object.assign(gate, { admin });
+}
+
+
+// ---- DEV-10 synthetic trust fixtures (TEST FIXTURES ONLY: a generated throwaway key, never a real signing authority) ----------------------------------------------------------------------------------
+
+export interface SyntheticTrust {
+  readonly signer: RuntimeSigner;
+  /** Mutable on purpose: tests revoke or expire the key by editing this entry. */
+  readonly entry: { -readonly [K in keyof TrustedKeyEntry]: TrustedKeyEntry[K] };
+  readonly keyRing: () => TrustedKeyRing;
+  readonly keyId: string;
+}
+/** A freshly generated Ed25519 key pair registered with the given purpose. Throwaway and in-memory; the private key never leaves this closure. */
+export function syntheticTrust(purpose: KeyPurpose = 'SYNTHETIC_RUNTIME', keyId = `dev10-${purpose === 'SYNTHETIC_RUNTIME' ? 'synthetic' : 'runtime'}-key`): SyntheticTrust {
+  const { privateKey, publicKey } = generateKeyPairSync('ed25519');
+  const spki = publicKey.export({ type: 'spki', format: 'der' });
+  const publicKeyHex = Buffer.from(spki.subarray(spki.length - 32)).toString('hex');
+  const signer: RuntimeSigner = Object.freeze({ keyId, sign: async (m: Uint8Array) => new Uint8Array(nodeSign(null, Buffer.from(m), privateKey)) });
+  const entry = { publicKeyHex, purpose, notBeforeMs: 0, notAfterMs: NOW * 100, revokedAtMs: null as number | null };
+  return { signer, entry, keyRing: () => ({ [keyId]: entry }), keyId };
+}
+export interface RuntimeRig { readonly runtime: TrustedReadRuntime; readonly verifier: ReturnType<typeof createObservationVerifier>; readonly trust: SyntheticTrust }
+/** The synthetic trusted runtime around a test transport, with its matching verifier. */
+export function runtimeOver(transport: StripeReadTransport, gate: ReadGate, clock: () => number, trust: SyntheticTrust = syntheticTrust()): RuntimeRig {
+  const runtime = createSyntheticTrustedRuntime({ signer: trust.signer, keyRing: trust.keyRing, gate, clock, transport });
+  return { runtime, verifier: createObservationVerifier({ keyRing: trust.keyRing, clock }), trust };
+}
+/** The real-provider shape (account and invoice only) over a synthetic runtime. Replaces the pre-DEV-10 `createRealReadProvider({ transport, gate })`. */
+export function providerOver(o: { transport: StripeReadTransport; gate: ReadGate; clock: () => number; audit: AuditSink; apiVersion?: string; trust?: SyntheticTrust }): RealReadProvider & { rig: RuntimeRig } {
+  const rig = runtimeOver(o.transport, o.gate, o.clock, o.trust);
+  return { ...createRealReadProvider({ runtime: rig.runtime, verifier: rig.verifier, clock: o.clock, audit: o.audit, ...(o.apiVersion !== undefined ? { apiVersion: o.apiVersion } : {}) }), rig };
+}
+export function adapterOver(o: { transport: StripeReadTransport; gate: ReadGate; expectedAccountId: string; clock: () => number; audit: AuditSink; apiVersion?: string; trust?: SyntheticTrust }): StripeReadOnlyEvidenceAdapter {
+  const rig = runtimeOver(o.transport, o.gate, o.clock, o.trust);
+  return new StripeReadOnlyEvidenceAdapter({ runtime: rig.runtime, verifier: rig.verifier, expectedAccountId: o.expectedAccountId, clock: o.clock, audit: o.audit, ...(o.apiVersion !== undefined ? { apiVersion: o.apiVersion } : {}) });
+}
+export function captureOver(d: { transport: StripeReadTransport; gate: ReadGate; store: ProofStore; clock: () => number; audit: AuditSink; apiVersion?: string; trust?: SyntheticTrust }, req: Parameters<typeof captureProof>[1]) {
+  const rig = runtimeOver(d.transport, d.gate, d.clock, d.trust);
+  return captureProof({ runtime: rig.runtime, verifier: rig.verifier, store: d.store, clock: d.clock, audit: d.audit, ...(d.apiVersion !== undefined ? { apiVersion: d.apiVersion } : {}) }, req);
 }

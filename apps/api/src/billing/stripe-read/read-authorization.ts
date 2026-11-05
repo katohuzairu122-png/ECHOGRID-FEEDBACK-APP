@@ -26,6 +26,8 @@ export interface ReadAuthorizationRecord {
   readonly expiresAtMs: number;
   /** Present exactly when REVOKED. */
   readonly revokedAtMs: number | null;
+  /** Lifecycle version of the stored record; advances by exactly one per transition (DEV-10). */
+  readonly version: number;
   readonly inventoryRecordId: 'S08-STRIPE-PRIVATE-TEST-VERIFIER-001';
   readonly inventoryRevision: string;
 }
@@ -51,12 +53,13 @@ const has = (o: object, k: string) => Object.prototype.hasOwnProperty.call(o, k)
 export function parseAuthorizationRecord(raw: unknown): ReadAuthorizationRecord | null {
   if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) return null;
   const r = raw as Record<string, unknown>;
-  const keys = ['authorizationId', 'businessId', 'accountId', 'realm', 'workloadId', 'methodId', 'state', 'approvedBy', 'validFromMs', 'expiresAtMs', 'revokedAtMs', 'inventoryRecordId', 'inventoryRevision'];
+  const keys = ['authorizationId', 'businessId', 'accountId', 'realm', 'workloadId', 'methodId', 'state', 'approvedBy', 'validFromMs', 'expiresAtMs', 'revokedAtMs', 'version', 'inventoryRecordId', 'inventoryRevision'];
   if (Object.keys(r).length !== keys.length || !keys.every(k => has(r, k))) return null;
   if (![r.authorizationId, r.businessId, r.workloadId].every(x => typeof x === 'string' && TOKEN.test(x))) return null;
   if (typeof r.accountId !== 'string' || !ACCOUNT.test(r.accountId) || r.realm !== 'test') return null;
   if (typeof r.methodId !== 'string' || !has(READ_METHODS, r.methodId)) return null;
   if (r.state !== 'PENDING' && r.state !== 'APPROVED' && r.state !== 'REVOKED') return null;
+  if (!isInt(r.version) || r.version < 1) return null;
   if (!isInt(r.validFromMs) || !isInt(r.expiresAtMs) || r.expiresAtMs <= r.validFromMs) return null;
   if (r.inventoryRecordId !== 'S08-STRIPE-PRIVATE-TEST-VERIFIER-001' || typeof r.inventoryRevision !== 'string' || r.inventoryRevision.length === 0 || r.inventoryRevision.length > 160) return null;
   if (r.state === 'APPROVED' && !(typeof r.approvedBy === 'string' && TOKEN.test(r.approvedBy))) return null;
@@ -128,11 +131,11 @@ export function transitionAuthorization(record: unknown, event: AuthorizationEve
     if (r.state !== 'PENDING') return { ok: false, reason: 'INVALID_TRANSITION' };
     if (typeof event.approvedBy !== 'string' || !TOKEN.test(event.approvedBy)) return { ok: false, reason: 'APPROVER_REQUIRED' };
     if (nowMs >= r.expiresAtMs) return { ok: false, reason: 'EXPIRED' };
-    return { ok: true, record: Object.freeze({ ...r, state: 'APPROVED' as const, approvedBy: event.approvedBy }) };
+    return { ok: true, record: Object.freeze({ ...r, state: 'APPROVED' as const, version: r.version + 1, approvedBy: event.approvedBy }) };
   }
   if (event?.type === 'REVOKE') {
     if (r.state === 'REVOKED') return { ok: false, reason: 'INVALID_TRANSITION' };
-    return { ok: true, record: Object.freeze({ ...r, state: 'REVOKED' as const, revokedAtMs: nowMs }) };
+    return { ok: true, record: Object.freeze({ ...r, state: 'REVOKED' as const, version: r.version + 1, revokedAtMs: nowMs }) };
   }
   return { ok: false, reason: 'INVALID_TRANSITION' };
 }

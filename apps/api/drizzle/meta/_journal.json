@@ -435,6 +435,13 @@
       "when": 1793876719313,
       "tag": "0061_d1d3_dev04_settlement_authority",
       "breakpoints": true
+    },
+    {
+      "idx": 62,
+      "version": "7",
+      "when": 1793903646017,
+      "tag": "0062_d1d3_dev10_read_authorization",
+      "breakpoints": true
     }
   ]
 }

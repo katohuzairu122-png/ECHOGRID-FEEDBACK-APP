@@ -3,14 +3,14 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import { readdirSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import {
-  applyProof, authorizeRead, captureProof, checkRead, createInMemoryAuthorizationStore, createInMemoryProofStore, createRealReadProvider, createStripeGetTransport, DEFAULT_MAPPING_CATALOG, evaluateCompatibility,
+  applyProof, authorizeRead, checkRead, createInMemoryAuthorizationStore, createInMemoryProofStore, createObservationVerifier, createStripeGetTransport, createTrustedStripeRuntime, DEFAULT_MAPPING_CATALOG, evaluateCompatibility,
   EvidenceAcquisitionPipeline, isSealedProof, MappingRegistry, observeShape, parseAuthorizationRecord, ScriptedReadTransport, syntheticProofResponses, transitionAuthorization, unavailableAuthorizationStore,
   CredentialDenied, PROOF_ACCOUNT_ID,
   type CredentialSource, type ReadAuditEvent, type ReadAuthorizationStore, type StripeReadTransport,
 } from './index';
-import { buildProof } from './proof-capture';
+import { buildProof, captureProof } from './proof-capture';
 import {
-  ACCT, API, account, AUTH, binding, CONFIG, gateFor, invocationHarness, invoice, mockProvider, NOW, recordFor, SYNTHETIC_ACCOUNT_KEY, verifiedMapping, WORKLOAD,
+  ACCT, API, account, AUTH, binding, captureOver, providerOver, syntheticTrust, CONFIG, gateFor, invocationHarness, invoice, mockProvider, NOW, recordFor, SYNTHETIC_ACCOUNT_KEY, verifiedMapping, WORKLOAD,
 } from './pipeline-fixtures';
 
 /**
@@ -38,7 +38,7 @@ function rig(over: { gate?: ReturnType<typeof gateFor>; responses?: unknown[]; t
   const transport = over.transport ?? new ScriptedReadTransport(over.responses ?? [account, invoice()]);
   const gate = over.gate ?? gateFor(AUTH);
   const events: ReadAuditEvent[] = []; const h = invocationHarness();
-  const provider = createRealReadProvider({ transport, gate, clock: () => NOW, audit: e => events.push(e) });
+  const provider = providerOver({ transport, gate, clock: () => NOW, audit: e => events.push(e) });
   const pipeline = new EvidenceAcquisitionPipeline<string>({ provider, config: CONFIG, clock: () => NOW, audit: e => events.push(e), resolveBinding: async () => binding(), invocation: { policy: h.policy, deps: h.deps } });
   return { transport, gate, events, pipeline, h, run: () => pipeline.run(REQ, h.pair()) };
 }
@@ -167,7 +167,7 @@ describe('A. authorization records and enforcement (zero requests on any denial)
     // and the proof path
     const g2 = gateFor(AUTH, { mapping: MappingRegistry.catalog() });
     class RevokingTransport2 extends ScriptedReadTransport { override async get(m: any, p?: any) { const x = await super.get(m, p); if (m === 'ACCOUNT_RETRIEVE_CURRENT') g2.admin.apply('auth-INVOICE_RETRIEVE', { type: 'REVOKE' }, NOW - 1); return x; } }
-    const out = await captureProof({ transport: new RevokingTransport2([account, invoice()]), gate: g2, store: createInMemoryProofStore(), clock: () => NOW, audit: () => undefined }, { businessId: 'biz-1', accountId: ACCT, methodId: 'INVOICE_RETRIEVE', invoiceId: 'in_1' });
+    const out = await captureOver({ transport: new RevokingTransport2([account, invoice()]), gate: g2, store: createInMemoryProofStore(), clock: () => NOW, audit: () => undefined }, { businessId: 'biz-1', accountId: ACCT, methodId: 'INVOICE_RETRIEVE', invoiceId: 'in_1' });
     expect(out).toEqual({ ok: false, kind: 'DENIED', reason: 'AUTHORIZATION_REVOKED' });
   });
 
@@ -198,7 +198,7 @@ describe('B. credentials and the restricted transport', () => {
     expect(await t.transport.get('INVOICE_RETRIEVE', { invoiceId: 'in_1' }, b)).toMatchObject({ id: 'in_1' });
     expect(t.calls.map(c => [c.init.method, c.url])).toEqual([['GET', 'https://api.stripe.com/v1/account'], ['GET', 'https://api.stripe.com/v1/invoices/in_1']]);
     expect(t.calls[0]!.init.headers.Authorization).toBe(`Bearer ${GOOD_KEY}`);
-    expect(t.transport.networkSource).toBe('INJECTED'); expect((t.source as { resolved: number }).resolved).toBe(2); // resolved per request, never cached in the transport
+    expect((t.source as { resolved: number }).resolved).toBe(2); // resolved per request, never cached in the transport
     expect(() => createStripeGetTransport({ apiKey: GOOD_KEY, credentials: credSource() })).toThrow(/CREDENTIAL_SOURCE_INVALID/); // exactly one source
     expect(() => createStripeGetTransport({})).toThrow(/CREDENTIAL_SOURCE_INVALID/);
     expect(() => createStripeGetTransport({ credentials: {} as any })).toThrow(/CREDENTIAL_SOURCE_INVALID/);
@@ -234,7 +234,7 @@ describe('B. credentials and the restricted transport', () => {
     const out = await r.run();
     expect(out).toEqual({ status: 'PROVIDER_FAILURE', failureClass: 'PROVIDER_REJECTED' });
     const events: ReadAuditEvent[] = []; const store = createInMemoryProofStore();
-    const proofOut = await captureProof({ transport: t.transport, gate: gateFor(AUTH, { mapping: MappingRegistry.catalog() }), store, clock: () => NOW, audit: e => events.push(e) }, { businessId: 'biz-1', accountId: ACCT, methodId: 'ACCOUNT_RETRIEVE_CURRENT' });
+    const proofOut = await captureOver({ transport: t.transport, gate: gateFor(AUTH, { mapping: MappingRegistry.catalog() }), store, clock: () => NOW, audit: e => events.push(e) }, { businessId: 'biz-1', accountId: ACCT, methodId: 'ACCOUNT_RETRIEVE_CURRENT' });
     const dumped = JSON.stringify([out, r.events, proofOut, events, store.list()]);
     expect(dumped).not.toMatch(/rk_test|SECRET-PAYLOAD|example\.com|Bearer|Invalid API Key/);
     const throwing = routedFetch(() => { throw new Error(`connect failed using ${GOOD_KEY}`); });
@@ -245,7 +245,7 @@ describe('B. credentials and the restricted transport', () => {
 
   it('15-17. unknown methods are rejected, write verbs and other paths are unreachable, and only the two fixed GET paths exist', async () => {
     for (const id of ['POST /v1/refunds', 'refunds.create', '__proto__', 'constructor', '', 42, null, undefined]) expect(await authorizeRead({ async lookup() { return []; } }, q({ methodId: id }), NOW)).toEqual({ allowed: false, reason: 'UNKNOWN_METHOD' });
-    expect(await captureProof({ transport: new ScriptedReadTransport([account]), gate: gateFor(AUTH, { mapping: MappingRegistry.catalog() }), store: createInMemoryProofStore(), clock: () => NOW, audit: () => undefined }, { businessId: 'biz-1', accountId: ACCT, methodId: 'REFUNDS_LIST' })).toEqual({ ok: false, kind: 'DENIED', reason: 'INVALID_REQUEST' });
+    expect(await captureOver({ transport: new ScriptedReadTransport([account]), gate: gateFor(AUTH, { mapping: MappingRegistry.catalog() }), store: createInMemoryProofStore(), clock: () => NOW, audit: () => undefined }, { businessId: 'biz-1', accountId: ACCT, methodId: 'REFUNDS_LIST' })).toEqual({ ok: false, kind: 'DENIED', reason: 'INVALID_REQUEST' });
     const t = transportOver();
     const b = { accountId: ACCT, workloadId: WORKLOAD };
     for (const bad of ['POST /v1/refunds', 'REFUNDS_LIST', 'INVOICE_LINES_LIST', 'PAYMENT_RETRIEVE', 'DISPUTES_LIST', '../../v1/charges', 'INVOICE_RETRIEVE ']) await expect(t.transport.get(bad as any, { invoiceId: 'in_1' }, b)).rejects.toMatchObject({ failureClass: 'DENIED' });
@@ -254,7 +254,7 @@ describe('B. credentials and the restricted transport', () => {
     expect((t.source as { resolved: number }).resolved).toBe(0);
     await t.transport.get('INVOICE_RETRIEVE', { invoiceId: 'in_1' }, b);
     expect(t.calls.map(c => c.url)).toEqual(['https://api.stripe.com/v1/invoices/in_1']);
-    expect(Object.keys(t.transport).sort()).toEqual(['get', 'keyMode', 'networkSource']);
+    expect(Object.keys(t.transport).sort()).toEqual(['get', 'keyMode']);
   });
 
   it('18-20. redirects are refused, a timeout is a safe failure, and an oversized response is rejected', async () => {
@@ -264,7 +264,7 @@ describe('B. credentials and the restricted transport', () => {
     expect(red.calls[0]!.init.redirect).toBe('error'); expect(red.calls).toHaveLength(1);
     const hung = routedFetch((_u, init) => new Promise<Response>((_res, rej) => { init.signal?.addEventListener('abort', () => rej(Object.assign(new Error('aborted'), { name: 'AbortError' }))); }));
     const th = createStripeGetTransport({ credentials: credSource(), fetchImpl: hung.fetchImpl, clock: () => NOW, timeoutMs: 20 });
-    const outcome = await captureProof({ transport: th, gate: gateFor(AUTH, { mapping: MappingRegistry.catalog() }), store: createInMemoryProofStore(), clock: () => NOW, audit: () => undefined }, { businessId: 'biz-1', accountId: ACCT, methodId: 'ACCOUNT_RETRIEVE_CURRENT' });
+    const outcome = await captureOver({ transport: th, gate: gateFor(AUTH, { mapping: MappingRegistry.catalog() }), store: createInMemoryProofStore(), clock: () => NOW, audit: () => undefined }, { businessId: 'biz-1', accountId: ACCT, methodId: 'ACCOUNT_RETRIEVE_CURRENT' });
     expect(outcome).toEqual({ ok: false, kind: 'PROVIDER_FAILURE', failureClass: 'TIMEOUT' });
     const big = routedFetch(() => json({ pad: 'x'.repeat(5000) }));
     const tb = createStripeGetTransport({ credentials: credSource(), fetchImpl: big.fetchImpl, clock: () => NOW, maxBytes: 100 });
@@ -292,7 +292,7 @@ describe('B. credentials and the restricted transport', () => {
   it('21. unsupported API versions are rejected for proofs and evidence reads, with zero requests', async () => {
     for (const apiVersion of ['2025-01-01.acacia', '', '__proto__', ` ${API}`]) {
       const t = new ScriptedReadTransport([account, invoice()]);
-      expect(await captureProof({ transport: t, gate: gateFor(AUTH, { mapping: MappingRegistry.catalog() }), store: createInMemoryProofStore(), clock: () => NOW, audit: () => undefined, apiVersion }, { businessId: 'biz-1', accountId: ACCT, methodId: 'ACCOUNT_RETRIEVE_CURRENT' }), apiVersion)
+      expect(await captureOver({ transport: t, gate: gateFor(AUTH, { mapping: MappingRegistry.catalog() }), store: createInMemoryProofStore(), clock: () => NOW, audit: () => undefined, apiVersion }, { businessId: 'biz-1', accountId: ACCT, methodId: 'ACCOUNT_RETRIEVE_CURRENT' }), apiVersion)
         .toEqual({ ok: false, kind: 'DENIED', reason: 'UNSUPPORTED_API_VERSION' });
       expect(t.calls).toEqual([]);
       expect(await checkRead(gateFor(AUTH), { businessId: 'biz-1', accountId: ACCT, methodId: 'INVOICE_RETRIEVE', apiVersion, purpose: 'EVIDENCE' }, NOW)).toEqual({ ok: false, reason: 'MAPPING_UNSUPPORTED' }); // no mapping exists for that version
@@ -327,15 +327,15 @@ describe('C. field-mapping authority', () => {
     for (const bad of [null, {}, 'x', [{}], [{ ...DEFAULT_MAPPING_CATALOG[0], status: 'SOMETHING' }], [DEFAULT_MAPPING_CATALOG[0], DEFAULT_MAPPING_CATALOG[0]], [{ ...DEFAULT_MAPPING_CATALOG[0], contractVersion: 'old' }]] as any[]) expect(MappingRegistry.load(bad)).toBeNull();
     // fixtures covering every mapped field of every operation, built into proofs of every non-real origin, change nothing
     const responses = syntheticProofResponses();
-    for (const origin of ['INJECTED_TRANSPORT', 'SYNTHETIC_FIXTURE'] as const) {
+    for (const origin of ['SYNTHETIC_RUNTIME'] as const) {
       let reg = catalog;
       for (const [op, body] of Object.entries(responses)) {
-        const proof = await buildProof({ methodId: op as any, apiVersion: API, businessId: 'biz-1', accountId: PROOF_ACCOUNT_ID, workloadId: WORKLOAD, authorizationId: 'a', capturedAtMs: NOW, captureOrigin: origin, subject: 's', body, mapping: catalog });
+        const proof = await buildProof({ methodId: op as any, apiVersion: API, businessId: 'biz-1', accountId: PROOF_ACCOUNT_ID, workloadId: WORKLOAD, authorizationId: 'a', authorizationVersion: 1, runtimeKeyId: 'k', observationRequestId: '00000000-0000-4000-8000-000000000000', capturedAtMs: NOW, captureOrigin: origin, subject: 's', body, mapping: catalog });
         const r = applyProof(reg, proof); expect(r).toMatchObject({ note: 'ORIGIN_CANNOT_VERIFY', changes: [] }); reg = r.registry;
       }
       expect(reg.entries().every(e => e.status !== 'TEST_MODE_VERIFIED')).toBe(true);
     }
-    const sealed = await buildProof({ methodId: 'ACCOUNT_RETRIEVE_CURRENT', apiVersion: API, businessId: 'biz-1', accountId: ACCT, workloadId: WORKLOAD, authorizationId: 'a', capturedAtMs: NOW, captureOrigin: 'REAL_NETWORK', subject: 's', body: account, mapping: catalog });
+    const sealed = await buildProof({ methodId: 'ACCOUNT_RETRIEVE_CURRENT', apiVersion: API, businessId: 'biz-1', accountId: ACCT, workloadId: WORKLOAD, authorizationId: 'a', authorizationVersion: 1, runtimeKeyId: 'k', observationRequestId: '00000000-0000-4000-8000-000000000000', capturedAtMs: NOW, captureOrigin: 'REAL_NETWORK', subject: 's', body: account, mapping: catalog });
     for (const forged of [JSON.parse(JSON.stringify(sealed)), { ...sealed }, structuredClone(sealed), Object.create(sealed), null, 'x']) { expect(isSealedProof(forged)).toBe(false); expect(applyProof(catalog, forged)).toMatchObject({ note: 'PROOF_NOT_SEALED', changes: [] }); }
     expect(applyProof(catalog, { ...sealed, apiVersion: 'x' } as any).note).toBe('PROOF_NOT_SEALED');
   });
@@ -343,14 +343,14 @@ describe('C. field-mapping authority', () => {
   it('23. mock proof records cannot establish real-provider authority: the gate still refuses evidence reads and the pipeline still rejects real evidence', async () => {
     const store = createInMemoryProofStore(); const t = new ScriptedReadTransport([account, invoice()]); // a fake: no network source at all
     const gate = gateFor(AUTH, { mapping: MappingRegistry.catalog() });
-    const cap = await captureProof({ transport: t, gate, store, clock: () => NOW, audit: () => undefined }, { businessId: 'biz-1', accountId: ACCT, methodId: 'INVOICE_RETRIEVE', invoiceId: 'in_1' });
+    const cap = await captureOver({ transport: t, gate, store, clock: () => NOW, audit: () => undefined }, { businessId: 'biz-1', accountId: ACCT, methodId: 'INVOICE_RETRIEVE', invoiceId: 'in_1' });
     if (!cap.ok) throw new Error(`capture ${JSON.stringify(cap)}`);
-    expect(cap.proof.captureOrigin).toBe('SYNTHETIC_FIXTURE');
+    expect(cap.proof.captureOrigin).toBe('SYNTHETIC_RUNTIME');
     expect(applyProof(gate.mapping, cap.proof)).toMatchObject({ note: 'ORIGIN_CANNOT_VERIFY', changes: [] });
     expect(await checkRead(gate, { businessId: 'biz-1', accountId: ACCT, methodId: 'INVOICE_RETRIEVE', apiVersion: API, purpose: 'EVIDENCE' }, NOW)).toEqual({ ok: false, reason: 'MAPPING_NOT_VERIFIED' });
     const injected = transportOver();
-    const cap2 = await captureProof({ transport: injected.transport, gate, store, clock: () => NOW, audit: () => undefined }, { businessId: 'biz-1', accountId: ACCT, methodId: 'INVOICE_RETRIEVE', invoiceId: 'in_1' });
-    if (!cap2.ok) throw new Error('capture2'); expect(cap2.proof.captureOrigin).toBe('INJECTED_TRANSPORT'); expect(applyProof(gate.mapping, cap2.proof).changes).toEqual([]);
+    const cap2 = await captureOver({ transport: injected.transport, gate, store, clock: () => NOW, audit: () => undefined }, { businessId: 'biz-1', accountId: ACCT, methodId: 'INVOICE_RETRIEVE', invoiceId: 'in_1' });
+    if (!cap2.ok) throw new Error('capture2'); expect(cap2.proof.captureOrigin).toBe('SYNTHETIC_RUNTIME'); expect(applyProof(gate.mapping, cap2.proof).changes).toEqual([]);
     // with the mapping still unverified no real EVIDENCE read happens at all
     const r = rig({ gate: gateFor(AUTH, { mapping: MappingRegistry.catalog() }) });
     expect(await r.run()).toEqual({ status: 'DENIED', reason: 'MAPPING_NOT_VERIFIED' }); expect(calls(r.transport)).toEqual([]);
@@ -359,14 +359,16 @@ describe('C. field-mapping authority', () => {
   it('a REAL_NETWORK proof (the platform fetch path, stubbed here) is the only thing that verifies a mapping, field by field, and later evidence can demote it', async () => {
     const real = routedFetch(stripeRoutes());
     vi.stubGlobal('fetch', real.fetchImpl);
-    const transport = createStripeGetTransport({ credentials: credSource(), clock: () => NOW }); // no fetchImpl: the platform fetch
-    expect(transport.networkSource).toBe('GLOBAL_FETCH');
+    const trust = syntheticTrust('TRUSTED_RUNTIME'); // a throwaway key registered with the TRUSTED_RUNTIME purpose in THIS test's key ring
     const store = createInMemoryProofStore(); const gate = gateFor(AUTH, { mapping: MappingRegistry.catalog() });
+    const runtime = createTrustedStripeRuntime({ signer: trust.signer, keyRing: trust.keyRing, gate, credentials: credSource(), clock: () => NOW }); // no transport, no fetchImpl: the platform fetch
+    const verifier = createObservationVerifier({ keyRing: trust.keyRing, clock: () => NOW });
+    expect(runtime.kind).toBe('REAL_NETWORK');
     const events: ReadAuditEvent[] = [];
-    const a = await captureProof({ transport, gate, store, clock: () => NOW, audit: e => events.push(e) }, { businessId: 'biz-1', accountId: ACCT, methodId: 'ACCOUNT_RETRIEVE_CURRENT' });
-    const i = await captureProof({ transport, gate, store, clock: () => NOW, audit: e => events.push(e) }, { businessId: 'biz-1', accountId: ACCT, methodId: 'INVOICE_RETRIEVE', invoiceId: 'in_1' });
-    if (!a.ok || !i.ok) throw new Error('capture failed');
-    expect(a.proof.captureOrigin).toBe('REAL_NETWORK'); expect(i.proof).toMatchObject({ captureOrigin: 'REAL_NETWORK', mode: 'test', accountVerified: true, accountId: ACCT, workloadId: WORKLOAD, authorizationId: 'auth-INVOICE_RETRIEVE' });
+    const a = await captureProof({ runtime, verifier, store, clock: () => NOW, audit: e => events.push(e) }, { businessId: 'biz-1', accountId: ACCT, methodId: 'ACCOUNT_RETRIEVE_CURRENT' });
+    const i = await captureProof({ runtime, verifier, store, clock: () => NOW, audit: e => events.push(e) }, { businessId: 'biz-1', accountId: ACCT, methodId: 'INVOICE_RETRIEVE', invoiceId: 'in_1' });
+    if (!a.ok || !i.ok) throw new Error('capture failed ' + JSON.stringify([a, i]));
+    expect(a.proof.captureOrigin).toBe('REAL_NETWORK'); expect(i.proof).toMatchObject({ captureOrigin: 'REAL_NETWORK', mode: 'test', accountVerified: true, accountId: ACCT, workloadId: WORKLOAD, authorizationId: 'auth-INVOICE_RETRIEVE', runtimeKeyId: trust.keyId });
     let reg = gate.mapping;
     const ra = applyProof(reg, a.proof); expect(ra.note).toBe('APPLIED'); expect(ra.changes.map(c => c.to)).toEqual(['TEST_MODE_VERIFIED', 'TEST_MODE_VERIFIED']); reg = ra.registry;
     expect(reg.operationStatus('ACCOUNT_RETRIEVE_CURRENT', API)).toBe('TEST_MODE_VERIFIED'); expect(reg.operationStatus('INVOICE_RETRIEVE', API)).toBe('SDK_SCHEMA_UNPROVEN_LIVE');
@@ -380,7 +382,7 @@ describe('C. field-mapping authority', () => {
     // idempotent application
     expect(applyProof(reg, i.proof).changes).toEqual([]);
     // later real evidence of a different type demotes a verified field to SCHEMA_DRIFT, and the evidence gate then refuses
-    const drifted = await buildProof({ methodId: 'ACCOUNT_RETRIEVE_CURRENT', apiVersion: API, businessId: 'biz-1', accountId: ACCT, workloadId: WORKLOAD, authorizationId: 'a', capturedAtMs: NOW + 1, captureOrigin: 'REAL_NETWORK', subject: 's', body: { object: 'account', id: 5 }, mapping: reg });
+    const drifted = await buildProof({ methodId: 'ACCOUNT_RETRIEVE_CURRENT', apiVersion: API, businessId: 'biz-1', accountId: ACCT, workloadId: WORKLOAD, authorizationId: 'a', authorizationVersion: 1, runtimeKeyId: 'k', observationRequestId: '00000000-0000-4000-8000-000000000000', capturedAtMs: NOW + 1, captureOrigin: 'REAL_NETWORK', subject: 's', body: { object: 'account', id: 5 }, mapping: reg });
     const rd = applyProof(reg, drifted); expect(rd.changes).toEqual([{ key: `${API}|ACCOUNT_RETRIEVE_CURRENT|id`, from: 'TEST_MODE_VERIFIED', to: 'SCHEMA_DRIFT' }]);
     expect(rd.registry.operationStatus('ACCOUNT_RETRIEVE_CURRENT', API)).toBe('SCHEMA_DRIFT');
     expect(await checkRead({ ...gate, mapping: rd.registry }, { businessId: 'biz-1', accountId: ACCT, methodId: 'ACCOUNT_RETRIEVE_CURRENT', apiVersion: API, purpose: 'EVIDENCE' }, NOW)).toEqual({ ok: false, reason: 'MAPPING_DRIFT' });
@@ -410,7 +412,7 @@ describe('C. field-mapping authority', () => {
     expect(JSON.stringify(sh)).not.toMatch(/customer_secret_key|il_Proof|ii_Proof|sub_Proof|3000|-300/);
     expect(sh.observations['data[].parent.type']!.enumValues).toEqual(['invoice_item_details']);
     // a synthetic proof of drifted data reports drift and changes no status
-    const proof = await buildProof({ methodId: 'INVOICE_RETRIEVE', apiVersion: API, businessId: 'biz-1', accountId: ACCT, workloadId: WORKLOAD, authorizationId: 'a', capturedAtMs: NOW, captureOrigin: 'SYNTHETIC_FIXTURE', subject: 'in_1', body: { ...res.INVOICE_RETRIEVE, status: 'frozen' }, mapping: catalog });
+    const proof = await buildProof({ methodId: 'INVOICE_RETRIEVE', apiVersion: API, businessId: 'biz-1', accountId: ACCT, workloadId: WORKLOAD, authorizationId: 'a', authorizationVersion: 1, runtimeKeyId: 'k', observationRequestId: '00000000-0000-4000-8000-000000000000', capturedAtMs: NOW, captureOrigin: 'SYNTHETIC_RUNTIME', subject: 'in_1', body: { ...res.INVOICE_RETRIEVE, status: 'frozen' }, mapping: catalog });
     expect(proof.drift).toEqual(['ENUM_UNKNOWN:status']); expect(applyProof(catalog, proof).changes).toEqual([]); expect(catalog.operationStatus('INVOICE_RETRIEVE', API)).toBe('SDK_SCHEMA_UNPROVEN_LIVE');
   });
 });
@@ -421,7 +423,7 @@ const registryUnchangedOutsideOps = (before: MappingRegistry, after: MappingRegi
 describe('D. proof capture, gate purposes and idempotency', () => {
   const gate = () => gateFor(AUTH, { mapping: MappingRegistry.catalog() });
   const cap = (g: ReturnType<typeof gate>, t: StripeReadTransport, store = createInMemoryProofStore(), over: Record<string, unknown> = {}) =>
-    captureProof({ transport: t, gate: g, store, clock: () => NOW, audit: () => undefined }, { businessId: 'biz-1', accountId: ACCT, methodId: 'INVOICE_RETRIEVE', invoiceId: 'in_1', ...over } as any);
+    captureOver({ transport: t, gate: g, store, clock: () => NOW, audit: () => undefined }, { businessId: 'biz-1', accountId: ACCT, methodId: 'INVOICE_RETRIEVE', invoiceId: 'in_1', ...over } as any);
 
   it('the gate purposes differ: PROOF may read while a mapping is unproven or drifted, EVIDENCE needs a verified mapping, and neither reads an unsupported one', async () => {
     const g = gate();

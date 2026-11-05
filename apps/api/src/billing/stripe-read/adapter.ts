@@ -1,9 +1,8 @@
-import type { ReadGate } from './read-gate';
 import { acquireEvidence } from './evidence-engine';
 import type { TrustedInvoiceScope } from './invoice-normalizer';
-import { createRealReadProvider, type ReadProvider } from './read-provider';
+import { createRealReadProvider, type RealReadProvider } from './read-provider';
 import type { AcquireOutcome, AuditSink } from './read-types';
-import type { StripeReadTransport } from './transport';
+import type { ObservationVerifier, TrustedReadRuntime } from './trusted-runtime';
 
 export type { AcquireDenial, AcquireOutcome, AuditSink, ReadAuditEvent } from './read-types';
 
@@ -15,8 +14,8 @@ export type { AcquireDenial, AcquireOutcome, AuditSink, ReadAuditEvent } from '.
  */
 export class StripeReadOnlyEvidenceAdapter {
   readonly kind = 'STRIPE_TEST_READ' as const;
-  private readonly provider: ReadProvider;
-  constructor(private readonly deps: Readonly<{ transport: StripeReadTransport; gate: ReadGate; /** The approved Stripe test account, from the trusted binding; the authorization records are looked up for it. */ expectedAccountId: string; clock: () => number; audit: AuditSink; /** The API version the transport reads with; defaults to the pinned one. A version with no mapping profile is refused. */ apiVersion?: string }>) {
+  private readonly provider: RealReadProvider;
+  constructor(private readonly deps: Readonly<{ runtime: TrustedReadRuntime; verifier: ObservationVerifier; /** The approved Stripe test account, from the trusted binding; the authorization records are looked up for it. */ expectedAccountId: string; clock: () => number; audit: AuditSink; /** The API version the runtime reads with; defaults to the pinned one. A version with no mapping profile is refused. */ apiVersion?: string }>) {
     this.provider = createRealReadProvider(deps);
   }
 
