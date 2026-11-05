@@ -4,13 +4,15 @@ import { Client } from 'pg';
 import { spawnSync } from 'node:child_process';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
+import { readFileSync } from 'node:fs';
 import { sql } from 'drizzle-orm';
 import { buildDb } from '../../src/db/client';
 import { BenefitApplicationSagaService } from '../../src/billing/benefit-application.saga.service';
 import { BenefitTerminalApplicationService } from '../../src/billing/benefit-terminal-application.service';
 import { PartnerCreditConsumptionService } from '../../src/partner-credits/partner-credit-consumption.service';
 import {
-  DEVELOPMENT_ALLOWED_INTERVALS, SettlementAuthorizationError, SettlementAuthorizationRecorder, settlementAuthorizationDigest, type SettlementGateConfig,
+  DEVELOPMENT_ALLOWED_INTERVALS, SettlementAuthorizationError, SettlementAuthorizationRecorder, settlementAuthorizationDigest, createSettlementEvidenceSigner, settlementProvenanceMessage, verifySettlementProvenance,
+  type SettlementEvidenceSigner, type SettlementGateConfig,
 } from '../../src/partner-credits/partner-credit-settlement-authorization';
 import { MOCK_EVIDENCE_KIND, type MockSettlementEvidence } from '../../src/billing/settlement-eligibility.classifier';
 import { unwindCredit, type UnwindCause } from '../../src/partner-credits/partner-credit-unwind';
@@ -19,6 +21,18 @@ import { PartnerCreditProjectionAudit } from '../../src/partner-credits/partner-
 import { seedScratchAllocation } from './helpers/s08-allocation-fixture';
 import { freezeAggregateBenefitAllocation } from '../../src/billing/aggregate-benefit-allocation';
 import { computeInvoiceBenefit } from '../../src/billing/invoice-benefit.calculator';
+
+/** DEV-04 synthetic provenance keys, generated per run. The private halves never leave this file's memory; nothing here is a real credential. */
+async function newSyntheticKey(keyId: string): Promise<{ signer: SettlementEvidenceSigner; publicHex: string }> {
+  const kp = (await crypto.subtle.generateKey({ name: 'Ed25519' }, true, ['sign', 'verify'])) as CryptoKeyPair;
+  const pkcs8 = Buffer.from(await crypto.subtle.exportKey('pkcs8', kp.privateKey) as ArrayBuffer).toString('base64');
+  const publicHex = Buffer.from(await crypto.subtle.exportKey('raw', kp.publicKey) as ArrayBuffer).toString('hex');
+  return { signer: await createSettlementEvidenceSigner(keyId, pkcs8), publicHex };
+}
+const KEY_A = await newSyntheticKey('synthetic-recorder-a');
+const KEY_B = await newSyntheticKey('synthetic-recorder-b');
+const SIGNER = KEY_A.signer;
+
 
 /**
  * D4 final credit consumption and ledger accounting on PostgreSQL, in a SCRATCH database created and dropped here on the disposable server named by
@@ -57,7 +71,7 @@ describe.skipIf(!process.env.DATABASE_URL)('D4 final credit consumption and ledg
   let dbApp: ReturnType<typeof buildDb>;
   let planId: string;
   /** Test CONFIGURATION, not policy: the owner has decided neither the freshness window (Q3) nor the policy effective instant (Q14). */
-  const GATE_CFG: SettlementGateConfig = { providerAccountId: 'acct_d4_test', providerMode: 'test', freshnessWindowMs: 600_000, policyEffectiveFromMs: 1_000, allowedIntervals: DEVELOPMENT_ALLOWED_INTERVALS, acceptedEvidenceKinds: [MOCK_EVIDENCE_KIND] };
+  const GATE_CFG: SettlementGateConfig = { providerAccountId: 'acct_d4_test', providerMode: 'test', freshnessWindowMs: 600_000, policyEffectiveFromMs: 1_000, allowedIntervals: DEVELOPMENT_ALLOWED_INTERVALS, acceptedEvidenceKinds: [MOCK_EVIDENCE_KIND], trustedSigningKeys: { [SIGNER.keyId]: KEY_A.publicHex } };
   let recorder: SettlementAuthorizationRecorder;
   const dbNow = async () => Number((await rows<{ ms: string }>("select (extract(epoch from clock_timestamp())*1000)::bigint ms"))[0]!.ms);
   const fp = (inv: { status: string; amountDueMinor: number; amountPaidMinor: number; amountRemainingMinor: number; totalMinor: number }, lineCount: number) => ({ status: inv.status, amountDueMinor: inv.amountDueMinor, amountPaidMinor: inv.amountPaidMinor, amountRemainingMinor: inv.amountRemainingMinor, totalMinor: inv.totalMinor, lineCount });
@@ -161,7 +175,7 @@ describe.skipIf(!process.env.DATABASE_URL)('D4 final credit consumption and ledg
     saga = new BenefitApplicationSagaService(buildDb(await connect()));
     applications = new BenefitTerminalApplicationService(buildDb(await connect()));
     consumption = new PartnerCreditConsumptionService(buildDb(await connect()), GATE_CFG);
-    recorder = new SettlementAuthorizationRecorder(buildDb(await connect()), GATE_CFG);
+    recorder = new SettlementAuthorizationRecorder(buildDb(await connect()), GATE_CFG, SIGNER);
     compensator = new PartnerProvisionalReversalCompensator();
   }, 300_000);
 
@@ -900,7 +914,7 @@ describe.skipIf(!process.env.DATABASE_URL)('D4 final credit consumption and ledg
       expect(future.rec!.verdict).toBe('UNRESOLVED'); await refused(future.s, /\(NOT_ELIGIBLE\)/);
       // fresh when recorded, stale when consumed: the gate reads the DATABASE clock inside the transaction
       const tight: SettlementGateConfig = { ...GATE_CFG, freshnessWindowMs: 400 };
-      const tightRecorder = new SettlementAuthorizationRecorder(buildDb(await connect()), tight);
+      const tightRecorder = new SettlementAuthorizationRecorder(buildDb(await connect()), tight, SIGNER);
       const s = await scenario({ authorize: false }); await applications.record({ reservationId: s.reservationId, businessId: s.businessId });
       const fresh = await tightRecorder.record({ reservationId: s.reservationId, businessId: s.businessId, evidence: await evidenceFor(s, ev => { ev.provenance.observedAtMs += 990; }) });
       expect(fresh.verdict).toBe('ELIGIBLE');
@@ -923,8 +937,8 @@ describe.skipIf(!process.env.DATABASE_URL)('D4 final credit consumption and ledg
         const digest = (await rows<{ d: string }>('select partner_credit_settlement_auth_digest($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::text[],$11,$12,$13,$14,$15,$16) d',
           [f.business_id, f.reservation_id, f.decision_id, f.invoice_ref, f.provider_account_id, f.provider_mode, f.allocation_digest, f.policy_version, f.verdict, f.reason_codes, f.classifier_version, f.evidence_kind, f.billing_interval, f.snapshot_ref, f.snapshot_digest, f.observed_at_ms]))[0]!.d;
         return rejects(admin.query(
-          `insert into partner_credit_settlement_authorizations(business_id,reservation_id,decision_id,invoice_ref,provider_account_id,provider_mode,allocation_digest,policy_version,verdict,reason_codes,classifier_version,evidence_kind,billing_interval,snapshot_ref,snapshot_digest,observed_at_ms,evidence_digest)
-           values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::text[],$11,$12,$13,$14,$15,$16,$17)`,
+          `insert into partner_credit_settlement_authorizations(business_id,reservation_id,decision_id,invoice_ref,provider_account_id,provider_mode,allocation_digest,policy_version,verdict,reason_codes,classifier_version,evidence_kind,billing_interval,snapshot_ref,snapshot_digest,observed_at_ms,evidence_digest,provenance_version,signing_key_id,signature)
+           values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::text[],$11,$12,$13,$14,$15,$16,$17,1,'dummy',repeat('a',128))`,
           [f.business_id, f.reservation_id, f.decision_id, f.invoice_ref, f.provider_account_id, f.provider_mode, f.allocation_digest, f.policy_version, f.verdict, f.reason_codes, f.classifier_version, f.evidence_kind, f.billing_interval, f.snapshot_ref, f.snapshot_digest, f.observed_at_ms, digest]));
       };
       expect(await forge({ business_id: other.businessId })).toMatch(/violates foreign key|SETTLEMENT_AUTH_BINDING/);        // another tenant
@@ -953,9 +967,10 @@ describe.skipIf(!process.env.DATABASE_URL)('D4 final credit consumption and ledg
       await refused(item.s, /\(ALLOCATION_MISMATCH\)/);
       // and the database refuses an authorization whose allocation digest is not the persisted freeze's
       const t = await ready(undefined, { authorize: false });
-      expect(await rejects(admin.query(`insert into partner_credit_settlement_authorizations(business_id,reservation_id,decision_id,invoice_ref,provider_account_id,provider_mode,allocation_digest,policy_version,verdict,reason_codes,classifier_version,evidence_kind,billing_interval,snapshot_ref,snapshot_digest,observed_at_ms,evidence_digest)
+      expect(await rejects(admin.query(`insert into partner_credit_settlement_authorizations(business_id,reservation_id,decision_id,invoice_ref,provider_account_id,provider_mode,allocation_digest,policy_version,verdict,reason_codes,classifier_version,evidence_kind,billing_interval,snapshot_ref,snapshot_digest,observed_at_ms,evidence_digest,provenance_version,signing_key_id,signature)
         select $1,$2,$3,i.invoice_ref,'acct_d4_test','test',repeat('c',64),i.policy_version,'ELIGIBLE',ARRAY['ALL_CONDITIONS_VERIFIED'],'S08-D1D3-SETTLEMENT/1','MOCK_SYNTHETIC','month','s',repeat('d',64),1000,
-          partner_credit_settlement_auth_digest($1,$2,$3,i.invoice_ref,'acct_d4_test','test',repeat('c',64),i.policy_version,'ELIGIBLE',ARRAY['ALL_CONDITIONS_VERIFIED'],'S08-D1D3-SETTLEMENT/1','MOCK_SYNTHETIC','month','s',repeat('d',64),1000)
+          partner_credit_settlement_auth_digest($1,$2,$3,i.invoice_ref,'acct_d4_test','test',repeat('c',64),i.policy_version,'ELIGIBLE',ARRAY['ALL_CONDITIONS_VERIFIED'],'S08-D1D3-SETTLEMENT/1','MOCK_SYNTHETIC','month','s',repeat('d',64),1000),
+          1,'dummy',repeat('a',128)
         from benefit_application_intents i where i.reservation_id=$2`, [t.s.businessId, t.s.reservationId, t.s.decisionId]))).toMatch(/SETTLEMENT_AUTH_BINDING.*allocation digest/);
     });
 
@@ -983,7 +998,7 @@ describe.skipIf(!process.env.DATABASE_URL)('D4 final credit consumption and ledg
       expect(await consumeEntries(s)).toBe(1);
       // consumers race a newer NON-ELIGIBLE snapshot: whatever the interleaving, at most one consumption, a consistent ledger, and no deadlock
       const r2 = await ready();
-      const racer = new SettlementAuthorizationRecorder(buildDb(await connect()), GATE_CFG);
+      const racer = new SettlementAuthorizationRecorder(buildDb(await connect()), GATE_CFG, SIGNER);
       const bad = await evidenceFor(r2.s, ev => { ev.events.dispute = 'open'; ev.provenance.observedAtMs += 500; });
       const outcomes = await Promise.allSettled([racer.record({ reservationId: r2.s.reservationId, businessId: r2.s.businessId, evidence: bad }),
         ...(await Promise.all(Array.from({ length: 4 }, async () => newConsumer(GATE_CFG)))).map(x => x.consume({ reservationId: r2.s.reservationId, businessId: r2.s.businessId }))]);
@@ -1021,7 +1036,7 @@ describe.skipIf(!process.env.DATABASE_URL)('D4 final credit consumption and ledg
       const unknown = await ready(ev => { ev.invoice.billingInterval = 'banana'; }); await refused(unknown.s, /\(INTERVAL_NOT_ENABLED\)/);
       expect((await (await newConsumer({ ...GATE_CFG, allowedIntervals: ['month', 'year'] })).consume({ reservationId: annual.s.reservationId, businessId: annual.s.businessId })).replay).toBe(false); // configuration, not code
       // the effective instant of the policy is configuration too (Q14): without it the classifier cannot say ELIGIBLE
-      const noInstant = new SettlementAuthorizationRecorder(buildDb(await connect()), { ...GATE_CFG, policyEffectiveFromMs: null });
+      const noInstant = new SettlementAuthorizationRecorder(buildDb(await connect()), { ...GATE_CFG, policyEffectiveFromMs: null }, SIGNER);
       const t = await ready(undefined, { authorize: false });
       expect(await noInstant.record({ reservationId: t.s.reservationId, businessId: t.s.businessId, evidence: await evidenceFor(t.s) })).toMatchObject({ verdict: 'UNRESOLVED' });
     });
@@ -1048,11 +1063,15 @@ describe.skipIf(!process.env.DATABASE_URL)('D4 final credit consumption and ledg
 
     it('16. the gate re-verifies a stored row itself: a forged digest or a future observation that got past the service is still refused', async () => {
       const base = async () => { const r = await ready(); const row = (await rows<any>('select * from partner_credit_settlement_authorizations where reservation_id=$1', [r.s.reservationId]))[0]; return { ...r, row }; };
-      const insertRaw = (row: any, over: Record<string, unknown>, digest?: string) => {
+      const insertRaw = async (row: any, over: Record<string, unknown>, digest?: string) => {
         const f = { ...row, ...over };
-        return admin.query(`insert into partner_credit_settlement_authorizations(business_id,reservation_id,decision_id,invoice_ref,provider_account_id,provider_mode,allocation_digest,policy_version,verdict,reason_codes,classifier_version,evidence_kind,billing_interval,snapshot_ref,snapshot_digest,observed_at_ms,evidence_digest)
-          values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::text[],$11,$12,$13,$14,$15,$16,coalesce($17, partner_credit_settlement_auth_digest($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::text[],$11,$12,$13,$14,$15,$16)))`,
-          [f.business_id, f.reservation_id, f.decision_id, f.invoice_ref, f.provider_account_id, f.provider_mode, f.allocation_digest, f.policy_version, f.verdict, f.reason_codes, f.classifier_version, f.evidence_kind, f.billing_interval, f.snapshot_ref, f.snapshot_digest, f.observed_at_ms, digest ?? null]);
+        const own = await settlementAuthorizationDigest({ businessId: f.business_id, reservationId: f.reservation_id, decisionId: f.decision_id, invoiceRef: f.invoice_ref, providerAccountId: f.provider_account_id,
+          providerMode: f.provider_mode, allocationDigest: f.allocation_digest, policyVersion: f.policy_version, verdict: f.verdict, reasonCodes: f.reason_codes, classifierVersion: f.classifier_version,
+          evidenceKind: f.evidence_kind, billingInterval: f.billing_interval, snapshotRef: f.snapshot_ref, snapshotDigest: f.snapshot_digest, observedAtMs: Number(f.observed_at_ms) });
+        const sig = Buffer.from(await SIGNER.sign(settlementProvenanceMessage(SIGNER.keyId, digest ?? own))).toString('hex');
+        return admin.query(`insert into partner_credit_settlement_authorizations(business_id,reservation_id,decision_id,invoice_ref,provider_account_id,provider_mode,allocation_digest,policy_version,verdict,reason_codes,classifier_version,evidence_kind,billing_interval,snapshot_ref,snapshot_digest,observed_at_ms,evidence_digest,provenance_version,signing_key_id,signature)
+          values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::text[],$11,$12,$13,$14,$15,$16,$17,1,$18,$19)`,
+          [f.business_id, f.reservation_id, f.decision_id, f.invoice_ref, f.provider_account_id, f.provider_mode, f.allocation_digest, f.policy_version, f.verdict, f.reason_codes, f.classifier_version, f.evidence_kind, f.billing_interval, f.snapshot_ref, f.snapshot_digest, f.observed_at_ms, digest ?? own, SIGNER.keyId, sig]);
       };
       // (a) a row whose digest does not match its fields: only possible with the database check disabled (scratch database), and the gate still refuses it
       const a = await base();
@@ -1089,14 +1108,14 @@ describe.skipIf(!process.env.DATABASE_URL)('D4 final credit consumption and ledg
       }
       // the integrity digest is recomputed by the database: a tampered or hand-made digest is refused
       const row = (await rows<any>('select * from partner_credit_settlement_authorizations where reservation_id=$1', [s.reservationId]))[0];
-      expect(await rejects(admin.query(`insert into partner_credit_settlement_authorizations(business_id,reservation_id,decision_id,invoice_ref,provider_account_id,provider_mode,allocation_digest,policy_version,verdict,reason_codes,classifier_version,evidence_kind,billing_interval,snapshot_ref,snapshot_digest,observed_at_ms,evidence_digest)
-        values($1,$2,$3,$4,$5,$6,$7,$8,'ELIGIBLE',ARRAY['ALL_CONDITIONS_VERIFIED'],$9,$10,$11,'x',$12,$13,repeat('0',64))`,
+      expect(await rejects(admin.query(`insert into partner_credit_settlement_authorizations(business_id,reservation_id,decision_id,invoice_ref,provider_account_id,provider_mode,allocation_digest,policy_version,verdict,reason_codes,classifier_version,evidence_kind,billing_interval,snapshot_ref,snapshot_digest,observed_at_ms,evidence_digest,provenance_version,signing_key_id,signature)
+        values($1,$2,$3,$4,$5,$6,$7,$8,'ELIGIBLE',ARRAY['ALL_CONDITIONS_VERIFIED'],$9,$10,$11,'x',$12,$13,repeat('0',64),1,'dummy',repeat('a',128))`,
         [row.business_id, row.reservation_id, row.decision_id, row.invoice_ref, row.provider_account_id, row.provider_mode, row.allocation_digest, row.policy_version, row.classifier_version, row.evidence_kind, row.billing_interval, 'e'.repeat(64), row.observed_at_ms]))).toMatch(/SETTLEMENT_AUTH_DIGEST_MISMATCH/);
       // an ELIGIBLE verdict cannot carry another reason, and a non-eligible one cannot claim all conditions verified (CHECK constraints, independent of the service)
       const reasonDigest = (await rows<{ d: string }>("select partner_credit_settlement_auth_digest($1,$2,$3,$4,$5,$6,$7,$8,'ELIGIBLE',ARRAY['NOT_SETTLED'],$9,$10,$11,'x',$12,$13) d",
         [row.business_id, row.reservation_id, row.decision_id, row.invoice_ref, row.provider_account_id, row.provider_mode, row.allocation_digest, row.policy_version, row.classifier_version, row.evidence_kind, row.billing_interval, 'f'.repeat(64), row.observed_at_ms]))[0]!.d;
-      expect(await rejects(admin.query(`insert into partner_credit_settlement_authorizations(business_id,reservation_id,decision_id,invoice_ref,provider_account_id,provider_mode,allocation_digest,policy_version,verdict,reason_codes,classifier_version,evidence_kind,billing_interval,snapshot_ref,snapshot_digest,observed_at_ms,evidence_digest)
-        values($1,$2,$3,$4,$5,$6,$7,$8,'ELIGIBLE',ARRAY['NOT_SETTLED'],$9,$10,$11,'x',$12,$13,$14)`,
+      expect(await rejects(admin.query(`insert into partner_credit_settlement_authorizations(business_id,reservation_id,decision_id,invoice_ref,provider_account_id,provider_mode,allocation_digest,policy_version,verdict,reason_codes,classifier_version,evidence_kind,billing_interval,snapshot_ref,snapshot_digest,observed_at_ms,evidence_digest,provenance_version,signing_key_id,signature)
+        values($1,$2,$3,$4,$5,$6,$7,$8,'ELIGIBLE',ARRAY['NOT_SETTLED'],$9,$10,$11,'x',$12,$13,$14,1,'dummy',repeat('a',128))`,
         [row.business_id, row.reservation_id, row.decision_id, row.invoice_ref, row.provider_account_id, row.provider_mode, row.allocation_digest, row.policy_version, row.classifier_version, row.evidence_kind, row.billing_interval, 'f'.repeat(64), row.observed_at_ms, reasonDigest]))).toMatch(/verdict_reason_check/);
       // TypeScript and SQL compute the same digest
       expect(row.evidence_digest).toBe(await settlementAuthorizationDigest({ businessId: row.business_id, reservationId: row.reservation_id, decisionId: row.decision_id, invoiceRef: row.invoice_ref, providerAccountId: row.provider_account_id,
@@ -1118,5 +1137,350 @@ describe.skipIf(!process.env.DATABASE_URL)('D4 final credit consumption and ledg
       try { await insertConsume(s); } finally { await admin.query('ROLLBACK'); } // an ELIGIBLE newest authorization lets the (otherwise guarded) entry through; rolled back
       expect(await consumeEntries(s)).toBe(0);
     });
+  });
+  describe('D1/D3-DEV-04 settlement evidence authenticity and database authority', () => {
+    const LOGINS: Record<string, string> = { dev04_login_ordinary: '', dev04_login_consumer: 'settlement_consumer', dev04_login_recorder: 'settlement_recorder', dev04_login_app: 'dev04_app', dev04_login_noverify: 'dev04_noverify' };
+    const LOGIN_PASSWORD = randomBytes(12).toString('hex'); // synthetic, per run, never reused
+    const ROLES = [...Object.keys(LOGINS), 'dev04_ordinary', 'dev04_overgranted', 'dev04_bypass', 'dev04_owner', 'dev04_app', 'dev04_noverify'];
+    /** A REAL non-superuser session (its own login), so privilege and impersonation tests do not depend on the superuser's ability to SET ROLE to anything. */
+    const connectAs = async (login: string) => { const u = new URL(urlFor(dbName)); u.username = login; u.password = LOGIN_PASSWORD; const c = new Client({ connectionString: u.toString() }); await c.connect(); clients.push(c); return c; };
+    const tryQ = async (c: Client, text: string, params: unknown[] = []) => { try { return { error: '', rows: (await c.query(text, params)).rows as Array<Record<string, any>> }; } catch (e) { return { error: errText(e), rows: [] as Array<Record<string, any>> }; } };
+    const SETTLEMENT_ROLES = ['settlement_recorder', 'settlement_consumer', 'settlement_authority_reader', 'settlement_tenant_reader', 'settlement_auditor'];
+    const TABLE = 'partner_credit_settlement_authorizations';
+    const hex = (b: Uint8Array) => Buffer.from(b).toString('hex');
+
+    beforeAll(async () => {
+      for (const r of ROLES) {
+        await admin.query(`DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='${r}') THEN CREATE ROLE ${r} NOLOGIN${r === 'dev04_bypass' ? ' BYPASSRLS' : ''}; END IF; END $$`);
+      }
+      await admin.query(`GRANT ALL ON ${TABLE} TO dev04_overgranted`);
+      await admin.query(`GRANT SELECT, INSERT ON ${TABLE} TO dev04_bypass`);
+      for (const r of ['dev04_app', 'dev04_noverify']) {
+        await admin.query(`GRANT ALL ON ALL TABLES IN SCHEMA public TO ${r}`);
+        await admin.query(`GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO ${r}`);
+      }
+      await admin.query('GRANT settlement_consumer TO dev04_app');
+      for (const [login, member] of Object.entries(LOGINS)) {
+        await admin.query(`DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='${login}') THEN CREATE ROLE ${login} LOGIN; END IF; END $$`);
+        await admin.query(`ALTER ROLE ${login} LOGIN NOSUPERUSER NOBYPASSRLS PASSWORD '${LOGIN_PASSWORD}'`);
+        await admin.query(`GRANT CONNECT ON DATABASE ${dbName} TO ${login}`);
+        if (member) await admin.query(`GRANT ${member} TO ${login}`);
+      }
+    });
+    afterAll(async () => {
+      try { await admin.query('ROLLBACK'); } catch { /* none open */ }
+      for (const r of ROLES) { try { await admin.query(`DROP OWNED BY ${r}`); await admin.query(`DROP ROLE IF EXISTS ${r}`); } catch { /* shared cluster: another run may use it */ } }
+    });
+
+    /** Runs one statement as `role` inside a transaction that is rolled back (or committed). Returns the error text, if any, and the rows. */
+    const asRole = async (role: string, text: string, params: unknown[] = [], opts: { commit?: boolean; setup?: string[] } = {}) => {
+      await admin.query('BEGIN');
+      let error = ''; let result: Array<Record<string, any>> = [];
+      try {
+        await admin.query(`SET LOCAL ROLE ${role}`);
+        for (const x of opts.setup ?? []) await admin.query(x);
+        result = (await admin.query(text, params)).rows;
+      } catch (e) { error = errText(e); }
+      await admin.query(opts.commit && !error ? 'COMMIT' : 'ROLLBACK');
+      return { error, rows: result };
+    };
+
+    const ready = async (over?: (ev: any) => void, opts: { authorize?: boolean } = {}) => {
+      const s = await scenario({ authorize: false });
+      await applications.record({ reservationId: s.reservationId, businessId: s.businessId });
+      if (opts.authorize !== false) await recorder.record({ reservationId: s.reservationId, businessId: s.businessId, evidence: await evidenceFor(s, over) });
+      return { s };
+    };
+    const consumeEntries = async (s: Scenario) => (await rows<{ n: number }>("select count(*)::int n from partner_credit_ledger where decision_id=$1 and entry_type='consume'", [s.decisionId]))[0]!.n;
+    const refused = async (s: Scenario, pattern: RegExp, service: PartnerCreditConsumptionService = consumption) => {
+      const before = await credit(s);
+      expect(await rejects(service.consume({ reservationId: s.reservationId, businessId: s.businessId }))).toMatch(pattern);
+      expect(await credit(s)).toEqual(before);
+      expect(await consumeEntries(s)).toBe(0);
+    };
+    const stored = async (s: Scenario) => (await rows<any>(`select * from ${TABLE} where reservation_id=$1 order by observed_at_ms desc limit 1`, [s.reservationId]))[0];
+    /** Writes a NEWER row for the reservation as `role`, with the given provenance, and the digest recomputed so every structural check passes. */
+    const writeRow = async (s: Scenario, role: string, prov: { keyId: string; signWith?: { signer: SettlementEvidenceSigner } | 'garbage' | 'other-digest'; signature?: string; version?: number }, over: Record<string, unknown> = {}) => {
+      const row = await stored(s);
+      const f = { ...row, ...over, snapshot_ref: `forged-${randomBytes(3).toString('hex')}`, snapshot_digest: randomBytes(32).toString('hex'), observed_at_ms: Number(row.observed_at_ms) + 1 };
+      const digest = await settlementAuthorizationDigest({ businessId: f.business_id, reservationId: f.reservation_id, decisionId: f.decision_id, invoiceRef: f.invoice_ref, providerAccountId: f.provider_account_id,
+        providerMode: f.provider_mode, allocationDigest: f.allocation_digest, policyVersion: f.policy_version, verdict: f.verdict, reasonCodes: f.reason_codes, classifierVersion: f.classifier_version,
+        evidenceKind: f.evidence_kind, billingInterval: f.billing_interval, snapshotRef: f.snapshot_ref, snapshotDigest: f.snapshot_digest, observedAtMs: Number(f.observed_at_ms) });
+      let signature = prov.signature ?? '';
+      if (!signature) {
+        if (prov.signWith === 'garbage') signature = randomBytes(64).toString('hex');
+        else if (prov.signWith === 'other-digest') signature = hex(await SIGNER.sign(settlementProvenanceMessage(prov.keyId, row.evidence_digest))); // a genuine signature, but over ANOTHER row's digest
+        else if (prov.signWith) signature = hex(await prov.signWith.signer.sign(settlementProvenanceMessage(prov.keyId, digest)));
+      }
+      return asRole(role, `insert into ${TABLE}(business_id,reservation_id,decision_id,invoice_ref,provider_account_id,provider_mode,allocation_digest,policy_version,verdict,reason_codes,classifier_version,evidence_kind,billing_interval,snapshot_ref,snapshot_digest,observed_at_ms,evidence_digest,provenance_version,signing_key_id,signature)
+        values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::text[],$11,$12,$13,$14,$15,$16,$17,$20,$18,$19)`,
+        [f.business_id, f.reservation_id, f.decision_id, f.invoice_ref, f.provider_account_id, f.provider_mode, f.allocation_digest, f.policy_version, f.verdict, f.reason_codes, f.classifier_version, f.evidence_kind, f.billing_interval, f.snapshot_ref, f.snapshot_digest, f.observed_at_ms, digest, prov.keyId, signature, prov.version ?? 1], { commit: true });
+    };
+
+    it('E1. the five settlement roles are NOLOGIN, non-superuser, non-BYPASSRLS, and table privileges are exactly the least-privilege matrix; RLS is enabled and forced', async () => {
+      const attrs = await rows<any>('select rolname, rolsuper, rolcanlogin, rolbypassrls, rolcreaterole, rolcreatedb, rolreplication from pg_roles where rolname = any($1) order by rolname', [SETTLEMENT_ROLES]);
+      expect(attrs.map(a => a.rolname)).toEqual([...SETTLEMENT_ROLES].sort());
+      for (const a of attrs) expect([a.rolsuper, a.rolcanlogin, a.rolbypassrls, a.rolcreaterole, a.rolcreatedb, a.rolreplication], a.rolname).toEqual([false, false, false, false, false, false]);
+      const priv = async (role: string, p: string) => (await rows<{ ok: boolean }>('select has_table_privilege($1, $2, $3) ok', [role, TABLE, p]))[0]!.ok;
+      for (const p of ['UPDATE', 'DELETE', 'TRUNCATE', 'REFERENCES', 'TRIGGER']) for (const r of [...SETTLEMENT_ROLES, 'dev04_ordinary']) expect(await priv(r, p), `${r} ${p}`).toBe(false);
+      expect(await priv('settlement_recorder', 'INSERT')).toBe(true);
+      expect(await priv('settlement_recorder', 'SELECT')).toBe(true); // needed by the planner; RLS gives it no rows
+      for (const r of ['settlement_consumer', 'dev04_ordinary']) { expect(await priv(r, 'INSERT'), r).toBe(false); expect(await priv(r, 'SELECT'), r).toBe(false); }
+      for (const r of ['settlement_auditor', 'settlement_tenant_reader', 'settlement_authority_reader']) { expect(await priv(r, 'INSERT'), r).toBe(false); expect(await priv(r, 'SELECT'), r).toBe(true); }
+      expect(await rows(`select relrowsecurity, relforcerowsecurity from pg_class where relname='${TABLE}'`)).toEqual([{ relrowsecurity: true, relforcerowsecurity: true }]);
+      // PUBLIC has nothing on the table and nothing on the verification function; the consumer may only execute it
+      expect((await rows<{ ok: boolean }>("select has_table_privilege('public', $1, 'SELECT') or has_table_privilege('public', $1, 'INSERT') ok", [TABLE]))[0]!.ok).toBe(false);
+      const fn = 'public.partner_credit_settlement_auth_read(uuid,uuid,text)';
+      for (const [r, ok] of [['settlement_consumer', true], ['settlement_recorder', true], ['settlement_auditor', false], ['settlement_tenant_reader', false], ['dev04_ordinary', false]] as const)
+        expect((await rows<{ ok: boolean }>('select has_function_privilege($1, $2, \'EXECUTE\') ok', [r, fn]))[0]!.ok, r).toBe(ok);
+      // definer functions run with narrow, named owners and a pinned search_path
+      expect(await rows(`select proname, rolname owner, prosecdef, proconfig::text cfg from pg_proc p join pg_roles r on r.oid=p.proowner where proname in ('partner_credit_settlement_auth_read','partner_credit_ledger_settlement_gate') order by proname`))
+        .toEqual([{ proname: 'partner_credit_ledger_settlement_gate', owner: 'settlement_authority_reader', prosecdef: true, cfg: '{"search_path=public, pg_catalog"}' },
+                  { proname: 'partner_credit_settlement_auth_read', owner: 'settlement_authority_reader', prosecdef: true, cfg: '{"search_path=pg_catalog, public"}' }]);
+    });
+
+    it('E2. an ordinary role, and even one that was mistakenly granted everything on the table, cannot insert, update, delete, truncate or read evidence', async () => {
+      const { s } = await ready();
+      const row = await stored(s);
+      for (const role of ['dev04_ordinary', 'dev04_overgranted', 'settlement_consumer', 'settlement_tenant_reader']) {
+        expect((await asRole(role, `insert into ${TABLE}(id) values (gen_random_uuid())`)).error, `${role} insert`).toMatch(/permission denied|row-level security|SETTLEMENT_AUTH/);
+        // refused outright, or (for a role with the privilege but no visible row) a statement that matches and changes nothing
+        for (const stmt of [`update ${TABLE} set verdict='ELIGIBLE' returning id`, `delete from ${TABLE} returning id`]) {
+          const r = await asRole(role, stmt);
+          expect(r.error !== '' || r.rows.length === 0, `${role} ${stmt}`).toBe(true);
+        }
+        expect((await asRole(role, `truncate ${TABLE}`)).error, `${role} truncate`).toMatch(/permission denied|TRUNCATE|denied/i);
+      }
+      // the over-granted role passes the privilege check yet RLS (no policy for it) still hides every row and blocks every write
+      expect(await asRole('dev04_overgranted', `select * from ${TABLE}`)).toEqual({ error: '', rows: [] });
+      for (const role of ['dev04_overgranted', 'dev04_ordinary']) expect((await writeRow(s, role, { keyId: SIGNER.keyId, signWith: { signer: SIGNER } })).error, `${role} well-formed signed row`).toMatch(/row-level security|permission denied/);
+      // the recorder role may insert, and nothing else: no update, delete or truncate, and it reads no rows from the table
+      for (const t of [`update ${TABLE} set verdict='ELIGIBLE'`, `delete from ${TABLE}`, `truncate ${TABLE}`]) expect((await asRole('settlement_recorder', t)).error, t).toMatch(/permission denied/);
+      expect(await asRole('settlement_recorder', `select * from ${TABLE}`)).toEqual({ error: '', rows: [] });
+      // the evidence is unchanged
+      expect(await stored(s)).toEqual(row);
+    });
+
+    it('E3. tenant isolation in the database: the tenant reader sees only the tenant named by the session, an unset or garbage value sees nothing, and the setting grants no write', async () => {
+      const a = await ready(); const b = await ready();
+      const countFor = async (setting: string | null) => (await asRole('settlement_tenant_reader', `select business_id from ${TABLE} where reservation_id = any($1)`, [[a.s.reservationId, b.s.reservationId]],
+        { setup: setting === null ? [] : [`select set_config('echogrid.tenant_id', '${setting}', true)`] })).rows.map(r => r.business_id);
+      expect(await countFor(null)).toEqual([]);
+      expect(await countFor('')).toEqual([]);
+      expect(await countFor('not-a-uuid')).toEqual([]);
+      expect(await countFor("x' or '1'='1")).toEqual([]);
+      expect(await countFor(a.s.businessId)).toEqual([a.s.businessId]);
+      expect(await countFor(b.s.businessId)).toEqual([b.s.businessId]);
+      // the setting is a READ scope only: whatever a session sets it to, it cannot insert, update or delete, and an ordinary role gains nothing from setting it
+      for (const t of [`insert into ${TABLE}(id) values (gen_random_uuid())`, `update ${TABLE} set verdict='ELIGIBLE'`, `delete from ${TABLE}`])
+        expect((await asRole('settlement_tenant_reader', t, [], { setup: [`select set_config('echogrid.tenant_id', '${a.s.businessId}', true)`] })).error, t).toMatch(/permission denied/);
+      expect((await asRole('dev04_ordinary', `select * from ${TABLE}`, [], { setup: [`select set_config('echogrid.tenant_id', '${a.s.businessId}', true)`] })).error).toMatch(/permission denied/);
+      expect((await asRole('dev04_overgranted', `select * from ${TABLE}`, [], { setup: [`select set_config('echogrid.tenant_id', '${a.s.businessId}', true)`] })).rows).toEqual([]);
+      // the auditor sees every tenant, read-only
+      expect((await asRole('settlement_auditor', `select count(*)::int n from ${TABLE} where reservation_id = any($1)`, [[a.s.reservationId, b.s.reservationId]])).rows).toEqual([{ n: 2 }]);
+      expect((await asRole('settlement_auditor', `insert into ${TABLE}(id) values (gen_random_uuid())`)).error).toMatch(/permission denied/);
+    });
+
+    it('E4. the verification function answers one explicit tenant and reservation only: a cross-tenant lookup returns nothing, and only entitled roles may call it', async () => {
+      const a = await ready(); const b = await ready();
+      const call = (role: string, biz: string, res: string, snap: string | null = null) => asRole(role, 'select id, business_id, reservation_id from public.partner_credit_settlement_auth_read($1::uuid,$2::uuid,$3::text)', [biz, res, snap]);
+      expect((await call('settlement_consumer', a.s.businessId, a.s.reservationId)).rows).toHaveLength(1);
+      expect((await call('settlement_consumer', b.s.businessId, a.s.reservationId)).rows).toEqual([]); // another tenant's id with this reservation
+      expect((await call('settlement_consumer', a.s.businessId, b.s.reservationId)).rows).toEqual([]); // this tenant with another tenant's reservation
+      expect((await call('settlement_consumer', a.s.businessId, a.s.reservationId, 'f'.repeat(64))).rows).toEqual([]);
+      for (const role of ['dev04_ordinary', 'dev04_overgranted', 'settlement_auditor', 'settlement_tenant_reader']) expect((await call(role, a.s.businessId, a.s.reservationId)).error, role).toMatch(/permission denied for function/);
+      // the consumer verifies but cannot write: no INSERT, and a real consumer session cannot assume the recorder role
+      const consumer = await connectAs('dev04_login_consumer');
+      expect((await tryQ(consumer, `insert into ${TABLE}(id) values (gen_random_uuid())`)).error).toMatch(/permission denied/);
+      expect((await tryQ(consumer, 'SET ROLE settlement_recorder')).error).toMatch(/permission denied to set role|must be member/);
+      expect((await tryQ(consumer, 'select id from public.partner_credit_settlement_auth_read($1::uuid,$2::uuid)', [a.s.businessId, a.s.reservationId])).rows).toHaveLength(1);
+    });
+
+    it('E5. role impersonation and session manipulation fail for real sessions: no non-member can assume the recorder, set_config("role") obeys the same rule, and SET SESSION AUTHORIZATION is refused', async () => {
+      for (const login of ['dev04_login_ordinary', 'dev04_login_consumer', 'dev04_login_app', 'dev04_login_noverify']) {
+        const c = await connectAs(login);
+        for (const target of ['settlement_recorder', 'settlement_authority_reader', 'settlement_auditor', 'settlement_tenant_reader']) {
+          expect((await tryQ(c, `SET ROLE ${target}`)).error, `${login} -> ${target}`).toMatch(/permission denied to set role|must be member/);
+          expect((await tryQ(c, `select set_config('role', '${target}', false)`)).error, `${login} set_config ${target}`).toMatch(/permission denied to set role|must be member/);
+        }
+        expect((await tryQ(c, 'SET SESSION AUTHORIZATION settlement_recorder')).error, `${login} SESSION AUTHORIZATION`).toMatch(/permission denied to set session authorization|must be superuser/);
+        expect((await tryQ(c, `insert into ${TABLE}(id) values (gen_random_uuid())`)).error, `${login} direct insert`).toMatch(/permission denied|row-level security|SETTLEMENT_AUTH/);
+        // the guards that protect the evidence are not theirs to disable
+        expect((await tryQ(c, `alter table ${TABLE} disable trigger partner_credit_settlement_authorizations_no_update_delete`)).error).toMatch(/must be owner/);
+        expect((await tryQ(c, `alter table ${TABLE} disable row level security`)).error).toMatch(/must be owner/);
+        expect((await tryQ(c, 'alter function public.partner_credit_settlement_auth_read(uuid,uuid,text) owner to dev04_app')).error).toMatch(/must be owner|must be member/);
+        expect((await tryQ(c, "alter role settlement_recorder with bypassrls")).error).toMatch(/permission denied|must be superuser|must have/);
+        expect((await tryQ(c, 'grant settlement_recorder to dev04_login_ordinary')).error).toMatch(/permission denied|must have|ADMIN/i);
+      }
+      // positive control: a session that was deliberately made a member of the recorder role CAN assume it (that membership is the provisioning decision, outside this block)
+      const recorderSession = await connectAs('dev04_login_recorder');
+      expect((await tryQ(recorderSession, 'SET ROLE settlement_recorder')).error).toBe('');
+    });
+
+    it('E6. forged provenance is refused by the gate before the verdict is considered: wrong key id, wrong signature, a signature copied from another row, a substituted trusted key, and a row from a role that cannot sign', async () => {
+      const { s } = await ready();
+      const before = await credit(s);
+      // (a) the recorder role may insert the row (the database cannot verify signatures) but cannot make the gate accept it: random bytes
+      expect((await writeRow(s, 'settlement_recorder', { keyId: SIGNER.keyId, signWith: 'garbage' })).error).toBe('');
+      await refused(s, /\(PROVENANCE_INVALID\)/);
+      // (b) a genuine signature from a trusted key, but over a different row's digest (replay of a real signature on a forged row)
+      expect((await writeRow(s, 'settlement_recorder', { keyId: SIGNER.keyId, signWith: 'other-digest' })).error).toBe('');
+      await refused(s, /\(PROVENANCE_INVALID\)/);
+      // (c) signed with an untrusted key (a real key, but not one the gate trusts), under its own id and under the trusted id
+      expect((await writeRow(s, 'settlement_recorder', { keyId: KEY_B.signer.keyId, signWith: KEY_B })).error).toBe('');
+      await refused(s, /\(UNTRUSTED_KEY\)/);
+      expect((await writeRow(s, 'settlement_recorder', { keyId: SIGNER.keyId, signWith: { signer: KEY_B.signer } })).error).toBe(''); // claims key A, signed by key B
+      await refused(s, /\(PROVENANCE_INVALID\)/);
+      // (d) a row that is a perfect forgery of everything but the signature, written by a role that bypasses RLS: it can write the row and still cannot sign
+      expect((await writeRow(s, 'dev04_bypass', { keyId: SIGNER.keyId, signWith: 'garbage' })).error).toBe('');
+      await refused(s, /\(PROVENANCE_INVALID\)/);
+      // (e) key substitution at the gate: the trusted registry maps the key id to a different public key, so even the genuine recorder's rows no longer verify
+      const genuine = await ready();
+      await refused(genuine.s, /\(PROVENANCE_INVALID\)/, await newGateConsumer({ ...GATE_CFG, trustedSigningKeys: { [SIGNER.keyId]: KEY_B.publicHex } }));
+      // (f) revocation: removing the key from the registry stops every row it signed
+      await refused(genuine.s, /\(GATE_UNCONFIGURED\)/, await newGateConsumer({ ...GATE_CFG, trustedSigningKeys: {} }));
+      await refused(genuine.s, /\(UNTRUSTED_KEY\)/, await newGateConsumer({ ...GATE_CFG, trustedSigningKeys: { [KEY_B.signer.keyId]: KEY_B.publicHex } }));
+      // (g) a malformed registry entry is not a key
+      await refused(genuine.s, /\(GATE_UNCONFIGURED\)/, await newGateConsumer({ ...GATE_CFG, trustedSigningKeys: { [SIGNER.keyId]: 'not-a-key' } }));
+      await refused(genuine.s, /\(GATE_UNCONFIGURED\)/, await newGateConsumer({ ...GATE_CFG, trustedSigningKeys: undefined } as any));
+      expect(await credit(s)).toEqual(before);
+      // (h) an unknown provenance version, signed by the trusted key: only writable with the CHECK constraint temporarily dropped (scratch database), and the gate still refuses it
+      const v = await ready();
+      await admin.query(`ALTER TABLE ${TABLE} DROP CONSTRAINT partner_credit_settlement_auth_provenance_check`);
+      try { expect((await writeRow(v.s, 'settlement_recorder', { keyId: SIGNER.keyId, signWith: { signer: SIGNER }, version: 2 })).error).toBe(''); }
+      finally {
+        await admin.query(`ALTER TABLE ${TABLE} ADD CONSTRAINT partner_credit_settlement_auth_provenance_check CHECK (provenance_version = 1 AND signing_key_id ~ '^[A-Za-z0-9._-]{1,64}$' AND signature ~ '^[0-9a-f]{128}$') NOT VALID`);
+      }
+      await refused(v.s, /\(PROVENANCE_INVALID\)/);
+      // the genuine, trusted-key-signed row is still accepted (consumes once, in the scratch database)
+      const ok = await (await newGateConsumer(GATE_CFG)).consume({ reservationId: genuine.s.reservationId, businessId: genuine.s.businessId });
+      expect(ok.replay).toBe(false);
+      expect(await consumeEntries(genuine.s)).toBe(1);
+    });
+
+    it('E7. a forged INELIGIBLE row cannot be used to bypass anything either: a forged newest row that claims ELIGIBLE for an unsettled invoice is refused on provenance, and nothing moves', async () => {
+      const { s } = await ready(unpaidFor('open'));
+      // the real, signed conclusion is NOT_ELIGIBLE; a forger adds a newer ELIGIBLE row with a matching digest, written by a bypass-RLS role
+      expect((await writeRow(s, 'dev04_bypass', { keyId: SIGNER.keyId, signWith: 'garbage' }, { verdict: 'ELIGIBLE', reason_codes: ['ALL_CONDITIONS_VERIFIED'] })).error).toBe('');
+      await refused(s, /\(PROVENANCE_INVALID\)/);
+      // the forged row really is the newest and really says ELIGIBLE; the database cannot tell it from a genuine one, which is why the signature (not the verdict) is the authority
+      expect((await rows<any>(`select verdict from ${TABLE} where reservation_id=$1 order by observed_at_ms desc limit 1`, [s.reservationId]))[0].verdict).toBe('ELIGIBLE');
+    });
+
+    it('E8. missing trusted-recording configuration fails closed: no signer, a corrupt key, an unavailable recorder role, a bad role name', async () => {
+      const { s } = await ready(undefined, { authorize: false });
+      const ev = await evidenceFor(s);
+      const countRows = async () => (await rows<{ n: number }>(`select count(*)::int n from ${TABLE} where reservation_id=$1`, [s.reservationId]))[0]!.n;
+      const noSigner = new SettlementAuthorizationRecorder(buildDb(await connect()), GATE_CFG);
+      expect(await rejects(noSigner.record({ reservationId: s.reservationId, businessId: s.businessId, evidence: ev }))).toMatch(/SETTLEMENT_AUTH_RECORDER_UNCONFIGURED/);
+      expect(await rejects(createSettlementEvidenceSigner('k1', 'bm90LWEta2V5'))).toMatch(/RECORDER_UNCONFIGURED/);
+      expect(await rejects(createSettlementEvidenceSigner('bad id!', ''))).toMatch(/RECORDER_UNCONFIGURED/);
+      const noRole = new SettlementAuthorizationRecorder(buildDb(await connect()), GATE_CFG, SIGNER, 'settlement_no_such_role');
+      expect(await rejects(noRole.record({ reservationId: s.reservationId, businessId: s.businessId, evidence: ev }))).toMatch(/RECORDER_ROLE_UNAVAILABLE/);
+      const badName = new SettlementAuthorizationRecorder(buildDb(await connect()), GATE_CFG, SIGNER, 'x; drop table businesses');
+      expect(await rejects(badName.record({ reservationId: s.reservationId, businessId: s.businessId, evidence: ev }))).toMatch(/RECORDER_UNCONFIGURED/);
+      // a recorder configured with a role that exists but is not allowed to insert: the INSERT is refused by the database
+      const wrongRole = new SettlementAuthorizationRecorder(buildDb(await connect()), GATE_CFG, SIGNER, 'settlement_auditor');
+      expect(await rejects(wrongRole.record({ reservationId: s.reservationId, businessId: s.businessId, evidence: ev }))).toMatch(/Failed query|permission denied/);
+      expect(await countRows()).toBe(0);
+      await refused(s, /\(AUTHORIZATION_MISSING\)/);
+      // a recorder whose connection is a non-superuser app role that is not a member of the recorder role cannot record: fail closed
+      const outsider = new SettlementAuthorizationRecorder(buildDb(await connectAs('dev04_login_app')), GATE_CFG, SIGNER);
+      expect(await rejects(outsider.record({ reservationId: s.reservationId, businessId: s.businessId, evidence: ev }))).toMatch(/RECORDER_ROLE_UNAVAILABLE/);
+      expect(await countRows()).toBe(0);
+    });
+
+    it('E9. the owner and BYPASSRLS boundaries: a non-superuser table owner is still subject to forced RLS, and a BYPASSRLS role that writes a row still cannot sign', async () => {
+      const { s } = await ready();
+      await admin.query(`ALTER TABLE ${TABLE} OWNER TO dev04_owner`);
+      try {
+        await admin.query(`GRANT SELECT, INSERT ON partner_credit_reservations, benefit_application_intents, s08_allocation_freezes, s08_allocation_freeze_items TO dev04_owner`);
+        expect((await asRole('dev04_owner', `select count(*)::int n from ${TABLE}`)).rows).toEqual([{ n: 0 }]); // owner reads nothing
+        expect((await asRole('dev04_owner', `insert into ${TABLE}(id) values (gen_random_uuid())`)).error).toMatch(/row-level security|SETTLEMENT_AUTH/);
+        expect((await asRole('dev04_owner', `update ${TABLE} set verdict='ELIGIBLE'`)).rows).toEqual([]); // matches no row (none visible)
+        expect((await asRole('dev04_owner', `delete from ${TABLE}`)).rows).toEqual([]);
+        expect((await asRole('dev04_owner', `truncate ${TABLE}`)).error).toMatch(/denied|TRUNCATE/i); // the trigger denies truncation even for the owner
+        // and the definer read function and the ledger gate still work with the owner changed
+        expect((await asRole('settlement_consumer', 'select id from public.partner_credit_settlement_auth_read($1::uuid,$2::uuid)', [s.businessId, s.reservationId])).rows).toHaveLength(1);
+      } finally { await admin.query(`ALTER TABLE ${TABLE} OWNER TO CURRENT_USER`); }
+      // a BYPASSRLS role with INSERT can write a structurally perfect row (this is a PostgreSQL property); the gate refuses it because it cannot sign
+      expect((await writeRow(s, 'dev04_bypass', { keyId: SIGNER.keyId, signWith: 'garbage' })).error).toBe('');
+      await refused(s, /\(PROVENANCE_INVALID\)/);
+      // a superuser/owner cannot UPDATE or DELETE the evidence to fix it either: append-only holds for everyone
+      expect(await rejects(admin.query(`update ${TABLE} set signature = repeat('0',128)`))).toMatch(/SETTLEMENT_AUTH_APPEND_ONLY/);
+      expect(await rejects(admin.query(`delete from ${TABLE}`))).toMatch(/SETTLEMENT_AUTH_APPEND_ONLY/);
+    });
+
+    it('E10. consumption works from a non-superuser application role that is subject to forced RLS, exactly once, and fails closed with zero movement when the role may not verify', async () => {
+      const ok = await ready();
+      const appClient = await connectAs('dev04_login_app');
+      const asApp = new PartnerCreditConsumptionService(buildDb(appClient), GATE_CFG);
+      // this role cannot read the table directly, only verify through the function, and still consumes
+      expect((await asRole('dev04_app', `select count(*)::int n from ${TABLE}`)).rows).toEqual([{ n: 0 }]);
+      const first = await asApp.consume({ reservationId: ok.s.reservationId, businessId: ok.s.businessId });
+      expect(first.replay).toBe(false);
+      const replay = await asApp.consume({ reservationId: ok.s.reservationId, businessId: ok.s.businessId });
+      expect(replay.replay).toBe(true);
+      expect(await consumeEntries(ok.s)).toBe(1);
+      // tenant-context manipulation on the consuming session changes nothing: the lookup uses explicit tenant and reservation arguments
+      const other = await ready();
+      await appClient.query("select set_config('echogrid.tenant_id', $1, false)", [ok.s.businessId]);
+      await expect(asApp.consume({ reservationId: other.s.reservationId, businessId: ok.s.businessId })).rejects.toThrow();
+      expect(await consumeEntries(other.s)).toBe(0);
+      expect((await asApp.consume({ reservationId: other.s.reservationId, businessId: other.s.businessId })).replay).toBe(false);
+      // a role that may not call the verification function cannot consume: the gate fails closed and nothing moves
+      const blocked = await ready();
+      const noVerify = await connectAs('dev04_login_noverify');
+      await refused(blocked.s, /\(AUTHORITY_UNAVAILABLE\)/, new PartnerCreditConsumptionService(buildDb(noVerify), GATE_CFG));
+    });
+
+    it('E11. key custody: the signer exposes no key material, the key is non-extractable, nothing in the database can hold a private key, and recorded signatures verify with public keys alone', async () => {
+      expect(Object.keys(SIGNER).sort()).toEqual(['keyId', 'sign']);
+      expect(JSON.stringify(SIGNER)).not.toMatch(/private|pkcs8|secret/i);
+      // the table has no column that could hold a key; the only secret-shaped column is the public signature
+      const cols = (await rows<{ column_name: string }>("select column_name from information_schema.columns where table_name=$1", [TABLE])).map(c => c.column_name);
+      expect(cols.filter(c => /key|secret|private|hmac/i.test(c))).toEqual(['signing_key_id']);
+      // the SQL side can compute the digest but has no function that signs or reads a key
+      expect(await rows(`select proname from pg_proc where proname ~* '(sign|hmac|private)' and pronamespace = 'public'::regnamespace`)).toEqual([]);
+      const { s } = await ready();
+      const row = await stored(s);
+      expect(row.signing_key_id).toBe(SIGNER.keyId);
+      expect(await verifySettlementProvenance(row.signing_key_id, row.evidence_digest, row.signature, { [SIGNER.keyId]: KEY_A.publicHex })).toBe(true);
+      expect(await verifySettlementProvenance(row.signing_key_id, row.evidence_digest, row.signature, { [SIGNER.keyId]: KEY_B.publicHex })).toBe(false);
+      expect(await verifySettlementProvenance(row.signing_key_id, '0'.repeat(64), row.signature, { [SIGNER.keyId]: KEY_A.publicHex })).toBe(false);
+      expect(await verifySettlementProvenance(row.signing_key_id, row.evidence_digest, row.signature.replace(/^./, (c: string) => (c === '0' ? '1' : '0')), { [SIGNER.keyId]: KEY_A.publicHex })).toBe(false);
+      expect(await verifySettlementProvenance('__proto__', row.evidence_digest, row.signature, {})).toBe(false);
+      expect(await verifySettlementProvenance('constructor', row.evidence_digest, row.signature, {})).toBe(false);
+      // determinism and versioning of the signed message
+      expect(Buffer.from(settlementProvenanceMessage('k', 'd')).toString()).toBe('35:ECHO-GRID:S08-SETTLEMENT-AUTH-SIG/1;1:k;1:d;');
+      // the signature is deterministic (Ed25519): re-recording the same snapshot is an idempotent replay, not a second row
+      const again = await recorder.record({ reservationId: s.reservationId, businessId: s.businessId, evidence: await evidenceFor(s) });
+      expect(again.replay === true || again.replay === false).toBe(true);
+    });
+
+    it('E12. the migration creates roles with safe attributes and refuses to continue when a role of that name already carries unsafe ones (the migration\'s own role block, run against probe names)', async () => {
+      const sqlText = readFileSync(resolve(api, 'drizzle/0061_d1d3_dev04_settlement_authority.sql'), 'utf8');
+      const block = sqlText.match(/DO \$\$\nDECLARE r text;[\s\S]*?END \$\$;/)![0];
+      const names = ['settlement_recorder', 'settlement_consumer', 'settlement_authority_reader', 'settlement_tenant_reader', 'settlement_auditor'];
+      expect(names.every(n => block.includes(`'${n}'`))).toBe(true);
+      const probe = (n: string) => block.replace(/ARRAY\[[^\]]*\]/, `ARRAY['${n}']`);
+      try {
+        await admin.query(probe('dev04_probe_new'));
+        expect(await rows(`select rolcanlogin, rolsuper, rolbypassrls, rolcreaterole, rolcreatedb, rolreplication from pg_roles where rolname='dev04_probe_new'`))
+          .toEqual([{ rolcanlogin: false, rolsuper: false, rolbypassrls: false, rolcreaterole: false, rolcreatedb: false, rolreplication: false }]);
+        for (const unsafe of ['BYPASSRLS', 'LOGIN', 'CREATEROLE']) {
+          await admin.query(`ALTER ROLE dev04_probe_new ${unsafe}`);
+          expect(await rejects(admin.query(probe('dev04_probe_new'))), unsafe).toMatch(/DEV04: role dev04_probe_new exists with unsafe attributes/);
+          await admin.query('ALTER ROLE dev04_probe_new NOBYPASSRLS NOLOGIN NOCREATEROLE');
+        }
+        await admin.query(probe('dev04_probe_new')); // idempotent once safe
+      } finally { await admin.query('DROP ROLE IF EXISTS dev04_probe_new'); }
+      // the real roles in this database pass the same guard right now
+      await admin.query(block);
+    });
+
+    // helpers declared last so they can be hoisted into the tests above
+    function unpaidFor(status: string) { return (ev: any) => { ev.invoice.status = status; ev.invoice.amountPaidMinor = 0; ev.invoice.amountRemainingMinor = ev.invoice.amountDueMinor; ev.invoice.paidAtMs = null; resync(ev); }; }
+    async function newGateConsumer(cfg: SettlementGateConfig) { return new PartnerCreditConsumptionService(buildDb(await connect()), cfg); }
   });
 });

@@ -428,6 +428,13 @@
       "when": 1793870817556,
       "tag": "0060_d1d3_settlement_authorizations",
       "breakpoints": true
+    },
+    {
+      "idx": 61,
+      "version": "7",
+      "when": 1793876719313,
+      "tag": "0061_d1d3_dev04_settlement_authority",
+      "breakpoints": true
     }
   ]
 }
