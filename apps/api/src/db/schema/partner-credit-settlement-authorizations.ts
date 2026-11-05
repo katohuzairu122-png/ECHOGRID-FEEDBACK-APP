@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, bigint, timestamp, unique, check, foreignKey, index } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, text, bigint, smallint, timestamp, unique, check, foreignKey, index } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import { businesses } from './businesses';
 import { partnerCreditReservations } from './partner-credit-applications';
@@ -33,6 +33,10 @@ export const partnerCreditSettlementAuthorizations = pgTable('partner_credit_set
   snapshotDigest: text('snapshot_digest').notNull(),
   observedAtMs: bigint('observed_at_ms', { mode: 'number' }).notNull(),
   evidenceDigest: text('evidence_digest').notNull(),
+  /** DEV-04 provenance: an Ed25519 signature by the trusted recorder's private key (never stored in the database) over the evidence digest. */
+  provenanceVersion: smallint('provenance_version').notNull(),
+  signingKeyId: text('signing_key_id').notNull(),
+  signature: text('signature').notNull(),
   recordedAt: timestamp('recorded_at', { withTimezone: true }).notNull().default(sql`clock_timestamp()`),
 }, t => [
   unique('partner_credit_settlement_auth_replay_key').on(t.reservationId, t.snapshotDigest),
@@ -42,6 +46,7 @@ export const partnerCreditSettlementAuthorizations = pgTable('partner_credit_set
   check('partner_credit_settlement_auth_verdict_check', sql`${t.verdict} IN ('ELIGIBLE','INELIGIBLE','UNRESOLVED')`),
   check('partner_credit_settlement_auth_interval_check', sql`${t.billingInterval} IN ('month','year','unknown')`),
   check('partner_credit_settlement_auth_evidence_kind_check', sql`${t.evidenceKind} = 'MOCK_SYNTHETIC'`),
+  check('partner_credit_settlement_auth_provenance_check', sql`${t.provenanceVersion} = 1 AND ${t.signingKeyId} ~ '^[A-Za-z0-9._-]{1,64}$' AND ${t.signature} ~ '^[0-9a-f]{128}$'`),
   check('partner_credit_settlement_auth_digests_check', sql`${t.allocationDigest} ~ '^[0-9a-f]{64}$' AND ${t.snapshotDigest} ~ '^[0-9a-f]{64}$' AND ${t.evidenceDigest} ~ '^[0-9a-f]{64}$'`),
   check('partner_credit_settlement_auth_refs_check', sql`${t.invoiceRef} ~ '^[!-~]{1,255}$' AND ${t.providerAccountId} ~ '^[!-~]{1,255}$' AND ${t.policyVersion} ~ '^[!-~]{1,255}$' AND ${t.classifierVersion} ~ '^[!-~]{1,255}$' AND ${t.snapshotRef} ~ '^[!-~]{1,255}$'`),
   check('partner_credit_settlement_auth_observed_check', sql`${t.observedAtMs} > 0`),
