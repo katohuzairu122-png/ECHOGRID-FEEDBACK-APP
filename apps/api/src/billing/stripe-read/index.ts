@@ -14,3 +14,7 @@ export * from './line-normalizer';
 export * from './payment-normalizer';
 export * from './refund-dispute-normalizer';
 export { acquireMockExtendedEvidence, MockExtendedSource, onePage, pagesOf, type ExtendedReadSource, type ExtendedMockInput, type ExtendedMockResult } from './extended-source';
+export * from './read-types';
+export { createRealReadProvider, createMockReadProvider, NO_SUPPLEMENT, type ReadProvider, type MockReadProvider, type MockProviderFixtures, type ObjectRead, type ListRead, type Supplement } from './read-provider';
+export { acquireEvidence, type EngineDeps } from './evidence-engine';
+export * from './acquisition-pipeline';

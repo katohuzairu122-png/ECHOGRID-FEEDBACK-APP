@@ -15,7 +15,7 @@ import {
   type SettlementEvidenceSigner, type SettlementGateConfig,
 } from '../../src/partner-credits/partner-credit-settlement-authorization';
 import { MOCK_EVIDENCE_KIND, type MockSettlementEvidence } from '../../src/billing/settlement-eligibility.classifier';
-import { acquireMockExtendedEvidence, buildMockEvidence, classifyBundle, MockExtendedSource, onePage, ScriptedReadTransport, StripeReadOnlyEvidenceAdapter, syntheticStripeInvoice } from '../../src/billing/stripe-read';
+import { acquireMockExtendedEvidence, buildMockEvidence, classifyBundle, createMockReadProvider, createRealReadProvider, EvidenceAcquisitionPipeline, MockExtendedSource, onePage, ScriptedReadTransport, StripeReadOnlyEvidenceAdapter, syntheticStripeInvoice } from '../../src/billing/stripe-read';
 import { unwindCredit, type UnwindCause } from '../../src/partner-credits/partner-credit-unwind';
 import { PartnerProvisionalReversalCompensator } from '../../src/partner-credits/partner-provisional-reversal.compensator';
 import { PartnerCreditProjectionAudit } from '../../src/partner-credits/partner-credit-projection.audit';
@@ -1736,6 +1736,121 @@ describe.skipIf(!process.env.DATABASE_URL)('D4 final credit consumption and ledg
         expect(await credit(s), label).toEqual(before);
         expect(await consumeEntries(s), label).toBe(0);
       }
+    });
+
+    describe('D1/D3-DEV-08 acquisition pipeline over a disposable database', () => {
+      /** The pipeline over a fixture provider built from PERSISTED rows; the binding is what a tenant-checked resolver would return. */
+      const rig = async (s: Scenario, fx: { refunds?: unknown[]; disputes?: unknown[]; payments?: unknown[] } = {}) => {
+        const p = await persisted(s);
+        const alloc = p.ctx.expected.frozenAllocation.allocations.find((a: any) => a.reservationId === s.reservationId);
+        const base = p.ctx.expected.frozenAllocation.eligibleBaseMinor; const total = (p.rawInvoice as any).total;
+        const created = (p.rawInvoice as any).created; const paid = (p.rawInvoice as any).status_transitions.paid_at;
+        const line = (id: string, amount: number, parent: unknown) => ({ id, object: 'line_item', amount, currency: 'usd', invoice: s.invoiceRef, livemode: false, metadata: {}, parent });
+        const pi = `pi_dev08_${s.invoiceRef}`;
+        const payment = { id: 'inpay_dev08', object: 'invoice_payment', amount_paid: total, amount_requested: total, created, currency: 'usd', invoice: s.invoiceRef, is_default: true, livemode: false,
+          payment: { type: 'payment_intent', payment_intent: pi }, status: 'paid', status_transitions: { paid_at: paid, canceled_at: null } };
+        const provider = createMockReadProvider({
+          account: { object: 'account', id: GATE_CFG.providerAccountId }, invoices: [p.rawInvoice],
+          lines: onePage([line('il_base', base, { type: 'subscription_item_details', invoice_item_details: null, subscription_item_details: { invoice_item: null, proration: false, subscription: p.scope.subscriptionId, subscription_item: 'si_1' } }),
+            line('il_ben', -alloc.benefitMinor, { type: 'invoice_item_details', subscription_item_details: null, invoice_item_details: { invoice_item: 'ii_ben', proration: false, subscription: p.scope.subscriptionId } })]),
+          payments: onePage(fx.payments ?? [payment]), refunds: onePage(fx.refunds ?? []), disputes: onePage(fx.disputes ?? []),
+          supplement: { billingInterval: 'month', cancellation: 'none', idempotency: [{ parentItemRef: 'ii_ben', idempotencyKey: alloc.providerIdempotencyKey }],
+            benefitItem: { itemRef: 'ii_ben', invoiceRef: s.invoiceRef, idempotencyKey: alloc.providerIdempotencyKey, amountMinor: -alloc.benefitMinor, currency: 'usd', discountable: false } },
+        });
+        const pipeline = new EvidenceAcquisitionPipeline<never>({
+          provider, clock: () => p.now, audit: () => undefined, config: { freshnessWindowMs: GATE_CFG.freshnessWindowMs, policyEffectiveFromMs: 1_000, policyVersion: 'PC-BENEFIT/1' },
+          resolveBinding: async (b, i) => (b === s.businessId && i === s.invoiceRef ? { scope: p.scope, expectedAccountId: GATE_CFG.providerAccountId, classifier: { binding: p.binding, expected: p.ctx.expected as any, expectedPaymentRef: pi, consumedAtMs: null } } : null),
+        });
+        return { pipeline, provider, req: { businessId: s.businessId, invoiceId: s.invoiceRef }, p };
+      };
+      const ledgerRows = async (s: Scenario) => (await rows<{ n: number }>('select count(*)::int n from partner_credit_ledger where decision_id=$1', [s.decisionId]))[0]!.n;
+
+      it('26. a complete synthetic chain passes the pipeline, the existing signed recorder and the settlement gate, and consumes exactly once (replays change nothing)', async () => {
+        const s = await prepare(); const { pipeline, req } = await rig(s);
+        const r = await pipeline.run(req);
+        if (r.status !== 'CLASSIFIED') throw new Error(`expected CLASSIFIED, got ${r.status}`);
+        expect(r.classification.settlement.verdict).toBe('ELIGIBLE'); expect(r.recordableEvidence).not.toBeNull();
+        expect(await authRows(s)).toBe(0); // the pipeline itself records nothing
+        const rec = await recorder.record({ reservationId: s.reservationId, businessId: s.businessId, evidence: r.recordableEvidence! });
+        expect(rec.verdict).toBe('ELIGIBLE');
+        expect((await rows<any>(`select signing_key_id, evidence_kind from ${TABLE} where reservation_id=$1`, [s.reservationId]))[0]).toMatchObject({ signing_key_id: SIGNER.keyId, evidence_kind: 'MOCK_SYNTHETIC' });
+        const before = await ledgerRows(s);
+        expect((await consumption.consume({ reservationId: s.reservationId, businessId: s.businessId })).replay).toBe(false);
+        expect(await ledgerRows(s)).toBe(before + 1); expect(await consumeEntries(s)).toBe(1);
+        expect((await consumption.consume({ reservationId: s.reservationId, businessId: s.businessId })).replay).toBe(true);
+        expect(await ledgerRows(s)).toBe(before + 1);
+      });
+
+      it('27. missing, contradictory, incomplete or non-eligible evidence produces zero ledger movement: rejected evidence is never recordable, and recorded non-eligible evidence is refused by the gate', async () => {
+        const dp = (s: Scenario, over: Record<string, unknown> = {}) => ({ id: 'dp_dev08', object: 'dispute', amount: 100, charge: 'ch_1', created: 1, currency: 'usd', livemode: false, payment_intent: `pi_dev08_${s.invoiceRef}`, status: 'needs_response', ...over });
+        const rf = (s: Scenario, over: Record<string, unknown> = {}) => ({ id: 're_dev08', object: 'refund', amount: 100, charge: 'ch_1', created: 1, currency: 'usd', payment_intent: `pi_dev08_${s.invoiceRef}`, status: 'succeeded', ...over });
+        const cases: Array<[string, (s: Scenario) => Parameters<typeof rig>[1], 'REJECTED' | 'CLASSIFIED']> = [
+          ['no settling payment', () => ({ payments: [] }), 'REJECTED'], ['refund of another payment', s => ({ refunds: [rf(s, { payment_intent: 'pi_other' })] }), 'REJECTED'],
+          ['dispute of another payment', s => ({ disputes: [dp(s, { payment_intent: 'pi_other' })] }), 'REJECTED'], ['refund/dispute overlap', s => ({ refunds: [rf(s)], disputes: [dp(s, { status: 'lost' })] }), 'REJECTED'],
+          ['open dispute', s => ({ disputes: [dp(s)] }), 'CLASSIFIED'], ['partial refund', s => ({ refunds: [rf(s)] }), 'CLASSIFIED']];
+        for (const [label, fx, expected] of cases) {
+          const s = await prepare(); const { pipeline, req } = await rig(s, fx(s));
+          const r = await pipeline.run(req);
+          expect(r.status, label).toBe(expected);
+          if (r.status === 'CLASSIFIED') { expect(r.classification.settlement.verdict, label).not.toBe('ELIGIBLE'); await recorder.record({ reservationId: s.reservationId, businessId: s.businessId, evidence: r.recordableEvidence! }); }
+          else expect('recordableEvidence' in r, label).toBe(false);
+          const credBefore = await credit(s); const ledgerBefore = await ledgerRows(s);
+          expect(await rejects(consumption.consume({ reservationId: s.reservationId, businessId: s.businessId })), label).toMatch(/PARTNER_CONSUME_SETTLEMENT_NOT_AUTHORIZED \((NOT_ELIGIBLE|AUTHORIZATION_MISSING)\)/);
+          expect(await credit(s), label).toEqual(credBefore); expect(await ledgerRows(s), label).toBe(ledgerBefore); expect(await consumeEntries(s), label).toBe(0);
+        }
+      });
+
+      it('28. duplicate orchestration does not duplicate financial effects: repeated runs and repeated recordings leave one authorization row and one consumption', async () => {
+        const s = await prepare(); const { pipeline, req } = await rig(s);
+        const runs = [await pipeline.run(req), await pipeline.run(req), await pipeline.run(req)];
+        if (runs.some(r => r.status !== 'CLASSIFIED')) throw new Error('expected CLASSIFIED');
+        const digests = runs.map(r => (r as any).evidence.digest); expect(new Set(digests).size).toBe(1);
+        const results = [];
+        for (const r of runs) results.push(await recorder.record({ reservationId: s.reservationId, businessId: s.businessId, evidence: (r as any).recordableEvidence }));
+        expect(results.map(x => x.replay)).toEqual([false, true, true]);
+        expect(await authRows(s)).toBe(1);
+        expect(await ledgerRows(s)).toBe(await ledgerRows(s)); // pipeline runs wrote nothing
+        await consumption.consume({ reservationId: s.reservationId, businessId: s.businessId });
+        await consumption.consume({ reservationId: s.reservationId, businessId: s.businessId });
+        expect(await consumeEntries(s)).toBe(1);
+      });
+
+      it('29. concurrent consumption of pipeline-authorized evidence stays exactly once', async () => {
+        const s = await prepare(); const { pipeline, req } = await rig(s);
+        const r = await pipeline.run(req); if (r.status !== 'CLASSIFIED') throw new Error('expected CLASSIFIED');
+        await recorder.record({ reservationId: s.reservationId, businessId: s.businessId, evidence: r.recordableEvidence! });
+        // temporary connections, closed afterwards: the suite shares one small connection budget
+        const temp: Client[] = [];
+        try {
+          const services = await Promise.all(Array.from({ length: 8 }, async () => { const c = new Client({ connectionString: urlFor(dbName) }); await c.connect(); temp.push(c); return new PartnerCreditConsumptionService(buildDb(c), GATE_CFG); }));
+          const results = await Promise.all(services.map(x => x.consume({ reservationId: s.reservationId, businessId: s.businessId })));
+          expect(results.filter(x => !x.replay)).toHaveLength(1); expect(results.filter(x => x.replay)).toHaveLength(7);
+        } finally { await Promise.all(temp.map(c => c.end().catch(() => undefined))); }
+        expect(await consumeEntries(s)).toBe(1);
+        expect(await credit(s)).toMatchObject({ reserved: 0, reservation: 'consumed', terminal: true });
+      });
+
+      it('30. real provider evidence stays disabled for financial authorization even with a complete-looking database: the real pipeline is rejected, nothing is recordable, consumption stays refused', async () => {
+        const s = await prepare(); const p = await persisted(s);
+        const transport = new ScriptedReadTransport([{ object: 'account', id: 'acct_RealShape1' }, { ...p.rawInvoice, id: 'in_Dev08RealShape1' }]);
+        const auth = { approved: true, revoked: false, inventoryRecordId: 'S08-STRIPE-PRIVATE-TEST-VERIFIER-001' as const, inventoryRevision: 'rev-1', accountId: 'acct_RealShape1', realm: 'test' as const,
+          methods: ['ACCOUNT_RETRIEVE_CURRENT', 'INVOICE_RETRIEVE'] as Array<'ACCOUNT_RETRIEVE_CURRENT' | 'INVOICE_RETRIEVE'>, expiresAtMs: p.now + 3_600_000 };
+        const provider = createRealReadProvider({ transport, authorization: auth, clock: () => p.now, audit: () => undefined });
+        const realScope = { ...p.scope, invoiceId: 'in_Dev08RealShape1' };
+        const pipeline = new EvidenceAcquisitionPipeline<string>({ provider, clock: () => p.now, audit: () => undefined, config: { freshnessWindowMs: GATE_CFG.freshnessWindowMs, policyEffectiveFromMs: 1_000, policyVersion: 'PC-BENEFIT/1' },
+          resolveBinding: async () => ({ scope: realScope, expectedAccountId: 'acct_RealShape1', classifier: { binding: p.binding, expected: p.ctx.expected as any, expectedPaymentRef: null, consumedAtMs: null } }),
+          invocation: { policy: { approved: true, revoked: false, callerPrincipal: 'c', audience: 'aud-dev08', credentialVersion: 'v1', inventoryRevision: 'rev-1', methods: ['GET /v1/account', 'GET /v1/invoices/{id}'], expiresAt: p.now + 3_600_000, invoiceScope: realScope },
+            deps: { authenticate: async (proof, canonical) => (proof === 'valid' ? { principal: 'c', audience: 'aud-dev08', credentialVersion: 'v1', authenticatedRequest: canonical } : null), claimOnce: async () => true } } });
+        const req = (op: 'GET /v1/account' | 'GET /v1/invoices/{id}', n: string) => ({ audience: 'aud-dev08', operation: op, inventoryRevision: 'rev-1', nonce: n.repeat(24), issuedAt: p.now - 1_000, expiresAt: p.now + 60_000, ...(op === 'GET /v1/invoices/{id}' ? { invoiceScope: realScope } : {}) });
+        const out = await pipeline.run({ businessId: s.businessId, invoiceId: realScope.invoiceId }, { account: { request: req('GET /v1/account', 'ax'), proof: 'valid' }, invoice: { request: req('GET /v1/invoices/{id}', 'ay'), proof: 'valid' } });
+        if (out.status !== 'REJECTED') throw new Error(`expected REJECTED, got ${JSON.stringify(out).slice(0, 200)}`);
+        expect(out.origin).toBe('STRIPE_TEST_READ'); expect(out.completeness.blockers).toContain('REAL_EVIDENCE_NOT_AUTHORIZED_FOR_SETTLEMENT');
+        expect('recordableEvidence' in out).toBe(false);
+        expect(out.classification?.settlement.reasonCodes).toEqual(['EVIDENCE_KIND_UNSUPPORTED']);
+        const before = await credit(s);
+        expect(await rejects(consumption.consume({ reservationId: s.reservationId, businessId: s.businessId }))).toMatch(/\(AUTHORIZATION_MISSING\)/);
+        expect(await credit(s)).toEqual(before); expect(await authRows(s)).toBe(0); expect(await consumeEntries(s)).toBe(0);
+      });
     });
 
     it('22b. with no authorization recorded from real evidence, consumption stays refused and leaves no trace', async () => {
