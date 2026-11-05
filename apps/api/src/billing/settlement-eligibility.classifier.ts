@@ -228,7 +228,8 @@ function evaluate(ctx: SettlementClassifierContext, ev: MockSettlementEvidence, 
   if (!isNonNegInt(ctx.policy.effectiveFromMs)) return U('POLICY_EFFECTIVE_DATE_UNAVAILABLE');
 
   // P5: completeness
-  if (!ev.provenance.complete || !ev.lines.complete) return U('INCOMPLETE_EVIDENCE');
+  // Completeness must be EXACTLY the boolean true: a truthy string, number or object ("false", 1, {}) is malformed input, never completeness.
+  if (ev.provenance.complete !== true || ev.lines.complete !== true) return U('INCOMPLETE_EVIDENCE');
 
   // P6: stability across the bracketing reads
   const { readBefore, readAfter } = ev.provenance;

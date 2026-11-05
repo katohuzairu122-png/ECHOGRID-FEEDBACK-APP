@@ -152,7 +152,8 @@ function evaluate(ctx: RefundDisputeContext, ev: MockRefundDisputeEvidence): Out
   if (scope.length) return UNREACH(...new Set(scope));
   if (!isStr(ctx.policy.version)) return UNREACH('POLICY_VERSION_MISSING');
   if (ctx.policy.version !== SUPPORTED_BENEFIT_POLICY_VERSION) return UNREACH('POLICY_VERSION_MISMATCH');
-  if (!ev.provenance.complete || !ev.refunds.complete || !ev.disputes.complete) return UNREACH('INCOMPLETE_EVIDENCE');
+  // Completeness must be EXACTLY the boolean true: a truthy string, number or object ("false", 1, {}) is malformed input, never completeness.
+  if (ev.provenance.complete !== true || ev.refunds.complete !== true || ev.disputes.complete !== true) return UNREACH('INCOMPLETE_EVIDENCE');
   if (!isNonNegInt(ctx.policy.freshnessWindowMs)) return UNREACH('FRESHNESS_POLICY_UNAVAILABLE');
   const age = ctx.nowMs - ev.provenance.observedAtMs;
   if (!isInt(ev.provenance.observedAtMs) || age < 0) return UNREACH('EVIDENCE_FROM_FUTURE');

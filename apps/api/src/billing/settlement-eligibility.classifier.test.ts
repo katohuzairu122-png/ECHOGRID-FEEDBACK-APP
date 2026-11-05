@@ -195,6 +195,15 @@ describe('S08-D1D3-DEV-01 mock settlement eligibility classifier', () => {
       expectU(run((_, e) => { e.provenance.complete = false; }), 'INCOMPLETE_EVIDENCE');
       expectU(run((_, e) => { e.provenance.readAfter = null; }), 'INCOMPLETE_EVIDENCE');
     });
+    it('F-2: completeness must be exactly boolean true; no other value (false, null, undefined, "true", "false", "yes", 1, {}, []) establishes it', () => {
+      const bad: unknown[] = [false, null, undefined, 'true', 'false', 'yes', '', 1, 0, -1, 1.5, Number.NaN, {}, [], [true], Symbol.for('x')];
+      for (const v of bad) {
+        for (const set of [(e: any) => { e.provenance.complete = v; }, (e: any) => { e.lines.complete = v; }]) {
+          const r = run((_, e) => set(e)); expectU(r, 'INCOMPLETE_EVIDENCE'); expect(r.verdict).not.toBe('ELIGIBLE');
+        }
+      }
+      expect(run((_, e) => { e.provenance.complete = true; e.lines.complete = true; }).verdict).toBe('ELIGIBLE'); // valid control
+    });
     it('20. payment status changing during observation is UNRESOLVED (unstable)', () => {
       expectU(run((_, e) => { e.provenance.readAfter = { ...e.provenance.readAfter, status: 'open' }; }), 'EVIDENCE_UNSTABLE');
       expectU(run((_, e) => { e.provenance.readAfter = { ...e.provenance.readAfter, amountPaidMinor: 2000, amountRemainingMinor: 700 }; }), 'EVIDENCE_UNSTABLE');

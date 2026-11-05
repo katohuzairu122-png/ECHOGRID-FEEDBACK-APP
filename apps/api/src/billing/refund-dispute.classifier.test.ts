@@ -259,6 +259,17 @@ describe('S08-D1D3-DEV-02 mock refund and payment-dispute classifier', () => {
       for (const f of [(e: any) => { e.provenance.complete = false; }, (e: any) => { e.refunds.complete = false; }, (e: any) => { e.disputes.complete = false; }]) expectClass(run((_, e) => f(e)), 'PROVIDER_UNREACHABLE', 'INCOMPLETE_EVIDENCE');
       expectClass(run((_, e) => { e.provenance.complete = false; e.refunds.items = [refund('re_1', PAID)]; }), 'PROVIDER_UNREACHABLE', 'INCOMPLETE_EVIDENCE');
     });
+    it('F-2: completeness must be exactly boolean true in all three fields; no other value establishes it (never NO_REFUND or any verified class)', () => {
+      const bad: unknown[] = [false, null, undefined, 'true', 'false', 'yes', '', 1, 0, -1, 1.5, Number.NaN, {}, [], [true], Symbol.for('x')];
+      const setters: Array<[string, (e: any, v: unknown) => void]> = [['provenance', (e, v) => { e.provenance.complete = v; }], ['refunds', (e, v) => { e.refunds.complete = v; }], ['disputes', (e, v) => { e.disputes.complete = v; }]];
+      for (const [name, set] of setters) for (const v of bad) {
+        for (const items of [withItems([]), withItems([refund('re_1', PAID)]), withItems([], [dispute('dp_1', PAID, 'lost')])]) {
+          const r = run((c, e) => { items(c, e); set(e, v); });
+          expect(r.classification, `${name}=${String(v)}`).toBe('PROVIDER_UNREACHABLE'); expect(r.reasonCodes).toContain('INCOMPLETE_EVIDENCE'); expect(r.mayQualifyForFutureRecoveryReview).toBe(false);
+        }
+      }
+      expect(run((_, e) => { e.provenance.complete = true; e.refunds.complete = true; e.disputes.complete = true; }).classification).toBe('NO_REFUND'); // valid control
+    });
     it('29. stale observations never support a verified class; exactly the window is fresh; future-dated evidence is refused', () => {
       expectClass(run((_, e) => { e.provenance.observedAtMs = NOW - 60_001; }), 'PROVIDER_UNREACHABLE', 'STALE_EVIDENCE');
       expect(run((_, e) => { e.provenance.observedAtMs = NOW - 60_000; }).classification).toBe('NO_REFUND');
