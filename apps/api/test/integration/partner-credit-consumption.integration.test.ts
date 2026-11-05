@@ -15,6 +15,7 @@ import {
   type SettlementEvidenceSigner, type SettlementGateConfig,
 } from '../../src/partner-credits/partner-credit-settlement-authorization';
 import { MOCK_EVIDENCE_KIND, type MockSettlementEvidence } from '../../src/billing/settlement-eligibility.classifier';
+import { buildMockEvidence, classifyBundle, ScriptedReadTransport, StripeReadOnlyEvidenceAdapter, syntheticStripeInvoice } from '../../src/billing/stripe-read';
 import { unwindCredit, type UnwindCause } from '../../src/partner-credits/partner-credit-unwind';
 import { PartnerProvisionalReversalCompensator } from '../../src/partner-credits/partner-provisional-reversal.compensator';
 import { PartnerCreditProjectionAudit } from '../../src/partner-credits/partner-credit-projection.audit';
@@ -1620,5 +1621,101 @@ describe.skipIf(!process.env.DATABASE_URL)('D4 final credit consumption and ledg
     // helpers declared last so they can be hoisted into the tests above
     function unpaidFor(status: string) { return (ev: any) => { ev.invoice.status = status; ev.invoice.amountPaidMinor = 0; ev.invoice.amountRemainingMinor = ev.invoice.amountDueMinor; ev.invoice.paidAtMs = null; resync(ev); }; }
     async function newGateConsumer(cfg: SettlementGateConfig) { return new PartnerCreditConsumptionService(buildDb(await connect()), cfg); }
+  });
+  describe('D1/D3-DEV-06 trusted Stripe read-only evidence integration (bridge into the DEV-03/04/05 pipeline)', () => {
+    const TABLE = 'partner_credit_settlement_authorizations';
+    const consumeEntries = async (s: Scenario) => (await rows<{ n: number }>("select count(*)::int n from partner_credit_ledger where decision_id=$1 and entry_type='consume'", [s.decisionId]))[0]!.n;
+    const authRows = async (s: Scenario) => (await rows<{ n: number }>(`select count(*)::int n from ${TABLE} where reservation_id=$1`, [s.reservationId]))[0]!.n;
+
+    /** Everything the bridge needs, derived from PERSISTED rows (never from the provider response): the trusted scope, classifier context, and the numbers of the frozen allocation. */
+    async function persisted(s: Scenario) {
+      const now = await dbNow();
+      const freeze = (await rows<{ artifact: any }>('select artifact from s08_allocation_freezes where business_id=$1 and invoice_ref=$2', [s.businessId, s.invoiceRef]))[0]!.artifact;
+      const own = freeze.allocations.find((a: any) => a.reservationId === s.reservationId);
+      const sub = (await rows<{ c: string; s: string }>('select stripe_customer_id c, stripe_subscription_id s from business_subscriptions where business_id=$1', [s.businessId]))[0]!;
+      const res = (await rows<{ ref: string; exp: Date }>('select invoice_intent_ref ref, expires_at exp from partner_credit_reservations where id=$1', [s.reservationId]))[0]!;
+      const scope = { businessId: s.businessId, invoiceId: s.invoiceRef, customerId: sub.c, subscriptionId: sub.s };
+      const ctx = { nowMs: now, policy: { version: 'PC-BENEFIT/1', effectiveFromMs: 1_000, freshnessWindowMs: GATE_CFG.freshnessWindowMs },
+        expected: { businessId: s.businessId, reservationId: s.reservationId, intentRef: res.ref, invoiceRef: s.invoiceRef, customerRef: sub.c, subscriptionRef: sub.s, currency: 'usd', providerAccountId: GATE_CFG.providerAccountId,
+          providerMode: GATE_CFG.providerMode, reservationExpiresAtMs: res.exp.getTime(), frozenAllocation: freeze } };
+      const total = freeze.eligibleBaseMinor - own.benefitMinor;
+      const created = Math.floor((now - 3_600_000) / 1000); const paid = Math.floor((now - 600_000) / 1000);
+      const rawInvoice = syntheticStripeInvoice(scope, { amount_due: total, amount_paid: total, amount_remaining: 0, total, created, status_transitions: { paid_at: paid, voided_at: null, finalized_at: created, marked_uncollectible_at: null },
+        lines: { object: 'list', has_more: false, data: [{ id: 'il_base', amount: freeze.eligibleBaseMinor, currency: 'usd' }, { id: 'il_ben', amount: -own.benefitMinor, currency: 'usd' }] } });
+      const mockSpec = { scope, accountId: GATE_CFG.providerAccountId, observedAtMs: now - 1_000, invoiceBefore: rawInvoice, billingInterval: 'month' as const, cancellation: 'none' as const,
+        lineAttribution: [{ lineRef: 'il_base', category: 'recurring_base' as const, parentItemRef: null, parentItemKey: null }, { lineRef: 'il_ben', category: 'benefit' as const, parentItemRef: 'ii_ben', parentItemKey: own.providerIdempotencyKey }],
+        benefitItem: { itemRef: 'ii_ben', invoiceRef: s.invoiceRef, idempotencyKey: own.providerIdempotencyKey, amountMinor: -own.benefitMinor, currency: 'usd', discountable: false },
+        settlingPayment: { ref: `pi_dev06_${s.invoiceRef}`, source: 'stripe_payment' as const }, refunds: 'absent' as const, disputes: 'absent' as const };
+      const binding = { businessId: s.businessId, reservationId: s.reservationId, intentRef: res.ref };
+      return { ctx, scope, rawInvoice, mockSpec, binding, now };
+    }
+    const prepare = async () => { const s = await scenario({ authorize: false }); await applications.record({ reservationId: s.reservationId, businessId: s.businessId }); return s; };
+
+    it('the full chain with mock-provider evidence: bridge -> classifiers -> trusted recorder (signed) -> gate -> consumption, exactly once; nothing in it grants authority on its own', async () => {
+      const s = await prepare(); const p = await persisted(s);
+      const built = await buildMockEvidence(p.mockSpec as any);
+      if (!built.ok) throw new Error('mock denied');
+      const classified = classifyBundle(p.ctx as any, built.evidence, p.binding);
+      expect(classified).toMatchObject({ origin: 'MOCK_FIXTURE', settlement: { verdict: 'ELIGIBLE', grantsFinancialAuthority: false } });
+      expect(await authRows(s)).toBe(0); // classification alone records nothing
+      const rec = await recorder.record({ reservationId: s.reservationId, businessId: s.businessId, evidence: classified.settlementEvidence! });
+      expect(rec.verdict).toBe('ELIGIBLE');
+      expect((await rows<any>(`select signing_key_id, evidence_kind from ${TABLE} where reservation_id=$1`, [s.reservationId]))[0]).toMatchObject({ signing_key_id: SIGNER.keyId, evidence_kind: 'MOCK_SYNTHETIC' });
+      expect((await consumption.consume({ reservationId: s.reservationId, businessId: s.businessId })).replay).toBe(false);
+      expect((await consumption.consume({ reservationId: s.reservationId, businessId: s.businessId })).replay).toBe(true);
+      expect(await consumeEntries(s)).toBe(1);
+    });
+
+    it('22. evidence from a real test-mode read stays disabled for the consumption gate: it is not converted, cannot be recorded, cannot be forged into a row, and nothing moves', async () => {
+      const s = await prepare(); const p = await persisted(s);
+      const realAuth = { approved: true, revoked: false, inventoryRecordId: 'S08-STRIPE-PRIVATE-TEST-VERIFIER-001' as const, inventoryRevision: 'rev-synthetic-1', accountId: 'acct_RealShape1', realm: 'test' as const,
+        methods: ['ACCOUNT_RETRIEVE_CURRENT', 'INVOICE_RETRIEVE'] as Array<'ACCOUNT_RETRIEVE_CURRENT' | 'INVOICE_RETRIEVE'>, expiresAtMs: p.now + 3_600_000 };
+      const realScope = { ...p.scope, invoiceId: 'in_Dev06RealShape1' }; // a Stripe-shaped id: the scenario's own ids contain underscores, which real invoice ids never do
+      const adapter = new StripeReadOnlyEvidenceAdapter({ transport: new ScriptedReadTransport([{ object: 'account', id: 'acct_RealShape1' }, { ...p.rawInvoice, id: realScope.invoiceId }]), authorization: realAuth, clock: () => p.now, audit: () => undefined });
+      const out = await adapter.acquire(realScope);
+      if (!out.ok) throw new Error('expected evidence');
+      expect(out.evidence.origin).toBe('STRIPE_TEST_READ'); expect(out.evidence.complete).toBe(false);
+      const classified = classifyBundle(p.ctx as any, out.evidence, p.binding);
+      expect(classified.settlement).toMatchObject({ verdict: 'UNRESOLVED', reasonCodes: ['EVIDENCE_KIND_UNSUPPORTED'] });
+      expect(classified.settlementEvidence).toBeNull();
+      // even evidence hand-relabelled as the real kind cannot be recorded: the recorder (and the classifier it runs) accept only the mock kind
+      const good = classifyBundle(p.ctx as any, (await buildMockEvidence(p.mockSpec as any) as any).evidence, p.binding).settlementEvidence!;
+      const relabelled = { ...good, provenance: { ...good.provenance, evidenceKind: 'STRIPE_TEST_READ' } } as any;
+      expect(await rejects(recorder.record({ reservationId: s.reservationId, businessId: s.businessId, evidence: relabelled }))).toMatch(/SETTLEMENT_AUTH_EVIDENCE_UNUSABLE/);
+      expect(await authRows(s)).toBe(0);
+      // a database writer cannot forge a row of that kind either: the evidence-kind CHECK admits only the mock kind
+      const row = classifyBundle(p.ctx as any, (await buildMockEvidence(p.mockSpec as any) as any).evidence, p.binding).settlementEvidence!;
+      await recorder.record({ reservationId: s.reservationId, businessId: s.businessId, evidence: row });
+      const stored = (await rows<any>(`select * from ${TABLE} where reservation_id=$1`, [s.reservationId]))[0];
+      expect(await rejects(admin.query(`insert into ${TABLE}(business_id,reservation_id,decision_id,invoice_ref,provider_account_id,provider_mode,allocation_digest,policy_version,verdict,reason_codes,classifier_version,evidence_kind,billing_interval,snapshot_ref,snapshot_digest,observed_at_ms,evidence_digest,provenance_version,signing_key_id,signature)
+        values($1,$2,$3,$4,$5,$6,$7,$8,'ELIGIBLE',ARRAY['ALL_CONDITIONS_VERIFIED'],$9,'STRIPE_TEST_READ',$10,'x',$11,$12,$13,1,$14,$15)`,
+        [stored.business_id, stored.reservation_id, stored.decision_id, stored.invoice_ref, stored.provider_account_id, stored.provider_mode, stored.allocation_digest, stored.policy_version, stored.classifier_version, stored.billing_interval,
+          'e'.repeat(64), stored.observed_at_ms, 'f'.repeat(64), stored.signing_key_id, stored.signature]))).toMatch(/evidence_kind_check|SETTLEMENT_AUTH_DIGEST_MISMATCH/);
+    });
+
+    it('22b. with no authorization recorded from real evidence, consumption stays refused and leaves no trace', async () => {
+      const s = await prepare();
+      const before = await credit(s);
+      expect(await rejects(consumption.consume({ reservationId: s.reservationId, businessId: s.businessId }))).toMatch(/PARTNER_CONSUME_SETTLEMENT_NOT_AUTHORIZED \(AUTHORIZATION_MISSING\)/);
+      expect(await credit(s)).toEqual(before);
+      expect(await consumeEntries(s)).toBe(0);
+      // a gate configured to ACCEPT the real kind still has nothing to accept: no row of that kind can exist
+      const lenient = new PartnerCreditConsumptionService(buildDb(await connect()), { ...GATE_CFG, acceptedEvidenceKinds: ['STRIPE_TEST_READ', MOCK_EVIDENCE_KIND] });
+      expect(await rejects(lenient.consume({ reservationId: s.reservationId, businessId: s.businessId }))).toMatch(/\(AUTHORIZATION_MISSING\)/);
+      expect(await consumeEntries(s)).toBe(0);
+    });
+
+    it('a pipeline that cannot establish a fact leaves the reservation unauthorized: evidence missing its refund history is recorded as UNRESOLVED and consumption is refused', async () => {
+      const s = await prepare(); const p = await persisted(s);
+      const built = await buildMockEvidence({ ...p.mockSpec, refunds: 'unresolved' } as any);
+      if (!built.ok) throw new Error('mock denied');
+      const classified = classifyBundle(p.ctx as any, built.evidence, p.binding);
+      expect(classified.settlement.verdict).toBe('UNRESOLVED');
+      const rec = await recorder.record({ reservationId: s.reservationId, businessId: s.businessId, evidence: classified.settlementEvidence! });
+      expect(rec.verdict).toBe('UNRESOLVED');
+      const before = await credit(s);
+      expect(await rejects(consumption.consume({ reservationId: s.reservationId, businessId: s.businessId }))).toMatch(/\(NOT_ELIGIBLE\)/);
+      expect(await credit(s)).toEqual(before); expect(await consumeEntries(s)).toBe(0);
+    });
   });
 });
