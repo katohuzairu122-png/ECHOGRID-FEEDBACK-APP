@@ -251,6 +251,15 @@ describe('S08-D1D3-DEV-01 mock settlement eligibility classifier', () => {
       }
       expect(run((_, e) => { e.benefitItem.itemRef = 'ii_other'; e.lines.items[1].parentItemRef = 'ii_other'; }).verdict).toBe('ELIGIBLE'); // well-formed control
     });
+    it('a non-string identifier or currency that is consistent everywhere (numbers, arrays) is still refused: String(x) is never accepted as a reference', () => {
+      // reservation id 123 in the context, the evidence binding AND the allocation, with the matching derived key
+      expectU(run((c, e) => { c.expected.reservationId = 123; e.binding.reservationId = 123; const a = c.expected.frozenAllocation.allocations[0]; a.reservationId = 123; a.providerIdempotencyKey = benefitIdempotencyKey('123'); }), 'FROZEN_ALLOCATION_MISMATCH');
+      expectU(run((c, e) => { c.expected.intentRef = ['intent-1']; e.binding.intentRef = c.expected.intentRef; c.expected.frozenAllocation.allocations[0].invoiceIntentRef = c.expected.intentRef; }), 'FROZEN_ALLOCATION_MISMATCH');
+      const arr = ['usd']; // the SAME array object everywhere, so strict equality alone would hold
+      expectU(run((c, e) => { c.expected.currency = arr; c.expected.frozenAllocation.currency = arr; e.invoice.currency = arr; e.lines.items.forEach((l: any) => { l.currency = arr; }); e.benefitItem.currency = arr; }), 'INPUT_INVALID');
+      expectU(run((_, e) => { e.lines.items[0].lineRef = ['il_base']; }), 'INPUT_INVALID');
+      expectU(run((_, e) => { e.benefitItem.itemRef = ['ii_ben']; e.lines.items[1].parentItemRef = e.benefitItem.itemRef; }), 'ATTRIBUTION_MISMATCH');
+    });
     it('the copied policy bounds equal the real ones (drift guard)', () => {
       expect(INVOICE_BENEFIT_POLICY_V1.percentPerCredit).toBe(1); expect(INVOICE_BENEFIT_POLICY_V1.maxPercent).toBe(10);
     });

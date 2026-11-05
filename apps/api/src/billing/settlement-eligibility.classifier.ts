@@ -24,7 +24,9 @@ const PERCENT_PER_CREDIT = 1;
 const MAX_BENEFIT_PERCENT = 10;
 const MAX_CREDITS_PER_BATCH = 10;
 const REFERENCE = /^\S{1,255}$/u; // the allocation contract's identifier form: 1 to 255 non-whitespace characters
+const isRef = (x: unknown): x is string => typeof x === 'string' && REFERENCE.test(x); // a STRING of the identifier form; String(123) or String(['a']) must never pass
 const CURRENCY = /^[a-z]{3}$/; // the repository's canonical currency form (lowercase ISO-4217 alpha-3), as used by the allocation freeze and the provider adapter
+const isCurrency = (x: unknown): x is string => typeof x === 'string' && CURRENCY.test(x);
 export const benefitIdempotencyKey = (reservationId: string) => `benefit-apply:v1:${reservationId}`;
 
 export type SettlementVerdict = 'ELIGIBLE' | 'INELIGIBLE' | 'UNRESOLVED';
@@ -213,7 +215,7 @@ function frozenAllocationValid(f: FrozenAggregateBenefitAllocation, e: Settlemen
   let sum = 0n; let previous: string | null = null;
   const ids = new Set<string>(); const intents = new Set<string>();
   for (const a of f.allocations) {
-    if (!a || !REFERENCE.test(String(a.reservationId)) || !REFERENCE.test(String(a.invoiceIntentRef)) || a.units !== 1 || !isInt(a.benefitMinor) || a.benefitMinor <= 0 ||
+    if (!a || !isRef(a.reservationId) || !isRef(a.invoiceIntentRef) || a.units !== 1 || !isInt(a.benefitMinor) || a.benefitMinor <= 0 ||
         a.providerIdempotencyKey !== benefitIdempotencyKey(a.reservationId)) return false;
     if (ids.has(a.reservationId) || intents.has(a.invoiceIntentRef)) return false;
     if (previous !== null && !(previous < a.reservationId)) return false; // the freeze emits allocations in ascending reservation-id order
@@ -241,7 +243,7 @@ function evaluate(ctx: SettlementClassifierContext, ev: MockSettlementEvidence, 
   // P1: tenant, reservation, intent and the frozen allocation the evidence must belong to
   if (ev.binding.businessId !== e.businessId) return U('TENANT_MISMATCH');
   if (ev.binding.reservationId !== e.reservationId || ev.binding.intentRef !== e.intentRef) return U('RESERVATION_MISMATCH');
-  if (!REFERENCE.test(String(e.reservationId)) || !REFERENCE.test(String(e.intentRef))) return U('FROZEN_ALLOCATION_MISMATCH');
+  if (!isRef(e.reservationId) || !isRef(e.intentRef)) return U('FROZEN_ALLOCATION_MISMATCH');
   const own = Array.isArray(frozen.allocations) ? frozen.allocations.find(a => a?.reservationId === e.reservationId) : undefined;
   if (!frozenAllocationValid(frozen, e) || !own || own.invoiceIntentRef !== e.intentRef) return U('FROZEN_ALLOCATION_MISMATCH');
 
@@ -253,7 +255,7 @@ function evaluate(ctx: SettlementClassifierContext, ev: MockSettlementEvidence, 
   if (ev.provider.accountId !== e.providerAccountId) scope.push('SCOPE_MISMATCH');
   if (ev.provider.mode !== e.providerMode) scope.push('SCOPE_MISMATCH');
   if (ev.invoice.id !== e.invoiceRef || ev.invoice.customerRef !== e.customerRef || ev.invoice.subscriptionRef !== e.subscriptionRef) scope.push('SCOPE_MISMATCH');
-  if (!CURRENCY.test(String(e.currency))) return U('INPUT_INVALID'); // the expected currency must itself be a well-formed currency, or no comparison means anything
+  if (!isCurrency(e.currency)) return U('INPUT_INVALID'); // the expected currency must itself be a well-formed currency, or no comparison means anything
   if (ev.invoice.currency !== e.currency) scope.push('CURRENCY_MISMATCH');
   if (scope.length) return U(...new Set(scope));
 
@@ -280,9 +282,9 @@ function evaluate(ctx: SettlementClassifierContext, ev: MockSettlementEvidence, 
   // a non-integer timestamp would make `createdAt < effectiveFrom` false and silently skip the policy-applicability rule, so it is refused here
   if (!isNonNegInt(inv.createdAtMs)) return U('INPUT_INVALID');
   // Every line is summed into the total, so EVERY line (not only the benefit line) must carry exactly the invoice currency. Nothing is converted.
-  if (items.some(l => !CURRENCY.test(String(l?.currency)) || l.currency !== inv.currency)) return U('CURRENCY_MISMATCH');
+  if (items.some(l => !isCurrency(l?.currency) || l.currency !== inv.currency)) return U('CURRENCY_MISMATCH');
   // F-8: every line needs a usable identifier (non-empty, no whitespace); an absent or ambiguous reference cannot be told apart from another line
-  if (items.some(l => !REFERENCE.test(String(l?.lineRef)) || typeof l.lineRef !== 'string')) return U('INPUT_INVALID');
+  if (items.some(l => !isRef(l?.lineRef))) return U('INPUT_INVALID');
   if (new Set(items.map(l => l.lineRef)).size !== items.length) return U('DUPLICATE_LINE');
   if (![inv.amountDueMinor, inv.amountPaidMinor, inv.amountRemainingMinor].every(isNonNegInt) || !isInt(inv.totalMinor) || inv.totalMinor < 0 ||
       inv.amountPaidMinor + inv.amountRemainingMinor !== inv.amountDueMinor || items.some(l => !isInt(l.amountMinor)) ||
@@ -336,7 +338,7 @@ function evaluate(ctx: SettlementClassifierContext, ev: MockSettlementEvidence, 
   if (!item || !line) return U('BENEFIT_LINE_MISSING');
   const c10: SettlementReason[] = [];
   // F-8: an empty or ambiguous item/parent reference could match another empty reference; correlation needs real identifiers on both sides
-  if (typeof item.itemRef !== 'string' || typeof line.parentItemRef !== 'string' || !REFERENCE.test(item.itemRef) || !REFERENCE.test(line.parentItemRef)) c10.push('ATTRIBUTION_MISMATCH');
+  if (!isRef(item.itemRef) || !isRef(line.parentItemRef)) c10.push('ATTRIBUTION_MISMATCH');
   if (item.invoiceRef !== e.invoiceRef || item.idempotencyKey !== ourKey || line.parentItemRef !== item.itemRef) c10.push('ATTRIBUTION_MISMATCH');
   if (item.currency !== e.currency || line.currency !== e.currency) c10.push('CURRENCY_MISMATCH');
   if (item.amountMinor !== -(own.benefitMinor) || line.amountMinor !== -(own.benefitMinor)) c10.push('AMOUNT_MISMATCH');
