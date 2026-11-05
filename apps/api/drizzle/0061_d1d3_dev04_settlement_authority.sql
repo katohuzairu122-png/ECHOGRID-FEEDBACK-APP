@@ -29,6 +29,22 @@ BEGIN
     END IF;
   END LOOP;
 END $$;--> statement-breakpoint
+-- DEV-05: a migrator that is NOT a superuser (the realistic owner) may create the roles (CREATEROLE) but cannot hand a function to a role it cannot SET ROLE to, and the new owner needs
+-- CREATE on the schema. Both are granted only for the two ALTER FUNCTION ... OWNER statements below and removed again at the end of this file. A superuser needs neither, and nothing
+-- is granted or revoked for it. Which grants were made here is remembered in a session setting, so a membership the owner provisioned beforehand is never revoked.
+DO $$
+BEGIN
+  IF NOT (SELECT rolsuper FROM pg_roles WHERE rolname = current_user) THEN
+    IF NOT pg_has_role(current_user, 'settlement_authority_reader', 'SET') THEN
+      GRANT settlement_authority_reader TO CURRENT_USER;
+      PERFORM set_config('dev05.membership_granted', 'on', false);
+    END IF;
+    IF NOT has_schema_privilege('settlement_authority_reader', 'public', 'CREATE') THEN
+      GRANT CREATE ON SCHEMA public TO settlement_authority_reader;
+      PERFORM set_config('dev05.schema_create_granted', 'on', false);
+    END IF;
+  END IF;
+END $$;--> statement-breakpoint
 REVOKE ALL ON TABLE public.partner_credit_settlement_authorizations FROM PUBLIC;--> statement-breakpoint
 GRANT SELECT, INSERT ON TABLE public.partner_credit_settlement_authorizations TO settlement_recorder;--> statement-breakpoint
 GRANT SELECT ON TABLE public.partner_credit_settlement_authorizations TO settlement_authority_reader, settlement_tenant_reader, settlement_auditor;--> statement-breakpoint
@@ -92,4 +108,11 @@ BEGIN
   RETURN NEW;
 END $$;--> statement-breakpoint
 REVOKE ALL ON FUNCTION public.partner_credit_ledger_settlement_gate() FROM PUBLIC;--> statement-breakpoint
-ALTER FUNCTION public.partner_credit_ledger_settlement_gate() OWNER TO settlement_authority_reader;
+ALTER FUNCTION public.partner_credit_ledger_settlement_gate() OWNER TO settlement_authority_reader;--> statement-breakpoint
+DO $$
+BEGIN
+  IF current_setting('dev05.schema_create_granted', true) = 'on' THEN REVOKE CREATE ON SCHEMA public FROM settlement_authority_reader; END IF;
+  IF current_setting('dev05.membership_granted', true) = 'on' THEN REVOKE settlement_authority_reader FROM CURRENT_USER; END IF;
+  PERFORM set_config('dev05.schema_create_granted', '', false);
+  PERFORM set_config('dev05.membership_granted', '', false);
+END $$;

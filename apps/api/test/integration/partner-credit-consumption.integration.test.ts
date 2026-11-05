@@ -11,7 +11,7 @@ import { BenefitApplicationSagaService } from '../../src/billing/benefit-applica
 import { BenefitTerminalApplicationService } from '../../src/billing/benefit-terminal-application.service';
 import { PartnerCreditConsumptionService } from '../../src/partner-credits/partner-credit-consumption.service';
 import {
-  DEVELOPMENT_ALLOWED_INTERVALS, SettlementAuthorizationError, SettlementAuthorizationRecorder, settlementAuthorizationDigest, createSettlementEvidenceSigner, settlementProvenanceMessage, verifySettlementProvenance,
+  DEVELOPMENT_ALLOWED_INTERVALS, SettlementAuthorizationError, SettlementAuthorizationRecorder, settlementAuthorizationDigest, createSettlementEvidenceSigner, settlementProvenanceMessage, verifySettlementProvenance, parseTrustedSigningKeys,
   type SettlementEvidenceSigner, type SettlementGateConfig,
 } from '../../src/partner-credits/partner-credit-settlement-authorization';
 import { MOCK_EVIDENCE_KIND, type MockSettlementEvidence } from '../../src/billing/settlement-eligibility.classifier';
@@ -1381,7 +1381,7 @@ describe.skipIf(!process.env.DATABASE_URL)('D4 final credit consumption and ledg
       expect(await rejects(badName.record({ reservationId: s.reservationId, businessId: s.businessId, evidence: ev }))).toMatch(/RECORDER_UNCONFIGURED/);
       // a recorder configured with a role that exists but is not allowed to insert: the INSERT is refused by the database
       const wrongRole = new SettlementAuthorizationRecorder(buildDb(await connect()), GATE_CFG, SIGNER, 'settlement_auditor');
-      expect(await rejects(wrongRole.record({ reservationId: s.reservationId, businessId: s.businessId, evidence: ev }))).toMatch(/Failed query|permission denied/);
+      expect(await rejects(wrongRole.record({ reservationId: s.reservationId, businessId: s.businessId, evidence: ev }))).toMatch(/AUTHORITY_UNAVAILABLE|Failed query|permission denied/); // stopped at its first lookup or at the INSERT
       expect(await countRows()).toBe(0);
       await refused(s, /\(AUTHORIZATION_MISSING\)/);
       // a recorder whose connection is a non-superuser app role that is not a member of the recorder role cannot record: fail closed
@@ -1477,6 +1477,144 @@ describe.skipIf(!process.env.DATABASE_URL)('D4 final credit consumption and ledg
       } finally { await admin.query('DROP ROLE IF EXISTS dev04_probe_new'); }
       // the real roles in this database pass the same guard right now
       await admin.query(block);
+    });
+
+    // ---- D1/D3-DEV-05: key lifecycle and recorder-lock determinism --------------------------------------------------------------------------------------------------------------
+    const cfgWith = (keys: Record<string, string>): SettlementGateConfig => ({ ...GATE_CFG, trustedSigningKeys: keys });
+    const recorderFor = async (key: { signer: SettlementEvidenceSigner }) => new SettlementAuthorizationRecorder(buildDb(await connect()), GATE_CFG, key.signer);
+    const later = (ms: number) => (ev: any) => { ev.provenance.observedAtMs += ms; };
+
+    it('K1. key rotation overlap: while both keys are trusted, evidence signed by either authorizes consumption', async () => {
+      const both = cfgWith({ [KEY_A.signer.keyId]: KEY_A.publicHex, [KEY_B.signer.keyId]: KEY_B.publicHex });
+      const oldKey = await ready(); // recorded and signed by key A
+      const newKey = await ready(undefined, { authorize: false });
+      await (await recorderFor(KEY_B)).record({ reservationId: newKey.s.reservationId, businessId: newKey.s.businessId, evidence: await evidenceFor(newKey.s) }); // signed by key B
+      expect((await stored(newKey.s)).signing_key_id).toBe(KEY_B.signer.keyId);
+      for (const x of [oldKey, newKey]) expect((await (await newGateConsumer(both)).consume({ reservationId: x.s.reservationId, businessId: x.s.businessId })).replay).toBe(false);
+    });
+
+    it('K2. completing a rotation: once the old key is removed its evidence stops authorizing (nothing moves) until the new key re-records; the old row stays as history', async () => {
+      const onlyB = cfgWith({ [KEY_B.signer.keyId]: KEY_B.publicHex });
+      const { s } = await ready(); // signed by A
+      await refused(s, /\(UNTRUSTED_KEY\)/, await newGateConsumer(onlyB));
+      await (await recorderFor(KEY_B)).record({ reservationId: s.reservationId, businessId: s.businessId, evidence: await evidenceFor(s, later(10)) }); // a fresh snapshot, signed by B
+      expect((await rows<{ n: number }>(`select count(*)::int n from ${TABLE} where reservation_id=$1`, [s.reservationId]))[0]!.n).toBe(2); // append-only: A's row is kept
+      expect((await (await newGateConsumer(onlyB)).consume({ reservationId: s.reservationId, businessId: s.businessId })).replay).toBe(false);
+      expect(await consumeEntries(s)).toBe(1);
+    });
+
+    it('K3. revoking a key: a validly signed, newest, ELIGIBLE row from a revoked key never authorizes anything, even when an earlier row from a trusted key exists', async () => {
+      const onlyB = cfgWith({ [KEY_B.signer.keyId]: KEY_B.publicHex });
+      const { s } = await ready(undefined, { authorize: false });
+      await (await recorderFor(KEY_B)).record({ reservationId: s.reservationId, businessId: s.businessId, evidence: await evidenceFor(s) }); // legitimate, signed by B
+      expect((await writeRow(s, 'settlement_recorder', { keyId: SIGNER.keyId, signWith: { signer: SIGNER } })).error).toBe(''); // a newer row with a GENUINE signature from the now-revoked key A
+      await refused(s, /\(UNTRUSTED_KEY\)/, await newGateConsumer(onlyB));
+      // the same newest row is honoured only while its key is trusted
+      expect((await (await newGateConsumer(cfgWith({ [KEY_A.signer.keyId]: KEY_A.publicHex, [KEY_B.signer.keyId]: KEY_B.publicHex }))).consume({ reservationId: s.reservationId, businessId: s.businessId })).replay).toBe(false);
+    });
+
+    it('K4. the registry is configuration: a JSON string loads into a working gate, and a malformed string leaves the gate refusing everything', async () => {
+      const good = parseTrustedSigningKeys(JSON.stringify({ [KEY_A.signer.keyId]: KEY_A.publicHex }));
+      expect(good).toBeDefined();
+      const ok = await ready();
+      expect((await (await newGateConsumer(cfgWith({ ...good! }))).consume({ reservationId: ok.s.reservationId, businessId: ok.s.businessId })).replay).toBe(false);
+      const blocked = await ready();
+      for (const raw of ['{', '[]', JSON.stringify({ [KEY_A.signer.keyId]: 'nothex' }), undefined]) {
+        const parsed = parseTrustedSigningKeys(raw as string);
+        expect(parsed).toBeUndefined();
+        await refused(blocked.s, /\(GATE_UNCONFIGURED\)/, await newGateConsumer({ ...GATE_CFG, trustedSigningKeys: parsed as never }));
+      }
+    });
+
+    it('K5. key ids are exact: a different case or a look-alike id is a different (untrusted) key, never a match', async () => {
+      const { s } = await ready();
+      expect((await writeRow(s, 'settlement_recorder', { keyId: SIGNER.keyId.toUpperCase(), signWith: { signer: SIGNER } })).error).toBe('');
+      await refused(s, /\(UNTRUSTED_KEY\)/);
+      expect((await writeRow(s, 'settlement_recorder', { keyId: `${SIGNER.keyId} `, signWith: { signer: SIGNER } })).error).toMatch(/provenance_check|violates check/); // rejected by the database CHECK
+    });
+
+    it('P1. end to end with the provisioning template: a recorder login that inherits nothing records, an application login that cannot record consumes, and neither is a superuser', async () => {
+      const apl = `dev05p_app_${randomBytes(3).toString('hex')}`; const rcl = `dev05p_rec_${randomBytes(3).toString('hex')}`;
+      try {
+        for (const l of [apl, rcl]) {
+          await admin.query(`CREATE ROLE ${l} LOGIN PASSWORD '${LOGIN_PASSWORD}'`);
+          await admin.query(`GRANT ALL ON ALL TABLES IN SCHEMA public TO ${l}`); await admin.query(`GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO ${l}`); // the ordinary application privileges, unrelated to settlement authority
+        }
+        await admin.query(readFileSync(resolve(api, 'scripts/sql/settlement-authority-provisioning.sql'), 'utf8').replace('REPLACE_WITH_APPLICATION_LOGIN', apl).replace('REPLACE_WITH_RECORDER_LOGIN', rcl));
+        const connectLogin = async (login: string) => { const u = new URL(urlFor(dbName)); u.username = login; u.password = LOGIN_PASSWORD; const c = new Client({ connectionString: u.toString() }); await c.connect(); clients.push(c); return c; };
+        const { s } = await ready(undefined, { authorize: false });
+        const recorderOnly = new SettlementAuthorizationRecorder(buildDb(await connectLogin(rcl)), GATE_CFG, SIGNER);
+        const app = new PartnerCreditConsumptionService(buildDb(await connectLogin(apl)), GATE_CFG);
+        await refused(s, /\(AUTHORIZATION_MISSING\)/, app);
+        const ev = await evidenceFor(s);
+        const first = await recorderOnly.record({ reservationId: s.reservationId, businessId: s.businessId, evidence: ev });
+        expect(first.replay).toBe(false);
+        expect((await recorderOnly.record({ reservationId: s.reservationId, businessId: s.businessId, evidence: ev })).replay).toBe(true); // replay lookup works for a non-inheriting recorder
+        expect((await app.consume({ reservationId: s.reservationId, businessId: s.businessId })).replay).toBe(false);
+        expect(await consumeEntries(s)).toBe(1);
+        // the application login cannot record, and the recorder login cannot consume (it cannot verify)
+        const appAsRecorder = new SettlementAuthorizationRecorder(buildDb(await connectLogin(apl)), GATE_CFG, SIGNER);
+        const t = await ready(undefined, { authorize: false });
+        expect(await rejects(appAsRecorder.record({ reservationId: t.s.reservationId, businessId: t.s.businessId, evidence: await evidenceFor(t.s) }))).toMatch(/RECORDER_ROLE_UNAVAILABLE/);
+        const u = await ready();
+        await refused(u.s, /\(AUTHORITY_UNAVAILABLE\)/, new PartnerCreditConsumptionService(buildDb(await connectLogin(rcl)), GATE_CFG));
+      } finally {
+        for (const l of [apl, rcl]) { try { await admin.query(`DROP OWNED BY ${l}`); await admin.query(`DROP ROLE IF EXISTS ${l}`); } catch { /* shared cluster */ } }
+      }
+    });
+
+    /** Polls until `n` backends of the scratch database are waiting on a lock (deterministic: the wait is observed, never assumed from elapsed time). */
+    const waitForLockWaiters = async (n: number) => {
+      for (let i = 0; i < 100; i++) {
+        const w = (await rows<{ c: number }>("select count(*)::int c from pg_stat_activity where datname=$1 and wait_event_type='Lock'", [dbName]))[0]!.c;
+        if (w >= n) return w;
+        await new Promise(r => setTimeout(r, 50));
+      }
+      throw new Error(`fewer than ${n} backends waited on a lock within 5s`);
+    };
+
+    it('L1. the recorder takes the reservation lock: it waits while the lock is held, writes nothing meanwhile, and proceeds once released', async () => {
+      const { s } = await ready(undefined, { authorize: false });
+      const holder = await connect();
+      await holder.query('BEGIN'); await holder.query('select id from partner_credit_reservations where id=$1 for no key update', [s.reservationId]); // conflicts with the explicit FOR UPDATE, but not with the FK check's KEY SHARE, so only the explicit lock can make the recorder wait
+      let finished = false;
+      const pending = recorder.record({ reservationId: s.reservationId, businessId: s.businessId, evidence: await evidenceFor(s) }).then(r => { finished = true; return r; });
+      await waitForLockWaiters(1); // the recorder is observably blocked on a lock
+      expect(finished).toBe(false);
+      expect((await rows<{ n: number }>(`select count(*)::int n from ${TABLE} where reservation_id=$1`, [s.reservationId]))[0]!.n).toBe(0);
+      await holder.query('COMMIT');
+      expect((await pending).replay).toBe(false);
+      expect((await rows<{ n: number }>(`select count(*)::int n from ${TABLE} where reservation_id=$1`, [s.reservationId]))[0]!.n).toBe(1);
+    });
+
+    it('L2. consumption takes the same lock: it waits while the lock is held and consumes nothing meanwhile; and a recording racing a consumption can never leave a consume that the newest evidence does not allow', async () => {
+      const a = await ready();
+      const holderA = await connect();
+      await holderA.query('BEGIN'); await holderA.query('select id from partner_credit_reservations where id=$1 for no key update', [a.s.reservationId]);
+      let consumed = false;
+      const pendingConsume = consumption.consume({ reservationId: a.s.reservationId, businessId: a.s.businessId }).then(r => { consumed = true; return r; });
+      await waitForLockWaiters(1);
+      expect(consumed).toBe(false);
+      expect(await consumeEntries(a.s)).toBe(0);
+      await holderA.query('COMMIT');
+      expect((await pendingConsume).replay).toBe(false);
+      expect(await consumeEntries(a.s)).toBe(1);
+
+      // a revocation (a newer dispute snapshot) and a consumption both wait on the lock; whichever is granted first, the outcome is consistent
+      for (let round = 0; round < 3; round++) {
+        const r = await ready();
+        const holder = await connect();
+        await holder.query('BEGIN'); await holder.query('select id from partner_credit_reservations where id=$1 for no key update', [r.s.reservationId]);
+        const revoke = recorder.record({ reservationId: r.s.reservationId, businessId: r.s.businessId, evidence: await evidenceFor(r.s, ev => { ev.events.dispute = 'open'; ev.provenance.observedAtMs += 50; }) });
+        const consume = rejects(consumption.consume({ reservationId: r.s.reservationId, businessId: r.s.businessId }));
+        await waitForLockWaiters(2);
+        await holder.query('COMMIT');
+        const [, consumeError] = await Promise.all([revoke, consume]);
+        const entries = await consumeEntries(r.s);
+        if (consumeError === '') expect(entries, 'consumed before the revocation took the lock').toBe(1);
+        else { expect(consumeError).toMatch(/\(NOT_ELIGIBLE\)/); expect(entries, 'revoked first: nothing consumed').toBe(0); }
+        expect(entries).toBeLessThanOrEqual(1);
+      }
     });
 
     // helpers declared last so they can be hoisted into the tests above
