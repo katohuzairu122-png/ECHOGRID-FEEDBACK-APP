@@ -227,9 +227,9 @@ describe('S08-D1D3-DEV-01 mock settlement eligibility classifier', () => {
       for (const v of ['benefit-apply:v1:res-9', 'benefit-apply:v2:res-1', 'x', '', null, undefined, 7]) expectFrozen(fa(a => { a.allocations[0].providerIdempotencyKey = v; }));
       for (const v of ['', ' ', 'res 1', null, undefined, 7, 'x'.repeat(256)]) { expectFrozen(fa(a => { a.allocations[0].reservationId = v; })); expectFrozen(fa(a => { a.allocations[0].invoiceIntentRef = v; })); }
       const two = (a: any) => { a.allocations.push({ reservationId: 'res-2', invoiceIntentRef: 'intent-2', units: 1, benefitMinor: 300, providerIdempotencyKey: benefitIdempotencyKey('res-2') }); a.aggregateBenefitMinor = 600; a.unitsToApply = 2; a.percentApplied = 2; a.eligibleCreditBalance = 2; a.eligibleBaseMinor = 6000; };
-      expectFrozen((c, e) => { two(c.expected.frozenAllocation); c.expected.frozenAllocation.allocations[1].reservationId = 'res-1'; c.expected.frozenAllocation.allocations[1].providerIdempotencyKey = KEY; }); // duplicate reservation
-      expectFrozen((c, e) => { two(c.expected.frozenAllocation); c.expected.frozenAllocation.allocations[1].invoiceIntentRef = 'intent-1'; }); // duplicate intent
-      expectFrozen((c, e) => { two(c.expected.frozenAllocation); c.expected.frozenAllocation.allocations.reverse(); }); // not in the freeze's ascending order
+      expectFrozen(c => { two(c.expected.frozenAllocation); c.expected.frozenAllocation.allocations[1].reservationId = 'res-1'; c.expected.frozenAllocation.allocations[1].providerIdempotencyKey = KEY; }); // duplicate reservation
+      expectFrozen(c => { two(c.expected.frozenAllocation); c.expected.frozenAllocation.allocations[1].invoiceIntentRef = 'intent-1'; }); // duplicate intent
+      expectFrozen(c => { two(c.expected.frozenAllocation); c.expected.frozenAllocation.allocations.reverse(); }); // not in the freeze's ascending order
     });
     it('the allocation must belong to the expected tenant, invoice, currency and the evaluated reservation and intent', () => {
       for (const f of [(a: any) => { a.businessId = 'biz-2'; }, (a: any) => { a.invoiceRef = 'in_2'; }, (a: any) => { a.currency = 'eur'; }, (a: any) => { a.allocations[0].invoiceIntentRef = 'intent-9'; }, (a: any) => { a.allocationPolicyVersion = 'S08-AGG-ROUND/2'; },
