@@ -421,6 +421,13 @@
       "when": 1793806714143,
       "tag": "0059_r10_obligation_delete_denial",
       "breakpoints": true
+    },
+    {
+      "idx": 60,
+      "version": "7",
+      "when": 1793870817556,
+      "tag": "0060_d1d3_settlement_authorizations",
+      "breakpoints": true
     }
   ]
 }

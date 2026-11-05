@@ -1,6 +1,7 @@
 import { and, eq, sql } from 'drizzle-orm';
 import type { Database } from '../db/client';
 import { hasActiveDisputeHold } from './partner-credit-dispute.service';
+import { requireSettlementAuthorization, type SettlementGateConfig } from './partner-credit-settlement-authorization';
 import {
   benefitApplicationIntents, billingPartnerCreditApplications, orphanSettlementEvents, orphanSettlements,
   partnerCreditAccounts, partnerCreditAwardDecisions, partnerCreditLedger, partnerCreditLots, partnerCreditReservations,
@@ -19,11 +20,15 @@ import {
  * bucket drops by one, and exactly one `consume` (-1) ledger entry is appended (idempotency key `partner-consume:v1:<reservationId>`). Together they keep the
  * ledger identity (the sum of the counted ledger entries equals provisional + available + reserved). The database re-verifies the evidence by trigger.
  *
+ * D1/D3-DEV-03: a first consumption also needs a settlement authorization (see partner-credit-settlement-authorization.ts), enforced here under the same locks and again by
+ * a database trigger on the `consume` ledger entry. Nothing the caller supplies can satisfy it.
+ *
  * Decisions that are mine, not the owner's, flagged for ratification: consumption is refused while an award dispute hold is active (the unit stays reserved
  * until the hold is resolved), and an application confirmed after the reservation's own deadline is refused (see BenefitTerminalApplicationService).
  */
 export class PartnerCreditConsumptionService {
-  constructor(private readonly db: Database) {}
+  /** `settlementGate` is REQUIRED for any consumption: undefined, null or malformed configuration makes every first consumption fail closed (replays of an already consumed credit do not need it). */
+  constructor(private readonly db: Database, private readonly settlementGate?: SettlementGateConfig) {}
 
   async consume(input: { reservationId: string; businessId: string; now?: Date }): Promise<{ state: 'consumed'; replay: boolean; ledgerKey: string }> {
     if (!input.reservationId || !input.businessId) throw new Error('PARTNER_CONSUME_INPUT_INVALID');
@@ -85,6 +90,8 @@ export class PartnerCreditConsumptionService {
       if (entry) throw new Error('PARTNER_CONSUME_LEDGER_WITHOUT_CONSUMPTION');
       if (reservation.state !== 'reserved' || lot.status !== 'reserved' || lot.availableUnits !== 0 || account.reserved < 1) throw new Error('PARTNER_CONSUME_NOT_CONSUMABLE');
       if (await hasActiveDisputeHold(tx, decision.id)) throw new Error('PARTNER_CONSUME_DISPUTE_HOLD');
+      // D1/D3-DEV-03: final consumption additionally needs a current, ELIGIBLE, correctly bound settlement authorization. Checked under the locks above and before any write.
+      await requireSettlementAuthorization(tx, { businessId: input.businessId, reservationId: reservation.id, decisionId: decision.id, invoiceRef: intent.invoiceRef, policyVersion: intent.policyVersion }, this.settlementGate);
 
       await tx.update(partnerCreditReservations).set({ state: 'consumed', terminalAt: application.appliedAt > now ? application.appliedAt : now }).where(eq(partnerCreditReservations.id, reservation.id));
       await tx.update(partnerCreditLots).set({ status: 'consumed', availableUnits: 0 }).where(eq(partnerCreditLots.id, lot.id));
