@@ -140,6 +140,26 @@ describe('S08-D1D3-DEV-01 mock settlement eligibility classifier', () => {
       expectU(run((_, e) => { e.benefitItem.currency = 'eur'; }), 'CURRENCY_MISMATCH');
       expectU(run((_, e) => { e.lines.items[1].currency = 'eur'; }), 'CURRENCY_MISMATCH');
     });
+    it('F-3: EVERY invoice line must carry exactly the invoice currency; nothing is converted', () => {
+      const base = (e: any) => e.lines.items[0];
+      // a mismatched recurring-base line, with arithmetic that still adds up
+      expectU(run((_, e) => { base(e).currency = 'eur'; }), 'CURRENCY_MISMATCH');
+      // missing, null, empty and malformed currencies on the base line
+      for (const v of [undefined, null, '', 'USD', 'us', 'usdd', 'u$d', ' usd', 'usd ', 123, {}, [], true]) expectU(run((_, e) => { base(e).currency = v; }), 'CURRENCY_MISMATCH');
+      // non-base lines count too: tax, proration, other
+      for (const category of ['tax', 'proration', 'other']) {
+        expectU(run((_, e) => { e.lines.items.push({ lineRef: 'il_x', amountMinor: 100, currency: 'eur', category, parentItemRef: null, parentItemKey: null, labelReservationRef: null }); setTotal(e, 2800); }), 'CURRENCY_MISMATCH');
+        expect(run((_, e) => { e.lines.items.push({ lineRef: 'il_x', amountMinor: 100, currency: 'usd', category, parentItemRef: null, parentItemKey: null, labelReservationRef: null }); setTotal(e, 2800); }).verdict).toBe('ELIGIBLE'); // matched-currency control: the extra line is outside the eligible base
+      }
+      // mixed-currency invoice: lines in two currencies that the total happens to reconcile
+      expectU(run((_, e) => { e.lines.items.push({ lineRef: 'il_y', amountMinor: 50, currency: 'eur', category: 'other', parentItemRef: null, parentItemKey: null, labelReservationRef: null }); setTotal(e, 2750); }), 'CURRENCY_MISMATCH');
+      // a currency mismatch inside otherwise valid benefit evidence
+      expectU(run((_, e) => { e.lines.items[1].currency = 'eur'; }), 'CURRENCY_MISMATCH');
+      expectU(run((_, e) => { e.benefitItem.currency = 'eur'; }), 'CURRENCY_MISMATCH');
+      // a malformed EXPECTED currency cannot be matched by an equally malformed invoice
+      expectU(run((c, e) => { c.expected.currency = 'USD'; c.expected.frozenAllocation.currency = 'USD'; e.invoice.currency = 'USD'; e.lines.items.forEach((l: any) => { l.currency = 'USD'; }); e.benefitItem.currency = 'USD'; }), 'INPUT_INVALID');
+      expect(run().verdict).toBe('ELIGIBLE'); // all-matching control
+    });
     it('9. a wrong reservation is UNRESOLVED (binding, intent and a foreign benefit key)', () => {
       expectU(run((_, e) => { e.binding.reservationId = 'res-9'; }), 'RESERVATION_MISMATCH');
       expectU(run((_, e) => { e.binding.intentRef = 'intent-9'; }), 'RESERVATION_MISMATCH');

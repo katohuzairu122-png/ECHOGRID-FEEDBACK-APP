@@ -17,6 +17,7 @@ export const SETTLEMENT_CLASSIFIER_VERSION = 'S08-D1D3-SETTLEMENT/1' as const;
 export const SUPPORTED_BENEFIT_POLICY_VERSION = 'PC-BENEFIT/1' as const;
 export const SUPPORTED_ALLOCATION_POLICY_VERSION = 'S08-AGG-ROUND/1' as const;
 export const MOCK_EVIDENCE_KIND = 'MOCK_SYNTHETIC' as const;
+const CURRENCY = /^[a-z]{3}$/; // the repository's canonical currency form (lowercase ISO-4217 alpha-3), as used by the allocation freeze and the provider adapter
 export const benefitIdempotencyKey = (reservationId: string) => `benefit-apply:v1:${reservationId}`;
 
 export type SettlementVerdict = 'ELIGIBLE' | 'INELIGIBLE' | 'UNRESOLVED';
@@ -219,6 +220,7 @@ function evaluate(ctx: SettlementClassifierContext, ev: MockSettlementEvidence, 
   if (ev.provider.accountId !== e.providerAccountId) scope.push('SCOPE_MISMATCH');
   if (ev.provider.mode !== e.providerMode) scope.push('SCOPE_MISMATCH');
   if (ev.invoice.id !== e.invoiceRef || ev.invoice.customerRef !== e.customerRef || ev.invoice.subscriptionRef !== e.subscriptionRef) scope.push('SCOPE_MISMATCH');
+  if (!CURRENCY.test(String(e.currency))) return U('INPUT_INVALID'); // the expected currency must itself be a well-formed currency, or no comparison means anything
   if (ev.invoice.currency !== e.currency) scope.push('CURRENCY_MISMATCH');
   if (scope.length) return U(...new Set(scope));
 
@@ -243,6 +245,8 @@ function evaluate(ctx: SettlementClassifierContext, ev: MockSettlementEvidence, 
   const items = ev.lines.items;
   // a non-integer timestamp would make `createdAt < effectiveFrom` false and silently skip the policy-applicability rule, so it is refused here
   if (!isNonNegInt(inv.createdAtMs)) return U('INPUT_INVALID');
+  // Every line is summed into the total, so EVERY line (not only the benefit line) must carry exactly the invoice currency. Nothing is converted.
+  if (items.some(l => !CURRENCY.test(String(l?.currency)) || l.currency !== inv.currency)) return U('CURRENCY_MISMATCH');
   if (new Set(items.map(l => l.lineRef)).size !== items.length) return U('DUPLICATE_LINE');
   if (![inv.amountDueMinor, inv.amountPaidMinor, inv.amountRemainingMinor].every(isNonNegInt) || !isInt(inv.totalMinor) || inv.totalMinor < 0 ||
       inv.amountPaidMinor + inv.amountRemainingMinor !== inv.amountDueMinor || items.some(l => !isInt(l.amountMinor)) ||
