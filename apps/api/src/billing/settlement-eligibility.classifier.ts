@@ -125,7 +125,7 @@ export type SettlementReason =
   | 'REFUND_PENDING' | 'REFUND_PARTIAL' | 'REFUNDED' | 'REFUND_EVIDENCE_UNKNOWN'
   | 'DISPUTE_OPEN' | 'PAYMENT_DISPUTE_LOST' | 'DISPUTE_EVIDENCE_UNKNOWN' | 'CANCELLATION_EVIDENCE_UNKNOWN'
   | 'BENEFIT_LINE_MISSING' | 'ATTRIBUTION_MISMATCH' | 'AMOUNT_MISMATCH' | 'DUPLICATE_EFFECT' | 'UNEXPECTED_BENEFIT_LINE' | 'BENEFIT_DISCOUNTABLE'
-  | 'EVIDENCE_DRIFT' | 'PRORATION_ONLY_BASE'
+  | 'EVIDENCE_DRIFT' | 'PRORATION_ONLY_BASE' | 'TEMPORAL_INCOHERENCE'
   | 'RESERVATION_EXPIRY_UNKNOWN' | 'SETTLED_AFTER_EXPIRY'
   | 'FRESHNESS_POLICY_UNAVAILABLE' | 'STALE_EVIDENCE' | 'EVIDENCE_FROM_FUTURE';
 
@@ -149,7 +149,7 @@ export interface SettlementClassification {
 const MANUAL_REVIEW: ReadonlySet<SettlementReason> = new Set<SettlementReason>([
   'TENANT_MISMATCH', 'RESERVATION_MISMATCH', 'FROZEN_ALLOCATION_MISMATCH', 'SCOPE_MISMATCH', 'CALLER_AUTHORITY_ASSERTED', 'EVIDENCE_KIND_UNSUPPORTED',
   'OUT_OF_BAND', 'INVOICE_UNCOLLECTIBLE', 'INVOICE_VOID', 'NO_ECONOMIC_BENEFIT', 'CONTRADICTORY_EVIDENCE', 'ATTRIBUTION_MISMATCH', 'DUPLICATE_EFFECT',
-  'UNEXPECTED_BENEFIT_LINE', 'AMOUNT_MISMATCH', 'EVIDENCE_DRIFT', 'PRORATION_ONLY_BASE', 'SETTLED_AFTER_EXPIRY', 'DISPUTE_OPEN', 'PAYMENT_DISPUTE_LOST',
+  'UNEXPECTED_BENEFIT_LINE', 'AMOUNT_MISMATCH', 'EVIDENCE_DRIFT', 'PRORATION_ONLY_BASE', 'TEMPORAL_INCOHERENCE', 'SETTLED_AFTER_EXPIRY', 'DISPUTE_OPEN', 'PAYMENT_DISPUTE_LOST',
   'REFUND_PARTIAL', 'REFUNDED', 'SETTLEMENT_SOURCE_UNKNOWN', 'AMOUNTS_INCONSISTENT', 'PAID_WITH_REMAINING', 'DUPLICATE_LINE', 'BENEFIT_DISCOUNTABLE',
 ]);
 
@@ -159,7 +159,7 @@ const REQUIREMENT: Readonly<Partial<Record<SettlementReason, string>>> = {
   POLICY_VERSION_MISSING: 'a policy version', POLICY_VERSION_MISMATCH: 'matching policy versions', NOT_SETTLED: 'invoice status paid', PARTIAL_PAYMENT: 'full payment',
   SETTLED_AFTER_EXPIRY: 'an owner decision on settlement after reservation expiry (OQ-3)', RESERVATION_EXPIRY_UNKNOWN: 'the reservation expiry', SCOPE_MISMATCH: 'evidence from the configured account and mode',
   ATTRIBUTION_MISMATCH: 'item-to-line correlation proven by the provider', BENEFIT_LINE_MISSING: 'the verified benefit line', DISPUTE_OPEN: 'a final dispute outcome', REFUND_PENDING: 'a final refund state',
-  REFUND_PARTIAL: 'a separate owner-approved partial-refund policy (OQ-11)', SETTLEMENT_SOURCE_UNKNOWN: 'the settlement source (OQ-1)', EVIDENCE_DRIFT: 'owner review of post-freeze invoice change',
+  REFUND_PARTIAL: 'a separate owner-approved partial-refund policy (OQ-11)', SETTLEMENT_SOURCE_UNKNOWN: 'the settlement source (OQ-1)', EVIDENCE_DRIFT: 'owner review of post-freeze invoice change', TEMPORAL_INCOHERENCE: 'a coherent invoice timeline (created, settled, observed)',
   PRORATION_ONLY_BASE: 'owner review (proration excluded from the base)', CONTRADICTORY_EVIDENCE: 'consistent provider evidence', TENANT_MISMATCH: 'tenant-matching evidence',
   RESERVATION_MISMATCH: 'reservation-matching evidence', FROZEN_ALLOCATION_MISMATCH: 'a valid frozen allocation', EVIDENCE_MISSING: 'the missing evidence section', INPUT_INVALID: 'well-formed evidence',
 };
@@ -227,7 +227,8 @@ function evaluate(ctx: SettlementClassifierContext, ev: MockSettlementEvidence, 
   // P4: policy version (a recorded-policy dependency; absent or different is never guessed)
   if (!isStr(ctx.policy.version) || !isStr(frozen.benefitPolicyVersion)) return U('POLICY_VERSION_MISSING');
   if (ctx.policy.version !== SUPPORTED_BENEFIT_POLICY_VERSION || frozen.benefitPolicyVersion !== ctx.policy.version) return U('POLICY_VERSION_MISMATCH');
-  if (!isNonNegInt(ctx.policy.effectiveFromMs)) return U('POLICY_EFFECTIVE_DATE_UNAVAILABLE');
+  // The policy instant must be explicitly supplied as a positive safe integer; null, undefined, 0 (the epoch default), negatives, fractions and non-numbers are all "unavailable". No value is chosen here (Q14).
+  if (!isInt(ctx.policy.effectiveFromMs) || ctx.policy.effectiveFromMs <= 0) return U('POLICY_EFFECTIVE_DATE_UNAVAILABLE');
 
   // P5: completeness
   // Completeness must be EXACTLY the boolean true: a truthy string, number or object ("false", 1, {}) is malformed input, never completeness.
@@ -251,6 +252,13 @@ function evaluate(ctx: SettlementClassifierContext, ev: MockSettlementEvidence, 
   if (![inv.amountDueMinor, inv.amountPaidMinor, inv.amountRemainingMinor].every(isNonNegInt) || !isInt(inv.totalMinor) || inv.totalMinor < 0 ||
       inv.amountPaidMinor + inv.amountRemainingMinor !== inv.amountDueMinor || items.some(l => !isInt(l.amountMinor)) ||
       items.reduce((n, l) => n + l.amountMinor, 0) !== inv.totalMinor) return U('AMOUNTS_INCONSISTENT');
+
+  // P7b: the invoice timeline must be well-formed and coherent before any status-based decision: every supplied timestamp is a non-negative safe integer, settlement/void cannot
+  // precede creation, and nothing may be later than the observation that reported it. Structural invariants only: no policy instant is chosen.
+  if (!isNonNegInt(ev.provenance.observedAtMs)) return U('INPUT_INVALID');
+  for (const t of [inv.paidAtMs, inv.voidedAtMs]) if (t != null && !isNonNegInt(t)) return U('INPUT_INVALID');
+  if (inv.createdAtMs > ev.provenance.observedAtMs) return U('TEMPORAL_INCOHERENCE');
+  for (const t of [inv.paidAtMs, inv.voidedAtMs]) if (t != null && ((t as number) < inv.createdAtMs || (t as number) > ev.provenance.observedAtMs)) return U('TEMPORAL_INCOHERENCE');
 
   // P8: invoice state, settlement source and policy applicability (the only phase that can disqualify)
   if (inv.status === 'void') return inv.paidAtMs != null ? U('CONTRADICTORY_EVIDENCE') : out('INELIGIBLE', 'INVOICE_VOID');

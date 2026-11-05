@@ -276,6 +276,39 @@ describe('S08-D1D3-DEV-01 mock settlement eligibility classifier', () => {
   });
 
   describe('policy', () => {
+    it('F-7: settlement cannot precede invoice creation, and nothing may be later than the observation that reported it', () => {
+      // fixtures: createdAt 5000, paidAt 9_000_000, observedAt NOW-1000 = 9_999_000
+      const r = run((_, e) => { e.invoice.paidAtMs = 4_999; }); expectU(r, 'TEMPORAL_INCOHERENCE'); expect(r.manualReviewRequired).toBe(true); // an impossible timeline is an evidence-integrity problem
+      expectU(run((_, e) => { e.invoice.paidAtMs = 0; }), 'TEMPORAL_INCOHERENCE'); // epoch: chronologically before creation
+      expect(run((_, e) => { e.invoice.paidAtMs = 5_000; }).verdict).toBe('ELIGIBLE'); // settled at the creation instant: coherent
+      expectU(run((_, e) => { e.invoice.createdAtMs = 9_000_001; }), 'TEMPORAL_INCOHERENCE'); // created after it was settled
+      expectU(run((_, e) => { e.invoice.paidAtMs = 9_999_001; e.invoice.createdAtMs = 5_000; }), 'TEMPORAL_INCOHERENCE'); // settled after the evidence was observed
+      expectU(run((_, e) => { e.provenance.observedAtMs = 4_999; }), 'TEMPORAL_INCOHERENCE'); // observed before the invoice existed
+      expectU(run((_, e) => { e.invoice.status = 'void'; e.invoice.amountPaidMinor = 0; e.invoice.amountRemainingMinor = 2700; e.invoice.paidAtMs = null; e.invoice.voidedAtMs = 4_000; sync(e); }), 'TEMPORAL_INCOHERENCE'); // voided before creation
+      expectI(run((_, e) => { e.invoice.status = 'void'; e.invoice.amountPaidMinor = 0; e.invoice.amountRemainingMinor = 2700; e.invoice.paidAtMs = null; e.invoice.voidedAtMs = 8_000_000; sync(e); }), 'INVOICE_VOID'); // valid void control
+      expect(run().verdict).toBe('ELIGIBLE'); // valid chronology control
+    });
+    it('F-7: invalid timestamps (negative, non-finite, fractional, non-numeric, missing) can never establish eligibility', () => {
+      const bad: unknown[] = [-1, -1_000, Number.NaN, Infinity, -Infinity, 1.5, '9000000', {}, [], true];
+      for (const v of bad) {
+        expectU(run((_, e) => { e.invoice.paidAtMs = v; }), 'INPUT_INVALID');
+        expectU(run((_, e) => { e.invoice.createdAtMs = v; }), 'INPUT_INVALID');
+        expectU(run((_, e) => { e.provenance.observedAtMs = v; }), 'INPUT_INVALID');
+        expectU(run((_, e) => { e.invoice.voidedAtMs = v; }), 'INPUT_INVALID');
+      }
+      // missing required timestamps
+      for (const f of [(e: any) => { delete e.invoice.createdAtMs; }, (e: any) => { e.invoice.createdAtMs = null; }, (e: any) => { delete e.provenance.observedAtMs; }, (e: any) => { e.provenance.observedAtMs = null; }])
+        expectU(run((_, e) => f(e)), 'INPUT_INVALID');
+      for (const v of [null, undefined]) expectU(run((_, e) => { e.invoice.paidAtMs = v; }), 'SETTLEMENT_TIME_MISSING');
+    });
+    it('F-7: the policy effective instant must be explicitly supplied as a positive safe integer; no default is invented', () => {
+      for (const v of [null, undefined, 0, -1, -1_000, Number.NaN, Infinity, 1.5, '1000', {}, [], true, Number.MAX_SAFE_INTEGER + 1]) expectU(run(c => { c.policy.effectiveFromMs = v; }), 'POLICY_EFFECTIVE_DATE_UNAVAILABLE');
+      expectU(run(c => { delete c.policy.effectiveFromMs; }), 'POLICY_EFFECTIVE_DATE_UNAVAILABLE');
+      // exact boundary under the existing contract: created strictly before the instant => not effective; at the instant => effective
+      expectI(run((_, e) => { e.invoice.createdAtMs = 999; }), 'POLICY_NOT_EFFECTIVE');
+      expect(run((_, e) => { e.invoice.createdAtMs = 1_000; }).verdict).toBe('ELIGIBLE');
+      expect(run((_, e) => { e.invoice.createdAtMs = 1_001; }).verdict).toBe('ELIGIBLE');
+    });
     it('27. a missing or different policy version is UNRESOLVED', () => {
       for (const v of [null, '']) expectU(run(c => { c.policy.version = v; }), 'POLICY_VERSION_MISSING');
       expectU(run(c => { c.expected.frozenAllocation.benefitPolicyVersion = ''; }), 'POLICY_VERSION_MISSING');
