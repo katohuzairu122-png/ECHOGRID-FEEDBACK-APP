@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  createSettlementEvidenceSigner, DEVELOPMENT_ALLOWED_INTERVALS, SETTLEMENT_PROVENANCE_LABEL, settlementProvenanceMessage, validSettlementGateConfig, verifySettlementProvenance,
+  createSettlementEvidenceSigner, DEVELOPMENT_ALLOWED_INTERVALS, parseTrustedSigningKeys, SETTLEMENT_PROVENANCE_LABEL, settlementProvenanceMessage, validSettlementGateConfig, verifySettlementProvenance,
   SettlementAuthorizationError, SettlementAuthorizationRecorder, type SettlementGateConfig,
 } from './partner-credit-settlement-authorization';
 import type { Database } from '../db/client';
@@ -61,5 +61,22 @@ describe('D1/D3-DEV-04 settlement provenance (pure)', () => {
     await expect(new SettlementAuthorizationRecorder(neverCalled, cfg, a.signer, 'x; drop table businesses').record(input)).rejects.toThrow(/RECORDER_UNCONFIGURED/);
     await expect(new SettlementAuthorizationRecorder(neverCalled, { ...cfg, trustedSigningKeys: {} }, a.signer).record(input)).rejects.toThrow(/CONFIG_INVALID/);
     expect(new SettlementAuthorizationError('RECORDER_UNCONFIGURED').message).toBe('SETTLEMENT_AUTH_RECORDER_UNCONFIGURED');
+  });
+
+  it('DEV-05: loads the trusted key registry from configuration and rejects anything malformed (never a partial or permissive registry)', async () => {
+    const a = await key('rec-a'); const b = await key('rec-b');
+    const reg = parseTrustedSigningKeys(JSON.stringify({ 'rec-a': a.publicHex, 'rec-b': b.publicHex }));
+    expect(reg).toEqual({ 'rec-a': a.publicHex, 'rec-b': b.publicHex });
+    expect(Object.isFrozen(reg)).toBe(true);
+    expect(await verifySettlementProvenance('rec-b', digest, hex(await b.signer.sign(settlementProvenanceMessage('rec-b', digest))), reg!)).toBe(true);
+    // revocation by configuration alone: the same signature stops verifying once the id is removed
+    const revoked = parseTrustedSigningKeys(JSON.stringify({ 'rec-a': a.publicHex }));
+    expect(await verifySettlementProvenance('rec-b', digest, hex(await b.signer.sign(settlementProvenanceMessage('rec-b', digest))), revoked!)).toBe(false);
+    for (const bad of [undefined, null, '', '   ', 'not json', '[]', '"x"', '123', 'null', '{}', JSON.stringify({ 'rec-a': 'short' }), JSON.stringify({ 'rec-a': a.publicHex.toUpperCase() }), JSON.stringify({ 'bad id': a.publicHex }),
+      JSON.stringify({ 'rec-a': 5 }), JSON.stringify({ 'rec-a': a.publicHex, 'rec-b': 'zz' }), `{"rec-a":"${a.publicHex}","rec-a":"${b.publicHex}"}`, 'x'.repeat(20_000)])
+      expect(parseTrustedSigningKeys(bad as string), String(bad).slice(0, 40)).toBeUndefined();
+    // a prototype-polluting id is not a key id
+    expect(parseTrustedSigningKeys(`{"__proto__":"${a.publicHex}"}`)?.['__proto__' as string]).toBeUndefined();
+    expect(({} as Record<string, unknown>).polluted).toBeUndefined();
   });
 });

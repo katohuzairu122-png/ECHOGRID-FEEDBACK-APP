@@ -52,7 +52,7 @@ export class SettlementGateError extends Error {
 
 const isNonNegInt = (n: unknown): n is number => typeof n === 'number' && Number.isSafeInteger(n) && n >= 0;
 const REF = /^[!-~]{1,255}$/;
-const KEY_ID = /^[A-Za-z0-9._-]{1,64}$/;
+const KEY_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/; // stricter than the database check: no leading separator, so no __proto__-style ids
 const PUBLIC_KEY_HEX = /^[0-9a-f]{64}$/;
 const SIGNATURE_HEX = /^[0-9a-f]{128}$/;
 const ROLE_NAME = /^[a-z_][a-z0-9_]{0,62}$/;
@@ -120,6 +120,26 @@ export async function verifySettlementProvenance(keyId: string, evidenceDigest: 
     const key = await crypto.subtle.importKey('raw', fromHex(pub), { name: 'Ed25519' }, false, ['verify']);
     return await crypto.subtle.verify({ name: 'Ed25519' }, key, fromHex(signatureHex), settlementProvenanceMessage(keyId, evidenceDigest));
   } catch { return false; }
+}
+
+/**
+ * DEV-05: loads the trusted PUBLIC key registry from a configuration string (for example a Worker variable holding JSON like {"key-2026-11":"<64 hex>"}), so keys can be added (rotation
+ * overlap) or removed (revocation) by changing configuration alone. Anything malformed returns undefined, which makes the gate refuse everything: a bad registry never degrades to
+ * "trust nothing special" or "trust everything". Duplicate key ids, non-object JSON, non-hex or wrong-length keys and unsafe key ids are all malformed.
+ */
+export function parseTrustedSigningKeys(raw: string | undefined | null): Readonly<Record<string, string>> | undefined {
+  if (typeof raw !== 'string' || raw.length === 0 || raw.length > 16_384) return undefined;
+  const ids = [...raw.matchAll(/"((?:[^"\\]|\\.)*)"\s*:/g)].map(m => m[1]);
+  if (new Set(ids).size !== ids.length) return undefined; // JSON.parse would silently keep the last duplicate
+  let parsed: unknown;
+  try { parsed = JSON.parse(raw); } catch { return undefined; }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return undefined;
+  const out: Record<string, string> = Object.create(null);
+  for (const [id, key] of Object.entries(parsed as Record<string, unknown>)) {
+    if (!KEY_ID.test(id) || typeof key !== 'string' || !PUBLIC_KEY_HEX.test(key)) return undefined;
+    out[id] = key;
+  }
+  return Object.keys(out).length > 0 ? Object.freeze({ ...out }) : undefined;
 }
 
 const dbNowMs = async (tx: Transaction): Promise<number> => {
@@ -222,15 +242,17 @@ export class SettlementAuthorizationRecorder {
       const signature = toHex(await signer.sign(settlementProvenanceMessage(signer.keyId, evidenceDigest)));
       // The reservation row is locked, so two recordings of the same reservation cannot interleave: look first, then insert. (ON CONFLICT is not used: under row-level security it
       // would also demand a SELECT policy for the recorder, and the recorder is deliberately allowed to insert and not to read the table.)
+      // Everything above ran with the session's own rights. From here the session acts as the recorder role, for the replay lookup (a recorder login that does not inherit the role has no
+      // other way to call the verification function) and for the single INSERT. The role is dropped again immediately after.
+      try { await tx.execute(sql`select set_config('role', ${this.recorderRole}, true)`); }
+      catch { throw new SettlementAuthorizationError('RECORDER_ROLE_UNAVAILABLE'); }
       const existing = await readAuthorization(tx, input.businessId, reservation.id, fields.snapshotDigest);
       if (existing) {
         if (existing.evidenceDigest !== evidenceDigest) throw new SettlementAuthorizationError('REPLAY_CONFLICT'); // same snapshot, different conclusion: never silently replaced
+        await tx.execute(sql`reset role`);
         return { id: existing.id, verdict: existing.verdict, reasonCodes: existing.reasonCodes, replay: true };
       }
       const newId = randomUUID();
-      // Everything above ran with the session's own rights. Only the INSERT runs as the recorder role, which the database allows to insert and nothing else.
-      try { await tx.execute(sql`select set_config('role', ${this.recorderRole}, true)`); }
-      catch { throw new SettlementAuthorizationError('RECORDER_ROLE_UNAVAILABLE'); }
       await tx.insert(partnerCreditSettlementAuthorizations).values({
         id: newId, businessId: fields.businessId, reservationId: fields.reservationId, decisionId: fields.decisionId, invoiceRef: fields.invoiceRef, providerAccountId: fields.providerAccountId,
         providerMode: cfg.providerMode, allocationDigest: fields.allocationDigest, policyVersion: fields.policyVersion, verdict: result.verdict, reasonCodes: [...result.reasonCodes],
