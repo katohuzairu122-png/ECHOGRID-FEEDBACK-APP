@@ -80,3 +80,43 @@ export function invocationHarness() {
   const pair = (proof = 'valid'): InvocationPair<string> => { const c = String.fromCharCode(97 + (n++ % 26)); return { account: { request: req(c + 'x', 'GET /v1/account'), proof }, invoice: { request: req(c + 'y', 'GET /v1/invoices/{id}'), proof } }; };
   return { policy, deps, pair };
 }
+
+// ---- DEV-09: trusted read gate fixtures -------------------------------------------------------------------------------------------------------------------------------------------------------
+import { MappingRegistry, DEFAULT_MAPPING_CATALOG, type ProofLookup } from './mapping-authority';
+import { createInMemoryAuthorizationStore, type ReadAuthorizationRecord } from './read-authorization';
+import type { ReadGate } from './read-gate';
+import { READ_METHODS } from './capability-registry';
+
+export const WORKLOAD = 'wl-verifier-1';
+export const SYNTHETIC_ACCOUNT_KEY = ['rk', 'test', 'SyntheticKeyMaterial0123456789'].join('_');
+
+/**
+ * TEST FIXTURE ONLY. Stands in for a persisted store of REAL captured proofs so that the gate's behaviour with a verified mapping can be exercised. It proves nothing about Stripe: a mapping becomes
+ * verified in production only through a real-network proof (proof-capture.ts), and `MappingRegistry.load` honours a verified entry only when such a proof exists.
+ */
+const fixtureProofs: ProofLookup = { get: id => (id.startsWith('proof-fixture:') ? { captureOrigin: 'REAL_NETWORK', methodId: id.split(':')[1]!, apiVersion: API } : null) };
+export function verifiedMapping(ops: readonly string[] = ['ACCOUNT_RETRIEVE_CURRENT', 'INVOICE_RETRIEVE']): MappingRegistry {
+  const entries = DEFAULT_MAPPING_CATALOG.map(m => (ops.includes(m.sourceOperation) && m.status === 'SDK_SCHEMA_UNPROVEN_LIVE' ? { ...m, status: 'TEST_MODE_VERIFIED', verifiedByProofId: `proof-fixture:${m.sourceOperation}` } : m));
+  return MappingRegistry.load(entries, fixtureProofs)!;
+}
+
+export function recordFor(methodId: string, over: Partial<ReadAuthorizationRecord> = {}): ReadAuthorizationRecord {
+  return { authorizationId: `auth-${methodId}`, businessId: 'biz-1', accountId: ACCT, realm: 'test', workloadId: WORKLOAD, methodId: methodId as never, state: 'PENDING', approvedBy: null, validFromMs: 1, expiresAtMs: NOW + 3_600_000,
+    revokedAtMs: null, inventoryRecordId: 'S08-STRIPE-PRIVATE-TEST-VERIFIER-001', inventoryRevision: 'rev-synthetic-1', ...over };
+}
+
+/** A gate built from a legacy-shaped authorization description: one APPROVED record per listed method (or PENDING / REVOKED as described), a read-only store, this workload and a mapping state. */
+export function gateFor(auth: ReadAuthorization | null, o: { mapping?: MappingRegistry; workloadId?: string; businessId?: string } = {}) {
+  const { store, admin } = createInMemoryAuthorizationStore();
+  if (auth) {
+    for (const methodId of auth.methods) {
+      if (!Object.prototype.hasOwnProperty.call(READ_METHODS, methodId)) continue;
+      const added = admin.add(recordFor(methodId, { accountId: auth.accountId, realm: auth.realm, businessId: o.businessId ?? 'biz-1', expiresAtMs: auth.expiresAtMs }));
+      if (!added.ok) continue; // a record that cannot be valid (for example a live realm or a malformed account) simply does not exist
+      if (auth.approved) admin.apply(`auth-${methodId}`, { type: 'APPROVE', approvedBy: 'owner-approver-1' }, 2);
+      if (auth.revoked) admin.apply(`auth-${methodId}`, { type: 'REVOKE' }, 3);
+    }
+  }
+  const gate: ReadGate = { store, workloadId: o.workloadId ?? WORKLOAD, mapping: o.mapping ?? verifiedMapping() };
+  return Object.assign(gate, { admin });
+}

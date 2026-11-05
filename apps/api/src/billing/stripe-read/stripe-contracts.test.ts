@@ -7,6 +7,7 @@ import {
   normalizeInvoicePayments, normalizeLinePages, normalizeRefundPages, onePage, pagesOf, profileFor, refundExtent, ScriptedReadTransport, sealedOriginOf, StripeReadOnlyEvidenceAdapter, syntheticStripeInvoice,
   type ExtendedMockInput, type ReadAuthorization, type TrustedInvoiceScope,
 } from './index';
+import { gateFor } from './pipeline-fixtures';
 import { assembleEvidence } from './bundle-builder';
 import { benefitIdempotencyKey, type SettlementClassifierContext } from '../settlement-eligibility.classifier';
 import type { RefundDisputeContext } from '../refund-dispute.classifier';
@@ -346,7 +347,7 @@ describe('D. refund and dispute evidence', () => {
 describe('E. accounts, modes, drift, required fields', () => {
   it('19. wrong Stripe account: the real adapter refuses another account before any invoice read, and the classifier refuses a mismatched account', async () => {
     const transport = new ScriptedReadTransport([{ object: 'account', id: 'acct_SomeOtherAccount' }, invoice()]);
-    const adapter = new StripeReadOnlyEvidenceAdapter({ transport, authorization: AUTH, clock: () => NOW, audit: () => undefined });
+    const adapter = new StripeReadOnlyEvidenceAdapter({ transport, gate: gateFor(AUTH), expectedAccountId: ACCT, clock: () => NOW, audit: () => undefined });
     expect(await adapter.acquire(scope)).toEqual({ ok: false, kind: 'DENIED', reason: 'ACCOUNT_MISMATCH' });
     expect(transport.calls.map(c => c.method)).toEqual(['ACCOUNT_RETRIEVE_CURRENT']);
     const r = classifyBundle(ctx({ expected: { ...ctx().expected, providerAccountId: 'acct_Other' } }), await acquire(), binding, rdCtx());
@@ -399,7 +400,7 @@ describe('E. accounts, modes, drift, required fields', () => {
       notEligible(classifyBundle(ctx(), r.evidence, binding, rdCtx()) as any, apiVersion);
     }
     const t = new ScriptedReadTransport([{ object: 'account', id: ACCT }, invoice()]);
-    const adapter = new StripeReadOnlyEvidenceAdapter({ transport: t, authorization: AUTH, clock: () => NOW, audit: () => undefined, apiVersion: '2025-01-01.acacia' });
+    const adapter = new StripeReadOnlyEvidenceAdapter({ transport: t, gate: gateFor(AUTH), expectedAccountId: ACCT, clock: () => NOW, audit: () => undefined, apiVersion: '2025-01-01.acacia' });
     expect(await adapter.acquire(scope)).toEqual({ ok: false, kind: 'DENIED', reason: 'UNSUPPORTED_API_VERSION' });
     expect(t.calls).toEqual([]);
   });
@@ -459,7 +460,7 @@ describe('F. classifier bridge, origin and determinism', () => {
 
   it('24. evidence origin substitution is refused: clones, serialized copies, edited origins, edited contract versions and non-objects are never trusted', async () => {
     const m = await acquire();
-    const real = ((await new StripeReadOnlyEvidenceAdapter({ transport: new ScriptedReadTransport([{ object: 'account', id: ACCT }, invoice()]), authorization: AUTH, clock: () => NOW, audit: () => undefined }).acquire(scope)) as any).evidence;
+    const real = ((await new StripeReadOnlyEvidenceAdapter({ transport: new ScriptedReadTransport([{ object: 'account', id: ACCT }, invoice()]), gate: gateFor(AUTH), expectedAccountId: ACCT, clock: () => NOW, audit: () => undefined }).acquire(scope)) as any).evidence;
     expect(sealedOriginOf(m)).toBe('MOCK_FIXTURE'); expect(sealedOriginOf(real)).toBe('STRIPE_TEST_READ');
     for (const forged of [JSON.parse(JSON.stringify(m)), structuredClone(m), { ...m }, { ...m, origin: 'STRIPE_TEST_READ' }, { ...m, origin: null }, { ...m, contractVersion: 'S08-STRIPE-EVIDENCE/0' }, { ...real, origin: 'MOCK_FIXTURE' },
       JSON.parse(JSON.stringify(real)), Object.create(m), null, undefined, 'x', 5, []]) {
@@ -512,7 +513,7 @@ describe('G. capability boundaries and write-path absence', () => {
       expect(/create\(|refunds\.create|invoices\.(create|update|pay|finalize|void)|paymentIntents\.|subscriptions\.(update|cancel)/.test(text), `${f} names a Stripe write call`).toBe(false);
     }
     const t = createStripeGetTransport({ apiKey: ['rk', 'test', 'SyntheticKeyMaterial0123456789'].join('_'), fetchImpl: (async () => new Response('{}')) as unknown as typeof fetch });
-    expect(Object.keys(t).sort()).toEqual(['get', 'keyMode']);
+    expect(Object.keys(t).sort()).toEqual(['get', 'keyMode', 'networkSource']);
   });
 
   it('29. the four unapproved real reads stay inaccessible: no authorization enables them, the real transport has no path for them, and a non-mock source is refused', async () => {
@@ -529,7 +530,7 @@ describe('G. capability boundaries and write-path absence', () => {
   });
 
   it('30. real provider evidence cannot authorize consumption: it is incomplete by construction, is not converted for the classifiers, and the classifiers answer UNRESOLVED / EVIDENCE_KIND_UNSUPPORTED', async () => {
-    const out = await new StripeReadOnlyEvidenceAdapter({ transport: new ScriptedReadTransport([{ object: 'account', id: ACCT }, invoice()]), authorization: AUTH, clock: () => NOW, audit: () => undefined }).acquire(scope);
+    const out = await new StripeReadOnlyEvidenceAdapter({ transport: new ScriptedReadTransport([{ object: 'account', id: ACCT }, invoice()]), gate: gateFor(AUTH), expectedAccountId: ACCT, clock: () => NOW, audit: () => undefined }).acquire(scope);
     if (!out.ok) throw new Error('expected evidence');
     expect(out.evidence.origin).toBe('STRIPE_TEST_READ'); expect(out.evidence.complete).toBe(false);
     for (const f of [out.evidence.settlingPayment, out.evidence.refunds, out.evidence.disputes, out.evidence.lineAttribution]) expect(f.state).toBe('UNRESOLVED');
