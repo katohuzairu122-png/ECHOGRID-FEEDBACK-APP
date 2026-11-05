@@ -60,3 +60,4 @@ export * from './partner-credit-disputes';
 export * from './heta-persisted-reconciliation';
 
 export * from './s08-allocation-freezes';
+export * from './partner-credit-settlement-authorizations';

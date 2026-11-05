@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- synthetic-evidence mutators in tests deliberately build malformed provider payloads */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { Client } from 'pg';
 import { spawnSync } from 'node:child_process';
@@ -8,6 +9,10 @@ import { buildDb } from '../../src/db/client';
 import { BenefitApplicationSagaService } from '../../src/billing/benefit-application.saga.service';
 import { BenefitTerminalApplicationService } from '../../src/billing/benefit-terminal-application.service';
 import { PartnerCreditConsumptionService } from '../../src/partner-credits/partner-credit-consumption.service';
+import {
+  DEVELOPMENT_ALLOWED_INTERVALS, SettlementAuthorizationError, SettlementAuthorizationRecorder, settlementAuthorizationDigest, type SettlementGateConfig,
+} from '../../src/partner-credits/partner-credit-settlement-authorization';
+import { MOCK_EVIDENCE_KIND, type MockSettlementEvidence } from '../../src/billing/settlement-eligibility.classifier';
 import { unwindCredit, type UnwindCause } from '../../src/partner-credits/partner-credit-unwind';
 import { PartnerProvisionalReversalCompensator } from '../../src/partner-credits/partner-provisional-reversal.compensator';
 import { PartnerCreditProjectionAudit } from '../../src/partner-credits/partner-credit-projection.audit';
@@ -38,7 +43,7 @@ describe.skipIf(!process.env.DATABASE_URL)('D4 final credit consumption and ledg
     ['partner_credit_recovery_obligations', 'partner_credit_recovery_insert_disabled'], ['billing_partner_credit_applications', 'billing_partner_credit_applications_inert_guard'],
     ['benefit_application_intents', 'benefit_application_intents_inert_guard'], ['benefit_provider_attempts', 'benefit_provider_attempts_inert_guard'],
     ['benefit_provider_observations', 'benefit_provider_observations_inert_guard'], ['benefit_application_compensations', 'benefit_application_compensations_inert_guard'],
-    ['benefit_application_transitions', 'benefit_application_transitions_inert_guard'],
+    ['benefit_application_transitions', 'benefit_application_transitions_inert_guard'], ['partner_credit_settlement_authorizations', 'partner_credit_settlement_authorizations_inert_guard'],
   ];
   const setGuards = async (on: boolean) => { for (const [t, g] of GUARDS) await admin.query(`ALTER TABLE ${t} ${on ? 'ENABLE' : 'DISABLE'} TRIGGER ${g}`); };
   const errText = (e: unknown) => String((e as { cause?: { message?: string } })?.cause?.message ?? (e as Error)?.message ?? e);
@@ -51,6 +56,37 @@ describe.skipIf(!process.env.DATABASE_URL)('D4 final credit consumption and ledg
   let compensator: PartnerProvisionalReversalCompensator;
   let dbApp: ReturnType<typeof buildDb>;
   let planId: string;
+  /** Test CONFIGURATION, not policy: the owner has decided neither the freshness window (Q3) nor the policy effective instant (Q14). */
+  const GATE_CFG: SettlementGateConfig = { providerAccountId: 'acct_d4_test', providerMode: 'test', freshnessWindowMs: 600_000, policyEffectiveFromMs: 1_000, allowedIntervals: DEVELOPMENT_ALLOWED_INTERVALS, acceptedEvidenceKinds: [MOCK_EVIDENCE_KIND] };
+  let recorder: SettlementAuthorizationRecorder;
+  const dbNow = async () => Number((await rows<{ ms: string }>("select (extract(epoch from clock_timestamp())*1000)::bigint ms"))[0]!.ms);
+  const fp = (inv: { status: string; amountDueMinor: number; amountPaidMinor: number; amountRemainingMinor: number; totalMinor: number }, lineCount: number) => ({ status: inv.status, amountDueMinor: inv.amountDueMinor, amountPaidMinor: inv.amountPaidMinor, amountRemainingMinor: inv.amountRemainingMinor, totalMinor: inv.totalMinor, lineCount });
+
+  /** Synthetic, internally consistent settlement evidence for a scenario, derived from the PERSISTED intent, freeze, subscription and reservation. `over` may corrupt it. */
+  async function evidenceFor(s: { businessId: string; reservationId: string; invoiceRef: string }, over?: (ev: any) => void, nowOverride?: number): Promise<MockSettlementEvidence> {
+    const now = nowOverride ?? await dbNow();
+    const freeze = (await rows<{ artifact: any }>('select artifact from s08_allocation_freezes where business_id=$1 and invoice_ref=$2', [s.businessId, s.invoiceRef]))[0]!.artifact;
+    const own = freeze.allocations.find((a: any) => a.reservationId === s.reservationId);
+    const sub = (await rows<{ c: string; s: string }>('select stripe_customer_id c, stripe_subscription_id s from business_subscriptions where business_id=$1', [s.businessId]))[0]!;
+    const res = (await rows<{ ref: string }>('select invoice_intent_ref ref from partner_credit_reservations where id=$1', [s.reservationId]))[0]!;
+    const total = freeze.eligibleBaseMinor - own.benefitMinor;
+    const inv = { status: 'paid', amountDueMinor: total, amountPaidMinor: total, amountRemainingMinor: 0, totalMinor: total };
+    const ev: any = {
+      provenance: { evidenceKind: MOCK_EVIDENCE_KIND, snapshotRef: `snap_${++seq}`, snapshotDigest: randomBytes(32).toString('hex'), observedAtMs: now - 1_000, providerOutcome: 'ok', complete: true, readBefore: fp(inv, 2), readAfter: fp(inv, 2) },
+      binding: { businessId: s.businessId, reservationId: s.reservationId, intentRef: res.ref },
+      provider: { accountId: GATE_CFG.providerAccountId, mode: GATE_CFG.providerMode },
+      invoice: { id: s.invoiceRef, customerRef: sub.c, subscriptionRef: sub.s, currency: 'usd', ...inv, createdAtMs: now - 3_600_000, paidAtMs: now - 600_000, voidedAtMs: null, billingInterval: 'month' },
+      lines: { complete: true, items: [
+        { lineRef: 'il_base', amountMinor: freeze.eligibleBaseMinor, currency: 'usd', category: 'recurring_base', parentItemRef: null, parentItemKey: null, labelReservationRef: null },
+        { lineRef: 'il_ben', amountMinor: -own.benefitMinor, currency: 'usd', category: 'benefit', parentItemRef: 'ii_ben', parentItemKey: own.providerIdempotencyKey, labelReservationRef: null }] },
+      benefitItem: { itemRef: 'ii_ben', invoiceRef: s.invoiceRef, idempotencyKey: own.providerIdempotencyKey, amountMinor: -own.benefitMinor, currency: 'usd', discountable: false },
+      settlement: { source: 'stripe_payment', paymentRef: `pi_${seq}` }, events: { refund: 'none', dispute: 'none', cancellation: 'none' },
+    };
+    over?.(ev);
+    return ev;
+  }
+  /** Re-derive the bracketing reads after `over` changed the invoice, so a test changes ONE fact. */
+  const resync = (ev: any) => { const f = fp(ev.invoice, ev.lines.items.length); ev.provenance.readBefore = { ...f }; ev.provenance.readAfter = { ...f }; };
 
   /** One vested, single-unit credit RESERVED for an invoice: claim, fulfilled settlement, decision, reserved lot, provisional and vest ledger entries, reservation. */
   async function forgeCredit(businessId: string, accountId: string, n: number, expiresInMs: number) {
@@ -77,12 +113,12 @@ describe.skipIf(!process.env.DATABASE_URL)('D4 final credit consumption and ledg
 
   interface Scenario { businessId: string; settlementId: string; decisionId: string; lotId: string; accountId: string; reservationId: string; intentId: string; invoiceRef: string }
   /** A vested, single-unit credit that is RESERVED for one invoice, with its provisional and vest ledger entries, an allocation freeze and a saga intent. */
-  async function scenario(opts: { sagaTo?: 'none' | 'reserved' | 'applying' | 'consumed'; subscription?: 'active' | 'trialing' | 'none'; allocate?: boolean; expiresInMs?: number; appliedOffsetMs?: number } = {}): Promise<Scenario> {
-    const n = ++seq; const o = { sagaTo: 'consumed', subscription: 'active', allocate: true, expiresInMs: 86_400_000, appliedOffsetMs: 1_000, ...opts };
+  async function scenario(opts: { sagaTo?: 'none' | 'reserved' | 'applying' | 'consumed'; subscription?: 'active' | 'trialing' | 'none'; allocate?: boolean; expiresInMs?: number; appliedOffsetMs?: number; authorize?: boolean } = {}): Promise<Scenario> {
+    const n = ++seq; const o = { sagaTo: 'consumed', subscription: 'active', allocate: true, expiresInMs: 86_400_000, appliedOffsetMs: 1_000, authorize: true, ...opts };
     const businessId = (await rows<{ id: string }>("insert into businesses(name,slug,status) values($1,$2,'active') returning id", [`D4 ${n}`, `d4-${dbName}-${n}`]))[0]!.id;
     const accountId = (await fxq<{ id: string }>('insert into partner_credit_accounts(business_id,reserved) values($1,1) returning id', [businessId]))[0]!.id;
     const { settlementId, decisionId, lotId, reservationId } = await forgeCredit(businessId, accountId, n, o.expiresInMs);
-    if (o.subscription !== 'none') await fxq("insert into business_subscriptions(business_id,plan_id,status,billing_interval) values($1,$2,$3,'month')", [businessId, planId, o.subscription]);
+    if (o.subscription !== 'none') await fxq("insert into business_subscriptions(business_id,plan_id,status,billing_interval,stripe_customer_id,stripe_subscription_id) values($1,$2,$3,'month',$4,$5)", [businessId, planId, o.subscription, `cus_d4_${n}`, `sub_d4_${n}`]);
     const invoiceRef = `in_d4_${n}`;
     let intentId = '';
     if (o.sagaTo !== 'none') {
@@ -98,7 +134,12 @@ describe.skipIf(!process.env.DATABASE_URL)('D4 final credit consumption and ledg
         }
       }
     }
-    return { businessId, settlementId, decisionId, lotId, accountId, reservationId, intentId, invoiceRef };
+    const out = { businessId, settlementId, decisionId, lotId, accountId, reservationId, intentId, invoiceRef };
+    // Every pre-existing consumption test now consumes through the REAL gate: record valid synthetic settlement evidence for the scenarios the gate can be built for.
+    if (o.authorize && o.sagaTo !== 'none' && o.allocate && o.subscription === 'active') {
+      try { await recorder.record({ reservationId, businessId, evidence: await evidenceFor(out) }); } catch (e) { if (!(e instanceof SettlementAuthorizationError)) throw e; }
+    }
+    return out;
   }
   const credit = async (s: Scenario) => (await rows(
     `select r.state reservation, (r.terminal_at is not null) terminal, l.status lot, l.available_units, a.available, a.provisional, a.reserved, a.recovery_due,
@@ -119,7 +160,8 @@ describe.skipIf(!process.env.DATABASE_URL)('D4 final credit consumption and ledg
     dbApp = buildDb(await connect());
     saga = new BenefitApplicationSagaService(buildDb(await connect()));
     applications = new BenefitTerminalApplicationService(buildDb(await connect()));
-    consumption = new PartnerCreditConsumptionService(buildDb(await connect()));
+    consumption = new PartnerCreditConsumptionService(buildDb(await connect()), GATE_CFG);
+    recorder = new SettlementAuthorizationRecorder(buildDb(await connect()), GATE_CFG);
     compensator = new PartnerProvisionalReversalCompensator();
   }, 300_000);
 
@@ -280,7 +322,7 @@ describe.skipIf(!process.env.DATABASE_URL)('D4 final credit consumption and ledg
     it('is idempotent and exactly-once: replays write nothing, and 8 parallel consumers produce one consumption', async () => {
       const s = await scenario();
       await applications.record({ reservationId: s.reservationId, businessId: s.businessId });
-      const services = await Promise.all(Array.from({ length: 8 }, async () => new PartnerCreditConsumptionService(buildDb(await connect()))));
+      const services = await Promise.all(Array.from({ length: 8 }, async () => new PartnerCreditConsumptionService(buildDb(await connect()), GATE_CFG)));
       const results = await Promise.allSettled(services.map(x => x.consume({ reservationId: s.reservationId, businessId: s.businessId })));
       const ok = results.filter((x): x is PromiseFulfilledResult<{ state: 'consumed'; replay: boolean; ledgerKey: string }> => x.status === 'fulfilled');
       expect(ok.length).toBe(8);
@@ -304,10 +346,14 @@ describe.skipIf(!process.env.DATABASE_URL)('D4 final credit consumption and ledg
       await fxq('update benefit_application_intents set business_id=$1 where id=$2', [a.businessId, b.intentId]);
       await fxq('update s08_allocation_freeze_items set business_id=$1 where reservation_id=$2', [a.businessId, b.reservationId]);
       await fxq('update s08_allocation_freezes set business_id=$1 where id=(select freeze_id from s08_allocation_freeze_items where reservation_id=$2)', [a.businessId, b.reservationId]);
+      await fxq("update s08_allocation_freezes set artifact = jsonb_set(artifact, '{businessId}', to_jsonb($1::text)) where business_id=$1 and id=(select freeze_id from s08_allocation_freeze_items where reservation_id=$2)", [a.businessId, b.reservationId]); // the artifact names its tenant too
       await fxq('delete from business_subscriptions where business_id=$1', [b.businessId]);
+      // the fixture moved credit b into business a by hand, so its settlement authorization is recorded AFTER that rearrangement
+      await recorder.record({ reservationId: a.reservationId, businessId: a.businessId, evidence: await evidenceFor(a) });
+      await recorder.record({ reservationId: b.reservationId, businessId: a.businessId, evidence: await evidenceFor({ businessId: a.businessId, reservationId: b.reservationId, invoiceRef: b.invoiceRef }) });
       await applications.record({ reservationId: a.reservationId, businessId: a.businessId });
       await applications.record({ reservationId: b.reservationId, businessId: a.businessId });
-      const one = await Promise.all([0, 1].map(async () => new PartnerCreditConsumptionService(buildDb(await connect()))));
+      const one = await Promise.all([0, 1].map(async () => new PartnerCreditConsumptionService(buildDb(await connect()), GATE_CFG)));
       const res = await Promise.all([one[0]!.consume({ reservationId: a.reservationId, businessId: a.businessId }), one[1]!.consume({ reservationId: b.reservationId, businessId: a.businessId })]);
       expect(res.every(r => r.state === 'consumed' && !r.replay)).toBe(true);
       expect((await rows<{ reserved: number; available: number }>('select reserved, available from partner_credit_accounts where id=$1', [a.accountId]))[0]).toEqual({ reserved: 0, available: 0 });
@@ -494,6 +540,7 @@ describe.skipIf(!process.env.DATABASE_URL)('D4 final credit consumption and ledg
         const done = await saga.recordObservation(intent.id, 'att-agg', { status: 'effect_present', effectRef: `ef_${randomBytes(5).toString('hex')}`, amountMinor: 300, currency: 'usd', invoiceRef: first.invoiceRef, attributedToReservationRef: res }, new Date());
         if (!done.ok) throw new Error('not consumed: ' + JSON.stringify({ code: (done as { code?: string }).code }));
       }
+      for (const r of [first.reservationId, second.reservationId]) await recorder.record({ reservationId: r, businessId: first.businessId, evidence: await evidenceFor({ businessId: first.businessId, reservationId: r, invoiceRef: first.invoiceRef }) });
       await applications.record({ reservationId: first.reservationId, businessId: first.businessId });
       await applications.record({ reservationId: second.reservationId, businessId: first.businessId });
       await consumption.consume({ reservationId: first.reservationId, businessId: first.businessId });
@@ -796,6 +843,280 @@ describe.skipIf(!process.env.DATABASE_URL)('D4 final credit consumption and ledg
       const keys = await rows<{ def: string }>("select pg_get_constraintdef(oid) def from pg_constraint where conrelid='billing_partner_credit_applications'::regclass and contype='u' order by 1");
       expect(keys.map(k => k.def)).toEqual(expect.arrayContaining(['UNIQUE (business_id, invoice_ref, reservation_id)', 'UNIQUE (reservation_id)']));
       expect(keys.map(k => k.def)).not.toContain('UNIQUE (business_id, invoice_ref)');
+    });
+  });
+
+  describe('D1/D3-DEV-03 consumption settlement gate', () => {
+    const ready = async (over?: (ev: any) => void, opts: { authorize?: boolean } = {}) => {
+      const s = await scenario({ authorize: false });
+      await applications.record({ reservationId: s.reservationId, businessId: s.businessId });
+      let rec;
+      if (opts.authorize !== false) rec = await recorder.record({ reservationId: s.reservationId, businessId: s.businessId, evidence: await evidenceFor(s, over) });
+      return { s, rec };
+    };
+    const consumeEntries = async (s: Scenario) => (await rows<{ n: number }>("select count(*)::int n from partner_credit_ledger where decision_id=$1 and entry_type='consume'", [s.decisionId]))[0]!.n;
+    /** A refused consumption leaves NO trace: reservation, lot, account and ledger are exactly as they were. */
+    const refused = async (s: Scenario, pattern: RegExp, service: PartnerCreditConsumptionService = consumption) => {
+      const before = await credit(s);
+      const msg = await rejects(service.consume({ reservationId: s.reservationId, businessId: s.businessId }));
+      expect(msg).toMatch(pattern);
+      expect(await credit(s)).toEqual(before);
+      expect(await consumeEntries(s)).toBe(0);
+      expect(await rows('select count(*)::int n from partner_credit_ledger where entry_type=\'consume\' and decision_id=$1', [s.decisionId])).toEqual([{ n: 0 }]);
+      return msg;
+    };
+    const unpaid = (status: string) => (ev: any) => { ev.invoice.status = status; ev.invoice.amountPaidMinor = 0; ev.invoice.amountRemainingMinor = ev.invoice.amountDueMinor; ev.invoice.paidAtMs = null; resync(ev); };
+    const newConsumer = async (cfg: SettlementGateConfig | undefined) => new PartnerCreditConsumptionService(buildDb(await connect()), cfg);
+
+    it('1-2. unpaid, draft, voided, uncollectible, disputed and refunded invoices cannot authorize consumption, and nothing moves', async () => {
+      const variants: Array<[string, (ev: any) => void]> = [
+        ['open (unpaid)', unpaid('open')], ['draft', unpaid('draft')],
+        ['void', ev => { unpaid('void')(ev); ev.invoice.voidedAtMs = ev.invoice.createdAtMs + 1_000; }], ['uncollectible', unpaid('uncollectible')],
+        ['partially paid', ev => { ev.invoice.status = 'open'; ev.invoice.amountPaidMinor = 100; ev.invoice.amountRemainingMinor = ev.invoice.amountDueMinor - 100; ev.invoice.paidAtMs = null; resync(ev); }],
+        ['paid with an open dispute', ev => { ev.events.dispute = 'open'; }], ['paid then fully refunded', ev => { ev.events.refund = 'full'; }],
+        ['paid out of band', ev => { ev.settlement.source = 'out_of_band'; }],
+      ];
+      for (const [label, over] of variants) {
+        const { s, rec } = await ready(over);
+        expect(rec!.verdict, label).not.toBe('ELIGIBLE');
+        await refused(s, /PARTNER_CONSUME_SETTLEMENT_NOT_AUTHORIZED \(NOT_ELIGIBLE\)/);
+      }
+    });
+
+    it('3. missing settlement evidence blocks consumption; evidence that cannot even be identified leaves no row', async () => {
+      const { s } = await ready(undefined, { authorize: false });
+      await refused(s, /\(AUTHORIZATION_MISSING\)/);
+      const t = await ready(undefined, { authorize: false });
+      for (const bad of [null, undefined, {}, { provenance: {} }, 'x'] as any[]) expect(await rejects(recorder.record({ reservationId: t.s.reservationId, businessId: t.s.businessId, evidence: bad }))).toMatch(/SETTLEMENT_AUTH_EVIDENCE_UNUSABLE|TypeError|Cannot read/);
+      expect(await rows('select count(*)::int n from partner_credit_settlement_authorizations where reservation_id=$1', [t.s.reservationId])).toEqual([{ n: 0 }]);
+      await refused(t.s, /\(AUTHORIZATION_MISSING\)/);
+    });
+
+    it('4. stale evidence blocks consumption (stale at recording, stale by the time of consumption, and future-dated)', async () => {
+      const old = await ready(ev => { for (const k of ['observedAtMs']) ev.provenance[k] -= 7_200_000; ev.invoice.createdAtMs -= 7_200_000; ev.invoice.paidAtMs -= 7_200_000; }); // a coherent timeline observed two hours ago
+      expect(old.rec).toMatchObject({ verdict: 'UNRESOLVED' }); expect(old.rec!.reasonCodes).toContain('STALE_EVIDENCE');
+      await refused(old.s, /\(NOT_ELIGIBLE\)/);
+      const future = await ready(ev => { ev.provenance.observedAtMs += 120_000; });
+      expect(future.rec!.verdict).toBe('UNRESOLVED'); await refused(future.s, /\(NOT_ELIGIBLE\)/);
+      // fresh when recorded, stale when consumed: the gate reads the DATABASE clock inside the transaction
+      const tight: SettlementGateConfig = { ...GATE_CFG, freshnessWindowMs: 400 };
+      const tightRecorder = new SettlementAuthorizationRecorder(buildDb(await connect()), tight);
+      const s = await scenario({ authorize: false }); await applications.record({ reservationId: s.reservationId, businessId: s.businessId });
+      const fresh = await tightRecorder.record({ reservationId: s.reservationId, businessId: s.businessId, evidence: await evidenceFor(s, ev => { ev.provenance.observedAtMs += 990; }) });
+      expect(fresh.verdict).toBe('ELIGIBLE');
+      await new Promise(r => setTimeout(r, 900));
+      await refused(s, /\(STALE_EVIDENCE\)/, await newConsumer(tight));
+    });
+
+    it('5. cross-tenant evidence is rejected at every layer', async () => {
+      const other = await scenario({ authorize: false });
+      const { s, rec } = await ready(ev => { ev.binding.businessId = other.businessId; });
+      expect(rec!.verdict).toBe('UNRESOLVED'); expect(rec!.reasonCodes).toContain('TENANT_MISMATCH');
+      await refused(s, /\(NOT_ELIGIBLE\)/);
+      // the recorder refuses another tenant's reservation outright
+      expect(await rejects(recorder.record({ reservationId: s.reservationId, businessId: other.businessId, evidence: await evidenceFor(s) }))).toMatch(/SETTLEMENT_AUTH_UNKNOWN_RESERVATION/);
+      // and the database refuses a forged row: a valid row copied under another business / another reservation / another invoice, with a correctly recomputed digest
+      const good = await ready(); expect(good.rec!.verdict).toBe('ELIGIBLE');
+      const row = (await rows<any>('select * from partner_credit_settlement_authorizations where reservation_id=$1', [good.s.reservationId]))[0];
+      const forge = async (over: Record<string, unknown>) => {
+        const f = { ...row, ...over, snapshot_digest: randomBytes(32).toString('hex') };
+        const digest = (await rows<{ d: string }>('select partner_credit_settlement_auth_digest($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::text[],$11,$12,$13,$14,$15,$16) d',
+          [f.business_id, f.reservation_id, f.decision_id, f.invoice_ref, f.provider_account_id, f.provider_mode, f.allocation_digest, f.policy_version, f.verdict, f.reason_codes, f.classifier_version, f.evidence_kind, f.billing_interval, f.snapshot_ref, f.snapshot_digest, f.observed_at_ms]))[0]!.d;
+        return rejects(admin.query(
+          `insert into partner_credit_settlement_authorizations(business_id,reservation_id,decision_id,invoice_ref,provider_account_id,provider_mode,allocation_digest,policy_version,verdict,reason_codes,classifier_version,evidence_kind,billing_interval,snapshot_ref,snapshot_digest,observed_at_ms,evidence_digest)
+           values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::text[],$11,$12,$13,$14,$15,$16,$17)`,
+          [f.business_id, f.reservation_id, f.decision_id, f.invoice_ref, f.provider_account_id, f.provider_mode, f.allocation_digest, f.policy_version, f.verdict, f.reason_codes, f.classifier_version, f.evidence_kind, f.billing_interval, f.snapshot_ref, f.snapshot_digest, f.observed_at_ms, digest]));
+      };
+      expect(await forge({ business_id: other.businessId })).toMatch(/violates foreign key|SETTLEMENT_AUTH_BINDING/);        // another tenant
+      expect(await forge({ reservation_id: other.reservationId })).toMatch(/violates foreign key|SETTLEMENT_AUTH_BINDING/);  // another reservation
+      expect(await forge({ invoice_ref: 'in_other_invoice' })).toMatch(/invoice and policy are not those of the reservation/);  // another invoice (the intent binding, not merely the freeze)
+      expect(await forge({ policy_version: 'PC-BENEFIT/2' })).toMatch(/invoice and policy are not those of the reservation/);   // another policy version
+      expect(await forge({ decision_id: other.decisionId })).toMatch(/SETTLEMENT_AUTH_BINDING/);                              // another decision
+    });
+
+    it('6. a wrong Stripe account or mode is rejected (in the evidence, and by the gate configuration at consumption)', async () => {
+      const acct = await ready(ev => { ev.provider.accountId = 'acct_somebody_else'; }); expect(acct.rec!.reasonCodes).toContain('SCOPE_MISMATCH'); await refused(acct.s, /\(NOT_ELIGIBLE\)/);
+      const mode = await ready(ev => { ev.provider.mode = 'live'; }); expect(mode.rec!.reasonCodes).toContain('SCOPE_MISMATCH'); await refused(mode.s, /\(NOT_ELIGIBLE\)/);
+      const good = await ready(); expect(good.rec!.verdict).toBe('ELIGIBLE');
+      await refused(good.s, /\(PROVIDER_SCOPE_MISMATCH\)/, await newConsumer({ ...GATE_CFG, providerAccountId: 'acct_other_environment' }));
+      await refused(good.s, /\(PROVIDER_SCOPE_MISMATCH\)/, await newConsumer({ ...GATE_CFG, providerMode: 'live' }));
+    });
+
+    it('7. frozen-allocation mismatches are rejected (evidence that disagrees with the freeze, and a freeze changed after the authorization)', async () => {
+      const amount = await ready(ev => { ev.benefitItem.amountMinor += 1; ev.lines.items[1].amountMinor += 1; ev.invoice.totalMinor += 1; ev.invoice.amountDueMinor += 1; ev.invoice.amountPaidMinor += 1; resync(ev); });
+      expect(amount.rec!.reasonCodes).toContain('AMOUNT_MISMATCH'); await refused(amount.s, /\(NOT_ELIGIBLE\)/);
+      const digest = await ready(); expect(digest.rec!.verdict).toBe('ELIGIBLE');
+      await fxq("update s08_allocation_freezes set allocation_digest = $1 where business_id=$2 and invoice_ref=$3", ['f'.repeat(64), digest.s.businessId, digest.s.invoiceRef]);
+      await refused(digest.s, /\(ALLOCATION_MISMATCH\)/);
+      const item = await ready(); expect(item.rec!.verdict).toBe('ELIGIBLE');
+      await fxq('delete from s08_allocation_freeze_items where reservation_id=$1', [item.s.reservationId]);
+      await refused(item.s, /\(ALLOCATION_MISMATCH\)/);
+      // and the database refuses an authorization whose allocation digest is not the persisted freeze's
+      const t = await ready(undefined, { authorize: false });
+      expect(await rejects(admin.query(`insert into partner_credit_settlement_authorizations(business_id,reservation_id,decision_id,invoice_ref,provider_account_id,provider_mode,allocation_digest,policy_version,verdict,reason_codes,classifier_version,evidence_kind,billing_interval,snapshot_ref,snapshot_digest,observed_at_ms,evidence_digest)
+        select $1,$2,$3,i.invoice_ref,'acct_d4_test','test',repeat('c',64),i.policy_version,'ELIGIBLE',ARRAY['ALL_CONDITIONS_VERIFIED'],'S08-D1D3-SETTLEMENT/1','MOCK_SYNTHETIC','month','s',repeat('d',64),1000,
+          partner_credit_settlement_auth_digest($1,$2,$3,i.invoice_ref,'acct_d4_test','test',repeat('c',64),i.policy_version,'ELIGIBLE',ARRAY['ALL_CONDITIONS_VERIFIED'],'S08-D1D3-SETTLEMENT/1','MOCK_SYNTHETIC','month','s',repeat('d',64),1000)
+        from benefit_application_intents i where i.reservation_id=$2`, [t.s.businessId, t.s.reservationId, t.s.decisionId]))).toMatch(/SETTLEMENT_AUTH_BINDING.*allocation digest/);
+    });
+
+    it('8. duplicate settlement evidence is one row and cannot cause a second consumption; the same snapshot with a different conclusion is a conflict', async () => {
+      const { s } = await ready();
+      const ev = await evidenceFor(s);
+      const first = await recorder.record({ reservationId: s.reservationId, businessId: s.businessId, evidence: ev });
+      const again = await recorder.record({ reservationId: s.reservationId, businessId: s.businessId, evidence: ev });
+      expect(first.replay).toBe(false); expect(again).toMatchObject({ id: first.id, replay: true });
+      expect((await rows<{ n: number }>('select count(*)::int n from partner_credit_settlement_authorizations where reservation_id=$1 and snapshot_digest=$2', [s.reservationId, ev.provenance.snapshotDigest]))[0]!.n).toBe(1);
+      const conflicting = JSON.parse(JSON.stringify(ev)); conflicting.events.dispute = 'open'; // same snapshot digest, different content, therefore a different conclusion
+      expect(await rejects(recorder.record({ reservationId: s.reservationId, businessId: s.businessId, evidence: conflicting }))).toMatch(/SETTLEMENT_AUTH_REPLAY_CONFLICT/);
+      const one = await consumption.consume({ reservationId: s.reservationId, businessId: s.businessId });
+      const two = await consumption.consume({ reservationId: s.reservationId, businessId: s.businessId });
+      expect(one.replay).toBe(false); expect(two.replay).toBe(true);
+      expect(await consumeEntries(s)).toBe(1); expect(await audit(s.businessId)).toMatchObject({ status: 'consistent' });
+    });
+
+    it('9. concurrent consumption attempts remain exactly-once, with and without a racing newer authorization', async () => {
+      const { s } = await ready();
+      const services = await Promise.all(Array.from({ length: 8 }, async () => newConsumer(GATE_CFG)));
+      const results = await Promise.allSettled(services.map(x => x.consume({ reservationId: s.reservationId, businessId: s.businessId })));
+      expect(results.every(r => r.status === 'fulfilled')).toBe(true);
+      expect(results.filter(r => r.status === 'fulfilled' && !(r as PromiseFulfilledResult<{ replay: boolean }>).value.replay)).toHaveLength(1);
+      expect(await consumeEntries(s)).toBe(1);
+      // consumers race a newer NON-ELIGIBLE snapshot: whatever the interleaving, at most one consumption, a consistent ledger, and no deadlock
+      const r2 = await ready();
+      const racer = new SettlementAuthorizationRecorder(buildDb(await connect()), GATE_CFG);
+      const bad = await evidenceFor(r2.s, ev => { ev.events.dispute = 'open'; ev.provenance.observedAtMs += 500; });
+      const outcomes = await Promise.allSettled([racer.record({ reservationId: r2.s.reservationId, businessId: r2.s.businessId, evidence: bad }),
+        ...(await Promise.all(Array.from({ length: 4 }, async () => newConsumer(GATE_CFG)))).map(x => x.consume({ reservationId: r2.s.reservationId, businessId: r2.s.businessId }))]);
+      expect(outcomes[0]!.status).toBe('fulfilled');
+      const consumed = await consumeEntries(r2.s);
+      expect(consumed).toBeLessThanOrEqual(1);
+      expect(outcomes.slice(1).filter(o => o.status === 'fulfilled' && !(o as PromiseFulfilledResult<{ replay: boolean }>).value.replay)).toHaveLength(consumed);
+      expect(await audit(r2.s.businessId)).toMatchObject({ status: 'consistent' });
+      if (consumed === 0) await refused(r2.s, /\(NOT_ELIGIBLE\)/); // the newest snapshot governs from here on
+    });
+
+    it('10-11. valid synthetic settlement evidence passes the gate and consumes exactly once, keeping the ledger identity, without any provider', async () => {
+      const { s, rec } = await ready();
+      expect(rec).toMatchObject({ verdict: 'ELIGIBLE', reasonCodes: ['ALL_CONDITIONS_VERIFIED'], replay: false });
+      const before = await credit(s);
+      const res = await consumption.consume({ reservationId: s.reservationId, businessId: s.businessId });
+      expect(res).toMatchObject({ state: 'consumed', replay: false });
+      expect(await credit(s)).toMatchObject({ reservation: 'consumed', lot: 'consumed', reserved: Number(before.reserved) - 1, ledger: Number(before.ledger) + 1 });
+      expect(await consumeEntries(s)).toBe(1);
+      expect(await audit(s.businessId)).toMatchObject({ status: 'consistent' });
+      expect((await rows<{ n: number }>('select count(*)::int n from partner_credit_settlement_authorizations where reservation_id=$1', [s.reservationId]))[0]!.n).toBe(1);
+    });
+
+    it('12. the gate is configuration-driven and fails closed: no configuration, invalid configuration, monthly-only default, accepted evidence kinds', async () => {
+      const { s, rec } = await ready(); expect(rec!.verdict).toBe('ELIGIBLE');
+      await refused(s, /\(GATE_UNCONFIGURED\)/, await newConsumer(undefined));
+      await refused(s, /\(GATE_UNCONFIGURED\)/, await newConsumer(null as any));
+      for (const bad of [{ freshnessWindowMs: null }, { freshnessWindowMs: -1 }, { freshnessWindowMs: Number.NaN }, { freshnessWindowMs: 1.5 }, { freshnessWindowMs: '600000' }, { providerMode: 'prod' }, { providerAccountId: '' },
+        { allowedIntervals: [] }, { allowedIntervals: ['week'] }, { acceptedEvidenceKinds: [] }]) await refused(s, /\(GATE_UNCONFIGURED\)/, await newConsumer({ ...GATE_CFG, ...bad } as any));
+      await refused(s, /\(EVIDENCE_KIND_NOT_ACCEPTED\)/, await newConsumer({ ...GATE_CFG, acceptedEvidenceKinds: ['SOMETHING_ELSE'] }));
+      // monthly-only is a restrictive development default, passed explicitly; an annual or unknown interval is classified but not enabled
+      const annual = await ready(ev => { ev.invoice.billingInterval = 'year'; });
+      expect(annual.rec).toMatchObject({ verdict: 'ELIGIBLE' });
+      await refused(annual.s, /\(INTERVAL_NOT_ENABLED\)/);
+      const unknown = await ready(ev => { ev.invoice.billingInterval = 'banana'; }); await refused(unknown.s, /\(INTERVAL_NOT_ENABLED\)/);
+      expect((await (await newConsumer({ ...GATE_CFG, allowedIntervals: ['month', 'year'] })).consume({ reservationId: annual.s.reservationId, businessId: annual.s.businessId })).replay).toBe(false); // configuration, not code
+      // the effective instant of the policy is configuration too (Q14): without it the classifier cannot say ELIGIBLE
+      const noInstant = new SettlementAuthorizationRecorder(buildDb(await connect()), { ...GATE_CFG, policyEffectiveFromMs: null });
+      const t = await ready(undefined, { authorize: false });
+      expect(await noInstant.record({ reservationId: t.s.reservationId, businessId: t.s.businessId, evidence: await evidenceFor(t.s) })).toMatchObject({ verdict: 'UNRESOLVED' });
+    });
+
+    it('13. the newest snapshot governs: a later non-eligible one revokes, an older one inserted late does not', async () => {
+      const { s } = await ready();
+      await recorder.record({ reservationId: s.reservationId, businessId: s.businessId, evidence: await evidenceFor(s, ev => { ev.events.dispute = 'open'; ev.provenance.observedAtMs += 900; }) });
+      await refused(s, /\(NOT_ELIGIBLE\)/);
+      const t = await ready();
+      await recorder.record({ reservationId: t.s.reservationId, businessId: t.s.businessId, evidence: await evidenceFor(t.s, ev => { ev.events.dispute = 'open'; ev.provenance.observedAtMs -= 5_000; }) }); // older, recorded later
+      expect((await consumption.consume({ reservationId: t.s.reservationId, businessId: t.s.businessId })).replay).toBe(false);
+    });
+
+    it('14. no caller can supply a verdict or authority: only evidence is accepted, and asserted authority is refused', async () => {
+      const unpaidRun = await ready(unpaid('open'));
+      const spoof = await recorder.record({ reservationId: unpaidRun.s.reservationId, businessId: unpaidRun.s.businessId, evidence: await evidenceFor(unpaidRun.s, ev => { unpaid('open')(ev); }), verdict: 'ELIGIBLE', eligible: true, consumptionAuthorized: true } as any);
+      expect(spoof.verdict).not.toBe('ELIGIBLE');
+      await refused(unpaidRun.s, /\(NOT_ELIGIBLE\)/);
+      for (const key of ['consumptionAuthorized', 'eligible', 'verified', 'approved', 'settlementAuthorized']) {
+        const { s, rec } = await ready(ev => { ev[key] = true; });
+        expect(rec!.reasonCodes).toContain('CALLER_AUTHORITY_ASSERTED'); expect(rec!.verdict).toBe('UNRESOLVED'); await refused(s, /\(NOT_ELIGIBLE\)/);
+      }
+    });
+
+    it('16. the gate re-verifies a stored row itself: a forged digest or a future observation that got past the service is still refused', async () => {
+      const base = async () => { const r = await ready(); const row = (await rows<any>('select * from partner_credit_settlement_authorizations where reservation_id=$1', [r.s.reservationId]))[0]; return { ...r, row }; };
+      const insertRaw = (row: any, over: Record<string, unknown>, digest?: string) => {
+        const f = { ...row, ...over };
+        return admin.query(`insert into partner_credit_settlement_authorizations(business_id,reservation_id,decision_id,invoice_ref,provider_account_id,provider_mode,allocation_digest,policy_version,verdict,reason_codes,classifier_version,evidence_kind,billing_interval,snapshot_ref,snapshot_digest,observed_at_ms,evidence_digest)
+          values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::text[],$11,$12,$13,$14,$15,$16,coalesce($17, partner_credit_settlement_auth_digest($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::text[],$11,$12,$13,$14,$15,$16)))`,
+          [f.business_id, f.reservation_id, f.decision_id, f.invoice_ref, f.provider_account_id, f.provider_mode, f.allocation_digest, f.policy_version, f.verdict, f.reason_codes, f.classifier_version, f.evidence_kind, f.billing_interval, f.snapshot_ref, f.snapshot_digest, f.observed_at_ms, digest ?? null]);
+      };
+      // (a) a row whose digest does not match its fields: only possible with the database check disabled (scratch database), and the gate still refuses it
+      const a = await base();
+      await admin.query('ALTER TABLE partner_credit_settlement_authorizations DISABLE TRIGGER partner_credit_settlement_authorizations_check');
+      try { await insertRaw(a.row, { snapshot_ref: 'tampered', snapshot_digest: randomBytes(32).toString('hex'), observed_at_ms: Number(a.row.observed_at_ms) + 5_000 }, '0'.repeat(64)); }
+      finally { await admin.query('ALTER TABLE partner_credit_settlement_authorizations ENABLE TRIGGER partner_credit_settlement_authorizations_check'); }
+      await refused(a.s, /\(INTEGRITY_MISMATCH\)/);
+      // (b) a correctly digested, correctly bound, ELIGIBLE row observed in the FUTURE: the database accepts it, the gate reads the database clock and refuses it
+      const b = await base();
+      await insertRaw(b.row, { snapshot_ref: 'future', snapshot_digest: randomBytes(32).toString('hex'), observed_at_ms: (await dbNow()) + 3_600_000 });
+      await refused(b.s, /\(EVIDENCE_FROM_FUTURE\)/);
+    });
+
+    it('17. the recorder needs exactly one active subscription with Stripe identifiers; without them nothing is recorded', async () => {
+      const none = await ready(undefined, { authorize: false });
+      await fxq('update business_subscriptions set stripe_customer_id = null where business_id=$1', [none.s.businessId]);
+      expect(await rejects(recorder.record({ reservationId: none.s.reservationId, businessId: none.s.businessId, evidence: await evidenceFor(none.s) }))).toMatch(/SETTLEMENT_AUTH_SUBSCRIPTION_MISSING/);
+      await fxq('update business_subscriptions set stripe_customer_id = $2, stripe_subscription_id = null where business_id=$1', [none.s.businessId, 'cus_x']);
+      expect(await rejects(recorder.record({ reservationId: none.s.reservationId, businessId: none.s.businessId, evidence: await evidenceFor(none.s) }))).toMatch(/SETTLEMENT_AUTH_SUBSCRIPTION_MISSING|TypeError|null/);
+      const gone = await ready(undefined, { authorize: false });
+      const goneEvidence = await evidenceFor(gone.s);
+      await fxq('delete from business_subscriptions where business_id=$1', [gone.s.businessId]);
+      expect(await rejects(recorder.record({ reservationId: gone.s.reservationId, businessId: gone.s.businessId, evidence: goneEvidence }))).toMatch(/SETTLEMENT_AUTH_SUBSCRIPTION_MISSING/);
+      expect(await rows('select count(*)::int n from partner_credit_settlement_authorizations where reservation_id = any($1)', [[none.s.reservationId, gone.s.reservationId]])).toEqual([{ n: 0 }]);
+    });
+
+    it('15. the database enforces the gate and the evidence lifecycle independently of the service', async () => {
+      // append-only, even for a session in the replica role (these triggers are ENABLE ALWAYS)
+      const { s } = await ready();
+      for (const client of [admin, fx]) {
+        expect(await rejects(client.query("update partner_credit_settlement_authorizations set verdict='ELIGIBLE' where reservation_id=$1", [s.reservationId]))).toMatch(/SETTLEMENT_AUTH_APPEND_ONLY/);
+        expect(await rejects(client.query('delete from partner_credit_settlement_authorizations where reservation_id=$1', [s.reservationId]))).toMatch(/SETTLEMENT_AUTH_APPEND_ONLY/);
+        expect(await rejects(client.query('truncate partner_credit_settlement_authorizations cascade'))).toMatch(/TRUNCATE_DENIED/);
+      }
+      // the integrity digest is recomputed by the database: a tampered or hand-made digest is refused
+      const row = (await rows<any>('select * from partner_credit_settlement_authorizations where reservation_id=$1', [s.reservationId]))[0];
+      expect(await rejects(admin.query(`insert into partner_credit_settlement_authorizations(business_id,reservation_id,decision_id,invoice_ref,provider_account_id,provider_mode,allocation_digest,policy_version,verdict,reason_codes,classifier_version,evidence_kind,billing_interval,snapshot_ref,snapshot_digest,observed_at_ms,evidence_digest)
+        values($1,$2,$3,$4,$5,$6,$7,$8,'ELIGIBLE',ARRAY['ALL_CONDITIONS_VERIFIED'],$9,$10,$11,'x',$12,$13,repeat('0',64))`,
+        [row.business_id, row.reservation_id, row.decision_id, row.invoice_ref, row.provider_account_id, row.provider_mode, row.allocation_digest, row.policy_version, row.classifier_version, row.evidence_kind, row.billing_interval, 'e'.repeat(64), row.observed_at_ms]))).toMatch(/SETTLEMENT_AUTH_DIGEST_MISMATCH/);
+      // an ELIGIBLE verdict cannot carry another reason, and a non-eligible one cannot claim all conditions verified (CHECK constraints, independent of the service)
+      const reasonDigest = (await rows<{ d: string }>("select partner_credit_settlement_auth_digest($1,$2,$3,$4,$5,$6,$7,$8,'ELIGIBLE',ARRAY['NOT_SETTLED'],$9,$10,$11,'x',$12,$13) d",
+        [row.business_id, row.reservation_id, row.decision_id, row.invoice_ref, row.provider_account_id, row.provider_mode, row.allocation_digest, row.policy_version, row.classifier_version, row.evidence_kind, row.billing_interval, 'f'.repeat(64), row.observed_at_ms]))[0]!.d;
+      expect(await rejects(admin.query(`insert into partner_credit_settlement_authorizations(business_id,reservation_id,decision_id,invoice_ref,provider_account_id,provider_mode,allocation_digest,policy_version,verdict,reason_codes,classifier_version,evidence_kind,billing_interval,snapshot_ref,snapshot_digest,observed_at_ms,evidence_digest)
+        values($1,$2,$3,$4,$5,$6,$7,$8,'ELIGIBLE',ARRAY['NOT_SETTLED'],$9,$10,$11,'x',$12,$13,$14)`,
+        [row.business_id, row.reservation_id, row.decision_id, row.invoice_ref, row.provider_account_id, row.provider_mode, row.allocation_digest, row.policy_version, row.classifier_version, row.evidence_kind, row.billing_interval, 'f'.repeat(64), row.observed_at_ms, reasonDigest]))).toMatch(/verdict_reason_check/);
+      // TypeScript and SQL compute the same digest
+      expect(row.evidence_digest).toBe(await settlementAuthorizationDigest({ businessId: row.business_id, reservationId: row.reservation_id, decisionId: row.decision_id, invoiceRef: row.invoice_ref, providerAccountId: row.provider_account_id,
+        providerMode: row.provider_mode, allocationDigest: row.allocation_digest, policyVersion: row.policy_version, verdict: row.verdict, reasonCodes: row.reason_codes, classifierVersion: row.classifier_version,
+        evidenceKind: row.evidence_kind, billingInterval: row.billing_interval, snapshotRef: row.snapshot_ref, snapshotDigest: row.snapshot_digest, observedAtMs: Number(row.observed_at_ms) }));
+      // a `consume` ledger entry needs a current ELIGIBLE authorization even if the D4 evidence trigger is bypassed (disabled here ONLY in the scratch database, inside one transaction)
+      const none = await ready(undefined, { authorize: false });
+      const bad = await ready(unpaid('open'));
+      const insertConsume = (x: Scenario) => admin.query("insert into partner_credit_ledger(account_id,decision_id,entry_type,units,idempotency_key) values($1,$2,'consume',-1,$3)", [x.accountId, x.decisionId, `gate-probe-${randomUUID()}`]);
+      await admin.query('BEGIN'); await admin.query('ALTER TABLE partner_credit_ledger DISABLE TRIGGER partner_credit_ledger_d4_evidence');
+      try {
+        for (const x of [none.s, bad.s]) {
+          await admin.query('SAVEPOINT probe');
+          expect(await rejects(insertConsume(x))).toMatch(/SETTLEMENT_GATE/);
+          await admin.query('ROLLBACK TO SAVEPOINT probe');
+        }
+      } finally { await admin.query('ROLLBACK'); }
+      await admin.query('BEGIN'); await admin.query('ALTER TABLE partner_credit_ledger DISABLE TRIGGER partner_credit_ledger_d4_evidence');
+      try { await insertConsume(s); } finally { await admin.query('ROLLBACK'); } // an ELIGIBLE newest authorization lets the (otherwise guarded) entry through; rolled back
+      expect(await consumeEntries(s)).toBe(0);
     });
   });
 });
