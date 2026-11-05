@@ -53,24 +53,31 @@ export async function createRuntimeSigner(keyId: string, pkcs8Base64: string): P
 }
 
 /** One trusted public key. The key ring is TRUSTED CONFIGURATION: public keys only (the verifier can check, never create), with a purpose, a validity window and a revocation mark. */
-export interface TrustedKeyEntry { readonly publicKeyHex: string; readonly purpose: KeyPurpose; readonly notBeforeMs: number; readonly notAfterMs: number; readonly revokedAtMs: number | null }
+export interface TrustedKeyEntry {
+  readonly publicKeyHex: string; readonly purpose: KeyPurpose;
+  /** The ISSUANCE window: a key signs new observations only inside it. */
+  readonly notBeforeMs: number; readonly notAfterMs: number;
+  /** DEV-11 retained-key policy: until when evidence signed inside the issuance window still VERIFIES (default: the end of the issuance window). A revoked key verifies nothing, whatever this says. */
+  readonly verifyUntilMs?: number;
+  readonly revokedAtMs: number | null;
+}
 export type TrustedKeyRing = Readonly<Record<string, TrustedKeyEntry>>;
 export type KeyRingSource = () => TrustedKeyRing | Promise<TrustedKeyRing>;
 
 export type KeyDenial = 'SIGNING_AUTHORITY_UNAVAILABLE' | 'SIGNING_KEY_NOT_TRUSTED' | 'SIGNING_KEY_PURPOSE' | 'SIGNING_KEY_EXPIRED' | 'SIGNING_KEY_NOT_YET_VALID' | 'SIGNING_KEY_REVOKED';
 const isInt = (n: unknown): n is number => typeof n === 'number' && Number.isSafeInteger(n) && n >= 0;
 
-async function keyEntry(source: KeyRingSource, keyId: string, purpose: KeyPurpose, nowMs: number): Promise<Readonly<{ ok: true; entry: TrustedKeyEntry }> | Readonly<{ ok: false; reason: KeyDenial }>> {
+async function keyEntry(source: KeyRingSource, keyId: string, purpose: KeyPurpose, nowMs: number, mode: 'ISSUE' | 'VERIFY' = 'ISSUE'): Promise<Readonly<{ ok: true; entry: TrustedKeyEntry }> | Readonly<{ ok: false; reason: KeyDenial }>> {
   let ring: TrustedKeyRing;
   try { ring = await source(); } catch { return { ok: false, reason: 'SIGNING_AUTHORITY_UNAVAILABLE' }; }
   if (!ring || typeof ring !== 'object' || typeof keyId !== 'string' || !KEY_ID.test(keyId) || !has(ring, keyId)) return { ok: false, reason: 'SIGNING_KEY_NOT_TRUSTED' };
   const e = ring[keyId] as TrustedKeyEntry | undefined;
   if (!e || typeof e !== 'object' || typeof e.publicKeyHex !== 'string' || !PUBLIC_KEY_HEX.test(e.publicKeyHex) || !isInt(e.notBeforeMs) || !isInt(e.notAfterMs) || e.notAfterMs <= e.notBeforeMs
-    || (e.revokedAtMs !== null && !isInt(e.revokedAtMs)) || (e.purpose !== 'TRUSTED_RUNTIME' && e.purpose !== 'SYNTHETIC_RUNTIME')) return { ok: false, reason: 'SIGNING_KEY_NOT_TRUSTED' };
+    || (e.revokedAtMs !== null && !isInt(e.revokedAtMs)) || (e.verifyUntilMs !== undefined && (!isInt(e.verifyUntilMs) || e.verifyUntilMs < e.notAfterMs)) || (e.purpose !== 'TRUSTED_RUNTIME' && e.purpose !== 'SYNTHETIC_RUNTIME')) return { ok: false, reason: 'SIGNING_KEY_NOT_TRUSTED' };
   if (e.purpose !== purpose) return { ok: false, reason: 'SIGNING_KEY_PURPOSE' };
   if (e.revokedAtMs !== null) return { ok: false, reason: 'SIGNING_KEY_REVOKED' };
   if (nowMs < e.notBeforeMs) return { ok: false, reason: 'SIGNING_KEY_NOT_YET_VALID' };
-  if (nowMs >= e.notAfterMs) return { ok: false, reason: 'SIGNING_KEY_EXPIRED' };
+  if (nowMs >= (mode === 'VERIFY' ? (e.verifyUntilMs ?? e.notAfterMs) : e.notAfterMs)) return { ok: false, reason: 'SIGNING_KEY_EXPIRED' };
   return { ok: true, entry: e };
 }
 
@@ -221,7 +228,7 @@ export function createObservationVerifier(deps: Readonly<{ keyRing: KeyRingSourc
       if (!claims || typeof o.signature !== 'string' || !SIGNATURE_HEX.test(o.signature)) return deny('MALFORMED_OBSERVATION');
       if (!expected || (expected.kind !== 'REAL_NETWORK' && expected.kind !== 'SYNTHETIC_RUNTIME') || claims.kind !== expected.kind) return deny('KIND_MISMATCH');
       const nowMs = deps.clock();
-      const k = await keyEntry(deps.keyRing, claims.keyId, KIND_PURPOSE[expected.kind], nowMs);
+      const k = await keyEntry(deps.keyRing, claims.keyId, KIND_PURPOSE[expected.kind], nowMs, 'VERIFY');
       if (!k.ok) return deny(k.reason);
       let verified = false;
       try {

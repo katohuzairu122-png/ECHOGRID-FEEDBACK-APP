@@ -28,7 +28,7 @@ export class StripeReadConfigError extends Error {
  */
 export interface CredentialRecord { readonly apiKey: string; readonly accountId: string; readonly workloadId: string; readonly validUntilMs: number }
 export interface CredentialSource { resolve(binding: Readonly<{ accountId: string; workloadId: string }>): Promise<CredentialRecord | null> }
-export type CredentialDenial = 'CREDENTIAL_MISSING' | 'CREDENTIAL_MALFORMED' | 'CREDENTIAL_LIVE_MODE' | 'CREDENTIAL_EXPIRED' | 'CREDENTIAL_ACCOUNT_MISMATCH' | 'CREDENTIAL_WORKLOAD_MISMATCH' | 'CREDENTIAL_BINDING_REQUIRED' | 'CREDENTIAL_SOURCE_UNAVAILABLE';
+export type CredentialDenial = 'CREDENTIAL_MISSING' | 'CREDENTIAL_MALFORMED' | 'CREDENTIAL_LIVE_MODE' | 'CREDENTIAL_EXPIRED' | 'CREDENTIAL_ACCOUNT_MISMATCH' | 'CREDENTIAL_WORKLOAD_MISMATCH' | 'CREDENTIAL_BINDING_REQUIRED' | 'CREDENTIAL_SOURCE_UNAVAILABLE' | 'CREDENTIAL_REVOKED' | 'CREDENTIAL_WORKLOAD_NOT_AUTHORIZED';
 export class CredentialDenied extends ProviderReadError {
   constructor(readonly code: CredentialDenial) { super('DENIED'); this.name = 'CredentialDenied'; }
 }
@@ -72,7 +72,7 @@ export function createStripeGetTransport(opts: TransportOptions): StripeReadTran
     if (staticKey !== undefined) return staticKey;
     if (!binding || typeof binding.accountId !== 'string' || typeof binding.workloadId !== 'string') throw new CredentialDenied('CREDENTIAL_BINDING_REQUIRED');
     let rec: CredentialRecord | null;
-    try { rec = await source!.resolve({ accountId: binding.accountId, workloadId: binding.workloadId }); } catch { throw new CredentialDenied('CREDENTIAL_SOURCE_UNAVAILABLE'); }
+    try { rec = await source!.resolve({ accountId: binding.accountId, workloadId: binding.workloadId }); } catch (e) { throw e instanceof CredentialDenied ? e : new CredentialDenied('CREDENTIAL_SOURCE_UNAVAILABLE'); } // a source may name WHY it refused; anything else is just unavailable
     if (!rec) throw new CredentialDenied('CREDENTIAL_MISSING');
     if (typeof rec !== 'object' || typeof rec.apiKey !== 'string' || typeof rec.accountId !== 'string' || typeof rec.workloadId !== 'string' || !Number.isSafeInteger(rec.validUntilMs)) throw new CredentialDenied('CREDENTIAL_MALFORMED');
     if (/^(rk|sk)_live_/.test(rec.apiKey)) throw new CredentialDenied('CREDENTIAL_LIVE_MODE');

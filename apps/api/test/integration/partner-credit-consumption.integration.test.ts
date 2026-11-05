@@ -17,6 +17,8 @@ import {
 import { MOCK_EVIDENCE_KIND, type MockSettlementEvidence } from '../../src/billing/settlement-eligibility.classifier';
 import { adapterOver, gateFor, providerOver, verifiedMapping, WORKLOAD } from '../../src/billing/stripe-read/pipeline-fixtures';
 import { createDurableAuthorizationStore, ReadAuthorizationLifecycle } from '../../src/billing/stripe-read/durable-authorization';
+import { createSyntheticTrustedRuntime } from '../../src/billing/stripe-read/synthetic-runtime';
+import { createCredentialCustody, createObservationVerifier, createRealReadProvider, createSigningCustody, createWorkloadAuthority, gateForWorkload } from '../../src/billing/stripe-read';
 import { acquireMockExtendedEvidence, buildMockEvidence, classifyBundle, createMockReadProvider, EvidenceAcquisitionPipeline, MockExtendedSource, onePage, ScriptedReadTransport, syntheticStripeInvoice } from '../../src/billing/stripe-read';
 import { unwindCredit, type UnwindCause } from '../../src/partner-credits/partner-credit-unwind';
 import { PartnerProvisionalReversalCompensator } from '../../src/partner-credits/partner-provisional-reversal.compensator';
@@ -2016,6 +2018,68 @@ describe.skipIf(!process.env.DATABASE_URL)('D4 final credit consumption and ledg
         it('40. concurrent consumption stays exactly once under the existing D4 controls when the evidence was accepted next to durable authorization activity', async () => {
           const s = await prepare(); const { pipeline, req } = await rig(s);
           await authorize(s.businessId, ['ACCOUNT_RETRIEVE_CURRENT', 'INVOICE_RETRIEVE']);
+          const r = await pipeline.run(req); if (r.status !== 'CLASSIFIED') throw new Error('expected CLASSIFIED');
+          await recorder.record({ reservationId: s.reservationId, businessId: s.businessId, evidence: r.recordableEvidence! });
+          const temp: Client[] = [];
+          try {
+            const services = await Promise.all(Array.from({ length: 8 }, async () => { const c = new Client({ connectionString: urlFor(dbName) }); await c.connect(); temp.push(c); return new PartnerCreditConsumptionService(buildDb(c), GATE_CFG); }));
+            const results = await Promise.all(services.map(x => x.consume({ reservationId: s.reservationId, businessId: s.businessId })));
+            expect(results.filter(x => !x.replay)).toHaveLength(1); expect(results.filter(x => x.replay)).toHaveLength(7);
+          } finally { await Promise.all(temp.map(c => c.end().catch(() => undefined))); }
+          expect(await consumeEntries(s)).toBe(1);
+        });
+      });
+
+      describe('D1/D3-DEV-11 administrator, workload, credential and signing boundaries in front of the settlement gate', () => {
+        let adm1: string; let adm2: string;
+        beforeAll(async () => {
+          const mk = async () => (await rows<{ id: string }>("insert into users(email,password_hash,full_name,status,platform_role) values($1,'x','D11 admin','active','admin') returning id", [`d11c-${randomUUID()}@example.test`]))[0]!.id;
+          adm1 = await mk(); adm2 = await mk();
+          await admin.query('update stripe_read_authorization_policy set approval_enabled = true');
+        });
+        const tmp = async () => { const c = new Client({ connectionString: urlFor(dbName) }); await c.connect(); return { c, db: buildDb(c), close: () => c.end().catch(() => undefined) }; };
+        const approveBoth = async (businessId: string) => {
+          const t1 = await tmp();
+          try { const lc = new ReadAuthorizationLifecycle(t1.db); for (const m of ['ACCOUNT_RETRIEVE_CURRENT', 'INVOICE_RETRIEVE'] as const) { const id = await lc.propose({ businessId, accountId: 'acct_RealShape1', workloadId: WORKLOAD, methodId: m, validFromMs: 1, expiresAtMs: Date.now() + 3_600_000, inventoryRecordId: 'S08-STRIPE-PRIVATE-TEST-VERIFIER-001', inventoryRevision: 'rev-1' }, adm1); await lc.approve(id, adm2, `EV-${m}`); } }
+          finally { await t1.close(); }
+        };
+
+        it('48-49. the full DEV-11 chain (durable approval, trusted workload, credential custody, custody-signed synthetic runtime) yields synthetic, rejected evidence: nothing is recordable, consumable or moves the ledger', async () => {
+          const s = await prepare(); const p = await persisted(s); await approveBoth(s.businessId);
+          const now = p.now; const crypto = await import('node:crypto'); const pair = crypto.generateKeyPairSync('ed25519'); const spki = pair.publicKey.export({ type: 'spki', format: 'der' });
+          const authority = createWorkloadAuthority({ environment: 'development', clock: () => now, source: { load: async () => ({ workloadId: WORKLOAD, environment: 'development', accountId: 'acct_RealShape1', realm: 'test', methods: ['ACCOUNT_RETRIEVE_CURRENT', 'INVOICE_RETRIEVE'], credentialRef: 'cred:d11-chain', signingKeyPurpose: 'SYNTHETIC_RUNTIME', validFromMs: 0, expiresAtMs: now + 3_600_000, revokedAtMs: null }) } });
+          const resolved = await authority.resolve(); if (!resolved.ok) throw new Error(resolved.reason);
+          const key = ['rk', 'test', 'Dev11ChainCredential0001'].join('_');
+          const custody = createCredentialCustody({ descriptors: { load: async () => ({ ref: 'cred:d11-chain', workloadId: WORKLOAD, accountId: 'acct_RealShape1', mode: 'test', revokedAtMs: null, versions: [{ version: 'v1', notBeforeMs: 0, notAfterMs: now + 3_600_000, revokedAtMs: null }] }) }, secrets: { read: async () => key }, workloads: authority, clock: () => now });
+          expect(await custody.sourceFor(resolved.identity).resolve({ accountId: 'acct_RealShape1', workloadId: WORKLOAD })).toMatchObject({ accountId: 'acct_RealShape1', workloadId: WORKLOAD }); // the credential is provisioned to the trusted workload only
+          const keys = createSigningCustody({ clock: () => now, directory: { load: async () => [{ keyId: 'syn-chain-v1', version: 1, purpose: 'SYNTHETIC_RUNTIME', publicKeyHex: Buffer.from(spki.subarray(spki.length - 32)).toString('hex'), notBeforeMs: 0, notAfterMs: now + 3_600_000, verifyUntilMs: now + 7_200_000, revokedAtMs: null }] }, signers: { signerFor: id => (id === 'syn-chain-v1' ? { keyId: id, sign: async m => new Uint8Array(crypto.sign(null, Buffer.from(m), pair.privateKey)) } : null) } });
+          const t1 = await tmp();
+          try {
+            const gate = { ...gateForWorkload({ authority, identity: resolved.identity, store: createDurableAuthorizationStore(t1.db), mapping: verifiedMapping() }) };
+            const scriptedT = new ScriptedReadTransport([{ object: 'account', id: 'acct_RealShape1' }, { ...p.rawInvoice, id: 'in_Dev10Shape1' }]);
+            const runtime = createSyntheticTrustedRuntime({ signer: await keys.activeSigner('SYNTHETIC_RUNTIME'), keyRing: keys.keyRing, gate, clock: () => now, transport: scriptedT });
+            const provider = createRealReadProvider({ runtime, verifier: createObservationVerifier({ keyRing: keys.keyRing, clock: () => now }), clock: () => now, audit: () => undefined });
+            const realScope = { ...p.scope, invoiceId: 'in_Dev10Shape1' };
+            const pipeline = new EvidenceAcquisitionPipeline<string>({ provider, clock: () => now, audit: () => undefined, config: { freshnessWindowMs: GATE_CFG.freshnessWindowMs, policyEffectiveFromMs: 1_000, policyVersion: 'PC-BENEFIT/1' },
+              resolveBinding: async () => ({ scope: realScope, expectedAccountId: 'acct_RealShape1', classifier: { binding: p.binding, expected: p.ctx.expected as any, expectedPaymentRef: null, consumedAtMs: null } }),
+              invocation: { policy: { approved: true, revoked: false, callerPrincipal: 'c', audience: 'aud-dev11', credentialVersion: 'v1', inventoryRevision: 'rev-1', methods: ['GET /v1/account', 'GET /v1/invoices/{id}'], expiresAt: now + 3_600_000, invoiceScope: realScope },
+                deps: { authenticate: async (proof, canonical) => (proof === 'valid' ? { principal: 'c', audience: 'aud-dev11', credentialVersion: 'v1', authenticatedRequest: canonical } : null), claimOnce: async () => true } } });
+            const inv = (op: 'GET /v1/account' | 'GET /v1/invoices/{id}', n: string) => ({ audience: 'aud-dev11', operation: op, inventoryRevision: 'rev-1', nonce: n.repeat(24), issuedAt: now - 1_000, expiresAt: now + 60_000, ...(op === 'GET /v1/invoices/{id}' ? { invoiceScope: realScope } : {}) });
+            const ledgerBefore = await ledgerRows(s); const before = await credit(s);
+            const out = await pipeline.run({ businessId: s.businessId, invoiceId: realScope.invoiceId }, { account: { request: inv('GET /v1/account', 'ax'), proof: 'valid' }, invoice: { request: inv('GET /v1/invoices/{id}', 'ay'), proof: 'valid' } });
+            expect(out.status).toBe('REJECTED'); expect('recordableEvidence' in out).toBe(false);
+            if (out.status === 'REJECTED') expect(out.completeness.blockers).toContain('REAL_EVIDENCE_NOT_AUTHORIZED_FOR_SETTLEMENT');
+            expect(provider.authenticity).toBe('SYNTHETIC_RUNTIME'); expect(provider.provenance().every(c => c.kind === 'SYNTHETIC_RUNTIME' && c.keyId === 'syn-chain-v1')).toBe(true);
+            expect(await rejects(consumption.consume({ reservationId: s.reservationId, businessId: s.businessId }))).toMatch(/\(AUTHORIZATION_MISSING\)/);
+            expect(await credit(s)).toEqual(before); expect(await ledgerRows(s)).toBe(ledgerBefore); expect(await authRows(s)).toBe(0); expect(await consumeEntries(s)).toBe(0);
+            // revoking the workload stops the next acquisition before any store or credential access
+            const revoked = createWorkloadAuthority({ environment: 'development', clock: () => now, source: { load: async () => ({ workloadId: WORKLOAD, environment: 'development', accountId: 'acct_RealShape1', realm: 'test', methods: ['ACCOUNT_RETRIEVE_CURRENT', 'INVOICE_RETRIEVE'], credentialRef: 'cred:d11-chain', signingKeyPurpose: 'SYNTHETIC_RUNTIME', validFromMs: 0, expiresAtMs: now + 3_600_000, revokedAtMs: now - 1 }) } });
+            expect(await revoked.check(resolved.identity, { environment: 'development', accountId: 'acct_RealShape1', realm: 'test', methodId: 'INVOICE_RETRIEVE' })).toBe('WORKLOAD_REVOKED');
+          } finally { await t1.close(); }
+        });
+
+        it('50. concurrent consumption stays exactly once under the existing D4 controls', async () => {
+          const s = await prepare(); const { pipeline, req } = await rig(s);
           const r = await pipeline.run(req); if (r.status !== 'CLASSIFIED') throw new Error('expected CLASSIFIED');
           await recorder.record({ reservationId: s.reservationId, businessId: s.businessId, evidence: r.recordableEvidence! });
           const temp: Client[] = [];

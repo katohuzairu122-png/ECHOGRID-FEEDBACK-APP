@@ -29,3 +29,17 @@ export {
   type ObservationVerifier, type VerifiedObservation, type ExpectedBinding, type ObservationDenial, type RuntimeDenial, type RuntimeReadRequest, type RuntimeReadResult, type KeyDenial,
 } from './trusted-runtime';
 export { createDurableAuthorizationStore, READ_AUTH_VERIFIER_ROLE, recordFromRow } from './durable-authorization';
+export {
+  authenticateAdminSession, requireFreshAdmin, isTrustedAdminContext, ADMIN_SCOPE, AdminAuthorityError,
+  type TrustedAdminContext, type AdminSessionDeps, type AdminSessionDenial, type AdminSessionResult,
+} from './admin-session';
+export { ReadAuthorizationAdminService, DEFAULT_CONTEXT_MAX_AGE_MS, type AuthorizationStatus, type AuthorizationAuditEvent } from './read-authorization-admin';
+export {
+  createWorkloadAuthority, gateForWorkload, isTrustedWorkloadIdentity,
+  type TrustedWorkloadIdentity, type WorkloadAuthority, type WorkloadConfigSource, type WorkloadEnvironment, type WorkloadResolveResult, type WorkloadUse,
+} from './workload-identity';
+export {
+  createCredentialCustody, CredentialCustodyError,
+  type CredentialCustody, type CredentialDescriptor, type CredentialDescriptorSource, type CredentialVersion, type SecretProvider, type CredentialAuditEvent,
+} from './credential-custody';
+export { createSigningCustody, SigningCustodyError, type SigningCustody, type SigningKeyDirectory, type SigningKeyRecord, type SignerProvider } from './signing-custody';
