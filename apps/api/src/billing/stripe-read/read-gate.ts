@@ -19,7 +19,7 @@ export interface ReadGate {
   /** The current mapping state (a registry loaded from persisted mapping state and proofs). */
   readonly mapping: MappingRegistry;
 }
-export type GateDecision = Readonly<{ ok: true; authorizationId: string }> | Readonly<{ ok: false; reason: GateDenial }>;
+export type GateDecision = Readonly<{ ok: true; authorizationId: string; authorizationVersion: number }> | Readonly<{ ok: false; reason: GateDenial }>;
 
 export async function checkRead(
   gate: ReadGate,
@@ -35,5 +35,5 @@ export async function checkRead(
     if (status === 'SCHEMA_DRIFT') return { ok: false, reason: 'MAPPING_DRIFT' };
     if (status !== 'TEST_MODE_VERIFIED') return { ok: false, reason: 'MAPPING_NOT_VERIFIED' };
   }
-  return { ok: true, authorizationId: a.record.authorizationId };
+  return { ok: true, authorizationId: a.record.authorizationId, authorizationVersion: a.record.version };
 }

@@ -1,11 +1,11 @@
 import type { FailureClass, ReadMethodId } from './capability-registry';
-import { checkRead, type ReadGate } from './read-gate';
 import type { EvidenceOrigin, MockLineAttribution } from './evidence-types';
 import type { IdempotencyEvidence } from './line-normalizer';
 import type { PageRecord } from './pagination';
 import type { PaymentTarget } from './refund-dispute-normalizer';
 import { makeEmitter, type AcquireDenial, type AuditSink } from './read-types';
-import { CredentialDenied, ProviderReadError, STRIPE_API_VERSION, type StripeReadTransport } from './transport';
+import { STRIPE_API_VERSION } from './transport';
+import type { ObservationClaims, ObservationKind, ObservationVerifier, TrustedReadRuntime } from './trusted-runtime';
 import type { MockPaymentDispute, MockRefund } from '../refund-dispute.classifier';
 import type { CancellationEvidence, MockBenefitItem } from '../settlement-eligibility.classifier';
 
@@ -56,47 +56,63 @@ export interface ReadProvider {
 const INVOICE_ID = /^in_[A-Za-z0-9]+$/;
 const TOKEN = /^[A-Za-z0-9][A-Za-z0-9:_./-]{0,159}$/;
 
-export function createRealReadProvider(deps: Readonly<{ transport: StripeReadTransport; gate: ReadGate; clock: () => number; audit: AuditSink; apiVersion?: string }>): ReadProvider {
+export interface RealReadProvider extends ReadProvider {
+  /** REAL_NETWORK only when every observation came from the trusted runtime and verified as such; SYNTHETIC_RUNTIME when the runtime is the synthetic one. */
+  readonly authenticity: ObservationKind;
+  /** The verified claims of every observation this provider has served, oldest first. Claims only: never a body, a header or a credential. */
+  provenance(): readonly ObservationClaims[];
+}
+
+/**
+ * DEV-10: the real provider no longer accepts a transport. Every read goes through a TRUSTED RUNTIME (authorization and mapping gate rechecked immediately before the request, bound credential,
+ * signed observation) and every observation is verified against the trusted key ring and the expected binding before its body is used. An observation that does not verify is a denial and its body
+ * is discarded.
+ */
+export function createRealReadProvider(deps: Readonly<{ runtime: TrustedReadRuntime; verifier: ObservationVerifier; clock: () => number; audit: AuditSink; apiVersion?: string }>): RealReadProvider {
   const emit = makeEmitter(deps.audit, deps.clock, 'STRIPE_TEST_READ');
   const apiVersion = deps.apiVersion ?? STRIPE_API_VERSION;
-  /** The gate, evaluated for ONE request, immediately before it. */
-  const allowed = async (id: 'ACCOUNT_RETRIEVE_CURRENT' | 'INVOICE_RETRIEVE', scope: AuditScope): Promise<AcquireDenial | null> => {
+  const log: ObservationClaims[] = [];
+  const check = async (id: 'ACCOUNT_RETRIEVE_CURRENT' | 'INVOICE_RETRIEVE', scope: AuditScope): Promise<AcquireDenial | null> => {
     if (typeof scope.accountId !== 'string') { emit('stripe_read.denied', id, 'INVALID_REQUEST', scope); return 'INVALID_REQUEST'; }
-    const d = await checkRead(deps.gate, { businessId: scope.businessId, accountId: scope.accountId, methodId: id, apiVersion, purpose: 'EVIDENCE' }, deps.clock());
+    const d = await deps.runtime.check({ businessId: scope.businessId, accountId: scope.accountId, methodId: id, apiVersion, purpose: 'EVIDENCE' });
     if (d.ok) return null;
     emit('stripe_read.denied', id, d.reason, scope);
     return d.reason;
   };
-  const run = async (id: 'ACCOUNT_RETRIEVE_CURRENT' | 'INVOICE_RETRIEVE', scope: AuditScope, params?: { invoiceId: string }): Promise<ObjectRead> => {
-    const denied = await allowed(id, scope); // checked again on every request: a revocation takes effect on the very next one
-    if (denied) return { ok: false, kind: 'DENIED', reason: denied };
-    emit('stripe_read.attempt', id, null, scope);
-    try { return { ok: true, body: await deps.transport.get(id, params, { accountId: scope.accountId as string, workloadId: deps.gate.workloadId }) }; }
-    catch (e) {
-      if (e instanceof CredentialDenied) { emit('stripe_read.denied', id, e.code, scope); return { ok: false, kind: 'DENIED', reason: e.code }; }
-      const failureClass = e instanceof ProviderReadError ? e.failureClass : 'NETWORK';
-      emit('stripe_read.failure', id, failureClass, scope);
-      return { ok: false, kind: 'PROVIDER_FAILURE', failureClass };
+  const run = async (id: 'ACCOUNT_RETRIEVE_CURRENT' | 'INVOICE_RETRIEVE', scope: AuditScope, invoiceId?: string): Promise<ObjectRead> => {
+    if (typeof scope.accountId !== 'string') { emit('stripe_read.denied', id, 'INVALID_REQUEST', scope); return { ok: false, kind: 'DENIED', reason: 'INVALID_REQUEST' }; }
+    emit('stripe_read.attempt', id, null, scope); // the runtime rechecks authorization immediately before the request: a revocation takes effect on the very next one
+    const out = await deps.runtime.read({ businessId: scope.businessId, accountId: scope.accountId, methodId: id, ...(invoiceId ? { invoiceId } : {}), apiVersion, purpose: 'EVIDENCE' });
+    if (!out.ok) {
+      if (out.kind === 'DENIED') { emit('stripe_read.denied', id, out.reason, scope); return { ok: false, kind: 'DENIED', reason: out.reason }; }
+      emit('stripe_read.failure', id, out.failureClass, scope);
+      return { ok: false, kind: 'PROVIDER_FAILURE', failureClass: out.failureClass };
     }
+    const v = await deps.verifier.verify(out.observation, { kind: deps.runtime.kind, businessId: scope.businessId, accountId: scope.accountId, workloadId: deps.runtime.workloadId, methodId: id, subject: id === 'INVOICE_RETRIEVE' ? (invoiceId as string) : scope.accountId, apiVersion });
+    if (!v.ok) { emit('stripe_read.denied', id, v.reason, scope); return { ok: false, kind: 'DENIED', reason: v.reason }; }
+    log.push(v.claims);
+    return { ok: true, body: v.body };
   };
   const denyList = (id: ReadMethodId, scope: AuditScope): ListRead => {
     // the registry marks these NOT_AUTHORIZED and the transport has no path for them: no record, mapping or setting changes that
     emit('stripe_read.denied', id, 'METHOD_NOT_AUTHORIZED', scope);
     return { ok: false, kind: 'DENIED', reason: 'METHOD_NOT_AUTHORIZED' };
   };
-  const provider: ReadProvider = {
+  const provider: RealReadProvider = {
     kind: 'STRIPE_TEST_READ',
     apiVersion,
+    authenticity: deps.runtime.kind,
+    provenance: () => Object.freeze([...log]),
     async preflight(scope) {
       if (!scope || !TOKEN.test(String(scope.businessId)) || !INVOICE_ID.test(String(scope.invoiceId)) || !TOKEN.test(String(scope.customerId)) || !TOKEN.test(String(scope.subscriptionId)) || typeof scope.accountId !== 'string') {
         emit('stripe_read.denied', 'UNKNOWN', 'INVALID_REQUEST', null);
         return { ok: false, reason: 'INVALID_REQUEST' } as const;
       }
-      for (const id of ['ACCOUNT_RETRIEVE_CURRENT', 'INVOICE_RETRIEVE'] as const) { const d = await allowed(id, scope); if (d) return { ok: false, reason: d } as const; }
+      for (const id of ['ACCOUNT_RETRIEVE_CURRENT', 'INVOICE_RETRIEVE'] as const) { const d = await check(id, scope); if (d) return { ok: false, reason: d } as const; }
       return { ok: true } as const;
     },
     getAccount: scope => run('ACCOUNT_RETRIEVE_CURRENT', scope),
-    getInvoice: scope => run('INVOICE_RETRIEVE', scope, { invoiceId: scope.invoiceId }),
+    getInvoice: scope => run('INVOICE_RETRIEVE', scope, scope.invoiceId),
     async listInvoiceLines(scope) { return denyList('INVOICE_LINES_LIST', scope); },
     async listInvoicePayments(scope) { return denyList('PAYMENT_RETRIEVE', scope); },
     async listRefunds(scope) { return denyList('REFUNDS_LIST', scope); },

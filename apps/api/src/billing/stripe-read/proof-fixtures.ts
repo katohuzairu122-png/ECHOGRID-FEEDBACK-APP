@@ -1,7 +1,7 @@
 /**
  * S08-D1D3-DEV-09: REPRODUCIBLE SYNTHETIC proof fixtures. One deterministic, Stripe-shaped response per read, written to exercise every mapped field of the SDK profile (both line parent variants, a
  * payment-intent and a charge payment, a refund addressed by payment intent and by charge, a dispute). They are constants, not recordings: they contain no real identifier and prove nothing about what Stripe
- * returns. A proof built from them is at best SYNTHETIC_FIXTURE and can never raise a mapping status.
+ * returns. A proof built from them is at best SYNTHETIC_RUNTIME and can never raise a mapping status.
  */
 export const PROOF_ACCOUNT_ID = 'acct_ProofSyntheticAccount1';
 export const PROOF_INVOICE_ID = 'in_ProofSyntheticInvoice1';

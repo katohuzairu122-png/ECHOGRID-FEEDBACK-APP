@@ -32,7 +32,6 @@ export type CredentialDenial = 'CREDENTIAL_MISSING' | 'CREDENTIAL_MALFORMED' | '
 export class CredentialDenied extends ProviderReadError {
   constructor(readonly code: CredentialDenial) { super('DENIED'); this.name = 'CredentialDenied'; }
 }
-export type NetworkSource = 'GLOBAL_FETCH' | 'INJECTED';
 
 export type PerformableMethod = Extract<ReadMethodId, 'ACCOUNT_RETRIEVE_CURRENT' | 'INVOICE_RETRIEVE'>;
 
@@ -40,8 +39,6 @@ export type PerformableMethod = Extract<ReadMethodId, 'ACCOUNT_RETRIEVE_CURRENT'
 export interface StripeReadTransport {
   /** The mode of the credential, fixed at construction. Only 'test' exists. */
   readonly keyMode: 'test';
-  /** Where requests go: the platform `fetch` (a real network) or an injected function (a test double). A proof captured over an injected transport can never verify a mapping. Absent on fakes. */
-  readonly networkSource?: NetworkSource;
   /** Performs the GET for one registry method and resolves the parsed JSON body of a 2xx response; throws ProviderReadError otherwise. `binding` selects the credential when the transport uses a credential source. */
   get(method: PerformableMethod, params?: Readonly<{ invoiceId?: string }>, binding?: Readonly<{ accountId: string; workloadId: string }>): Promise<unknown>;
 }
@@ -88,7 +85,6 @@ export function createStripeGetTransport(opts: TransportOptions): StripeReadTran
 
   return Object.freeze({
     keyMode: 'test' as const,
-    networkSource: (opts.fetchImpl ? 'INJECTED' : 'GLOBAL_FETCH') as NetworkSource,
     async get(method: PerformableMethod, params?: Readonly<{ invoiceId?: string }>, binding?: Readonly<{ accountId: string; workloadId: string }>): Promise<unknown> {
       let path: string;
       if (method === 'ACCOUNT_RETRIEVE_CURRENT') path = '/v1/account';

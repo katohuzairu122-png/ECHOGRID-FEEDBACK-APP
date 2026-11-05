@@ -15,8 +15,9 @@ import {
   type SettlementEvidenceSigner, type SettlementGateConfig,
 } from '../../src/partner-credits/partner-credit-settlement-authorization';
 import { MOCK_EVIDENCE_KIND, type MockSettlementEvidence } from '../../src/billing/settlement-eligibility.classifier';
-import { gateFor } from '../../src/billing/stripe-read/pipeline-fixtures';
-import { acquireMockExtendedEvidence, buildMockEvidence, classifyBundle, createMockReadProvider, createRealReadProvider, EvidenceAcquisitionPipeline, MockExtendedSource, onePage, ScriptedReadTransport, StripeReadOnlyEvidenceAdapter, syntheticStripeInvoice } from '../../src/billing/stripe-read';
+import { adapterOver, gateFor, providerOver, verifiedMapping, WORKLOAD } from '../../src/billing/stripe-read/pipeline-fixtures';
+import { createDurableAuthorizationStore, ReadAuthorizationLifecycle } from '../../src/billing/stripe-read/durable-authorization';
+import { acquireMockExtendedEvidence, buildMockEvidence, classifyBundle, createMockReadProvider, EvidenceAcquisitionPipeline, MockExtendedSource, onePage, ScriptedReadTransport, syntheticStripeInvoice } from '../../src/billing/stripe-read';
 import { unwindCredit, type UnwindCause } from '../../src/partner-credits/partner-credit-unwind';
 import { PartnerProvisionalReversalCompensator } from '../../src/partner-credits/partner-provisional-reversal.compensator';
 import { PartnerCreditProjectionAudit } from '../../src/partner-credits/partner-credit-projection.audit';
@@ -1672,7 +1673,7 @@ describe.skipIf(!process.env.DATABASE_URL)('D4 final credit consumption and ledg
       const realAuth = { approved: true, revoked: false, inventoryRecordId: 'S08-STRIPE-PRIVATE-TEST-VERIFIER-001' as const, inventoryRevision: 'rev-synthetic-1', accountId: 'acct_RealShape1', realm: 'test' as const,
         methods: ['ACCOUNT_RETRIEVE_CURRENT', 'INVOICE_RETRIEVE'] as Array<'ACCOUNT_RETRIEVE_CURRENT' | 'INVOICE_RETRIEVE'>, expiresAtMs: p.now + 3_600_000 };
       const realScope = { ...p.scope, invoiceId: 'in_Dev06RealShape1' }; // a Stripe-shaped id: the scenario's own ids contain underscores, which real invoice ids never do
-      const adapter = new StripeReadOnlyEvidenceAdapter({ transport: new ScriptedReadTransport([{ object: 'account', id: 'acct_RealShape1' }, { ...p.rawInvoice, id: realScope.invoiceId }]), gate: gateFor(realAuth, { businessId: s.businessId }), expectedAccountId: 'acct_RealShape1', clock: () => p.now, audit: () => undefined });
+      const adapter = adapterOver({ transport: new ScriptedReadTransport([{ object: 'account', id: 'acct_RealShape1' }, { ...p.rawInvoice, id: realScope.invoiceId }]), gate: gateFor(realAuth, { businessId: s.businessId }), expectedAccountId: 'acct_RealShape1', clock: () => p.now, audit: () => undefined });
       const out = await adapter.acquire(realScope);
       if (!out.ok) throw new Error('expected evidence');
       expect(out.evidence.origin).toBe('STRIPE_TEST_READ'); expect(out.evidence.complete).toBe(false);
@@ -1836,7 +1837,7 @@ describe.skipIf(!process.env.DATABASE_URL)('D4 final credit consumption and ledg
         const transport = new ScriptedReadTransport([{ object: 'account', id: 'acct_RealShape1' }, { ...p.rawInvoice, id: 'in_Dev08RealShape1' }]);
         const auth = { approved: true, revoked: false, inventoryRecordId: 'S08-STRIPE-PRIVATE-TEST-VERIFIER-001' as const, inventoryRevision: 'rev-1', accountId: 'acct_RealShape1', realm: 'test' as const,
           methods: ['ACCOUNT_RETRIEVE_CURRENT', 'INVOICE_RETRIEVE'] as Array<'ACCOUNT_RETRIEVE_CURRENT' | 'INVOICE_RETRIEVE'>, expiresAtMs: p.now + 3_600_000 };
-        const provider = createRealReadProvider({ transport, gate: gateFor(auth, { businessId: s.businessId }), clock: () => p.now, audit: () => undefined });
+        const provider = providerOver({ transport, gate: gateFor(auth, { businessId: s.businessId }), clock: () => p.now, audit: () => undefined });
         const realScope = { ...p.scope, invoiceId: 'in_Dev08RealShape1' };
         const pipeline = new EvidenceAcquisitionPipeline<string>({ provider, clock: () => p.now, audit: () => undefined, config: { freshnessWindowMs: GATE_CFG.freshnessWindowMs, policyEffectiveFromMs: 1_000, policyVersion: 'PC-BENEFIT/1' },
           resolveBinding: async () => ({ scope: realScope, expectedAccountId: 'acct_RealShape1', classifier: { binding: p.binding, expected: p.ctx.expected as any, expectedPaymentRef: null, consumedAtMs: null } }),
@@ -1866,7 +1867,7 @@ describe.skipIf(!process.env.DATABASE_URL)('D4 final credit consumption and ledg
             const s = await prepare(); const p = await persisted(s);
             const transport = new ScriptedReadTransport([{ object: 'account', id: 'acct_RealShape1' }, { ...p.rawInvoice, id: 'in_Dev09Shape1' }]);
             const gate = gateFor(mk(p.now), { businessId: label === 'wrong business' ? 'biz-other' : s.businessId, ...(workloadId ? { workloadId } : {}) });
-            const provider = createRealReadProvider({ transport, gate, clock: () => p.now, audit: () => undefined });
+            const provider = providerOver({ transport, gate, clock: () => p.now, audit: () => undefined });
             const pipeline = new EvidenceAcquisitionPipeline<never>({ provider, clock: () => p.now, audit: () => undefined, config: { freshnessWindowMs: GATE_CFG.freshnessWindowMs, policyEffectiveFromMs: 1_000, policyVersion: 'PC-BENEFIT/1' },
               resolveBinding: async () => ({ scope: { ...p.scope, invoiceId: 'in_Dev09Shape1' }, expectedAccountId: 'acct_RealShape1', classifier: { binding: p.binding, expected: p.ctx.expected as any, expectedPaymentRef: null, consumedAtMs: null } }) });
             const before = await credit(s); const ledgerBefore = await ledgerRows(s);
@@ -1881,7 +1882,7 @@ describe.skipIf(!process.env.DATABASE_URL)('D4 final credit consumption and ledg
         it('31. real-origin evidence stays prohibited from settlement authorization recording even with a complete authorization, verified mapping and relabelling attempts', async () => {
           const s = await prepare(); const p = await persisted(s);
           const transport = new ScriptedReadTransport([{ object: 'account', id: 'acct_RealShape1' }, { ...p.rawInvoice, id: 'in_Dev09Shape1' }]);
-          const provider = createRealReadProvider({ transport, gate: gateFor(mkAuth(p.now), { businessId: s.businessId }), clock: () => p.now, audit: () => undefined });
+          const provider = providerOver({ transport, gate: gateFor(mkAuth(p.now), { businessId: s.businessId }), clock: () => p.now, audit: () => undefined });
           const pipeline = new EvidenceAcquisitionPipeline<never>({ provider, clock: () => p.now, audit: () => undefined, config: { freshnessWindowMs: GATE_CFG.freshnessWindowMs, policyEffectiveFromMs: 1_000, policyVersion: 'PC-BENEFIT/1' },
             resolveBinding: async () => ({ scope: { ...p.scope, invoiceId: 'in_Dev09Shape1' }, expectedAccountId: 'acct_RealShape1', classifier: { binding: p.binding, expected: p.ctx.expected as any, expectedPaymentRef: null, consumedAtMs: null } }) });
           const out = await pipeline.run({ businessId: s.businessId, invoiceId: 'in_Dev09Shape1' });
@@ -1891,6 +1892,139 @@ describe.skipIf(!process.env.DATABASE_URL)('D4 final credit consumption and ledg
           const relabelled = { ...r.recordableEvidence, provenance: { ...(r.recordableEvidence as any).provenance, evidenceKind: 'STRIPE_TEST_READ' } } as any;
           expect(await rejects(recorder.record({ reservationId: s2.reservationId, businessId: s2.businessId, evidence: relabelled }))).toMatch(/SETTLEMENT_AUTH_EVIDENCE_UNUSABLE/);
           expect(await authRows(s2)).toBe(0); expect(await authRows(s)).toBe(0); expect(await consumeEntries(s)).toBe(0);
+        });
+      });
+
+      describe('D1/D3-DEV-10 durable authorization and the trusted runtime over a disposable database', () => {
+        let adm1: string; let adm2: string;
+        const REAL_ACCT = 'acct_RealShape1';
+        beforeAll(async () => {
+          const mk = async () => (await rows<{ id: string }>("insert into users(email,password_hash,full_name,status,platform_role) values($1,'x','D10 admin','active','admin') returning id", [`d10-${randomUUID()}@example.test`]))[0]!.id;
+          adm1 = await mk(); adm2 = await mk();
+          await admin.query('update stripe_read_authorization_policy set approval_enabled = true'); // owner-side switch, flipped only in this disposable database
+        });
+        /** A short-lived connection (the suite shares a small connection budget). */
+        const tmp = async () => { const c = new Client({ connectionString: urlFor(dbName) }); await c.connect(); return { c, db: buildDb(c), close: () => c.end().catch(() => undefined) }; };
+        /** Persist an APPROVED authorization per listed method through the real lifecycle. */
+        const authorize = async (businessId: string, methods: string[], workloadId = WORKLOAD) => {
+          const t1 = await tmp();
+          try {
+            const lc = new ReadAuthorizationLifecycle(t1.db); const ids: Record<string, string> = {};
+            for (const m of methods) {
+              ids[m] = await lc.propose({ businessId, accountId: REAL_ACCT, workloadId, methodId: m as any, validFromMs: 1, expiresAtMs: Date.now() + 3_600_000, inventoryRecordId: 'S08-STRIPE-PRIVATE-TEST-VERIFIER-001', inventoryRevision: 'rev-1' }, adm1);
+              await lc.approve(ids[m]!, adm2, `EVIDENCE-${m}`);
+            }
+            return { lc, ids };
+          } finally { await t1.close(); }
+        };
+        const revoke = async (id: string) => { const t1 = await tmp(); try { await new ReadAuthorizationLifecycle(t1.db).revoke(id, adm1, 'OWNER_REQUEST'); } finally { await t1.close(); } };
+        const realPipeline = async (s: Scenario, p: Awaited<ReturnType<typeof persisted>>, store: ReturnType<typeof createDurableAuthorizationStore>, transport: ScriptedReadTransport, nowMs: number) => {
+          const gate = { store, workloadId: WORKLOAD, mapping: verifiedMapping() };
+          const provider = providerOver({ transport, gate, clock: () => nowMs, audit: () => undefined });
+          const realScope = { ...p.scope, invoiceId: 'in_Dev10Shape1' };
+          const pipeline = new EvidenceAcquisitionPipeline<string>({ provider, clock: () => nowMs, audit: () => undefined, config: { freshnessWindowMs: GATE_CFG.freshnessWindowMs, policyEffectiveFromMs: 1_000, policyVersion: 'PC-BENEFIT/1' },
+            resolveBinding: async () => ({ scope: realScope, expectedAccountId: REAL_ACCT, classifier: { binding: p.binding, expected: p.ctx.expected as any, expectedPaymentRef: null, consumedAtMs: null } }),
+            invocation: { policy: { approved: true, revoked: false, callerPrincipal: 'c', audience: 'aud-dev10', credentialVersion: 'v1', inventoryRevision: 'rev-1', methods: ['GET /v1/account', 'GET /v1/invoices/{id}'], expiresAt: nowMs + 3_600_000, invoiceScope: realScope },
+              deps: { authenticate: async (proof, canonical) => (proof === 'valid' ? { principal: 'c', audience: 'aud-dev10', credentialVersion: 'v1', authenticatedRequest: canonical } : null), claimOnce: async () => true } } });
+          const inv = (op: 'GET /v1/account' | 'GET /v1/invoices/{id}', n: string) => ({ audience: 'aud-dev10', operation: op, inventoryRevision: 'rev-1', nonce: n.repeat(24), issuedAt: nowMs - 1_000, expiresAt: nowMs + 60_000, ...(op === 'GET /v1/invoices/{id}' ? { invoiceScope: realScope } : {}) });
+          return { provider, run: () => pipeline.run({ businessId: s.businessId, invoiceId: realScope.invoiceId }, { account: { request: inv('GET /v1/account', 'ax'), proof: 'valid' }, invoice: { request: inv('GET /v1/invoices/{id}', 'ay'), proof: 'valid' } }) };
+        };
+        const scripted = (p: Awaited<ReturnType<typeof persisted>>) => new ScriptedReadTransport([{ object: 'account', id: REAL_ACCT }, { ...p.rawInvoice, id: 'in_Dev10Shape1' }]);
+
+        it('35. real evidence cannot authorize consumption: with durable authorization for both approved reads, the full chain runs and the evidence is still rejected, unrecordable and unconsumable', async () => {
+          const s = await prepare(); const p = await persisted(s);
+          await authorize(s.businessId, ['ACCOUNT_RETRIEVE_CURRENT', 'INVOICE_RETRIEVE']);
+          const t1 = await tmp();
+          try {
+            const transport = scripted(p);
+            const { provider, run } = await realPipeline(s, p, createDurableAuthorizationStore(t1.db), transport, p.now);
+            const out = await run();
+            expect(new Set(transport.calls.map(c => c.method))).toEqual(new Set(['ACCOUNT_RETRIEVE_CURRENT', 'INVOICE_RETRIEVE'])); // the durable authorization let exactly the two approved reads through (the engine re-reads the account)
+            expect(new Set(provider.provenance().map(c => c.methodId))).toEqual(new Set(['ACCOUNT_RETRIEVE_CURRENT', 'INVOICE_RETRIEVE'])); expect(provider.authenticity).toBe('SYNTHETIC_RUNTIME');
+            expect(out.status).toBe('REJECTED'); expect('recordableEvidence' in out).toBe(false);
+            if (out.status === 'REJECTED') expect(out.completeness.blockers).toContain('REAL_EVIDENCE_NOT_AUTHORIZED_FOR_SETTLEMENT');
+          } finally { await t1.close(); }
+          const before = await credit(s);
+          expect(await rejects(consumption.consume({ reservationId: s.reservationId, businessId: s.businessId }))).toMatch(/\(AUTHORIZATION_MISSING\)/);
+          expect(await credit(s)).toEqual(before); expect(await authRows(s)).toBe(0); expect(await consumeEntries(s)).toBe(0);
+          // relabelled real evidence cannot be recorded either
+          const s2 = await prepare(); const m = await rig(s2); const r = await m.pipeline.run(m.req);
+          if (r.status !== 'CLASSIFIED') throw new Error('expected CLASSIFIED');
+          const relabelled = { ...r.recordableEvidence, provenance: { ...(r.recordableEvidence as any).provenance, evidenceKind: 'STRIPE_TEST_READ' } } as any;
+          expect(await rejects(recorder.record({ reservationId: s2.reservationId, businessId: s2.businessId, evidence: relabelled }))).toMatch(/SETTLEMENT_AUTH_EVIDENCE_UNUSABLE/);
+        });
+
+        it('36. mock evidence cannot bypass the signed recorder: unrecorded mock evidence consumes nothing, a recorder without a signing key records nothing, and a forged unsigned row is refused', async () => {
+          const s = await prepare(); const m = await rig(s); const r = await m.pipeline.run(m.req);
+          if (r.status !== 'CLASSIFIED') throw new Error('expected CLASSIFIED');
+          const before = await credit(s);
+          expect(await rejects(consumption.consume({ reservationId: s.reservationId, businessId: s.businessId }))).toMatch(/\(AUTHORIZATION_MISSING\)/); // eligible evidence in memory is not authority
+          const t1 = await tmp();
+          try {
+            const unsigned = new SettlementAuthorizationRecorder(t1.db, GATE_CFG, undefined);
+            expect(await rejects(unsigned.record({ reservationId: s.reservationId, businessId: s.businessId, evidence: r.recordableEvidence! }))).toMatch(/RECORDER_UNCONFIGURED/);
+          } finally { await t1.close(); }
+          expect(await credit(s)).toEqual(before); expect(await authRows(s)).toBe(0); expect(await consumeEntries(s)).toBe(0);
+          await recorder.record({ reservationId: s.reservationId, businessId: s.businessId, evidence: r.recordableEvidence! }); // the signed recorder is the only door
+          expect((await consumption.consume({ reservationId: s.reservationId, businessId: s.businessId })).replay).toBe(false);
+        });
+
+        it('37-38. unapproved Stripe reads remain disabled even when the database holds APPROVED records for them; no write verb or write-shaped method reaches the transport', async () => {
+          const s = await prepare(); const p = await persisted(s);
+          const all = ['ACCOUNT_RETRIEVE_CURRENT', 'INVOICE_RETRIEVE', 'INVOICE_LINES_LIST', 'PAYMENT_RETRIEVE', 'REFUNDS_LIST', 'DISPUTES_LIST'];
+          await authorize(s.businessId, all); // the database accepts all six; the registry still has no path for four of them
+          const t1 = await tmp();
+          try {
+            const transport = scripted(p);
+            const { provider } = await realPipeline(s, p, createDurableAuthorizationStore(t1.db), transport, p.now);
+            const scope = { businessId: s.businessId, invoiceId: 'in_Dev10Shape1', accountId: REAL_ACCT };
+            for (const read of [provider.listInvoiceLines(scope), provider.listInvoicePayments(scope), provider.listRefunds(scope, { kind: 'payment_intent', ref: 'pi_1' } as any), provider.listDisputes(scope, { kind: 'payment_intent', ref: 'pi_1' } as any)])
+              expect(await read).toEqual({ ok: false, kind: 'DENIED', reason: 'METHOD_NOT_AUTHORIZED' });
+            expect(transport.calls).toEqual([]);
+            const runtime = (provider as any).rig.runtime;
+            for (const bad of ['REFUNDS_CREATE', 'POST /v1/refunds', 'INVOICE_LINES_LIST', 'PAYMENT_RETRIEVE', 'REFUNDS_LIST', 'DISPUTES_LIST', '__proto__', '']) {
+              const out = await runtime.read({ businessId: s.businessId, accountId: REAL_ACCT, methodId: bad, invoiceId: 'in_Dev10Shape1', apiVersion: '2026-05-27.dahlia', purpose: 'EVIDENCE' });
+              expect(out, bad).toMatchObject({ ok: false, kind: 'DENIED' });
+            }
+            expect(transport.calls).toEqual([]);
+          } finally { await t1.close(); }
+        });
+
+        it('39. a failed evidence authorization (revoked between the account read and the invoice read, an unavailable store, or no record) causes zero ledger, authorization-row and consumption movement', async () => {
+          const s = await prepare(); const p = await persisted(s);
+          const { ids } = await authorize(s.businessId, ['ACCOUNT_RETRIEVE_CURRENT', 'INVOICE_RETRIEVE']);
+          const t1 = await tmp();
+          try {
+            class Revoking extends ScriptedReadTransport { override async get(m: any, params?: any) { const r = await super.get(m, params); if (m === 'ACCOUNT_RETRIEVE_CURRENT') await revoke(ids.INVOICE_RETRIEVE!); return r; } }
+            const transport = new Revoking([{ object: 'account', id: REAL_ACCT }, { ...p.rawInvoice, id: 'in_Dev10Shape1' }]);
+            const { run } = await realPipeline(s, p, createDurableAuthorizationStore(t1.db), transport, p.now);
+            const ledgerBefore = await ledgerRows(s); const before = await credit(s);
+            const out = await run();
+            expect(out.status).toBe('DENIED'); expect(out).toMatchObject({ reason: 'AUTHORIZATION_REVOKED' }); // revocation took effect for the very next request
+            expect(transport.calls.map(c => c.method)).toEqual(['ACCOUNT_RETRIEVE_CURRENT']);
+            expect(await rejects(consumption.consume({ reservationId: s.reservationId, businessId: s.businessId }))).toMatch(/\(AUTHORIZATION_MISSING\)/);
+            expect(await credit(s)).toEqual(before); expect(await ledgerRows(s)).toBe(ledgerBefore); expect(await authRows(s)).toBe(0); expect(await consumeEntries(s)).toBe(0);
+          } finally { await t1.close(); }
+          // an unavailable store: the whole acquisition is denied before any request
+          const s2 = await prepare(); const p2 = await persisted(s2); const tr2 = scripted(p2);
+          const ledger2 = await ledgerRows(s2);
+          const { run: run2 } = await realPipeline(s2, p2, createDurableAuthorizationStore(undefined), tr2, p2.now);
+          expect(await run2()).toMatchObject({ status: 'DENIED', reason: 'AUTHORIZATION_STORE_UNAVAILABLE' }); expect(tr2.calls).toEqual([]);
+          expect(await ledgerRows(s2)).toBe(ledger2); expect(await authRows(s2)).toBe(0); expect(await consumeEntries(s2)).toBe(0);
+        });
+
+        it('40. concurrent consumption stays exactly once under the existing D4 controls when the evidence was accepted next to durable authorization activity', async () => {
+          const s = await prepare(); const { pipeline, req } = await rig(s);
+          await authorize(s.businessId, ['ACCOUNT_RETRIEVE_CURRENT', 'INVOICE_RETRIEVE']);
+          const r = await pipeline.run(req); if (r.status !== 'CLASSIFIED') throw new Error('expected CLASSIFIED');
+          await recorder.record({ reservationId: s.reservationId, businessId: s.businessId, evidence: r.recordableEvidence! });
+          const temp: Client[] = [];
+          try {
+            const services = await Promise.all(Array.from({ length: 8 }, async () => { const c = new Client({ connectionString: urlFor(dbName) }); await c.connect(); temp.push(c); return new PartnerCreditConsumptionService(buildDb(c), GATE_CFG); }));
+            const results = await Promise.all(services.map(x => x.consume({ reservationId: s.reservationId, businessId: s.businessId })));
+            expect(results.filter(x => !x.replay)).toHaveLength(1); expect(results.filter(x => x.replay)).toHaveLength(7);
+          } finally { await Promise.all(temp.map(c => c.end().catch(() => undefined))); }
+          expect(await consumeEntries(s)).toBe(1);
         });
       });
     });
