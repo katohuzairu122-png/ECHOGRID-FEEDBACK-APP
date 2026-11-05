@@ -1,10 +1,11 @@
-import { decideCapability, type FailureClass, type ReadAuthorization, type ReadMethodId } from './capability-registry';
+import type { FailureClass, ReadMethodId } from './capability-registry';
+import { checkRead, type ReadGate } from './read-gate';
 import type { EvidenceOrigin, MockLineAttribution } from './evidence-types';
 import type { IdempotencyEvidence } from './line-normalizer';
 import type { PageRecord } from './pagination';
 import type { PaymentTarget } from './refund-dispute-normalizer';
 import { makeEmitter, type AcquireDenial, type AuditSink } from './read-types';
-import { ProviderReadError, STRIPE_API_VERSION, type StripeReadTransport } from './transport';
+import { CredentialDenied, ProviderReadError, STRIPE_API_VERSION, type StripeReadTransport } from './transport';
 import type { MockPaymentDispute, MockRefund } from '../refund-dispute.classifier';
 import type { CancellationEvidence, MockBenefitItem } from '../settlement-eligibility.classifier';
 
@@ -36,7 +37,7 @@ export interface Supplement {
 }
 export const NO_SUPPLEMENT: Supplement = Object.freeze({ billingInterval: 'unresolved', benefitItem: 'unresolved', cancellation: 'unresolved', idempotency: null });
 
-export interface AuditScope { readonly businessId: string; readonly invoiceId: string }
+export interface AuditScope { readonly businessId: string; readonly invoiceId: string; /** The expected (approved) Stripe test account, from the trusted binding. Real providers need it to find the authorization. */ readonly accountId?: string }
 export interface ReadProvider {
   readonly kind: EvidenceOrigin;
   /** The API version every read is made with. */
@@ -55,35 +56,43 @@ export interface ReadProvider {
 const INVOICE_ID = /^in_[A-Za-z0-9]+$/;
 const TOKEN = /^[A-Za-z0-9][A-Za-z0-9:_./-]{0,159}$/;
 
-export function createRealReadProvider(deps: Readonly<{ transport: StripeReadTransport; authorization: ReadAuthorization | null; clock: () => number; audit: AuditSink; apiVersion?: string }>): ReadProvider {
+export function createRealReadProvider(deps: Readonly<{ transport: StripeReadTransport; gate: ReadGate; clock: () => number; audit: AuditSink; apiVersion?: string }>): ReadProvider {
   const emit = makeEmitter(deps.audit, deps.clock, 'STRIPE_TEST_READ');
+  const apiVersion = deps.apiVersion ?? STRIPE_API_VERSION;
+  /** The gate, evaluated for ONE request, immediately before it. */
+  const allowed = async (id: 'ACCOUNT_RETRIEVE_CURRENT' | 'INVOICE_RETRIEVE', scope: AuditScope): Promise<AcquireDenial | null> => {
+    if (typeof scope.accountId !== 'string') { emit('stripe_read.denied', id, 'INVALID_REQUEST', scope); return 'INVALID_REQUEST'; }
+    const d = await checkRead(deps.gate, { businessId: scope.businessId, accountId: scope.accountId, methodId: id, apiVersion, purpose: 'EVIDENCE' }, deps.clock());
+    if (d.ok) return null;
+    emit('stripe_read.denied', id, d.reason, scope);
+    return d.reason;
+  };
   const run = async (id: 'ACCOUNT_RETRIEVE_CURRENT' | 'INVOICE_RETRIEVE', scope: AuditScope, params?: { invoiceId: string }): Promise<ObjectRead> => {
+    const denied = await allowed(id, scope); // checked again on every request: a revocation takes effect on the very next one
+    if (denied) return { ok: false, kind: 'DENIED', reason: denied };
     emit('stripe_read.attempt', id, null, scope);
-    try { return { ok: true, body: await deps.transport.get(id, params) }; }
+    try { return { ok: true, body: await deps.transport.get(id, params, { accountId: scope.accountId as string, workloadId: deps.gate.workloadId }) }; }
     catch (e) {
+      if (e instanceof CredentialDenied) { emit('stripe_read.denied', id, e.code, scope); return { ok: false, kind: 'DENIED', reason: e.code }; }
       const failureClass = e instanceof ProviderReadError ? e.failureClass : 'NETWORK';
       emit('stripe_read.failure', id, failureClass, scope);
       return { ok: false, kind: 'PROVIDER_FAILURE', failureClass };
     }
   };
   const denyList = (id: ReadMethodId, scope: AuditScope): ListRead => {
-    // the registry marks these NOT_AUTHORIZED whatever the authorization says; the transport is never consulted
+    // the registry marks these NOT_AUTHORIZED and the transport has no path for them: no record, mapping or setting changes that
     emit('stripe_read.denied', id, 'METHOD_NOT_AUTHORIZED', scope);
     return { ok: false, kind: 'DENIED', reason: 'METHOD_NOT_AUTHORIZED' };
   };
   const provider: ReadProvider = {
     kind: 'STRIPE_TEST_READ',
-    apiVersion: deps.apiVersion ?? STRIPE_API_VERSION,
+    apiVersion,
     async preflight(scope) {
-      if (!scope || !TOKEN.test(String(scope.businessId)) || !INVOICE_ID.test(String(scope.invoiceId)) || !TOKEN.test(String(scope.customerId)) || !TOKEN.test(String(scope.subscriptionId))) {
+      if (!scope || !TOKEN.test(String(scope.businessId)) || !INVOICE_ID.test(String(scope.invoiceId)) || !TOKEN.test(String(scope.customerId)) || !TOKEN.test(String(scope.subscriptionId)) || typeof scope.accountId !== 'string') {
         emit('stripe_read.denied', 'UNKNOWN', 'INVALID_REQUEST', null);
         return { ok: false, reason: 'INVALID_REQUEST' } as const;
       }
-      const now = deps.clock();
-      for (const id of ['ACCOUNT_RETRIEVE_CURRENT', 'INVOICE_RETRIEVE'] as const) {
-        const d = decideCapability(id, deps.authorization, now);
-        if (!d.allowed) { emit('stripe_read.denied', id, d.reason, scope); return { ok: false, reason: d.reason } as const; }
-      }
+      for (const id of ['ACCOUNT_RETRIEVE_CURRENT', 'INVOICE_RETRIEVE'] as const) { const d = await allowed(id, scope); if (d) return { ok: false, reason: d } as const; }
       return { ok: true } as const;
     },
     getAccount: scope => run('ACCOUNT_RETRIEVE_CURRENT', scope),

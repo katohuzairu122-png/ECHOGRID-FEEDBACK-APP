@@ -15,6 +15,7 @@ import {
   type SettlementEvidenceSigner, type SettlementGateConfig,
 } from '../../src/partner-credits/partner-credit-settlement-authorization';
 import { MOCK_EVIDENCE_KIND, type MockSettlementEvidence } from '../../src/billing/settlement-eligibility.classifier';
+import { gateFor } from '../../src/billing/stripe-read/pipeline-fixtures';
 import { acquireMockExtendedEvidence, buildMockEvidence, classifyBundle, createMockReadProvider, createRealReadProvider, EvidenceAcquisitionPipeline, MockExtendedSource, onePage, ScriptedReadTransport, StripeReadOnlyEvidenceAdapter, syntheticStripeInvoice } from '../../src/billing/stripe-read';
 import { unwindCredit, type UnwindCause } from '../../src/partner-credits/partner-credit-unwind';
 import { PartnerProvisionalReversalCompensator } from '../../src/partner-credits/partner-provisional-reversal.compensator';
@@ -1671,7 +1672,7 @@ describe.skipIf(!process.env.DATABASE_URL)('D4 final credit consumption and ledg
       const realAuth = { approved: true, revoked: false, inventoryRecordId: 'S08-STRIPE-PRIVATE-TEST-VERIFIER-001' as const, inventoryRevision: 'rev-synthetic-1', accountId: 'acct_RealShape1', realm: 'test' as const,
         methods: ['ACCOUNT_RETRIEVE_CURRENT', 'INVOICE_RETRIEVE'] as Array<'ACCOUNT_RETRIEVE_CURRENT' | 'INVOICE_RETRIEVE'>, expiresAtMs: p.now + 3_600_000 };
       const realScope = { ...p.scope, invoiceId: 'in_Dev06RealShape1' }; // a Stripe-shaped id: the scenario's own ids contain underscores, which real invoice ids never do
-      const adapter = new StripeReadOnlyEvidenceAdapter({ transport: new ScriptedReadTransport([{ object: 'account', id: 'acct_RealShape1' }, { ...p.rawInvoice, id: realScope.invoiceId }]), authorization: realAuth, clock: () => p.now, audit: () => undefined });
+      const adapter = new StripeReadOnlyEvidenceAdapter({ transport: new ScriptedReadTransport([{ object: 'account', id: 'acct_RealShape1' }, { ...p.rawInvoice, id: realScope.invoiceId }]), gate: gateFor(realAuth, { businessId: s.businessId }), expectedAccountId: 'acct_RealShape1', clock: () => p.now, audit: () => undefined });
       const out = await adapter.acquire(realScope);
       if (!out.ok) throw new Error('expected evidence');
       expect(out.evidence.origin).toBe('STRIPE_TEST_READ'); expect(out.evidence.complete).toBe(false);
@@ -1835,7 +1836,7 @@ describe.skipIf(!process.env.DATABASE_URL)('D4 final credit consumption and ledg
         const transport = new ScriptedReadTransport([{ object: 'account', id: 'acct_RealShape1' }, { ...p.rawInvoice, id: 'in_Dev08RealShape1' }]);
         const auth = { approved: true, revoked: false, inventoryRecordId: 'S08-STRIPE-PRIVATE-TEST-VERIFIER-001' as const, inventoryRevision: 'rev-1', accountId: 'acct_RealShape1', realm: 'test' as const,
           methods: ['ACCOUNT_RETRIEVE_CURRENT', 'INVOICE_RETRIEVE'] as Array<'ACCOUNT_RETRIEVE_CURRENT' | 'INVOICE_RETRIEVE'>, expiresAtMs: p.now + 3_600_000 };
-        const provider = createRealReadProvider({ transport, authorization: auth, clock: () => p.now, audit: () => undefined });
+        const provider = createRealReadProvider({ transport, gate: gateFor(auth, { businessId: s.businessId }), clock: () => p.now, audit: () => undefined });
         const realScope = { ...p.scope, invoiceId: 'in_Dev08RealShape1' };
         const pipeline = new EvidenceAcquisitionPipeline<string>({ provider, clock: () => p.now, audit: () => undefined, config: { freshnessWindowMs: GATE_CFG.freshnessWindowMs, policyEffectiveFromMs: 1_000, policyVersion: 'PC-BENEFIT/1' },
           resolveBinding: async () => ({ scope: realScope, expectedAccountId: 'acct_RealShape1', classifier: { binding: p.binding, expected: p.ctx.expected as any, expectedPaymentRef: null, consumedAtMs: null } }),
@@ -1850,6 +1851,47 @@ describe.skipIf(!process.env.DATABASE_URL)('D4 final credit consumption and ledg
         const before = await credit(s);
         expect(await rejects(consumption.consume({ reservationId: s.reservationId, businessId: s.businessId }))).toMatch(/\(AUTHORIZATION_MISSING\)/);
         expect(await credit(s)).toEqual(before); expect(await authRows(s)).toBe(0); expect(await consumeEntries(s)).toBe(0);
+      });
+
+      describe('D1/D3-DEV-09 read authorization over a disposable database', () => {
+        const mkAuth = (now: number, over: Record<string, unknown> = {}) => ({ approved: true, revoked: false, inventoryRecordId: 'S08-STRIPE-PRIVATE-TEST-VERIFIER-001' as const, inventoryRevision: 'rev-1', accountId: 'acct_RealShape1', realm: 'test' as const,
+          methods: ['ACCOUNT_RETRIEVE_CURRENT', 'INVOICE_RETRIEVE'] as Array<'ACCOUNT_RETRIEVE_CURRENT' | 'INVOICE_RETRIEVE'>, expiresAtMs: now + 3_600_000, ...over });
+
+        it('32. a failed read authorization makes zero provider requests and leaves zero ledger, authorization-row and consumption movement', async () => {
+          const cases: Array<[string, (now: number) => any, string?]> = [
+            ['missing', () => null], ['revoked', n => mkAuth(n, { revoked: true })], ['expired', n => mkAuth(n, { expiresAtMs: n - 1 })],
+            ['not approved', n => mkAuth(n, { approved: false })], ['wrong account', n => mkAuth(n, { accountId: 'acct_Other1' })],
+            ['wrong workload', n => mkAuth(n), 'wl-other'], ['wrong business', n => mkAuth(n)]];
+          for (const [label, mk, workloadId] of cases) {
+            const s = await prepare(); const p = await persisted(s);
+            const transport = new ScriptedReadTransport([{ object: 'account', id: 'acct_RealShape1' }, { ...p.rawInvoice, id: 'in_Dev09Shape1' }]);
+            const gate = gateFor(mk(p.now), { businessId: label === 'wrong business' ? 'biz-other' : s.businessId, ...(workloadId ? { workloadId } : {}) });
+            const provider = createRealReadProvider({ transport, gate, clock: () => p.now, audit: () => undefined });
+            const pipeline = new EvidenceAcquisitionPipeline<never>({ provider, clock: () => p.now, audit: () => undefined, config: { freshnessWindowMs: GATE_CFG.freshnessWindowMs, policyEffectiveFromMs: 1_000, policyVersion: 'PC-BENEFIT/1' },
+              resolveBinding: async () => ({ scope: { ...p.scope, invoiceId: 'in_Dev09Shape1' }, expectedAccountId: 'acct_RealShape1', classifier: { binding: p.binding, expected: p.ctx.expected as any, expectedPaymentRef: null, consumedAtMs: null } }) });
+            const before = await credit(s); const ledgerBefore = await ledgerRows(s);
+            const out = await pipeline.run({ businessId: s.businessId, invoiceId: 'in_Dev09Shape1' });
+            expect(out.status, label).not.toBe('CLASSIFIED'); expect('recordableEvidence' in out, label).toBe(false);
+            expect(transport.calls ?? [], label).toEqual([]);
+            expect(await rejects(consumption.consume({ reservationId: s.reservationId, businessId: s.businessId })), label).toMatch(/\(AUTHORIZATION_MISSING\)/);
+            expect(await credit(s), label).toEqual(before); expect(await ledgerRows(s), label).toBe(ledgerBefore); expect(await authRows(s), label).toBe(0); expect(await consumeEntries(s), label).toBe(0);
+          }
+        });
+
+        it('31. real-origin evidence stays prohibited from settlement authorization recording even with a complete authorization, verified mapping and relabelling attempts', async () => {
+          const s = await prepare(); const p = await persisted(s);
+          const transport = new ScriptedReadTransport([{ object: 'account', id: 'acct_RealShape1' }, { ...p.rawInvoice, id: 'in_Dev09Shape1' }]);
+          const provider = createRealReadProvider({ transport, gate: gateFor(mkAuth(p.now), { businessId: s.businessId }), clock: () => p.now, audit: () => undefined });
+          const pipeline = new EvidenceAcquisitionPipeline<never>({ provider, clock: () => p.now, audit: () => undefined, config: { freshnessWindowMs: GATE_CFG.freshnessWindowMs, policyEffectiveFromMs: 1_000, policyVersion: 'PC-BENEFIT/1' },
+            resolveBinding: async () => ({ scope: { ...p.scope, invoiceId: 'in_Dev09Shape1' }, expectedAccountId: 'acct_RealShape1', classifier: { binding: p.binding, expected: p.ctx.expected as any, expectedPaymentRef: null, consumedAtMs: null } }) });
+          const out = await pipeline.run({ businessId: s.businessId, invoiceId: 'in_Dev09Shape1' });
+          expect(out.status).not.toBe('CLASSIFIED'); expect('recordableEvidence' in out).toBe(false); // the full invocation path (REJECTED with the real-evidence blocker) is test 30
+          const s2 = await prepare(); const m = await rig(s2); const r = await m.pipeline.run(m.req);
+          if (r.status !== 'CLASSIFIED') throw new Error('expected CLASSIFIED');
+          const relabelled = { ...r.recordableEvidence, provenance: { ...(r.recordableEvidence as any).provenance, evidenceKind: 'STRIPE_TEST_READ' } } as any;
+          expect(await rejects(recorder.record({ reservationId: s2.reservationId, businessId: s2.businessId, evidence: relabelled }))).toMatch(/SETTLEMENT_AUTH_EVIDENCE_UNUSABLE/);
+          expect(await authRows(s2)).toBe(0); expect(await authRows(s)).toBe(0); expect(await consumeEntries(s)).toBe(0);
+        });
       });
     });
 

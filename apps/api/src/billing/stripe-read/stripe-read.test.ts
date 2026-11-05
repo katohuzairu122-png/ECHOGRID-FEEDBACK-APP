@@ -5,6 +5,7 @@ import {
   sealedOriginOf, StripeReadConfigError, StripeReadOnlyEvidenceAdapter, syntheticStripeInvoice, TrustedStripeEvidenceService,
   type MockEvidenceSpec, type ReadAuditEvent, type ReadAuthorization, type TrustedInvoiceScope,
 } from './index';
+import { gateFor } from './pipeline-fixtures';
 import { canonicalPrivateInvocation, type InvocationPolicy, type InvocationRequest } from '../private-stripe-verifier-invocation.contract';
 import { benefitIdempotencyKey, type SettlementClassifierContext } from '../settlement-eligibility.classifier';
 import type { RefundDisputeContext } from '../refund-dispute.classifier';
@@ -29,7 +30,7 @@ const KEY = benefitIdempotencyKey('res-1');
 function adapterFor(responses: unknown[], auth: ReadAuthorization | null = AUTH, now = NOW) {
   const transport = new ScriptedReadTransport(responses);
   const events: ReadAuditEvent[] = [];
-  return { transport, events, adapter: new StripeReadOnlyEvidenceAdapter({ transport, authorization: auth, clock: () => now, audit: e => events.push(e) }) };
+  return { transport, events, adapter: new StripeReadOnlyEvidenceAdapter({ transport, gate: gateFor(auth), expectedAccountId: ACCT, clock: () => now, audit: e => events.push(e) }) };
 }
 const D = (c: string) => c.repeat(64).slice(0, 64);
 const ctx = (over: Record<string, unknown> = {}): SettlementClassifierContext => ({
@@ -95,7 +96,7 @@ describe('read-only transport', () => {
   it('4. only GET on two fixed paths is possible; no write method, generic path or other verb exists', async () => {
     const f = fakeFetch(async () => json(account));
     const t = createStripeGetTransport({ apiKey: KEY_TEXT, fetchImpl: f.fetchImpl });
-    expect(Object.keys(t).sort()).toEqual(['get', 'keyMode']);
+    expect(Object.keys(t).sort()).toEqual(['get', 'keyMode', 'networkSource']);
     expect(Object.isFrozen(t)).toBe(true);
     await t.get('ACCOUNT_RETRIEVE_CURRENT');
     await t.get('INVOICE_RETRIEVE', { invoiceId: 'in_1' });
@@ -162,7 +163,7 @@ describe('read-only transport', () => {
     expect(err2.message + JSON.stringify(err2)).not.toContain(KEY_TEXT);
     // the whole acquire path with a leaking transport: outcome and audit stream stay clean
     const events: ReadAuditEvent[] = [];
-    const adapter = new StripeReadOnlyEvidenceAdapter({ transport: t, authorization: AUTH, clock: () => NOW, audit: e => events.push(e) });
+    const adapter = new StripeReadOnlyEvidenceAdapter({ transport: t, gate: gateFor(AUTH), expectedAccountId: ACCT, clock: () => NOW, audit: e => events.push(e) });
     const out = await adapter.acquire(scope);
     expect(out).toEqual({ ok: false, kind: 'PROVIDER_FAILURE', failureClass: 'PROVIDER_REJECTED' });
     expect(JSON.stringify([out, events])).not.toMatch(/rk_test|SECRET-PAYLOAD|example\.com|Bearer/);

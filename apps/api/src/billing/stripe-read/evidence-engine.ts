@@ -35,7 +35,7 @@ const slot = <T>(v: Slot<T>, reason: string, origin: 'MOCK_FIXTURE' | 'STRIPE_TE
 export async function acquireEvidence(deps: EngineDeps, scope: TrustedInvoiceScope, expectedAccountId: string, frozen: readonly FrozenReference[] | null): Promise<AcquireOutcome> {
   const { provider } = deps;
   const emit = makeEmitter(deps.audit, deps.clock, provider.kind);
-  const audit: AuditScope = { businessId: scope?.businessId as string, invoiceId: scope?.invoiceId as string };
+  const audit: AuditScope = { businessId: scope?.businessId as string, invoiceId: scope?.invoiceId as string, accountId: expectedAccountId };
   if (!scope || typeof scope !== 'object' || typeof expectedAccountId !== 'string' || expectedAccountId.length === 0) {
     emit('stripe_read.denied', 'UNKNOWN', 'INVALID_REQUEST', null);
     return { ok: false, kind: 'DENIED', reason: 'INVALID_REQUEST' };

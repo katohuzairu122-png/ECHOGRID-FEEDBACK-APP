@@ -7,7 +7,7 @@ import {
   type AcquisitionBinding, type AcquisitionConfig, type ReadAuditEvent, type ReadAuthorization, type ReadProvider,
 } from './index';
 import {
-  ACCT, API, AUTH, baseLines, binding, BENEFIT_ITEM, CONFIG, account, dispute, invocationHarness, invoice, itemParent, line, mockProvider, NOW, pay, refund, SCOPE, subParent,
+  ACCT, API, AUTH, gateFor, baseLines, binding, BENEFIT_ITEM, CONFIG, account, dispute, invocationHarness, invoice, itemParent, line, mockProvider, NOW, pay, refund, SCOPE, subParent,
 } from './pipeline-fixtures';
 import type { mockFixtures } from './pipeline-fixtures';
 
@@ -35,7 +35,7 @@ const fixture = (over: Parameters<typeof mockFixtures>[0] = {}) => mockProvider(
 function realRig(over: { authorization?: ReadAuthorization | null; responses?: unknown[] } = {}) {
   const transport = new ScriptedReadTransport(over.responses ?? [account, invoice()]);
   const events: ReadAuditEvent[] = [];
-  const provider = createRealReadProvider({ transport, authorization: over.authorization === undefined ? AUTH : over.authorization, clock: () => NOW, audit: e => events.push(e) });
+  const provider = createRealReadProvider({ transport, gate: gateFor(over.authorization === undefined ? AUTH : over.authorization), clock: () => NOW, audit: e => events.push(e) });
   const h = invocationHarness();
   const pipeline = new EvidenceAcquisitionPipeline<string>({ provider, config: CONFIG, clock: () => NOW, audit: e => events.push(e), resolveBinding: async () => binding(), invocation: { policy: h.policy, deps: h.deps } });
   return { transport, events, pipeline, h, provider };
@@ -100,8 +100,9 @@ describe('4-6. authorization, mode and credentials', () => {
   });
 
   it('5. revoked, expired, unapproved or unlisted read authorization makes zero provider calls', async () => {
-    const cases: Array<[Partial<ReadAuthorization>, string]> = [[{ revoked: true }, 'AUTHORIZATION_REVOKED'], [{ expiresAtMs: NOW }, 'AUTHORIZATION_EXPIRED'], [{ approved: false }, 'AUTHORIZATION_INVALID'],
-      [{ methods: ['ACCOUNT_RETRIEVE_CURRENT'] }, 'METHOD_NOT_APPROVED'], [{ methods: [] }, 'METHOD_NOT_APPROVED'], [{ accountId: 'nope' }, 'ACCOUNT_NOT_APPROVED']];
+    // DEV-09: authorization is a durable record per method. A method with no record, or an account that cannot be a record at all, is simply not authorized (AUTHORIZATION_MISSING)
+    const cases: Array<[Partial<ReadAuthorization>, string]> = [[{ revoked: true }, 'AUTHORIZATION_REVOKED'], [{ expiresAtMs: NOW }, 'AUTHORIZATION_EXPIRED'], [{ approved: false }, 'AUTHORIZATION_NOT_APPROVED'],
+      [{ methods: ['ACCOUNT_RETRIEVE_CURRENT'] }, 'AUTHORIZATION_MISSING'], [{ methods: [] }, 'AUTHORIZATION_MISSING'], [{ accountId: 'nope' }, 'AUTHORIZATION_MISSING']];
     for (const [over, reason] of cases) {
       const rig = realRig({ authorization: { ...AUTH, ...over } });
       expect(await rig.pipeline.run(REQ, rig.h.pair()), reason).toEqual({ status: 'DENIED', reason });
@@ -111,8 +112,8 @@ describe('4-6. authorization, mode and credentials', () => {
 
   it('6. live-mode credentials are refused (construction, authorization realm, and a live invoice)', async () => {
     for (const k of [['sk', 'live', 'SyntheticLive0123456789'].join('_'), ['rk', 'live', 'SyntheticLive0123456789'].join('_'), 'pk_test_x', '']) expect(() => createStripeGetTransport({ apiKey: k })).toThrow(/KEY_NOT_TEST_MODE/);
-    const live = realRig({ authorization: { ...AUTH, realm: 'live' as any } });
-    expect(await live.pipeline.run(REQ, live.h.pair())).toEqual({ status: 'DENIED', reason: 'REALM_NOT_TEST' });
+    const live = realRig({ authorization: { ...AUTH, realm: 'live' as any } }); // a record claiming the live realm cannot exist (the contract is test-only), so nothing authorizes the read
+    expect(await live.pipeline.run(REQ, live.h.pair())).toEqual({ status: 'DENIED', reason: 'AUTHORIZATION_MISSING' });
     expect(live.transport.calls).toEqual([]);
     for (const livemode of [true, undefined, null, 'false']) {
       const rig = realRig({ responses: [account, invoice({ livemode })] });
@@ -223,7 +224,7 @@ describe('18-21. API version, drift, freshness and malformed input', () => {
       expect(await make({ provider }).pipeline.run(REQ), apiVersion).toEqual({ status: 'DENIED', reason: 'UNSUPPORTED_API_VERSION' });
       expect(provider.calls).toEqual([]);
     }
-    const rig = (() => { const transport = new ScriptedReadTransport([account, invoice()]); const adapter = new StripeReadOnlyEvidenceAdapter({ transport, authorization: AUTH, clock: () => NOW, audit: () => undefined, apiVersion: '2025-01-01.acacia' }); return { transport, adapter }; })();
+    const rig = (() => { const transport = new ScriptedReadTransport([account, invoice()]); const adapter = new StripeReadOnlyEvidenceAdapter({ transport, gate: gateFor(AUTH), expectedAccountId: ACCT, clock: () => NOW, audit: () => undefined, apiVersion: '2025-01-01.acacia' }); return { transport, adapter }; })();
     expect(await rig.adapter.acquire(SCOPE)).toEqual({ ok: false, kind: 'DENIED', reason: 'UNSUPPORTED_API_VERSION' }); expect(rig.transport.calls).toEqual([]);
   });
 
@@ -293,19 +294,19 @@ describe('22-24. failures, leakage and write-path absence', () => {
     const fetchImpl = (async () => new Response(JSON.stringify({ error: { message: `Invalid API Key provided: ${realKey()}`, detail: SECRET } }), { status: 401 })) as unknown as typeof fetch;
     const transport = createStripeGetTransport({ apiKey: realKey(), fetchImpl });
     const events: ReadAuditEvent[] = []; const h = invocationHarness();
-    const provider = createRealReadProvider({ transport, authorization: AUTH, clock: () => NOW, audit: e => events.push(e) });
+    const provider = createRealReadProvider({ transport, gate: gateFor(AUTH), clock: () => NOW, audit: e => events.push(e) });
     const pipeline = new EvidenceAcquisitionPipeline<string>({ provider, config: CONFIG, clock: () => NOW, audit: e => events.push(e), resolveBinding: async () => binding(), invocation: { policy: h.policy, deps: h.deps } });
     const r = await pipeline.run(REQ, h.pair());
     expect(r).toEqual({ status: 'PROVIDER_FAILURE', failureClass: 'PROVIDER_REJECTED' });
     expect(JSON.stringify([r, events])).not.toMatch(/rk_test|SECRET-PAYLOAD|example\.com|Bearer|Invalid API Key/);
     const throwing = createStripeGetTransport({ apiKey: realKey(), fetchImpl: (async () => { throw new Error(`connect failed using ${realKey()}`); }) as unknown as typeof fetch });
-    const p2 = new EvidenceAcquisitionPipeline<string>({ provider: createRealReadProvider({ transport: throwing, authorization: AUTH, clock: () => NOW, audit: () => undefined }), config: CONFIG, clock: () => NOW, audit: () => undefined, resolveBinding: async () => binding(), invocation: { policy: h.policy, deps: h.deps } });
+    const p2 = new EvidenceAcquisitionPipeline<string>({ provider: createRealReadProvider({ transport: throwing, gate: gateFor(AUTH), clock: () => NOW, audit: () => undefined }), config: CONFIG, clock: () => NOW, audit: () => undefined, resolveBinding: async () => binding(), invocation: { policy: h.policy, deps: h.deps } });
     expect(JSON.stringify(await p2.run(REQ, h.pair()))).not.toContain(realKey());
   });
 
   it('24. no Stripe write method is reachable: the pipeline, engine, providers and transport expose only reads, and no source file has a write verb or an SDK import', () => {
     expect(Object.getOwnPropertyNames(EvidenceAcquisitionPipeline.prototype).sort()).toEqual(['constructor', 'run']);
-    const real = createRealReadProvider({ transport: new ScriptedReadTransport([account, invoice()]), authorization: AUTH, clock: () => NOW, audit: () => undefined });
+    const real = createRealReadProvider({ transport: new ScriptedReadTransport([account, invoice()]), gate: gateFor(AUTH), clock: () => NOW, audit: () => undefined });
     expect(Object.keys(real).sort()).toEqual(['apiVersion', 'getAccount', 'getInvoice', 'kind', 'listDisputes', 'listInvoiceLines', 'listInvoicePayments', 'listRefunds', 'preflight', 'supplement']);
     expect(Object.keys(mockProvider()).filter(k => /^(post|put|patch|delete|create|update|write|send|execute|request)/i.test(k))).toEqual([]);
     const dir = resolve(__dirname);

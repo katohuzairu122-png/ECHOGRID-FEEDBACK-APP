@@ -19,8 +19,20 @@ export class ProviderReadError extends Error {
   constructor(readonly failureClass: FailureClass) { super(`STRIPE_READ_${failureClass}`); this.name = 'ProviderReadError'; }
 }
 export class StripeReadConfigError extends Error {
-  constructor(readonly code: 'KEY_NOT_TEST_MODE' | 'TIMEOUT_INVALID' | 'LIMIT_INVALID') { super(`STRIPE_READ_CONFIG_${code}`); this.name = 'StripeReadConfigError'; }
+  constructor(readonly code: 'KEY_NOT_TEST_MODE' | 'TIMEOUT_INVALID' | 'LIMIT_INVALID' | 'CREDENTIAL_SOURCE_INVALID') { super(`STRIPE_READ_CONFIG_${code}`); this.name = 'StripeReadConfigError'; }
 }
+
+/**
+ * DEV-09: a credential handed to the transport by a trusted runtime source (a Worker secret binding or an authorized secret provider). It is bound to ONE Stripe account and ONE workload and
+ * expires. The transport re-checks all of that on every request and refuses with a fixed code that names the failed condition and never the value.
+ */
+export interface CredentialRecord { readonly apiKey: string; readonly accountId: string; readonly workloadId: string; readonly validUntilMs: number }
+export interface CredentialSource { resolve(binding: Readonly<{ accountId: string; workloadId: string }>): Promise<CredentialRecord | null> }
+export type CredentialDenial = 'CREDENTIAL_MISSING' | 'CREDENTIAL_MALFORMED' | 'CREDENTIAL_LIVE_MODE' | 'CREDENTIAL_EXPIRED' | 'CREDENTIAL_ACCOUNT_MISMATCH' | 'CREDENTIAL_WORKLOAD_MISMATCH' | 'CREDENTIAL_BINDING_REQUIRED' | 'CREDENTIAL_SOURCE_UNAVAILABLE';
+export class CredentialDenied extends ProviderReadError {
+  constructor(readonly code: CredentialDenial) { super('DENIED'); this.name = 'CredentialDenied'; }
+}
+export type NetworkSource = 'GLOBAL_FETCH' | 'INJECTED';
 
 export type PerformableMethod = Extract<ReadMethodId, 'ACCOUNT_RETRIEVE_CURRENT' | 'INVOICE_RETRIEVE'>;
 
@@ -28,30 +40,56 @@ export type PerformableMethod = Extract<ReadMethodId, 'ACCOUNT_RETRIEVE_CURRENT'
 export interface StripeReadTransport {
   /** The mode of the credential, fixed at construction. Only 'test' exists. */
   readonly keyMode: 'test';
-  /** Performs the GET for one registry method and resolves the parsed JSON body of a 2xx response; throws ProviderReadError otherwise. */
-  get(method: PerformableMethod, params?: Readonly<{ invoiceId?: string }>): Promise<unknown>;
+  /** Where requests go: the platform `fetch` (a real network) or an injected function (a test double). A proof captured over an injected transport can never verify a mapping. Absent on fakes. */
+  readonly networkSource?: NetworkSource;
+  /** Performs the GET for one registry method and resolves the parsed JSON body of a 2xx response; throws ProviderReadError otherwise. `binding` selects the credential when the transport uses a credential source. */
+  get(method: PerformableMethod, params?: Readonly<{ invoiceId?: string }>, binding?: Readonly<{ accountId: string; workloadId: string }>): Promise<unknown>;
 }
 
 export interface TransportOptions {
-  /** A restricted (rk_test_) or secret (sk_test_) TEST key from the server-side secret store. Anything else, including every live key, is refused. */
-  readonly apiKey: string;
+  /** A restricted (rk_test_) or secret (sk_test_) TEST key from the server-side secret store. Anything else, including every live key, is refused. Exactly one of `apiKey` and `credentials`. */
+  readonly apiKey?: string;
+  /** DEV-09: a credential resolved per request, bound to the expected account and workload, with an expiry. */
+  readonly credentials?: CredentialSource;
+  /** Trusted clock for credential expiry; defaults to Date.now. */
+  readonly clock?: () => number;
   readonly fetchImpl?: typeof fetch;
   readonly timeoutMs?: number;
   readonly maxBytes?: number;
 }
 
 export function createStripeGetTransport(opts: TransportOptions): StripeReadTransport {
-  const key = opts?.apiKey;
-  if (typeof key !== 'string' || !TEST_KEY.test(key)) throw new StripeReadConfigError('KEY_NOT_TEST_MODE'); // never echo the value
+  const staticKey = opts?.apiKey; const source = opts?.credentials;
+  if ((staticKey === undefined) === (source === undefined)) throw new StripeReadConfigError('CREDENTIAL_SOURCE_INVALID'); // exactly one source
+  if (source !== undefined && (source === null || typeof source.resolve !== 'function')) throw new StripeReadConfigError('CREDENTIAL_SOURCE_INVALID');
+  if (staticKey !== undefined && (typeof staticKey !== 'string' || !TEST_KEY.test(staticKey))) throw new StripeReadConfigError('KEY_NOT_TEST_MODE'); // never echo the value
+  const clock = opts.clock ?? Date.now;
   const timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const maxBytes = opts.maxBytes ?? DEFAULT_MAX_BYTES;
   if (!Number.isSafeInteger(timeoutMs) || timeoutMs <= 0 || timeoutMs > 30_000) throw new StripeReadConfigError('TIMEOUT_INVALID');
   if (!Number.isSafeInteger(maxBytes) || maxBytes <= 0 || maxBytes > 4 * 1024 * 1024) throw new StripeReadConfigError('LIMIT_INVALID');
   const doFetch = opts.fetchImpl ?? fetch;
 
+  /** The key for THIS request: the static test key, or one resolved from the source and checked against the binding, the mode and the expiry. */
+  const keyFor = async (binding?: Readonly<{ accountId: string; workloadId: string }>): Promise<string> => {
+    if (staticKey !== undefined) return staticKey;
+    if (!binding || typeof binding.accountId !== 'string' || typeof binding.workloadId !== 'string') throw new CredentialDenied('CREDENTIAL_BINDING_REQUIRED');
+    let rec: CredentialRecord | null;
+    try { rec = await source!.resolve({ accountId: binding.accountId, workloadId: binding.workloadId }); } catch { throw new CredentialDenied('CREDENTIAL_SOURCE_UNAVAILABLE'); }
+    if (!rec) throw new CredentialDenied('CREDENTIAL_MISSING');
+    if (typeof rec !== 'object' || typeof rec.apiKey !== 'string' || typeof rec.accountId !== 'string' || typeof rec.workloadId !== 'string' || !Number.isSafeInteger(rec.validUntilMs)) throw new CredentialDenied('CREDENTIAL_MALFORMED');
+    if (/^(rk|sk)_live_/.test(rec.apiKey)) throw new CredentialDenied('CREDENTIAL_LIVE_MODE');
+    if (!TEST_KEY.test(rec.apiKey)) throw new CredentialDenied('CREDENTIAL_MALFORMED');
+    if (rec.accountId !== binding.accountId) throw new CredentialDenied('CREDENTIAL_ACCOUNT_MISMATCH');
+    if (rec.workloadId !== binding.workloadId) throw new CredentialDenied('CREDENTIAL_WORKLOAD_MISMATCH');
+    if (rec.validUntilMs <= clock()) throw new CredentialDenied('CREDENTIAL_EXPIRED');
+    return rec.apiKey;
+  };
+
   return Object.freeze({
     keyMode: 'test' as const,
-    async get(method: PerformableMethod, params?: Readonly<{ invoiceId?: string }>): Promise<unknown> {
+    networkSource: (opts.fetchImpl ? 'INJECTED' : 'GLOBAL_FETCH') as NetworkSource,
+    async get(method: PerformableMethod, params?: Readonly<{ invoiceId?: string }>, binding?: Readonly<{ accountId: string; workloadId: string }>): Promise<unknown> {
       let path: string;
       if (method === 'ACCOUNT_RETRIEVE_CURRENT') path = '/v1/account';
       else if (method === 'INVOICE_RETRIEVE') {
@@ -59,6 +97,7 @@ export function createStripeGetTransport(opts: TransportOptions): StripeReadTran
         if (typeof id !== 'string' || !INVOICE_ID.test(id)) throw new ProviderReadError('DENIED');
         path = `/v1/invoices/${id}`;
       } else throw new ProviderReadError('DENIED'); // any other method id, including every unauthorized read and every write-shaped name
+      const key = await keyFor(binding); // resolved after the path is validated and immediately before the request
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), timeoutMs);
       let res: Response;

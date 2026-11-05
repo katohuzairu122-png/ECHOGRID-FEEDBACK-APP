@@ -18,3 +18,8 @@ export * from './read-types';
 export { createRealReadProvider, createMockReadProvider, NO_SUPPLEMENT, type ReadProvider, type MockReadProvider, type MockProviderFixtures, type ObjectRead, type ListRead, type Supplement } from './read-provider';
 export { acquireEvidence, type EngineDeps } from './evidence-engine';
 export * from './acquisition-pipeline';
+export * from './read-authorization';
+export * from './read-gate';
+export * from './mapping-authority';
+export { captureProof, applyProof, createInMemoryProofStore, isSealedProof, type ProofRecord, type ProofStore, type ProofOutcome, type ProofApplication, type CaptureOrigin } from './proof-capture';
+export { syntheticProofResponses, PROOF_ACCOUNT_ID, PROOF_INVOICE_ID } from './proof-fixtures';

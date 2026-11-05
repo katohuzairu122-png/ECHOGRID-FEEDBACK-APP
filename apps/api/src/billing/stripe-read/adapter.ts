@@ -1,4 +1,4 @@
-import type { ReadAuthorization } from './capability-registry';
+import type { ReadGate } from './read-gate';
 import { acquireEvidence } from './evidence-engine';
 import type { TrustedInvoiceScope } from './invoice-normalizer';
 import { createRealReadProvider, type ReadProvider } from './read-provider';
@@ -16,12 +16,11 @@ export type { AcquireDenial, AcquireOutcome, AuditSink, ReadAuditEvent } from '.
 export class StripeReadOnlyEvidenceAdapter {
   readonly kind = 'STRIPE_TEST_READ' as const;
   private readonly provider: ReadProvider;
-  constructor(private readonly deps: Readonly<{ transport: StripeReadTransport; authorization: ReadAuthorization | null; clock: () => number; audit: AuditSink; /** The API version the transport reads with; defaults to the pinned one. A version with no mapping profile is refused. */ apiVersion?: string }>) {
+  constructor(private readonly deps: Readonly<{ transport: StripeReadTransport; gate: ReadGate; /** The approved Stripe test account, from the trusted binding; the authorization records are looked up for it. */ expectedAccountId: string; clock: () => number; audit: AuditSink; /** The API version the transport reads with; defaults to the pinned one. A version with no mapping profile is refused. */ apiVersion?: string }>) {
     this.provider = createRealReadProvider(deps);
   }
 
   async acquire(scope: TrustedInvoiceScope): Promise<AcquireOutcome> {
-    // the approved account is the owner's authorization's account; without an authorization the provider's preflight denies before any read
-    return acquireEvidence({ provider: this.provider, clock: this.deps.clock, audit: this.deps.audit }, scope, this.deps.authorization?.accountId ?? 'acct_unset', null);
+    return acquireEvidence({ provider: this.provider, clock: this.deps.clock, audit: this.deps.audit }, scope, this.deps.expectedAccountId, null);
   }
 }

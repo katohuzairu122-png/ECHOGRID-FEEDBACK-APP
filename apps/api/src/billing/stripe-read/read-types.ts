@@ -1,6 +1,8 @@
 import type { AuditEventName, FailureClass, ReadMethodId } from './capability-registry';
 import type { NormalizedStripeEvidence } from './evidence-types';
 import type { NormalizeDenial } from './invoice-normalizer';
+import type { GateDenial } from './read-gate';
+import type { CredentialDenial } from './transport';
 
 /**
  * Shared outcome and audit types of the read path. The audit sink receives codes, method ids and identifiers only: never a response body, a header, a credential or a URL.
@@ -15,7 +17,7 @@ export type AuditSink = (event: ReadAuditEvent) => void;
 
 export type AcquireDenial =
   | 'UNKNOWN_METHOD' | 'METHOD_NOT_AUTHORIZED' | 'AUTHORIZATION_MISSING' | 'AUTHORIZATION_INVALID' | 'AUTHORIZATION_EXPIRED' | 'AUTHORIZATION_REVOKED' | 'METHOD_NOT_APPROVED' | 'REALM_NOT_TEST' | 'ACCOUNT_NOT_APPROVED'
-  | 'ACCOUNT_MISMATCH' | 'ACCOUNT_RESPONSE_INVALID' | 'INVALID_REQUEST' | 'UNSUPPORTED_API_VERSION' | NormalizeDenial;
+  | 'ACCOUNT_MISMATCH' | 'ACCOUNT_RESPONSE_INVALID' | 'INVALID_REQUEST' | 'UNSUPPORTED_API_VERSION' | NormalizeDenial | GateDenial | CredentialDenial;
 export type AcquireOutcome =
   | Readonly<{ ok: true; evidence: NormalizedStripeEvidence }>
   | Readonly<{ ok: false; kind: 'DENIED'; reason: AcquireDenial }>
