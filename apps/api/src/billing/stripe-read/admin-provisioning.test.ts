@@ -28,12 +28,14 @@ function sessionRig(over: { user?: Partial<Row> | null; sessions?: Array<{ revok
   const userId = randomUUID();
   const row: Row | undefined = over.user === null ? undefined : { id: userId, status: 'active', platformRole: 'admin', isDeleted: false, deletedAt: null, ...over.user };
   const calls = { users: 0, sessions: 0 };
+  const sid = randomUUID();
+  const rows = (over.sessions ?? [{ revokedAt: null, expiresAt: new Date(Date.now() + 86_400_000) }]).map(s => ({ userId: row?.id ?? userId, sessionId: sid, ...s }));
   const deps: AdminSessionDeps = {
     accessSecret: SECRET, clock: over.clock ?? (() => Date.now()),
     users: { async findById(id) { calls.users++; return row && row.id === id ? row : undefined; } },
-    sessions: { async listActiveForUser() { calls.sessions++; return over.sessions ?? [{ revokedAt: null, expiresAt: new Date(Date.now() + 86_400_000) }]; } },
+    sessions: { async isSessionLive(u, s, nowMs) { calls.sessions++; return rows.some(r => r.userId === u && r.sessionId === s && r.revokedAt === null && r.expiresAt.getTime() > nowMs); } },
   };
-  return { deps, userId: row?.id ?? userId, calls, token: () => signAccessToken(row?.id ?? userId, SECRET) };
+  return { deps, userId: row?.id ?? userId, sid, rows, calls, token: () => signAccessToken(row?.id ?? userId, SECRET, sid) };
 }
 const bearer = (t: string) => `Bearer ${t}`;
 
@@ -85,7 +87,7 @@ describe('1-10. administrator session authentication', () => {
     for (const [label, t] of cases) expect(await authenticateAdminSession(r.deps, bearer(t)), label).toMatchObject({ ok: false, reason: expect.stringMatching(/INVALID_TOKEN/) });
     // a correctly signed token for a NON-admin that claims admin rights in its payload gains nothing: the persisted row decides
     const user = sessionRig({ user: { platformRole: null } });
-    const claimed = await honoSign({ sub: user.userId, type: 'access', iat: 1, exp, platformRole: 'admin', isAdmin: true, role: 'admin' }, SECRET, 'HS256');
+    const claimed = await honoSign({ sub: user.userId, sid: user.sid, type: 'access', iat: 1, exp, platformRole: 'admin', isAdmin: true, role: 'admin' }, SECRET, 'HS256');
     expect(await authenticateAdminSession(user.deps, bearer(claimed))).toEqual({ ok: false, reason: 'NOT_PLATFORM_ADMIN' });
     const ghost = sessionRig({ user: null });
     expect(await authenticateAdminSession(ghost.deps, bearer(await ghost.token()))).toEqual({ ok: false, reason: 'ACCOUNT_NOT_FOUND' });
@@ -130,7 +132,7 @@ describe('1-10. administrator session authentication', () => {
     const r = sessionRig(); const token = await r.token();
     const boom = { ...r.deps, users: { async findById() { throw new Error('db down'); } } };
     expect(await authenticateAdminSession(boom, bearer(token))).toEqual({ ok: false, reason: 'VERIFICATION_UNAVAILABLE' });
-    const boom2 = { ...r.deps, sessions: { async listActiveForUser() { throw new Error('db down'); } } };
+    const boom2 = { ...r.deps, sessions: { async isSessionLive() { throw new Error('db down'); } } };
     expect(await authenticateAdminSession(boom2, bearer(token))).toEqual({ ok: false, reason: 'VERIFICATION_UNAVAILABLE' });
     const wrongRow = { ...r.deps, users: { async findById() { return { id: randomUUID(), status: 'active', platformRole: 'admin' }; } } };
     expect(await authenticateAdminSession(wrongRow, bearer(token))).toEqual({ ok: false, reason: 'ACCOUNT_NOT_FOUND' }); // the persisted row must be the subject's

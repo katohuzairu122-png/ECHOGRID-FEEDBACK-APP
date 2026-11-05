@@ -442,6 +442,13 @@
       "when": 1793903646017,
       "tag": "0062_d1d3_dev10_read_authorization",
       "breakpoints": true
+    },
+    {
+      "idx": 63,
+      "version": "7",
+      "when": 1793912405119,
+      "tag": "0063_d1d3_dev11_r1_session_binding",
+      "breakpoints": true
     }
   ]
 }

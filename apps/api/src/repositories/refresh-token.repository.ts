@@ -1,4 +1,4 @@
-import { eq, and, isNull } from 'drizzle-orm';
+import { eq, and, isNull, gt } from 'drizzle-orm';
 import { refreshTokens } from '../db/schema';
 import { BaseRepository } from './base.repository';
 
@@ -25,6 +25,29 @@ export class RefreshTokenRepository extends BaseRepository {
       .where(and(eq(refreshTokens.id, id), isNull(refreshTokens.revokedAt)))
       .returning({ id: refreshTokens.id });
     return rows.length > 0;
+  }
+
+  /**
+   * DEV-11-R1: is THIS session live for THIS user? Exactly one question, answered from persisted state: an unrevoked, unexpired row with this user id AND this session id. Another session of the
+   * same user, or any session of another user, never answers it.
+   */
+  async isSessionLive(userId: string, sessionId: string, nowMs: number): Promise<boolean> {
+    const rows = await this.db
+      .select({ id: refreshTokens.id })
+      .from(refreshTokens)
+      .where(and(eq(refreshTokens.userId, userId), eq(refreshTokens.sessionId, sessionId), isNull(refreshTokens.revokedAt), gt(refreshTokens.expiresAt, new Date(nowMs))))
+      .limit(1);
+    return rows.length > 0;
+  }
+
+  /** Revokes every row of one session (logout): the session ends even if an older sibling row were somehow still unrevoked. */
+  async revokeSession(userId: string, sessionId: string): Promise<number> {
+    const rows = await this.db
+      .update(refreshTokens)
+      .set({ revokedAt: new Date() })
+      .where(and(eq(refreshTokens.userId, userId), eq(refreshTokens.sessionId, sessionId), isNull(refreshTokens.revokedAt)))
+      .returning({ id: refreshTokens.id });
+    return rows.length;
   }
 
   async revoke(id: string): Promise<void> {

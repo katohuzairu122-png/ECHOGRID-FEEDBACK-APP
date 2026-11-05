@@ -82,6 +82,15 @@ describe.skipIf(!process.env.DATABASE_URL)('D1/D3-DEV-05 settlement authority: n
     expect((await tryQ(owner, 'select count(*)::int n from stripe_read_authorizations')).rows).toEqual([{ n: 0 }]);
   });
 
+  it('M1c. migration 0063 (DEV-11-R1) applies for a non-superuser owner: an additive, nullable session_id column and its index, with no existing row rewritten', async () => {
+    const db = new Client({ connectionString: urlFor(dbName) }); await db.connect(); clients.push(db);
+    expect((await db.query("select data_type, is_nullable, column_default from information_schema.columns where table_name='refresh_tokens' and column_name='session_id'")).rows).toEqual([{ data_type: 'uuid', is_nullable: 'YES', column_default: null }]);
+    expect((await db.query("select indexdef from pg_indexes where indexname='refresh_tokens_session_idx'")).rows[0].indexdef).toMatch(/\(user_id, session_id\)/);
+    // rows that existed before the column (legacy sessions) keep a NULL session id: the column has no default and the migration has no data statement
+    const u = (await db.query("select id from users limit 1")).rows[0]; void u;
+    expect((await db.query("select count(*)::int n from refresh_tokens where session_id is not null")).rows[0].n).toBe(0);
+  });
+
   it('M2. the owner of the table is still bound by forced RLS: it reads nothing and cannot insert evidence', async () => {
     expect((await tryQ(owner, 'select count(*)::int n from partner_credit_settlement_authorizations')).rows).toEqual([{ n: 0 }]);
     expect((await tryQ(owner, 'insert into partner_credit_settlement_authorizations(id) values (gen_random_uuid())')).error).toMatch(/row-level security|SETTLEMENT_AUTH|violates/);

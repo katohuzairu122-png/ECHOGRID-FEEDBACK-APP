@@ -1,6 +1,6 @@
 import { sql } from 'drizzle-orm';
 import type { Database } from '../../db/client';
-import { requireFreshAdmin, type TrustedAdminContext } from './admin-session';
+import { AdminAuthorityError, requireFreshAdmin, type SessionRevalidator, type TrustedAdminContext } from './admin-session';
 import { ReadAuthorizationLifecycle, ReadAuthorizationLifecycleError, type ProposalInput } from './durable-authorization';
 
 /**
@@ -20,16 +20,23 @@ export interface AuthorizationAuditEvent { readonly version: number; readonly ev
 
 export class ReadAuthorizationAdminService {
   private readonly lifecycle: ReadAuthorizationLifecycle;
-  constructor(private readonly db: Database, private readonly clock: () => number, private readonly maxContextAgeMs: number = DEFAULT_CONTEXT_MAX_AGE_MS, lifecycle?: ReadAuthorizationLifecycle) {
+  /** `revalidate` is REQUIRED (DEV-11-R1): there is no way to build the service without a per-call session re-verification. */
+  constructor(private readonly db: Database, private readonly clock: () => number, private readonly revalidate: SessionRevalidator, private readonly maxContextAgeMs: number = DEFAULT_CONTEXT_MAX_AGE_MS, lifecycle?: ReadAuthorizationLifecycle) {
+    if (typeof revalidate !== 'function') throw new AdminAuthorityError('SESSION_NOT_LIVE');
     this.lifecycle = lifecycle ?? new ReadAuthorizationLifecycle(db);
   }
-  private actor(ctx: TrustedAdminContext): string { return requireFreshAdmin(ctx, this.clock(), this.maxContextAgeMs); }
-  async propose(ctx: TrustedAdminContext, input: ProposalInput): Promise<string> { return this.lifecycle.propose(input, this.actor(ctx)); }
-  async approve(ctx: TrustedAdminContext, authorizationId: string, evidenceRef: string): Promise<number> { return this.lifecycle.approve(authorizationId, this.actor(ctx), evidenceRef); }
-  async revoke(ctx: TrustedAdminContext, authorizationId: string, reason: string): Promise<number> { return this.lifecycle.revoke(authorizationId, this.actor(ctx), reason); }
+  /** The actor of every privileged call: derived from a genuine, fresh context whose exact session, token and administrator are re-verified against persisted state right now. */
+  private async actor(ctx: TrustedAdminContext): Promise<string> {
+    const id = requireFreshAdmin(ctx, this.clock(), this.maxContextAgeMs);
+    if ((await this.revalidate(ctx)) !== 'LIVE') throw new AdminAuthorityError('SESSION_NOT_LIVE');
+    return id;
+  }
+  async propose(ctx: TrustedAdminContext, input: ProposalInput): Promise<string> { return this.lifecycle.propose(input, await this.actor(ctx)); }
+  async approve(ctx: TrustedAdminContext, authorizationId: string, evidenceRef: string): Promise<number> { return this.lifecycle.approve(authorizationId, await this.actor(ctx), evidenceRef); }
+  async revoke(ctx: TrustedAdminContext, authorizationId: string, reason: string): Promise<number> { return this.lifecycle.revoke(authorizationId, await this.actor(ctx), reason); }
 
   async status(ctx: TrustedAdminContext, authorizationId: string): Promise<AuthorizationStatus | null> {
-    this.actor(ctx);
+    await this.actor(ctx);
     if (!UUID.test(authorizationId)) throw new ReadAuthorizationLifecycleError('INVALID_INPUT');
     const rows = await this.read(sql`select id, business_id, account_id, workload_id, method_id, state, version, valid_from_ms, expires_at_ms, proposed_by, approved_by, revoked_by from public.stripe_read_authorizations where id = ${authorizationId}::uuid`);
     const r = rows[0]; if (!r) return null;
@@ -37,7 +44,7 @@ export class ReadAuthorizationAdminService {
       validFromMs: Number(r.valid_from_ms), expiresAtMs: Number(r.expires_at_ms), proposedBy: String(r.proposed_by), approvedBy: r.approved_by === null ? null : String(r.approved_by), revokedBy: r.revoked_by === null ? null : String(r.revoked_by) };
   }
   async auditHistory(ctx: TrustedAdminContext, authorizationId: string): Promise<readonly AuthorizationAuditEvent[]> {
-    this.actor(ctx);
+    await this.actor(ctx);
     if (!UUID.test(authorizationId)) throw new ReadAuthorizationLifecycleError('INVALID_INPUT');
     const rows = await this.read(sql`select version, event_type, from_state, to_state, actor_id, at_ms, record_digest from public.stripe_read_authorization_events where authorization_id = ${authorizationId}::uuid order by version`);
     return rows.map(r => ({ version: Number(r.version), eventType: String(r.event_type), fromState: r.from_state === null ? null : String(r.from_state), toState: String(r.to_state), actorId: String(r.actor_id), atMs: Number(r.at_ms), recordDigest: String(r.record_digest) }));

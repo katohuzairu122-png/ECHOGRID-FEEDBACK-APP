@@ -6,12 +6,15 @@ import { generateKeyPairSync, randomBytes, randomUUID, sign as nodeSign } from '
 import { resolve } from 'node:path';
 import { buildDb } from '../../src/db/client';
 import { createRepositories } from '../../src/repositories';
-import { signAccessToken } from '../../src/auth/jwt';
+import { signAccessToken, verifyAccessToken } from '../../src/auth/jwt';
+import { AuthService } from '../../src/auth/auth.service';
+import { createDirectPbkdf2Worker } from '../../src/auth/pbkdf2-worker';
 import {
-  authenticateAdminSession, ReadAuthorizationAdminService, createDurableAuthorizationStore, createWorkloadAuthority, gateForWorkload, createCredentialCustody,
+  authenticateAdminSession, createSessionRevalidator, ReadAuthorizationAdminService, createDurableAuthorizationStore, createWorkloadAuthority, gateForWorkload, createCredentialCustody,
   createSigningCustody, createObservationVerifier, createTrustedStripeRuntime, checkRead, MappingRegistry, AdminAuthorityError, type TrustedAdminContext,
 } from '../../src/billing/stripe-read';
 import { ReadAuthorizationLifecycleError } from '../../src/billing/stripe-read/durable-authorization';
+import { ReadAuthorizationLifecycle } from '../../src/billing/stripe-read/durable-authorization';
 import { createSyntheticTrustedRuntime } from '../../src/billing/stripe-read/synthetic-runtime';
 import { captureProof } from '../../src/billing/stripe-read/proof-capture';
 import { createInMemoryProofStore } from '../../src/billing/stripe-read';
@@ -41,18 +44,29 @@ describe.skipIf(!process.env.DATABASE_URL)('D1/D3-DEV-11 administrator authority
   const GOOD_KEY = ['rk', 'test', 'Dev11IntegrationCredential01'].join('_');
   let a1: { id: string }; let a2: { id: string }; let plain: string;
 
-  /** A real session: a refresh_tokens row (the session record) plus the access token the existing infrastructure issues for it. */
+  /** A real session: a refresh_tokens row carrying a session id, plus the session-bound access token the AuthService issues for it. */
+  const sessionOf = new Map<string, { sid: string; rowId: string; userId: string }>();
   async function login(userId: string, over: { revoked?: boolean } = {}) {
-    await q('insert into refresh_tokens(user_id, token_hash, expires_at, revoked_at) values($1,$2,now()+interval \'1 day\',$3)', [userId, randomUUID(), over.revoked ? new Date() : null]);
-    return `Bearer ${await signAccessToken(userId, SECRET)}`;
+    const sid = randomUUID(); const rowId = randomUUID();
+    await q('insert into refresh_tokens(id, user_id, token_hash, session_id, expires_at, revoked_at) values($1,$2,$3,$4,now()+interval \'1 day\',$5)', [rowId, userId, randomUUID(), sid, over.revoked ? new Date() : null]);
+    const header = `Bearer ${await signAccessToken(userId, SECRET, sid)}`;
+    sessionOf.set(header, { sid, rowId, userId });
+    return header;
   }
+  const appRepos = async () => createRepositories(buildDb(await connect()));
+  const depsFor = async (clock: () => number = () => Date.now()) => { const repos = await appRepos(); return { accessSecret: SECRET, users: repos.users, sessions: repos.refreshTokens, clock }; };
   async function contextFor(userId: string, clock: () => number = () => Date.now()): Promise<TrustedAdminContext> {
-    const c = await connect(); const repos = createRepositories(buildDb(c));
-    const out = await authenticateAdminSession({ accessSecret: SECRET, users: repos.users, sessions: repos.refreshTokens, clock }, await login(userId));
+    const out = await authenticateAdminSession(await depsFor(clock), await login(userId));
     if (!out.ok) throw new Error('auth ' + out.reason);
     return out.context;
   }
-  const serviceFor = async (login = 'dev11_l_admin', maxAge?: number) => new ReadAuthorizationAdminService(buildDb(await connectAs(login)), () => Date.now(), maxAge);
+  /** A context together with the session it came from, so a test can revoke exactly that session. */
+  async function sessionContext(userId: string) {
+    const header = await login(userId); const out = await authenticateAdminSession(await depsFor(), header);
+    if (!out.ok) throw new Error('auth ' + out.reason);
+    return { ctx: out.context, ...sessionOf.get(header)!, header };
+  }
+  const serviceFor = async (login = 'dev11_l_admin', maxAge?: number) => new ReadAuthorizationAdminService(buildDb(await connectAs(login)), () => Date.now(), createSessionRevalidator(await depsFor()), maxAge);
   const input = (over: Record<string, unknown> = {}) => ({ businessId: biz, accountId: ACCT, workloadId: WORKLOAD, methodId: 'INVOICE_RETRIEVE' as const, validFromMs: 1, expiresAtMs: Date.now() + 3_600_000, inventoryRecordId: 'S08-STRIPE-PRIVATE-TEST-VERIFIER-001', inventoryRevision: 'rev-1', ...over });
   let n = 0; const acct = () => `acct_Dev11U${++n}x`;
 
@@ -122,7 +136,9 @@ describe.skipIf(!process.env.DATABASE_URL)('D1/D3-DEV-11 administrator authority
       // an administrator demoted after the context was minted is stopped by the DATABASE guard (defence in depth)
       const demoted = (await q<{ id: string }>("insert into users(email,password_hash,full_name,status,platform_role) values($1,'x','D','active','admin') returning id", [`d11-${randomUUID()}@example.test`]))[0]!.id;
       const dctx = await contextFor(demoted); await q("update users set platform_role = null where id = $1", [demoted]);
-      expect(await code(svc.propose(dctx, input({ accountId: acct() })))).toBe('ADMIN_REQUIRED');
+      expect(await code(svc.propose(dctx, input({ accountId: acct() })))).toBe('SESSION_NOT_LIVE'); // re-verified at use against the persisted role
+      // and the DATABASE refuses the demoted administrator independently of the application layer
+      expect(await code(new ReadAuthorizationLifecycle(buildDb(await connectAs('dev11_l_admin'))).propose(input({ accountId: acct() }), demoted))).toBe('ADMIN_REQUIRED');
     });
 
     it('14-15. a revoked authorization cannot be restored and an expired one cannot become active; renewal is a new, explicitly approved authorization', async () => {
@@ -172,21 +188,125 @@ describe.skipIf(!process.env.DATABASE_URL)('D1/D3-DEV-11 administrator authority
     });
   });
 
+  describe('R1. session-specific revocation over PostgreSQL', () => {
+    it('the real AuthService issues session-bound tokens: login creates a session, refresh keeps it, logout and revocation end it, and the persisted refresh_tokens rows say so', async () => {
+      const repos = await appRepos();
+      const auth = new AuthService(repos, { JWT_ACCESS_SECRET: SECRET, JWT_REFRESH_SECRET: 'r1-refresh-secret-0123456789abcdef-cccc' }, createDirectPbkdf2Worker());
+      const email = `r1-${randomUUID()}@example.test`;
+      const signed = await auth.signup({ email, password: 'correct horse battery staple', fullName: 'R1 Admin' });
+      const uid = (await q<{ id: string }>('select id from users where email = $1', [email]))[0]!.id;
+      await q("update users set platform_role = 'admin' where id = $1", [uid]);
+      const t1 = await auth.login({ email, password: 'correct horse battery staple' });
+      const sid = (await verifyAccessToken(t1.accessToken, SECRET)).sid!;
+      expect(sid).toMatch(/^[0-9a-f-]{36}$/);
+      const rowsOf = async (s: string) => q<{ revoked_at: Date | null }>('select revoked_at from refresh_tokens where user_id = $1 and session_id = $2 order by issued_at', [uid, s]);
+      expect(await rowsOf(sid)).toHaveLength(1);
+      expect((await authenticateAdminSession(await depsFor(), `Bearer ${t1.accessToken}`)).ok).toBe(true);
+      const t2 = await auth.refresh(t1.refreshToken); // the session survives its own rotation
+      expect((await verifyAccessToken(t2.accessToken, SECRET)).sid).toBe(sid);
+      const rows = await rowsOf(sid); expect(rows).toHaveLength(2); expect(rows.filter(r => r.revoked_at === null)).toHaveLength(1);
+      expect((await authenticateAdminSession(await depsFor(), `Bearer ${t2.accessToken}`)).ok).toBe(true);
+      // signup's session and this login's session are different sessions of one user
+      const signedSid = (await verifyAccessToken(signed.accessToken, SECRET)).sid!; expect(signedSid).not.toBe(sid);
+      await auth.logout(t2.refreshToken);
+      expect(await authenticateAdminSession(await depsFor(), `Bearer ${t2.accessToken}`)).toEqual({ ok: false, reason: 'SESSION_REVOKED' });
+      expect(await authenticateAdminSession(await depsFor(), `Bearer ${t1.accessToken}`)).toEqual({ ok: false, reason: 'SESSION_REVOKED' }); // every token of the session
+      expect((await authenticateAdminSession(await depsFor(), `Bearer ${signed.accessToken}`)).ok).toBe(true); // the sibling session is a different session
+      expect(await rowsOf(sid)).toSatisfy((r: Array<{ revoked_at: Date | null }>) => r.every(x => x.revoked_at !== null));
+      // replay containment kills every session
+      const t3 = await auth.login({ email, password: 'correct horse battery staple' }); const t4 = await auth.refresh(t3.refreshToken);
+      await q("update refresh_tokens set revoked_at = now() - interval '5 minutes' where user_id = $1 and session_id = $2 and replaced_by_token_id is not null", [uid, (await verifyAccessToken(t3.accessToken, SECRET)).sid]);
+      await expect(auth.refresh(t3.refreshToken)).rejects.toThrow();
+      expect(await authenticateAdminSession(await depsFor(), `Bearer ${t4.accessToken}`)).toEqual({ ok: false, reason: 'SESSION_REVOKED' });
+      expect(await authenticateAdminSession(await depsFor(), `Bearer ${signed.accessToken}`)).toEqual({ ok: false, reason: 'SESSION_REVOKED' });
+      // a legacy row (no session id) is not an administrative session, and gets one only at its next refresh
+      const legacyEmail = `r1-${randomUUID()}@example.test`;
+      const lt = await auth.signup({ email: legacyEmail, password: 'correct horse battery staple', fullName: 'Legacy' });
+      const luid = (await q<{ id: string }>('select id from users where email = $1', [legacyEmail]))[0]!.id; await q("update users set platform_role = 'admin' where id = $1", [luid]);
+      await q('update refresh_tokens set session_id = null where user_id = $1', [luid]);
+      expect(await authenticateAdminSession(await depsFor(), `Bearer ${lt.accessToken}`)).toEqual({ ok: false, reason: 'SESSION_REVOKED' });
+      expect(await authenticateAdminSession(await depsFor(), `Bearer ${await signAccessToken(luid, SECRET)}`)).toEqual({ ok: false, reason: 'SESSION_BINDING_MISSING' });
+      const lt2 = await auth.refresh(lt.refreshToken); expect((await authenticateAdminSession(await depsFor(), `Bearer ${lt2.accessToken}`)).ok).toBe(true);
+    }, 60_000);
+
+    it('the repository answers per exact session: another user, another session, a revoked row and an expired row never validate', async () => {
+      const repos = await appRepos(); const now = Date.now();
+      const s1 = randomUUID(); const s2 = randomUUID();
+      const mk = (uid: string, sid: string, over: string) => q(`insert into refresh_tokens(user_id, token_hash, session_id, expires_at, revoked_at) values($1,$2,$3,${over})`, [uid, randomUUID(), sid]);
+      await mk(a1.id, s1, "now()+interval '1 day', null"); await mk(a1.id, s2, 'now()-interval \'1 minute\', null'); await mk(a2.id, randomUUID(), "now()+interval '1 day', now()");
+      expect(await repos.refreshTokens.isSessionLive(a1.id, s1, now)).toBe(true);
+      expect(await repos.refreshTokens.isSessionLive(a2.id, s1, now)).toBe(false); // another user's id with this session id
+      expect(await repos.refreshTokens.isSessionLive(a1.id, s2, now)).toBe(false); // expired
+      expect(await repos.refreshTokens.isSessionLive(a1.id, randomUUID(), now)).toBe(false);
+      expect(await repos.refreshTokens.revokeSession(a2.id, s1)).toBe(0); // another user cannot end this session by naming its id
+      expect(await repos.refreshTokens.isSessionLive(a1.id, s1, now)).toBe(true);
+      expect(await repos.refreshTokens.revokeSession(a1.id, s1)).toBe(1);
+      expect(await repos.refreshTokens.isSessionLive(a1.id, s1, now)).toBe(false);
+      expect(await repos.refreshTokens.revokeSession(a1.id, s1)).toBe(0); // idempotent
+    });
+
+    it('15-18. a revoked session cannot propose, approve, revoke, read status or read audit history; another live session of the same administrator does not help; nothing changes in the database', async () => {
+      const svc = await serviceFor();
+      const s1 = await sessionContext(a1.id); const s1b = await sessionContext(a1.id); const s2 = await sessionContext(a2.id);
+      const id = await svc.propose(s1.ctx, input({ accountId: acct() }));
+      await q('update refresh_tokens set revoked_at = now() where id = $1', [s1.rowId]); // revoke ONLY the first session
+      const before = (await q('select (select count(*)::int from stripe_read_authorizations) a, (select count(*)::int from stripe_read_authorization_events) e'))[0]!;
+      expect(await code(svc.propose(s1.ctx, input({ accountId: acct() })))).toBe('SESSION_NOT_LIVE'); // 15
+      expect(await code(svc.revoke(s1.ctx, id, 'REVOKED_SESSION'))).toBe('SESSION_NOT_LIVE'); // 17
+      expect(await code(svc.status(s1.ctx, id))).toBe('SESSION_NOT_LIVE');
+      expect(await code(svc.auditHistory(s1.ctx, id))).toBe('SESSION_NOT_LIVE'); // 18
+      expect((await q('select (select count(*)::int from stripe_read_authorizations) a, (select count(*)::int from stripe_read_authorization_events) e'))[0]).toEqual(before);
+      expect((await svc.status(s1b.ctx, id))!.state).toBe('PENDING'); // the same administrator's other live session works
+      expect(await svc.approve(s2.ctx, id, 'EV-R1')).toBe(2);
+      // approve through a session revoked AFTER the proposal (16)
+      const id2 = await svc.propose(s1b.ctx, input({ accountId: acct() }));
+      await q('update refresh_tokens set revoked_at = now() where id = $1', [s2.rowId]);
+      expect(await code(svc.approve(s2.ctx, id2, 'EV-NO'))).toBe('SESSION_NOT_LIVE');
+      expect((await svc.status(s1b.ctx, id2))!.state).toBe('PENDING');
+      // 19: self-approval remains denied for a live session
+      expect(await code(svc.approve(s1b.ctx, id2, 'SELF'))).toBe('SELF_APPROVAL');
+      // an access token's own expiry is enforced at use too
+      const short = await serviceFor('dev11_l_admin'); const sc = await sessionContext(a1.id);
+      expect(await code(new ReadAuthorizationAdminService(buildDb(await connectAs('dev11_l_admin')), () => Date.now() + 16 * 60_000, createSessionRevalidator(await depsFor(() => Date.now() + 16 * 60_000)), 60 * 60_000).status(sc.ctx, id))).toBe('SESSION_NOT_LIVE');
+      void short;
+    });
+
+    it('20-22. the database guards stay effective, and an administrator session or token is neither a workload identity nor a way to Stripe secrets', async () => {
+      const { ctx, header } = await sessionContext(a1.id);
+      // 20: the app login still cannot write, and the verifier still reads only through its function
+      const app = await connectAs('dev11_l_app');
+      expect((await tryQ(app, "update stripe_read_authorizations set state='APPROVED'")).rows).toEqual([]);
+      expect((await tryQ(app, `select public.stripe_read_auth_approve('${randomUUID()}'::uuid, '${a2.id}'::uuid, 'X')`)).error).toMatch(/permission denied/);
+      expect((await tryQ(admin, `update stripe_read_authorizations set state='APPROVED', version=2, approved_by='${plain}', approval_evidence_ref='E', approved_at_ms=0 where id in (select id from stripe_read_authorizations where state='PENDING' limit 1)`)).error).toMatch(/READ_AUTH_ADMIN_REQUIRED/);
+      // 21: nothing an administrator holds is a workload identity
+      const authority = createWorkloadAuthority({ source: { load: async () => ({ workloadId: WORKLOAD, environment: 'development', accountId: ACCT, realm: 'test', methods: ['INVOICE_RETRIEVE'], credentialRef: 'cred:r1', signingKeyPurpose: 'SYNTHETIC_RUNTIME', validFromMs: 0, expiresAtMs: Date.now() + 3_600_000, revokedAtMs: null }) }, environment: 'development', clock: () => Date.now() });
+      for (const f of [ctx, header, header.slice(7), { workloadId: WORKLOAD, adminUserId: a1.id }]) {
+        expect(await authority.check(f, { environment: 'development', accountId: ACCT, realm: 'test', methodId: 'INVOICE_RETRIEVE' })).toBe('WORKLOAD_NOT_TRUSTED');
+        expect(() => gateForWorkload({ authority, identity: f as any, store: createDurableAuthorizationStore(undefined), mapping: MappingRegistry.catalog() })).toThrow();
+      }
+      // 22: and cannot resolve Stripe secrets
+      let reads = 0;
+      const custody = createCredentialCustody({ descriptors: { load: async () => null }, secrets: { read: async () => { reads++; return GOOD_KEY; } }, workloads: authority, clock: () => Date.now() });
+      for (const f of [ctx, header, header.slice(7), { workloadId: WORKLOAD }]) expect(() => custody.sourceFor(f as any)).toThrow(/NOT_A_TRUSTED_WORKLOAD/);
+      expect(reads).toBe(0);
+    });
+  });
+
   describe('1-10 over real records, and the full synthetic chain', () => {
     it('administrator authentication resolves from the persisted users and refresh_tokens rows: suspended, demoted, logged-out and non-admin users never get a context', async () => {
       const mkUser = async (role: string | null, status = 'active') => (await q<{ id: string }>('insert into users(email,password_hash,full_name,status,platform_role) values($1,$2,$3,$4,$5) returning id', [`d11-${randomUUID()}@example.test`, 'x', 'D11', status, role]))[0]!.id;
-      const authenticate = async (userId: string, header?: string) => { const repos = createRepositories(buildDb(await connect())); return authenticateAdminSession({ accessSecret: SECRET, users: repos.users, sessions: repos.refreshTokens, clock: () => Date.now() }, header ?? `Bearer ${await signAccessToken(userId, SECRET)}`); };
+      const authenticate = async (userId: string, header?: string) => authenticateAdminSession(await depsFor(), header ?? [...sessionOf.entries()].filter(([, v]) => v.userId === userId).map(([h]) => h).pop() ?? '');
       const sus = await mkUser('admin', 'suspended'); await login(sus); expect(await authenticate(sus)).toEqual({ ok: false, reason: 'ACCOUNT_NOT_ACTIVE' });
       const nonAdmin = await mkUser(null); await login(nonAdmin); expect(await authenticate(nonAdmin)).toEqual({ ok: false, reason: 'NOT_PLATFORM_ADMIN' });
       const billing = await mkUser('billing'); await login(billing); expect(await authenticate(billing)).toEqual({ ok: false, reason: 'NOT_PLATFORM_ADMIN' });
       const loggedOut = await mkUser('admin'); await login(loggedOut, { revoked: true }); expect(await authenticate(loggedOut)).toEqual({ ok: false, reason: 'SESSION_REVOKED' });
-      const noSession = await mkUser('admin'); expect(await authenticate(noSession)).toEqual({ ok: false, reason: 'SESSION_REVOKED' });
+      const noSession = await mkUser('admin'); expect(await authenticate(noSession, `Bearer ${await signAccessToken(noSession, SECRET, randomUUID())}`)).toEqual({ ok: false, reason: 'SESSION_REVOKED' }); // a bound token whose session does not exist
       const deleted = await mkUser('admin'); await login(deleted); await q('update users set is_deleted = true, deleted_at = now() where id = $1', [deleted]);
       expect(await authenticate(deleted)).toMatchObject({ ok: false });
       const ok = await mkUser('admin'); await login(ok); expect(await authenticate(ok)).toMatchObject({ ok: true });
       await q('update refresh_tokens set revoked_at = now() where user_id = $1', [ok]); // logout / password change revokes the session records
       expect(await authenticate(ok)).toEqual({ ok: false, reason: 'SESSION_REVOKED' });
-      expect(await authenticate(randomUUID())).toEqual({ ok: false, reason: 'ACCOUNT_NOT_FOUND' });
+      const ghost = randomUUID(); expect(await authenticate(ghost, `Bearer ${await signAccessToken(ghost, SECRET, randomUUID())}`)).toEqual({ ok: false, reason: 'ACCOUNT_NOT_FOUND' });
     });
 
     it('46-47. an approved synthetic chain builds synthetic proof only; real retrieval stays impossible (no verified mapping, no real key purpose) and write or unapproved methods never reach the platform fetch', async () => {
