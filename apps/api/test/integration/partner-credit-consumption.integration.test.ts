@@ -287,6 +287,37 @@ describe.skipIf(!process.env.DATABASE_URL)('D4 final credit consumption and ledg
       expect(await rejects(admin.query('update settlement_custody_authorization_links set payload_sha256=$1 where authorization_id=$2', ['f'.repeat(64), first.authorizationId]))).toMatch(/DEV20_LINK_APPEND_ONLY/);
       expect(await rejects(admin.query('delete from settlement_custody_authorization_links where authorization_id=$1', [first.authorizationId]))).toMatch(/DEV20_LINK_APPEND_ONLY/);
       expect(await rejects(admin.query('truncate settlement_custody_authorization_links'))).not.toBe('');
+      // A forged receipt cannot be manufactured from plain matching fields,
+      // even if all identifiers and digests are copied from valid evidence.
+      const forgedReceipt = {
+        evidenceId, businessId: sc.businessId, reservationId: sc.reservationId,
+        payloadSha256: signed.evidence.claims.payloadSha256,
+        custodyKeyId: signed.evidence.claims.keyId,
+        custodyKeyVersion: signed.evidence.claims.keyVersion,
+      };
+      expect(await rejects(recorder.record({
+        reservationId: sc.reservationId, businessId: sc.businessId,
+        evidence, custodyReceipt: forgedReceipt,
+      }))).toMatch(/SETTLEMENT_AUTH_CUSTODY_RECEIPT_UNTRUSTED/);
+      // A separate, valid legacy authorization must not gain a fabricated
+      // custody link: both composite FKs are independently enforced by SQL.
+      const other = await scenario({ authorize: false, sagaTo: 'consumed' });
+      const unrelated = await recorder.record({
+        businessId: other.businessId, reservationId: other.reservationId,
+        evidence: await evidenceFor(other),
+      });
+      const attempt = (businessId: string, sha: string) => admin.query(
+        `insert into settlement_custody_authorization_links
+         (authorization_id,evidence_id,business_id,reservation_id,payload_sha256,
+          custody_key_id,custody_key_version,authorization_evidence_digest)
+         values ($1,$2,$3,$4,$5,$6,$7,$8)`,
+        [unrelated.id,evidenceId,businessId,other.reservationId,sha,
+         signed.evidence.claims.keyId,signed.evidence.claims.keyVersion,
+         links[0]!.authorization_evidence_digest],
+      );
+      expect(await rejects(attempt(sc.businessId, signed.evidence.claims.payloadSha256))).toMatch(/foreign key/);
+      expect(await rejects(attempt(other.businessId, 'f'.repeat(64)))).toMatch(/foreign key/);
+      expect((await rows<{ n: number }>('select count(*)::int n from settlement_custody_authorization_links'))[0]!.n).toBe(1);
       expect(await rows('select approval_enabled from stripe_read_authorization_policy')).toEqual([{ approval_enabled: false }]);
       } finally {
         await admin.query('alter table settlement_custody_authorization_links enable trigger settlement_custody_link_inert_guard');
