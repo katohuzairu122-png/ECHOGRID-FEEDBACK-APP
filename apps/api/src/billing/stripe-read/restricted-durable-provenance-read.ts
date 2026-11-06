@@ -1,6 +1,6 @@
 import { sql } from 'drizzle-orm';
 import type { Database } from '../../db/client';
-import { readAuthorization, type StoredAuthorization } from '../../partner-credits/partner-credit-settlement-authorization';
+import type { StoredAuthorization } from '../../partner-credits/partner-credit-settlement-authorization';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
@@ -28,8 +28,10 @@ export type RestrictedProvenanceRead =
  * The ordinary application and recorder logins are NOT permitted to assume
  * settlement_authority_reader (see settlement-authority-provisioning.sql).
  * Never borrow a financial-consumer or recorder connection for this read.
- * The pre-existing authorization read function selects the newest snapshot.
- * This deliberately refuses to claim a historical authorization is current.
+ * Apply the same newest-snapshot ordering as the pre-existing authority read
+ * function. Auditors have SELECT under forced RLS, but have no EXECUTE grant
+ * on the consumer/recorder-only authorization read function. No role switch
+ * or permission grant is performed here.
  */
 export async function readRestrictedDurableProvenance(
   db: Database,
@@ -41,11 +43,40 @@ export async function readRestrictedDurableProvenance(
 
   try {
     return await db.transaction(async tx => {
-      // No SET ROLE: the caller must already hold an explicitly authorized
-      // read-only database principal. Unauthorized sessions fail closed.
-      const authorization = await readAuthorization(tx, input.businessId, input.reservationId);
-      if (!authorization || authorization.id !== input.authorizationId)
+      // Explicitly require the independent audit principal. A generic app
+      // login or recorder cannot use this operation, even if it holds other
+      // settlement permissions. No SET ROLE or additional GRANT is made.
+      const access = await tx.execute(sql`
+        select pg_has_role(current_user, 'settlement_auditor', 'USAGE') as permitted
+      `);
+      if ((access.rows[0] as { permitted?: boolean } | undefined)?.permitted !== true)
+        throw new Error('DEDICATED_AUDITOR_ROLE_REQUIRED');
+
+      const authRows = await tx.execute(sql`
+        select * from public.partner_credit_settlement_authorizations
+         where business_id = ${input.businessId}::uuid
+           and reservation_id = ${input.reservationId}::uuid
+         order by observed_at_ms desc, recorded_at desc, id desc
+         limit 1
+      `);
+      const a = authRows.rows[0] as Record<string, unknown> | undefined;
+      if (!a || a.id !== input.authorizationId)
         return { ok: true, authorization: undefined, link: undefined };
+      const authorization: StoredAuthorization = {
+        id: String(a.id), businessId: String(a.business_id),
+        reservationId: String(a.reservation_id), decisionId: String(a.decision_id),
+        invoiceRef: String(a.invoice_ref), providerAccountId: String(a.provider_account_id),
+        providerMode: a.provider_mode as StoredAuthorization['providerMode'],
+        allocationDigest: String(a.allocation_digest), policyVersion: String(a.policy_version),
+        verdict: a.verdict as StoredAuthorization['verdict'],
+        reasonCodes: a.reason_codes as string[],
+        classifierVersion: String(a.classifier_version), evidenceKind: String(a.evidence_kind),
+        billingInterval: a.billing_interval as StoredAuthorization['billingInterval'],
+        snapshotRef: String(a.snapshot_ref), snapshotDigest: String(a.snapshot_digest),
+        observedAtMs: Number(a.observed_at_ms), evidenceDigest: String(a.evidence_digest),
+        provenanceVersion: Number(a.provenance_version),
+        signingKeyId: String(a.signing_key_id), signature: String(a.signature),
+      };
 
       const result = await tx.execute(sql`
         select authorization_id, evidence_id, business_id, reservation_id,
