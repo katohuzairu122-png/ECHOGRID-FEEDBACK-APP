@@ -31,6 +31,8 @@ export class ReadAuthorizationAdminService {
     if ((await this.revalidate(ctx)) !== 'LIVE') throw new AdminAuthorityError('SESSION_NOT_LIVE');
     return id;
   }
+  /** Re-verifies the exact session and administrator right now, with no other effect. Used by read-only surfaces that touch no authorization row. */
+  async assertLive(ctx: TrustedAdminContext): Promise<void> { await this.actor(ctx); }
   async propose(ctx: TrustedAdminContext, input: ProposalInput): Promise<string> { return this.lifecycle.propose(input, await this.actor(ctx)); }
   async approve(ctx: TrustedAdminContext, authorizationId: string, evidenceRef: string): Promise<number> { return this.lifecycle.approve(authorizationId, await this.actor(ctx), evidenceRef); }
   async revoke(ctx: TrustedAdminContext, authorizationId: string, reason: string): Promise<number> { return this.lifecycle.revoke(authorizationId, await this.actor(ctx), reason); }

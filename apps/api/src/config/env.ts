@@ -28,6 +28,15 @@ export interface Bindings {
   JWT_ACCESS_SECRET: string;
   JWT_REFRESH_SECRET: string;
 
+  /**
+   * DEV-12 deployment restrictions for the internal Stripe-read administrator API (internal/stripe-read-admin.routes.ts). BOTH must be set for the routes to exist at all; otherwise every
+   * request answers 404. Neither value grants any capability: they only decide whether the already-authenticated administrator surface is reachable on this deployment. Intentionally NOT in
+   * wrangler.toml [secrets].required.
+   */
+  INTERNAL_STRIPE_READ_ADMIN_API?: string | undefined;
+  /** Shared secret a trusted internal gateway presents in X-Internal-Gateway-Token (>= 32 chars). Independent of, and in addition to, administrator authentication. */
+  INTERNAL_API_GATEWAY_TOKEN?: string | undefined;
+
   /** Customer identity (Loyalty module) -- deliberately a separate secret
    * from the staff JWT_ACCESS_SECRET, so a leak of one token system never
    * compromises the other (see customer-auth/customer-jwt.ts). */
