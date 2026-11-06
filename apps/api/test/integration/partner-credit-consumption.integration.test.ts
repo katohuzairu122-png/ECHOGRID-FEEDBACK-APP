@@ -250,6 +250,10 @@ describe.skipIf(!process.env.DATABASE_URL)('D4 final credit consumption and ledg
         evidence: signed.evidence,
       })).toMatchObject({ ok: true, outcome: 'PERSISTED', financialAuthorization: 'NOT_GRANTED' });
 
+      // Inert-by-default guard is disabled ONLY in this isolated, disposable
+      // database while testing the atomic recorder + sidecar transaction.
+      await admin.query('alter table settlement_custody_authorization_links disable trigger settlement_custody_link_inert_guard');
+      try {
       const ledgerBefore = (await rows<{ n: number }>('select count(*)::int n from partner_credit_ledger where decision_id=$1', [sc.decisionId]))[0]!.n;
       const handoff = createSyntheticCustodyRecorderHandoff({ custody: service.issueTrustedReader(), recorder });
       const request = { evidenceId, businessId: sc.businessId, reservationId: sc.reservationId };
@@ -262,7 +266,31 @@ describe.skipIf(!process.env.DATABASE_URL)('D4 final credit consumption and ledg
       const rowsNow = await rows<{ n: number }>('select count(*)::int n from partner_credit_settlement_authorizations where business_id=$1 and reservation_id=$2', [sc.businessId, sc.reservationId]);
       expect(rowsNow).toEqual([{ n: 1 }]);
       expect((await rows<{ n: number }>('select count(*)::int n from partner_credit_ledger where decision_id=$1', [sc.decisionId]))[0]!.n).toBe(ledgerBefore);
+      const links = await rows<{ authorization_id: string; evidence_id: string; payload_sha256: string; custody_key_id: string; custody_key_version: number; authorization_evidence_digest: string }>(
+        'select authorization_id, evidence_id, payload_sha256, custody_key_id, custody_key_version, authorization_evidence_digest from settlement_custody_authorization_links where business_id=$1 and reservation_id=$2',
+        [sc.businessId, sc.reservationId],
+      );
+      expect(links).toHaveLength(1);
+      expect(links[0]).toMatchObject({
+        authorization_id: first.authorizationId, evidence_id: evidenceId,
+        payload_sha256: signed.evidence.claims.payloadSha256,
+        custody_key_id: signed.evidence.claims.keyId,
+        custody_key_version: signed.evidence.claims.keyVersion,
+      });
+      const linked = await rows<{ signature: string; content_digest: string }>(
+        'select c.signature,c.content_digest from signed_evidence_records c join settlement_custody_authorization_links l on l.evidence_id=c.evidence_id and l.business_id=c.business_id where l.authorization_id=$1',
+        [first.authorizationId],
+      );
+      expect(linked).toHaveLength(1);
+      expect(linked[0]!.signature).toBe(signed.evidence.signature);
+      expect(linked[0]!.content_digest).toMatch(/^[0-9a-f]{64}$/);
+      expect(await rejects(admin.query('update settlement_custody_authorization_links set payload_sha256=$1 where authorization_id=$2', ['f'.repeat(64), first.authorizationId]))).toMatch(/DEV20_LINK_APPEND_ONLY/);
+      expect(await rejects(admin.query('delete from settlement_custody_authorization_links where authorization_id=$1', [first.authorizationId]))).toMatch(/DEV20_LINK_APPEND_ONLY/);
+      expect(await rejects(admin.query('truncate settlement_custody_authorization_links'))).not.toBe('');
       expect(await rows('select approval_enabled from stripe_read_authorization_policy')).toEqual([{ approval_enabled: false }]);
+      } finally {
+        await admin.query('alter table settlement_custody_authorization_links enable trigger settlement_custody_link_inert_guard');
+      }
     });
   });
 
