@@ -17,8 +17,8 @@ const S = 'b'.repeat(64);
 
 async function fixture() {
   const kp = await crypto.subtle.generateKey({ name: 'Ed25519' }, true, ['sign', 'verify']) as CryptoKeyPair;
-  const signer = await createSettlementEvidenceSigner('rec-dev20', Buffer.from(await crypto.subtle.exportKey('pkcs8', kp.privateKey)).toString('base64'));
-  const publicHex = Buffer.from(await crypto.subtle.exportKey('raw', kp.publicKey)).toString('hex');
+  const signer = await createSettlementEvidenceSigner('rec-dev20', Buffer.from((await crypto.subtle.exportKey('pkcs8', kp.privateKey)) as ArrayBuffer).toString('base64'));
+  const publicHex = Buffer.from((await crypto.subtle.exportKey('raw', kp.publicKey)) as ArrayBuffer).toString('hex');
   const auth: StoredAuthorization = {
     id: A, businessId: B, reservationId: R, decisionId: D,
     invoiceRef: 'in_dev20', providerAccountId: 'acct_dev20', providerMode: 'test',
