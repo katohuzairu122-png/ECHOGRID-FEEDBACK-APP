@@ -140,7 +140,6 @@ describe('DEV-18 synthetic custody-to-recorder handoff (inert)', () => {
     expect(isIssuedCustodyReader(new Proxy(genuine, {}))).toBe(false);
     // Replacing the instance method after issuance must never replace the captured verifier.
     const compromised = issuedReader(async () => ({ ok: false, reason: 'SIGNER_CONFIG_MISSING' }));
-    const later = vi.fn(async () => signed);
     const fakeService = {} as SignedEvidenceCustodyService;
     expect(isIssuedCustodyReader(fakeService)).toBe(false);
     // The capability retains the underlying implementation selected at issuance.
