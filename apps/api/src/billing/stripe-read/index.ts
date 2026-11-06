@@ -43,3 +43,16 @@ export {
   type CredentialCustody, type CredentialDescriptor, type CredentialDescriptorSource, type CredentialVersion, type SecretProvider, type CredentialAuditEvent,
 } from './credential-custody';
 export { createSigningCustody, SigningCustodyError, type SigningCustody, type SigningKeyDirectory, type SigningKeyRecord, type SignerProvider } from './signing-custody';
+export {
+  EVIDENCE_SIGNING_PURPOSES, PURPOSE_EVIDENCE_TYPES, SIGNING_ALGORITHMS, DEFAULT_VERIFICATION_POLICY, resolveVerificationPolicy, parseKeyDirectory, createUnprovisionedKeyDirectory, createUnprovisionedSignerProvider,
+  type EvidenceSigningPurpose, type SigningAlgorithm, type KeyLifecycleState, type EvidenceKeyRecord, type EvidenceKeyDirectory, type EvidenceSigner, type EvidenceSignerProvider, type VerificationPolicy,
+} from './evidence-signing-keys';
+export {
+  createSigningWorkloadAuthority, createUnprovisionedSigningWorkloadSource, isSigningWorkloadIdentity,
+  type SigningWorkloadIdentity, type SigningWorkloadAuthority, type SigningWorkloadDenial, type SigningUse,
+} from './evidence-signing-workload';
+export {
+  createEvidenceSigningBoundary, createEvidenceVerifier, evidenceMessage, EVIDENCE_SCHEMA, EVIDENCE_SCHEMA_VERSION,
+  type EvidenceClaims, type SignedEvidence, type SigningMetadata, type SigningRequest, type SignResult, type SigningDenial, type EvidenceDenial, type ExpectedEvidence, type VerifiedEvidence,
+  type EvidenceSigningBoundary, type EvidenceVerifier,
+} from './evidence-signing';
