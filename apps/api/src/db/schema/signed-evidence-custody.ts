@@ -35,6 +35,7 @@ export const signedEvidenceRecords = pgTable('signed_evidence_records', {
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().default(sql`clock_timestamp()`),
 }, t => [
   uniqueIndex('signed_evidence_records_signature_key').on(t.signature),
+  uniqueIndex('signed_evidence_records_dev20_binding_key').on(t.evidenceId, t.businessId, t.payloadSha256, t.keyId, t.keyVersion),
   uniqueIndex('signed_evidence_records_seq_key').on(t.seq),
   index('signed_evidence_records_business_idx').on(t.businessId, t.seq),
   check('signed_evidence_records_env_check', sql`${t.environment} IN ('development','staging','production')`),
