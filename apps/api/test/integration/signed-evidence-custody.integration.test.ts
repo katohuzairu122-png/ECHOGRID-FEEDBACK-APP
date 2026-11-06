@@ -9,6 +9,8 @@ import {
   createEvidenceSigningBoundary, createSigningWorkloadAuthority, SignedEvidenceCustodyService, isIssuedCustodyReader, evidenceMessage, canonicalJson, sha256Hex,
   type EvidenceKeyRecord, type SecurityLogEntry, type SignedEvidence,
 } from '../../src/billing/stripe-read';
+import { createSyntheticCustodyRecorderHandoff } from '../../src/billing/stripe-read/synthetic-custody-recorder-handoff';
+import { SettlementAuthorizationRecorder } from '../../src/partner-credits/partner-credit-settlement-authorization';
 import { syntheticDirectory, syntheticKey, syntheticSignerProvider, syntheticSigningWorkloadSource, type SyntheticKey } from '../../src/billing/stripe-read/evidence-signing-test-support';
 
 /**
@@ -337,6 +339,63 @@ describe.skipIf(!process.env.DATABASE_URL)('D1/D3-DEV-15 signed-evidence custody
     } finally { state.custWl = wl('EVIDENCE_CUSTODIAN', [B1, B2]); }
     const again = await reader.retrieve({ evidenceId, ...exp() });
     expect(again).toMatchObject({ ok: true, financialAuthorization: 'NOT_GRANTED' });
+  });
+
+  it('DEV-19: PostgreSQL-backed signed evidence reaches only a trusted synthetic handoff, with no accounting authority', async () => {
+    state.now = 500_000;
+    state.custWl = wl('EVIDENCE_CUSTODIAN', [B1, B2]);
+    const evidenceId = randomUUID();
+    const payload = { settlementEvidence: {
+      provenance: { evidenceKind: 'MOCK_SYNTHETIC', snapshotRef: 'dev19-synthetic' },
+      binding: { businessId: B1, reservationId: 'synthetic-res-1', intentRef: 'synthetic-intent-1' },
+    } };
+    const signed = await mkEvidence(payload);
+    expect(await svc.persist({ evidenceId, expected: exp(), evidence: signed })).toMatchObject({ ok: true, outcome: 'PERSISTED' });
+
+    const calls: Array<Record<string, unknown>> = [];
+    // A recording spy is deliberate: setting up persisted reservation/intent/
+    // allocation/subscription authority requires a separately isolated full
+    // recorder fixture. This test proves custody->handoff, not D4 readiness.
+    const recorder = {
+      record: async (input: Record<string, any>) => {
+        calls.push(input);
+        return { id: randomUUID(), verdict: 'UNRESOLVED' as const, reasonCodes: ['INPUT_INVALID'], replay: false };
+      },
+    };
+    const reader = svc.issueTrustedReader();
+    const handoff = createSyntheticCustodyRecorderHandoff({ custody: reader, recorder });
+    const req = { evidenceId, businessId: B1, reservationId: 'synthetic-res-1' };
+    const result = await handoff.record(req);
+    expect(result).toMatchObject({ ok: true, verdict: 'UNRESOLVED', financialAuthorization: 'NOT_GRANTED' });
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toEqual({ businessId: B1, reservationId: req.reservationId, evidence: payload.settlementEvidence });
+    const audit = await q("select event_type from signed_evidence_events where evidence_id=$1 order by seq", [evidenceId]);
+    expect(audit.map(e => e.event_type)).toEqual(['EVIDENCE_PERSISTED', 'VERIFICATION_ATTEMPTED', 'VERIFICATION_SUCCEEDED']);
+
+    // An object that merely mimics the same interface cannot cause a recorder call.
+    const forged = createSyntheticCustodyRecorderHandoff({
+      custody: { retrieve: async () => ({
+        ok: true as const, authenticity: 'AUTHENTIC' as const, financialAuthorization: 'NOT_GRANTED' as const,
+        claims: signed.claims, payload,
+      }) },
+      recorder,
+    });
+    expect(await forged.record(req)).toEqual({ ok: false, reason: 'CUSTODY_NOT_TRUSTED', financialAuthorization: 'NOT_GRANTED' });
+    expect(calls).toHaveLength(1);
+
+    // Revoking the trusted workload after reader issuance still fails closed.
+    state.custWl = null;
+    try {
+      expect(await handoff.record(req)).toEqual({ ok: false, reason: 'CUSTODY_UNAVAILABLE', financialAuthorization: 'NOT_GRANTED' });
+      expect(calls).toHaveLength(1);
+    } finally { state.custWl = wl('EVIDENCE_CUSTODIAN', [B1, B2]); }
+
+    // A real recorder WITHOUT trusted signer/config is never an authority;
+    // the handoff must not turn the signed custody result into a persisted row.
+    const unconfigured = new SettlementAuthorizationRecorder(buildDb(custodian), null as any);
+    const inert = createSyntheticCustodyRecorderHandoff({ custody: reader, recorder: unconfigured });
+    expect(await inert.record(req)).toEqual({ ok: false, reason: 'RECORDER_UNAVAILABLE', financialAuthorization: 'NOT_GRANTED' });
+    expect(await policyRow()).toEqual(policyBefore);
   });
 
   it('13. the activation and financial boundaries are untouched: policy unchanged, no ledger or Stripe effect, evidence never presented as financial authority', async () => {
