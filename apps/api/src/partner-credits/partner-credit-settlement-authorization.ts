@@ -1,6 +1,7 @@
 import { and, eq, sql } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
 import { isTrustedCustodyReceipt, type TrustedCustodyReceipt } from '../billing/stripe-read/trusted-custody-recorder-receipt';
+import { canonicalJson, sha256Hex } from '../billing/stripe-read/bundle-builder';
 import type { Database, Transaction } from '../db/client';
 import {
   benefitApplicationIntents, businessSubscriptions, partnerCreditReservations, partnerCreditSettlementAuthorizations, s08AllocationFreezeItems, s08AllocationFreezes,
@@ -201,6 +202,8 @@ export class SettlementAuthorizationRecorder {
     const receipt = input.custodyReceipt;
     if (receipt !== undefined && (!isTrustedCustodyReceipt(receipt) ||
         receipt.businessId !== input.businessId || receipt.reservationId !== input.reservationId))
+      throw new SettlementAuthorizationError('CUSTODY_RECEIPT_UNTRUSTED');
+    if (receipt && (await sha256Hex(canonicalJson({ settlementEvidence: input.evidence }))) !== receipt.payloadSha256)
       throw new SettlementAuthorizationError('CUSTODY_RECEIPT_UNTRUSTED');
     const cfg = this.config;
     if (!validSettlementGateConfig(cfg)) throw new SettlementAuthorizationError('CONFIG_INVALID');
