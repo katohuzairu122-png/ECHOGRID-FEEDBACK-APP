@@ -87,3 +87,53 @@ CREATE POLICY settlement_custody_link_auditor_read ON public.settlement_custody_
 --> statement-breakpoint
 REVOKE ALL ON FUNCTION public.settlement_custody_link_immutable(),
   public.settlement_custody_link_inert() FROM PUBLIC;
+
+--> statement-breakpoint
+-- Narrow replay verification: recorder can check the EXACT link it already
+-- knows, but cannot enumerate other tenants' link rows.
+DO $$
+BEGIN
+  IF NOT (SELECT rolsuper FROM pg_roles WHERE rolname = current_user) THEN
+    IF NOT pg_has_role(current_user, 'settlement_authority_reader', 'SET') THEN
+      GRANT settlement_authority_reader TO CURRENT_USER;
+      PERFORM set_config('dev20b.membership_granted', 'on', false);
+    END IF;
+    IF NOT has_schema_privilege('settlement_authority_reader', 'public', 'CREATE') THEN
+      GRANT CREATE ON SCHEMA public TO settlement_authority_reader;
+      PERFORM set_config('dev20b.schema_create_granted', 'on', false);
+    END IF;
+  END IF;
+END $$;
+--> statement-breakpoint
+CREATE FUNCTION public.settlement_custody_link_matches(
+  p_auth uuid, p_business uuid, p_reservation uuid, p_evidence uuid,
+  p_payload text, p_key text, p_version integer, p_digest text
+) RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path = pg_catalog, public AS $$
+ SELECT EXISTS (
+   SELECT 1 FROM public.settlement_custody_authorization_links l
+    WHERE l.authorization_id = p_auth AND l.business_id = p_business
+      AND l.reservation_id = p_reservation AND l.evidence_id = p_evidence
+      AND l.payload_sha256 = p_payload AND l.custody_key_id = p_key
+      AND l.custody_key_version = p_version AND l.authorization_evidence_digest = p_digest
+ )
+$$;
+--> statement-breakpoint
+REVOKE ALL ON FUNCTION public.settlement_custody_link_matches(uuid,uuid,uuid,uuid,text,text,integer,text) FROM PUBLIC;
+--> statement-breakpoint
+ALTER FUNCTION public.settlement_custody_link_matches(uuid,uuid,uuid,uuid,text,text,integer,text)
+  OWNER TO settlement_authority_reader;
+--> statement-breakpoint
+GRANT EXECUTE ON FUNCTION public.settlement_custody_link_matches(uuid,uuid,uuid,uuid,text,text,integer,text)
+ TO settlement_recorder;
+--> statement-breakpoint
+DO $$
+BEGIN
+  IF current_setting('dev20b.schema_create_granted', true) = 'on' THEN
+    REVOKE CREATE ON SCHEMA public FROM settlement_authority_reader;
+  END IF;
+  IF current_setting('dev20b.membership_granted', true) = 'on' THEN
+    REVOKE settlement_authority_reader FROM CURRENT_USER;
+  END IF;
+  PERFORM set_config('dev20b.schema_create_granted', '', false);
+  PERFORM set_config('dev20b.membership_granted', '', false);
+END $$;
