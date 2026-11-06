@@ -20,13 +20,13 @@ export type RestrictedProvenanceRead =
   | Readonly<{ ok: false; reason: 'INVALID_REQUEST' | 'UNAVAILABLE' }>;
 
 /**
- * DEV-21 private/internal-only read. Uses the pre-existing authority-reader
- * role and its existing forced-RLS policy from migration 0066.
+ * DEV-21 private/internal-only read. Requires an independently authorized
+ * settlement_auditor principal and existing forced-RLS read policies.
  * No D4 call site, public route, or role grants are added.
  *
  * A dedicated, independently provisioned read-only connection is required.
- * The ordinary application and recorder logins are NOT permitted to assume
- * settlement_authority_reader (see settlement-authority-provisioning.sql).
+ * The ordinary application and recorder logins are NOT granted auditor rights
+ * (see settlement-authority-provisioning.sql).
  * Never borrow a financial-consumer or recorder connection for this read.
  * Apply the same newest-snapshot ordering as the pre-existing authority read
  * function. Auditors have SELECT under forced RLS, but have no EXECUTE grant
