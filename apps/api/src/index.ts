@@ -31,6 +31,7 @@ import { platformCommunityPointRulesRoutes } from './platform/community-point-ru
 import { platformCommunityPointLedgerRoutes } from './platform/community-point-ledger.routes';
 import { platformCommunityPointAdjustmentRoutes } from './platform/community-point-adjustments.routes';
 import { platformOpsRoutes } from './platform/ops.routes';
+import { internalStripeReadAdminRoutes } from './internal/stripe-read-admin.routes';
 import { platformOrphanSettlementRoutes } from './platform/orphan-settlement.routes';
 import { billingRoutes } from './billing/billing.routes';
 import { partnerConsentRoutes } from './partner-credits/partner-consent.routes';
@@ -192,6 +193,8 @@ api.route('/platform/orphan-settlements', platformOrphanSettlementRoutes);
 // WRITES nothing and READS nothing. See ops.routes.ts for why it is gated
 // tighter than audit-log (which admits all three roles).
 api.route('/platform/ops', platformOpsRoutes);
+// DEV-12: internal Stripe-read administrator API. Absent (404) unless explicitly enabled AND presented with the gateway token; always behind administrator-session authentication. See the route module.
+api.route('/internal/stripe-read', internalStripeReadAdminRoutes);
 
 app.route('/api/v1', api);
 
