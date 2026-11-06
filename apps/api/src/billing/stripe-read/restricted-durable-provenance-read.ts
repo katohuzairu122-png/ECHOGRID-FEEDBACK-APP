@@ -16,7 +16,7 @@ export type StoredCustodyAuthorizationLink = Readonly<{
 }>;
 
 export type RestrictedProvenanceRead =
-  | Readonly<{ ok: true; authorization?: StoredAuthorization; link?: StoredCustodyAuthorizationLink }>
+  | Readonly<{ ok: true; authorization: StoredAuthorization | undefined; link: StoredCustodyAuthorizationLink | undefined }>
   | Readonly<{ ok: false; reason: 'INVALID_REQUEST' | 'UNAVAILABLE' }>;
 
 /**
