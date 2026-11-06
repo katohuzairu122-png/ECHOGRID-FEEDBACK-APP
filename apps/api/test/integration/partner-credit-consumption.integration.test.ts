@@ -405,14 +405,21 @@ describe.skipIf(!process.env.DATABASE_URL)('D4 final credit consumption and ledg
       const auditor = await connect();
       await auditor.query('set role settlement_auditor');
       let revokedAtMs: number | null = null;
+      let swapIdentityBetweenChecks = false;
+      let configurationReads = 0;
       const stage = createPrivateProvenanceAuditStage({
         db: buildDb(auditor), custodyReader: f.trustedReader,
         environment: 'development', clock: () => 500000,
-        source: { load: async () => ({
-          workloadId: 'dev22-auditor', role: 'PROVENANCE_AUDITOR',
-          environment: 'development', businessIds: [f.sc.businessId],
-          validFromMs: 1000, expiresAtMs: 900000, revokedAtMs,
-        }) },
+        source: { load: async () => {
+          configurationReads++;
+          return {
+            workloadId: swapIdentityBetweenChecks && configurationReads % 2 === 0
+              ? 'dev22-replacement-auditor' : 'dev22-auditor',
+            role: 'PROVENANCE_AUDITOR', environment: 'development',
+            businessIds: [f.sc.businessId], validFromMs: 1000,
+            expiresAtMs: 900000, revokedAtMs,
+          };
+        } },
         recorderPublicKeys: GATE_CFG.trustedSigningKeys,
       });
       const request = { businessId: f.sc.businessId, reservationId: f.sc.reservationId, authorizationId: recorded.id };
@@ -422,6 +429,14 @@ describe.skipIf(!process.env.DATABASE_URL)('D4 final credit consumption and ledg
       expect(await stage.verify({ ...request, businessId: randomUUID() })).toEqual({
         status: 'UNAVAILABLE', durable: false, financialAuthorization: 'NOT_GRANTED',
       });
+      // Same-tenant workload substitution during the async custody read
+      // cannot inherit the original identity's VERIFIED verdict.
+      configurationReads = 0;
+      swapIdentityBetweenChecks = true;
+      expect(await stage.verify(request)).toEqual({
+        status: 'UNAVAILABLE', durable: false, financialAuthorization: 'NOT_GRANTED',
+      });
+      swapIdentityBetweenChecks = false;
       revokedAtMs = 500000;
       expect(await stage.verify(request)).toEqual({
         status: 'UNAVAILABLE', durable: false, financialAuthorization: 'NOT_GRANTED',
