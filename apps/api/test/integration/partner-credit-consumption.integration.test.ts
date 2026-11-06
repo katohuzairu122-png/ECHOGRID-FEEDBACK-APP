@@ -25,6 +25,7 @@ import { PartnerProvisionalReversalCompensator } from '../../src/partner-credits
 import { PartnerCreditProjectionAudit } from '../../src/partner-credits/partner-credit-projection.audit';
 import { readTrustedCustodyForRecorder } from '../../src/billing/stripe-read/trusted-custody-recorder-receipt';
 import { verifyDurableSettlementProvenance } from '../../src/billing/stripe-read/durable-provenance-verifier';
+import { createPrivateProvenanceAuditStage } from '../../src/billing/stripe-read/private-provenance-audit-stage';
 import { createSyntheticCustodyRecorderHandoff } from '../../src/billing/stripe-read/synthetic-custody-recorder-handoff';
 import { createEvidenceSigningBoundary, createSigningWorkloadAuthority, SignedEvidenceCustodyService } from '../../src/billing/stripe-read';
 import { syntheticDirectory, syntheticKey, syntheticSignerProvider, syntheticSigningWorkloadSource } from '../../src/billing/stripe-read/evidence-signing-test-support';
@@ -391,6 +392,55 @@ describe.skipIf(!process.env.DATABASE_URL)('D4 final credit consumption and ledg
       expect(await verifyDurableSettlementProvenance(
         buildDb(auditor), f.trustedReader, request, GATE_CFG.trustedSigningKeys,
       )).toEqual({ status: 'UNAVAILABLE', durable: false, financialAuthorization: 'NOT_GRANTED' });
+      expect(await credit(f.sc)).toEqual(before);
+    });
+    it('DEV-22 binds a private audit workload to the current tenant, revocation, and genuinely verified provenance', async () => {
+      const f = await prepared();
+      const before = await credit(f.sc);
+      await admin.query('alter table settlement_custody_authorization_links disable trigger settlement_custody_link_inert_guard');
+      let recorded: Awaited<ReturnType<typeof recorder.record>>;
+      try { recorded = await recorder.record(f.input); }
+      finally { await admin.query('alter table settlement_custody_authorization_links enable trigger settlement_custody_link_inert_guard'); }
+
+      const auditor = await connect();
+      await auditor.query('set role settlement_auditor');
+      let revokedAtMs: number | null = null;
+      let swapIdentityBetweenChecks = false;
+      let configurationReads = 0;
+      const stage = createPrivateProvenanceAuditStage({
+        db: buildDb(auditor), custodyReader: f.trustedReader,
+        environment: 'development', clock: () => 500000,
+        source: { load: async () => {
+          configurationReads++;
+          return {
+            workloadId: swapIdentityBetweenChecks && configurationReads % 2 === 0
+              ? 'dev22-replacement-auditor' : 'dev22-auditor',
+            role: 'PROVENANCE_AUDITOR', environment: 'development',
+            businessIds: [f.sc.businessId], validFromMs: 1000,
+            expiresAtMs: 900000, revokedAtMs,
+          };
+        } },
+        recorderPublicKeys: GATE_CFG.trustedSigningKeys,
+      });
+      const request = { businessId: f.sc.businessId, reservationId: f.sc.reservationId, authorizationId: recorded.id };
+      expect(await stage.verify(request)).toEqual({
+        status: 'VERIFIED', durable: true, financialAuthorization: 'NOT_GRANTED',
+      });
+      expect(await stage.verify({ ...request, businessId: randomUUID() })).toEqual({
+        status: 'UNAVAILABLE', durable: false, financialAuthorization: 'NOT_GRANTED',
+      });
+      // Same-tenant workload substitution during the async custody read
+      // cannot inherit the original identity's VERIFIED verdict.
+      configurationReads = 0;
+      swapIdentityBetweenChecks = true;
+      expect(await stage.verify(request)).toEqual({
+        status: 'UNAVAILABLE', durable: false, financialAuthorization: 'NOT_GRANTED',
+      });
+      swapIdentityBetweenChecks = false;
+      revokedAtMs = 500000;
+      expect(await stage.verify(request)).toEqual({
+        status: 'UNAVAILABLE', durable: false, financialAuthorization: 'NOT_GRANTED',
+      });
       expect(await credit(f.sc)).toEqual(before);
     });
     it.each(['revoke', 'removeKey'] as const)('rejects a retained receipt after custody key %s', async action => {
