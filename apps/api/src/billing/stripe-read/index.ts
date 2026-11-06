@@ -30,8 +30,8 @@ export {
 } from './trusted-runtime';
 export { createDurableAuthorizationStore, READ_AUTH_VERIFIER_ROLE, recordFromRow } from './durable-authorization';
 export {
-  authenticateAdminSession, requireFreshAdmin, isTrustedAdminContext, ADMIN_SCOPE, AdminAuthorityError,
-  type TrustedAdminContext, type AdminSessionDeps, type AdminSessionDenial, type AdminSessionResult,
+  authenticateAdminSession, createSessionRevalidator, requireFreshAdmin, isTrustedAdminContext, ADMIN_SCOPE, AdminAuthorityError,
+  type TrustedAdminContext, type AdminSessionDeps, type AdminSessionDenial, type AdminSessionResult, type SessionRevalidator, type SessionRevalidation,
 } from './admin-session';
 export { ReadAuthorizationAdminService, DEFAULT_CONTEXT_MAX_AGE_MS, type AuthorizationStatus, type AuthorizationAuditEvent } from './read-authorization-admin';
 export {

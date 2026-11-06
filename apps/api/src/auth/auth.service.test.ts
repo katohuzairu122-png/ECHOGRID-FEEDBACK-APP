@@ -79,6 +79,7 @@ function createFakeRepos() {
           id: (input.id as string) ?? crypto.randomUUID(),
           userId: input.userId,
           tokenHash: input.tokenHash,
+          sessionId: input.sessionId ?? null,
           issuedAt: new Date(),
           expiresAt: input.expiresAt,
           revokedAt: null,
@@ -102,6 +103,14 @@ function createFakeRepos() {
       async revoke(id: string) {
         const row = refreshTokens.get(id);
         if (row) row.revokedAt = new Date();
+      },
+      async isSessionLive(userId: string, sessionId: string, nowMs: number) {
+        return [...refreshTokens.values()].some((r) => r.userId === userId && r.sessionId === sessionId && !r.revokedAt && r.expiresAt.getTime() > nowMs);
+      },
+      async revokeSession(userId: string, sessionId: string) {
+        const rows = [...refreshTokens.values()].filter((r) => r.userId === userId && r.sessionId === sessionId && !r.revokedAt);
+        for (const row of rows) row.revokedAt = new Date();
+        return rows.length;
       },
       async listActiveForUser(userId: string) {
         return [...refreshTokens.values()].filter((r) => r.userId === userId && !r.revokedAt);

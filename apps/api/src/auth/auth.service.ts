@@ -207,10 +207,13 @@ export class AuthService {
       throw new AuthError('This account is not active.', 'ACCOUNT_INACTIVE');
     }
 
+    // DEV-11-R1: a rotation stays inside the SAME session (its id is copied from the row being rotated, never from the request); a legacy row that predates the binding is given one here, now that
+    // possession of its valid refresh token has been proven.
     const next = await this.issueTokens(
       stored.userId,
       stored.userAgent ?? undefined,
       stored.ipAddress ?? undefined,
+      stored.sessionId ?? crypto.randomUUID(),
     );
     const rotated = await this.repos.refreshTokens.rotate(stored.id, next.refreshTokenId);
     if (rotated === false) {
@@ -420,7 +423,10 @@ export class AuthService {
   async logout(rawRefreshToken: string): Promise<void> {
     const payload = await this.verifyRefreshTokenOrThrow(rawRefreshToken).catch(() => null);
     if (!payload) return;
+    const stored = await this.repos.refreshTokens.findById(payload.jti);
     await this.repos.refreshTokens.revoke(payload.jti);
+    // logout ends the whole session, so its access tokens stop authorizing privileged functions immediately
+    if (stored?.sessionId) await this.repos.refreshTokens.revokeSession(stored.userId, stored.sessionId);
   }
 
   private async verifyRefreshTokenOrThrow(rawRefreshToken: string) {
@@ -435,8 +441,9 @@ export class AuthService {
     userId: string,
     userAgent?: string,
     ipAddress?: string,
+    sessionId: string = crypto.randomUUID(), // a new login or signup is a NEW session; the id is created here, at the trusted authentication boundary
   ): Promise<AuthTokens & { refreshTokenId: string }> {
-    const accessToken = await signAccessToken(userId, this.secrets.JWT_ACCESS_SECRET);
+    const accessToken = await signAccessToken(userId, this.secrets.JWT_ACCESS_SECRET, sessionId);
 
     // Pre-generate the row id so it can be embedded as the refresh token's
     // jti claim before the row exists, avoiding a create-then-update dance.
@@ -451,6 +458,7 @@ export class AuthService {
       id: tokenId,
       userId,
       tokenHash: await hashToken(refreshToken),
+      sessionId,
       expiresAt,
       userAgent,
       ipAddress,
