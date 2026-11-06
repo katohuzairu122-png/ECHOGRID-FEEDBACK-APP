@@ -49,7 +49,7 @@ export function evidenceMessage(c: EvidenceClaims): Uint8Array {
 const FORBIDDEN_KEYS = new Set(['eligible', 'eligibility', 'approved', 'approval', 'approvalenabled', 'authorized', 'authorization', 'verdict', 'decision', 'financialdecision', 'settlementstatus', 'consumable', 'consumed']);
 const FORBIDDEN_VALUES = new Set(['ELIGIBLE', 'APPROVED', 'AUTHORIZED', 'SETTLEMENT_ELIGIBLE']);
 /** Plain, JSON-safe, bounded and verdict-free, or null. A caller-supplied verdict is never independent authorization, so it is never signed. */
-function cleanPayload(p: unknown): Record<string, unknown> | null {
+export function cleanPayload(p: unknown): Record<string, unknown> | null {
   if (p === null || typeof p !== 'object' || Array.isArray(p)) return null;
   let nodes = 0;
   const ok = (v: unknown, depth: number): boolean => {

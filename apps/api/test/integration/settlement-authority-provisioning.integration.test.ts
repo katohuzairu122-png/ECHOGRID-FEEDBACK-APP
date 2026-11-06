@@ -22,6 +22,8 @@ describe.skipIf(!process.env.DATABASE_URL)('D1/D3-DEV-05 settlement authority: n
   const SETTLEMENT_ROLES = ['settlement_recorder', 'settlement_consumer', 'settlement_authority_reader', 'settlement_tenant_reader', 'settlement_auditor'];
   /** DEV-10 (migration 0062) group roles; the migrator is given the same ADMIN OPTION when another database already created them. */
   const READ_AUTH_ROLES = ['stripe_read_auth_lifecycle', 'stripe_read_auth_admin', 'stripe_read_auth_verifier', 'stripe_read_auth_tenant_reader', 'stripe_read_auth_auditor'];
+  /** DEV-15 (migration 0065) group roles. */
+  const SIGNED_EVIDENCE_ROLES = ['signed_evidence_lifecycle', 'signed_evidence_writer', 'signed_evidence_reader', 'signed_evidence_auditor'];
   const clients: Client[] = [];
   let root: Client;
   let owner: Client;
@@ -35,7 +37,7 @@ describe.skipIf(!process.env.DATABASE_URL)('D1/D3-DEV-05 settlement authority: n
     await root.query(`create role ${migrator} login createrole password '${password}'`);
     for (const l of [appLogin, recorderLogin]) await root.query(`create role ${l} login password '${password}'`);
     // the group roles may already exist (created by another database's migration, by a superuser): the migrator is then given ADMIN OPTION, which is what creating them itself would have given it
-    for (const r of [...SETTLEMENT_ROLES, ...READ_AUTH_ROLES]) {
+    for (const r of [...SETTLEMENT_ROLES, ...READ_AUTH_ROLES, ...SIGNED_EVIDENCE_ROLES]) {
       if ((await root.query('select 1 from pg_roles where rolname=$1', [r])).rowCount) await root.query(`grant ${r} to ${migrator} with admin option, inherit false, set false`);
     }
     await root.query(`create database ${dbName} owner ${migrator}`);
@@ -104,6 +106,18 @@ describe.skipIf(!process.env.DATABASE_URL)('D1/D3-DEV-05 settlement authority: n
     expect((await db.query("select has_schema_privilege('stripe_read_auth_lifecycle','public','CREATE') c")).rows[0].c).toBe(false);
     // shipped default: disabled, version 1
     expect((await db.query('select approval_enabled, version from stripe_read_authorization_policy')).rows).toEqual([{ approval_enabled: false, version: 1 }]);
+  });
+
+  it('M1e. migration 0065 (DEV-15) applies for a non-superuser owner: custody tables are forced-RLS and append-only, definer functions belong to the narrow lifecycle role, nothing is executable by PUBLIC and no temporary grant remains', async () => {
+    const db = new Client({ connectionString: urlFor(dbName) }); await db.connect(); clients.push(db);
+    expect((await db.query("select relname, relrowsecurity r, relforcerowsecurity f, pg_get_userbyid(relowner) o from pg_class where relname in ('signed_evidence_records','signed_evidence_events') order by 1")).rows)
+      .toEqual([{ relname: 'signed_evidence_events', r: true, f: true, o: migrator }, { relname: 'signed_evidence_records', r: true, f: true, o: migrator }]);
+    expect((await db.query("select proname from pg_proc where proname like 'evidence_custody_%' and prosecdef and pg_get_userbyid(proowner) <> 'signed_evidence_lifecycle'")).rows).toEqual([]);
+    expect((await db.query("select count(*)::int n from pg_proc p where proname like 'evidence_custody_%' and has_function_privilege('public', p.oid, 'EXECUTE')")).rows[0].n).toBe(0);
+    expect((await db.query("select count(*)::int n from pg_trigger where tgrelid in ('signed_evidence_records'::regclass,'signed_evidence_events'::regclass) and not tgisinternal and tgenabled <> 'A'")).rows[0].n).toBe(0); // every custody trigger fires ALWAYS
+    expect((await root.query("select count(*)::int n from pg_auth_members where pg_get_userbyid(roleid)='signed_evidence_lifecycle' and pg_get_userbyid(member)=$1 and set_option", [migrator])).rows[0].n).toBe(0);
+    expect((await db.query("select has_schema_privilege('signed_evidence_lifecycle','public','CREATE') c")).rows[0].c).toBe(false);
+    expect((await db.query("select count(*)::int n from information_schema.role_table_grants where table_name in ('signed_evidence_records','signed_evidence_events') and privilege_type in ('UPDATE','DELETE','TRUNCATE') and grantee <> $1", [migrator])).rows[0].n).toBe(0); // only the owner holds them, and the append-only triggers bind the owner too
   });
 
   it('M2. the owner of the table is still bound by forced RLS: it reads nothing and cannot insert evidence', async () => {

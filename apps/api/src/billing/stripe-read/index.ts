@@ -56,3 +56,7 @@ export {
   type EvidenceClaims, type SignedEvidence, type SigningMetadata, type SigningRequest, type SignResult, type SigningDenial, type EvidenceDenial, type ExpectedEvidence, type VerifiedEvidence,
   type EvidenceSigningBoundary, type EvidenceVerifier,
 } from './evidence-signing';
+export {
+  SignedEvidenceCustodyService, contentDigest,
+  type CustodyDeps, type CustodyDenial, type PersistRequest, type PersistResult, type RetrieveRequest, type RetrieveResult, type CustodyStatus, type SecurityLogEntry,
+} from './signed-evidence-custody';
