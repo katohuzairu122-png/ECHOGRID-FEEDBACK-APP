@@ -72,4 +72,53 @@ describe.skipIf(!process.env.DATABASE_URL)('DEV-21 dedicated audit reader (scrat
     await expect(client.query('insert into settlement_custody_authorization_links default values'))
       .rejects.toThrow();
   });
+
+  it('auditor can read an exactly bound synthetic immutable pair without acquiring writer rights', async () => {
+    // Disposable-only fabricated DB rows exercise the read contract, NOT
+    // genuine custody authenticity. Full cryptographic acceptance remains
+    // subject to independently issued custody evidence verification.
+    const admin = new Client({ connectionString: urlFor(dbName) });
+    await admin.connect(); clients.push(admin);
+    const evidenceId = '55555555-5555-4555-8555-555555555555';
+    const decisionId = '44444444-4444-4444-8444-444444444444';
+    const hash = (ch: string) => ch.repeat(64);
+    await admin.query('set session_replication_role = replica');
+    try {
+      await admin.query(`
+        insert into partner_credit_settlement_authorizations
+          (id,business_id,reservation_id,decision_id,invoice_ref,provider_account_id,
+           provider_mode,allocation_digest,policy_version,verdict,reason_codes,
+           classifier_version,evidence_kind,billing_interval,snapshot_ref,
+           snapshot_digest,observed_at_ms,evidence_digest,provenance_version,
+           signing_key_id,signature)
+        values ($1,$2,$3,$4,'in_dev21','acct_dev21','test',$5,'PC-BENEFIT/1',
+                'INELIGIBLE',ARRAY['NOT_SETTLED'],'v1','MOCK_SYNTHETIC',
+                'month','snap_dev21',$6,500000,$7,1,'dev21',$8)
+      `, [request.authorizationId, request.businessId, request.reservationId,
+        decisionId, hash('a'), hash('b'), hash('c'), 'd'.repeat(128)]);
+      await admin.query(`
+        insert into settlement_custody_authorization_links
+          (authorization_id,evidence_id,business_id,reservation_id,
+           payload_sha256,custody_key_id,custody_key_version,
+           authorization_evidence_digest)
+        values ($1,$2,$3,$4,$5,'synthetic-dev21',1,$6)
+      `, [request.authorizationId, evidenceId, request.businessId,
+        request.reservationId, hash('e'), hash('c')]);
+    } finally {
+      await admin.query('set session_replication_role = origin');
+    }
+    const auditor = new Client({ connectionString: urlFor(dbName, auditorName) });
+    await auditor.connect(); clients.push(auditor);
+    const exact = await readRestrictedDurableProvenance(buildDb(auditor), request);
+    expect(exact.ok).toBe(true);
+    if (!exact.ok) throw new Error('auditor read failed closed');
+    expect(exact.authorization?.id).toBe(request.authorizationId);
+    expect(exact.link?.evidenceId).toBe(evidenceId);
+    expect(exact.link?.authorizationEvidenceDigest).toBe(hash('c'));
+    const foreign = await readRestrictedDurableProvenance(buildDb(auditor), {
+      ...request, businessId: '66666666-6666-4666-8666-666666666666',
+    });
+    expect(foreign).toEqual({ ok: true, authorization: undefined, link: undefined });
+  });
+
 });
