@@ -40,6 +40,7 @@ export const partnerCreditSettlementAuthorizations = pgTable('partner_credit_set
   recordedAt: timestamp('recorded_at', { withTimezone: true }).notNull().default(sql`clock_timestamp()`),
 }, t => [
   unique('partner_credit_settlement_auth_replay_key').on(t.reservationId, t.snapshotDigest),
+  unique('settlement_auth_dev20_binding_key').on(t.id, t.businessId, t.reservationId, t.evidenceDigest),
   foreignKey({ name: 'partner_credit_settlement_auth_reservation_fk', columns: [t.reservationId, t.businessId], foreignColumns: [partnerCreditReservations.id, partnerCreditReservations.businessId] }).onDelete('restrict'),
   index('partner_credit_settlement_auth_latest_idx').on(t.reservationId, t.observedAtMs, t.recordedAt, t.id),
   check('partner_credit_settlement_auth_provider_mode_check', sql`${t.providerMode} IN ('test','live')`),
