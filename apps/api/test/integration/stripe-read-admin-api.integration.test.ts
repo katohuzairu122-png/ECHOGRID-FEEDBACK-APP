@@ -100,7 +100,7 @@ describe.skipIf(!process.env.DATABASE_URL)('D1/D3-DEV-12 administrator API (inte
       const s1 = await session(a1);
       const before = (await q('select (select count(*)::int from stripe_read_authorizations) a, (select count(*)::int from stripe_read_authorization_events) e'))[0]!;
       const st = await call(app, '/policy', s1.auth);
-      expect([st.status, (await j(st)).data]).toEqual([200, { approvalEnabled: false, state: 'DISABLED', mutableThroughApi: false }]);
+      expect(st.status).toBe(200); expect((await j(st)).data).toMatchObject({ approvalEnabled: false, state: 'DISABLED', mutableThroughApi: false }); // DEV-13 adds the additive policy version
       const p = await call(app, '/authorizations', s1.auth, { json: proposal() });
       expect([p.status, (await j(p)).error.code]).toEqual([409, 'APPROVAL_POLICY_DISABLED']);
       const ap = await call(app, `/authorizations/${randomUUID()}/approve`, (await session(a2)).auth, { json: { evidenceRef: 'EV' } });
@@ -117,7 +117,7 @@ describe.skipIf(!process.env.DATABASE_URL)('D1/D3-DEV-12 administrator API (inte
       for (const g of grants) expect(g.p, g.grantee).toBe('SELECT');
       expect((await q("select count(*)::int n from pg_roles r join pg_class c on c.relname='stripe_read_authorization_policy' where c.relowner = r.oid and r.rolname like 'stripe_read_auth_%'"))[0]!.n).toBe(0); // and the owner is not one of the DEV-10 roles
       await policy(true); // harness acting as the database OWNER in a disposable database, never the API
-      expect((await j(await call(app, '/policy', s1.auth))).data).toEqual({ approvalEnabled: true, state: 'ENABLED', mutableThroughApi: false });
+      expect((await j(await call(app, '/policy', s1.auth))).data).toMatchObject({ approvalEnabled: true, state: 'ENABLED', mutableThroughApi: false });
     });
   });
 

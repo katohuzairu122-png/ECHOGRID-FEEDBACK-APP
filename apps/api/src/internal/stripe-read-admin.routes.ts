@@ -14,6 +14,7 @@ import {
   type WorkloadConfigSource, type WorkloadEnvironment,
 } from '../billing/stripe-read';
 import { ReadAuthorizationLifecycleError } from '../billing/stripe-read/durable-authorization';
+import { MAX_POLICY_PAGE, PolicyAdministrationError, PolicyAdministrationService, type PolicyChange } from '../billing/stripe-read/policy-administration';
 
 /**
  * S08-D1D3-DEV-12: the INTERNAL ADMINISTRATOR API for the durable Stripe read-authorization lifecycle. It exposes proposal, approval, revocation, status, audit history and a READ-ONLY view of the
@@ -69,6 +70,12 @@ export const ApprovalBody = z.object({ evidenceRef: PRINTABLE }).strict();
 export const RevokeBody = z.object({ reason: z.string().regex(/^[A-Z_]{1,64}$/) }).strict();
 const AuditQuery = z.object({ businessId: UUID, limit: z.coerce.number().int().min(1).max(100).default(50), afterVersion: z.coerce.number().int().min(0).max(1_000_000).default(0) }).strict();
 const ScopeQuery = z.object({ businessId: UUID }).strict();
+/** DEV-13: a policy-change PROPOSAL. It asks for a target state at an expected policy version and is decided by a distinct administrator; it never changes the policy. */
+export const PolicyProposalBody = z.object({
+  targetState: z.boolean(), expectedVersion: z.number().int().min(1).max(1_000_000), justification: z.string().regex(/^[ -~]{1,255}$/), expiresAtMs: z.number().int().min(1).max(8_640_000_000_000_000),
+}).strict();
+export const PolicyDecisionBody = z.object({ decisionRef: PRINTABLE }).strict();
+const PageQuery = z.object({ limit: z.coerce.number().int().min(1).max(MAX_POLICY_PAGE).default(50), afterSeq: z.coerce.number().int().min(0).max(1_000_000_000_000).default(0) }).strict();
 
 /** The INVENTORY record every authorization belongs to; fixed by the server, never by the caller. */
 const INVENTORY_RECORD_ID = 'S08-STRIPE-PRIVATE-TEST-VERIFIER-001' as const;
@@ -95,8 +102,18 @@ const constantTimeEqual = (a: string, b: string): boolean => {
 const notFound = () => new AppError('Not found.', 404, 'NOT_FOUND');
 const actorRef = async (id: string) => (await sha256Hex(`stripe-read-audit-actor|${id}`)).slice(0, 16);
 
+const POLICY_FAILURE: Record<string, readonly [400 | 403 | 404 | 409 | 422 | 500, string]> = {
+  INVALID_INPUT: [422, 'INVALID_REQUEST'], ADMIN_REQUIRED: [403, 'ADMIN_ACCESS_DENIED'], SELF_DECISION: [403, 'SELF_DECISION_REFUSED'], VERSION_CONFLICT: [409, 'POLICY_VERSION_CONFLICT'], NO_CHANGE: [409, 'POLICY_ALREADY_IN_STATE'],
+  EXPIRED: [409, 'POLICY_CHANGE_EXPIRED'], NOT_EXPIRED: [409, 'POLICY_CHANGE_NOT_EXPIRED'], TERMINAL: [409, 'POLICY_CHANGE_TERMINAL'], DECISION_CONFLICT: [409, 'POLICY_DECISION_CONFLICT'], NOT_FOUND: [404, 'NOT_FOUND'],
+  POLICY_MISSING: [500, 'POLICY_STORE_UNAVAILABLE'], DUPLICATE_LIVE: [409, 'DUPLICATE_POLICY_CHANGE'], NOT_PERMITTED: [500, 'POLICY_STORE_UNAVAILABLE'], UNAVAILABLE: [500, 'POLICY_STORE_UNAVAILABLE'], INVALID_TRANSITION: [409, 'INVALID_TRANSITION'],
+};
+
 function mapFailure(e: unknown): never {
   if (e instanceof AppError) throw e;
+  if (e instanceof PolicyAdministrationError) {
+    const [status, code] = POLICY_FAILURE[e.code] ?? [500, 'POLICY_STORE_UNAVAILABLE'];
+    throw new AppError(status === 500 ? 'The policy store is unavailable.' : 'The request was refused.', status, code);
+  }
   if (e instanceof AdminAuthorityError) {
     if (e.code === 'SESSION_NOT_LIVE' || e.code === 'CONTEXT_STALE') throw new AppError('Administrator session is no longer valid.', 401, 'UNAUTHENTICATED');
     throw new AppError('Administrator authority could not be established.', 500, 'ADMIN_AUTH_UNAVAILABLE');
@@ -186,12 +203,78 @@ export function createStripeReadAdminRoutes(overrides: Partial<AdminApiDeps> = {
     return status;
   };
 
-  // READ-ONLY policy status. There is deliberately no write handler for the policy anywhere in this module.
+  const policyService = (c: Context<Env>) => {
+    const db = c.get('db');
+    return new PolicyAdministrationService(db, deps.clock, createSessionRevalidator(deps.sessionDeps(db, c.env, deps.clock)));
+  };
+  const changeView = async (c: Context<Env>, ch: PolicyChange) => ({
+    changeId: ch.changeId, expectedPolicyVersion: ch.expectedPolicyVersion, targetState: ch.targetState, state: ch.state, storedState: ch.storedState, version: ch.version, justification: ch.justification, expiresAtMs: ch.expiresAtMs, decidedAtMs: ch.decidedAtMs,
+    proposedByRef: await actorRef(ch.proposedBy), decidedByRef: ch.decidedBy ? await actorRef(ch.decidedBy) : null, decisionRef: ch.decisionRef, activationPerformed: false as const, correlationId: c.get('requestCorrelation'),
+  });
+
+  // READ-ONLY policy status. There is deliberately no handler anywhere in this module that writes the policy value: approving a policy-change request below records a decision and nothing else.
   routes.get('/policy', async c => {
     try {
-      await service(c).assertLive(c.get('adminCtx')); // re-verifies the exact session at use time
-      const state = await policyState(c);
-      return ok(c, { approvalEnabled: state === 'ENABLED', state, mutableThroughApi: false });
+      const s = await policyService(c).status(c.get('adminCtx')); // re-verifies the exact session at use time; missing, inconsistent or unreadable is UNKNOWN (disabled)
+      return ok(c, { approvalEnabled: s.approvalEnabled, state: s.state, version: s.version, mutableThroughApi: false, correlationId: c.get('requestCorrelation') });
+    } catch (e) { return mapFailure(e); }
+  });
+
+  routes.post('/policy/changes', async c => {
+    try {
+      const body = await parse(c, PolicyProposalBody);
+      if (body.expiresAtMs <= deps.clock()) throw new AppError('The request would already be expired.', 422, 'INVALID_REQUEST');
+      const svc = policyService(c);
+      const id = await svc.propose(c.get('adminCtx'), { targetState: body.targetState, expectedVersion: body.expectedVersion, justification: body.justification, expiresAtMs: body.expiresAtMs });
+      audit(c, 'stripe_read_policy_change.proposed', id);
+      return ok(c, { changeId: id, state: 'PENDING', activationPerformed: false, correlationId: c.get('requestCorrelation') }, 201);
+    } catch (e) { return mapFailure(e); }
+  });
+
+  routes.get('/policy/changes', async c => {
+    try {
+      const q = parseQuery(c, PageQuery);
+      const page = await policyService(c).listPending(c.get('adminCtx'), { limit: q.limit, afterSeq: q.afterSeq });
+      return ok(c, { items: await Promise.all(page.items.map(i => changeView(c, i))), nextAfterSeq: page.nextAfterSeq, limit: q.limit, correlationId: c.get('requestCorrelation') });
+    } catch (e) { return mapFailure(e); }
+  });
+
+  routes.get('/policy/audit', async c => {
+    try {
+      const q = parseQuery(c, PageQuery);
+      const page = await policyService(c).policyRowHistory(c.get('adminCtx'), { limit: q.limit, afterSeq: q.afterSeq });
+      return ok(c, { events: page.events, nextAfterSeq: page.nextAfterSeq, limit: q.limit, correlationId: c.get('requestCorrelation') });
+    } catch (e) { return mapFailure(e); }
+  });
+
+  routes.get('/policy/changes/:id', async c => {
+    try {
+      const ch = await policyService(c).get(c.get('adminCtx'), idParam(c));
+      if (!ch) throw notFound();
+      return ok(c, await changeView(c, ch));
+    } catch (e) { return mapFailure(e); }
+  });
+
+  const decide = (decision: 'APPROVE' | 'REJECT' | 'CANCEL', action: string) => async (c: Context<Env>) => {
+    try {
+      const id = idParam(c); const body = await parse(c, PolicyDecisionBody);
+      const version = await policyService(c).decide(c.get('adminCtx'), id, decision, body.decisionRef);
+      audit(c, action, id);
+      const stored = decision === 'APPROVE' ? 'APPROVED' : decision === 'REJECT' ? 'REJECTED' : 'CANCELLED';
+      return ok(c, { changeId: id, state: stored, version, activationPerformed: false, correlationId: c.get('requestCorrelation') }); // a decision is NOT an activation, whatever it is
+    } catch (e) { return mapFailure(e); }
+  };
+  routes.post('/policy/changes/:id/approve', decide('APPROVE', 'stripe_read_policy_change.approved'));
+  routes.post('/policy/changes/:id/reject', decide('REJECT', 'stripe_read_policy_change.rejected'));
+  routes.post('/policy/changes/:id/cancel', decide('CANCEL', 'stripe_read_policy_change.cancelled'));
+
+  routes.get('/policy/changes/:id/audit', async c => {
+    try {
+      const id = idParam(c); const q = parseQuery(c, PageQuery); const svc = policyService(c);
+      if (!(await svc.get(c.get('adminCtx'), id))) throw notFound();
+      const page = await svc.audit(c.get('adminCtx'), id, { limit: q.limit, afterSeq: q.afterSeq });
+      const events = await Promise.all(page.events.map(async e => ({ seq: e.seq, version: e.version, eventType: e.eventType, fromState: e.fromState, toState: e.toState, actorRef: e.actorId ? await actorRef(e.actorId) : null, decisionRef: e.decisionRef, policyVersion: e.policyVersion, atMs: e.atMs, recordDigest: e.recordDigest })));
+      return ok(c, { changeId: id, events, nextAfterSeq: page.nextAfterSeq, limit: q.limit, correlationId: c.get('requestCorrelation') });
     } catch (e) { return mapFailure(e); }
   });
 

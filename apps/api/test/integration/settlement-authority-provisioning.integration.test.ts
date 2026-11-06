@@ -91,6 +91,21 @@ describe.skipIf(!process.env.DATABASE_URL)('D1/D3-DEV-05 settlement authority: n
     expect((await db.query("select count(*)::int n from refresh_tokens where session_id is not null")).rows[0].n).toBe(0);
   });
 
+  it('M1d. migration 0064 (DEV-13) applies for a non-superuser owner: policy administration tables are forced-RLS, the definer functions belong to the narrow lifecycle role, no temporary grant remains, and the policy stays disabled at version 1', async () => {
+    const db = new Client({ connectionString: urlFor(dbName) }); await db.connect(); clients.push(db);
+    expect((await db.query("select relname, relrowsecurity r, relforcerowsecurity f, pg_get_userbyid(relowner) o from pg_class where relname in ('stripe_read_policy_changes','stripe_read_policy_events') order by 1")).rows)
+      .toEqual([{ relname: 'stripe_read_policy_changes', r: true, f: true, o: migrator }, { relname: 'stripe_read_policy_events', r: true, f: true, o: migrator }]);
+    expect((await db.query("select proname, pg_get_userbyid(proowner) o, prosecdef d from pg_proc where proname in ('stripe_read_policy_propose','stripe_read_policy_decide','stripe_read_policy_expire') order by 1")).rows)
+      .toEqual(['stripe_read_policy_decide', 'stripe_read_policy_expire', 'stripe_read_policy_propose'].map(proname => ({ proname, o: 'stripe_read_auth_lifecycle', d: true })));
+    // PUBLIC cannot execute them; only the administrator group role can
+    expect((await db.query("select proname, has_function_privilege('public', oid, 'EXECUTE') pub from pg_proc where proname like 'stripe_read_policy_%' and prosecdef order by 1")).rows.every(r => r.pub === false)).toBe(true);
+    // no temporary membership or schema CREATE is left behind
+    expect((await root.query("select count(*)::int n from pg_auth_members where pg_get_userbyid(roleid)='stripe_read_auth_lifecycle' and pg_get_userbyid(member)=$1 and set_option", [migrator])).rows[0].n).toBe(0);
+    expect((await db.query("select has_schema_privilege('stripe_read_auth_lifecycle','public','CREATE') c")).rows[0].c).toBe(false);
+    // shipped default: disabled, version 1
+    expect((await db.query('select approval_enabled, version from stripe_read_authorization_policy')).rows).toEqual([{ approval_enabled: false, version: 1 }]);
+  });
+
   it('M2. the owner of the table is still bound by forced RLS: it reads nothing and cannot insert evidence', async () => {
     expect((await tryQ(owner, 'select count(*)::int n from partner_credit_settlement_authorizations')).rows).toEqual([{ n: 0 }]);
     expect((await tryQ(owner, 'insert into partner_credit_settlement_authorizations(id) values (gen_random_uuid())')).error).toMatch(/row-level security|SETTLEMENT_AUTH|violates/);

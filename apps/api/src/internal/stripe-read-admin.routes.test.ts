@@ -122,7 +122,7 @@ describe('1-10. administrator authentication through the HTTP boundary', () => {
     const r = rig(); const res = await r.call('/policy', { auth: bearer(await r.token()) });
     expect(res.status).toBe(200);
     expect(r.seen.userId).toBe(r.userId); // the request is attributed to the SESSION administrator for the audit trail
-    expect(await body(res)).toEqual({ success: true, data: { approvalEnabled: false, state: 'UNKNOWN', mutableThroughApi: false } });
+    expect(await body(res)).toMatchObject({ success: true, data: { approvalEnabled: false, state: 'UNKNOWN', version: null, mutableThroughApi: false } });
   });
 
   it('authentication-storage failure fails closed with 500, and no request field names an administrator', async () => {
@@ -197,6 +197,47 @@ describe('static properties of the administrator API module', () => {
     expect(/process\.env|import\.meta\.env/.test(text)).toBe(false);
     expect(/set\s+approval_enabled|update\s+(public\.)?stripe_read_authorization_policy|insert\s+into\s+(public\.)?stripe_read_authorization_policy/i.test(text)).toBe(false); // no statement that writes the policy
     expect(/routes\.(put|patch|delete)\(/.test(text)).toBe(false);
-    expect([...text.matchAll(/routes\.(get|post)\('([^']+)'/g)].map(m => `${m[1]} ${m[2]}`).sort()).toEqual(['get /authorizations/:id', 'get /authorizations/:id/audit', 'get /policy', 'post /authorizations', 'post /authorizations/:id/approve', 'post /authorizations/:id/revoke']);
+    expect([...text.matchAll(/routes\.(get|post)\('([^']+)'/g)].map(m => `${m[1]} ${m[2]}`).sort()).toEqual(['get /authorizations/:id', 'get /authorizations/:id/audit', 'get /policy', 'get /policy/audit', 'get /policy/changes', 'get /policy/changes/:id', 'get /policy/changes/:id/audit', 'post /authorizations', 'post /authorizations/:id/approve', 'post /authorizations/:id/revoke', 'post /policy/changes', 'post /policy/changes/:id/approve', 'post /policy/changes/:id/cancel', 'post /policy/changes/:id/reject']);
+  });
+});
+
+describe('DEV-13 policy administration routes: validation and the absence of any activation path', () => {
+  const post = async (r: ReturnType<typeof rig>, path: string, b: unknown, raw?: string) => r.call(path, { method: 'POST', auth: bearer(await r.token()), headers: { 'content-type': 'application/json' }, body: raw ?? JSON.stringify(b) });
+  const valid = () => ({ targetState: true, expectedVersion: 1, justification: 'Owner review of the approval policy', expiresAtMs: Date.now() + 3_600_000 });
+
+  it('malformed proposals, mass assignment and bad decision bodies are rejected with 422 that echoes no submitted value', async () => {
+    const r = rig();
+    for (const raw of ['{not json', 'null', '[]', '"x"']) expect((await post(r, '/policy/changes', null, raw)).status, raw).toBe(422);
+    const bad: Array<[string, Record<string, unknown>]> = [
+      ['target as string', { targetState: 'true' }], ['missing target', { targetState: undefined }], ['version zero', { expectedVersion: 0 }], ['version float', { expectedVersion: 1.5 }], ['version string', { expectedVersion: '1' }],
+      ['empty justification', { justification: '' }], ['control characters', { justification: 'a\nb' }], ['too long', { justification: 'x'.repeat(256) }], ['past expiry', { expiresAtMs: 5 }], ['mass assignment adminUserId', { adminUserId: randomUUID() }],
+      ['mass assignment state', { state: 'APPROVED' }], ['mass assignment proposedBy', { proposedBy: randomUUID() }], ['mass assignment approvalEnabled', { approvalEnabled: true }], ['mass assignment decidedBy', { decidedBy: randomUUID() }],
+    ];
+    for (const [label, patch] of bad) { const res = await post(r, '/policy/changes', { ...valid(), ...patch }); expect(res.status, label).toBe(422); expect(JSON.stringify(await body(res)), label).not.toMatch(/Owner review|x{20}/); }
+    const id = randomUUID();
+    for (const action of ['approve', 'reject', 'cancel']) {
+      for (const b of [{}, { decisionRef: '' }, { decisionRef: 'a b' }, { decisionRef: 'ok', decidedBy: randomUUID() }, { decisionRef: 5 }, { decisionRef: 'ok', state: 'APPROVED' }]) expect((await post(r, `/policy/changes/${id}/${action}`, b)).status, `${action} ${JSON.stringify(b)}`).toBe(422);
+    }
+    for (const q of ['limit=0', 'limit=101', 'limit=x', 'afterSeq=-1', 'extra=1']) { expect((await r.call(`/policy/changes?${q}`, { auth: bearer(await r.token()) })).status, q).toBe(422); expect((await r.call(`/policy/audit?${q}`, { auth: bearer(await r.token()) })).status, q).toBe(422); expect((await r.call(`/policy/changes/${id}/audit?${q}`, { auth: bearer(await r.token()) })).status, q).toBe(422); }
+    for (const x of ['x', '1', `${id}x`]) expect((await r.call(`/policy/changes/${x}`, { auth: bearer(await r.token()) })).status, x).toBe(422);
+  });
+
+  it('every policy route needs an administrator: anonymous is 401 and a non-administrator is 403, before any validation or database access', async () => {
+    const anon = rig(); const user = rig({ user: { platformRole: null } }); const id = randomUUID();
+    const calls: Array<[string, string]> = [['GET', '/policy'], ['GET', '/policy/audit'], ['GET', '/policy/changes'], ['POST', '/policy/changes'], ['GET', `/policy/changes/${id}`], ['GET', `/policy/changes/${id}/audit`], ['POST', `/policy/changes/${id}/approve`], ['POST', `/policy/changes/${id}/reject`], ['POST', `/policy/changes/${id}/cancel`]];
+    for (const [m, p] of calls) {
+      expect((await anon.call(p, { method: m, auth: null, ...(m === 'POST' ? { headers: { 'content-type': 'application/json' }, body: '{}' } : {}) })).status, `anon ${m} ${p}`).toBe(401);
+      expect((await user.call(p, { method: m, auth: bearer(await user.token()), ...(m === 'POST' ? { headers: { 'content-type': 'application/json' }, body: '{}' } : {}) })).status, `user ${m} ${p}`).toBe(403);
+    }
+    expect(anon.calls.openDb + user.calls.openDb).toBeGreaterThan(0); expect(user.calls.openDb).toBeGreaterThan(0);
+  });
+
+  it('there is no activation route and no env-style switch: every enabling verb and path answers 404, and a configured environment flag changes nothing', async () => {
+    const r = rig(); const auth = bearer(await r.token()); const id = randomUUID();
+    const paths = ['/policy/activate', '/policy/enable', '/policy/apply', '/policy/approval', '/policy/enabled', `/policy/changes/${id}/activate`, `/policy/changes/${id}/apply`, `/policy/changes/${id}/enable`];
+    for (const p of paths) for (const m of ['POST', 'PUT', 'PATCH', 'DELETE', 'GET']) expect((await r.call(p, { method: m, auth, ...(m === 'POST' || m === 'PUT' || m === 'PATCH' ? { headers: { 'content-type': 'application/json' }, body: JSON.stringify({ approvalEnabled: true, enabled: true }) } : {}) })).status, `${m} ${p}`).toBe(404);
+    for (const m of ['PUT', 'PATCH', 'DELETE']) for (const p of ['/policy', '/policy/changes', `/policy/changes/${id}`]) expect((await r.call(p, { method: m, auth })).status, `${m} ${p}`).toBe(404);
+    const flagged = await r.call('/policy', { auth, env: { APPROVAL_ENABLED: 'true', STRIPE_READ_APPROVAL_ENABLED: 'true', INTERNAL_APPROVAL_ENABLED: 'true' } as never });
+    expect(await body(flagged)).toMatchObject({ data: { approvalEnabled: false, mutableThroughApi: false } });
   });
 });

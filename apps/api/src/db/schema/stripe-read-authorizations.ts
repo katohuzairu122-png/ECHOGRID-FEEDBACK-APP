@@ -75,4 +75,6 @@ export const stripeReadAuthorizationEvents = pgTable('stripe_read_authorization_
 export const stripeReadAuthorizationPolicy = pgTable('stripe_read_authorization_policy', {
   singleton: boolean('singleton').primaryKey().default(true),
   approvalEnabled: boolean('approval_enabled').notNull().default(false),
+  /** DEV-13: the policy VERSION. Starts at 1 and advances by exactly one whenever `approval_enabled` changes (a trigger does it); every policy-change request names the version it was written against. */
+  version: integer('version').notNull().default(1),
 }, t => [check('stripe_read_auth_policy_singleton_check', sql`${t.singleton} = true`)]);
