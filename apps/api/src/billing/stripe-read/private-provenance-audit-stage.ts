@@ -88,7 +88,7 @@ export function createPrivateProvenanceAuditStage(deps: Readonly<{
   };
 
   return Object.freeze({
-    async verify(request): Promise<DurableProvenanceResult> {
+    async verify(request: Readonly<{ businessId: string; reservationId: string; authorizationId: string }>): Promise<DurableProvenanceResult> {
       if (!request || !UUID.test(request.businessId) ||
           !UUID.test(request.reservationId) || !UUID.test(request.authorizationId) ||
           !isIssuedCustodyReader(deps?.custodyReader))
