@@ -15,7 +15,7 @@ No production access, activation, live Stripe, deployment, or automatic merge.
 
 ## DEV-21 implementation boundary
 
-Develop a private verification operation that accepts explicit businessId, reservationId, and authorizationId; it must never permit caller-selected tenant scope without trusted workload authorization. Resolve one persisted immutable link by exact tuple with a dedicated, narrowly authorized database read function. Do not use direct table SELECT from an ordinary app session, and do not grant broad table access.
+DEV-21 implements a private verification operation accepting explicit businessId, reservationId, and authorizationId. It relies on an independently authorized auditor database login (not the application or recorder login) and the migration-0061/0066 pre-existing auditor SELECT grants and forced RLS. The private reader checks auditor membership, reads exactly the newest matching authorization (matching the old authority function's ordering), and reads one immutable link by exact tuple. It does not use the consumer/recorder-only SECURITY DEFINER read function. There are no new database grants, migrations, routes or production credentials. Without independently provisioned auditor authorization the operation fails closed. The privileged composition root must authorize the caller's workload and tenant before using the private interface. Do not wire it to ordinary user input.
 
 The read function must be least-privilege, ownership-safe and default-deny. Distinguish no matching authorized link from infrastructure failure, but do not disclose cross-tenant existence. Do not weaken existing INSERT guards, immutable triggers, or RLS policies. If a new migration is required, use the next verified migration sequence and disposable PostgreSQL migration tests.
 
@@ -34,3 +34,7 @@ No implementation completion may be claimed until TypeScript checks, targeted te
 ## Stop conditions
 
 Stop for owner review on any conflict with previously approved Split 08 architecture, key-lifecycle policy, consumption authority, or migration ownership. Do not merge, deploy, activate financial operations, or start DEV-22.
+
+## Current development status
+
+The result contract, restricted audit reader, cryptographic verifier, fail-closed unit tests and disposable-PostgreSQL role tests are implemented on the DEV-21 branch. This document does not certify their correctness: exact-head CI, positive genuine custody verification, and security review are still required. The default application/recorder provisioning intentionally does not grant auditor access; no automatic provisioning occurs.
