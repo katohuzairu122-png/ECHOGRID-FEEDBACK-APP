@@ -9,10 +9,16 @@ const expected: ExpectedEvidence = {
   evidenceType: 'SYNTHETIC_TEST_EVIDENCE', environment: 'development',
 };
 const context = { expected: { businessId } } as SettlementClassifierContext;
-const authentic = {
+const authentic: Extract<VerifiedEvidence, { ok: true }> = {
   ok: true, authenticity: 'AUTHENTIC', financialAuthorization: 'NOT_GRANTED',
-  claims: { businessId }, payload: { settlementEvidence: {} }, keyState: 'ACTIVE',
-} as VerifiedEvidence;
+  claims: {
+    schema: 'S08-SIGNED-EVIDENCE', schemaVersion: 1, businessId,
+    purpose: 'SYNTHETIC_TEST_EVIDENCE', evidenceType: 'SYNTHETIC_TEST_EVIDENCE',
+    environment: 'development', workloadId: 'synthetic-workload', keyId: 'synthetic-key',
+    keyVersion: 1, algorithm: 'Ed25519', signedAtMs: 500_000, payloadSha256: '0'.repeat(64),
+  },
+  payload: { settlementEvidence: {} }, keyState: 'ACTIVE',
+};
 
 function fixture(options: { stored?: unknown; verification?: VerifiedEvidence; expected?: ExpectedEvidence } = {}) {
   const load = vi.fn(async () => options.stored === undefined ? { synthetic: true } : options.stored);
