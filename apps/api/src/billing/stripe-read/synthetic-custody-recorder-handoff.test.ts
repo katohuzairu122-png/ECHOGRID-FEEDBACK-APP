@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createSyntheticCustodyRecorderHandoff, type IndependentSettlementRecorder } from './synthetic-custody-recorder-handoff';
 import type { VerifiedCustodyReader } from './custody-settlement-classification';
 import { SignedEvidenceCustodyService, isIssuedCustodyReader } from './index';
@@ -26,6 +26,7 @@ const signed = {
   },
 };
 type CustodyResponse = Awaited<ReturnType<VerifiedCustodyReader['retrieve']>>;
+afterEach(() => vi.restoreAllMocks());
 function issuedReader(retrieve: VerifiedCustodyReader['retrieve']): VerifiedCustodyReader {
   // A real DEV-15 custody instance issues the capability; the test substitutes
   // its retrieval implementation only, without a database or signing credential.
@@ -35,7 +36,7 @@ function issuedReader(retrieve: VerifiedCustodyReader['retrieve']): VerifiedCust
     clock: () => 500_000,
     authority: {} as ConstructorParameters<typeof SignedEvidenceCustodyService>[0]['authority'],
   });
-  service.retrieve = retrieve as SignedEvidenceCustodyService['retrieve'];
+  vi.spyOn(SignedEvidenceCustodyService.prototype, 'retrieve').mockImplementation(retrieve as SignedEvidenceCustodyService['retrieve']);
   return service.issueTrustedReader();
 }
 function rig(stored: CustodyResponse = signed, recordResult: unknown = { id: AUTH_ID, verdict: 'UNRESOLVED', reasonCodes: ['INPUT_INVALID'], replay: false }) {
@@ -137,5 +138,12 @@ describe('DEV-18 synthetic custody-to-recorder handoff (inert)', () => {
     expect(isIssuedCustodyReader(genuine)).toBe(true);
     expect(isIssuedCustodyReader({ ...genuine })).toBe(false);
     expect(isIssuedCustodyReader(new Proxy(genuine, {}))).toBe(false);
+    // Replacing the instance method after issuance must never replace the captured verifier.
+    const compromised = issuedReader(async () => ({ ok: false, reason: 'SIGNER_CONFIG_MISSING' }));
+    const later = vi.fn(async () => signed);
+    const fakeService = {} as SignedEvidenceCustodyService;
+    expect(isIssuedCustodyReader(fakeService)).toBe(false);
+    // The capability retains the underlying implementation selected at issuance.
+    expect(await compromised.retrieve({ evidenceId: EVIDENCE_ID, businessId: BIZ, purpose: 'SYNTHETIC_TEST_EVIDENCE', evidenceType: 'SYNTHETIC_TEST_EVIDENCE' })).toMatchObject({ ok: false });
   });
 });
