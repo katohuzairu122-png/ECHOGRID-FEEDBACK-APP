@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any -- synthetic-evidence mutators in tests deliberately build malformed provider payloads */
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
 import { Client } from 'pg';
 import { spawnSync } from 'node:child_process';
 import { randomBytes, randomUUID } from 'node:crypto';
@@ -23,6 +23,7 @@ import { acquireMockExtendedEvidence, buildMockEvidence, classifyBundle, createM
 import { unwindCredit, type UnwindCause } from '../../src/partner-credits/partner-credit-unwind';
 import { PartnerProvisionalReversalCompensator } from '../../src/partner-credits/partner-provisional-reversal.compensator';
 import { PartnerCreditProjectionAudit } from '../../src/partner-credits/partner-credit-projection.audit';
+import { readTrustedCustodyForRecorder } from '../../src/billing/stripe-read/trusted-custody-recorder-receipt';
 import { createSyntheticCustodyRecorderHandoff } from '../../src/billing/stripe-read/synthetic-custody-recorder-handoff';
 import { createEvidenceSigningBoundary, createSigningWorkloadAuthority, SignedEvidenceCustodyService } from '../../src/billing/stripe-read';
 import { syntheticDirectory, syntheticKey, syntheticSignerProvider, syntheticSigningWorkloadSource } from '../../src/billing/stripe-read/evidence-signing-test-support';
@@ -250,6 +251,10 @@ describe.skipIf(!process.env.DATABASE_URL)('D4 final credit consumption and ledg
         evidence: signed.evidence,
       })).toMatchObject({ ok: true, outcome: 'PERSISTED', financialAuthorization: 'NOT_GRANTED' });
 
+      // Inert-by-default guard is disabled ONLY in this isolated, disposable
+      // database while testing the atomic recorder + sidecar transaction.
+      await admin.query('alter table settlement_custody_authorization_links disable trigger settlement_custody_link_inert_guard');
+      try {
       const ledgerBefore = (await rows<{ n: number }>('select count(*)::int n from partner_credit_ledger where decision_id=$1', [sc.decisionId]))[0]!.n;
       const handoff = createSyntheticCustodyRecorderHandoff({ custody: service.issueTrustedReader(), recorder });
       const request = { evidenceId, businessId: sc.businessId, reservationId: sc.reservationId };
@@ -262,7 +267,188 @@ describe.skipIf(!process.env.DATABASE_URL)('D4 final credit consumption and ledg
       const rowsNow = await rows<{ n: number }>('select count(*)::int n from partner_credit_settlement_authorizations where business_id=$1 and reservation_id=$2', [sc.businessId, sc.reservationId]);
       expect(rowsNow).toEqual([{ n: 1 }]);
       expect((await rows<{ n: number }>('select count(*)::int n from partner_credit_ledger where decision_id=$1', [sc.decisionId]))[0]!.n).toBe(ledgerBefore);
+      const links = await rows<{ authorization_id: string; evidence_id: string; payload_sha256: string; custody_key_id: string; custody_key_version: number; authorization_evidence_digest: string }>(
+        'select authorization_id, evidence_id, payload_sha256, custody_key_id, custody_key_version, authorization_evidence_digest from settlement_custody_authorization_links where business_id=$1 and reservation_id=$2',
+        [sc.businessId, sc.reservationId],
+      );
+      expect(links).toHaveLength(1);
+      expect(links[0]).toMatchObject({
+        authorization_id: first.authorizationId, evidence_id: evidenceId,
+        payload_sha256: signed.evidence.claims.payloadSha256,
+        custody_key_id: signed.evidence.claims.keyId,
+        custody_key_version: signed.evidence.claims.keyVersion,
+      });
+      const linked = await rows<{ signature: string; content_digest: string }>(
+        'select c.signature,c.content_digest from signed_evidence_records c join settlement_custody_authorization_links l on l.evidence_id=c.evidence_id and l.business_id=c.business_id where l.authorization_id=$1',
+        [first.authorizationId],
+      );
+      expect(linked).toHaveLength(1);
+      expect(linked[0]!.signature).toBe(signed.evidence.signature);
+      expect(linked[0]!.content_digest).toMatch(/^[0-9a-f]{64}$/);
+      expect(await rejects(admin.query('update settlement_custody_authorization_links set payload_sha256=$1 where authorization_id=$2', ['f'.repeat(64), first.authorizationId]))).toMatch(/DEV20_LINK_APPEND_ONLY/);
+      expect(await rejects(admin.query('delete from settlement_custody_authorization_links where authorization_id=$1', [first.authorizationId]))).toMatch(/DEV20_LINK_APPEND_ONLY/);
+      expect(await rejects(admin.query('truncate settlement_custody_authorization_links'))).not.toBe('');
+      // A forged receipt cannot be manufactured from plain matching fields,
+      // even if all identifiers and digests are copied from valid evidence.
+      const forgedReceipt = {
+        evidenceId, businessId: sc.businessId, reservationId: sc.reservationId,
+        payloadSha256: signed.evidence.claims.payloadSha256,
+        custodyKeyId: signed.evidence.claims.keyId,
+        custodyKeyVersion: signed.evidence.claims.keyVersion,
+      };
+      expect(await rejects(recorder.record({
+        reservationId: sc.reservationId, businessId: sc.businessId,
+        evidence, custodyReceipt: forgedReceipt,
+      }))).toMatch(/SETTLEMENT_AUTH_CUSTODY_RECEIPT_UNTRUSTED/);
+      // A separate, valid legacy authorization must not gain a fabricated
+      // custody link: both composite FKs are independently enforced by SQL.
+      const other = await scenario({ authorize: false, sagaTo: 'consumed' });
+      const unrelated = await recorder.record({
+        businessId: other.businessId, reservationId: other.reservationId,
+        evidence: await evidenceFor(other),
+      });
+      const attempt = (businessId: string, sha: string, candidateEvidenceId: string) => admin.query(
+        `insert into settlement_custody_authorization_links
+         (authorization_id,evidence_id,business_id,reservation_id,payload_sha256,
+          custody_key_id,custody_key_version,authorization_evidence_digest)
+         values ($1,$2,$3,$4,$5,$6,$7,$8)`,
+        [unrelated.id,candidateEvidenceId,businessId,other.reservationId,sha,
+         signed.evidence.claims.keyId,signed.evidence.claims.keyVersion,
+         links[0]!.authorization_evidence_digest],
+      );
+      // PostgreSQL checks uniqueness before or alongside foreign keys. Test
+      // each invariant independently rather than expecting one particular
+      // failure when multiple constraints are simultaneously violated.
+      expect(await rejects(attempt(sc.businessId, signed.evidence.claims.payloadSha256, randomUUID()))).toMatch(/foreign key/);
+      expect(await rejects(attempt(other.businessId, 'f'.repeat(64), randomUUID()))).toMatch(/foreign key/);
+      expect(await rejects(attempt(other.businessId, signed.evidence.claims.payloadSha256, evidenceId))).toMatch(/duplicate key|unique constraint/);
+      expect((await rows<{ n: number }>('select count(*)::int n from settlement_custody_authorization_links'))[0]!.n).toBe(1);
       expect(await rows('select approval_enabled from stripe_read_authorization_policy')).toEqual([{ approval_enabled: false }]);
+      } finally {
+        await admin.query('alter table settlement_custody_authorization_links enable trigger settlement_custody_link_inert_guard');
+      }
+    });
+  });
+
+  describe('DEV-20.B receipt acceptance and atomicity', () => {
+    let connectionStart = 0;
+    beforeEach(() => { connectionStart = clients.length; });
+    afterEach(async () => { for (const c of clients.splice(connectionStart)) await c.end(); });
+    async function prepared() {
+      const sc = await scenario({ authorize: false });
+      const evidence = await evidenceFor(sc);
+      const key = await syntheticKey({ keyId: 'dev20b-disposable' });
+      let records = [key.record];
+      const keys = syntheticDirectory(() => records);
+      const clock = () => 500_000;
+      const authority = (role: 'EVIDENCE_SIGNER' | 'EVIDENCE_CUSTODIAN') => createSigningWorkloadAuthority({
+        source: syntheticSigningWorkloadSource('development', () => ({ workloadId: `dev20b:${role}`, role,
+          environment: 'development', purposes: ['SYNTHETIC_TEST_EVIDENCE'], businessIds: [sc.businessId],
+          validFromMs: 1000, expiresAtMs: 900000, revokedAtMs: null })), environment: 'development', clock,
+        ...(role === 'EVIDENCE_CUSTODIAN' ? { role } : {}),
+      });
+      const signing = createEvidenceSigningBoundary({ authority: authority('EVIDENCE_SIGNER'), keys,
+        signers: syntheticSignerProvider([key]), environment: 'development', clock });
+      const signed = await signing.sign({ businessId: sc.businessId, purpose: 'SYNTHETIC_TEST_EVIDENCE',
+        evidenceType: 'SYNTHETIC_TEST_EVIDENCE', payload: { settlementEvidence: evidence } });
+      if (!signed.ok) throw new Error(signed.reason);
+      const service = new SignedEvidenceCustodyService({ db: buildDb(await connect()), authority: authority('EVIDENCE_CUSTODIAN'),
+        keys, environment: 'development', clock });
+      const evidenceId = randomUUID();
+      expect(await service.persist({ evidenceId, expected: { businessId: sc.businessId, purpose: 'SYNTHETIC_TEST_EVIDENCE',
+        evidenceType: 'SYNTHETIC_TEST_EVIDENCE' }, evidence: signed.evidence })).toMatchObject({ ok: true });
+      const read = await readTrustedCustodyForRecorder(service.issueTrustedReader(), { evidenceId, businessId: sc.businessId, reservationId: sc.reservationId });
+      if (!read.ok) throw new Error(read.reason);
+      const input = { businessId: sc.businessId, reservationId: sc.reservationId, evidence, custodyReceipt: read.receipt };
+      return { sc, input, revoke: () => { records = [{ ...key.record, state: 'REVOKED', revokedAtMs: 500000 }]; },
+        removeKey: () => { records = []; } };
+    }
+    const counts = async (businessId: string) => ({
+      auth: await rows('select id from partner_credit_settlement_authorizations where business_id=$1', [businessId]),
+      links: await rows('select authorization_id from settlement_custody_authorization_links where business_id=$1', [businessId]),
+      ledger: await rows('select * from partner_credit_accounts where business_id=$1', [businessId]),
+    });
+    it.each(['revoke', 'removeKey'] as const)('rejects a retained receipt after custody key %s', async action => {
+      const f = await prepared(); const before = await counts(f.sc.businessId);
+      f[action]();
+      expect(await rejects(recorder.record(f.input))).toMatch(/CUSTODY_RECEIPT_UNTRUSTED/);
+      expect(await counts(f.sc.businessId)).toEqual(before);
+    });
+    it('rechecks revocation after asynchronous recorder signing, under the reservation lock', async () => {
+      const f = await prepared(); const before = await counts(f.sc.businessId);
+      const late = new SettlementAuthorizationRecorder(buildDb(await connect()), GATE_CFG, {
+        keyId: SIGNER.keyId, sign: async bytes => { const signature = await SIGNER.sign(bytes); f.revoke(); return signature; },
+      });
+      expect(await rejects(late.record(f.input))).toMatch(/CUSTODY_RECEIPT_UNTRUSTED/);
+      expect(await counts(f.sc.businessId)).toEqual(before);
+    });
+    it('rolls back the authorization when the link insert guard rejects, and allows a clean retry', async () => {
+      const f = await prepared(); const before = await counts(f.sc.businessId);
+      expect(await rejects(recorder.record(f.input))).toMatch(/DEV20_LINK_INERT/);
+      expect(await counts(f.sc.businessId)).toEqual(before);
+      await admin.query('alter table settlement_custody_authorization_links disable trigger settlement_custody_link_inert_guard');
+      try { expect(await recorder.record(f.input)).toMatchObject({ verdict: 'ELIGIBLE', replay: false }); }
+      finally { await admin.query('alter table settlement_custody_authorization_links enable trigger settlement_custody_link_inert_guard'); }
+    });
+    it('concurrent identical requests create exactly one authorization and link', async () => {
+      const f = await prepared(); const before = await credit(f.sc);
+      const second = new SettlementAuthorizationRecorder(buildDb(await connect()), GATE_CFG, SIGNER);
+      await admin.query('alter table settlement_custody_authorization_links disable trigger settlement_custody_link_inert_guard');
+      try {
+        const out = await Promise.all([recorder.record(f.input), second.record(f.input)]);
+        expect(new Set(out.map(x => x.id)).size).toBe(1);
+        expect(out.map(x => x.replay).sort()).toEqual([false, true]);
+        const stored = await counts(f.sc.businessId);
+        expect(stored.auth).toHaveLength(1); expect(stored.links).toHaveLength(1);
+        expect(await credit(f.sc)).toEqual(before);
+      } finally { await admin.query('alter table settlement_custody_authorization_links enable trigger settlement_custody_link_inert_guard'); }
+    });
+    it('takes a private evidence snapshot before yielding to digest verification', async () => {
+      const f = await prepared();
+      await admin.query('alter table settlement_custody_authorization_links disable trigger settlement_custody_link_inert_guard');
+      try {
+        const pending = recorder.record(f.input);
+        (f.input.evidence as any).invoice.status = 'unpaid';
+        expect(await pending).toMatchObject({ verdict: 'ELIGIBLE' });
+      } finally { await admin.query('alter table settlement_custody_authorization_links enable trigger settlement_custody_link_inert_guard'); }
+    });
+    it.each(['businessId', 'reservationId', 'payload'] as const)('rejects changed %s with an issued receipt', async field => {
+      const f = await prepared(); const before = await counts(f.sc.businessId);
+      if (field === 'payload') (f.input.evidence as any).invoice.totalMinor++;
+      else f.input[field] = randomUUID();
+      expect(await rejects(recorder.record(f.input))).toMatch(/CUSTODY_RECEIPT_UNTRUSTED/);
+      expect(await counts(f.sc.businessId)).toEqual(before);
+    });
+    it.each(['digest', 'key', 'version'] as const)('custody composite FK independently rejects incorrect %s', async field => {
+      const f = await prepared();
+      const legacy = await recorder.record({ businessId: f.input.businessId, reservationId: f.input.reservationId, evidence: f.input.evidence });
+      const digest = (await rows<{ evidence_digest: string }>('select evidence_digest from partner_credit_settlement_authorizations where id=$1', [legacy.id]))[0]!.evidence_digest;
+      const r = f.input.custodyReceipt;
+      await admin.query('alter table settlement_custody_authorization_links disable trigger settlement_custody_link_inert_guard');
+      try {
+        expect(await rejects(admin.query(`insert into settlement_custody_authorization_links
+          (authorization_id,evidence_id,business_id,reservation_id,payload_sha256,custody_key_id,custody_key_version,authorization_evidence_digest)
+          values($1,$2,$3,$4,$5,$6,$7,$8)`, [legacy.id, r.evidenceId, r.businessId, r.reservationId,
+          field === 'digest' ? 'f'.repeat(64) : r.payloadSha256, field === 'key' ? 'wrong-key' : r.custodyKeyId,
+          field === 'version' ? r.custodyKeyVersion + 1 : r.custodyKeyVersion, digest]))).toMatch(/settlement_custody_link_custody_fk/);
+        expect((await counts(f.sc.businessId)).links).toHaveLength(0);
+      } finally { await admin.query('alter table settlement_custody_authorization_links enable trigger settlement_custody_link_inert_guard'); }
+    });
+    it('legacy authorization cannot be upgraded by replaying with a valid receipt', async () => {
+      const f = await prepared();
+      await recorder.record({ businessId: f.input.businessId, reservationId: f.input.reservationId, evidence: f.input.evidence });
+      const before = await counts(f.sc.businessId);
+      expect(await rejects(recorder.record(f.input))).toMatch(/REPLAY_CONFLICT/);
+      expect(await counts(f.sc.businessId)).toEqual(before);
+      expect(before.links).toHaveLength(0);
+    });
+    it('recorder signing failure leaves authorization, link and balance unchanged', async () => {
+      const f = await prepared(); const before = await counts(f.sc.businessId);
+      const failed = new SettlementAuthorizationRecorder(buildDb(await connect()), GATE_CFG, {
+        keyId: SIGNER.keyId, sign: async () => { throw new Error('synthetic signer failure'); },
+      });
+      expect(await rejects(failed.record(f.input))).toMatch(/synthetic signer failure/);
+      expect(await counts(f.sc.businessId)).toEqual(before);
     });
   });
 

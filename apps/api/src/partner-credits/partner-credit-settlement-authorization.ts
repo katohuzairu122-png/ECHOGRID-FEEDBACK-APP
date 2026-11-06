@@ -1,5 +1,7 @@
 import { and, eq, sql } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
+import { isTrustedCustodyReceipt, revalidateTrustedCustodyReceipt, type TrustedCustodyReceipt } from '../billing/stripe-read/trusted-custody-recorder-receipt';
+import { canonicalJson, sha256Hex } from '../billing/stripe-read/bundle-builder';
 import type { Database, Transaction } from '../db/client';
 import {
   benefitApplicationIntents, businessSubscriptions, partnerCreditReservations, partnerCreditSettlementAuthorizations, s08AllocationFreezeItems, s08AllocationFreezes,
@@ -148,7 +150,7 @@ const dbNowMs = async (tx: Transaction): Promise<number> => {
 };
 
 export class SettlementAuthorizationError extends Error {
-  constructor(readonly code: 'UNKNOWN_RESERVATION' | 'INTENT_MISSING' | 'ALLOCATION_MISSING' | 'SUBSCRIPTION_MISSING' | 'EVIDENCE_UNUSABLE' | 'REPLAY_CONFLICT' | 'CONFIG_INVALID' | 'RECORDER_UNCONFIGURED' | 'RECORDER_ROLE_UNAVAILABLE') {
+  constructor(readonly code: 'UNKNOWN_RESERVATION' | 'INTENT_MISSING' | 'ALLOCATION_MISSING' | 'SUBSCRIPTION_MISSING' | 'EVIDENCE_UNUSABLE' | 'REPLAY_CONFLICT' | 'CONFIG_INVALID' | 'RECORDER_UNCONFIGURED' | 'RECORDER_ROLE_UNAVAILABLE' | 'CUSTODY_RECEIPT_UNTRUSTED' | 'CUSTODY_LINK_UNAVAILABLE') {
     super(`SETTLEMENT_AUTH_${code}`); this.name = 'SettlementAuthorizationError';
   }
 }
@@ -194,7 +196,22 @@ export class SettlementAuthorizationRecorder {
    */
   constructor(private readonly db: Database, private readonly config: SettlementGateConfig, private readonly signer?: SettlementEvidenceSigner, private readonly recorderRole: string = SETTLEMENT_RECORDER_ROLE) {}
 
-  async record(input: { reservationId: string; businessId: string; evidence: MockSettlementEvidence }): Promise<{ id: string; verdict: 'ELIGIBLE' | 'INELIGIBLE' | 'UNRESOLVED'; reasonCodes: readonly string[]; replay: boolean }> {
+  async record(input: { reservationId: string; businessId: string; evidence: MockSettlementEvidence; custodyReceipt?: TrustedCustodyReceipt }): Promise<{ id: string; verdict: 'ELIGIBLE' | 'INELIGIBLE' | 'UNRESOLVED'; reasonCodes: readonly string[]; replay: boolean }> {
+    // Only a runtime-issued DEV-15 custody receipt may request a durable link.
+    // Existing recorder callers remain backward-compatible and unlinked.
+    const receipt = input.custodyReceipt;
+    // Capture caller-owned values before the first await. Classification and
+    // digest binding must see the same bytes even across lock/signing delays.
+    try {
+      input = { businessId: input.businessId, reservationId: input.reservationId,
+        evidence: JSON.parse(canonicalJson(input.evidence)) as MockSettlementEvidence,
+        ...(receipt ? { custodyReceipt: receipt } : {}) };
+    } catch { throw new SettlementAuthorizationError('EVIDENCE_UNUSABLE'); }
+    if (receipt !== undefined && (!isTrustedCustodyReceipt(receipt) ||
+        receipt.businessId !== input.businessId || receipt.reservationId !== input.reservationId))
+      throw new SettlementAuthorizationError('CUSTODY_RECEIPT_UNTRUSTED');
+    if (receipt && (await sha256Hex(canonicalJson({ settlementEvidence: input.evidence }))) !== receipt.payloadSha256)
+      throw new SettlementAuthorizationError('CUSTODY_RECEIPT_UNTRUSTED');
     const cfg = this.config;
     if (!validSettlementGateConfig(cfg)) throw new SettlementAuthorizationError('CONFIG_INVALID');
     const signer = this.signer;
@@ -240,6 +257,8 @@ export class SettlementAuthorizationRecorder {
       };
       const evidenceDigest = await settlementAuthorizationDigest(fields);
       const signature = toHex(await signer.sign(settlementProvenanceMessage(signer.keyId, evidenceDigest)));
+      if (receipt && !(await revalidateTrustedCustodyReceipt(receipt)))
+        throw new SettlementAuthorizationError('CUSTODY_RECEIPT_UNTRUSTED');
       // The reservation row is locked, so two recordings of the same reservation cannot interleave: look first, then insert. (ON CONFLICT is not used: under row-level security it
       // would also demand a SELECT policy for the recorder, and the recorder is deliberately allowed to insert and not to read the table.)
       // Everything above ran with the session's own rights. From here the session acts as the recorder role, for the replay lookup (a recorder login that does not inherit the role has no
@@ -249,6 +268,15 @@ export class SettlementAuthorizationRecorder {
       const existing = await readAuthorization(tx, input.businessId, reservation.id, fields.snapshotDigest);
       if (existing) {
         if (existing.evidenceDigest !== evidenceDigest) throw new SettlementAuthorizationError('REPLAY_CONFLICT'); // same snapshot, different conclusion: never silently replaced
+        if (receipt) {
+          const check = await tx.execute(sql`select public.settlement_custody_link_matches(
+            ${existing.id}::uuid, ${input.businessId}::uuid, ${reservation.id}::uuid,
+            ${receipt.evidenceId}::uuid, ${receipt.payloadSha256}::text,
+            ${receipt.custodyKeyId}::text, ${receipt.custodyKeyVersion}::integer,
+            ${evidenceDigest}::text) AS matches`);
+          if ((check.rows[0] as { matches?: boolean } | undefined)?.matches !== true)
+            throw new SettlementAuthorizationError('REPLAY_CONFLICT');
+        }
         await tx.execute(sql`reset role`);
         return { id: existing.id, verdict: existing.verdict, reasonCodes: existing.reasonCodes, replay: true };
       }
@@ -259,6 +287,17 @@ export class SettlementAuthorizationRecorder {
         classifierVersion: fields.classifierVersion, evidenceKind: fields.evidenceKind, billingInterval: fields.billingInterval as 'month' | 'year' | 'unknown', snapshotRef: fields.snapshotRef,
         snapshotDigest: fields.snapshotDigest, observedAtMs, evidenceDigest, provenanceVersion: SETTLEMENT_PROVENANCE_VERSION, signingKeyId: signer.keyId, signature,
       });
+      if (receipt) {
+        // The inserted authorization and the link commit or roll back together.
+        // Both FKs bind tenant, reservation, canonical digest and custody key
+        // metadata to immutable rows. No caller-supplied verdict is accepted.
+        await tx.execute(sql`insert into public.settlement_custody_authorization_links
+          (authorization_id, evidence_id, business_id, reservation_id, payload_sha256,
+           custody_key_id, custody_key_version, authorization_evidence_digest)
+          values (${newId}::uuid, ${receipt.evidenceId}::uuid, ${input.businessId}::uuid,
+            ${reservation.id}::uuid, ${receipt.payloadSha256}::text, ${receipt.custodyKeyId}::text,
+            ${receipt.custodyKeyVersion}::integer, ${evidenceDigest}::text)`);
+      }
       await tx.execute(sql`reset role`);
       return { id: newId, verdict: result.verdict, reasonCodes: result.reasonCodes, replay: false };
     });

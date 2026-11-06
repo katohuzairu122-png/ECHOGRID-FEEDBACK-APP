@@ -368,7 +368,10 @@ describe.skipIf(!process.env.DATABASE_URL)('D1/D3-DEV-15 signed-evidence custody
     const result = await handoff.record(req);
     expect(result).toMatchObject({ ok: true, verdict: 'UNRESOLVED', financialAuthorization: 'NOT_GRANTED' });
     expect(calls).toHaveLength(1);
-    expect(calls[0]).toEqual({ businessId: B1, reservationId: req.reservationId, evidence: payload.settlementEvidence });
+    expect(calls[0]).toEqual(expect.objectContaining({
+      businessId: B1, reservationId: req.reservationId, evidence: payload.settlementEvidence,
+      custodyReceipt: expect.objectContaining({ evidenceId, businessId: B1, reservationId: req.reservationId }),
+    }));
     const audit = await q("select event_type from signed_evidence_events where evidence_id=$1 order by seq", [evidenceId]);
     expect(audit.map(e => e.event_type)).toEqual(['EVIDENCE_PERSISTED', 'VERIFICATION_ATTEMPTED', 'VERIFICATION_SUCCEEDED']);
 
