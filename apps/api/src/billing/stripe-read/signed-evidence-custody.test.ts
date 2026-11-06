@@ -3,7 +3,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { SignedEvidenceCustodyService, contentDigest, createSigningWorkloadAuthority } from './index';
+import { SignedEvidenceCustodyService, contentDigest, createSigningWorkloadAuthority, isIssuedCustodyReader } from './index';
 import { randomBusinessId, syntheticSigningWorkloadSource } from './evidence-signing-test-support';
 
 /**
@@ -28,6 +28,17 @@ describe('DEV-15 custody service (unit)', () => {
     // valid shape, but no trusted custodian is configured: fail closed before any store or key access
     expect(await svc().persist({ evidenceId: randomUUID(), expected: exp as any, evidence: {} as any })).toEqual({ ok: false, reason: 'SIGNER_CONFIG_MISSING' });
     expect(await svc().retrieve({ evidenceId: randomUUID(), ...exp } as any)).toEqual({ ok: false, reason: 'SIGNER_CONFIG_MISSING' });
+  });
+
+  it('R1: issued readers cannot be diverted by replacing the custody instance method after issuance', async () => {
+    const service = svc();
+    const reader = service.issueTrustedReader();
+    expect(isIssuedCustodyReader(reader)).toBe(true);
+    expect(isIssuedCustodyReader({ retrieve: reader.retrieve })).toBe(false);
+    // A malicious or erroneous late replacement must not manufacture a
+    // successful authenticated read through an already-issued capability.
+    (service as any).retrieve = async () => ({ ok: true, authenticity: 'AUTHENTIC', financialAuthorization: 'NOT_GRANTED', payload: {} });
+    expect(await reader.retrieve({ evidenceId: randomUUID(), ...exp } as any)).toEqual({ ok: false, reason: 'SIGNER_CONFIG_MISSING' });
   });
 
   it('the content digest is a byte-length-prefixed contract (fixed vector, multi-byte safe)', async () => {
