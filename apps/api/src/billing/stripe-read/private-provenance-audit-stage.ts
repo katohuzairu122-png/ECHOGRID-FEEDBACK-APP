@@ -74,17 +74,17 @@ export function createPrivateProvenanceAuditStage(deps: Readonly<{
   clock: () => number;
   recorderPublicKeys: Readonly<Record<string, string>>;
 }>): ProvenanceAuditStage {
-  const permitted = async (businessId: string): Promise<boolean> => {
+  const permittedIdentity = async (businessId: string): Promise<string | null> => {
     if (!deps || deps.environment !== 'development' || !deps.source ||
         typeof deps.source.load !== 'function' || typeof deps.clock !== 'function')
-      return false;
+      return null;
     try {
       const record = parseAuditRecord(await deps.source.load());
       const now = deps.clock();
-      return !!record && validTime(now) && record.revokedAtMs === null &&
+      return record && validTime(now) && record.revokedAtMs === null &&
         now >= record.validFromMs && now < record.expiresAtMs &&
-        record.businessIds.includes(businessId);
-    } catch { return false; }
+        record.businessIds.includes(businessId) ? record.workloadId : null;
+    } catch { return null; }
   };
 
   return Object.freeze({
@@ -93,14 +93,18 @@ export function createPrivateProvenanceAuditStage(deps: Readonly<{
           !UUID.test(request.reservationId) || !UUID.test(request.authorizationId) ||
           !isIssuedCustodyReader(deps?.custodyReader))
         return durableProvenanceResult('UNAVAILABLE');
-      if (!(await permitted(request.businessId))) return durableProvenanceResult('UNAVAILABLE');
+      const identityAtStart = await permittedIdentity(request.businessId);
+      if (identityAtStart === null) return durableProvenanceResult('UNAVAILABLE');
       let result: DurableProvenanceResult;
       try {
         result = await verifyDurableSettlementProvenance(
           deps.db, deps.custodyReader, request, deps.recorderPublicKeys,
         );
       } catch { return durableProvenanceResult('UNAVAILABLE'); }
-      if (!(await permitted(request.businessId))) return durableProvenanceResult('UNAVAILABLE');
+      // Require continuity of the same authority identity, not just any
+      // newly-authorized actor for the same business, across asynchronous work.
+      if ((await permittedIdentity(request.businessId)) !== identityAtStart)
+        return durableProvenanceResult('UNAVAILABLE');
       return result;
     },
   });
