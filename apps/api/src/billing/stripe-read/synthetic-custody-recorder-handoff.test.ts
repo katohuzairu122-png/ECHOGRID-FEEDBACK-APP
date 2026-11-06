@@ -9,6 +9,8 @@ const AUTH_ID = 'bb29c6b8-82d0-4995-bca0-44b9f6c0befc';
 const request = { evidenceId: EVIDENCE_ID, businessId: BIZ, reservationId: 'res-1' };
 const signed = {
   ok: true as const,
+  evidenceId: EVIDENCE_ID,
+  keyState: 'ACTIVE' as const,
   authenticity: 'AUTHENTIC' as const,
   financialAuthorization: 'NOT_GRANTED' as const,
   claims: {
@@ -58,9 +60,13 @@ describe('DEV-18 synthetic custody-to-recorder handoff (inert)', () => {
       purpose: 'SYNTHETIC_TEST_EVIDENCE', evidenceType: 'SYNTHETIC_TEST_EVIDENCE',
     });
     expect(record).toHaveBeenCalledTimes(1);
-    expect(record).toHaveBeenCalledWith({
+    expect(record).toHaveBeenCalledWith(expect.objectContaining({
       businessId: BIZ, reservationId: 'res-1', evidence: signed.payload.settlementEvidence,
-    });
+      custodyReceipt: expect.objectContaining({
+        evidenceId: EVIDENCE_ID, businessId: BIZ, reservationId: 'res-1',
+        payloadSha256: signed.claims.payloadSha256,
+      }),
+    }));
     expect(result).toEqual({
       ok: true, evidenceId: EVIDENCE_ID, authorizationId: AUTH_ID,
       verdict: 'UNRESOLVED', replay: false, financialAuthorization: 'NOT_GRANTED',
