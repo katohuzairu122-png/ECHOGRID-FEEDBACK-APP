@@ -390,6 +390,34 @@ describe.skipIf(!process.env.DATABASE_URL)('D1/D3-DEV-15 signed-evidence custody
       expect(calls).toHaveLength(1);
     } finally { state.custWl = wl('EVIDENCE_CUSTODIAN', [B1, B2]); }
 
+    // Tenant/reservation substitution is rejected by the custody and handoff
+    // boundaries before any settlement recorder call.
+    const foreignTenant = await handoff.record({ ...req, businessId: B2 });
+    expect(foreignTenant).toEqual({ ok: false, reason: 'CUSTODY_UNAVAILABLE', financialAuthorization: 'NOT_GRANTED' });
+    expect(await handoff.record({ ...req, reservationId: 'wrong-reservation' })).toEqual({
+      ok: false, reason: 'BINDING_MISMATCH', financialAuthorization: 'NOT_GRANTED',
+    });
+    expect(calls).toHaveLength(1);
+
+    // Key revocation is evaluated on every read, including through an
+    // already-issued capability. A signed record is not perpetual authority.
+    const activeDirectory = state.dir;
+    state.dir = [{ ...k1.record, state: 'REVOKED', revokedAtMs: 499_000 } as EvidenceKeyRecord];
+    try {
+      expect(await handoff.record(req)).toEqual({
+        ok: false, reason: 'CUSTODY_UNAVAILABLE', financialAuthorization: 'NOT_GRANTED',
+      });
+      expect(calls).toHaveLength(1);
+    } finally { state.dir = activeDirectory; }
+
+    // Identical signed evidence remains retrievable but never supplies a
+    // caller-chosen financial authorization or bypasses recorder verdicts.
+    expect(await svc.persist({ evidenceId, expected: exp(), evidence: signed })).toMatchObject({
+      ok: true, outcome: 'REPLAYED', financialAuthorization: 'NOT_GRANTED',
+    });
+    expect(await handoff.record(req)).toMatchObject({ ok: true, verdict: 'UNRESOLVED', financialAuthorization: 'NOT_GRANTED' });
+    expect(calls).toHaveLength(2);
+
     // A real recorder WITHOUT trusted signer/config is never an authority;
     // the handoff must not turn the signed custody result into a persisted row.
     const unconfigured = new SettlementAuthorizationRecorder(buildDb(custodian), null as any);
