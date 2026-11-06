@@ -306,17 +306,21 @@ describe.skipIf(!process.env.DATABASE_URL)('D4 final credit consumption and ledg
         businessId: other.businessId, reservationId: other.reservationId,
         evidence: await evidenceFor(other),
       });
-      const attempt = (businessId: string, sha: string) => admin.query(
+      const attempt = (businessId: string, sha: string, candidateEvidenceId: string) => admin.query(
         `insert into settlement_custody_authorization_links
          (authorization_id,evidence_id,business_id,reservation_id,payload_sha256,
           custody_key_id,custody_key_version,authorization_evidence_digest)
          values ($1,$2,$3,$4,$5,$6,$7,$8)`,
-        [unrelated.id,evidenceId,businessId,other.reservationId,sha,
+        [unrelated.id,candidateEvidenceId,businessId,other.reservationId,sha,
          signed.evidence.claims.keyId,signed.evidence.claims.keyVersion,
          links[0]!.authorization_evidence_digest],
       );
-      expect(await rejects(attempt(sc.businessId, signed.evidence.claims.payloadSha256))).toMatch(/foreign key/);
-      expect(await rejects(attempt(other.businessId, 'f'.repeat(64)))).toMatch(/foreign key/);
+      // PostgreSQL checks uniqueness before or alongside foreign keys. Test
+      // each invariant independently rather than expecting one particular
+      // failure when multiple constraints are simultaneously violated.
+      expect(await rejects(attempt(sc.businessId, signed.evidence.claims.payloadSha256, randomUUID()))).toMatch(/foreign key/);
+      expect(await rejects(attempt(other.businessId, 'f'.repeat(64), randomUUID()))).toMatch(/foreign key/);
+      expect(await rejects(attempt(other.businessId, signed.evidence.claims.payloadSha256, evidenceId))).toMatch(/duplicate key|unique constraint/);
       expect((await rows<{ n: number }>('select count(*)::int n from settlement_custody_authorization_links'))[0]!.n).toBe(1);
       expect(await rows('select approval_enabled from stripe_read_authorization_policy')).toEqual([{ approval_enabled: false }]);
       } finally {
