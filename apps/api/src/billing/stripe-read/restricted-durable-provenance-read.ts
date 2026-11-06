@@ -24,6 +24,10 @@ export type RestrictedProvenanceRead =
  * role and its existing forced-RLS policy from migration 0066.
  * No D4 call site, public route, or role grants are added.
  *
+ * A dedicated, independently provisioned read-only connection is required.
+ * The ordinary application and recorder logins are NOT permitted to assume
+ * settlement_authority_reader (see settlement-authority-provisioning.sql).
+ * Never borrow a financial-consumer or recorder connection for this read.
  * The pre-existing authorization read function selects the newest snapshot.
  * This deliberately refuses to claim a historical authorization is current.
  */
@@ -37,8 +41,8 @@ export async function readRestrictedDurableProvenance(
 
   try {
     return await db.transaction(async tx => {
-      // Only the configured trusted database principal may SET this role.
-      await tx.execute(sql`select set_config('role', 'settlement_authority_reader', true)`);
+      // No SET ROLE: the caller must already hold an explicitly authorized
+      // read-only database principal. Unauthorized sessions fail closed.
       const authorization = await readAuthorization(tx, input.businessId, input.reservationId);
       if (!authorization || authorization.id !== input.authorizationId)
         return { ok: true, authorization: undefined, link: undefined };
