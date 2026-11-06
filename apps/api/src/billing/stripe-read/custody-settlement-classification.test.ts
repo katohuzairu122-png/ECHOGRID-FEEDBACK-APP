@@ -1,6 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createCustodySettlementClassificationStage } from './custody-settlement-classification';
-import type { SignedEvidenceCustodyService, RetrieveResult } from './signed-evidence-custody';
+import { createCustodySettlementClassificationStage, type VerifiedCustodyReader } from './custody-settlement-classification';
 import type { SettlementClassifierContext } from '../settlement-eligibility.classifier';
 
 const BIZ = 'c33112d3-7bb4-4b35-ab92-03246d05bb43';
@@ -28,12 +27,13 @@ const success = {
     evidenceType: 'SYNTHETIC_TEST_EVIDENCE',
   },
   payload: { settlementEvidence: evidence },
-} as unknown as RetrieveResult;
+} as unknown as Extract<Awaited<ReturnType<VerifiedCustodyReader['retrieve']>>, {ok: true}>;
 
-function rig(stored: RetrieveResult = success, context: SettlementClassifierContext = ctx) {
+type CustodyResponse = Awaited<ReturnType<VerifiedCustodyReader['retrieve']>>;
+function rig(stored: CustodyResponse = success, context: SettlementClassifierContext = ctx) {
   const retrieve = vi.fn(async () => stored);
   // Test double is confined to this file. Production requires the concrete DEV-15 service.
-  const custody = { retrieve } as unknown as SignedEvidenceCustodyService;
+  const custody = { retrieve } satisfies VerifiedCustodyReader;
   const stage = createCustodySettlementClassificationStage({ custody, context: async () => context });
   return { retrieve, stage };
 }
@@ -59,7 +59,7 @@ describe('DEV-17: merged custody-to-classifier integration remains inert', () =>
   it('fails closed when custody denies access or is unavailable', async () => {
     const { stage } = rig({ ok: false, reason: 'NOT_FOUND' });
     expect(await stage.evaluate(EVIDENCE)).toMatchObject({ ok: false, reason: 'CUSTODY_UNAVAILABLE' });
-    const custody = { retrieve: async () => { throw new Error('secret'); } } as unknown as SignedEvidenceCustodyService;
+    const custody: VerifiedCustodyReader = { retrieve: async () => { throw new Error('secret'); } };
     const broken = createCustodySettlementClassificationStage({ custody, context: async () => ctx });
     expect(await broken.evaluate(EVIDENCE)).toEqual({ ok: false, reason: 'CUSTODY_UNAVAILABLE', financialAuthorization: 'NOT_GRANTED' });
   });
@@ -68,11 +68,11 @@ describe('DEV-17: merged custody-to-classifier integration remains inert', () =>
     const cases = [
       { ...success, financialAuthorization: 'GRANTED' },
       { ...success, authenticity: 'UNVERIFIED' },
-      { ...success, claims: { ...((success as Extract<RetrieveResult, { ok: true }>).claims), environment: 'production' } },
-      { ...success, claims: { ...((success as Extract<RetrieveResult, { ok: true }>).claims), businessId: 'another' } },
+      { ...success, claims: { ...((success as Extract<CustodyResponse, { ok: true }>).claims), environment: 'production' } },
+      { ...success, claims: { ...((success as Extract<CustodyResponse, { ok: true }>).claims), businessId: 'another' } },
     ];
     for (const wrong of cases) {
-      const { stage } = rig(wrong as RetrieveResult);
+      const { stage } = rig(wrong as CustodyResponse);
       expect(await stage.evaluate(EVIDENCE)).toMatchObject({ ok: false, reason: 'CUSTODY_UNVERIFIED' });
     }
   });
@@ -84,7 +84,7 @@ describe('DEV-17: merged custody-to-classifier integration remains inert', () =>
       { settlementEvidence: { ...evidence, provider: { ...evidence.provider, accountId: 'foreign' } } },
       { settlementEvidence: { ...evidence, invoice: { id: 'foreign' } } },
     ]) {
-      const { stage } = rig({ ...success, payload } as RetrieveResult);
+      const { stage } = rig({ ...success, payload } as CustodyResponse);
       expect(await stage.evaluate(EVIDENCE)).toMatchObject({ ok: false, reason: 'BINDING_MISMATCH', financialAuthorization: 'NOT_GRANTED' });
     }
   });
