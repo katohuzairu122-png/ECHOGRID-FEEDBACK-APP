@@ -240,7 +240,7 @@ describe.skipIf(!process.env.DATABASE_URL)('D4 final credit consumption and ledg
       expect(signed.ok).toBe(true);
       if (!signed.ok) return;
       const service = new SignedEvidenceCustodyService({
-        db: buildDb(await connect()), authority: issuer('EVIDENCE_CUSTODIAN'),
+        db: buildDb(admin), authority: issuer('EVIDENCE_CUSTODIAN'),
         keys, environment: 'development', clock,
       });
       const evidenceId = randomUUID();
