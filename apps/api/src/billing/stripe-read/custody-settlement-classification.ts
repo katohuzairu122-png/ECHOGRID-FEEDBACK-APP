@@ -1,4 +1,4 @@
-import type { SignedEvidenceCustodyService } from './signed-evidence-custody';
+import type { EvidenceClaims } from './evidence-signing';
 import {
   classifySettlement, type MockSettlementEvidence, type SettlementClassification,
   type SettlementClassifierContext,
@@ -13,6 +13,18 @@ import {
  * DEV-03 recorder, calls Stripe, or touches the D4 consumption writer.
  * Do not expose this function to an HTTP route.
  */
+/**
+ * Read-only structural port. The custody implementation remains isolated and
+ * is wired by a privileged composition root only after independent approval.
+ * An ordinary caller cannot establish its own authenticity through this port.
+ */
+export interface VerifiedCustodyReader {
+  retrieve(request: Readonly<{ evidenceId: string; businessId: string; purpose: 'SYNTHETIC_TEST_EVIDENCE'; evidenceType: 'SYNTHETIC_TEST_EVIDENCE' }>): Promise<
+    | Readonly<{ ok: true; authenticity: 'AUTHENTIC'; financialAuthorization: 'NOT_GRANTED'; claims: EvidenceClaims; payload: Readonly<Record<string, unknown>> }>
+    | Readonly<{ ok: false; reason: string }>
+  >;
+}
+
 export type CustodyClassificationResult =
   | Readonly<{ ok: true; classification: SettlementClassification; evidenceId: string; financialAuthorization: 'NOT_GRANTED' }>
   | Readonly<{ ok: false; reason: 'INVALID_REQUEST' | 'CUSTODY_UNAVAILABLE' | 'CUSTODY_UNVERIFIED' | 'BINDING_MISMATCH' | 'CLASSIFICATION_UNRESOLVED'; financialAuthorization: 'NOT_GRANTED' }>;
@@ -24,7 +36,7 @@ const deny = (reason: Extract<CustodyClassificationResult, { ok: false }>['reaso
 
 /** Strictly dependent upon the real custody service, never a caller-asserted 'verified' flag. */
 export function createCustodySettlementClassificationStage(deps: Readonly<{
-  custody: SignedEvidenceCustodyService;
+  custody: VerifiedCustodyReader;
   context: () => Promise<SettlementClassifierContext>;
 }>): Readonly<{ evaluate(evidenceId: string): Promise<CustodyClassificationResult> }> {
   return Object.freeze({
