@@ -1,6 +1,6 @@
 import type { MockSettlementEvidence } from '../settlement-eligibility.classifier';
 import type { VerifiedCustodyReader } from './custody-settlement-classification';
-import { isIssuedCustodyReader } from './index';
+import { readTrustedCustodyForRecorder, type TrustedCustodyReceipt } from './trusted-custody-recorder-receipt';
 
 /**
  * DEV-18 development-only handoff. NOT a production composition root.
@@ -13,7 +13,7 @@ import { isIssuedCustodyReader } from './index';
  * under its own database clock, and signs its own authorization snapshot.
  */
 export interface IndependentSettlementRecorder {
-  record(input: { reservationId: string; businessId: string; evidence: MockSettlementEvidence }): Promise<{
+  record(input: { reservationId: string; businessId: string; evidence: MockSettlementEvidence; custodyReceipt?: TrustedCustodyReceipt }): Promise<{
     id: string;
     verdict: 'ELIGIBLE' | 'INELIGIBLE' | 'UNRESOLVED';
     reasonCodes: readonly string[];
@@ -51,13 +51,10 @@ export function createSyntheticCustodyRecorderHandoff(deps: Readonly<{
         typeof request.reservationId !== 'string' || request.reservationId.length === 0 || request.reservationId.length > 255)
         return deny('INVALID_REQUEST');
 
-      if (!isIssuedCustodyReader(deps.custody)) return deny('CUSTODY_NOT_TRUSTED');
       try {
-        const custody = await deps.custody.retrieve({
-          evidenceId: request.evidenceId, businessId: request.businessId,
-          purpose: 'SYNTHETIC_TEST_EVIDENCE', evidenceType: 'SYNTHETIC_TEST_EVIDENCE',
-        });
-        if (!custody.ok) return deny('CUSTODY_UNAVAILABLE');
+        const verified = await readTrustedCustodyForRecorder(deps.custody, request);
+        if (!verified.ok) return deny(verified.reason);
+        const { custody, receipt } = verified;
         if (custody.authenticity !== 'AUTHENTIC' || custody.financialAuthorization !== 'NOT_GRANTED' ||
           custody.claims.businessId !== request.businessId || custody.claims.environment !== 'development' ||
           custody.claims.purpose !== 'SYNTHETIC_TEST_EVIDENCE' || custody.claims.evidenceType !== 'SYNTHETIC_TEST_EVIDENCE')
@@ -82,7 +79,7 @@ export function createSyntheticCustodyRecorderHandoff(deps: Readonly<{
         let recorded;
         try {
           recorded = await deps.recorder.record({
-            businessId: request.businessId, reservationId: request.reservationId, evidence,
+            businessId: request.businessId, reservationId: request.reservationId, evidence, custodyReceipt: receipt,
           });
         } catch { return deny('RECORDER_UNAVAILABLE'); }
         if (!recorded || typeof recorded.id !== 'string' || !UUID.test(recorded.id) ||
