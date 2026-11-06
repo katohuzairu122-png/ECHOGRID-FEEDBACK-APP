@@ -24,6 +24,7 @@ import { unwindCredit, type UnwindCause } from '../../src/partner-credits/partne
 import { PartnerProvisionalReversalCompensator } from '../../src/partner-credits/partner-provisional-reversal.compensator';
 import { PartnerCreditProjectionAudit } from '../../src/partner-credits/partner-credit-projection.audit';
 import { readTrustedCustodyForRecorder } from '../../src/billing/stripe-read/trusted-custody-recorder-receipt';
+import { verifyDurableSettlementProvenance } from '../../src/billing/stripe-read/durable-provenance-verifier';
 import { createSyntheticCustodyRecorderHandoff } from '../../src/billing/stripe-read/synthetic-custody-recorder-handoff';
 import { createEvidenceSigningBoundary, createSigningWorkloadAuthority, SignedEvidenceCustodyService } from '../../src/billing/stripe-read';
 import { syntheticDirectory, syntheticKey, syntheticSignerProvider, syntheticSigningWorkloadSource } from '../../src/billing/stripe-read/evidence-signing-test-support';
@@ -357,16 +358,40 @@ describe.skipIf(!process.env.DATABASE_URL)('D4 final credit consumption and ledg
       const evidenceId = randomUUID();
       expect(await service.persist({ evidenceId, expected: { businessId: sc.businessId, purpose: 'SYNTHETIC_TEST_EVIDENCE',
         evidenceType: 'SYNTHETIC_TEST_EVIDENCE' }, evidence: signed.evidence })).toMatchObject({ ok: true });
-      const read = await readTrustedCustodyForRecorder(service.issueTrustedReader(), { evidenceId, businessId: sc.businessId, reservationId: sc.reservationId });
+      const trustedReader = service.issueTrustedReader();
+      const read = await readTrustedCustodyForRecorder(trustedReader, { evidenceId, businessId: sc.businessId, reservationId: sc.reservationId });
       if (!read.ok) throw new Error(read.reason);
       const input = { businessId: sc.businessId, reservationId: sc.reservationId, evidence, custodyReceipt: read.receipt };
-      return { sc, input, revoke: () => { records = [{ ...key.record, state: 'REVOKED', revokedAtMs: 500000 }]; },
+      return { sc, input, trustedReader, revoke: () => { records = [{ ...key.record, state: 'REVOKED', revokedAtMs: 500000 }]; },
         removeKey: () => { records = []; } };
     }
     const counts = async (businessId: string) => ({
       auth: await rows('select id from partner_credit_settlement_authorizations where business_id=$1', [businessId]),
       links: await rows('select authorization_id from settlement_custody_authorization_links where business_id=$1', [businessId]),
       ledger: await rows('select * from partner_credit_accounts where business_id=$1', [businessId]),
+    });
+    it('DEV-21 independently verifies genuine persisted custody and recorder signatures as nonfinancial', async () => {
+      const f = await prepared();
+      const before = await credit(f.sc);
+      await admin.query('alter table settlement_custody_authorization_links disable trigger settlement_custody_link_inert_guard');
+      let recorded: Awaited<ReturnType<typeof recorder.record>>;
+      try { recorded = await recorder.record(f.input); }
+      finally { await admin.query('alter table settlement_custody_authorization_links enable trigger settlement_custody_link_inert_guard'); }
+
+      // A superuser-only disposable fixture switches to the existing NOLOGIN
+      // auditor group role. The actual query runs under its restricted RLS
+      // privileges, never under the superuser's bypass privileges.
+      const auditor = await connect();
+      await auditor.query('set role settlement_auditor');
+      const request = { businessId: f.sc.businessId, reservationId: f.sc.reservationId, authorizationId: recorded.id };
+      expect(await verifyDurableSettlementProvenance(
+        buildDb(auditor), f.trustedReader, request, GATE_CFG.trustedSigningKeys,
+      )).toEqual({ status: 'VERIFIED', durable: true, financialAuthorization: 'NOT_GRANTED' });
+      f.revoke();
+      expect(await verifyDurableSettlementProvenance(
+        buildDb(auditor), f.trustedReader, request, GATE_CFG.trustedSigningKeys,
+      )).toEqual({ status: 'UNAVAILABLE', durable: false, financialAuthorization: 'NOT_GRANTED' });
+      expect(await credit(f.sc)).toEqual(before);
     });
     it.each(['revoke', 'removeKey'] as const)('rejects a retained receipt after custody key %s', async action => {
       const f = await prepared(); const before = await counts(f.sc.businessId);
