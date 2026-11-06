@@ -29,11 +29,11 @@ export async function readTrustedCustodyForRecorder(
   if (!isIssuedCustodyReader(reader)) return { ok: false, reason: 'CUSTODY_NOT_TRUSTED' };
   let result: RetrieveResult;
   try {
-    result = await reader.retrieve({
+    result = (await reader.retrieve({
       evidenceId: request.evidenceId,
       businessId: request.businessId,
       purpose: 'SYNTHETIC_TEST_EVIDENCE', evidenceType: 'SYNTHETIC_TEST_EVIDENCE',
-    });
+    })) as unknown as RetrieveResult;
   } catch { return { ok: false, reason: 'CUSTODY_UNAVAILABLE' }; }
   if (!result.ok) return { ok: false, reason: 'CUSTODY_UNAVAILABLE' };
   if (result.authenticity !== 'AUTHENTIC' || result.financialAuthorization !== 'NOT_GRANTED' ||
