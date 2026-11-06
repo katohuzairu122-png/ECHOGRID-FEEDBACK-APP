@@ -24,6 +24,12 @@ import type { WorkloadEnvironment } from './workload-identity';
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const WRITER_ROLE = 'signed_evidence_writer';
 const READER_ROLE = 'signed_evidence_reader';
+// A private, unforgeable per-process capability registry. Only a real custody
+// service instance can mint a read capability; no public register/mint hook exists.
+const issuedCustodyReaders = new WeakSet<object>();
+export function isIssuedCustodyReader(value: unknown): boolean {
+  return value !== null && typeof value === 'object' && issuedCustodyReaders.has(value);
+}
 const has = (o: object, k: string) => Object.prototype.hasOwnProperty.call(o, k);
 
 export type CustodyDenial = SigningWorkloadDenial | EvidenceDenial | 'INVALID_REQUEST' | 'PAYLOAD_REJECTED' | 'EVIDENCE_CONFLICT' | 'NOT_FOUND' | 'CUSTODY_RECORD_INCONSISTENT' | 'BUSINESS_UNKNOWN' | 'STORE_NOT_PERMITTED' | 'STORE_UNAVAILABLE';
@@ -75,6 +81,22 @@ export interface CustodyDeps {
 
 export class SignedEvidenceCustodyService {
   private readonly verifier;
+  /**
+   * R1 trusted composition capability. The returned closure always calls this
+   * instance's authenticated, signature-verifying, audit-recording retrieve().
+   * Ordinary look-alike objects and proxy objects cannot enter the registry.
+   * Issuance alone does not confer DB access: retrieve still checks workload
+   * authority, role grants, tenant, key state and stored integrity on EVERY call.
+   */
+  issueTrustedReader(): Readonly<{ retrieve: (request: RetrieveRequest) => Promise<RetrieveResult> }> {
+    // Capture the implementation rather than dynamically dispatching an
+    // instance-supplied replacement. A caller cannot monkey-patch retrieve
+    // after issuance to turn a trusted capability into forged evidence.
+    const read = SignedEvidenceCustodyService.prototype.retrieve.bind(this);
+    const reader = Object.freeze({ retrieve: (request: RetrieveRequest): Promise<RetrieveResult> => read(request) });
+    issuedCustodyReaders.add(reader);
+    return reader;
+  }
   constructor(private readonly d: CustodyDeps) {
     this.verifier = createEvidenceVerifier({ keys: d.keys, policy: d.policy, clock: d.clock });
   }

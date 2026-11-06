@@ -1,6 +1,7 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createSyntheticCustodyRecorderHandoff, type IndependentSettlementRecorder } from './synthetic-custody-recorder-handoff';
 import type { VerifiedCustodyReader } from './custody-settlement-classification';
+import { SignedEvidenceCustodyService, isIssuedCustodyReader } from './index';
 
 const BIZ = 'c33112d3-7bb4-4b35-ab92-03246d05bb43';
 const EVIDENCE_ID = 'a9d3a73b-d8f9-4de5-b44f-7a7e4fa2db94';
@@ -25,11 +26,24 @@ const signed = {
   },
 };
 type CustodyResponse = Awaited<ReturnType<VerifiedCustodyReader['retrieve']>>;
+afterEach(() => vi.restoreAllMocks());
+function issuedReader(retrieve: VerifiedCustodyReader['retrieve']): VerifiedCustodyReader {
+  // A real DEV-15 custody instance issues the capability; the test substitutes
+  // its retrieval implementation only, without a database or signing credential.
+  const service = new SignedEvidenceCustodyService({
+    db: {} as ConstructorParameters<typeof SignedEvidenceCustodyService>[0]['db'],
+    keys: { load: async () => null }, environment: 'development',
+    clock: () => 500_000,
+    authority: {} as ConstructorParameters<typeof SignedEvidenceCustodyService>[0]['authority'],
+  });
+  vi.spyOn(SignedEvidenceCustodyService.prototype, 'retrieve').mockImplementation(retrieve as SignedEvidenceCustodyService['retrieve']);
+  return service.issueTrustedReader();
+}
 function rig(stored: CustodyResponse = signed, recordResult: unknown = { id: AUTH_ID, verdict: 'UNRESOLVED', reasonCodes: ['INPUT_INVALID'], replay: false }) {
   const retrieve = vi.fn(async () => stored);
   const record = vi.fn(async () => recordResult) as unknown as IndependentSettlementRecorder['record'];
   const stage = createSyntheticCustodyRecorderHandoff({
-    custody: { retrieve } satisfies VerifiedCustodyReader,
+    custody: issuedReader(retrieve),
     recorder: { record },
   });
   return { stage, retrieve, record };
@@ -100,7 +114,7 @@ describe('DEV-18 synthetic custody-to-recorder handoff (inert)', () => {
     const bad = rig(signed, { id: 'not-uuid', verdict: 'ELIGIBLE', replay: false });
     expect(await bad.stage.record(request)).toEqual({ ok: false, reason: 'RECORDER_UNAVAILABLE', financialAuthorization: 'NOT_GRANTED' });
     const errorRecorder = createSyntheticCustodyRecorderHandoff({
-      custody: { retrieve: async () => signed },
+      custody: issuedReader(async () => signed),
       recorder: { record: async () => { throw new Error('secret signer'); } },
     });
     expect(await errorRecorder.record(request)).toEqual({ ok: false, reason: 'RECORDER_UNAVAILABLE', financialAuthorization: 'NOT_GRANTED' });
@@ -109,5 +123,26 @@ describe('DEV-18 synthetic custody-to-recorder handoff (inert)', () => {
     expect(results).toHaveLength(8);
     expect(results.every(r => r.financialAuthorization === 'NOT_GRANTED')).toBe(true);
     expect(results.every(r => r.ok && r.authorizationId === AUTH_ID && r.replay)).toBe(true);
+  });
+
+  it('rejects a forged structurally compatible reader before custody or recorder executes', async () => {
+    const retrieve = vi.fn(async () => signed);
+    const record = vi.fn(async () => ({ id: AUTH_ID, verdict: 'ELIGIBLE' as const, reasonCodes: [], replay: false }));
+    const fake: VerifiedCustodyReader = { retrieve };
+    expect(isIssuedCustodyReader(fake)).toBe(false);
+    const stage = createSyntheticCustodyRecorderHandoff({ custody: fake, recorder: { record } });
+    expect(await stage.record(request)).toEqual({ ok: false, reason: 'CUSTODY_NOT_TRUSTED', financialAuthorization: 'NOT_GRANTED' });
+    expect(retrieve).not.toHaveBeenCalled();
+    expect(record).not.toHaveBeenCalled();
+    const genuine = issuedReader(async () => signed);
+    expect(isIssuedCustodyReader(genuine)).toBe(true);
+    expect(isIssuedCustodyReader({ ...genuine })).toBe(false);
+    expect(isIssuedCustodyReader(new Proxy(genuine, {}))).toBe(false);
+    // Replacing the instance method after issuance must never replace the captured verifier.
+    const compromised = issuedReader(async () => ({ ok: false, reason: 'SIGNER_CONFIG_MISSING' }));
+    const fakeService = {} as SignedEvidenceCustodyService;
+    expect(isIssuedCustodyReader(fakeService)).toBe(false);
+    // The capability retains the underlying implementation selected at issuance.
+    expect(await compromised.retrieve({ evidenceId: EVIDENCE_ID, businessId: BIZ, purpose: 'SYNTHETIC_TEST_EVIDENCE', evidenceType: 'SYNTHETIC_TEST_EVIDENCE' })).toMatchObject({ ok: false });
   });
 });

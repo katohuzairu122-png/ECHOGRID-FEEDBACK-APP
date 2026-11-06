@@ -57,6 +57,6 @@ export {
   type EvidenceSigningBoundary, type EvidenceVerifier,
 } from './evidence-signing';
 export {
-  SignedEvidenceCustodyService, contentDigest,
+  SignedEvidenceCustodyService, contentDigest, isIssuedCustodyReader,
   type CustodyDeps, type CustodyDenial, type PersistRequest, type PersistResult, type RetrieveRequest, type RetrieveResult, type CustodyStatus, type SecurityLogEntry,
 } from './signed-evidence-custody';

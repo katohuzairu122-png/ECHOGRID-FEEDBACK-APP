@@ -1,5 +1,6 @@
 import type { MockSettlementEvidence } from '../settlement-eligibility.classifier';
 import type { VerifiedCustodyReader } from './custody-settlement-classification';
+import { isIssuedCustodyReader } from './index';
 
 /**
  * DEV-18 development-only handoff. NOT a production composition root.
@@ -22,7 +23,7 @@ export interface IndependentSettlementRecorder {
 
 export type CustodyRecorderResult =
   | Readonly<{ ok: true; evidenceId: string; authorizationId: string; verdict: 'ELIGIBLE' | 'INELIGIBLE' | 'UNRESOLVED'; replay: boolean; financialAuthorization: 'NOT_GRANTED' }>
-  | Readonly<{ ok: false; reason: 'INVALID_REQUEST' | 'CUSTODY_UNAVAILABLE' | 'CUSTODY_UNVERIFIED' | 'BINDING_MISMATCH' | 'RECORDER_UNAVAILABLE'; financialAuthorization: 'NOT_GRANTED' }>;
+  | Readonly<{ ok: false; reason: 'INVALID_REQUEST' | 'CUSTODY_NOT_TRUSTED' | 'CUSTODY_UNAVAILABLE' | 'CUSTODY_UNVERIFIED' | 'BINDING_MISMATCH' | 'RECORDER_UNAVAILABLE'; financialAuthorization: 'NOT_GRANTED' }>;
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const deny = (reason: Extract<CustodyRecorderResult, { ok: false }>['reason']): CustodyRecorderResult =>
@@ -38,6 +39,9 @@ export function createSyntheticCustodyRecorderHandoff(deps: Readonly<{
   custody: VerifiedCustodyReader;
   recorder: IndependentSettlementRecorder;
 }>): Readonly<{ record(request: { evidenceId: string; businessId: string; reservationId: string }): Promise<CustodyRecorderResult> }> {
+  // The marker is held in a private WeakSet owned by the DEV-15 custody
+  // service. A shape-compatible object or fake AUTHENTIC result is insufficient.
+  // Check again at each call, and fail closed without invoking the recorder.
   return Object.freeze({
     async record(request: { evidenceId: string; businessId: string; reservationId: string }): Promise<CustodyRecorderResult> {
       if (!request || typeof request !== 'object' || Array.isArray(request) ||
@@ -47,6 +51,7 @@ export function createSyntheticCustodyRecorderHandoff(deps: Readonly<{
         typeof request.reservationId !== 'string' || request.reservationId.length === 0 || request.reservationId.length > 255)
         return deny('INVALID_REQUEST');
 
+      if (!isIssuedCustodyReader(deps.custody)) return deny('CUSTODY_NOT_TRUSTED');
       try {
         const custody = await deps.custody.retrieve({
           evidenceId: request.evidenceId, businessId: request.businessId,
