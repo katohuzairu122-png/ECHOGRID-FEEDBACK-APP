@@ -70,6 +70,24 @@ describe.skipIf(!process.env.DATABASE_URL)('D1/D3-DEV-05 settlement authority: n
     expect((await db.query("select count(*)::int n from pg_roles where rolname = any($1) and (rolsuper or rolbypassrls or rolcanlogin or rolcreaterole)", [SETTLEMENT_ROLES])).rows[0].n).toBe(0);
   });
 
+  it('DEV20.B: migration 0066 forces RLS, restricts roles and leaves no temporary ownership grants', async () => {
+    const db = new Client({ connectionString: urlFor(dbName) }); await db.connect(); clients.push(db);
+    expect((await db.query("select relrowsecurity r, relforcerowsecurity f, pg_get_userbyid(relowner) o from pg_class where relname='settlement_custody_authorization_links'")).rows)
+      .toEqual([{ r: true, f: true, o: migrator }]);
+    expect((await db.query("select prosecdef d, pg_get_userbyid(proowner) o, has_function_privilege('public',oid,'EXECUTE') p from pg_proc where proname='settlement_custody_link_matches'")).rows)
+      .toEqual([{ d: true, o: 'settlement_authority_reader', p: false }]);
+    for (const role of ['settlement_recorder', 'settlement_consumer', 'settlement_tenant_reader']) {
+      const grants = (await db.query("select has_table_privilege($1,'settlement_custody_authorization_links','SELECT') s, has_table_privilege($1,'settlement_custody_authorization_links','UPDATE,DELETE,TRUNCATE') m", [role])).rows[0];
+      expect(grants).toEqual({ s: false, m: false });
+    }
+    expect((await db.query("select has_schema_privilege('settlement_authority_reader','public','CREATE') c, pg_has_role($1,'settlement_authority_reader','SET') s", [migrator])).rows)
+      .toEqual([{ c: false, s: false }]);
+    expect((await tryQ(owner, 'select * from settlement_custody_authorization_links')).rows).toEqual([]);
+    expect((await db.query("select conname from pg_constraint where conrelid='settlement_custody_authorization_links'::regclass and contype='f' and convalidated")).rowCount).toBe(2);
+    expect((await db.query("select tgname,tgenabled from pg_trigger where tgrelid='settlement_custody_authorization_links'::regclass and not tgisinternal order by tgname")).rows)
+      .toEqual([{ tgname: 'settlement_custody_link_inert_guard', tgenabled: 'O' }, { tgname: 'settlement_custody_link_no_truncate', tgenabled: 'A' }, { tgname: 'settlement_custody_link_no_update_delete', tgenabled: 'A' }]);
+  });
+
   it('M1b. migration 0062 (DEV-10) applies for a non-superuser owner too: definer functions belong to the narrow lifecycle role, its temporary schema CREATE and SET membership are gone, and the roles are safe', async () => {
     const db = new Client({ connectionString: urlFor(dbName) }); await db.connect(); clients.push(db);
     expect((await db.query("select pg_get_userbyid(relowner) o, relrowsecurity r, relforcerowsecurity f from pg_class where relname='stripe_read_authorizations'")).rows).toEqual([{ o: migrator, r: true, f: true }]);

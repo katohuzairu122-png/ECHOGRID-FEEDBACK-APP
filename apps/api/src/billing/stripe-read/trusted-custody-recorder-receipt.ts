@@ -6,7 +6,7 @@ import { isIssuedCustodyReader, type RetrieveResult } from './signed-evidence-cu
  * read. Only the trusted reader service registers these immutable objects.
  * Never accept a caller-constructed lookalike as evidence of authenticity.
  */
-const issued = new WeakSet<object>();
+const issued = new WeakMap<object, () => Promise<boolean>>();
 export interface TrustedCustodyReceipt {
   readonly evidenceId: string;
   readonly businessId: string;
@@ -60,6 +60,24 @@ export async function readTrustedCustodyForRecorder(
     custodyKeyId: result.claims.keyId,
     custodyKeyVersion: result.claims.keyVersion,
   });
-  issued.add(receipt);
+  // Retain the trusted reader capability, never a caller-supplied verifier.
+  // A receipt is proof of an earlier read, not a permanent key-validity grant.
+  issued.set(receipt, async () => {
+    const fresh = await readTrustedCustodyForRecorder(reader, receipt);
+    return fresh.ok && fresh.receipt.payloadSha256 === receipt.payloadSha256 &&
+      fresh.receipt.custodyKeyId === receipt.custodyKeyId &&
+      fresh.receipt.custodyKeyVersion === receipt.custodyKeyVersion;
+  });
   return { ok: true, custody: result, receipt };
+}
+
+/** Revalidate current custody/workload/key authority immediately before persistence.
+ * This is the acceptance point; subsequent revocation never rewrites old evidence.
+ * The custody reader must have its own database connection/pool capacity because
+ * the recorder calls it while holding its reservation transaction lock.
+ */
+export async function revalidateTrustedCustodyReceipt(receipt: TrustedCustodyReceipt): Promise<boolean> {
+  const verify = issued.get(receipt);
+  if (!verify) return false;
+  try { return await verify(); } catch { return false; }
 }

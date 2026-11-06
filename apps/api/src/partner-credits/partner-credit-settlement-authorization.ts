@@ -1,6 +1,6 @@
 import { and, eq, sql } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
-import { isTrustedCustodyReceipt, type TrustedCustodyReceipt } from '../billing/stripe-read/trusted-custody-recorder-receipt';
+import { isTrustedCustodyReceipt, revalidateTrustedCustodyReceipt, type TrustedCustodyReceipt } from '../billing/stripe-read/trusted-custody-recorder-receipt';
 import { canonicalJson, sha256Hex } from '../billing/stripe-read/bundle-builder';
 import type { Database, Transaction } from '../db/client';
 import {
@@ -200,6 +200,13 @@ export class SettlementAuthorizationRecorder {
     // Only a runtime-issued DEV-15 custody receipt may request a durable link.
     // Existing recorder callers remain backward-compatible and unlinked.
     const receipt = input.custodyReceipt;
+    // Capture caller-owned values before the first await. Classification and
+    // digest binding must see the same bytes even across lock/signing delays.
+    try {
+      input = { businessId: input.businessId, reservationId: input.reservationId,
+        evidence: JSON.parse(canonicalJson(input.evidence)) as MockSettlementEvidence,
+        ...(receipt ? { custodyReceipt: receipt } : {}) };
+    } catch { throw new SettlementAuthorizationError('EVIDENCE_UNUSABLE'); }
     if (receipt !== undefined && (!isTrustedCustodyReceipt(receipt) ||
         receipt.businessId !== input.businessId || receipt.reservationId !== input.reservationId))
       throw new SettlementAuthorizationError('CUSTODY_RECEIPT_UNTRUSTED');
@@ -250,6 +257,8 @@ export class SettlementAuthorizationRecorder {
       };
       const evidenceDigest = await settlementAuthorizationDigest(fields);
       const signature = toHex(await signer.sign(settlementProvenanceMessage(signer.keyId, evidenceDigest)));
+      if (receipt && !(await revalidateTrustedCustodyReceipt(receipt)))
+        throw new SettlementAuthorizationError('CUSTODY_RECEIPT_UNTRUSTED');
       // The reservation row is locked, so two recordings of the same reservation cannot interleave: look first, then insert. (ON CONFLICT is not used: under row-level security it
       // would also demand a SELECT policy for the recorder, and the recorder is deliberately allowed to insert and not to read the table.)
       // Everything above ran with the session's own rights. From here the session acts as the recorder role, for the replay lookup (a recorder login that does not inherit the role has no
