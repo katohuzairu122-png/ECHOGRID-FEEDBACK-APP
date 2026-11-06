@@ -2,7 +2,7 @@ import { sql } from 'drizzle-orm';
 import type { Database } from '../../db/client';
 import type { StoredAuthorization } from '../../partner-credits/partner-credit-settlement-authorization';
 
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 export type StoredCustodyAuthorizationLink = Readonly<{
   authorizationId: string;
