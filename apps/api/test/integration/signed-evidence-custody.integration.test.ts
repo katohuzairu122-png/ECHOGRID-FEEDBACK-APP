@@ -6,7 +6,7 @@ import { randomBytes, randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
 import { buildDb } from '../../src/db/client';
 import {
-  createEvidenceSigningBoundary, createSigningWorkloadAuthority, SignedEvidenceCustodyService, evidenceMessage, canonicalJson, sha256Hex,
+  createEvidenceSigningBoundary, createSigningWorkloadAuthority, SignedEvidenceCustodyService, isIssuedCustodyReader, evidenceMessage, canonicalJson, sha256Hex,
   type EvidenceKeyRecord, type SecurityLogEntry, type SignedEvidence,
 } from '../../src/billing/stripe-read';
 import { syntheticDirectory, syntheticKey, syntheticSignerProvider, syntheticSigningWorkloadSource, type SyntheticKey } from '../../src/billing/stripe-read/evidence-signing-test-support';
@@ -310,6 +310,33 @@ describe.skipIf(!process.env.DATABASE_URL)('D1/D3-DEV-15 signed-evidence custody
     }
     for (const bad of [null, {}, { evidenceId: 'x', ...exp() }, { evidenceId: randomUUID(), businessId: B1 }, { evidenceId: randomUUID(), ...exp(), extra: 1 }]) expect(await svc.retrieve(bad as any)).toEqual({ ok: false, reason: 'INVALID_REQUEST' });
     expect({ r: await count('signed_evidence_records'), e: await count('signed_evidence_events') }).toEqual(before);
+  });
+
+  it('12b. issued read capability retrieves real PostgreSQL custody only while the trusted workload remains authorized', async () => {
+    state.now = 500_000;
+    state.custWl = wl('EVIDENCE_CUSTODIAN', [B1, B2]);
+    const evidenceId = randomUUID();
+    const signed = await mkEvidence({ subject: 'r1-custody-postgres' });
+    expect(await svc.persist({ evidenceId, expected: exp(), evidence: signed })).toMatchObject({ ok: true, outcome: 'PERSISTED' });
+
+    const reader = svc.issueTrustedReader();
+    expect(isIssuedCustodyReader(reader)).toBe(true);
+    expect(isIssuedCustodyReader({ ...reader })).toBe(false);
+    expect(isIssuedCustodyReader(new Proxy(reader, {}))).toBe(false);
+    const real = await reader.retrieve({ evidenceId, ...exp() });
+    expect(real).toMatchObject({
+      ok: true, evidenceId, authenticity: 'AUTHENTIC',
+      financialAuthorization: 'NOT_GRANTED', payload: { subject: 'r1-custody-postgres' },
+    });
+    expect((await q("select count(*)::int n from signed_evidence_events where evidence_id=$1 and event_type='VERIFICATION_SUCCEEDED'", [evidenceId]))[0]!.n).toBe(1);
+
+    // An issued capability is NOT a bypass of the runtime custodian authority.
+    state.custWl = null;
+    try {
+      expect(await reader.retrieve({ evidenceId, ...exp() })).toMatchObject({ ok: false, reason: 'SIGNER_CONFIG_MISSING' });
+    } finally { state.custWl = wl('EVIDENCE_CUSTODIAN', [B1, B2]); }
+    const again = await reader.retrieve({ evidenceId, ...exp() });
+    expect(again).toMatchObject({ ok: true, financialAuthorization: 'NOT_GRANTED' });
   });
 
   it('13. the activation and financial boundaries are untouched: policy unchanged, no ledger or Stripe effect, evidence never presented as financial authority', async () => {
