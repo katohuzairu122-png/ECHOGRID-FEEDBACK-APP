@@ -26,6 +26,7 @@ import { PartnerCreditProjectionAudit } from '../../src/partner-credits/partner-
 import { readTrustedCustodyForRecorder } from '../../src/billing/stripe-read/trusted-custody-recorder-receipt';
 import { verifyDurableSettlementProvenance } from '../../src/billing/stripe-read/durable-provenance-verifier';
 import { createPrivateProvenanceAuditStage } from '../../src/billing/stripe-read/private-provenance-audit-stage';
+import { createObservedPrivateProvenanceAuditStage, type PrivateProvenanceObservation } from '../../src/billing/stripe-read/private-provenance-observation';
 import { createSyntheticCustodyRecorderHandoff } from '../../src/billing/stripe-read/synthetic-custody-recorder-handoff';
 import { createEvidenceSigningBoundary, createSigningWorkloadAuthority, SignedEvidenceCustodyService } from '../../src/billing/stripe-read';
 import { syntheticDirectory, syntheticKey, syntheticSignerProvider, syntheticSigningWorkloadSource } from '../../src/billing/stripe-read/evidence-signing-test-support';
@@ -426,6 +427,40 @@ describe.skipIf(!process.env.DATABASE_URL)('D4 final credit consumption and ledg
       expect(await stage.verify(request)).toEqual({
         status: 'VERIFIED', durable: true, financialAuthorization: 'NOT_GRANTED',
       });
+
+      // DEV-23: successful genuine verification is still nonfinancial and
+      // the observer receives no identifiers, keys or custody content.
+      const events: PrivateProvenanceObservation[] = [];
+      let sinkUnavailable = false;
+      const observed = createObservedPrivateProvenanceAuditStage({
+        db: buildDb(auditor), custodyReader: f.trustedReader,
+        environment: 'development', clock: () => 500000,
+        source: { load: async () => ({
+          workloadId: 'dev22-auditor', role: 'PROVENANCE_AUDITOR',
+          environment: 'development', businessIds: [f.sc.businessId],
+          validFromMs: 1000, expiresAtMs: 900000, revokedAtMs,
+        }) },
+        recorderPublicKeys: GATE_CFG.trustedSigningKeys,
+        sink: { record: async event => {
+          if (sinkUnavailable) throw new Error('synthetic observer unavailable');
+          events.push(event);
+        } },
+      });
+      expect(await observed.verify(request)).toEqual({
+        status: 'VERIFIED', durable: true, financialAuthorization: 'NOT_GRANTED',
+      });
+      expect(events).toEqual([{
+        event: 'PRIVATE_PROVENANCE_VERIFICATION',
+        status: 'VERIFIED', financialAuthorization: 'NOT_GRANTED',
+      }]);
+      expect(JSON.stringify(events)).not.toContain(f.sc.businessId);
+      expect(JSON.stringify(events)).not.toContain(f.sc.reservationId);
+      expect(JSON.stringify(events)).not.toContain(recorded.id);
+      sinkUnavailable = true;
+      expect(await observed.verify(request)).toEqual({
+        status: 'UNAVAILABLE', durable: false, financialAuthorization: 'NOT_GRANTED',
+      });
+      expect(events).toHaveLength(1);
       expect(await stage.verify({ ...request, businessId: randomUUID() })).toEqual({
         status: 'UNAVAILABLE', durable: false, financialAuthorization: 'NOT_GRANTED',
       });
