@@ -23,6 +23,9 @@ import { acquireMockExtendedEvidence, buildMockEvidence, classifyBundle, createM
 import { unwindCredit, type UnwindCause } from '../../src/partner-credits/partner-credit-unwind';
 import { PartnerProvisionalReversalCompensator } from '../../src/partner-credits/partner-provisional-reversal.compensator';
 import { PartnerCreditProjectionAudit } from '../../src/partner-credits/partner-credit-projection.audit';
+import { createSyntheticCustodyRecorderHandoff } from '../../src/billing/stripe-read/synthetic-custody-recorder-handoff';
+import { createEvidenceSigningBoundary, createSigningWorkloadAuthority, SignedEvidenceCustodyService } from '../../src/billing/stripe-read';
+import { syntheticDirectory, syntheticKey, syntheticSignerProvider, syntheticSigningWorkloadSource } from '../../src/billing/stripe-read/evidence-signing-test-support';
 import { seedScratchAllocation } from './helpers/s08-allocation-fixture';
 import { freezeAggregateBenefitAllocation } from '../../src/billing/aggregate-benefit-allocation';
 import { computeInvoiceBenefit } from '../../src/billing/invoice-benefit.calculator';
@@ -207,6 +210,59 @@ describe.skipIf(!process.env.DATABASE_URL)('D4 final credit consumption and ledg
       expect(await rows('select count(*)::int n from billing_partner_credit_applications')).toEqual([{ n: 0 }]);
       expect((await rows<{ n: number }>("select count(*)::int n from partner_credit_ledger where entry_type in ('consume','consumed_reversal')"))[0]!.n).toBe(0);
       await setGuards(false); // from here on only the isolated scratch database has the guards off
+    });
+  });
+
+  describe('DEV-19: verified custody to real settlement recorder (synthetic-only)', () => {
+    it('records an ELIGIBLE authorization through real custody and recorder, replay is idempotent and D4 ledger is untouched', async () => {
+      const sc = await scenario({ authorize: false, sagaTo: 'consumed' });
+      const evidence = await evidenceFor(sc);
+      const key = await syntheticKey({ keyId: 'dev19-custody-synthetic' });
+      const clock = () => 500_000;
+      const issuer = (role: 'EVIDENCE_SIGNER' | 'EVIDENCE_CUSTODIAN') => createSigningWorkloadAuthority({
+        source: syntheticSigningWorkloadSource('development', () => ({
+          workloadId: role === 'EVIDENCE_SIGNER' ? 'signer:dev19' : 'custodian:dev19',
+          role, environment: 'development', purposes: ['SYNTHETIC_TEST_EVIDENCE'],
+          businessIds: [sc.businessId], validFromMs: 1000, expiresAtMs: 900000, revokedAtMs: null,
+        })),
+        environment: 'development', clock,
+        ...(role === 'EVIDENCE_CUSTODIAN' ? { role: 'EVIDENCE_CUSTODIAN' as const } : {}),
+      });
+      const keys = syntheticDirectory(() => [key.record]);
+      const signing = createEvidenceSigningBoundary({
+        authority: issuer('EVIDENCE_SIGNER'), keys,
+        signers: syntheticSignerProvider([key]), environment: 'development', clock,
+      });
+      const signed = await signing.sign({
+        businessId: sc.businessId, purpose: 'SYNTHETIC_TEST_EVIDENCE',
+        evidenceType: 'SYNTHETIC_TEST_EVIDENCE', payload: { settlementEvidence: evidence },
+      });
+      expect(signed.ok).toBe(true);
+      if (!signed.ok) return;
+      const service = new SignedEvidenceCustodyService({
+        db: buildDb(admin), authority: issuer('EVIDENCE_CUSTODIAN'),
+        keys, environment: 'development', clock,
+      });
+      const evidenceId = randomUUID();
+      expect(await service.persist({
+        evidenceId,
+        expected: { businessId: sc.businessId, purpose: 'SYNTHETIC_TEST_EVIDENCE', evidenceType: 'SYNTHETIC_TEST_EVIDENCE' },
+        evidence: signed.evidence,
+      })).toMatchObject({ ok: true, outcome: 'PERSISTED', financialAuthorization: 'NOT_GRANTED' });
+
+      const ledgerBefore = (await rows<{ n: number }>('select count(*)::int n from partner_credit_ledger where decision_id=$1', [sc.decisionId]))[0]!.n;
+      const handoff = createSyntheticCustodyRecorderHandoff({ custody: service.issueTrustedReader(), recorder });
+      const request = { evidenceId, businessId: sc.businessId, reservationId: sc.reservationId };
+      const first = await handoff.record(request);
+      expect(first).toMatchObject({ ok: true, verdict: 'ELIGIBLE', replay: false, financialAuthorization: 'NOT_GRANTED' });
+      const replay = await handoff.record(request);
+      expect(replay).toMatchObject({ ok: true, verdict: 'ELIGIBLE', replay: true, financialAuthorization: 'NOT_GRANTED' });
+      if (!first.ok || !replay.ok) return;
+      expect(replay.authorizationId).toBe(first.authorizationId);
+      const rowsNow = await rows<{ n: number }>('select count(*)::int n from partner_credit_settlement_authorizations where business_id=$1 and reservation_id=$2', [sc.businessId, sc.reservationId]);
+      expect(rowsNow).toEqual([{ n: 1 }]);
+      expect((await rows<{ n: number }>('select count(*)::int n from partner_credit_ledger where decision_id=$1', [sc.decisionId]))[0]!.n).toBe(ledgerBefore);
+      expect(await rows('select approval_enabled from stripe_read_authorization_policy')).toEqual([{ approval_enabled: false }]);
     });
   });
 
