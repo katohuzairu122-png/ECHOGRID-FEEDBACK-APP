@@ -89,7 +89,11 @@ export class SignedEvidenceCustodyService {
    * authority, role grants, tenant, key state and stored integrity on EVERY call.
    */
   issueTrustedReader(): Readonly<{ retrieve: (request: RetrieveRequest) => Promise<RetrieveResult> }> {
-    const reader = Object.freeze({ retrieve: (request: RetrieveRequest): Promise<RetrieveResult> => this.retrieve(request) });
+    // Capture the implementation rather than dynamically dispatching an
+    // instance-supplied replacement. A caller cannot monkey-patch retrieve
+    // after issuance to turn a trusted capability into forged evidence.
+    const read = SignedEvidenceCustodyService.prototype.retrieve.bind(this);
+    const reader = Object.freeze({ retrieve: (request: RetrieveRequest): Promise<RetrieveResult> => read(request) });
     issuedCustodyReaders.add(reader);
     return reader;
   }
