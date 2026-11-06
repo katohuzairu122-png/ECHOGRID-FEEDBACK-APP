@@ -35,7 +35,7 @@ function issuedReader(retrieve: VerifiedCustodyReader['retrieve']): VerifiedCust
     clock: () => 500_000,
     authority: {} as ConstructorParameters<typeof SignedEvidenceCustodyService>[0]['authority'],
   });
-  service.retrieve = retrieve;
+  service.retrieve = retrieve as SignedEvidenceCustodyService['retrieve'];
   return service.issueTrustedReader();
 }
 function rig(stored: CustodyResponse = signed, recordResult: unknown = { id: AUTH_ID, verdict: 'UNRESOLVED', reasonCodes: ['INPUT_INVALID'], replay: false }) {
