@@ -65,6 +65,34 @@ describe.skipIf(!process.env.DATABASE_URL)('Split 04 survey repositories (integr
     await client.end();
   });
 
+  it('DEV-72 preserves scoped consent idempotency only for the original authority', async () => {
+    const key = `dev72-consent-${crypto.randomUUID()}`;
+    const base = {
+      customerId,
+      businessId: businessAId,
+      purpose: 'survey_participation' as const,
+      scope: 'participate',
+      consentVersion: 'v1',
+      idempotencyKey: key,
+    };
+    const first = await repos.consentGrants.create(base);
+    const replay = await repos.consentGrants.create(base);
+    expect(replay.id).toBe(first.id);
+
+    const anotherCustomer = await repos.customers.create({
+      phone: `+1555${Math.floor(Math.random() * 9_000_000 + 1_000_000)}`,
+      phoneVerifiedAt: new Date(),
+    });
+    await expect(repos.consentGrants.create({ ...base, customerId: anotherCustomer.id }))
+      .rejects.toMatchObject({ code: 'CONSENT_IDEMPOTENCY_CONFLICT', status: 409 });
+    await expect(repos.consentGrants.create({ ...base, businessId: businessBId }))
+      .rejects.toMatchObject({ code: 'CONSENT_IDEMPOTENCY_CONFLICT', status: 409 });
+    await expect(repos.consentGrants.create({ ...base, consentVersion: 'v2' }))
+      .rejects.toMatchObject({ code: 'CONSENT_IDEMPOTENCY_CONFLICT', status: 409 });
+    await expect(repos.consentGrants.create({ ...base, scope: 'other_scope' }))
+      .rejects.toMatchObject({ code: 'CONSENT_IDEMPOTENCY_CONFLICT', status: 409 });
+  });
+
   it('enforces management lifecycle and cross-business boundaries', async () => {
     const service = new SurveyManagementService(repos);
     const survey = await service.createSurvey(
