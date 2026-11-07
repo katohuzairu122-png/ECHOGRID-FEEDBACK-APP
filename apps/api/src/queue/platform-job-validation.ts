@@ -2,7 +2,17 @@ import type { PlatformJob } from '../config/env';
 import { notificationEventTypeSchema } from '@echo-grid-feedback/shared-types';
 
 const nonempty = (v: unknown): v is string => typeof v === 'string' && v.trim().length > 0;
-const validDate = (v: unknown): v is string => nonempty(v) && !Number.isNaN(Date.parse(v));
+// Queue producers serialize Date values with toISOString() (UTC Z, zero or
+// three millisecond digits). Date.parse alone normalizes impossible dates
+// (e.g. February 30) and also accepts non-ISO inputs, so it is not enough.
+const UTC_TIMESTAMP = /^\\d{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12]\\d|3[01])T(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d{3})?Z$/;
+const validDate = (v: unknown): v is string => {
+  if (typeof v !== 'string' || !UTC_TIMESTAMP.test(v)) return false;
+  const parsed = Date.parse(v);
+  if (!Number.isFinite(parsed)) return false;
+  const canonical = v.includes('.') ? v : v.replace(/Z$/, '.000Z');
+  return new Date(parsed).toISOString() === canonical;
+};
 const validId = (v: unknown): v is string => nonempty(v) && v.length <= 256;
 const isRecord = (v: unknown): v is Record<string, unknown> => v !== null && typeof v === 'object' && !Array.isArray(v);
 const hasKeys = (v: Record<string,unknown>, keys: readonly string[]) => Object.keys(v).every(k=>keys.includes(k));
