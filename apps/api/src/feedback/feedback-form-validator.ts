@@ -10,11 +10,15 @@ export function validateFeedbackAnswers(form: PublicFeedbackForm, answers: Feedb
     seen.add(answer.questionId);
     const value = answer.value;
     const valid =
-      ((question.type === 'text' || question.type === 'textarea') && typeof value === 'string' && value.length <= 2000) ||
+      ((question.type === 'text' || question.type === 'textarea') && typeof value === 'string' && value.length <= 2000 && (!question.required || value.trim().length > 0)) ||
       (question.type === 'rating' && typeof value === 'number' && Number.isInteger(value) && value >= 1 && value <= 5) ||
       (question.type === 'boolean' && typeof value === 'boolean') ||
       (question.type === 'single_choice' && typeof value === 'string' && Boolean(question.options?.includes(value))) ||
-      (question.type === 'multi_choice' && Array.isArray(value) && value.every((v) => question.options?.includes(v)));
+      (question.type === 'multi_choice' && Array.isArray(value) &&
+        value.length <= (question.options?.length ?? 0) &&
+        (!question.required || value.length > 0) &&
+        value.every((v) => typeof v === 'string' && Boolean(question.options?.includes(v))) &&
+        new Set(value).size === value.length);
     if (!valid) invalid();
   }
   for (const question of form.questions) {
