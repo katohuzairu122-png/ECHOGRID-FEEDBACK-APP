@@ -44,8 +44,8 @@ describe('DEV-50 fail-closed tenant authorization guards', () => {
     { userId: 'staff-a', businessId: 'business-a', businessWideAccess: true },
     { userId: 'staff-a', businessWideAccess: true, permissions: new Set(['loyalty:view']) },
     { businessId: 'business-a', businessWideAccess: true, permissions: new Set(['loyalty:view']) },
-    { ...wide, businessWideAccess: undefined },
-    { ...scoped, branchId: undefined },
+    { userId: 'staff-a', businessId: 'business-a', permissions: new Set(['loyalty:view']) },
+    { userId: 'staff-a', businessId: 'business-a', businessWideAccess: false, permissions: new Set(['loyalty:view']) },
   ])('denies missing authorization context before permission-based handler execution %#', async (ctx) => {
     const response = await guardApp(ctx).request('/permission');
     expect(response.status).toBe(403);
