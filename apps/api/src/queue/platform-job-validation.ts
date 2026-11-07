@@ -1,7 +1,6 @@
 import type { PlatformJob } from '../config/env';
 import { notificationEventTypeSchema } from '@echo-grid-feedback/shared-types';
 
-const nonempty = (v: unknown): v is string => typeof v === 'string' && v.trim().length > 0;
 // Queue producers serialize Date values with toISOString() (UTC Z, zero or
 // three millisecond digits). Date.parse alone normalizes impossible dates
 // (e.g. February 30) and also accepts non-ISO inputs, so it is not enough.
