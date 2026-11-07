@@ -51,18 +51,18 @@ describe('DEV-66 published form answer cardinality and integrity', () => {
   });
 
   it.each([
-    [],
-    ['Email', 'Email'],
-    ['SMS', 'SMS', 'SMS'],
-    ['Email', 'SMS', 'In-App', 'Email'],
-    ['Other'],
-    [23],
-    [null],
-    ['Email', null],
-  ])('rejects invalid, empty, duplicate or unknown selections %#', choices => {
+    { choices: [] },
+    { choices: ['Email', 'Email'] },
+    { choices: ['SMS', 'SMS', 'SMS'] },
+    { choices: ['Email', 'SMS', 'In-App', 'Email'] },
+    { choices: ['Other'] },
+    { choices: [23] },
+    { choices: [null] },
+    { choices: ['Email', null] },
+  ])('rejects invalid, empty, duplicate or unknown selections %#', ({ choices }) => {
     expect(() => validateFeedbackAnswers(multiForm, [
       ...baseAnswers,
-      { questionId: multiId, value: choices },
+      { questionId: multiId, value: choices as unknown as string[] },
     ])).toThrow();
   });
 
