@@ -4,7 +4,7 @@
 
 ## Dependency and baseline
 
-DEV-29 builds on DEV-28 PR #252 while the owner merges it. Initially target the DEV-28 branch; after PR #252 is confirmed merged, retarget to authoritative main and require exact-head CI.
+DEV-28 PR #252 is merged. DEV-29 PR #253 targets authoritative main; require exact-head CI and independent review before owner merge.
 
 ## Verification scope
 
