@@ -64,7 +64,7 @@ describe('DEV-28 retry classification boundary invariants', () => {
     expect(classifyDevelopmentObservationRetry(history)).toMatchObject({
       status: 'UNCERTAIN', financialAuthorization: 'NOT_GRANTED', durableProof: false, exactlyOnce: false,
     });
-    expect(() => classifyDevelopmentObservationRetry([...history, history[0]])).toThrow('DEV26_ATTEMPTS_INVALID');
+    expect(() => classifyDevelopmentObservationRetry([...history, history[0]!])).toThrow('DEV26_ATTEMPTS_INVALID');
   });
 
   it('never mutates a correlation sequence after invalid or overflow attempts', () => {
