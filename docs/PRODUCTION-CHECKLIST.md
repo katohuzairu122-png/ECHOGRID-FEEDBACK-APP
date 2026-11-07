@@ -91,8 +91,10 @@ this checklist:
 - [ ] One real Stripe Checkout with a real card for a nominal amount (or the
       smallest live-mode test the owner is comfortable with), confirmed
       end to end including the webhook-driven subscription sync
-- [ ] Confirm the two cron triggers are active in the Cloudflare dashboard
-      and that a triggered run doesn't error (check `wrangler tail`)
+- [ ] Confirm all four cron schedules declared in the production
+      `apps/api/wrangler.toml` are active in the Cloudflare dashboard;
+      verify a triggered run without errors through the authorized
+      operational review (do not infer runtime status from CI)
 - [ ] Final manual smoke pass through the actual production URL — not
       staging, not localhost
 

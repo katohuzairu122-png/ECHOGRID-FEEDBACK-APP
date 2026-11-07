@@ -1,5 +1,11 @@
 # Launch Readiness Decision
 
+**Development-only evidence is not a release authorization.** Passing
+pull-request CI is not staging certification, not production attestation and
+not `TECHNICAL_GO`. The real Block 2H attestation is issued only after an
+explicitly authorized release and its runtime verification; never infer it
+from offline or static verification outputs.
+
 ## Technical GO
 
 A commit is technically qualified only when its single CI run passes typecheck, lint, unit and integration tests, production builds, Playwright, security, bounded load, ordered deployment, operations, billing probes, and Block 2H attestation. The attestation sets `decision: TECHNICAL_GO`.
