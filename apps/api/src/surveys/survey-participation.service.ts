@@ -40,7 +40,7 @@ async function hashSubmission(answers: SurveyAnswerInput[]): Promise<string> {
   return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, '0')).join('');
 }
 
-function assertAnswerValue(question: SurveyQuestion, value: SurveyAnswerInput['value']): void {
+export function assertAnswerValue(question: SurveyQuestion, value: SurveyAnswerInput['value']): void {
   const validation = (question.validation ?? {}) as SurveyQuestionValidation;
   const fail = (message: string): never => {
     throw new AppError(message, 422, 'SURVEY_ANSWER_INVALID', {
@@ -52,6 +52,11 @@ function assertAnswerValue(question: SurveyQuestion, value: SurveyAnswerInput['v
   if (question.type === 'text' || question.type === 'textarea') {
     if (typeof value !== 'string') fail('This survey answer must be text.');
     const textValue = value as string;
+    // DEV-68: a required answer must carry meaningful content even if the
+    // published question did not specify a minimum character length.
+    if (question.required && textValue.trim().length === 0) {
+      fail('A required survey text answer cannot be blank.');
+    }
     if (validation.minLength !== undefined && textValue.length < validation.minLength) {
       fail('This survey answer is shorter than allowed.');
     }
@@ -100,6 +105,9 @@ function assertAnswerValue(question: SurveyQuestion, value: SurveyAnswerInput['v
       fail('This survey answer must be a list of allowed options.');
     }
     const selected = value as string[];
+    if (question.required && selected.length === 0) {
+      fail('A required survey choice answer cannot be empty.');
+    }
     if (
       new Set(selected).size !== selected.length ||
       selected.some((item: string) => !options.includes(item))
