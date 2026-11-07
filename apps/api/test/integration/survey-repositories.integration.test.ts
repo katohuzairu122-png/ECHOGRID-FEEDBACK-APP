@@ -345,7 +345,21 @@ describe.skipIf(!process.env.DATABASE_URL)('Split 04 survey repositories (integr
     expect(started.participation.status).toBe('started');
     expect(started.participation.consentGrantId).not.toBeNull();
 
-    await repos.consentGrants.revoke(started.participation.consentGrantId!, customerId);
+    // DEV-70 — the database must prove an actual customer-owned active
+    // transition before the API is allowed to claim a successful revocation.
+    const consentId = started.participation.consentGrantId!;
+    expect(await repos.consentGrants.revoke(consentId, crypto.randomUUID())).toBe(false);
+    expect(await repos.consentGrants.revoke(consentId, customerId)).toBe(true);
+    expect(await repos.consentGrants.revoke(consentId, customerId)).toBe(false);
+
+    const expired = await repos.consentGrants.create({
+      customerId,
+      businessId: businessAId,
+      purpose: 'survey_participation',
+      consentVersion: 'v1',
+      expiresAt: new Date(Date.now() - 60_000),
+    });
+    expect(await repos.consentGrants.revoke(expired.id, customerId)).toBe(false);
 
     await expect(
       participationService.submit(customerId, campaign.id, {
