@@ -190,6 +190,27 @@ export async function assertSurveyAudienceEligible(
   );
 }
 
+/**
+ * DEV-71 — all idempotency reuse paths share the same owner/revocation gate.
+ * A row found after the repeat-policy lock or through insert conflict is no
+ * more trustworthy than one returned on the first lookup.
+ */
+export function assertReusableSurveyParticipation(
+  participation: Pick<SurveyParticipation, 'participantCustomerId' | 'status'>,
+  customerId: string,
+): void {
+  if (participation.participantCustomerId !== customerId) {
+    throw new AppError('This idempotency key is already in use.', 409, 'IDEMPOTENCY_CONFLICT');
+  }
+  if (participation.status === 'invalidated') {
+    throw new AppError(
+      'This survey participation has been invalidated.',
+      409,
+      'SURVEY_PARTICIPATION_INVALIDATED',
+    );
+  }
+}
+
 export class SurveyParticipationService {
   constructor(private readonly db: Database) {}
 
@@ -222,20 +243,7 @@ export class SurveyParticipationService {
       );
 
       if (existing) {
-        if (existing.participantCustomerId !== customerId) {
-          throw new AppError(
-            'This idempotency key is already in use.',
-            409,
-            'IDEMPOTENCY_CONFLICT',
-          );
-        }
-        if (existing.status === 'invalidated') {
-          throw new AppError(
-            'This survey participation has been invalidated.',
-            409,
-            'SURVEY_PARTICIPATION_INVALIDATED',
-          );
-        }
+        assertReusableSurveyParticipation(existing, customerId);
 
         const consent = await this.ensureCampaignConsent(
           repos,
@@ -262,13 +270,7 @@ export class SurveyParticipationService {
         input.idempotencyKey,
       );
       if (raced) {
-        if (raced.participantCustomerId !== customerId) {
-          throw new AppError(
-            'This idempotency key is already in use.',
-            409,
-            'IDEMPOTENCY_CONFLICT',
-          );
-        }
+        assertReusableSurveyParticipation(raced, customerId);
         const consent = await this.ensureCampaignConsent(
           repos,
           customerId,
@@ -322,13 +324,7 @@ export class SurveyParticipationService {
         source: 'direct',
       });
 
-      if (result.participation.participantCustomerId !== customerId) {
-        throw new AppError(
-          'This idempotency key is already in use.',
-          409,
-          'IDEMPOTENCY_CONFLICT',
-        );
-      }
+      assertReusableSurveyParticipation(result.participation, customerId);
       return result;
     });
   }
