@@ -34,7 +34,10 @@ duplicate it.
     existed. Setting the secret is the whole improvement; nothing breaks
     without it.
   - The alert never throws and never retries. A destination that is down
-    costs one extra log line, not a second incident.
+    costs one extra log line, not a second incident. DEV-54 also logs a safe,
+    fixed error code and HTTP status for non-2xx webhook responses. Transport
+    errors use only a fixed code; raw exception messages and destination
+    secrets must never enter this secondary diagnostic.
 - **Still not configured** (needs Cloudflare dashboard access, not a code
   change): Cloudflare's own notification rules on Worker error-rate
   thresholds, CPU time, and queue backlog. Worth adding on top of the
@@ -112,6 +115,19 @@ rollback isn't also the first attempt.
   with `analysis_status = 'failed'` and can be re-enqueued; a
   `generate_summary` period can be regenerated from the dashboard. A
   `send_notification` job is the one that is genuinely lost.
+
+## Notification redelivery integrity (DEV-55)
+
+- Notification delivery records a pending attempt, sends via Resend/Twilio,
+  then records sent or failed. Queue delivery remains **at least once**.
+- A provider may accept a message before the worker loses the database write
+  acknowledgment; a retry may send the same notification again.
+- The current message payload has no durable dispatch idempotency identifier.
+  Do not treat a failed status update as proof that an external send failed;
+  do not claim provider exactly-once delivery.
+- DEV-55 regression tests document this behavior but **do not remediate**
+  duplicate external notifications. Changing the provider/durable dedupe
+  contract requires a separately reviewed architecture decision.
 
 ## Secret rotation procedure
 
