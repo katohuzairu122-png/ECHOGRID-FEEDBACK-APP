@@ -4,7 +4,7 @@
 
 ## Baseline
 
-DEV-30 stacks on DEV-29 PR #253 pending owner merge. Once DEV-29 merges, retarget DEV-30 to current main, reconcile the exact diff and require exact-head CI.
+DEV-29 PR #253 has merged. DEV-30 PR #254 now targets authoritative main; reconcile the exact diff and require exact-head CI.
 
 ## Verification
 
