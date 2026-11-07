@@ -61,6 +61,7 @@ beforeEach(() => {
     id: 'campaign-a', surveyId: 'survey-a', surveyVersionId: 'version-a',
     status: 'active', startsAt: null, endsAt: null, businessId: null,
     repeatPolicy: 'repeatable', maxResponses: null,
+    audienceClass: 'general_authenticated_participant',
   });
   mocks.findSurvey.mockResolvedValue({
     id: 'survey-a', ownerType: 'platform', businessId: null, status: 'published',
