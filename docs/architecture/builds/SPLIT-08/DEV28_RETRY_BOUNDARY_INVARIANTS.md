@@ -4,7 +4,7 @@
 
 ## Dependency
 
-DEV-28 is stacked on DEV-27 PR #251 while its owner merge is pending. After DEV-27 merges, retarget DEV-28 to current main and rerun exact-head CI. Do not merge DEV-28 before DEV-27.
+DEV-27 PR #251 has merged. DEV-28 PR #252 is now targeted at authoritative main. Exact-head CI and independent review remain required before owner merge.
 
 ## Scope
 
