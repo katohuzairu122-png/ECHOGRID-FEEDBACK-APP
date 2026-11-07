@@ -15,6 +15,17 @@ export type TenantVariables = {
 };
 
 /**
+ * Header selectors are opaque database IDs, not unbounded user text. The
+ * accepted alphabet covers existing UUIDs and legacy fixture IDs while
+ * rejecting whitespace, separators, control characters, duplicate-header
+ * joins, and oversized selectors before any membership or branch query.
+ * This is syntactic input validation, never authorization.
+ */
+function isSafeTenantSelector(value: string): boolean {
+  return /^[A-Za-z0-9][A-Za-z0-9_-]{0,255}$/.test(value);
+}
+
+/**
  * Resolves which business (and optionally branch) a request operates on and
  * confirms the authenticated user (set by `authenticate`, which must run
  * first) actually has an active grant there.
@@ -36,7 +47,14 @@ export const resolveTenantContext = createMiddleware<{
   if (!businessId) {
     throw new AppError('Missing X-Business-Id header.', 400, 'MISSING_BUSINESS_CONTEXT');
   }
+  if (!isSafeTenantSelector(businessId)) {
+    throw new AppError('Invalid X-Business-Id header.', 400, 'INVALID_BUSINESS_CONTEXT');
+  }
+
   const branchId = c.req.header('x-branch-id') ?? undefined;
+  if (branchId !== undefined && !isSafeTenantSelector(branchId)) {
+    throw new AppError('Invalid X-Branch-Id header.', 400, 'INVALID_BRANCH_CONTEXT');
+  }
 
   const { db, close } = await createDb(c.env.HYPERDRIVE);
   try {
