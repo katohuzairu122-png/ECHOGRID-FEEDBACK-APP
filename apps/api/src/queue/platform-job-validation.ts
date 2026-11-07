@@ -1,0 +1,37 @@
+import type { PlatformJob } from '../config/env';
+
+const nonempty = (v: unknown): v is string => typeof v === 'string' && v.trim().length > 0;
+const validDate = (v: unknown): v is string => nonempty(v) && !Number.isNaN(Date.parse(v));
+const validId = (v: unknown): v is string => nonempty(v) && v.length <= 256;
+const isRecord = (v: unknown): v is Record<string, unknown> => v !== null && typeof v === 'object' && !Array.isArray(v);
+const hasKeys = (v: Record<string,unknown>, keys: readonly string[]) => Object.keys(v).every(k=>keys.includes(k));
+const optionalId = (v: unknown) => v === undefined || validId(v);
+const optionalText = (v: unknown) => v === undefined || (typeof v === 'string' && v.length <= 10000);
+
+/**
+ * Validates untrusted queue JSON before any domain service or provider call.
+ * Does not grant authorization; business ownership is checked downstream.
+ */
+export function isPlatformJob(value: unknown): value is PlatformJob {
+  if (!isRecord(value)) return false;
+  switch (value.type) {
+    case 'classify_feedback':
+      return hasKeys(value,['type','feedbackId','businessId']) && validId(value.feedbackId) && validId(value.businessId);
+    case 'generate_summary':
+      return hasKeys(value,['type','businessId','branchId','periodType','periodStart','periodEnd']) &&
+        validId(value.businessId) && optionalId(value.branchId) &&
+        ['daily','weekly','monthly'].includes(String(value.periodType)) &&
+        validDate(value.periodStart) && validDate(value.periodEnd) &&
+        Date.parse(value.periodStart as string) < Date.parse(value.periodEnd as string);
+    case 'send_notification':
+      return hasKeys(value,['type','businessId','userId','customerId','eventType','channel','recipientAddress','subject','body']) &&
+        validId(value.businessId) && optionalId(value.userId) && optionalId(value.customerId) &&
+        nonempty(value.eventType) && ['email','sms'].includes(String(value.channel)) &&
+        nonempty(value.recipientAddress) && value.recipientAddress.length <= 2048 &&
+        optionalText(value.subject) && typeof value.body === 'string' && value.body.length <= 100000;
+    case 'escalate_critical_incident':
+      return hasKeys(value,['type','incidentId','businessId']) && validId(value.incidentId) && validId(value.businessId);
+    default:
+      return false;
+  }
+}
