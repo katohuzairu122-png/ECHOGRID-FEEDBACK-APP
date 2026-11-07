@@ -1,9 +1,35 @@
 import { and, eq, gt, isNull, or } from 'drizzle-orm';
 import { consentGrants, type ConsentPurpose } from '../db/schema';
 import { BaseRepository } from './base.repository';
+import { AppError } from '../lib/errors';
 
 export type ConsentGrant = typeof consentGrants.$inferSelect;
 export type NewConsentGrant = typeof consentGrants.$inferInsert;
+
+/**
+ * DEV-72 — an idempotency key identifies one specific consent authority.
+ * A uniqueness collision must never return a grant belonging to another
+ * customer, business, purpose, resource, scope or consent version.
+ */
+export function assertConsentIdempotencyMatch(
+  existing: Pick<ConsentGrant,
+    'customerId' | 'businessId' | 'purpose' | 'resourceType' | 'resourceId' |
+    'scope' | 'consentVersion'>,
+  attempted: Pick<NewConsentGrant, 'customerId' | 'businessId' | 'purpose' |
+    'resourceType' | 'resourceId' | 'scope' | 'consentVersion'>,
+): void {
+  if (
+    existing.customerId !== attempted.customerId ||
+    existing.businessId !== (attempted.businessId ?? null) ||
+    existing.purpose !== attempted.purpose ||
+    existing.resourceType !== (attempted.resourceType ?? null) ||
+    existing.resourceId !== (attempted.resourceId ?? null) ||
+    existing.scope !== (attempted.scope ?? null) ||
+    existing.consentVersion !== (attempted.consentVersion ?? 'v1')
+  ) {
+    throw new AppError('Consent idempotency key is already in use.', 409, 'CONSENT_IDEMPOTENCY_CONFLICT');
+  }
+}
 
 export class ConsentGrantRepository extends BaseRepository {
   async create(input: NewConsentGrant): Promise<ConsentGrant> {
@@ -18,7 +44,10 @@ export class ConsentGrantRepository extends BaseRepository {
       const existing = await this.db.query.consentGrants.findFirst({
         where: eq(consentGrants.idempotencyKey, input.idempotencyKey),
       });
-      if (existing) return existing;
+      if (existing) {
+        assertConsentIdempotencyMatch(existing, input);
+        return existing;
+      }
       throw new Error('Consent idempotency conflict did not resolve to an existing grant.');
     }
 

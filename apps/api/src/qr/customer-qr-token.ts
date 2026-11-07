@@ -1,4 +1,5 @@
 import { sign, verify } from 'hono/jwt';
+import { validCustomerQrClaims } from './qr-claims-validation';
 
 export type CustomerQrTokenPayload = {
   sub: string;
@@ -30,9 +31,9 @@ export async function signCustomerQrToken(customerId: string, secret: string): P
 }
 
 async function verifyWithSecret(token: string, secret: string): Promise<CustomerQrTokenPayload> {
-  const payload = (await verify(token, secret, 'HS256')) as CustomerQrTokenPayload;
-  if (payload.type !== 'qr_customer') throw new Error('Not a customer QR token');
-  return payload;
+  const payload: unknown = await verify(token, secret, 'HS256');
+  if (!validCustomerQrClaims(payload, CUSTOMER_QR_TOKEN_SIGNATURE_VERSION)) throw new Error('Invalid customer QR token claims');
+  return payload as CustomerQrTokenPayload;
 }
 
 export async function verifyCustomerQrToken(
