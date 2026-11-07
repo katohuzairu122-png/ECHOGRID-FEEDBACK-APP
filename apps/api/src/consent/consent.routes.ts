@@ -5,6 +5,7 @@ import { createRepositories } from '../repositories';
 import { customerAuthenticate, type CustomerAuthVariables } from '../middleware/customer-authenticate';
 import { rateLimit } from '../middleware/rate-limit';
 import { ok } from '../lib/response';
+import { AppError } from '../lib/errors';
 
 type Env = { Bindings: Bindings; Variables: CustomerAuthVariables };
 
@@ -29,7 +30,12 @@ consentRoutes.get('/', async (c) =>
 
 consentRoutes.post('/:id/revoke', async (c) =>
   withDb(c, async (db) => {
-    await createRepositories(db).consentGrants.revoke(c.req.param('id'), c.get('customerId'));
+    const revoked = await createRepositories(db).consentGrants.revoke(c.req.param('id'), c.get('customerId'));
+    // DEV-70: a nonexistent, cross-customer, expired or already revoked
+    // grant must not be represented as a successful state transition.
+    if (!revoked) {
+      throw new AppError('Active consent grant not found.', 404, 'CONSENT_GRANT_NOT_ACTIVE');
+    }
     return ok(c, { revoked: true });
   }),
 );
