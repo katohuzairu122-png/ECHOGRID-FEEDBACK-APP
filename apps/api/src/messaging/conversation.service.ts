@@ -43,6 +43,14 @@ export class ConversationService {
   async getOrCreateForCustomer(businessId: string, customerId: string, createdBy: string): Promise<Conversation> {
     return this.db.transaction(async (tx) => {
       const repos = createRepositories(tx);
+      // DEV-67: customers are global identities; a business-scoped staff
+      // grant never authorizes initiating contact with arbitrary customers.
+      // The messaging contract requires an existing, non-deleted loyalty
+      // account for this exact (customer, business) pair.
+      const enrollment = await repos.loyaltyAccounts.findByCustomerAndBusiness(customerId, businessId);
+      if (!enrollment) {
+        throw new AppError('Customer is not enrolled at this business.', 404, 'CUSTOMER_NOT_ENROLLED');
+      }
       const existing = await repos.conversations.findByCustomerAndBusiness(customerId, businessId);
       if (existing) return existing;
       return repos.conversations.create({ businessId, customerId, createdBy });
