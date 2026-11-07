@@ -10,6 +10,7 @@ import { customerAuthenticate, type CustomerAuthVariables } from '../middleware/
 import { rateLimit } from '../middleware/rate-limit';
 import { parseJsonBody } from '../lib/validate';
 import { ok } from '../lib/response';
+import { parseListPagination } from '../lib/list-pagination';
 import { SurveyParticipationService } from './survey-participation.service';
 
 type Env = {
@@ -140,9 +141,11 @@ surveyCustomerRoutes.post('/campaigns/:campaignId/submit', async (c) => {
 });
 
 surveyCustomerRoutes.get('/participations', async (c) => {
+  const { limit = 100, offset = 0 } = parseListPagination(new URL(c.req.url).searchParams, 100);
   return withDb(c, async (db) => {
     const rows = await createRepositories(db).surveyParticipations.listForCustomer(
       c.get('customerId'),
+      { limit, offset },
     );
     return ok(c, rows.map(serializeParticipation));
   });
