@@ -91,16 +91,16 @@ export class NotificationService {
           subject: channel === 'email' ? rendered.subject : undefined,
           body: channel === 'email' ? rendered.emailHtml : rendered.smsText,
         });
-      } catch (err) {
-        // One channel's enqueue failing shouldn't prevent the other from
-        // being attempted -- log and move on, don't let this method throw
-        // and potentially roll back or fail the caller's own operation
-        // (e.g. a purchase that already succeeded).
+      } catch {
+        // DEV-62: queue/provider exceptions may embed recipient addresses,
+        // rendered message content, access tokens, or provider URLs.
+        // Preserve per-channel best-effort enqueue without ever logging a
+        // raw exception, arbitrary error string, or untrusted object.
         console.error('Failed to enqueue notification:', {
           businessId,
           eventType: data.eventType,
           channel,
-          error: err instanceof Error ? err.message : err,
+          errorCode: 'NOTIFICATION_ENQUEUE_FAILED',
         });
       }
     }
