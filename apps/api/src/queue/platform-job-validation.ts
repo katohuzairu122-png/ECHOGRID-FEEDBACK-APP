@@ -18,9 +18,16 @@ const isRecord = (v: unknown): v is Record<string, unknown> => v !== null && typ
 const hasKeys = (v: Record<string,unknown>, keys: readonly string[]) => Object.keys(v).every(k=>keys.includes(k));
 const optionalId = (v: unknown) => v === undefined || validId(v);
 const optionalText = (v: unknown) => v === undefined || (typeof v === 'string' && v.length <= 10000);
+const hasAsciiControl = (v: string): boolean => {
+  for (let i = 0; i < v.length; i++) {
+    const code = v.charCodeAt(i);
+    if (code <= 31 || code === 127) return true;
+  }
+  return false;
+};
 const validRecipientAddress = (v: unknown): v is string =>
   typeof v === 'string' && v.length > 0 && v.length <= 2048 &&
-  v.trim() === v && !/[\u0000-\u001f\u007f]/.test(v);
+  v.trim() === v && !hasAsciiControl(v);
 
 /**
  * Validates untrusted queue JSON before any domain service or provider call.
