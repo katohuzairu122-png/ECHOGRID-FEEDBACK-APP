@@ -295,7 +295,7 @@ export const surveyCompletionEvidenceSchema = z.object({
   businessId: z.uuid().nullable(),
   branchId: z.uuid().nullable(),
   source: surveyParticipationSourceSchema,
-  completedAt: z.string(),
+  completedAt: z.iso.datetime(),
 });
 export type SurveyCompletionEvidence = z.infer<typeof surveyCompletionEvidenceSchema>;
 
@@ -308,7 +308,16 @@ export const surveyCompletionEventSchema = z.object({
   type: z.literal('survey.participation.completed'),
   eventVersion: z.literal('v1'),
   eventKey: z.string().regex(/^survey-completion:[0-9a-f-]{36}$/),
-  occurredAt: z.string(),
+  occurredAt: z.iso.datetime(),
   evidence: surveyCompletionEvidenceSchema,
+}).superRefine((event, ctx) => {
+  // DEV-79: the queue envelope must identify the same durable completion
+  // as its embedded evidence. A mismatched key cannot select another claim.
+  if (event.eventKey !== `survey-completion:${event.evidence.completionRef}`) {
+    ctx.addIssue({ code: 'custom', path: ['eventKey'], message: 'Event key does not match completion reference.' });
+  }
+  if (event.occurredAt !== event.evidence.completedAt) {
+    ctx.addIssue({ code: 'custom', path: ['occurredAt'], message: 'Event time does not match completion evidence.' });
+  }
 });
 export type SurveyCompletionEvent = z.infer<typeof surveyCompletionEventSchema>;
