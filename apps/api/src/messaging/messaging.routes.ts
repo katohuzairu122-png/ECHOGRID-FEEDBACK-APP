@@ -8,6 +8,7 @@ import { requirePermission } from '../middleware/require-permission';
 import { requireBusinessWideAccess } from '../middleware/require-business-wide-access';
 import type { AuditVariables } from '../middleware/audit';
 import { parseJsonBody } from '../lib/validate';
+import { parseListPagination } from '../lib/list-pagination';
 import { ok } from '../lib/response';
 import { runInBackground } from '../lib/background-db';
 import { ConversationService } from './conversation.service';
@@ -40,8 +41,7 @@ async function withDb<T>(c: Context<Env>, fn: (db: Database) => Promise<T>): Pro
 
 messagingRoutes.get('/conversations', requirePermission('messages:view'), async (c) => {
   const url = new URL(c.req.url);
-  const limit = Number(url.searchParams.get('limit')) || undefined;
-  const offset = Number(url.searchParams.get('offset')) || undefined;
+  const { limit, offset } = parseListPagination(url.searchParams, 1000);
   return withDb(c, async (db) => {
     const items = await new ConversationService(db).listForBusiness(c.get('businessId'), { limit, offset });
     return ok(c, items);

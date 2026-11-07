@@ -13,6 +13,7 @@ import { requirePermission } from '../middleware/require-permission';
 import { requireBusinessWideAccess } from '../middleware/require-business-wide-access';
 import type { AuditVariables } from '../middleware/audit';
 import { parseJsonBody } from '../lib/validate';
+import { parseListPagination } from '../lib/list-pagination';
 import { ok } from '../lib/response';
 import { NotificationService } from './notification.service';
 
@@ -123,8 +124,7 @@ notificationsRoutes.patch('/settings', requireBusinessWideAccess, requirePermiss
  * (recipientAddress), not just aggregate counts. */
 notificationsRoutes.get('/', requireBusinessWideAccess, requirePermission('notifications:view'), async (c) => {
   const url = new URL(c.req.url);
-  const limit = Number(url.searchParams.get('limit')) || undefined;
-  const offset = Number(url.searchParams.get('offset')) || undefined;
+  const { limit, offset } = parseListPagination(url.searchParams, 200);
   const { db, close } = await createDb(c.env.HYPERDRIVE);
   try {
     const items = await createRepositories(db).notifications.listForBusiness(c.get('businessId'), {
