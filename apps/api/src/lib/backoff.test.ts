@@ -39,4 +39,19 @@ describe('computeRetryDelaySeconds (S4 roadmap Block 6 -- bounded exponential ba
     expect(() => computeRetryDelaySeconds(0)).toThrow(RangeError);
     expect(() => computeRetryDelaySeconds(-1)).toThrow(RangeError);
   });
+  it.each([Number.NaN, Infinity, -Infinity, 0.5, 1.5, -2.5, Number.MAX_SAFE_INTEGER + 1])(
+    'DEV-53 refuses non-integral or non-finite attempt count %s',
+    (attempts) => {
+      expect(() => computeRetryDelaySeconds(attempts)).toThrow(RangeError);
+    },
+  );
+
+  it('DEV-53 leaves the supported integer schedule unchanged', () => {
+    const expected = [30, 60, 120, 240, 300, 300, 300];
+    expected.forEach((seconds, index) => {
+      expect(computeRetryDelaySeconds(index + 1)).toBe(seconds);
+    });
+    expect(computeRetryDelaySeconds(Number.MAX_SAFE_INTEGER)).toBe(MAX_RETRY_DELAY_SECONDS);
+  });
+
 });
