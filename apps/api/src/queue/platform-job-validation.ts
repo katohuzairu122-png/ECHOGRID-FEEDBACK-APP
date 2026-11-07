@@ -5,7 +5,7 @@ const nonempty = (v: unknown): v is string => typeof v === 'string' && v.trim().
 // Queue producers serialize Date values with toISOString() (UTC Z, zero or
 // three millisecond digits). Date.parse alone normalizes impossible dates
 // (e.g. February 30) and also accepts non-ISO inputs, so it is not enough.
-const UTC_TIMESTAMP = /^\\d{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12]\\d|3[01])T(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d{3})?Z$/;
+const UTC_TIMESTAMP = /^\d{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12]\d|3[01])T(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d{3})?Z$/;
 const validDate = (v: unknown): v is string => {
   if (typeof v !== 'string' || !UTC_TIMESTAMP.test(v)) return false;
   const parsed = Date.parse(v);
