@@ -52,7 +52,10 @@ export class NotificationService {
   ) {}
 
   async notify(businessId: string, recipient: NotifyRecipient, data: NotificationTemplateData): Promise<void> {
-    if (!recipient.userId && !recipient.customerId) {
+    // DEV-63: fail closed if both identities are supplied, not just when
+    // neither is supplied. Otherwise a staff lookup wins in resolveAddress()
+    // while BOTH IDs travel to the queue and notification log.
+    if (Boolean(recipient.userId) === Boolean(recipient.customerId)) {
       throw new Error('notify() requires exactly one of userId/customerId.');
     }
 
