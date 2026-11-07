@@ -75,7 +75,7 @@ describe('DEV-55 notification delivery operational integrity regressions', () =>
 
   it('marks a failed provider attempt and propagates failure for the queue retry path', async () => {
     const h = harness();
-    h.sendEmail.mockRejectedValueOnce(new Error('provider unavailable'));
+    h.sendEmail.mockImplementationOnce(async () => { h.order.push('email'); throw new Error('provider unavailable'); });
     await expect(h.service.deliver(emailJob)).rejects.toThrow('provider unavailable');
     expect(h.order).toEqual(['pending', 'email', 'failed']);
     expect(h.markFailed).toHaveBeenCalledWith('log-1');
@@ -94,7 +94,7 @@ describe('DEV-55 notification delivery operational integrity regressions', () =>
 
   it('exposes the existing ambiguous send-then-status-write failure without claiming deduplication', async () => {
     const h = harness();
-    h.markSent.mockRejectedValueOnce(new Error('markSent failed after provider success'));
+    h.markSent.mockImplementationOnce(async () => { h.order.push('sent'); throw new Error('markSent failed after provider success'); });
     await expect(h.service.deliver(emailJob)).rejects.toThrow('markSent failed after provider success');
     expect(h.order).toEqual(['pending', 'email', 'sent', 'failed']);
     expect(h.sendEmail).toHaveBeenCalledOnce();
