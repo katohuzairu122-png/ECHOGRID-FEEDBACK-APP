@@ -78,7 +78,7 @@ function createFakeRepos(options: FakeRepoOptions = {}) {
     findById: vi.fn().mockResolvedValue(
       options.user === null
         ? undefined
-        : ({ id: 'user-1', email: 'staff@example.com', phone: '+15550001111', ...options.user } as User),
+        : ({ id: 'user-1', email: 'staff@example.com', phone: '+15550001111', status: 'active', ...options.user } as User),
     ),
   } as unknown as UserRepository;
 
@@ -86,7 +86,7 @@ function createFakeRepos(options: FakeRepoOptions = {}) {
     findById: vi.fn().mockResolvedValue(
       options.customer === null
         ? undefined
-        : ({ id: 'customer-1', email: null, phone: '+15559998888', ...options.customer } as Customer),
+        : ({ id: 'customer-1', email: null, phone: '+15559998888', status: 'active', ...options.customer } as Customer),
     ),
   } as unknown as CustomerRepository;
 
@@ -374,5 +374,53 @@ describe('DEV-63 exclusive notification recipient identity', () => {
     expect(vi.mocked(queue.send).mock.calls[0]?.[0]).toMatchObject({
       customerId: 'customer-1', userId: undefined, channel: 'sms',
     });
+  });
+});
+
+describe('DEV-64 active-identity guard for notification fan-out', () => {
+  it.each(['invited', 'suspended', 'deactivated'])(
+    'does not enqueue any channel for a %s staff account even if a business grant remains',
+    async (status) => {
+      const queue = createFakeQueue();
+      const repos = createFakeRepos({ user: { status } });
+      const service = new NotificationService(repos, queue);
+      await service.notify(BUSINESS_A, { userId: 'user-1' }, SUMMARY_DATA);
+      expect(queue.send).not.toHaveBeenCalled();
+      expect(repos.notificationPreferences.findOne).not.toHaveBeenCalled();
+      expect(repos.notifications.countSince).not.toHaveBeenCalled();
+    },
+  );
+
+  it('does not enqueue notifications for a suspended customer account', async () => {
+    const queue = createFakeQueue();
+    const repos = createFakeRepos({ customer: { status: 'suspended' } });
+    await new NotificationService(repos, queue)
+      .notify(BUSINESS_A, { customerId: 'customer-1' }, SUMMARY_DATA);
+    expect(queue.send).not.toHaveBeenCalled();
+    expect(repos.notificationPreferences.findOne).not.toHaveBeenCalled();
+  });
+
+  it('does not enqueue when the staff or customer identity is no longer found', async () => {
+    const staffQueue = createFakeQueue();
+    await new NotificationService(createFakeRepos({ user: null }), staffQueue)
+      .notify(BUSINESS_A, { userId: 'user-1' }, SUMMARY_DATA);
+    expect(staffQueue.send).not.toHaveBeenCalled();
+
+    const customerQueue = createFakeQueue();
+    await new NotificationService(createFakeRepos({ customer: null }), customerQueue)
+      .notify(BUSINESS_A, { customerId: 'customer-1' }, SUMMARY_DATA);
+    expect(customerQueue.send).not.toHaveBeenCalled();
+  });
+
+  it('retains normal notification delivery for active staff and customer accounts', async () => {
+    const staffQueue = createFakeQueue();
+    await new NotificationService(createFakeRepos({ user: { status: 'active' } }), staffQueue)
+      .notify(BUSINESS_A, { userId: 'user-1' }, SUMMARY_DATA);
+    expect(staffQueue.send).toHaveBeenCalledTimes(2);
+
+    const customerQueue = createFakeQueue();
+    await new NotificationService(createFakeRepos({ customer: { status: 'active' } }), customerQueue)
+      .notify(BUSINESS_A, { customerId: 'customer-1' }, SUMMARY_DATA);
+    expect(customerQueue.send).toHaveBeenCalledOnce();
   });
 });
