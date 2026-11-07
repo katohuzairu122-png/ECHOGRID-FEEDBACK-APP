@@ -15,11 +15,14 @@ module with configuration that happens outside `wrangler`/this codebase
 entirely), database migration, deployment itself, post-deploy verification,
 and rollback.
 
-**Current status as of this writing: nothing in this project has been
-deployed anywhere.** `node_modules` doesn't exist, no migrations have been
-generated, and every Cloudflare resource in `wrangler.toml` is still a
-placeholder. Every step below is a real, unstarted step — this is not a
-"mostly done, just double-check" list.
+**Release evidence status:** This document is a procedure, not a live
+deployment inventory. Repository code, migration files and Wrangler bindings
+exist, but their presence does not prove which infrastructure has been
+provisioned, what release is live, or which migrations are applied. Treat
+staging and production runtime state as **UNVERIFIED** until checked against
+the corresponding Cloudflare, database and GitHub environment records by an
+authorized operator. A green pull-request CI run does not grant staging or
+production execution authority.
 
 ## Environments
 
@@ -230,8 +233,9 @@ Go/no-go checklist before calling a deploy done:
       `/dashboard/billing` → pick a plan → complete Checkout → confirm
       `business_subscriptions.status` flips to `active` and the dashboard
       reflects it
-- [ ] Confirm the two cron triggers are listed under the Worker's Triggers
-      tab in the Cloudflare dashboard
+- [ ] Confirm the deployed cron schedule matches the relevant Wrangler
+      environment (production currently declares four schedules, staging one)
+      and verify the actual Worker trigger state in Cloudflare
 
 ## Continuous Deployment (Optional)
 
@@ -273,16 +277,16 @@ then apply it with `db:migrate` as its own deliberate step, per Step 4.
 The check verifies the migration *exists in the repo*; it does not and cannot
 verify it has been *applied to the database*.
 
-**One prerequisite still outstanding:**
+**Owner-controlled credential and approval gate (UNVERIFIED):**
 
-Two repository secrets (GitHub repo → Settings → Secrets and variables →
-Actions): `CLOUDFLARE_API_TOKEN` (Cloudflare dashboard → My Profile → API
-Tokens → Create Token → "Edit Cloudflare Workers" template) and
-`CLOUDFLARE_ACCOUNT_ID` (Cloudflare dashboard → Workers & Pages → Account
-ID, right sidebar).
-
-Until both exist, the `verify` job runs but the two deploy jobs fail
-authentication — keep deploying with Step 6's manual commands.
+The `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` names are used by
+the separately authorized staging and production deployment workflows. Their
+existence, scopes and isolation **cannot be established from repository
+text**. Confirm names and the protected GitHub environment settings without
+reading or copying secret values. Follow [PRODUCTION-RELEASE.md](./PRODUCTION-RELEASE.md)
+for environment-only secret isolation, required reviewers and explicit owner
+authorization. Do not dispatch a staging or production workflow to test this
+gate without separate approval; dispatching it can perform real writes.
 
 ## Rollback
 
