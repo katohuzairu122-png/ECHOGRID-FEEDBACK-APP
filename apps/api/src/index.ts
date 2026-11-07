@@ -5,7 +5,6 @@ import { requestId } from 'hono/request-id';
 import type { Bindings, PlatformJob } from './config/env';
 import { isPlatformJob } from './queue/platform-job-validation';
 import { describeDeadLetterPayload } from './queue/dead-letter-metadata';
-import { describeQueueFailure } from './queue/queue-failure-metadata';
 import { errorHandler } from './lib/error-handler';
 import { parseAllowedOrigins } from './lib/allowed-origins';
 import { rateLimit } from './middleware/rate-limit';
@@ -400,7 +399,9 @@ async function queue(batch: MessageBatch<PlatformJob>, env: Bindings, ctx: Execu
       } catch (err) {
         console.error('Background job failed:', {
           messageId: message.id,
-          ...describeQueueFailure(message.body, message.attempts, err),
+          jobType: (message.body as { type?: unknown } | null)?.type ?? 'unknown',
+          attempt: message.attempts,
+          error: err instanceof Error ? err.message : err,
         });
         message.retry({ delaySeconds: computeRetryDelaySeconds(message.attempts) });
       }
