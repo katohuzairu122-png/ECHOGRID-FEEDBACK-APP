@@ -93,7 +93,12 @@ export class ConsentGrantRepository extends BaseRepository {
     const [updated] = await this.db
       .update(consentGrants)
       .set({ status: 'revoked', revokedAt: new Date() })
-      .where(and(eq(consentGrants.id, id), eq(consentGrants.customerId, customerId), eq(consentGrants.status, 'active')))
+      .where(and(
+        eq(consentGrants.id, id),
+        eq(consentGrants.customerId, customerId),
+        eq(consentGrants.status, 'active'),
+        or(isNull(consentGrants.expiresAt), gt(consentGrants.expiresAt, new Date())),
+      ))
       .returning({ id: consentGrants.id });
     return updated !== undefined;
   }
