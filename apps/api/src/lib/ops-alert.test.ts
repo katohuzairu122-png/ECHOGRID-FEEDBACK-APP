@@ -255,6 +255,45 @@ describe('notifyOps', () => {
     ).resolves.toBeUndefined();
 
     expect(fetchMock).toHaveBeenCalledOnce();
+    expect(consoleError).toHaveBeenCalledTimes(2);
+    expect(consoleError.mock.calls[1]?.[1]).toEqual({
+      event: 'x',
+      errorCode: 'OPS_ALERT_HTTP_NON_SUCCESS',
+      status: 404,
+    });
+    expect(JSON.stringify(consoleError.mock.calls)).not.toContain('nope');
+  });
+
+  it.each([400, 401, 429, 500, 503])('DEV-54 reports HTTP %s safely without retrying or reading response bodies', async status => {
+    fetchMock.mockResolvedValueOnce(new Response('customer@example.com private access token', { status }));
+    await expect(notifyOps(ENV_WITH_WEBHOOK, {
+      event: 'queue.dead_letter',
+      severity: 'critical',
+      message: 'Queue alert delivery test',
+    })).resolves.toBeUndefined();
+
+    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(consoleError.mock.calls[1]?.[1]).toEqual({
+      event: 'queue.dead_letter',
+      errorCode: 'OPS_ALERT_HTTP_NON_SUCCESS',
+      status,
+    });
+    expect(JSON.stringify(consoleError.mock.calls)).not.toContain('customer@example.com');
+    expect(JSON.stringify(consoleError.mock.calls)).not.toContain('access token');
+  });
+
+  it('DEV-54 never emits credential-bearing transport error messages', async () => {
+    const secret = 'https://hooks.example.test/secret-credential';
+    fetchMock.mockRejectedValueOnce(new Error(`Connection refused to ${secret}`));
+    await expect(notifyOps(ENV_WITH_WEBHOOK, {
+      event: 'queue.dead_letter', severity: 'critical', message: 'DLQ alert',
+    })).resolves.toBeUndefined();
+
+    expect(consoleError).toHaveBeenCalledTimes(2);
+    expect(consoleError.mock.calls[1]?.[1]).toEqual({
+      event: 'queue.dead_letter', errorCode: 'OPS_ALERT_TRANSPORT_FAILED',
+    });
+    expect(JSON.stringify(consoleError.mock.calls)).not.toContain('secret-credential');
   });
 
   it('omits detail as an empty object rather than undefined', async () => {
