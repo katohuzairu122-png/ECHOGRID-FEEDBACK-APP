@@ -1,8 +1,8 @@
 import { AppError } from './errors';
 
 export interface ListPagination {
-  limit?: number;
-  offset?: number;
+  limit?: number | undefined;
+  offset?: number | undefined;
 }
 
 /**
