@@ -4,7 +4,7 @@
 
 ## Dependency
 
-DEV-27 is branched from DEV-26 PR #250 while its owner merge is pending. Review against the DEV-26 branch until PR #250 is merged, then rebase/retarget DEV-27 to current authoritative main. Do not merge DEV-27 into main before DEV-26.
+DEV-26 PR #250 has merged. DEV-27 PR #251 has been retargeted to authoritative main. Verify exact-head CI and independent review before merging DEV-27.
 
 ## Delivered
 
