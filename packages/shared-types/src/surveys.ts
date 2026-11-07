@@ -101,6 +101,23 @@ export const surveyQuestionInputSchema = z
         message: 'Choice questions require options.',
       });
     }
+    // DEV-69: publishing the same normalized option twice creates
+    // ambiguous answer choices and prevents unambiguous survey analysis.
+    // Zod trims each option before this refinement, so whitespace variants
+    // cannot bypass this constraint.
+    if (isChoice && question.options) {
+      const seenOptions = new Set<string>();
+      question.options.forEach((option, index) => {
+        if (seenOptions.has(option)) {
+          ctx.addIssue({
+            code: 'custom',
+            path: ['options', index],
+            message: 'Choice question options must be unique.',
+          });
+        }
+        seenOptions.add(option);
+      });
+    }
     if (!isChoice && question.options !== undefined) {
       ctx.addIssue({
         code: 'custom',
