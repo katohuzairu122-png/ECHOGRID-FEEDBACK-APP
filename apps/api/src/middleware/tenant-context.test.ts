@@ -84,3 +84,41 @@ describe('trusted QR and settlement tenant context', () => {
     expect(mocks.business).not.toHaveBeenCalled();
   });
 });
+
+
+describe('DEV-51 bounded and safe tenant header inputs', () => {
+  it.each([
+    [{ 'X-Business-Id': 'invalid/context' }, 'INVALID_BUSINESS_CONTEXT'],
+    [{ 'X-Business-Id': 'two,values' }, 'INVALID_BUSINESS_CONTEXT'],
+    [{ 'X-Business-Id': 'x'.repeat(257) }, 'INVALID_BUSINESS_CONTEXT'],
+    [{ 'X-Business-Id': ' business-a' }, 'INVALID_BUSINESS_CONTEXT'],
+    [{ 'X-Business-Id': 'business-a', 'X-Branch-Id': '' }, 'INVALID_BRANCH_CONTEXT'],
+    [{ 'X-Business-Id': 'business-a', 'X-Branch-Id': 'wrong/branch' }, 'INVALID_BRANCH_CONTEXT'],
+    [{ 'X-Business-Id': 'business-a', 'X-Branch-Id': 'b'.repeat(257) }, 'INVALID_BRANCH_CONTEXT'],
+    [{ 'X-Business-Id': 'business-a', 'X-Branch-Id': 'branch-a,branch-b' }, 'INVALID_BRANCH_CONTEXT'],
+  ])('rejects untrusted selectors before any membership, business or branch lookup %#', async (headers, code) => {
+    const response = await request(headers);
+    expect(response.status).toBe(403); // Fixture maps AppError to 403 to expose the code.
+    expect(await response.json()).toEqual({ code });
+    expect(mocks.membership).not.toHaveBeenCalled();
+    expect(mocks.business).not.toHaveBeenCalled();
+    expect(mocks.branch).not.toHaveBeenCalled();
+    expect(mocks.permissions).not.toHaveBeenCalled();
+  });
+
+  it('preserves the existing missing-business error', async () => {
+    const response = await request({ 'X-Branch-Id': 'branch-a' });
+    expect(await response.json()).toEqual({ code: 'MISSING_BUSINESS_CONTEXT' });
+    expect(mocks.membership).not.toHaveBeenCalled();
+  });
+
+  it('accepts ordinary UUID selector pairs unchanged', async () => {
+    const businessId = '11111111-1111-4111-8111-111111111111';
+    const branchId = '22222222-2222-4222-8222-222222222222';
+    const response = await request({ 'X-Business-Id': businessId, 'X-Branch-Id': branchId });
+    expect(response.status).toBe(200);
+    expect(mocks.membership).toHaveBeenCalledWith('staff', businessId);
+    expect(mocks.branch).toHaveBeenCalledWith(branchId, businessId);
+    expect(mocks.permissions).toHaveBeenCalledWith('staff', businessId, branchId);
+  });
+});
