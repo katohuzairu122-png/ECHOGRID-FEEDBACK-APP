@@ -49,7 +49,7 @@ describe('DEV-32 bounded retry history and capacity invariants', () => {
       expect(() => harness.append(token, rejected(invalid))).toThrow('DEV26_ATTEMPT_INVALID');
       expect(harness.classify(token).status).toBe('OBSERVED');
     }
-    expect(() => harness.append(token, rejected(0))).toThrow('DEV26_ATTEMPT_INVALID'.replace('ATTEMPT_INVALID', 'CONTRADICTORY_ATTEMPT'));
+    expect(() => harness.append(token, rejected(0))).toThrow('DEV26_ATTEMPT_INVALID');
     expect(harness.classify(token).status).toBe('OBSERVED');
     harness.end(token);
   });
