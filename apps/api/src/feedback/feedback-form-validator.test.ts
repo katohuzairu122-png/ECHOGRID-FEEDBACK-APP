@@ -31,3 +31,66 @@ describe('validateFeedbackAnswers', () => {
   });
 });
 
+const multiId = '55555555-5555-4555-8555-555555555555';
+const multiForm: PublicFeedbackForm = {
+  ...form,
+  questions: [
+    ...form.questions,
+    { id: multiId, key: 'channels', label: 'Preferred channels', type: 'multi_choice',
+      required: true, position: 2, options: ['Email', 'SMS', 'In-App'] },
+  ],
+};
+const baseAnswers = [{ questionId: textId, value: 'Helpful staff' }];
+
+describe('DEV-66 published form answer cardinality and integrity', () => {
+  it('accepts distinct valid multi-choice selections', () => {
+    expect(() => validateFeedbackAnswers(multiForm, [
+      ...baseAnswers,
+      { questionId: multiId, value: ['Email', 'In-App'] },
+    ])).not.toThrow();
+  });
+
+  it.each([
+    [],
+    ['Email', 'Email'],
+    ['SMS', 'SMS', 'SMS'],
+    ['Email', 'SMS', 'In-App', 'Email'],
+    ['Other'],
+    [23],
+    [null],
+    ['Email', null],
+  ])('rejects invalid, empty, duplicate or unknown selections %#', choices => {
+    expect(() => validateFeedbackAnswers(multiForm, [
+      ...baseAnswers,
+      { questionId: multiId, value: choices },
+    ])).toThrow();
+  });
+
+  it('still permits an unanswered optional multi-choice question', () => {
+    const optional: PublicFeedbackForm = {
+      ...multiForm,
+      questions: multiForm.questions.map(q => q.id === multiId ? { ...q, required: false } : q),
+    };
+    expect(() => validateFeedbackAnswers(optional, baseAnswers)).not.toThrow();
+    expect(() => validateFeedbackAnswers(optional, [
+      ...baseAnswers, { questionId: multiId, value: [] },
+    ])).not.toThrow();
+  });
+
+  it('rejects a blank or whitespace-only answer to a required text question', () => {
+    for (const value of ['', ' ', '\t', '\n']) {
+      expect(() => validateFeedbackAnswers(form, [{ questionId: textId, value }])).toThrow();
+    }
+    expect(() => validateFeedbackAnswers(form, [{ questionId: textId, value: ' Great ' }]))
+      .not.toThrow();
+  });
+
+  it('does not require nonblank text for an explicitly optional text field', () => {
+    const optional: PublicFeedbackForm = {
+      ...form,
+      questions: form.questions.map(q => q.id === textId ? { ...q, required: false } : q),
+    };
+    expect(() => validateFeedbackAnswers(optional, [{ questionId: textId, value: '' }]))
+      .not.toThrow();
+  });
+});
