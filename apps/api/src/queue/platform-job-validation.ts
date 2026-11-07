@@ -13,11 +13,15 @@ const validDate = (v: unknown): v is string => {
   const canonical = v.includes('.') ? v : v.replace(/Z$/, '.000Z');
   return new Date(parsed).toISOString() === canonical;
 };
-const validId = (v: unknown): v is string => nonempty(v) && v.length <= 256;
+const QUEUE_ID = /^[A-Za-z0-9][A-Za-z0-9_-]{0,255}$/;
+const validId = (v: unknown): v is string => typeof v === 'string' && QUEUE_ID.test(v);
 const isRecord = (v: unknown): v is Record<string, unknown> => v !== null && typeof v === 'object' && !Array.isArray(v);
 const hasKeys = (v: Record<string,unknown>, keys: readonly string[]) => Object.keys(v).every(k=>keys.includes(k));
 const optionalId = (v: unknown) => v === undefined || validId(v);
 const optionalText = (v: unknown) => v === undefined || (typeof v === 'string' && v.length <= 10000);
+const validRecipientAddress = (v: unknown): v is string =>
+  typeof v === 'string' && v.length > 0 && v.length <= 2048 &&
+  v.trim() === v && !/[\u0000-\u001f\u007f]/.test(v);
 
 /**
  * Validates untrusted queue JSON before any domain service or provider call.
@@ -38,7 +42,7 @@ export function isPlatformJob(value: unknown): value is PlatformJob {
       return hasKeys(value,['type','businessId','userId','customerId','eventType','channel','recipientAddress','subject','body']) &&
         validId(value.businessId) && optionalId(value.userId) && optionalId(value.customerId) &&
         notificationEventTypeSchema.safeParse(value.eventType).success && ['email','sms'].includes(String(value.channel)) &&
-        nonempty(value.recipientAddress) && value.recipientAddress.length <= 2048 &&
+        validRecipientAddress(value.recipientAddress) &&
         optionalText(value.subject) && typeof value.body === 'string' && value.body.length <= 100000;
     case 'escalate_critical_incident':
       return hasKeys(value,['type','incidentId','businessId']) && validId(value.incidentId) && validId(value.businessId);
