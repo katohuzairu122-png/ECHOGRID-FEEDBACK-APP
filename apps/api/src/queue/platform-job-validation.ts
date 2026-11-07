@@ -1,4 +1,5 @@
 import type { PlatformJob } from '../config/env';
+import { notificationEventTypeSchema } from '@echo-grid-feedback/shared-types';
 
 const nonempty = (v: unknown): v is string => typeof v === 'string' && v.trim().length > 0;
 const validDate = (v: unknown): v is string => nonempty(v) && !Number.isNaN(Date.parse(v));
@@ -26,7 +27,7 @@ export function isPlatformJob(value: unknown): value is PlatformJob {
     case 'send_notification':
       return hasKeys(value,['type','businessId','userId','customerId','eventType','channel','recipientAddress','subject','body']) &&
         validId(value.businessId) && optionalId(value.userId) && optionalId(value.customerId) &&
-        nonempty(value.eventType) && ['email','sms'].includes(String(value.channel)) &&
+        notificationEventTypeSchema.safeParse(value.eventType).success && ['email','sms'].includes(String(value.channel)) &&
         nonempty(value.recipientAddress) && value.recipientAddress.length <= 2048 &&
         optionalText(value.subject) && typeof value.body === 'string' && value.body.length <= 100000;
     case 'escalate_critical_incident':
