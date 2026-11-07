@@ -27,6 +27,7 @@ import { readTrustedCustodyForRecorder } from '../../src/billing/stripe-read/tru
 import { verifyDurableSettlementProvenance } from '../../src/billing/stripe-read/durable-provenance-verifier';
 import { createPrivateProvenanceAuditStage } from '../../src/billing/stripe-read/private-provenance-audit-stage';
 import { createObservedPrivateProvenanceAuditStage, type PrivateProvenanceObservation } from '../../src/billing/stripe-read/private-provenance-observation';
+import { createDevelopmentBoundedProvenanceObservationSink } from '../../src/billing/stripe-read/development-bounded-provenance-observation-sink';
 import { createSyntheticCustodyRecorderHandoff } from '../../src/billing/stripe-read/synthetic-custody-recorder-handoff';
 import { createEvidenceSigningBoundary, createSigningWorkloadAuthority, SignedEvidenceCustodyService } from '../../src/billing/stripe-read';
 import { syntheticDirectory, syntheticKey, syntheticSignerProvider, syntheticSigningWorkloadSource } from '../../src/billing/stripe-read/evidence-signing-test-support';
@@ -461,6 +462,31 @@ describe.skipIf(!process.env.DATABASE_URL)('D4 final credit consumption and ledg
         status: 'UNAVAILABLE', durable: false, financialAuthorization: 'NOT_GRANTED',
       });
       expect(events).toHaveLength(1);
+
+      // DEV-24 disposable bounded sink: one genuine verification is recorded
+      // as a redacted observation, overflow refuses a second success.
+      const bounded = createDevelopmentBoundedProvenanceObservationSink(1);
+      const boundedStage = createObservedPrivateProvenanceAuditStage({
+        db: buildDb(auditor), custodyReader: f.trustedReader,
+        environment: 'development', clock: () => 500000,
+        source: { load: async () => ({
+          workloadId: 'dev22-auditor', role: 'PROVENANCE_AUDITOR',
+          environment: 'development', businessIds: [f.sc.businessId],
+          validFromMs: 1000, expiresAtMs: 900000, revokedAtMs,
+        }) },
+        recorderPublicKeys: GATE_CFG.trustedSigningKeys,
+        sink: bounded,
+      });
+      expect(await boundedStage.verify(request)).toEqual({
+        status: 'VERIFIED', durable: true, financialAuthorization: 'NOT_GRANTED',
+      });
+      expect(await boundedStage.verify(request)).toEqual({
+        status: 'UNAVAILABLE', durable: false, financialAuthorization: 'NOT_GRANTED',
+      });
+      expect(bounded.snapshot()).toEqual([{
+        event: 'PRIVATE_PROVENANCE_VERIFICATION',
+        status: 'VERIFIED', financialAuthorization: 'NOT_GRANTED',
+      }]);
       expect(await stage.verify({ ...request, businessId: randomUUID() })).toEqual({
         status: 'UNAVAILABLE', durable: false, financialAuthorization: 'NOT_GRANTED',
       });
