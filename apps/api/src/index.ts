@@ -4,7 +4,7 @@ import { secureHeaders } from 'hono/secure-headers';
 import { requestId } from 'hono/request-id';
 import type { Bindings, PlatformJob } from './config/env';
 import { isPlatformJob } from './queue/platform-job-validation';
-import { describeDeadLetterPayload } from './queue/dead-letter-metadata';
+import { handleDeadLetterBatch } from './queue/dead-letter-consumer';
 import { describeQueueFailure } from './queue/queue-failure-metadata';
 import { errorHandler } from './lib/error-handler';
 import { parseAllowedOrigins } from './lib/allowed-origins';
@@ -233,47 +233,6 @@ app.route('/api/v1', api);
  * below: a rename in one place and this branch silently never runs again.
  */
 const DEAD_LETTER_QUEUE = 'echo-grid-feedback-jobs-dlq';
-
-/**
- * Consumes the dead-letter queue (audit P3-3).
- *
- * wrangler.toml declared `dead_letter_queue` from the start and nothing ever
- * consumed it, so a job that exhausted its 3 retries landed there and sat --
- * no consumer, no alarm, nothing logged. docs/OPERATIONS.md prescribed
- * "inspect the dashboard", which means a systemic failure (a Workers AI
- * outage, a database at capacity) was discovered only when somebody happened
- * to look.
- *
- * Alerts per message, then acks. Acking DISCARDS the message, which is the
- * deliberate choice: the alternative is leaving it to redeliver forever
- * against a handler that has already failed four times. The alert carries
- * the job type, id and attempt count, so it is the record -- which is why
- * the payload matters and the alert is not just a count.
- *
- * Opens NO database connection. It is reached before the main consumer's
- * createDb() on purpose: this path exists for the case where the database is
- * the thing that is broken.
- */
-async function handleDeadLetterBatch(batch: MessageBatch<PlatformJob>, env: Bindings): Promise<void> {
-  for (const message of batch.messages) {
-    const metadata = describeDeadLetterPayload(message.body);
-    await notifyOps(env, {
-      event: 'queue.dead_letter',
-      severity: 'critical',
-      message: `A ${metadata.jobType} job exhausted its retries and was dead-lettered.`,
-      // Ids and discriminants only -- job payloads carry businessId,
-      // feedbackId and notification ids, never customer prose. See
-      // lib/ops-alert.ts on why that boundary matters for this path.
-      detail: {
-        messageId: message.id,
-        jobType: metadata.jobType,
-        attempts: message.attempts,
-        payloadValid: metadata.payloadValid,
-      },
-    });
-    message.ack();
-  }
-}
 
 async function queue(batch: MessageBatch<PlatformJob>, env: Bindings, ctx: ExecutionContext): Promise<void> {
   // Both queues are bound to this one handler, so the batch says which it
