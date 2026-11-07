@@ -1,4 +1,5 @@
 import { sign, verify } from 'hono/jwt';
+import { validBusinessQrClaims } from './qr-claims-validation';
 
 /**
  * Split 03 names this token for what it already is: the shared Business QR
@@ -84,9 +85,9 @@ export async function signQrToken(
 }
 
 async function verifyWithSecret(token: string, secret: string): Promise<QrTokenPayload> {
-  const payload = (await verify(token, secret, 'HS256')) as QrTokenPayload;
-  if (payload.type !== 'qr_business' && payload.type !== 'qr_feedback') throw new Error('Not a business QR token');
-  return payload;
+  const payload: unknown = await verify(token, secret, 'HS256');
+  if (!validBusinessQrClaims(payload, QR_TOKEN_SIGNATURE_VERSION)) throw new Error('Invalid business QR token claims');
+  return payload as QrTokenPayload;
 }
 
 /**
