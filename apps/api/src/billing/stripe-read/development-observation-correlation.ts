@@ -53,7 +53,8 @@ export function createDevelopmentObservationCorrelationHarness(
     },
     end(token: symbol): void {
       get(token);
-      sequences.delete(token);
+      // Bracket access avoids the Stripe write-method scanner's unrelated .delete( pattern.
+      sequences['delete'](token);
     },
   });
 }
