@@ -310,3 +310,35 @@ describe('NotificationService.listMaterializedPreferences', () => {
     expect(result.find((r) => r.channel === 'sms')?.enabled).toBe(true);
   });
 });
+
+describe('DEV-62 notification enqueue failure telemetry', () => {
+  it.each([
+    new Error('Queue failed for private@example.com Bearer sensitive-key'),
+    { message: 'private@example.com', url: 'https://private-token.example' },
+    'private@example.com',
+  ])('does not serialize arbitrary exception messages or objects %#', async (failure) => {
+    const queue = createFakeQueue();
+    vi.mocked(queue.send).mockRejectedValueOnce(failure);
+    const service = new NotificationService(createFakeRepos(), queue);
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    try {
+      await expect(service.notify(BUSINESS_A, STAFF_RECIPIENT, SUMMARY_DATA))
+        .resolves.toBeUndefined();
+      expect(queue.send).toHaveBeenCalledTimes(2);
+      expect(errorSpy).toHaveBeenCalledOnce();
+      expect(errorSpy).toHaveBeenCalledWith('Failed to enqueue notification:', {
+        businessId: BUSINESS_A,
+        eventType: 'summary_ready',
+        channel: 'email',
+        errorCode: 'NOTIFICATION_ENQUEUE_FAILED',
+      });
+      const logged = JSON.stringify(errorSpy.mock.calls);
+      expect(logged).not.toContain('private@example.com');
+      expect(logged).not.toContain('sensitive-key');
+      expect(logged).not.toContain('private-token');
+      expect(logged).not.toContain('staff@example.com');
+    } finally {
+      errorSpy.mockRestore();
+    }
+  });
+});
