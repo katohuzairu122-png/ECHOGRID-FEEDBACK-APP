@@ -36,14 +36,15 @@ const MAX_RETRY_DELAY_SECONDS = 300;
  * package is the actual confirmation this sandbox cannot provide.
  */
 export function computeRetryDelaySeconds(attempts: number): number {
-  if (attempts < 1) {
-    // Loud failure instead of a silently negative/NaN delay from
-    // 2 ** (attempts - 1) going the wrong direction -- same "throw for an
+  if (!Number.isSafeInteger(attempts) || attempts < 1) {
+    // DEV-53: reject fractions, NaN, infinities and unsafe integers before
+    // exponentiation; queue attempts must be finite positive integers.
+    // Same "throw for an
     // impossible input rather than guess" convention as
     // summary-generator.ts's calculateCostUsd throwing on an unpriced
     // model, not defaulting to $0.
     throw new RangeError(
-      `attempts must be >= 1 (Cloudflare Queues' Message.attempts is 1-indexed, starting at 1 on first delivery), got ${attempts}`,
+      `attempts must be a positive safe integer (Cloudflare Queues' Message.attempts starts at 1), got ${attempts}`,
     );
   }
   const exponential = BASE_RETRY_DELAY_SECONDS * 2 ** (attempts - 1);
