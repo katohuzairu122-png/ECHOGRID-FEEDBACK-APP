@@ -4,6 +4,7 @@ import { secureHeaders } from 'hono/secure-headers';
 import { requestId } from 'hono/request-id';
 import type { Bindings, PlatformJob } from './config/env';
 import { isPlatformJob } from './queue/platform-job-validation';
+import { describeDeadLetterPayload } from './queue/dead-letter-metadata';
 import { errorHandler } from './lib/error-handler';
 import { parseAllowedOrigins } from './lib/allowed-origins';
 import { rateLimit } from './middleware/rate-limit';
@@ -254,18 +255,19 @@ const DEAD_LETTER_QUEUE = 'echo-grid-feedback-jobs-dlq';
  */
 async function handleDeadLetterBatch(batch: MessageBatch<PlatformJob>, env: Bindings): Promise<void> {
   for (const message of batch.messages) {
+    const metadata = describeDeadLetterPayload(message.body);
     await notifyOps(env, {
       event: 'queue.dead_letter',
       severity: 'critical',
-      message: `A ${message.body.type} job exhausted its retries and was dead-lettered.`,
+      message: `A ${metadata.jobType} job exhausted its retries and was dead-lettered.`,
       // Ids and discriminants only -- job payloads carry businessId,
       // feedbackId and notification ids, never customer prose. See
       // lib/ops-alert.ts on why that boundary matters for this path.
       detail: {
         messageId: message.id,
-        jobType: message.body.type,
+        jobType: metadata.jobType,
         attempts: message.attempts,
-        body: message.body,
+        payloadValid: metadata.payloadValid,
       },
     });
     message.ack();
