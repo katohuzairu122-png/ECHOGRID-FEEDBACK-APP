@@ -3,6 +3,7 @@ import { cors } from 'hono/cors';
 import { secureHeaders } from 'hono/secure-headers';
 import { requestId } from 'hono/request-id';
 import type { Bindings, PlatformJob } from './config/env';
+import { isPlatformJob } from './queue/platform-job-validation';
 import { errorHandler } from './lib/error-handler';
 import { parseAllowedOrigins } from './lib/allowed-origins';
 import { rateLimit } from './middleware/rate-limit';
@@ -308,6 +309,9 @@ async function queue(batch: MessageBatch<PlatformJob>, env: Bindings, ctx: Execu
 
     for (const message of batch.messages) {
       try {
+        if (!isPlatformJob(message.body)) {
+          throw new Error('QUEUE_JOB_PAYLOAD_INVALID');
+        }
         if (message.body.type === 'classify_feedback') {
           await sentimentService.classifyAndStore(message.body.feedbackId, message.body.businessId);
         } else if (message.body.type === 'generate_summary') {
@@ -393,7 +397,7 @@ async function queue(batch: MessageBatch<PlatformJob>, env: Bindings, ctx: Execu
       } catch (err) {
         console.error('Background job failed:', {
           messageId: message.id,
-          jobType: message.body.type,
+          jobType: (message.body as { type?: unknown } | null)?.type ?? 'unknown',
           attempt: message.attempts,
           error: err instanceof Error ? err.message : err,
         });
