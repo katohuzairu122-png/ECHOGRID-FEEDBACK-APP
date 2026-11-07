@@ -91,7 +91,7 @@ describe('DEV-51 bounded and safe tenant header inputs', () => {
     [{ 'X-Business-Id': 'invalid/context' }, 'INVALID_BUSINESS_CONTEXT'],
     [{ 'X-Business-Id': 'two,values' }, 'INVALID_BUSINESS_CONTEXT'],
     [{ 'X-Business-Id': 'x'.repeat(257) }, 'INVALID_BUSINESS_CONTEXT'],
-    [{ 'X-Business-Id': ' business-a' }, 'INVALID_BUSINESS_CONTEXT'],
+    [{ 'X-Business-Id': 'business a' }, 'INVALID_BUSINESS_CONTEXT'],
     [{ 'X-Business-Id': 'business-a', 'X-Branch-Id': '' }, 'INVALID_BRANCH_CONTEXT'],
     [{ 'X-Business-Id': 'business-a', 'X-Branch-Id': 'wrong/branch' }, 'INVALID_BRANCH_CONTEXT'],
     [{ 'X-Business-Id': 'business-a', 'X-Branch-Id': 'b'.repeat(257) }, 'INVALID_BRANCH_CONTEXT'],
