@@ -52,7 +52,10 @@ export class NotificationService {
   ) {}
 
   async notify(businessId: string, recipient: NotifyRecipient, data: NotificationTemplateData): Promise<void> {
-    if (!recipient.userId && !recipient.customerId) {
+    // DEV-63: fail closed if both identities are supplied, not just when
+    // neither is supplied. Otherwise a staff lookup wins in resolveAddress()
+    // while BOTH IDs travel to the queue and notification log.
+    if (Boolean(recipient.userId) === Boolean(recipient.customerId)) {
       throw new Error('notify() requires exactly one of userId/customerId.');
     }
 
@@ -91,16 +94,16 @@ export class NotificationService {
           subject: channel === 'email' ? rendered.subject : undefined,
           body: channel === 'email' ? rendered.emailHtml : rendered.smsText,
         });
-      } catch (err) {
-        // One channel's enqueue failing shouldn't prevent the other from
-        // being attempted -- log and move on, don't let this method throw
-        // and potentially roll back or fail the caller's own operation
-        // (e.g. a purchase that already succeeded).
+      } catch {
+        // DEV-62: queue/provider exceptions may embed recipient addresses,
+        // rendered message content, access tokens, or provider URLs.
+        // Preserve per-channel best-effort enqueue without ever logging a
+        // raw exception, arbitrary error string, or untrusted object.
         console.error('Failed to enqueue notification:', {
           businessId,
           eventType: data.eventType,
           channel,
-          error: err instanceof Error ? err.message : err,
+          errorCode: 'NOTIFICATION_ENQUEUE_FAILED',
         });
       }
     }
@@ -164,11 +167,16 @@ export class NotificationService {
   private async resolveAddress(recipient: NotifyRecipient): Promise<{ email?: string | undefined; phone?: string | undefined }> {
     if (recipient.userId) {
       const user = await this.repos.users.findById(recipient.userId);
-      return { email: user?.email, phone: user?.phone ?? undefined };
+      // DEV-64: a surviving business-role grant is not proof that an
+      // invited, suspended or deactivated identity may receive business
+      // data. Authentication already applies the same active-account gate.
+      if (!user || user.status !== 'active') return {};
+      return { email: user.email, phone: user.phone ?? undefined };
     }
     if (recipient.customerId) {
       const customer = await this.repos.customers.findById(recipient.customerId);
-      return { email: customer?.email ?? undefined, phone: customer?.phone };
+      if (!customer || customer.status !== 'active') return {};
+      return { email: customer.email ?? undefined, phone: customer.phone };
     }
     return {};
   }

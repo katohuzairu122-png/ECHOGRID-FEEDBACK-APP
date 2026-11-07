@@ -78,7 +78,7 @@ function createFakeRepos(options: FakeRepoOptions = {}) {
     findById: vi.fn().mockResolvedValue(
       options.user === null
         ? undefined
-        : ({ id: 'user-1', email: 'staff@example.com', phone: '+15550001111', ...options.user } as User),
+        : ({ id: 'user-1', email: 'staff@example.com', phone: '+15550001111', status: 'active', ...options.user } as User),
     ),
   } as unknown as UserRepository;
 
@@ -86,7 +86,7 @@ function createFakeRepos(options: FakeRepoOptions = {}) {
     findById: vi.fn().mockResolvedValue(
       options.customer === null
         ? undefined
-        : ({ id: 'customer-1', email: null, phone: '+15559998888', ...options.customer } as Customer),
+        : ({ id: 'customer-1', email: null, phone: '+15559998888', status: 'active', ...options.customer } as Customer),
     ),
   } as unknown as CustomerRepository;
 
@@ -308,5 +308,119 @@ describe('NotificationService.listMaterializedPreferences', () => {
 
     expect(result.find((r) => r.channel === 'email')?.enabled).toBe(false);
     expect(result.find((r) => r.channel === 'sms')?.enabled).toBe(true);
+  });
+});
+
+describe('DEV-62 notification enqueue failure telemetry', () => {
+  it.each([
+    new Error('Queue failed for private@example.com Bearer sensitive-key'),
+    { message: 'private@example.com', url: 'https://private-token.example' },
+    'private@example.com',
+  ])('does not serialize arbitrary exception messages or objects %#', async (failure) => {
+    const queue = createFakeQueue();
+    vi.mocked(queue.send).mockRejectedValueOnce(failure);
+    const service = new NotificationService(createFakeRepos(), queue);
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    try {
+      await expect(service.notify(BUSINESS_A, STAFF_RECIPIENT, SUMMARY_DATA))
+        .resolves.toBeUndefined();
+      expect(queue.send).toHaveBeenCalledTimes(2);
+      expect(errorSpy).toHaveBeenCalledOnce();
+      expect(errorSpy).toHaveBeenCalledWith('Failed to enqueue notification:', {
+        businessId: BUSINESS_A,
+        eventType: 'summary_ready',
+        channel: 'email',
+        errorCode: 'NOTIFICATION_ENQUEUE_FAILED',
+      });
+      const logged = JSON.stringify(errorSpy.mock.calls);
+      expect(logged).not.toContain('private@example.com');
+      expect(logged).not.toContain('sensitive-key');
+      expect(logged).not.toContain('private-token');
+      expect(logged).not.toContain('staff@example.com');
+    } finally {
+      errorSpy.mockRestore();
+    }
+  });
+});
+
+describe('DEV-63 exclusive notification recipient identity', () => {
+  it('rejects a request that supplies both staff and customer IDs before any repository query or enqueue', async () => {
+    const repos = createFakeRepos();
+    const queue = createFakeQueue();
+    const service = new NotificationService(repos, queue);
+    await expect(service.notify(BUSINESS_A, { userId: 'staff-1', customerId: 'customer-1' }, SUMMARY_DATA))
+      .rejects.toThrow('requires exactly one');
+    expect(repos.businessNotificationSettings.getOrCreateDefaults).not.toHaveBeenCalled();
+    expect(repos.users.findById).not.toHaveBeenCalled();
+    expect(repos.customers.findById).not.toHaveBeenCalled();
+    expect(queue.send).not.toHaveBeenCalled();
+  });
+
+  it('still allows exactly one active staff identity', async () => {
+    const queue = createFakeQueue();
+    await new NotificationService(createFakeRepos(), queue)
+      .notify(BUSINESS_A, { userId: 'user-1' }, SUMMARY_DATA);
+    expect(queue.send).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(queue.send).mock.calls[0]?.[0]).toMatchObject({
+      userId: 'user-1', customerId: undefined,
+    });
+  });
+
+  it('still allows exactly one active customer identity without carrying a staff ID', async () => {
+    const queue = createFakeQueue();
+    await new NotificationService(createFakeRepos(), queue)
+      .notify(BUSINESS_A, { customerId: 'customer-1' }, SUMMARY_DATA);
+    expect(queue.send).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(queue.send).mock.calls[0]?.[0]).toMatchObject({
+      customerId: 'customer-1', userId: undefined, channel: 'sms',
+    });
+  });
+});
+
+describe('DEV-64 active-identity guard for notification fan-out', () => {
+  it.each(['invited', 'suspended', 'deactivated'])(
+    'does not enqueue any channel for a %s staff account even if a business grant remains',
+    async (status) => {
+      const queue = createFakeQueue();
+      const repos = createFakeRepos({ user: { status } });
+      const service = new NotificationService(repos, queue);
+      await service.notify(BUSINESS_A, { userId: 'user-1' }, SUMMARY_DATA);
+      expect(queue.send).not.toHaveBeenCalled();
+      expect(repos.notificationPreferences.findOne).not.toHaveBeenCalled();
+      expect(repos.notifications.countSince).not.toHaveBeenCalled();
+    },
+  );
+
+  it('does not enqueue notifications for a suspended customer account', async () => {
+    const queue = createFakeQueue();
+    const repos = createFakeRepos({ customer: { status: 'suspended' } });
+    await new NotificationService(repos, queue)
+      .notify(BUSINESS_A, { customerId: 'customer-1' }, SUMMARY_DATA);
+    expect(queue.send).not.toHaveBeenCalled();
+    expect(repos.notificationPreferences.findOne).not.toHaveBeenCalled();
+  });
+
+  it('does not enqueue when the staff or customer identity is no longer found', async () => {
+    const staffQueue = createFakeQueue();
+    await new NotificationService(createFakeRepos({ user: null }), staffQueue)
+      .notify(BUSINESS_A, { userId: 'user-1' }, SUMMARY_DATA);
+    expect(staffQueue.send).not.toHaveBeenCalled();
+
+    const customerQueue = createFakeQueue();
+    await new NotificationService(createFakeRepos({ customer: null }), customerQueue)
+      .notify(BUSINESS_A, { customerId: 'customer-1' }, SUMMARY_DATA);
+    expect(customerQueue.send).not.toHaveBeenCalled();
+  });
+
+  it('retains normal notification delivery for active staff and customer accounts', async () => {
+    const staffQueue = createFakeQueue();
+    await new NotificationService(createFakeRepos({ user: { status: 'active' } }), staffQueue)
+      .notify(BUSINESS_A, { userId: 'user-1' }, SUMMARY_DATA);
+    expect(staffQueue.send).toHaveBeenCalledTimes(2);
+
+    const customerQueue = createFakeQueue();
+    await new NotificationService(createFakeRepos({ customer: { status: 'active' } }), customerQueue)
+      .notify(BUSINESS_A, { customerId: 'customer-1' }, SUMMARY_DATA);
+    expect(customerQueue.send).toHaveBeenCalledOnce();
   });
 });
