@@ -96,15 +96,17 @@ rollback isn't also the first attempt.
   exhausted its 3 retries landed there and sat, with no consumer, no alarm
   and nothing logged.
 - **What the consumer does**: alerts per message (job type, message id,
-  attempt count and the job body — ids and discriminants only, never
-  customer prose), then **acks**. Acking discards the message, which is the
+  attempt count and full-payload validation status, but **never** the job
+  body or arbitrary job-type strings), then **acks**. Acking discards the message, which is the
   deliberate trade: the alternative is redelivering forever to a handler
   that has already failed four times. **The alert is therefore the record** —
   keep it, because the message itself is gone.
 - It opens no database connection, on purpose: this path has to work when
   the database is the thing that broke.
 - **Operational action on a dead-letter alert**: diagnose the systemic cause
-  (provider outage vs. a code bug) from the alert's `jobType` and `body`.
+  (provider outage vs. a code bug) from the alert's bounded `jobType`,
+  `payloadValid`, message ID and attempt count. The message body is not
+  included in alerts and no automatic DLQ replay exists.
   The work itself is not recoverable from the queue, but most of it is
   reconstructible — a `classify_feedback` job's row is still in `feedback`
   with `analysis_status = 'failed'` and can be re-enqueued; a
