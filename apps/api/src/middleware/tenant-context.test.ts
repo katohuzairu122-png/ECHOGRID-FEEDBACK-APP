@@ -29,7 +29,10 @@ function app() {
     await next();
   });
   app.use('*', resolveTenantContext);
-  app.onError((err, c) => c.json({ code: err instanceof AppError ? err.code : 'UNEXPECTED' }, 403));
+  app.onError((err, c) => c.json(
+    { code: err instanceof AppError ? err.code : 'UNEXPECTED' },
+    err instanceof AppError ? err.status : 500,
+  ));
   app.get('/', (c) =>
     c.json({ businessId: c.get('businessId'), branchId: c.get('branchId') ?? null }),
   );
@@ -82,5 +85,43 @@ describe('trusted QR and settlement tenant context', () => {
     const response = await request({ 'X-Business-Id': 'foreign-business' });
     expect(await response.json()).toEqual({ code: 'NOT_A_MEMBER' });
     expect(mocks.business).not.toHaveBeenCalled();
+  });
+});
+
+
+describe('DEV-51 bounded and safe tenant header inputs', () => {
+  it.each([
+    [{ 'X-Business-Id': 'invalid/context' }, 'INVALID_BUSINESS_CONTEXT'],
+    [{ 'X-Business-Id': 'two,values' }, 'INVALID_BUSINESS_CONTEXT'],
+    [{ 'X-Business-Id': 'x'.repeat(257) }, 'INVALID_BUSINESS_CONTEXT'],
+    [{ 'X-Business-Id': 'business a' }, 'INVALID_BUSINESS_CONTEXT'],
+    [{ 'X-Business-Id': 'business-a', 'X-Branch-Id': '' }, 'INVALID_BRANCH_CONTEXT'],
+    [{ 'X-Business-Id': 'business-a', 'X-Branch-Id': 'wrong/branch' }, 'INVALID_BRANCH_CONTEXT'],
+    [{ 'X-Business-Id': 'business-a', 'X-Branch-Id': 'b'.repeat(257) }, 'INVALID_BRANCH_CONTEXT'],
+    [{ 'X-Business-Id': 'business-a', 'X-Branch-Id': 'branch-a,branch-b' }, 'INVALID_BRANCH_CONTEXT'],
+  ])('rejects untrusted selectors before any membership, business or branch lookup %#', async (headers, code) => {
+    const response = await request(headers);
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ code });
+    expect(mocks.membership).not.toHaveBeenCalled();
+    expect(mocks.business).not.toHaveBeenCalled();
+    expect(mocks.branch).not.toHaveBeenCalled();
+    expect(mocks.permissions).not.toHaveBeenCalled();
+  });
+
+  it('preserves the existing missing-business error', async () => {
+    const response = await request({ 'X-Branch-Id': 'branch-a' });
+    expect(await response.json()).toEqual({ code: 'MISSING_BUSINESS_CONTEXT' });
+    expect(mocks.membership).not.toHaveBeenCalled();
+  });
+
+  it('accepts ordinary UUID selector pairs unchanged', async () => {
+    const businessId = '11111111-1111-4111-8111-111111111111';
+    const branchId = '22222222-2222-4222-8222-222222222222';
+    const response = await request({ 'X-Business-Id': businessId, 'X-Branch-Id': branchId });
+    expect(response.status).toBe(200);
+    expect(mocks.membership).toHaveBeenCalledWith('staff', businessId);
+    expect(mocks.branch).toHaveBeenCalledWith(branchId, businessId);
+    expect(mocks.permissions).toHaveBeenCalledWith('staff', businessId, branchId);
   });
 });
