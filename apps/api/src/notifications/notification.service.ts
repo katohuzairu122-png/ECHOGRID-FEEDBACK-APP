@@ -167,11 +167,16 @@ export class NotificationService {
   private async resolveAddress(recipient: NotifyRecipient): Promise<{ email?: string | undefined; phone?: string | undefined }> {
     if (recipient.userId) {
       const user = await this.repos.users.findById(recipient.userId);
-      return { email: user?.email, phone: user?.phone ?? undefined };
+      // DEV-64: a surviving business-role grant is not proof that an
+      // invited, suspended or deactivated identity may receive business
+      // data. Authentication already applies the same active-account gate.
+      if (!user || user.status !== 'active') return {};
+      return { email: user.email, phone: user.phone ?? undefined };
     }
     if (recipient.customerId) {
       const customer = await this.repos.customers.findById(recipient.customerId);
-      return { email: customer?.email ?? undefined, phone: customer?.phone };
+      if (!customer || customer.status !== 'active') return {};
+      return { email: customer.email ?? undefined, phone: customer.phone };
     }
     return {};
   }
