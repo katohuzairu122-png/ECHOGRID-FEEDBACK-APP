@@ -46,7 +46,11 @@ describe('mounted customer and staff route boundaries', () => {
     }), env, ctx);
     expect(response.status).toBe(200);
     expect(await response.json()).toMatchObject({ success: true, data: [] });
-    expect(list).toHaveBeenCalledWith(customerId);
+    if (path === '/api/v1/surveys/me/participations') {
+      expect(list).toHaveBeenCalledWith(customerId, { limit: 100, offset: 0 });
+    } else {
+      expect(list).toHaveBeenCalledWith(customerId);
+    }
     expect(mocks.findUser).not.toHaveBeenCalled();
   });
 

@@ -1,4 +1,4 @@
-import { and, eq, gt, isNull, or } from 'drizzle-orm';
+import { and, desc, eq, gt, isNull, or } from 'drizzle-orm';
 import { consentGrants, type ConsentPurpose } from '../db/schema';
 import { BaseRepository } from './base.repository';
 import { AppError } from '../lib/errors';
@@ -56,10 +56,12 @@ export class ConsentGrantRepository extends BaseRepository {
     return row;
   }
 
-  async listForCustomer(customerId: string): Promise<ConsentGrant[]> {
+  async listForCustomer(customerId: string, options: { limit: number; offset: number } = { limit: 100, offset: 0 }): Promise<ConsentGrant[]> {
     return this.db.query.consentGrants.findMany({
       where: eq(consentGrants.customerId, customerId),
-      orderBy: (row, { desc }) => [desc(row.grantedAt)],
+      orderBy: [desc(consentGrants.grantedAt), desc(consentGrants.id)],
+      limit: options.limit,
+      offset: options.offset,
     });
   }
 

@@ -6,6 +6,7 @@ import { customerAuthenticate, type CustomerAuthVariables } from '../middleware/
 import { rateLimit } from '../middleware/rate-limit';
 import { ok } from '../lib/response';
 import { AppError } from '../lib/errors';
+import { parseListPagination } from '../lib/list-pagination';
 
 type Env = { Bindings: Bindings; Variables: CustomerAuthVariables };
 
@@ -21,12 +22,13 @@ async function withDb<T>(c: Context<Env>, fn: (db: Database) => Promise<T>): Pro
   }
 }
 
-consentRoutes.get('/', async (c) =>
-  withDb(c, async (db) => {
-    const rows = await createRepositories(db).consentGrants.listForCustomer(c.get('customerId'));
+consentRoutes.get('/', async (c) => {
+  const { limit = 100, offset = 0 } = parseListPagination(new URL(c.req.url).searchParams, 100);
+  return withDb(c, async (db) => {
+    const rows = await createRepositories(db).consentGrants.listForCustomer(c.get('customerId'), { limit, offset });
     return ok(c, rows);
-  }),
-);
+  });
+});
 
 consentRoutes.post('/:id/revoke', async (c) =>
   withDb(c, async (db) => {
