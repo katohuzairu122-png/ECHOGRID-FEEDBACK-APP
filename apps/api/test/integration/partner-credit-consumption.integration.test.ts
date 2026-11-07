@@ -28,6 +28,7 @@ import { verifyDurableSettlementProvenance } from '../../src/billing/stripe-read
 import { createPrivateProvenanceAuditStage } from '../../src/billing/stripe-read/private-provenance-audit-stage';
 import { createObservedPrivateProvenanceAuditStage, type PrivateProvenanceObservation } from '../../src/billing/stripe-read/private-provenance-observation';
 import { createDevelopmentBoundedProvenanceObservationSink } from '../../src/billing/stripe-read/development-bounded-provenance-observation-sink';
+import { createDevelopmentObservationAcknowledgementFaultSink } from '../../src/billing/stripe-read/development-provenance-ack-fault';
 import { createSyntheticCustodyRecorderHandoff } from '../../src/billing/stripe-read/synthetic-custody-recorder-handoff';
 import { createEvidenceSigningBoundary, createSigningWorkloadAuthority, SignedEvidenceCustodyService } from '../../src/billing/stripe-read';
 import { syntheticDirectory, syntheticKey, syntheticSignerProvider, syntheticSigningWorkloadSource } from '../../src/billing/stripe-read/evidence-signing-test-support';
@@ -487,6 +488,34 @@ describe.skipIf(!process.env.DATABASE_URL)('D4 final credit consumption and ledg
         event: 'PRIVATE_PROVENANCE_VERIFICATION',
         status: 'VERIFIED', financialAuthorization: 'NOT_GRANTED',
       }]);
+
+      // DEV-25 simulates a successful storage append with a lost
+      // acknowledgement. The observed verifier must fail closed; a subsequent
+      // retry can create a second status-only observation, not exactly-once.
+      const uncertainStorage = createDevelopmentBoundedProvenanceObservationSink(3);
+      const uncertainSink = createDevelopmentObservationAcknowledgementFaultSink(uncertainStorage);
+      const uncertainStage = createObservedPrivateProvenanceAuditStage({
+        db: buildDb(auditor), custodyReader: f.trustedReader,
+        environment: 'development', clock: () => 500000,
+        source: { load: async () => ({
+          workloadId: 'dev22-auditor', role: 'PROVENANCE_AUDITOR',
+          environment: 'development', businessIds: [f.sc.businessId],
+          validFromMs: 1000, expiresAtMs: 900000, revokedAtMs,
+        }) },
+        recorderPublicKeys: GATE_CFG.trustedSigningKeys,
+        sink: uncertainSink,
+      });
+      uncertainSink.setNextFault('AFTER_RECORD');
+      expect(await uncertainStage.verify(request)).toEqual({
+        status: 'UNAVAILABLE', durable: false, financialAuthorization: 'NOT_GRANTED',
+      });
+      expect(uncertainStorage.snapshot()).toHaveLength(1);
+      expect(await uncertainStage.verify(request)).toEqual({
+        status: 'VERIFIED', durable: true, financialAuthorization: 'NOT_GRANTED',
+      });
+      expect(uncertainStorage.snapshot()).toHaveLength(2);
+      expect(uncertainStorage.snapshot().every(event => event.financialAuthorization === 'NOT_GRANTED')).toBe(true);
+
       expect(await stage.verify({ ...request, businessId: randomUUID() })).toEqual({
         status: 'UNAVAILABLE', durable: false, financialAuthorization: 'NOT_GRANTED',
       });
