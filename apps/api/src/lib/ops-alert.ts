@@ -151,7 +151,7 @@ export async function notifyOps(
   if (!env.OPS_ALERT_WEBHOOK_URL) return;
 
   try {
-    await fetch(env.OPS_ALERT_WEBHOOK_URL, {
+    const response = await fetch(env.OPS_ALERT_WEBHOOK_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       // `text` AND `content` alongside the structured fields, deliberately:
@@ -172,17 +172,23 @@ export async function notifyOps(
       }),
       signal: AbortSignal.timeout(DELIVERY_TIMEOUT_MS),
     });
-    // Response status deliberately unchecked. A 4xx from the destination is
-    // a configuration problem for a human to notice in its own dashboard,
-    // and retrying or escalating from inside an alerting path is how you
-    // turn one incident into two.
-  } catch (err) {
-    // Includes an unsupported AbortSignal.timeout, a DNS failure, a
-    // timeout, or the destination being down. The console line above
-    // already carries the alert; this only records that delivery failed.
+    // DEV-54: non-2xx responses are failures, not successful delivery.
+    // Record only fixed codes and the HTTP status; never log the response
+    // body, request URL or any upstream provider-provided error message.
+    // Notification remains best-effort: no thrown errors or retries.
+    if (!response.ok) {
+      console.error('Ops alert delivery failed.', {
+        event: alert.event,
+        errorCode: 'OPS_ALERT_HTTP_NON_SUCCESS',
+        status: response.status,
+      });
+    }
+  } catch {
+    // DNS, transport and timeout exceptions can embed credential-bearing
+    // webhook URLs. Never stringify them into Workers Logs.
     console.error('Ops alert delivery failed.', {
       event: alert.event,
-      error: err instanceof Error ? err.message : String(err),
+      errorCode: 'OPS_ALERT_TRANSPORT_FAILED',
     });
   }
 }
