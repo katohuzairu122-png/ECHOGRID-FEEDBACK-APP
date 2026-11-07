@@ -73,10 +73,12 @@ export class SurveyParticipationRepository extends BaseRepository {
     return { participation: existing, inserted: false };
   }
 
-  async listForCustomer(customerId: string): Promise<SurveyParticipation[]> {
+  async listForCustomer(customerId: string, options: { limit: number; offset: number } = { limit: 100, offset: 0 }): Promise<SurveyParticipation[]> {
     return this.db.query.surveyParticipations.findMany({
       where: eq(surveyParticipations.participantCustomerId, customerId),
-      orderBy: [desc(surveyParticipations.createdAt)],
+      orderBy: [desc(surveyParticipations.createdAt), desc(surveyParticipations.id)],
+      limit: options.limit,
+      offset: options.offset,
     });
   }
 
