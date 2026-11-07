@@ -29,7 +29,10 @@ function app() {
     await next();
   });
   app.use('*', resolveTenantContext);
-  app.onError((err, c) => c.json({ code: err instanceof AppError ? err.code : 'UNEXPECTED' }, 403));
+  app.onError((err, c) => c.json(
+    { code: err instanceof AppError ? err.code : 'UNEXPECTED' },
+    err instanceof AppError ? err.status : 500,
+  ));
   app.get('/', (c) =>
     c.json({ businessId: c.get('businessId'), branchId: c.get('branchId') ?? null }),
   );
@@ -98,7 +101,7 @@ describe('DEV-51 bounded and safe tenant header inputs', () => {
     [{ 'X-Business-Id': 'business-a', 'X-Branch-Id': 'branch-a,branch-b' }, 'INVALID_BRANCH_CONTEXT'],
   ])('rejects untrusted selectors before any membership, business or branch lookup %#', async (headers, code) => {
     const response = await request(headers);
-    expect(response.status).toBe(403); // Fixture maps AppError to 403 to expose the code.
+    expect(response.status).toBe(400);
     expect(await response.json()).toEqual({ code });
     expect(mocks.membership).not.toHaveBeenCalled();
     expect(mocks.business).not.toHaveBeenCalled();
