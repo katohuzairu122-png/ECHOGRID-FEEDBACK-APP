@@ -342,3 +342,37 @@ describe('DEV-62 notification enqueue failure telemetry', () => {
     }
   });
 });
+
+describe('DEV-63 exclusive notification recipient identity', () => {
+  it('rejects a request that supplies both staff and customer IDs before any repository query or enqueue', async () => {
+    const repos = createFakeRepos();
+    const queue = createFakeQueue();
+    const service = new NotificationService(repos, queue);
+    await expect(service.notify(BUSINESS_A, { userId: 'staff-1', customerId: 'customer-1' }, SUMMARY_DATA))
+      .rejects.toThrow('requires exactly one');
+    expect(repos.businessNotificationSettings.getOrCreateDefaults).not.toHaveBeenCalled();
+    expect(repos.users.findById).not.toHaveBeenCalled();
+    expect(repos.customers.findById).not.toHaveBeenCalled();
+    expect(queue.send).not.toHaveBeenCalled();
+  });
+
+  it('still allows exactly one active staff identity', async () => {
+    const queue = createFakeQueue();
+    await new NotificationService(createFakeRepos(), queue)
+      .notify(BUSINESS_A, { userId: 'user-1' }, SUMMARY_DATA);
+    expect(queue.send).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(queue.send).mock.calls[0]?.[0]).toMatchObject({
+      userId: 'user-1', customerId: undefined,
+    });
+  });
+
+  it('still allows exactly one active customer identity without carrying a staff ID', async () => {
+    const queue = createFakeQueue();
+    await new NotificationService(createFakeRepos(), queue)
+      .notify(BUSINESS_A, { customerId: 'customer-1' }, SUMMARY_DATA);
+    expect(queue.send).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(queue.send).mock.calls[0]?.[0]).toMatchObject({
+      customerId: 'customer-1', userId: undefined, channel: 'sms',
+    });
+  });
+});
