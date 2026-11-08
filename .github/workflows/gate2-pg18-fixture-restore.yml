@@ -1,0 +1,112 @@
+name: Gate 2 PG18 synthetic fixture backup and upgrade
+
+# CI ONLY — no Neon, Cloudflare, Stripe, credentials, shared DB, or deployment.
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gate2-pg18-fixtures-${{ github.ref }}-${{ github.event_name }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Disposable PG18 backup, restore and 45-to-67 fixture preservation
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: echogrid
+          POSTGRES_PASSWORD: echogrid
+          POSTGRES_DB: echogrid_ci_pg18_upgrade
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://echogrid:echogrid@localhost:5432/echogrid_ci_pg18_upgrade
+      GATE2_SYNTHETIC_UPGRADE: I_ACKNOWLEDGE_DISPOSABLE_PG18
+      PGPASSWORD: echogrid
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.9.0
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Verify isolated PostgreSQL 18 target
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$DATABASE_URL" = 'postgresql://echogrid:echogrid@localhost:5432/echogrid_ci_pg18_upgrade'
+          test "$GATE2_SYNTHETIC_UPGRADE" = 'I_ACKNOWLEDGE_DISPOSABLE_PG18'
+          test "$(psql -h localhost -U echogrid -d echogrid_ci_pg18_upgrade -Atc "SELECT current_setting('server_version_num')::int / 10000")" = '18'
+          git diff --quiet -- apps/api/drizzle/meta/_journal.json
+      - name: Use exactly the historic 45 migrations in disposable CI checkout
+        working-directory: apps/api
+        run: node scripts/gate2-pg18-prefix-upgrade.mjs prepare
+      - name: Apply first 45 migrations on disposable PostgreSQL 18
+        run: pnpm --filter @echo-grid-feedback/api db:migrate
+      - name: Verify historical migration prefix
+        working-directory: apps/api
+        run: node scripts/gate2-pg18-prefix-upgrade.mjs verify-prefix
+      - name: Seed two synthetic tenants with customer and loyalty records
+        working-directory: apps/api
+        run: node scripts/gate2-pg18-fixture-evidence.mjs seed
+      - name: Create backup and restore ONLY inside local ephemeral PG18 service
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$DATABASE_URL" = 'postgresql://echogrid:echogrid@localhost:5432/echogrid_ci_pg18_upgrade'
+          pg_dump --version | grep -q '18\.'
+          pg_dump -h localhost -U echogrid -d echogrid_ci_pg18_upgrade --format=custom --file="$RUNNER_TEMP/gate2-pg18-synthetic.dump"
+          test -s "$RUNNER_TEMP/gate2-pg18-synthetic.dump"
+          createdb -h localhost -U echogrid -T template0 echogrid_ci_pg18_restored
+          pg_restore -h localhost -U echogrid -d echogrid_ci_pg18_restored --no-owner --no-acl --exit-on-error "$RUNNER_TEMP/gate2-pg18-synthetic.dump"
+      - name: Restore the exact journal from immutable Git
+        shell: bash
+        run: |
+          set -euo pipefail
+          git show HEAD:apps/api/drizzle/meta/_journal.json > apps/api/drizzle/meta/_journal.json
+          git diff --exit-code -- apps/api/drizzle/meta/_journal.json
+      - name: Upgrade original synthetic tenant database from 45 to 67
+        run: pnpm --filter @echo-grid-feedback/api db:migrate
+      - name: Verify post-upgrade migration and financial security
+        working-directory: apps/api
+        run: node scripts/gate2-pg18-prefix-upgrade.mjs verify-full
+      - name: Verify original tenant records survived all 22 migrations
+        working-directory: apps/api
+        run: node scripts/gate2-pg18-fixture-evidence.mjs verify
+      - name: Upgrade restored disposable backup from 45 to 67
+        env:
+          DATABASE_URL: postgresql://echogrid:echogrid@localhost:5432/echogrid_ci_pg18_restored
+        run: pnpm --filter @echo-grid-feedback/api db:migrate
+      - name: Verify restored and upgraded synthetic records
+        env:
+          DATABASE_URL: postgresql://echogrid:echogrid@localhost:5432/echogrid_ci_pg18_restored
+        working-directory: apps/api
+        run: node scripts/gate2-pg18-fixture-evidence.mjs verify
+      - name: Confirm both disposable database migration inventories and fingerprints agree
+        shell: bash
+        run: |
+          set -euo pipefail
+          for db in echogrid_ci_pg18_upgrade echogrid_ci_pg18_restored; do
+            test "$(psql -h localhost -U echogrid -d "$db" -Atc 'SELECT count(*) FROM drizzle.__drizzle_migrations')" = '67'
+            psql -h localhost -U echogrid -d "$db" -Atc "
+              SELECT md5(string_agg(created_at::text, ',' ORDER BY id))
+              FROM drizzle.__drizzle_migrations" > "$RUNNER_TEMP/$db.digest"
+          done
+          cmp "$RUNNER_TEMP/echogrid_ci_pg18_upgrade.digest" "$RUNNER_TEMP/echogrid_ci_pg18_restored.digest"
