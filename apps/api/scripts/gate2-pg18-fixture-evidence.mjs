@@ -39,6 +39,11 @@ try {
       env.role !== 'echogrid' || Math.floor(env.version / 10000) !== 18) {
     throw new Error('GATE2_R4_DATABASE_MISMATCH');
   }
+  const migrationCount = Number((await db.query(
+    'SELECT count(*)::int AS count FROM drizzle.__drizzle_migrations',
+  )).rows[0]?.count);
+  const expectedMigrationCount = action === 'seed' || env.db.endsWith('_restored') ? 45 : 67;
+  if (migrationCount !== expectedMigrationCount) throw new Error('GATE2_R4_MIGRATION_PHASE_MISMATCH');
   if (action === 'seed') {
     await db.query('BEGIN');
     try {
