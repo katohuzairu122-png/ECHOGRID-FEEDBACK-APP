@@ -84,7 +84,7 @@ try {
   IF v_secret IS NULL THEN
     RAISE EXCEPTION 'R12 missing verification key' USING ERRCODE='42501';
   END IF;
-  v_expected:=encode(hmac(convert_to(
+  v_expected:=encode(public.hmac(convert_to(
    'v1|'||p_actor::text||'|'||p_business::text||'|'||p_action||'|'||
    p_nonce::text||'|'||p_expires::text,'UTF8'),v_secret,'sha256'),'hex');
   IF v_expected IS DISTINCT FROM p_signature THEN
