@@ -44,6 +44,11 @@ try {
   )).rows[0]?.count);
   const expectedMigrationCount = action === 'seed' || env.db.endsWith('_restored') ? 45 : 67;
   if (migrationCount !== expectedMigrationCount) throw new Error('GATE2_R4_MIGRATION_PHASE_MISMATCH');
+  const migrations = (await db.query(
+    'SELECT created_at::text AS created_at FROM drizzle.__drizzle_migrations ORDER BY id',
+  )).rows;
+  const expectedCount = action === 'seed' ? 45 : 67;
+  if (migrations.length !== expectedCount) throw new Error('GATE2_R4_MIGRATION_COUNT_MISMATCH');
   if (action === 'seed') {
     await db.query('BEGIN');
     try {
