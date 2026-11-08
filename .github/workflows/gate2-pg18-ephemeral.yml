@@ -1,0 +1,72 @@
+name: Gate 2 PG18 disposable compatibility
+
+# Verification only. No staging or production resources, secrets, provider
+# credentials, deployment jobs or persistent databases are referenced.
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gate2-pg18-${{ github.ref }}-${{ github.event_name }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  verify:
+    name: PG18 clean replay and read-only security catalog
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: echogrid
+          POSTGRES_PASSWORD: echogrid
+          POSTGRES_DB: echogrid_pg18_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://echogrid:echogrid@127.0.0.1:5432/echogrid_pg18_ci
+      CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE: postgresql://echogrid:echogrid@127.0.0.1:5432/echogrid_pg18_ci
+      GATE2_EPHEMERAL_PG18: I_ACKNOWLEDGE_DISPOSABLE_POSTGRES18
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.9.0
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Guard local ephemeral PG18 target
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$DATABASE_URL" = 'postgresql://echogrid:echogrid@127.0.0.1:5432/echogrid_pg18_ci'
+          test "$GATE2_EPHEMERAL_PG18" = I_ACKNOWLEDGE_DISPOSABLE_POSTGRES18
+          PGPASSWORD=echogrid psql -h 127.0.0.1 -p 5432 -U echogrid -d echogrid_pg18_ci -v ON_ERROR_STOP=1 -Atc "SELECT current_setting('server_version_num')::int / 10000" | grep -qx 18
+      - name: Verify migrations current
+        run: pnpm --filter @echo-grid-feedback/api db:check
+      - name: Replay full migration journal on ephemeral PostgreSQL 18
+        run: pnpm --filter @echo-grid-feedback/api db:migrate
+      - name: Inspect exact journal, inert guards, FORCE RLS and least-privilege roles
+        working-directory: apps/api
+        run: node scripts/verify-gate2-pg18-ephemeral.mjs
+      - name: Verify inert HETA evidence on disposable PostgreSQL 18
+        working-directory: apps/api
+        env:
+          SPLIT07_DISPOSABLE_DB: I_ACKNOWLEDGE
+        run: node scripts/verify-heta-evidence-schema.mjs
+      - name: Run PostgreSQL 18 API integration regressions
+        run: pnpm --filter @echo-grid-feedback/api test:integration
