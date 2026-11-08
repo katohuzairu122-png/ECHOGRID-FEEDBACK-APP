@@ -26,9 +26,9 @@ export function resolveReconciliationPolicy(input: ReconciliationPolicyInput): R
     throw new Error('RECONCILIATION_POLICY_INVALID');
   }
 
-  const requestedAbsences = input.requiredAbsences ?? 2;
-  const requestedGap = input.minAbsenceGapMs ?? 300_000;
-  const requestedWindow = input.inFlightWindowMs ?? 120_000;
+  const requestedAbsences = input.requiredAbsences === undefined ? 2 : input.requiredAbsences;
+  const requestedGap = input.minAbsenceGapMs === undefined ? 300_000 : input.minAbsenceGapMs;
+  const requestedWindow = input.inFlightWindowMs === undefined ? 120_000 : input.inFlightWindowMs;
   if (!finiteNonnegativeInteger(requestedAbsences) ||
       !finiteNonnegativeInteger(requestedGap) ||
       !finiteNonnegativeInteger(requestedWindow)) {
