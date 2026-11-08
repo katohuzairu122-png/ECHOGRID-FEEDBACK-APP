@@ -4,7 +4,7 @@
  */
 import pg from 'pg';
 const action = process.argv[2];
-if (!['seed', 'verify'].includes(action)) throw new Error('GATE2_R4_ACTION_DENIED');
+if (!['seed', 'verify-prefix', 'verify'].includes(action)) throw new Error('GATE2_R4_ACTION_DENIED');
 const target = process.env.DATABASE_URL;
 const allowed = new Set([
   'postgresql://echogrid:echogrid@localhost:5432/echogrid_ci_pg18_upgrade',
@@ -12,7 +12,8 @@ const allowed = new Set([
 ]);
 if (process.env.GITHUB_ACTIONS !== 'true' ||
     process.env.GATE2_SYNTHETIC_UPGRADE !== 'I_ACKNOWLEDGE_DISPOSABLE_PG18' ||
-    !allowed.has(target) || (action === 'seed' && !target.endsWith('/echogrid_ci_pg18_upgrade'))) {
+    !allowed.has(target) || (action === 'seed' && !target.endsWith('/echogrid_ci_pg18_upgrade')) ||
+    (action === 'verify-prefix' && !target.endsWith('/echogrid_ci_pg18_restored'))) {
   throw new Error('GATE2_R4_DISPOSABLE_TARGET_DENIED');
 }
 const businesses = [
@@ -42,12 +43,12 @@ try {
   const migrationCount = Number((await db.query(
     'SELECT count(*)::int AS count FROM drizzle.__drizzle_migrations',
   )).rows[0]?.count);
-  const expectedMigrationCount = action === 'seed' ? 45 : 67;
+  const expectedMigrationCount = action === 'verify' ? 67 : 45;
   if (migrationCount !== expectedMigrationCount) throw new Error('GATE2_R4_MIGRATION_PHASE_MISMATCH');
   const migrations = (await db.query(
     'SELECT created_at::text AS created_at FROM drizzle.__drizzle_migrations ORDER BY id',
   )).rows;
-  const expectedCount = action === 'seed' ? 45 : 67;
+  const expectedCount = action === 'verify' ? 67 : 45;
   if (migrations.length !== expectedCount) throw new Error('GATE2_R4_MIGRATION_COUNT_MISMATCH');
   if (action === 'seed') {
     await db.query('BEGIN');
