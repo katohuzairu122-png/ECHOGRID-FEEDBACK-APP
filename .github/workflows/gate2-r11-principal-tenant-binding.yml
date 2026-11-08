@@ -1,0 +1,57 @@
+name: Gate 2 R11 disposable principal-bound tenant RLS
+on:
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+concurrency:
+  group: gate2-r11-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  verify:
+    name: PostgreSQL 18 per-login tenant proof and GUC spoof resistance
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: echogrid
+          POSTGRES_PASSWORD: echogrid
+          POSTGRES_DB: echogrid_ci_pg18_principal
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://echogrid:echogrid@localhost:5432/echogrid_ci_pg18_principal
+      GATE2_R11_DISPOSABLE: I_ACKNOWLEDGE_DISPOSABLE_PG18
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.9.0
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Fail closed on non-disposable target
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$DATABASE_URL" = 'postgresql://echogrid:echogrid@localhost:5432/echogrid_ci_pg18_principal'
+          test "$GATE2_R11_DISPOSABLE" = 'I_ACKNOWLEDGE_DISPOSABLE_PG18'
+          test "$(PGPASSWORD=echogrid psql -h localhost -U echogrid -d echogrid_ci_pg18_principal -Atc "SELECT current_setting('server_version_num')::int / 10000")" = 18
+      - name: Verify committed migrations
+        run: pnpm --filter @echo-grid-feedback/api db:check
+      - name: Replay full migrations on ephemeral PostgreSQL 18
+        run: pnpm --filter @echo-grid-feedback/api db:migrate
+      - name: Exercise per-login tenant mapping and reject forgery
+        working-directory: apps/api
+        run: node scripts/gate2-r11-disposable-principal-binding.mjs
