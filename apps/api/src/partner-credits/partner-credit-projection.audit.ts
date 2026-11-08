@@ -37,7 +37,10 @@ export class PartnerCreditProjectionAudit {
 
   /** Audits one business, or every account when `businessId` is omitted. */
   async inspect(input: { businessId?: string } = {}): Promise<ProjectionAuditResult> {
-    if (input.businessId !== undefined && !UUID.test(input.businessId)) return { status: 'unavailable', reason: 'INVALID_INPUT' };
+    // DEV-89: a malformed scope is not an all-business audit request.
+    if (!input || typeof input !== 'object' || Array.isArray(input) ||
+        (input.businessId !== undefined && (typeof input.businessId !== 'string' || !UUID.test(input.businessId))))
+      return { status: 'unavailable', reason: 'INVALID_INPUT' };
     const scope = input.businessId ?? null;
     let raw: unknown;
     try {
@@ -176,12 +179,23 @@ export class PartnerCreditProjectionAudit {
       if (!r || typeof r !== 'object') return { status: 'unavailable', reason: 'ROW_SHAPE_INVALID' };
       const row = r as Record<string, unknown>;
       const n = int(row.accounts);
-      if (n === null) return { status: 'unavailable', reason: 'ROW_SHAPE_INVALID' };
+      // DEV-90: count is an unsigned invariant repeated on every row.
+      if (n === null || n < 0 || (accounts !== null && n !== accounts))
+        return { status: 'unavailable', reason: 'ROW_SHAPE_INVALID' };
       accounts = n;
-      if (row.account_id === null) continue; // sentinel row carrying the account count
+      // DEV-91: an unrecognized or partially populated sentinel cannot silently
+      // discard a purported violation.
+      if (row.account_id === null) {
+        if (row.code !== null || row.expected !== null || row.actual !== null)
+          return { status: 'unavailable', reason: 'ROW_SHAPE_INVALID' };
+        continue;
+      }
       const expected = int(row.expected);
       const actual = int(row.actual);
-      if (typeof row.account_id !== 'string' || typeof row.code !== 'string' || !CODES.has(row.code) || expected === null || actual === null) return { status: 'unavailable', reason: 'ROW_SHAPE_INVALID' };
+      if (typeof row.account_id !== 'string' || !UUID.test(row.account_id) ||
+          typeof row.code !== 'string' || !CODES.has(row.code) ||
+          expected === null || actual === null || expected === actual)
+        return { status: 'unavailable', reason: 'ROW_SHAPE_INVALID' };
       violations.push({ accountId: row.account_id, code: row.code as ProjectionViolationCode, expected, actual });
     }
     if (accounts === null) return { status: 'unavailable', reason: 'ROW_SHAPE_INVALID' };
