@@ -62,7 +62,7 @@ export type RetrievalErrorClass = 'retryable' | 'rate_limited' | 'permanent';
 export type ProviderEffectRetrieval =
   | { kind: 'effect_present'; effects: ProviderEffectCandidate[]; linesInspected: number }
   | { kind: 'absent_complete'; linesInspected: number }
-  | { kind: 'incomplete'; reason: 'LINES_PAGE_LIMIT'; linesInspected: number }
+  | { kind: 'incomplete'; reason: 'LINES_PAGE_LIMIT' | 'LINES_MALFORMED'; linesInspected: number }
   | { kind: 'scope_mismatch'; reason: ScopeMismatchReason }
   | { kind: 'error'; errorClass: RetrievalErrorClass; code: string; status?: number; retryAfterMs?: number };
 
@@ -76,6 +76,20 @@ export type EffectExtractor = (lines: readonly ProviderInvoiceLine[]) => Provide
 
 const MAX_LINE_PAGES = 20;
 const ID = /^[A-Za-z0-9_]+$/;
+
+/** DEV-93: a successful transport read is not complete financial evidence
+ * unless the full invoice-line page is structurally trustworthy. */
+function validLine(value: unknown): value is ProviderInvoiceLine {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return false;
+  const line = value as Record<string, unknown>;
+  if (typeof line.id !== 'string' || !ID.test(line.id) ||
+      typeof line.amount !== 'number' || !Number.isSafeInteger(line.amount) ||
+      typeof line.currency !== 'string' || !/^[a-z]{3}$/.test(line.currency)) return false;
+  const metadata = line.metadata;
+  if (metadata === null) return true;
+  return metadata !== null && typeof metadata === 'object' && !Array.isArray(metadata) &&
+    Object.values(metadata as Record<string, unknown>).every(v => typeof v === 'string');
+}
 
 /** Redacts an unknown thrown value to code/type/status only. Never returns or logs a message, header, request body or credential. */
 export function classifyProviderError(e: unknown): Extract<ProviderEffectRetrieval, { kind: 'error' }> {
@@ -96,8 +110,16 @@ export function classifyProviderError(e: unknown): Extract<ProviderEffectRetriev
 }
 
 export async function retrieveProviderEffect(reader: ProviderInvoiceReader, expected: ExpectedProviderScope, extract: EffectExtractor = defaultEffectExtractor): Promise<ProviderEffectRetrieval> {
-  if (![expected.accountId, expected.invoiceRef, expected.customerId, expected.subscriptionId, expected.reservationRef].every(s => typeof s === 'string' && s !== '') ||
-      !expected.accountId.startsWith('acct_') || !expected.invoiceRef.startsWith('in_') || !/^[a-z]{3}$/.test(expected.currency) || typeof expected.livemode !== 'boolean')
+  // DEV-92: runtime callers may pass malformed data despite static types.
+  // Reject before making even a read-only provider call.
+  if (!expected || typeof expected !== 'object' || Array.isArray(expected) ||
+      ![expected.accountId, expected.invoiceRef, expected.customerId, expected.subscriptionId, expected.reservationRef].every(s => typeof s === 'string' && s !== '') ||
+      !/^(?:acct|in|cus|sub)_[A-Za-z0-9]+$/.test(expected.accountId) ||
+      !/^in_[A-Za-z0-9]+$/.test(expected.invoiceRef) ||
+      !/^cus_[A-Za-z0-9]+$/.test(expected.customerId) ||
+      !/^sub_[A-Za-z0-9]+$/.test(expected.subscriptionId) ||
+      !/^[A-Za-z0-9][A-Za-z0-9_-]{0,255}$/.test(expected.reservationRef) ||
+      !/^[a-z]{3}$/.test(expected.currency) || typeof expected.livemode !== 'boolean')
     return { kind: 'scope_mismatch', reason: 'SCOPE_INVALID' };
   try {
     // 1. account and operating mode before anything else is trusted
@@ -124,6 +146,11 @@ export async function retrieveProviderEffect(reader: ProviderInvoiceReader, expe
     for (let page = 0; ; page++) {
       if (page >= MAX_LINE_PAGES) return { kind: 'incomplete', reason: 'LINES_PAGE_LIMIT', linesInspected: lines.length };
       const r = await reader.listInvoiceLines(expected.invoiceRef, cursor);
+      // DEV-93/94: corrupted data, invalid amounts or malformed pagination
+      // cannot establish absence or a provider effect. Preserve prior count.
+      if (!r || !Array.isArray(r.data) || typeof r.hasMore !== 'boolean' ||
+          !r.data.every(validLine))
+        return { kind: 'incomplete', reason: 'LINES_MALFORMED', linesInspected: lines.length };
       lines.push(...r.data);
       if (!r.hasMore) break;
       const last = r.data[r.data.length - 1];
