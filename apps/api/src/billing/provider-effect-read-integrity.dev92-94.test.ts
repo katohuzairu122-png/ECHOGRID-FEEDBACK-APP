@@ -40,7 +40,7 @@ describe('Group 16 read-only provider-operation integrity', () => {
     { ...expected, invoiceRef: 'in_1?invalid' },
   ])('DEV-92 refuses invalid expected provider identity without provider calls %#', async (scope) => {
     const r = mockReader([goodLine]);
-    const result = await retrieveProviderEffect(r as ProviderInvoiceReader, scope as ExpectedProviderScope);
+    const result = await retrieveProviderEffect(r as unknown as ProviderInvoiceReader, scope as ExpectedProviderScope);
     expect(result).toEqual({ kind: 'scope_mismatch', reason: 'SCOPE_INVALID' });
     expect(r.currentAccount).not.toHaveBeenCalled();
     expect(r.retrieveInvoice).not.toHaveBeenCalled();
@@ -60,26 +60,26 @@ describe('Group 16 read-only provider-operation integrity', () => {
     [goodLine, null],
   ])('DEV-93 refuses a malformed provider line page as incomplete %#', async (data) => {
     const r = mockReader(data);
-    assertUnverifiable(await retrieveProviderEffect(r as ProviderInvoiceReader, expected));
+    assertUnverifiable(await retrieveProviderEffect(r as unknown as ProviderInvoiceReader, expected));
   });
 
   it.each([undefined, null, 'false', 0, 1])(
     'DEV-94 rejects malformed pagination hasMore %#', async (hasMore) => {
       const r = mockReader([goodLine], hasMore);
-      assertUnverifiable(await retrieveProviderEffect(r as ProviderInvoiceReader, expected));
+      assertUnverifiable(await retrieveProviderEffect(r as unknown as ProviderInvoiceReader, expected));
     },
   );
 
   it('DEV-94 accepts valid empty final page as one complete absence observation only', async () => {
     const r = mockReader([]);
-    const result = await retrieveProviderEffect(r as ProviderInvoiceReader, expected);
+    const result = await retrieveProviderEffect(r as unknown as ProviderInvoiceReader, expected);
     expect(result).toEqual({ kind: 'absent_complete', linesInspected: 0 });
     expect(toSagaObservation(result, expected)).toBeNull();
   });
 
   it('does not transform a valid unattributed invoice line into a benefit', async () => {
     const r = mockReader([goodLine]);
-    expect(await retrieveProviderEffect(r as ProviderInvoiceReader, expected))
+    expect(await retrieveProviderEffect(r as unknown as ProviderInvoiceReader, expected))
       .toEqual({ kind: 'absent_complete', linesInspected: 1 });
   });
 });
