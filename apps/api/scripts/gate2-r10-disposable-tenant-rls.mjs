@@ -6,10 +6,10 @@
  */
 import pg from 'pg';
 
-const URL = 'postgresql://echogrid:echogrid@localhost:5432/echogrid_ci_pg18_tenant_rls';
+const DB_URL = 'postgresql://echogrid:echogrid@localhost:5432/echogrid_ci_pg18_tenant_rls';
 if (process.env.GITHUB_ACTIONS !== 'true' ||
     process.env.GATE2_R10_DISPOSABLE !== 'I_ACKNOWLEDGE_DISPOSABLE_PG18' ||
-    process.env.DATABASE_URL !== URL) throw new Error('GATE2_R10_NON_DISPOSABLE_TARGET_DENIED');
+    process.env.DATABASE_URL !== DB_URL) throw new Error('GATE2_R10_NON_DISPOSABLE_TARGET_DENIED');
 
 const role = 'gate2_r10_disposable_reader';
 const password = 'gate2_r10_only_ci';
@@ -36,7 +36,7 @@ const ids = {
   bLoyalty:'95000000-0000-4000-8000-000000000002',
 };
 const assert = (ok, msg) => { if (!ok) throw new Error('GATE2_R10_' + msg); };
-const owner = new pg.Client({ connectionString: URL });
+const owner = new pg.Client({ connectionString: DB_URL });
 try {
   await owner.connect();
   const identity = (await owner.query(
@@ -117,7 +117,7 @@ try {
     `);
     await owner.query(`GRANT SELECT ON TABLE public."${table}" TO ${role}`);
   }
-  const candidateUrl = new URL(URL);
+  const candidateUrl = new URL(DB_URL);
   candidateUrl.username=role;candidateUrl.password=password;
   const reader = new pg.Client({ connectionString:candidateUrl.toString() });
   try {
