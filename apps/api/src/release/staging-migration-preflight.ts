@@ -83,7 +83,7 @@ export function assessStagingMigrationPreflight(input: unknown): StagingPrefligh
   if (v.missingRequiredRoles.length) reasons.add('ROLE_PROTECTION_UNVERIFIED');
   // RLS is selectively introduced by later migrations; zero RLS with pending
   // security migrations requires review, not an assertion all tables need RLS.
-  if (v.publicTables > 0 && v.rlsEnabledTables === 0) reasons.add('RLS_REVIEW_REQUIRED');
+  if ((v.publicTables ?? 0) > 0 && v.rlsEnabledTables === 0) reasons.add('RLS_REVIEW_REQUIRED');
   if (!v.backupRestoreDrillVerified) reasons.add('BACKUP_RESTORE_UNVERIFIED');
   if (!v.stagingEnvironmentProtectionVerified) reasons.add('ENVIRONMENT_PROTECTION_UNVERIFIED');
 
