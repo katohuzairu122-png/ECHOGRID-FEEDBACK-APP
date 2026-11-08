@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import pg from 'pg';
 
-const EXPECTED_DB = 'echogrid_pg18_ci';
+const EXPECTED_DB = 'echogrid_ci_pg18';
 const EXPECTED_USER = 'echogrid';
 const EXPECTED_HOSTS = new Set(['localhost', '127.0.0.1', '::1']);
 const url = new URL(process.env.DATABASE_URL || 'postgresql://invalid');
