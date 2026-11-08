@@ -114,7 +114,7 @@ export async function retrieveProviderEffect(reader: ProviderInvoiceReader, expe
   // Reject before making even a read-only provider call.
   if (!expected || typeof expected !== 'object' || Array.isArray(expected) ||
       ![expected.accountId, expected.invoiceRef, expected.customerId, expected.subscriptionId, expected.reservationRef].every(s => typeof s === 'string' && s !== '') ||
-      !/^(?:acct|in|cus|sub)_[A-Za-z0-9]+$/.test(expected.accountId) ||
+      !/^acct_[A-Za-z0-9]+$/.test(expected.accountId) ||
       !/^in_[A-Za-z0-9]+$/.test(expected.invoiceRef) ||
       !/^cus_[A-Za-z0-9]+$/.test(expected.customerId) ||
       !/^sub_[A-Za-z0-9]+$/.test(expected.subscriptionId) ||
