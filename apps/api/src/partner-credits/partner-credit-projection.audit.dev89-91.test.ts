@@ -31,20 +31,20 @@ describe('Group 15 read-only Partner Credit projection audit integrity', () => {
   });
 
   it.each([
-    [sentinel('-1')],
-    [violation('1'), sentinel('2')],
-    [sentinel('1'), violation('2')],
-  ])('DEV-90 rejects negative or conflicting account counts', async (rows) => {
+    { rows: [sentinel('-1')] },
+    { rows: [violation('1'), sentinel('2')] },
+    { rows: [sentinel('1'), violation('2')] },
+  ])('DEV-90 rejects negative or conflicting account counts', async ({ rows }) => {
     expect((await audit(rows)).result).toEqual(unavailable);
   });
 
   it.each([
-    [{ ...sentinel('1'), code: 'LEDGER_NET' }],
-    [{ ...sentinel('1'), expected: '0' }],
-    [{ ...sentinel('1'), actual: '1' }],
-    [{ ...violation(), account_id: 'foreign/invalid' }, sentinel('1')],
-    [{ ...violation(), expected: '2', actual: '2' }, sentinel('1')],
-  ])('DEV-91 rejects sentinel corruption and fabricated violation rows', async (rows) => {
+    { rows: [{ ...sentinel('1'), code: 'LEDGER_NET' }] },
+    { rows: [{ ...sentinel('1'), expected: '0' }] },
+    { rows: [{ ...sentinel('1'), actual: '1' }] },
+    { rows: [{ ...violation(), account_id: 'foreign/invalid' }, sentinel('1')] },
+    { rows: [{ ...violation(), expected: '2', actual: '2' }, sentinel('1')] },
+  ])('DEV-91 rejects sentinel corruption and fabricated violation rows', async ({ rows }) => {
     expect((await audit(rows)).result).toEqual(unavailable);
   });
 
