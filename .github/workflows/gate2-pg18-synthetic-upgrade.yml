@@ -90,7 +90,7 @@ jobs:
         working-directory: apps/api
         env:
           DATABASE_URL: postgresql://echogrid:echogrid@localhost:5432/echogrid_ci_pg18_restored
-        run: node scripts/gate2-pg18-fixture-evidence.mjs verify
+        run: node scripts/gate2-pg18-fixture-evidence.mjs verify-prefix
       - name: Restore exact immutable repository journal
         shell: bash
         run: |
