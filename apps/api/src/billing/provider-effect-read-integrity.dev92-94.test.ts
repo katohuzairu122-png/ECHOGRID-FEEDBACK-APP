@@ -66,6 +66,9 @@ describe('Group 16 read-only provider-operation integrity', () => {
   it.each([undefined, null, 'false', 0, 1])(
     'DEV-94 rejects malformed pagination hasMore %#', async (hasMore) => {
       const r = mockReader([goodLine], hasMore);
+      // A default parameter replaces explicit undefined; preserve the malformed
+      // provider payload as-is for this adversarial fixture.
+      r.listInvoiceLines.mockResolvedValue({ data: [goodLine], hasMore });
       assertUnverifiable(await retrieveProviderEffect(r as unknown as ProviderInvoiceReader, expected));
     },
   );
