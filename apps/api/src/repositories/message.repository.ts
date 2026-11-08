@@ -14,7 +14,7 @@ export class MessageRepository extends BaseRepository {
       where: eq(messages.conversationId, conversationId),
       limit: options.limit,
       offset: options.offset,
-      orderBy: desc(messages.createdAt),
+      orderBy: [desc(messages.createdAt), desc(messages.id)],
     });
   }
 
