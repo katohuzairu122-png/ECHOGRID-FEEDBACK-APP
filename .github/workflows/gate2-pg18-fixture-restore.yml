@@ -71,11 +71,16 @@ jobs:
         run: |
           set -euo pipefail
           test "$DATABASE_URL" = 'postgresql://echogrid:echogrid@localhost:5432/echogrid_ci_pg18_upgrade'
-          pg_dump --version | grep -q '18\.'
-          pg_dump -h localhost -U echogrid -d echogrid_ci_pg18_upgrade --format=custom --file="$RUNNER_TEMP/gate2-pg18-synthetic.dump"
-          test -s "$RUNNER_TEMP/gate2-pg18-synthetic.dump"
-          createdb -h localhost -U echogrid -T template0 echogrid_ci_pg18_restored
-          pg_restore -h localhost -U echogrid -d echogrid_ci_pg18_restored --no-owner --no-acl --exit-on-error "$RUNNER_TEMP/gate2-pg18-synthetic.dump"
+          # Use PostgreSQL 18 client tools inside this disposable service.
+          PG_CONTAINER="$(docker ps --filter ancestor=postgres:18 --format '{{.ID}}' | head -n 1)"
+          test -n "$PG_CONTAINER"
+          docker exec "$PG_CONTAINER" sh -ec '
+            pg_dump --version | grep -q "18\\."
+            pg_dump -U echogrid -d echogrid_ci_pg18_upgrade -Fc -f /tmp/gate2-synthetic.dump
+            test -s /tmp/gate2-synthetic.dump
+            createdb -U echogrid -T template0 echogrid_ci_pg18_restored
+            pg_restore -U echogrid -d echogrid_ci_pg18_restored --no-owner --no-acl --exit-on-error /tmp/gate2-synthetic.dump
+          '
       - name: Restore the exact journal from immutable Git
         shell: bash
         run: |
