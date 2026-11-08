@@ -82,7 +82,7 @@ const ID = /^[A-Za-z0-9_]+$/;
 function validLine(value: unknown): value is ProviderInvoiceLine {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) return false;
   const line = value as Record<string, unknown>;
-  if (typeof line.id !== 'string' || !ID.test(line.id) ||
+  if (typeof line.id !== 'string' || !/^[A-Za-z0-9_][A-Za-z0-9_-]{0,255}$/.test(line.id) ||
       typeof line.amount !== 'number' || !Number.isSafeInteger(line.amount) ||
       typeof line.currency !== 'string' || !/^[a-z]{3}$/.test(line.currency)) return false;
   const metadata = line.metadata;
