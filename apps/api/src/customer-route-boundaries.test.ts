@@ -48,6 +48,8 @@ describe('mounted customer and staff route boundaries', () => {
     expect(await response.json()).toMatchObject({ success: true, data: [] });
     if (path === '/api/v1/surveys/me/participations') {
       expect(list).toHaveBeenCalledWith(customerId, { limit: 100, offset: 0 });
+    } else if (path === '/api/v1/messaging/me/conversations') {
+      expect(list).toHaveBeenCalledWith(customerId, { limit: 100, offset: 0 });
     } else {
       expect(list).toHaveBeenCalledWith(customerId);
     }
