@@ -25,7 +25,7 @@ jobs:
         env:
           POSTGRES_USER: echogrid
           POSTGRES_PASSWORD: echogrid
-          POSTGRES_DB: echogrid_pg18_ci
+          POSTGRES_DB: echogrid_ci_pg18
         ports:
           - 5432:5432
         options: >-
@@ -34,8 +34,8 @@ jobs:
           --health-timeout 5s
           --health-retries 10
     env:
-      DATABASE_URL: postgresql://echogrid:echogrid@localhost:5432/echogrid_pg18_ci
-      CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE: postgresql://echogrid:echogrid@localhost:5432/echogrid_pg18_ci
+      DATABASE_URL: postgresql://echogrid:echogrid@localhost:5432/echogrid_ci_pg18
+      CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE: postgresql://echogrid:echogrid@localhost:5432/echogrid_ci_pg18
       GATE2_EPHEMERAL_PG18: I_ACKNOWLEDGE_DISPOSABLE_POSTGRES18
     steps:
       - uses: actions/checkout@v4
@@ -53,9 +53,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test "$DATABASE_URL" = 'postgresql://echogrid:echogrid@localhost:5432/echogrid_pg18_ci'
+          test "$DATABASE_URL" = 'postgresql://echogrid:echogrid@localhost:5432/echogrid_ci_pg18'
           test "$GATE2_EPHEMERAL_PG18" = I_ACKNOWLEDGE_DISPOSABLE_POSTGRES18
-          PGPASSWORD=echogrid psql -h localhost -p 5432 -U echogrid -d echogrid_pg18_ci -v ON_ERROR_STOP=1 -Atc "SELECT current_setting('server_version_num')::int / 10000" | grep -qx 18
+          PGPASSWORD=echogrid psql -h localhost -p 5432 -U echogrid -d echogrid_ci_pg18 -v ON_ERROR_STOP=1 -Atc "SELECT current_setting('server_version_num')::int / 10000" | grep -qx 18
       - name: Verify migrations current
         run: pnpm --filter @echo-grid-feedback/api db:check
       - name: Replay full migration journal on ephemeral PostgreSQL 18
