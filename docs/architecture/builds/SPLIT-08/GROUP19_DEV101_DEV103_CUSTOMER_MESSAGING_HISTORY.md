@@ -11,7 +11,7 @@ The authenticated customer conversations list and customer thread message list r
 - **DEV-103** — Mounted-route regression coverage for customer JWT, default 100/0, explicit 25/50, malformed query rejection, and identity-scoped service arguments.
 
 ## Compatibility and unresolved integration
-The API response wrapper remains `{success:true,data:[...]}`, but default listings are now a page (100 items) rather than all history. Existing customer UI/API consumers must request subsequent pages explicitly to display older threads/messages. This is a behavioral compatibility change; verify the consumer pagination UX before owner approval.
+The API response wrapper remains `{success:true,data:[...]}`, but default listings are now a page (100 items) rather than all history. The customer thread page now provides Older/Newer message page navigation using the bounded API. Other API consumers must request subsequent pages explicitly. Existing translations for the new navigation labels and deep-link pagination handling require UI review before owner approval.
 
 No new feedback-to-loyalty bridge, reward issuance, consent grant, survey completion economic effect, push notification behavior, staff authorization, Stripe operation, RLS or migration is introduced.
 
