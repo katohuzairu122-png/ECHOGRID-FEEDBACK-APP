@@ -1,4 +1,4 @@
-name: Gate 2 PG18 synthetic 45-to-67 upgrade
+name: Gate 2 PG18 seeded backup and 45-to-67 upgrade
 
 # Purely disposable PostgreSQL 18 Actions service container.
 # Does not access Neon, Stripe, Cloudflare, secrets or persistent databases.
@@ -10,7 +10,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: gate2-pg18-upgrade-${{ github.ref }}-${{ github.event_name }}
+  group: gate2-pg18-fixture-backup-${{ github.ref }}-${{ github.event_name }}
   cancel-in-progress: true
 
 jobs:
@@ -63,6 +63,34 @@ jobs:
       - name: Verify exact 45-migration prefix and absence of future schema
         working-directory: apps/api
         run: node scripts/gate2-pg18-prefix-upgrade.mjs verify-prefix
+      - name: Seed two synthetic tenants and isolated loyalty memberships
+        working-directory: apps/api
+        run: node scripts/gate2-pg18-fixture-evidence.mjs seed
+      - name: Backup the 45-migration synthetic database with PG18 client
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --rm --network host \
+            -v "$RUNNER_TEMP:/backup" \
+            -e PGPASSWORD=echogrid \
+            postgres:18 pg_dump -h localhost -p 5432 -U echogrid \
+            -d echogrid_ci_pg18_upgrade -Fc -f /backup/gate2-r4.dump
+          test -s "$RUNNER_TEMP/gate2-r4.dump"
+      - name: Restore backup to a second disposable PostgreSQL 18 database
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --rm --network host -e PGPASSWORD=echogrid postgres:18 \
+            createdb -h localhost -p 5432 -U echogrid echogrid_ci_pg18_restored
+          docker run --rm --network host \
+            -v "$RUNNER_TEMP:/backup:ro" -e PGPASSWORD=echogrid \
+            postgres:18 pg_restore -h localhost -p 5432 -U echogrid \
+            -d echogrid_ci_pg18_restored --no-owner /backup/gate2-r4.dump
+      - name: Verify restored tenant fixtures and pre-upgrade migration history
+        working-directory: apps/api
+        env:
+          DATABASE_URL: postgresql://echogrid:echogrid@localhost:5432/echogrid_ci_pg18_restored
+        run: node scripts/gate2-pg18-fixture-evidence.mjs verify
       - name: Restore exact immutable repository journal
         shell: bash
         run: |
@@ -74,3 +102,6 @@ jobs:
       - name: Verify 67-migration history, forced RLS, and financial-denial guards
         working-directory: apps/api
         run: node scripts/gate2-pg18-prefix-upgrade.mjs verify-full
+      - name: Verify synthetic tenant and loyalty rows survived upgrade
+        working-directory: apps/api
+        run: node scripts/gate2-pg18-fixture-evidence.mjs verify
