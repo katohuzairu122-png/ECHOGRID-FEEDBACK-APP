@@ -34,7 +34,11 @@ export class PostgresMultiunitConservationAudit {
       accountingConserved: false, issuanceAuthorized: false,
       databaseEvidenceAvailable, reason, issuedMonthUnits, observedLots,
     });
-    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(input.businessId) ||
+    // DEV-98: reject malformed runtime scopes before issuing any query.
+    if (!input || typeof input !== 'object' || Array.isArray(input) ||
+        typeof input.businessId !== 'string' ||
+        !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(input.businessId) ||
+        typeof input.earningMonthUtc !== 'string' ||
         !/^\d{4}-(0[1-9]|1[0-2])$/.test(input.earningMonthUtc))
       return deny('INVALID_INPUT');
     // Business-scoped aggregate from the immutable award decisions and
@@ -64,10 +68,13 @@ export class PostgresMultiunitConservationAudit {
     } catch {
       return deny('DATABASE_UNAVAILABLE');
     }
-    const candidate = Array.isArray(raw) ? raw[0]
-      : raw && typeof raw === 'object' && 'rows' in raw &&
-        Array.isArray(raw.rows) ? raw.rows[0] : undefined;
-    if (!candidate || typeof candidate !== 'object') return deny('ROW_SHAPE_INVALID');
+    // DEV-99: this aggregate SELECT must return exactly one row. Never
+    // silently trust one result from a duplicate/partial/malformed envelope.
+    const rows: unknown = Array.isArray(raw) ? raw
+      : raw && typeof raw === 'object' && 'rows' in raw ? raw.rows : undefined;
+    if (!Array.isArray(rows) || rows.length !== 1) return deny('ROW_SHAPE_INVALID');
+    const candidate: unknown = rows[0];
+    if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) return deny('ROW_SHAPE_INVALID');
     const row = candidate as Record<string,unknown>;
     const parse = (v: unknown) => {
       if (typeof v !== 'string' || !/^\d+$/.test(v)) return null;
@@ -77,7 +84,9 @@ export class PostgresMultiunitConservationAudit {
     const month = parse(row.month_units);
     const count = parse(row.lot_count);
     const invalid = parse(row.invalid_lots);
-    if (month === null || count === null || invalid === null)
+    // DEV-100: invalid_lots is a subset of counted lots. Treat impossible
+    // aggregates as unavailable, not valid evidence of conservation.
+    if (month === null || count === null || invalid === null || invalid > count)
       return deny('ROW_SHAPE_INVALID');
     if (month > 10) return deny('MONTHLY_CAP_VIOLATED',month,count,true);
     if (invalid > 0) return deny('LOT_PROJECTION_INVALID',month,count,true);
