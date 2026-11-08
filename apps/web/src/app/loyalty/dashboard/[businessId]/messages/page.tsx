@@ -1,4 +1,5 @@
 import { getFormatter, getTranslations } from 'next-intl/server';
+import Link from 'next/link';
 import type { ConversationWithBusinessDto, MessageDto } from '@echo-grid-feedback/shared-types';
 import { customerApiFetch } from '@/lib/customer-api-client';
 import { ApiError } from '@/lib/api-client';
@@ -7,6 +8,7 @@ import { ReplyForm } from './reply-form';
 
 interface CustomerMessagesPageProps {
   params: Promise<{ businessId: string }>;
+  searchParams: Promise<{ offset?: string }>;
 }
 
 /**
@@ -16,8 +18,12 @@ interface CustomerMessagesPageProps {
  * card instead, same "inert, not a data leak" distinction
  * notifications/page.tsx's own comment draws.
  */
-export default async function CustomerMessagesPage({ params }: CustomerMessagesPageProps) {
+export default async function CustomerMessagesPage({ params, searchParams }: CustomerMessagesPageProps) {
   const { businessId } = await params;
+  const { offset: rawOffset } = await searchParams;
+  const offset = rawOffset && /^(?:0|[1-9][0-9]*)$/.test(rawOffset) && Number(rawOffset) <= 1_000_000 && Number.isSafeInteger(Number(rawOffset))
+    ? Number(rawOffset) : 0;
+  const pageSize = 100;
   const format = await getFormatter();
   const t = await getTranslations('loyalty.customer.messages');
 
@@ -43,7 +49,8 @@ export default async function CustomerMessagesPage({ params }: CustomerMessagesP
   // thread page's identical comment.
   await customerApiFetch(`/messaging/me/conversations/${businessId}/read`, { method: 'POST' });
 
-  const messages = await customerApiFetch<MessageDto[]>(`/messaging/me/conversations/${businessId}/messages`);
+  const messages = await customerApiFetch<MessageDto[]>(`/messaging/me/conversations/${businessId}/messages?limit=${pageSize}&offset=${offset}`);
+  const basePath = `/loyalty/dashboard/${encodeURIComponent(businessId)}/messages`;
 
   return (
     <div className="flex flex-col gap-6">
@@ -72,6 +79,19 @@ export default async function CustomerMessagesPage({ params }: CustomerMessagesP
           ))}
         </CardContent>
       </Card>
+
+      <nav aria-label="Message history pages" className="flex items-center justify-between gap-4 text-sm">
+        {offset > 0 ? (
+          <Link className="text-brand-700 underline" href={`${basePath}?offset=${Math.max(0, offset - pageSize)}`}>
+            Newer messages
+          </Link>
+        ) : <span />}
+        {messages.length === pageSize && offset + pageSize <= 1_000_000 ? (
+          <Link className="text-brand-700 underline" href={`${basePath}?offset=${offset + pageSize}`}>
+            Older messages
+          </Link>
+        ) : <span />}
+      </nav>
 
       <ReplyForm businessId={businessId} />
     </div>
