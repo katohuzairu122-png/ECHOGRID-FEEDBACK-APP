@@ -48,7 +48,7 @@ try {
     await owner.query('INSERT INTO public.businesses(id,name,slug) VALUES($1,$2,$3)',[actor.business,'Gate 2 R11 synthetic business', 'gate2-r11-'+i]);
     await owner.query('INSERT INTO public.branches(id,business_id,name,slug) VALUES($1,$2,$3,$4)',[actor.branch,actor.business,'Synthetic R11 branch','r11-branch']);
     await owner.query('INSERT INTO public.qr_codes(id,business_id,branch_id) VALUES($1,$2,$3)',[actor.qr,actor.business,actor.branch]);
-    await owner.query('INSERT INTO public.feedback(id,business_id,branch_id,qr_code_id,rating,comment) VALUES($1,$2,$3,$4,5,$5)',[actor.feedback,actor.business,actor.branch,actor.name+' private']);
+    await owner.query('INSERT INTO public.feedback(id,business_id,branch_id,qr_code_id,rating,comment) VALUES($1,$2,$3,$4,5,$5)',[actor.feedback,actor.business,actor.branch,actor.qr,actor.name+' private']);
     await owner.query("INSERT INTO public.surveys(id,owner_type,business_id,name) VALUES($1,'business',$2,$3)",[actor.survey,actor.business,'R11 synthetic survey']);
   }
   await owner.query('INSERT INTO public.customers(id,phone) VALUES($1,$2)',[customer,'+15550009111']);
