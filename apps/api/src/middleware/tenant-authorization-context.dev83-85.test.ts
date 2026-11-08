@@ -54,10 +54,10 @@ describe('Group 13 tenant authorization context integrity', () => {
   });
 
   it.each([
-    [null], [''], [' '], [' loyalty:view'], ['loyalty:view '],
-    [123], [false], [{}], ['p'.repeat(257)],
-  ])('DEV-84 rejects malformed permission entries without granting access (%j)', (entries) => {
-    expectDenied({ ...valid(), permissions: new Set(entries) });
+    null, '', ' ', ' loyalty:view', 'loyalty:view ',
+    123, false, {}, 'p'.repeat(257),
+  ])('DEV-84 rejects malformed permission entries without granting access (%j)', (entry) => {
+    expectDenied({ ...valid(), permissions: new Set([entry]) });
   });
 
   it.each([
