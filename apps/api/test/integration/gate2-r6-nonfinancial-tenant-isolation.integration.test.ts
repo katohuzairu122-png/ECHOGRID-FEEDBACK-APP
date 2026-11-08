@@ -26,6 +26,8 @@ describe.skipIf(!targetIsDisposable)('Gate 2 R6 nonfinancial tenant-isolation in
   let b: string;
   let branchA: string;
   let branchB: string;
+  let qrAId: string;
+  let qrBId: string;
   let feedbackA: string;
   let feedbackB: string;
   let accountA: string;
@@ -55,6 +57,7 @@ describe.skipIf(!targetIsDisposable)('Gate 2 R6 nonfinancial tenant-isolation in
       repos.qrCodes.create({ businessId: a, branchId: branchA }),
       repos.qrCodes.create({ businessId: b, branchId: branchB }),
     ]);
+    qrAId = qrA.id; qrBId = qrB.id;
     const [fA, fB] = await Promise.all([
       repos.feedback.create({ businessId: a, branchId: branchA, qrCodeId: qrA.id, rating: 5, comment: 'private A' }),
       repos.feedback.create({ businessId: b, branchId: branchB, qrCodeId: qrB.id, rating: 2, comment: 'private B' }),
@@ -84,6 +87,10 @@ describe.skipIf(!targetIsDisposable)('Gate 2 R6 nonfinancial tenant-isolation in
     expect((await repos.branches.findById(branchB, b))?.id).toBe(branchB);
     expect(await repos.branches.findById(branchA, b)).toBeUndefined();
     expect(await repos.branches.findById(branchB, a)).toBeUndefined();
+    expect((await repos.qrCodes.findById(qrAId, a))?.id).toBe(qrAId);
+    expect((await repos.qrCodes.findById(qrBId, b))?.id).toBe(qrBId);
+    expect(await repos.qrCodes.findById(qrAId, b)).toBeUndefined();
+    expect(await repos.qrCodes.findById(qrBId, a)).toBeUndefined();
     expect((await repos.branches.listByBusiness(a)).map(x => x.id)).toContain(branchA);
     expect((await repos.branches.listByBusiness(a)).map(x => x.id)).not.toContain(branchB);
   });
