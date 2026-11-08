@@ -2,6 +2,7 @@ import { and, desc, eq, isNull, sql } from 'drizzle-orm';
 import type { Database } from '../db/client';
 import { benefitApplicationIntents, benefitReconciliationAttempts } from '../db/schema';
 import type { BenefitApplicationSagaService, SagaResult } from './benefit-application.saga.service';
+import { resolveReconciliationPolicy } from './reconciliation-policy.preflight';
 import {
   nextRetryDelayMs, retrieveProviderEffect, toSagaObservation,
   type EffectExtractor, type ExpectedProviderScope, type ProviderEffectRetrieval, type ProviderInvoiceReader,
@@ -43,9 +44,10 @@ export class BenefitReconciliationService {
 
   async reconcile(intentId: string, ctx: ReconcileContext): Promise<ReconcileResult> {
     const clock = ctx.clock ?? (() => new Date());
-    const requiredAbsences = Math.max(ctx.requiredAbsences ?? 2, 2); // never fewer than two: a single query is not proof
-    const minGap = Math.max(ctx.minAbsenceGapMs ?? 300_000, 0);
-    const inFlightMs = ctx.inFlightWindowMs ?? 120_000;
+    // DEV-96: invalid retry/absence timing is rejected before opening a
+    // transaction, querying a provider, or recording a durable attempt.
+    const { requiredAbsences, minAbsenceGapMs: minGap, inFlightWindowMs: inFlightMs } =
+      resolveReconciliationPolicy(ctx);
 
     // 1. reserve an attempt number under the intent row lock (no lock is held during the network call)
     const started = await this.db.transaction(async tx => {
