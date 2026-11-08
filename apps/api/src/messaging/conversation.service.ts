@@ -94,15 +94,15 @@ export class ConversationService {
     return repos.conversations.findByCustomerAndBusiness(customerId, businessId);
   }
 
-  async listForCustomer(customerId: string) {
+  async listForCustomer(customerId: string, options: { limit?: number; offset?: number } = {}) {
     const repos = createRepositories(this.db);
-    return repos.conversations.listForCustomer(customerId);
+    return repos.conversations.listForCustomer(customerId, options);
   }
 
-  async getMessagesForCustomer(customerId: string, businessId: string): Promise<Message[]> {
+  async getMessagesForCustomer(customerId: string, businessId: string, options: { limit?: number; offset?: number } = {}): Promise<Message[]> {
     const repos = createRepositories(this.db);
     const conversation = await this.requireConversationForCustomer(repos, customerId, businessId);
-    return repos.messages.listForConversation(conversation.id);
+    return repos.messages.listForConversation(conversation.id, options);
   }
 
   async markReadByCustomer(customerId: string, businessId: string): Promise<void> {

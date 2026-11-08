@@ -5,6 +5,7 @@ import { createDb, type Database } from '../db/client';
 import { customerAuthenticate, type CustomerAuthVariables } from '../middleware/customer-authenticate';
 import { rateLimit } from '../middleware/rate-limit';
 import { parseJsonBody } from '../lib/validate';
+import { parseListPagination } from '../lib/list-pagination';
 import { ok } from '../lib/response';
 import { AppError } from '../lib/errors';
 import { runInBackground } from '../lib/background-db';
@@ -33,8 +34,9 @@ async function withDb<T>(c: Context<Env>, fn: (db: Database) => Promise<T>): Pro
 }
 
 messagingCustomerRoutes.get('/conversations', async (c) => {
+  const { limit = 100, offset = 0 } = parseListPagination(new URL(c.req.url).searchParams, 100);
   return withDb(c, async (db) => {
-    const items = await new ConversationService(db).listForCustomer(c.get('customerId'));
+    const items = await new ConversationService(db).listForCustomer(c.get('customerId'), { limit, offset });
     return ok(c, items);
   });
 });
@@ -57,10 +59,12 @@ messagingCustomerRoutes.get('/conversations/:businessId', async (c) => {
 });
 
 messagingCustomerRoutes.get('/conversations/:businessId/messages', async (c) => {
+  const { limit = 100, offset = 0 } = parseListPagination(new URL(c.req.url).searchParams, 100);
   return withDb(c, async (db) => {
     const items = await new ConversationService(db).getMessagesForCustomer(
       c.get('customerId'),
       c.req.param('businessId'),
+      { limit, offset },
     );
     return ok(c, items);
   });

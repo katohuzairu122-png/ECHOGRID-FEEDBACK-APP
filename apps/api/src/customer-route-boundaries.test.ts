@@ -5,6 +5,8 @@ import { signCustomerAccessToken } from './customer-auth/customer-jwt';
 const mocks = vi.hoisted(() => ({
   listAccounts: vi.fn(async () => []),
   listConversations: vi.fn(async () => []),
+  findConversation: vi.fn(async () => ({ id: 'thread-a' })),
+  listMessages: vi.fn(async () => []),
   listParticipations: vi.fn(async () => []),
   getCommunityStatus: vi.fn(async () => null),
   getCommunityPointAccount: vi.fn(async () => undefined),
@@ -17,7 +19,8 @@ vi.mock('./repositories', () => ({ createRepositories: () => ({
   customers: { findById: mocks.findCustomer },
   users: { findById: mocks.findUser },
   loyaltyAccounts: { listForCustomer: mocks.listAccounts },
-  conversations: { listForCustomer: mocks.listConversations },
+  conversations: { listForCustomer: mocks.listConversations, findByCustomerAndBusiness: mocks.findConversation },
+  messages: { listForConversation: mocks.listMessages },
   surveyParticipations: { listForCustomer: mocks.listParticipations },
   communityMemberships: { findByCustomerId: mocks.getCommunityStatus },
   communityPointAccounts: { findByCustomerId: mocks.getCommunityPointAccount },
@@ -48,10 +51,56 @@ describe('mounted customer and staff route boundaries', () => {
     expect(await response.json()).toMatchObject({ success: true, data: [] });
     if (path === '/api/v1/surveys/me/participations') {
       expect(list).toHaveBeenCalledWith(customerId, { limit: 100, offset: 0 });
+    } else if (path === '/api/v1/messaging/me/conversations') {
+      expect(list).toHaveBeenCalledWith(customerId, { limit: 100, offset: 0 });
     } else {
       expect(list).toHaveBeenCalledWith(customerId);
     }
     expect(mocks.findUser).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['/api/v1/messaging/me/conversations', mocks.listConversations, false],
+    ['/api/v1/messaging/me/conversations/business-a/messages', mocks.listMessages, true],
+  ] as const)('DEV-101/102 applies explicit bounded customer paging at %s', async (path, method, isMessageList) => {
+    const token = await signCustomerAccessToken(customerId, env.CUSTOMER_JWT_SECRET);
+    const response = await worker.fetch(new Request(`https://api.test${path}?limit=25&offset=50`, {
+      headers: { Authorization: `Bearer ${token}` },
+    }), env, ctx);
+    expect(response.status).toBe(200);
+    if (isMessageList) {
+      expect(mocks.findConversation).toHaveBeenCalledWith(customerId, 'business-a');
+      expect(method).toHaveBeenCalledWith('thread-a', { limit: 25, offset: 50 });
+    } else {
+      expect(method).toHaveBeenCalledWith(customerId, { limit: 25, offset: 50 });
+    }
+    expect(mocks.findUser).not.toHaveBeenCalled();
+  });
+
+  it('DEV-102 defaults customer messages to a 100-row bounded page', async () => {
+    const token = await signCustomerAccessToken(customerId, env.CUSTOMER_JWT_SECRET);
+    const response = await worker.fetch(new Request('https://api.test/api/v1/messaging/me/conversations/business-a/messages', {
+      headers: { Authorization: `Bearer ${token}` },
+    }), env, ctx);
+    expect(response.status).toBe(200);
+    expect(mocks.listMessages).toHaveBeenCalledWith('thread-a', { limit: 100, offset: 0 });
+  });
+
+  it.each([
+    '/api/v1/messaging/me/conversations',
+    '/api/v1/messaging/me/conversations/business-a/messages',
+  ])('DEV-103 rejects malformed customer paging before fetching conversation data: %s', async (path) => {
+    const token = await signCustomerAccessToken(customerId, env.CUSTOMER_JWT_SECRET);
+    for (const query of ['limit=0', 'limit=101', 'offset=-1', 'offset=1000001', 'limit=1&limit=2']) {
+      vi.clearAllMocks();
+      const response = await worker.fetch(new Request(`https://api.test${path}?${query}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      }), env, ctx);
+      expect(response.status).toBe(400);
+      expect(mocks.listConversations).not.toHaveBeenCalled();
+      expect(mocks.findConversation).not.toHaveBeenCalled();
+      expect(mocks.listMessages).not.toHaveBeenCalled();
+    }
   });
 
   it('accepts a customer session at /api/v1/community/me without staff authentication', async () => {
