@@ -1,4 +1,4 @@
-import { eq, and, sql } from 'drizzle-orm';
+import { eq, and, sql, desc } from 'drizzle-orm';
 import { conversations, messages } from '../db/schema';
 import type { Customer } from './customer.repository';
 import type { Business } from './business.repository';
@@ -95,7 +95,7 @@ export class ConversationRepository extends BaseRepository {
   /** Customer's own view, across every business -- no businessId scoping on
    * purpose, same reasoning as LoyaltyAccountRepository.listForCustomer.
    * Unread means unread messages sent BY staff. */
-  async listForCustomer(customerId: string): Promise<ConversationWithBusiness[]> {
+  async listForCustomer(customerId: string, options: { limit?: number; offset?: number } = {}): Promise<ConversationWithBusiness[]> {
     const rows = await this.db
       .select({
         conversation: conversations,
@@ -105,7 +105,9 @@ export class ConversationRepository extends BaseRepository {
       .from(conversations)
       .innerJoin(sql`businesses`, sql`businesses.id = ${conversations.businessId}`)
       .where(and(eq(conversations.customerId, customerId), eq(conversations.isDeleted, false)))
-      .orderBy(sql`${conversations.lastMessageAt} desc`);
+      .orderBy(desc(conversations.lastMessageAt), desc(conversations.id))
+      .limit(options.limit ?? 100)
+      .offset(options.offset ?? 0);
 
     return rows.map((r) => ({ ...r.conversation, business: r.business, unreadCount: r.unreadCount }));
   }
