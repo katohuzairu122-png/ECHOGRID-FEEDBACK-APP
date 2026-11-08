@@ -106,6 +106,28 @@ function now(): number {
   return Math.floor(Date.now() / 1000);
 }
 
+/** DEV-104: configuration and subject controls fail closed before a KV read
+ * or write; a malformed limit must not disable abuse detection. */
+function validLimit(value: VelocityLimits): boolean {
+  return !!value && Number.isSafeInteger(value.windowSeconds) &&
+    value.windowSeconds >= 60 && value.windowSeconds <= 2_592_000 &&
+    Number.isSafeInteger(value.threshold) && value.threshold >= 1 &&
+    value.threshold <= 1_000_000;
+}
+
+function validSubject(value: unknown): value is string {
+  return typeof value === 'string' && value.length > 0 && value.length <= 2048;
+}
+
+function validEvent(value: unknown): value is string {
+  return typeof value === 'string' && /^[a-z][a-z0-9_]{0,63}$/.test(value);
+}
+
+function invalidVelocityState(): never {
+  // DEV-105: never log raw KV payloads, subject values, IPs, or salts.
+  throw new Error('VELOCITY_STATE_UNAVAILABLE');
+}
+
 export class VelocityTracker {
   constructor(
     private readonly kv: VelocityKv,
@@ -117,6 +139,7 @@ export class VelocityTracker {
    * signing, salted (unlike that one) because the input here is often
    * low-entropy and guessable (an IP, a device signal), not already-random. */
   async hashSubject(value: string): Promise<string> {
+    if (!validSubject(value) || !validSubject(this.salt)) invalidVelocityState();
     const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`${this.salt}:${value}`));
     return Array.from(new Uint8Array(digest))
       .map((b) => b.toString(16).padStart(2, '0'))
@@ -138,8 +161,21 @@ export class VelocityTracker {
   ): Promise<number> {
     const key = `velocity:${eventType}:${subjectType}:${subjectHash}`;
     const raw = await this.kv.get(key);
-    const existing = raw ? (JSON.parse(raw) as CounterState) : null;
+    let existing: CounterState | null = null;
+    if (raw !== null) {
+      let parsed: unknown;
+      try { parsed = JSON.parse(raw); } catch { invalidVelocityState(); }
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) invalidVelocityState();
+      const entry = parsed as Record<string, unknown>;
+      if (!Number.isSafeInteger(entry.count) || (entry.count as number) < 1 ||
+          !Number.isSafeInteger(entry.windowStart) || (entry.windowStart as number) < 0)
+        invalidVelocityState();
+      existing = entry as unknown as CounterState;
+    }
     const t = now();
+    if (!Number.isSafeInteger(t) || t < 0 ||
+        (existing !== null && (existing.windowStart > t || existing.count >= Number.MAX_SAFE_INTEGER)))
+      invalidVelocityState();
 
     const state: CounterState =
       existing && t - existing.windowStart < windowSeconds
@@ -166,6 +202,10 @@ export class VelocityTracker {
     deviceLimits: VelocityLimits;
     ipLimits: VelocityLimits;
   }): Promise<VelocityBreach | null> {
+    if (!params || !validEvent(params.eventType) || !validSubject(params.ip) ||
+        !validLimit(params.deviceLimits) || !validLimit(params.ipLimits) ||
+        (params.deviceSignal !== undefined && !validSubject(params.deviceSignal)))
+      invalidVelocityState();
     let deviceBreach: VelocityBreach | null = null;
     if (params.deviceSignal) {
       const hash = await this.hashSubject(params.deviceSignal);
@@ -212,9 +252,16 @@ export class VelocityTracker {
     subjectValue: string;
     windowSeconds: number;
   }): Promise<{ inCooldown: boolean; subjectHash: string }> {
+    // DEV-106: refuse malformed cooldown controls, and do not treat
+    // unexpected KV data as a successful fresh or completed cooldown.
+    if (!params || !validEvent(params.eventType) || !validSubject(params.subjectValue) ||
+        !Number.isSafeInteger(params.windowSeconds) || params.windowSeconds < 60 ||
+        params.windowSeconds > 2_592_000)
+      invalidVelocityState();
     const hash = await this.hashSubject(params.subjectValue);
     const key = `cooldown:${params.eventType}:${hash}`;
     const existing = await this.kv.get(key);
+    if (existing !== null && existing !== '1') invalidVelocityState();
     if (existing) {
       return { inCooldown: true, subjectHash: hash };
     }
