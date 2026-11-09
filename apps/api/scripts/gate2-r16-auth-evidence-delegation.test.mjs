@@ -3,6 +3,7 @@
  * NOT a production token issuer, Hono middleware, or database broker.
  */
 import { describe, it } from 'node:test';
+import { Buffer } from 'node:buffer';
 import assert from 'node:assert/strict';
 import { createHmac, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 
