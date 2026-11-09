@@ -6,10 +6,10 @@ import assert from 'node:assert/strict';
 import { createHmac, randomBytes, randomUUID } from 'node:crypto';
 import pg from 'pg';
 import { URL as NodeURL } from 'node:url';
-const URL='postgresql://echogrid:echogrid@localhost:5432/echogrid_ci_pg18_b2_broker';
+const URL='postgresql://echogrid:echogrid@localhost:5432/echogrid_ci_pg18_b3_broker';
 if(process.env.GITHUB_ACTIONS!=='true' ||
  process.env.GATE2_B3_DISPOSABLE!=='I_ACKNOWLEDGE_DISPOSABLE_PG18' ||
- process.env.DATABASE_URL!==URL) throw Error('B2_DISPOSABLE_GUARD');
+ process.env.DATABASE_URL!==URL) throw Error('B3_DISPOSABLE_GUARD');
 const actorA='b7000000-0000-4000-8000-000000000001';
 const actorB='b7000000-0000-4000-8000-000000000002';
 const tenantA='a7000000-0000-4000-8000-000000000001';
@@ -39,7 +39,7 @@ const call=(c,t)=>c.query(
 try{
  await owner.connect();
  const identity=(await owner.query("SELECT current_database() db,current_user usr,current_setting('server_version_num')::int version")).rows[0];
- assert.equal(identity.db,'echogrid_ci_pg18_b2_broker');
+ assert.equal(identity.db,'echogrid_ci_pg18_b3_broker');
  assert.equal(identity.usr,'echogrid');
  assert.equal(Math.floor(identity.version/10000),18);
  assert.equal((await owner.query('SELECT count(*)::int n FROM drizzle.__drizzle_migrations')).rows[0].n,67);
