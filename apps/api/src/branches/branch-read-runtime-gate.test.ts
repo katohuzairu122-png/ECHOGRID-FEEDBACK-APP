@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, URL } from 'node:url';
 import { selectB4BranchReadPath } from './branch-read-runtime-gate';
 
 describe('Gate 2 B4-04 guarded branch-read selection', () => {
