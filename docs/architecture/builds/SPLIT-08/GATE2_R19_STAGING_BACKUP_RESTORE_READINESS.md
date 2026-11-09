@@ -36,3 +36,19 @@ R19 adds a CI-only isolated PostgreSQL 18 nonce registry, unique key, atomic ins
 Stop if wrong project or branch; any actual production resource; backup unavailable; unresolved customer privacy; unexpected migration journal drift; missing guard trigger; database privilege escalation; untested recovery; or no approved staging maintenance and security plan.
 
 **Current decision: LIVE STAGING BACKUP/RESTORE NOT EXECUTED. MIGRATION NOT AUTHORIZED.**
+
+
+## Executed owner-approved staging recovery verification — 2026-11-09
+
+**Owner approval:** staging data handling and recovery. **Scope:** snapshot and separate-branch restore validation only. No staging schema migration, source overwrite, runtime credential rotation, Hyperdrive configuration change, deployment, or economic activation.
+
+- Source Neon project: `lucky-glitter-47218268` (`echo-grid-staging`); source/default branch: `br-bold-water-aukjlvw3` (named `production` *inside staging project*).
+- Manually created snapshot: `snap-still-queen-auxustvl`, name `gate2-pre-migration-staging-2026-11-09`, created `2026-11-09T06:06:15Z`.
+- Restored to a **separate, new** branch: `br-wild-mode-aur6fpp8`, name `gate2-restore-verification-2026-11-09`, `primary=false`, `default=false`, `restore_status=restored`, and `restored_from=snap-still-queen-auxustvl`. The restore was requested with `finalize=false` to avoid source branch replacement. The original branch was independently confirmed still `primary=true`, `default=true`, `ready`.
+- Restore compute exists and is on a separate branch endpoint (`ep-steep-art-autpq92y`); no application routing or Hyperdrive cutover was performed.
+- Independent read-only SQL on **both** source and restore returned matching: database `neondb`, PostgreSQL `18.6`, `45` applied migrations, `69` public tables, `0` public RLS-enabled tables, **all 5 inert financial guard triggers enabled**, `4` businesses, `3` branches, and `15` refresh-token records. No user/session/token values were extracted.
+- Migration journal timestamp digest matches across both branches: `53777d3c15ca08095e972a3660d6c4df`. This digest compares timestamp sequences; it does not prove all row contents are identical or stored migration SQL hashes.
+- Snapshot inventory was verified to contain the named snapshot after restore. Snapshot creation did not set an expiration; agree retention and deletion rules before expanding the test.
+- **Privacy caveat:** the restored branch contains session records and must be treated as sensitive staging data. Limit access, avoid production/external integrations, preserve same-project region, and enforce an approved retention/deletion lifecycle. The data counts alone do not certify access controls.
+- **Recovery verification verdict:** snapshot creation, separate-branch restore, and limited schema/journal/guard/count comparison **PASS**. Full recovery drill (application restore, security boundary, RPO/RTO, external integrations and migration rollback) is **NOT CERTIFIED**.
+- **Migration decision remains BLOCKED:** requires independent environment controls/credentials review, approved 45→67 rehearsal on the isolated branch, and a separate owner migration authorization. **Do not infer that snapshot/recovery approval authorizes the migration.**
