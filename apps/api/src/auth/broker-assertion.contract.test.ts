@@ -7,7 +7,7 @@ const claims: BrokerAssertionClaims = { version: 'B4-03/1', algorithm: 'Ed25519'
   issuedAt: 1000, expiresAt: 1060, authorizationVersion: null };
 async function fixture() {
   const pair = await crypto.subtle.generateKey('Ed25519', true, ['sign', 'verify']) as CryptoKeyPair;
-  const key = { keyId: 'fixture', version: 1, publicKeyHex: brokerHex(new Uint8Array(await crypto.subtle.exportKey('raw', pair.publicKey))), state: 'ACTIVE' as const, notBefore: 900, notAfter: 2000 };
+  const key = { keyId: 'fixture', version: 1, publicKeyHex: brokerHex(new Uint8Array(await crypto.subtle.exportKey('raw', pair.publicKey) as ArrayBuffer)), state: 'ACTIVE' as const, notBefore: 900, notAfter: 2000 };
   const assertion = { claims, signature: brokerHex(new Uint8Array(await crypto.subtle.sign('Ed25519', pair.privateKey, brokerAssertionMessage(claims)))) };
   return { assertion, key };
 }
