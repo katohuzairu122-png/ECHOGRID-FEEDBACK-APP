@@ -48,6 +48,8 @@ function makeHarness() {
   const businessEpochs=new Map([[A,0],[B,0]]);
   const memberships=new Set([`${ACTOR_A}:${A}`,`${ACTOR_B}:${B}`]);
   const consumed=new Set();
+  const disabledActors=new Set();
+  const disabledBusinesses=new Set();
   const publicVerifierKeys=new Map();
   function addKey(kid,notBefore,notAfter) {
     assert.match(kid,/^[a-z0-9_-]{1,36}$/);
@@ -65,13 +67,17 @@ function makeHarness() {
     actorEpochs.set(actor,(actorEpochs.get(actor)??0)+1);
   }
   function revokeActor(actor) {
+    disabledActors.add(actor);
     actorEpochs.set(actor,(actorEpochs.get(actor)??0)+1);
   }
   function revokeBusiness(business) {
+    disabledBusinesses.add(business);
     businessEpochs.set(business,(businessEpochs.get(business)??0)+1);
   }
   // Trusted issuer simulates verified authn and effective membership.
   function issue({kid,actor,business,action=ACTION,now,ttl=60,nonce=randomUUID()}) {
+    if(disabledActors.has(actor))throw Error('ISSUER_ACTOR_DISABLED');
+    if(disabledBusinesses.has(business))throw Error('ISSUER_BUSINESS_DISABLED');
     if(!memberships.has(`${actor}:${business}`))throw Error('ISSUER_MEMBERSHIP_DENIED');
     if(!allowedActions.has(action))throw Error('ISSUER_OPERATION_DENIED');
     if(!Number.isSafeInteger(now)||!Number.isSafeInteger(ttl)||ttl<=0||ttl>MAX_TTL_SECONDS)
@@ -103,7 +109,8 @@ function makeHarness() {
     const signature=Buffer.from(token.sig,'base64url');
     if(signature.length!==64||!verify(null,Buffer.from(canonical(c),'utf8'),key.publicKey,signature))
       return {ok:false,reason:'SIGNATURE'};
-    if((actorEpochs.get(c.sub)??-1)!==c.actorEpoch ||
+    if(disabledActors.has(c.sub)||disabledBusinesses.has(c.business)||
+       (actorEpochs.get(c.sub)??-1)!==c.actorEpoch ||
        (businessEpochs.get(c.business)??-1)!==c.businessEpoch ||
        !memberships.has(`${c.sub}:${c.business}`))
       return {ok:false,reason:'REVOKED'};
@@ -163,26 +170,36 @@ describe('Gate 2 R13 offline trusted assertion issuer and key lifecycle contract
     const h=makeHarness();const t=h.issue({kid:'key_old',actor:ACTOR_A,business:A,now:1100});
     h.revokeBusiness(A);assert.equal(h.consume(t,{now:1101}).reason,'REVOKED');
   });
-  it('09 removed membership prevents issue and consumption of outstanding tokens',()=>{
+  it('09 disabled actor cannot obtain fresh assertions despite retained membership',()=>{
+    const h=makeHarness();
+    h.revokeActor(ACTOR_A);
+    assert.throws(()=>h.issue({kid:'key_old',actor:ACTOR_A,business:A,now:1101}),/ACTOR_DISABLED/);
+  });
+  it('10 suspended business cannot obtain fresh assertions despite retained membership',()=>{
+    const h=makeHarness();
+    h.revokeBusiness(A);
+    assert.throws(()=>h.issue({kid:'key_old',actor:ACTOR_A,business:A,now:1101}),/BUSINESS_DISABLED/);
+  });
+  it('11 removed membership prevents issue and consumption of outstanding tokens',()=>{
     const h=makeHarness();const t=h.issue({kid:'key_old',actor:ACTOR_A,business:A,now:1100});
     h.removeMember(ACTOR_A,A);assert.equal(h.consume(t,{now:1101}).reason,'REVOKED');
     assert.throws(()=>h.issue({kid:'key_old',actor:ACTOR_A,business:A,now:1102}),/MEMBERSHIP/);
   });
-  it('10 replay nonce cannot be reused after first successful verification',()=>{
+  it('12 replay nonce cannot be reused after first successful verification',()=>{
     const h=makeHarness();const nonce=randomUUID();
     const t=h.issue({kid:'key_old',actor:ACTOR_A,business:A,now:1100,nonce});
     ok(h.consume(t,{now:1101}));
     const t2=h.issue({kid:'key_old',actor:ACTOR_A,business:A,now:1100,nonce});
     assert.equal(h.consume(t2,{now:1102}).reason,'REPLAY');
   });
-  it('11 verifier stores only public keys, not private signing capability',()=>{
+  it('13 verifier stores only public keys, not private signing capability',()=>{
     const h=makeHarness();
     for(const entry of h.publicVerifierKeys.values()){
       assert.equal(entry.publicKey.type,'public');
       assert.equal(Object.hasOwn(entry,'privateKey'),false);
     }
   });
-  it('12 invalid signature and untrusted client-selected action fail closed',()=>{
+  it('14 invalid signature and untrusted client-selected action fail closed',()=>{
     const h=makeHarness();
     const t=h.issue({kid:'key_old',actor:ACTOR_A,business:A,now:1100});
     const altered={...t,sig:'A'.repeat(86)};
