@@ -34,7 +34,7 @@ async function invocation(){
 }
 const path='https://broker.invalid/internal/broker/v1/branch-read';
 const request=(body:string,method='POST',url=path,headers:Record<string,string>={'content-type':'application/json'})=>
-  new Request(url,{method,headers,body:method==='GET'?undefined:body});
+  new Request(url,method==='GET'?{method,headers}:{method,headers,body});
 const inspect=(req:Request)=>inspectB410Ingress(req,
   async()=>publicKey(issuer,'issuer-1'),async()=>publicKey(workload,'workload-1'),now);
 
