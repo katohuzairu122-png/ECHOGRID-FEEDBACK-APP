@@ -1,0 +1,31 @@
+name: Gate 2 R17 offline exact session revalidation
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gate2-r17-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Offline session revocation and use-time authority
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check no live credential access
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f apps/api/scripts/gate2-r17-session-revalidation.test.mjs
+          ! grep -Eq 'process\.env\.(DATABASE_URL|HYPERDRIVE|STRIPE_SECRET_KEY|JWT_ACCESS_SECRET|CUSTOMER_JWT_SECRET)' apps/api/scripts/gate2-r17-session-revalidation.test.mjs
+      - name: Run exact-session use-time contract
+        run: node --test apps/api/scripts/gate2-r17-session-revalidation.test.mjs
