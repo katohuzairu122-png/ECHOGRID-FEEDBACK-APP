@@ -4,6 +4,7 @@
  */
 import assert from 'node:assert/strict';
 import { createHmac, randomBytes, randomUUID } from 'node:crypto';
+import { setTimeout } from 'node:timers';
 import pg from 'pg';
 import { URL as NodeURL } from 'node:url';
 const URL='postgresql://echogrid:echogrid@localhost:5432/echogrid_ci_pg18_b3_broker';
