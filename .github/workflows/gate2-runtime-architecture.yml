@@ -1,0 +1,21 @@
+name: Gate 2 offline runtime access architecture
+on:
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+concurrency:
+  group: gate2-runtime-architecture-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  verify:
+    name: Reject owner role and unverifiable tenant claims
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Run offline negative-capability model
+        run: node --test apps/api/scripts/gate2-runtime-access-choice.test.mjs
