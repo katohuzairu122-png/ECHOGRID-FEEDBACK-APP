@@ -5,6 +5,7 @@
 import assert from 'node:assert/strict';
 import { webcrypto, randomUUID } from 'node:crypto';
 import { Buffer } from 'node:buffer';
+import { TextEncoder } from 'node:util';
 import pg from 'pg';
 
 const target='postgresql://echogrid:echogrid@localhost:5432/echogrid_ci_pg18_b406';
