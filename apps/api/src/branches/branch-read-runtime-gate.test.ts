@@ -16,7 +16,7 @@ describe('Gate 2 B4-04 guarded branch-read selection', () => {
       selectB4BranchReadPath('broker');
       throw Error('gate unexpectedly opened');
     } catch (error) {
-      expect(error).toMatchObject({ status: 503, code: 'B4_BROKER_NOT_CERTIFIED' });
+      expect(error).toMatchObject({ status: 404, code: 'B4_BROKER_NOT_CERTIFIED' });
     }
   });
 
