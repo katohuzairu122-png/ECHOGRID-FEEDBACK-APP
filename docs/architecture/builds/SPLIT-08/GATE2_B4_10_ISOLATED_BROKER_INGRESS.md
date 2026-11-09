@@ -23,3 +23,13 @@ Required independent follow-up:
 5. Signed release approval and staged credential rollout. **Production Hyperdrive remains owner/BYPASSRLS; do not cut over prematurely.**
 
 **Verdict:** An isolated transport preflight is implemented but **not a deployable broker or production release authorization**.
+
+## Corrective review — bounded asynchronous work
+
+Based on PR #334 head `bbaebfd5b8673e73ab66150a5be84babd3b3c2e8` without modifying that branch. Two adversarial tests reproduced indefinite waits: a body stream that never yields, and an oversized body whose cancellation never settles.
+
+The preflight now applies a five-second deadline across stream reading and trusted key lookup, caps chunk count at 8,192 (including empty chunks), and owns copies of streamed bytes. Cancellation rejection is observed but cancellation is never awaited. Timeout is a deterministic non-authorizing `INGRESS_TIMEOUT` result. Timers and reader locks are released on completion. A dependency's underlying I/O is not forcibly terminated; future production key providers must implement their own transport cancellation and resource limits. No late result can trigger SQL or authorization in this preflight.
+
+The final parameter is now a trusted `() => number` clock returning epoch seconds, rather than a timestamp captured before asynchronous work. Expiry of both signed envelopes and resolved key windows is rechecked at acceptance; backwards or invalid time fails closed. The existing canonical signature formats and unconditional NOT_GRANTED result remain unchanged.
+
+New adversarial coverage includes stalled reads, hanging/rejecting cancellation, unlimited empty chunks, stalled key resolution, evidence expiry during key lookup, backwards clock movement and malformed UTF-8 before key lookup. This correction does not certify live workload identity, nonce consumption, restricted SQL or production deployment. PR #334 and this corrective branch require owner-controlled integration; neither is merged automatically.

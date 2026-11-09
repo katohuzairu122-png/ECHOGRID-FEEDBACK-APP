@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { generateKeyPairSync, sign } from 'node:crypto';
 import {
   BROKER_AUDIENCE, BROKER_ISSUER, BROKER_WORKLOAD, brokerAssertionMessage,
@@ -36,9 +36,70 @@ const path='https://broker.invalid/internal/broker/v1/branch-read';
 const request=(body:string,method='POST',url=path,headers:Record<string,string>={'content-type':'application/json'})=>
   new Request(url,method==='GET'?{method,headers}:{method,headers,body});
 const inspect=(req:Request)=>inspectB410Ingress(req,
-  async()=>publicKey(issuer,'issuer-1'),async()=>publicKey(workload,'workload-1'),now);
+  async()=>publicKey(issuer,'issuer-1'),async()=>publicKey(workload,'workload-1'),()=>now);
 
 describe('B4-10 unmounted, bounded broker ingress',()=>{
+  const streamed = (body: ReadableStream<Uint8Array>) => new Request(path, {
+    method:'POST',headers:{'content-type':'application/json'},body,duplex:'half',
+  } as RequestInit);
+  it('bounds a body stream that never produces data',async()=>{
+    vi.useFakeTimers();
+    try {
+      const result=inspect(streamed(new ReadableStream<Uint8Array>()));
+      const observed=Promise.race([result, new Promise(resolve=>setTimeout(()=>resolve('STILL_PENDING'),6000))]);
+      await vi.advanceTimersByTimeAsync(6000);
+      expect(await observed).toMatchObject({acceptedForEvaluation:false,reason:'INGRESS_TIMEOUT'});
+    } finally {vi.useRealTimers();}
+  });
+  it('does not await attacker-controlled cancellation after an oversized body',async()=>{
+    vi.useFakeTimers();
+    try {
+      const result=inspect(streamed(new ReadableStream<Uint8Array>({
+        start(controller){controller.enqueue(new Uint8Array(8193));},cancel(){return new Promise(()=>{});},
+      })));
+      const observed=Promise.race([result,new Promise(resolve=>setTimeout(()=>resolve('STILL_PENDING'),6000))]);
+      await vi.advanceTimersByTimeAsync(6000);
+      expect(await observed).toMatchObject({acceptedForEvaluation:false,reason:'BODY_LIMIT_EXCEEDED'});
+    } finally {vi.useRealTimers();}
+  });
+  it('bounds streams of empty chunks without relying on timer scheduling',async()=>{
+    const body=new ReadableStream<Uint8Array>({pull(controller){controller.enqueue(new Uint8Array());}});
+    expect(await inspect(streamed(body))).toMatchObject({acceptedForEvaluation:false,reason:'BODY_LIMIT_EXCEEDED'});
+  });
+  it('observes cancellation rejection without replacing the size denial',async()=>{
+    const body=new ReadableStream<Uint8Array>({start(controller){controller.enqueue(new Uint8Array(8193));},
+      cancel(){return Promise.reject(new Error('synthetic cancellation failure'));}});
+    expect(await inspect(streamed(body))).toMatchObject({reason:'BODY_LIMIT_EXCEEDED'});
+  });
+  it('bounds an unavailable trusted key provider',async()=>{
+    const body=JSON.stringify(await invocation());
+    vi.useFakeTimers();
+    try {
+      const result=inspectB410Ingress(request(body),()=>new Promise(()=>{}),
+        async()=>publicKey(workload,'workload-1'),()=>now);
+      await vi.advanceTimersByTimeAsync(5000);
+      expect(await result).toMatchObject({acceptedForEvaluation:false,reason:'INGRESS_TIMEOUT'});
+    } finally {vi.useRealTimers();}
+  });
+  it('rejects evidence that expires during asynchronous verification',async()=>{
+    let time=now;
+    const result=await inspectB410Ingress(request(JSON.stringify(await invocation())),
+      async()=>publicKey(issuer,'issuer-1'),async()=>{time=1021;return publicKey(workload,'workload-1');},()=>time);
+    expect(result).toMatchObject({acceptedForEvaluation:false,reason:'UNTRUSTED_PROVENANCE'});
+  });
+  it('rejects a trusted clock that moves backwards during verification',async()=>{
+    let time=now;
+    const result=await inspectB410Ingress(request(JSON.stringify(await invocation())),
+      async()=>publicKey(issuer,'issuer-1'),async()=>{time=999;return publicKey(workload,'workload-1');},()=>time);
+    expect(result).toMatchObject({acceptedForEvaluation:false,reason:'UNTRUSTED_PROVENANCE'});
+  });
+  it('rejects malformed UTF-8 before key lookup',async()=>{
+    let calls=0;
+    const body=new ReadableStream<Uint8Array>({start(controller){controller.enqueue(new Uint8Array([0xc3,0x28]));controller.close();}});
+    const source=async()=>{calls++;return null;};
+    expect(await inspectB410Ingress(streamed(body),source,source,()=>now)).toMatchObject({reason:'MALFORMED_INVOCATION'});
+    expect(calls).toBe(0);
+  });
   it('valid dual-signature invocation remains non-authorizing',async()=>{
     expect(await inspect(request(JSON.stringify(await invocation())))).toEqual({
       acceptedForEvaluation:true,brokerAuthorization:'NOT_GRANTED',
