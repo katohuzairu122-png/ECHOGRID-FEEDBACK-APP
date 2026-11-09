@@ -35,7 +35,7 @@ Signing binds all fields; verifier must reject extra/missing fields, malformed c
 
 ## Offline R13 CI evidence (limited)
 
-The `node --test` suite uses fresh ephemeral Ed25519 keypairs and in-memory state to test: legitimate assertion, unauthorized issuance, claim tampering, expiry, new/old key overlap, key revocation, actor/business revocation, membership removal, nonce replay, verifier public-key-only inventory and disallowed operation. The tests require no database, network, Cloudflare resource or real credential.
+The `node --test` suite uses fresh ephemeral Ed25519 keypairs and in-memory state to test: legitimate assertion, unauthorized issuance, claim tampering, expiry, new/old key overlap, key revocation, actor/business revocation, explicit denial of new assertions to disabled actors or businesses, membership removal, nonce replay, verifier public-key-only inventory and disallowed operation. The tests require no database, network, Cloudflare resource or real credential.
 
 **These tests cannot certify:** the issuer's trusted identity, production key management, actual PostgreSQL Ed25519 verification and privilege model, durable atomic replay protection, concurrency, revocation propagation, SQL injection safety, end-to-end Hono/Worker/Hyperdrive boundary, cross-region failure behavior, latency or complete tenant domain coverage. Passing CI proves only that the modeled contract behaves as specified.
 
@@ -50,3 +50,13 @@ The `node --test` suite uses fresh ephemeral Ed25519 keypairs and in-memory stat
 ## Absolute restrictions
 
 NO live Neon roles/migrations/clone, Cloudflare deployment or credential changes, signing secret generation outside test-only memory, provider reads, economic/financial activation, PR auto-merge or staging/production mutation.
+
+## Independent R13 development security review
+
+- **Finding R13-REV-01 (offline model; corrected):** Earlier issuer simulation incremented actor/business revocation epochs but still allowed newly issued tokens for the disabled principal or business. The offline harness now models disabled status and denies both issuance and verification. This is a **test-model correction only**, not proof of a production revocation service.
+- **Finding R13-REV-02 (blocking):** No actual identity provider, signer workload identity, independent authority source or protected key custody has been implemented. The harness's `issue()` API simulates a trusted caller and is **not** an authorization surface suitable for runtime use.
+- **Finding R13-REV-03 (blocking):** Offline nonce `Set` and epoch `Map` cannot prove transactional atomicity, persistence, multi-instance consistency, revocation ordering or denial during verifier-store unavailability. Require disposable PostgreSQL and adversarial concurrency proofs before live use.
+- **Finding R13-REV-04 (blocking):** An Ed25519 verification implementation inside the approved PostgreSQL version is unselected/unverified. Neither the test-only R12 HMAC proof nor the R13 Node verifier establishes database signature verification.
+- **Finding R13-REV-05 (blocking):** A shared Hyperdrive login remains too privileged in staging. No cutover is permitted until a complete least-privilege operation matrix, enforced SQL broker interface, and real pooled-connection test are approved.
+
+**Review outcome:** development-only conditional pass subject to exact-head hosted CI, independent human security approval and all outstanding architecture decisions. Not merge authorization or runtime certification.
