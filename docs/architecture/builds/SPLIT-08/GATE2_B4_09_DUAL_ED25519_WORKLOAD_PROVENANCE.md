@@ -27,3 +27,16 @@ The pure verifier rejects malformed envelopes, wrong workload/audience, bad keys
 6. Require explicit independent architecture approval, integration, successful exact-head CI and controlled release workflow before any staging/production deployment.
 
 **Verdict:** B4-09 provides a testable cryptographic workload-provenance component only. No deployment/settlement authorization is granted.
+
+## Handover remediation and live release blockers — 2026-11-09
+
+Review of head `27b3d03c4b028a2f913825d553003830235faf26` reproduced two defects:
+
+- One public key could sign both roles under different key identifiers. The verifier now compares the actual public key bytes and rejects reuse, while preserving distinct trusted sources.
+- Workload fields could be replaced during asynchronous assertion-key lookup, allowing the final signature check to use fields different from those checked initially. The verifier now snapshots the complete envelope before asynchronous work and copies each resolved key record.
+
+Both new negative tests failed against the original implementation (11 passed, 2 failed) and pass after correction. Distinct public keys remain necessary but insufficient proof of independent custody.
+
+Read-only handover verification confirmed both named Neon branches have 67 migration records and 9 FORCE RLS tables; `neondb_owner` has BYPASSRLS in both. Production Hyperdrive `542dd173d3d14d54ac66c0f1f69e5ff9` still uses that role. The API has no service binding to an isolated broker. No live settings were changed.
+
+Production still serves API version `9341d663-d10d-444c-a1d5-460fb4dd1a6d` and web version `cb05b5b8-9bc8-4347-b91a-9b2f03e34cb0`, both deployed October 22. GitHub's `production` environment currently returns an empty `protection_rules` array. `deploy-production.yml` and `docs/PRODUCTION-RELEASE.md` require independently configured required reviewers; a typed deployment phrase does not replace approval. Owner configuration of that gate and owner-controlled integration are required before release. No workflow dispatch or deployment was performed.

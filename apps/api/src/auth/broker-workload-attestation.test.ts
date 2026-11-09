@@ -73,6 +73,23 @@ describe('B4-09 offline two-key broker invocation provenance',()=>{
     expect((await verifyB409Invocation(good,async()=>null,async()=>key(workload,'workload-1'),now)).provenanceVerified).toBe(false);
     expect((await verifyB409Invocation(good,async()=>key(issuer,'issuer-1'),async()=>null,now)).provenanceVerified).toBe(false);
   });
+  it('rejects the same public key under different trust-role identifiers',async()=>{
+    const good=await fixture();
+    const shared={...good,workloadEvidence:{...good.workloadEvidence,
+      signature:signer(b409WorkloadMessage(good.workloadEvidence),issuer)}};
+    expect((await verifyB409Invocation(shared,async()=>key(issuer,'issuer-1'),
+      async()=>key(issuer,'workload-1'),now)).provenanceVerified).toBe(false);
+  });
+  it('cannot replace validated workload fields while awaiting assertion key lookup',async()=>{
+    const good=await fixture();
+    const wrong={...good.workloadEvidence,audience:'wrong'} as unknown as B409WorkloadEvidence;
+    const replacement={...wrong,signature:signer(b409WorkloadMessage(wrong),workload)};
+    const mutable={...good,workloadEvidence:{...good.workloadEvidence,signature:'0'.repeat(128)}};
+    expect((await verifyB409Invocation(mutable,async()=>{
+      Object.assign(mutable.workloadEvidence,replacement);
+      return key(issuer,'issuer-1');
+    },async()=>key(workload,'workload-1'),now)).provenanceVerified).toBe(false);
+  });
   it.each([null,{},[],false,{verified:true},'trusted'])('rejects malformed envelope',async raw=>{
     expect((await verify(raw)).provenanceVerified).toBe(false);
   });

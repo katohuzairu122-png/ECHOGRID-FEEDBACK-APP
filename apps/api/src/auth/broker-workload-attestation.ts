@@ -78,7 +78,9 @@ export async function verifyB409Invocation(
   try {
     if (!integer(now) || !raw || typeof raw !== 'object' || Array.isArray(raw) ||
         Object.keys(raw).sort().join(',') !== 'assertion,workloadEvidence') return denied;
-    const invocation = raw as B409Invocation;
+    // Own the entire envelope before any asynchronous key lookup. Never mix
+    // previously checked fields with caller mutations made while awaiting I/O.
+    const invocation = JSON.parse(JSON.stringify(raw)) as B409Invocation;
     const e = invocation.workloadEvidence;
     if (!e || typeof e !== 'object' || Array.isArray(e) ||
         Object.keys(e).sort().join(',') !== [...fields, 'signature'].sort().join(',') ||
@@ -92,11 +94,16 @@ export async function verifyB409Invocation(
         e.expiresAt - e.issuedAt > 30 ||
         typeof e.assertionDigest !== 'string' || !/^[0-9a-f]{64}$/.test(e.assertionDigest) ||
         typeof e.signature !== 'string' || !/^[0-9a-f]{128}$/.test(e.signature)) return denied;
-    if (!(await verifyBrokerAssertionSignature(invocation.assertion, assertionKeys, now))) return denied;
+    const issuerKeyValue = await assertionKeys();
+    const issuerKey = issuerKeyValue ? { ...issuerKeyValue } : null;
+    if (!validBrokerKey(issuerKey, now) ||
+        !(await verifyBrokerAssertionSignature(invocation.assertion, async () => issuerKey, now))) return denied;
     if ((await b409AssertionDigest(invocation.assertion)) !== e.assertionDigest) return denied;
-    const key = await workloadKeys();
+    const workloadKeyValue = await workloadKeys();
+    const key = workloadKeyValue ? { ...workloadKeyValue } : null;
     if (!validBrokerKey(key, now) || key.keyId !== e.keyId || key.version !== e.keyVersion ||
-        e.issuedAt < key.notBefore || e.expiresAt > key.notAfter) return denied;
+        e.issuedAt < key.notBefore || e.expiresAt > key.notAfter ||
+        key.publicKeyHex === issuerKey.publicKeyHex) return denied;
     const imported = await crypto.subtle.importKey('raw', hexBytes(key.publicKeyHex), 'Ed25519', false, ['verify']);
     const verified = await crypto.subtle.verify('Ed25519', imported, hexBytes(e.signature), b409WorkloadMessage(e));
     if (!verified) return denied;
