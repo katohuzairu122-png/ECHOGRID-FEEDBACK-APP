@@ -90,7 +90,8 @@ try {
   console.log(JSON.stringify({
     gate:'GATE2_STAGING_SECRET_READONLY',status:'PASS',
     targetEndpointAllowlisted:true,database:'neondb',postgresMajor:18,
-    appliedMigrations:45,pendingMigrations:22,\n    historicalStoredHashHistoryMatchesVerifiedSnapshot:true,
+    appliedMigrations:45,pendingMigrations:22,
+    historicalStoredHashHistoryMatchesVerifiedSnapshot:true,
     exactRepositorySqlHashMatches:exactHashes,historicalSqlHashDifferences:45-exactHashes,
     mostRecentAppliedMigrationHashExact:true,
     financialGuardsEnabled:5,
@@ -102,7 +103,8 @@ try {
   // Never print driver errors: they may expose connection or SQL context.
   const codes = new Set([
     'CONNECTED_IDENTITY_DENIED','JOURNAL_COUNT_DENIED',
-    'JOURNAL_TIMESTAMP_DENIED','HISTORICAL_JOURNAL_BASELINE_DENIED',\n    'LAST_APPLIED_MIGRATION_HASH_DENIED','FINANCIAL_GUARD_DENIED'
+    'JOURNAL_TIMESTAMP_DENIED','HISTORICAL_JOURNAL_BASELINE_DENIED',
+    'LAST_APPLIED_MIGRATION_HASH_DENIED','FINANCIAL_GUARD_DENIED'
   ]);
   console.error(codes.has(error?.message) ? error.message : 'PREFLIGHT_DATABASE_DENIED');
   process.exitCode=1;
