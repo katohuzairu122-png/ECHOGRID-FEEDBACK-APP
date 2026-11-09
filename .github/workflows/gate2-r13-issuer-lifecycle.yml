@@ -1,0 +1,31 @@
+name: Gate 2 R13 offline assertion issuer lifecycle contract
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gate2-r13-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Offline Ed25519 issuer/verifier lifecycle tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Assert test-only scope and no external network/credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f apps/api/scripts/gate2-r13-issuer-lifecycle.test.mjs
+          ! grep -Eq 'process\.env\.(DATABASE_URL|HYPERDRIVE|STRIPE_SECRET_KEY|JWT_ACCESS_SECRET)' apps/api/scripts/gate2-r13-issuer-lifecycle.test.mjs
+      - name: Verify issuer, expiry, rotation, revocation, tamper and replay
+        run: node --test apps/api/scripts/gate2-r13-issuer-lifecycle.test.mjs
