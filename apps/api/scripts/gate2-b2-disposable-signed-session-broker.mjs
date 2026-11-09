@@ -5,6 +5,7 @@
 import assert from 'node:assert/strict';
 import { createHmac, randomBytes, randomUUID } from 'node:crypto';
 import pg from 'pg';
+import { URL as NodeURL } from 'node:url';
 const URL='postgresql://echogrid:echogrid@localhost:5432/echogrid_ci_pg18_b2_broker';
 if(process.env.GITHUB_ACTIONS!=='true' ||
  process.env.GATE2_B2_DISPOSABLE!=='I_ACKNOWLEDGE_DISPOSABLE_PG18' ||
@@ -91,7 +92,7 @@ try{
  await owner.query("CREATE ROLE gate2_b2_ci_login LOGIN NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS PASSWORD 'gate2_b2_disposable_password'");
  await owner.query('GRANT USAGE ON SCHEMA gate2_b2 TO gate2_b2_ci_login');
  await owner.query('GRANT EXECUTE ON FUNCTION gate2_b2.list_one_branch(text,text,text,uuid,uuid,uuid,uuid,text,uuid,uuid,bigint,bigint,text) TO gate2_b2_ci_login');
- const url=new URL(URL);url.username=LOGIN;url.password=PASSWORD;
+ const url=new NodeURL(URL);url.username=LOGIN;url.password=PASSWORD;
  const db=new pg.Client({connectionString:url.toString(),statement_timeout:15000});
  try{
   await db.connect();
