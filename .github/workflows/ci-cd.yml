@@ -186,6 +186,19 @@ jobs:
         # verifying against this wrangler version first -- own change.
         run: pnpm --filter @echo-grid-feedback/api test
 
+      # R15's separate security workflow has intermittently failed before
+      # allocating a GitHub Actions job, with no test logs. Keep its standalone
+      # check; add an independent host-run execution here so the exact PR SHA
+      # cannot pass release CI without testing the same offline contract.
+      # This is a pure Node fixture. It never reaches Neon or Cloudflare.
+      - name: Gate 2 R15 actor-to-request offline security contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f apps/api/scripts/gate2-r15-actor-request-binding.test.mjs
+          ! grep -Eq 'process\.env\.(DATABASE_URL|HYPERDRIVE|STRIPE_SECRET_KEY|JWT_ACCESS_SECRET)' apps/api/scripts/gate2-r15-actor-request-binding.test.mjs
+          node --test apps/api/scripts/gate2-r15-actor-request-binding.test.mjs
+
       - name: Unit tests -- web
         run: pnpm --filter @echo-grid-feedback/web test
 
