@@ -69,7 +69,15 @@ export async function inspectB410Ingress(
     const body = new Uint8Array(total);
     let offset=0;
     for(const part of chunks){body.set(part,offset);offset+=part.byteLength;}
-    const raw: unknown = JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(body));
+    // This Workers type target does not expose TextDecoder's fatal option.
+    // A byte-for-byte UTF-8 round trip rejects invalid sequences, including
+    // decoded replacement characters inserted for malformed input.
+    const decoded = new TextDecoder().decode(body);
+    const reencoded = new TextEncoder().encode(decoded);
+    if (reencoded.length !== body.length || reencoded.some((byte, i) => byte !== body[i])) {
+      return denied('MALFORMED_INVOCATION');
+    }
+    const raw: unknown = JSON.parse(decoded);
     // Provenance is cryptographic and read-only, not authorization or
     // credential attestation. No SQL connection exists in this module.
     const verified = await verifyB409Invocation(raw as B409Invocation, assertionKeys, workloadKeys, now);
