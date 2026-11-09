@@ -22,7 +22,7 @@ export function selectB4BranchReadPath(requested: 'existing-route' | 'broker' = 
   if (requested !== 'existing-route') {
     throw new AppError(
       'Restricted branch-read broker is not certified or available.',
-      503,
+      404,
       'B4_BROKER_NOT_CERTIFIED',
     );
   }
