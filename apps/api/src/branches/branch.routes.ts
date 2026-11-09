@@ -14,6 +14,7 @@ import { parseJsonBody } from '../lib/validate';
 import { ok } from '../lib/response';
 import { createBranchSchema, updateBranchSchema } from '@echo-grid-feedback/shared-types';
 import { BranchService } from './branch.service';
+import { selectB4BranchReadPath } from './branch-read-runtime-gate';
 import { QrCodeService } from '../qr/qr-code.service';
 
 type Env = {
@@ -70,6 +71,9 @@ branchRoutes.post('/', requireBusinessWideAccess, requirePermission('branches:ma
 });
 
 branchRoutes.get('/:id', requireAuthorizedBranchParam(), requirePermission('branches:view'), async (c) => {
+  // B4-04: explicit OFF boundary; existing route semantics remain unchanged.
+  // Any proposed broker path must be rejected until full independent certification.
+  selectB4BranchReadPath();
   const { db, close } = await createDb(c.env.HYPERDRIVE);
   try {
     const service = new BranchService(createRepositories(db));
