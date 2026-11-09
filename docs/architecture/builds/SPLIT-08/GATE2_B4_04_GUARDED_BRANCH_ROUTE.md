@@ -13,7 +13,7 @@
 
 ## Implemented safe scope
 
-1. Add an explicit `selectB4BranchReadPath` branch-read selection seam. It selects **`existing-route`** by default and rejects any attempt to choose the proposed `broker` path with a deterministic **503 B4_BROKER_NOT_CERTIFIED**. It does not use environment flags, headers, query parameters, secrets or database state.
+1. Add an explicit `selectB4BranchReadPath` branch-read selection seam. It selects **`existing-route`** by default and rejects any attempt to choose the proposed `broker` path with a deterministic **404 B4_BROKER_NOT_CERTIFIED**. It does not use environment flags, headers, query parameters, secrets or database state.
 2. Invoke the seam inside the existing authenticated and permission-protected `GET /branches/:id` handler before the existing DB open. The legacy route still executes unchanged when selected. No additional endpoint or public authorization surface is added.
 3. Unit tests cover default behavior, broker activation denial, unsupported modes, request/env-based activation absence, and retention of existing authenticate/tenant/permission/branch guards. These tests confirm a dormant seam—not production broker authorization.
 4. Do not add database migrations, SQL functions, provider/settlement capabilities or secrets. No Hyperdrive connection change.
