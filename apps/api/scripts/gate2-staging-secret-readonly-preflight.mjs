@@ -4,7 +4,7 @@
  */
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, URL } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import pg from 'pg';
 
@@ -23,7 +23,7 @@ try { parsed = new URL(raw); } catch { fail('DATABASE_URL_PARSE_DENIED'); }
 if (!['postgres:', 'postgresql:'].includes(parsed.protocol) ||
     !hostAllowlist.has(parsed.hostname) ||
     (parsed.port && parsed.port !== '5432') ||
-    decodeURIComponent(parsed.pathname) !== '/neondb' ||
+    parsed.pathname !== '/neondb' ||
     !parsed.username || !parsed.password || parsed.hash) {
   fail('CONNECTION_TARGET_DENIED');
 }
