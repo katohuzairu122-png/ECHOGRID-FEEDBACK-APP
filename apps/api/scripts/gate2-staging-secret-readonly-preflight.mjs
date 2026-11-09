@@ -61,7 +61,7 @@ try {
   // snapshot and the still-unmodified original staging branch.
   const knownHistoryDigest = '6182f1afca2008d5467db9eb931cedf6b517319a0990fe493e7a5533dc532a0d';
   const actualHistoryDigest = createHash('sha256').update(
-    rows.map((row) => row.hash + ':' + row.stamp).join('\\n').replaceAll('\\n', '\n'),
+    rows.map((row) => row.hash + ':' + row.stamp).join('\n'),
   ).digest('hex');
   if (actualHistoryDigest !== knownHistoryDigest) fail('HISTORICAL_JOURNAL_BASELINE_DENIED');
   let exactHashes = 0;
@@ -90,7 +90,9 @@ try {
   console.log(JSON.stringify({
     gate:'GATE2_STAGING_SECRET_READONLY',status:'PASS',
     targetEndpointAllowlisted:true,database:'neondb',postgresMajor:18,
-    appliedMigrations:45,pendingMigrations:22,\n    historicalStoredHashHistoryMatchesVerifiedSnapshot:true,\n    exactRepositorySqlHashMatches:exactHashes,historicalSqlHashDifferences:45-exactHashes,\n    mostRecentAppliedMigrationHashExact:true,
+    appliedMigrations:45,pendingMigrations:22,\n    historicalStoredHashHistoryMatchesVerifiedSnapshot:true,
+    exactRepositorySqlHashMatches:exactHashes,historicalSqlHashDifferences:45-exactHashes,
+    mostRecentAppliedMigrationHashExact:true,
     financialGuardsEnabled:5,
     neonBranchIdIndependentlyVerified:false,
     runtimeRoleCertified:false,migrationExecuted:false,deploymentExecuted:false
