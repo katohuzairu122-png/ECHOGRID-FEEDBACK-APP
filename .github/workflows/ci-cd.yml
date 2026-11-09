@@ -196,7 +196,7 @@ jobs:
         run: |
           set -euo pipefail
           test -f apps/api/scripts/gate2-r15-actor-request-binding.test.mjs
-          ! grep -Eq 'process\\.env\\.(DATABASE_URL|HYPERDRIVE|STRIPE_SECRET_KEY|JWT_ACCESS_SECRET)' apps/api/scripts/gate2-r15-actor-request-binding.test.mjs
+          ! grep -Eq 'process\.env\.(DATABASE_URL|HYPERDRIVE|STRIPE_SECRET_KEY|JWT_ACCESS_SECRET)' apps/api/scripts/gate2-r15-actor-request-binding.test.mjs
           node --test apps/api/scripts/gate2-r15-actor-request-binding.test.mjs
 
       - name: Unit tests -- web
