@@ -4,6 +4,7 @@
  * Test-only private keys never appear in API, client, GitHub config or Neon.
  */
 import { describe, it } from 'node:test';
+import { Buffer } from 'node:buffer';
 import assert from 'node:assert/strict';
 import { generateKeyPairSync, randomUUID, sign, verify } from 'node:crypto';
 
