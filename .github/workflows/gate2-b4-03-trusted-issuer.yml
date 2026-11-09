@@ -1,0 +1,45 @@
+name: Gate 2 B4-03 trusted authentication issuer foundation
+on:
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+concurrency:
+  group: gate2-b403-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  verify:
+    name: PostgreSQL 18 real session RBAC and issuer serialization
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: echogrid
+          POSTGRES_PASSWORD: echogrid
+          POSTGRES_DB: echogrid_ci_b403
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 5s
+          --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://echogrid:echogrid@localhost:5432/echogrid_ci_b403
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.9.0
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Check migration consistency
+        run: pnpm --filter @echo-grid-feedback/api db:check
+      - name: Replay only disposable database
+        run: pnpm --filter @echo-grid-feedback/api db:migrate
+      - name: Real authentication and concurrent session revocation
+        working-directory: apps/api
+        run: pnpm exec vitest run --config test/gate2/vitest.config.ts
