@@ -6,6 +6,8 @@ import { API_BASE_URL, apiFetch, ApiError } from '@/lib/api-client';
 
 export interface AuthActionState {
   error?: string;
+  /** Localized UI fallback when login cannot complete its API/session request. */
+  errorKey?: 'unavailable';
 }
 
 /**
@@ -66,7 +68,12 @@ export async function loginAction(
     ? requestedNext
     : '/dashboard';
 
-  const result = await callAuthEndpoint('login', { email, password });
+  let result: AuthActionState;
+  try {
+    result = await callAuthEndpoint('login', { email, password });
+  } catch {
+    return { errorKey: 'unavailable' };
+  }
   if (result.error) return result;
 
   redirect(next);

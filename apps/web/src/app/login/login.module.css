@@ -1,0 +1,357 @@
+.page {
+  display: grid;
+  grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr);
+  min-height: 100svh;
+  color: #071b29;
+  background: #fff;
+}
+.page a:focus-visible {
+  outline: 3px solid #059669;
+  outline-offset: 5px;
+  border-radius: 4px;
+}
+.brandPanel {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  padding: clamp(32px, 4vw, 64px);
+  overflow: hidden;
+  color: #fff;
+  background: radial-gradient(ellipse at 75% 68%, #064b45 0%, transparent 58%), #031824;
+}
+.brandPanel::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.07;
+  background-image:
+    linear-gradient(#8cf5d2 1px, transparent 1px),
+    linear-gradient(90deg, #8cf5d2 1px, transparent 1px);
+  background-size: 64px 64px;
+  mask-image: linear-gradient(transparent, #000);
+}
+.brandPanel a:focus-visible {
+  outline-color: #6ee7b7;
+}
+.brandLink {
+  position: relative;
+  align-self: flex-start;
+}
+.brandCopy {
+  position: relative;
+  margin-block: auto;
+  padding-block: 60px 12px;
+  max-width: 510px;
+}
+.eyebrow,
+.formEyebrow {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+}
+.eyebrow {
+  color: #6ee7b7;
+  margin-block-end: 20px;
+}
+.brandCopy h2 {
+  font-size: clamp(32px, 3.2vw, 50px);
+  font-weight: 600;
+  line-height: 1.18;
+  letter-spacing: -0.04em;
+}
+.brandDescription {
+  color: #c0d4dc;
+  font-size: 16px;
+  line-height: 1.8;
+  margin-block-start: 24px;
+  max-width: 370px;
+}
+.connectionArt {
+  position: relative;
+  height: 230px;
+  max-width: 350px;
+  margin: 30px auto;
+}
+.orbit {
+  position: absolute;
+  inset: 15px 50px;
+  border: 1px solid #77e5bc30;
+  border-radius: 50%;
+  transform: rotate(-22deg);
+}
+.connectionArt span {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  border: 1px solid #8cf5d238;
+  border-radius: 20px;
+  background: #123b40;
+  color: #6ee7b7;
+}
+.centralTile {
+  width: 112px;
+  height: 112px;
+  inset-inline-start: calc(50% - 56px);
+  top: 58px;
+  box-shadow: 0 0 70px #00dfa52b;
+  transform: rotate(-8deg);
+}
+.feedbackTile,
+.loyaltyTile,
+.insightsTile {
+  width: 58px;
+  height: 58px;
+}
+.feedbackTile {
+  top: 4px;
+  inset-inline-start: 25px;
+  transform: rotate(-8deg);
+}
+.loyaltyTile {
+  top: 28px;
+  inset-inline-end: 8px;
+  transform: rotate(12deg);
+}
+.insightsTile {
+  bottom: 0;
+  inset-inline-end: 48px;
+  transform: rotate(-6deg);
+}
+.features {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px 24px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.features li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: #d5e7e9;
+}
+.features svg {
+  color: #34d399;
+  flex-shrink: 0;
+}
+.formPanel {
+  display: flex;
+  flex-direction: column;
+  padding: 40px clamp(28px, 5vw, 88px) 28px;
+  min-width: 0;
+}
+.backLink {
+  align-self: flex-end;
+  color: #475569;
+  font-size: 13px;
+  display: inline-flex;
+  gap: 10px;
+  align-items: center;
+}
+.backLink:hover,
+.footer a:hover {
+  color: #047857;
+  text-decoration: underline;
+}
+.formCard {
+  width: 100%;
+  max-width: 420px;
+  margin: auto;
+  padding-block: 64px;
+}
+.formEyebrow {
+  color: #047857;
+  margin-block-end: 14px;
+}
+.formHeader h1 {
+  font-size: clamp(30px, 3vw, 38px);
+  line-height: 1.25;
+  letter-spacing: -0.035em;
+  font-weight: 600;
+}
+.formHeader > p:last-child {
+  margin-block-start: 12px;
+  color: #64748b;
+  font-size: 14px;
+  line-height: 1.7;
+}
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  margin-block-start: 36px;
+}
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+.input {
+  height: 52px;
+  border-radius: 10px;
+  font-size: 16px;
+  padding-inline: 15px;
+}
+.input::placeholder {
+  color: #64748b;
+}
+.passwordLabel {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.textLink {
+  color: #047857;
+  font-weight: 600;
+  font-size: 13px;
+}
+.textLink:hover {
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+.passwordInput {
+  position: relative;
+}
+.passwordInput input {
+  padding-inline-end: 58px;
+}
+.visibilityToggle {
+  position: absolute;
+  inset-inline-end: 5px;
+  top: 4px;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  color: #475569;
+  border-radius: 8px;
+}
+.error {
+  padding: 13px 15px;
+  font-size: 14px;
+  line-height: 1.6;
+  color: #991b1b;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 10px;
+}
+.error:focus {
+  outline: 2px solid #991b1b;
+  outline-offset: 2px;
+}
+.submit {
+  width: 100%;
+  min-height: 52px;
+  border-radius: 10px;
+  background: #00e3aa;
+  color: #03232c;
+  font-size: 15px;
+  font-weight: 600;
+}
+.submit:hover {
+  background: #00cf9c;
+}
+.submit:disabled {
+  opacity: 0.65;
+  cursor: wait;
+}
+.spinner {
+  width: 18px;
+  height: 18px;
+  border: 2px solid currentColor;
+  border-inline-end-color: transparent;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+.signup {
+  margin-block-start: 28px;
+  text-align: center;
+  font-size: 14px;
+  color: #64748b;
+}
+.signup a {
+  font-size: inherit;
+}
+.footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+  color: #64748b;
+  font-size: 12px;
+}
+.footer nav {
+  display: flex;
+  gap: 20px;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .spinner {
+    animation: none;
+  }
+}
+@media (min-width: 1600px) {
+  .brandCopy {
+    align-self: center;
+  }
+}
+@media (max-width: 900px) {
+  .page {
+    grid-template-columns: 1fr;
+  }
+  .brandPanel {
+    padding: 28px 32px 36px;
+  }
+  .brandCopy {
+    margin: 0;
+    padding-block: 32px 0;
+    max-width: 600px;
+  }
+  .brandCopy h2 {
+    font-size: 32px;
+  }
+  .eyebrow {
+    margin-block-end: 12px;
+  }
+  .brandDescription {
+    max-width: 550px;
+    margin-block-start: 12px;
+    font-size: 14px;
+  }
+  .connectionArt,
+  .features {
+    display: none;
+  }
+  .formPanel {
+    padding: 24px 32px;
+  }
+  .formCard {
+    padding-block: 32px 48px;
+  }
+}
+@media (max-width: 400px) {
+  .brandPanel {
+    padding: 24px;
+  }
+  .brandCopy {
+    padding-block-start: 24px;
+  }
+  .brandCopy h2 {
+    font-size: 28px;
+  }
+  .formPanel {
+    padding: 24px;
+  }
+  .footer {
+    font-size: 11px;
+  }
+}
