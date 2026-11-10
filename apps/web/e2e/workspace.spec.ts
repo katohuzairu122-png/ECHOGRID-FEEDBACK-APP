@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { collapseDevelopmentBadge } from './helpers/development-chrome';
 
 test('Business Overview uses empty API data honestly and keeps navigation responsive', async ({
   page,
@@ -48,6 +49,7 @@ test('Business Overview uses empty API data honestly and keeps navigation respon
     }
   }
   await page.setViewportSize({ width: 360, height: 900 });
+  await collapseDevelopmentBadge(page);
   await page
     .getByRole('navigation', { name: 'Business workspace', exact: true })
     .getByRole('link', { name: 'Feedback', exact: true })
