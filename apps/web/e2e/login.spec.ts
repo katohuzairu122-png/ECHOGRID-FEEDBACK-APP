@@ -37,8 +37,9 @@ test('landing sign in, registration, failed login, session login, logout and pro
   await page.getByLabel('Email', { exact: true }).fill(email);
   await page.getByLabel('Password', { exact: true }).fill('wrong-password');
   await page.getByRole('button', { name: 'Log in', exact: true }).click();
-  await expect(page.getByRole('alert')).toBeVisible();
-  await expect(page.getByRole('alert')).toBeFocused();
+  const loginError = page.locator('form').getByRole('alert');
+  await expect(loginError).toBeVisible();
+  await expect(loginError).toBeFocused();
   expect(
     (await context.cookies()).filter((cookie) => cookie.name === 'ff_access_token'),
   ).toHaveLength(0);
