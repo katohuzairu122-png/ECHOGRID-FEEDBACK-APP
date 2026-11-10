@@ -18,5 +18,16 @@
   "status": {
     "error": "Something went wrong.",
     "success": "Saved successfully."
+  },
+  "workspace": {
+    "skip": "Skip to workspace content",
+    "business": "Business workspace",
+    "customer": "Customer account",
+    "platform": "Platform administration",
+    "menu": "All navigation",
+    "qr": "My customer QR",
+    "settlements": "Orphan settlements",
+    "support": "Support",
+    "loading": "Loading your workspace…"
   }
 }

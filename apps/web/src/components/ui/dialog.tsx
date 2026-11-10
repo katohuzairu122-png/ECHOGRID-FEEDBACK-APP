@@ -23,10 +23,10 @@ export function DialogContent({
 }: React.ComponentProps<typeof BaseDialog.Popup>) {
   return (
     <BaseDialog.Portal>
-      <BaseDialog.Backdrop className="fixed inset-0 bg-neutral-950/40" />
+      <BaseDialog.Backdrop className="fixed inset-0 z-50 bg-neutral-950/40" />
       <BaseDialog.Popup
         className={cn(
-          'fixed left-1/2 top-1/2 w-full max-w-md -translate-x-1/2 -translate-y-1/2',
+          'fixed left-1/2 top-1/2 z-[60] w-full max-w-md -translate-x-1/2 -translate-y-1/2',
           'rounded-lg border border-neutral-200 bg-white p-6 shadow-lg',
           className,
         )}

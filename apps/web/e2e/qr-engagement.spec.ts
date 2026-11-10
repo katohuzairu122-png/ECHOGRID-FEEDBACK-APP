@@ -63,7 +63,7 @@ test('QR code scan to feedback inbox, end to end', async ({ page }) => {
   await customerContext.close();
 
   // Back in the dashboard: the anonymous submission shows up in the inbox.
-  await page.getByRole('link', { name: 'Feedback' }).click();
+  await page.getByRole('link', { name: 'Feedback', exact: true }).click();
   await expect(page).toHaveURL('/dashboard/feedback');
   await expect(page.getByText('Excellent service, E2E test.')).toBeVisible();
 });

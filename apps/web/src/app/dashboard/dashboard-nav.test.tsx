@@ -1,47 +1,35 @@
-import { render, screen } from '@testing-library/react';
+import { render } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import { getBusinesses } from '@/lib/business';
 import { DashboardNav } from './dashboard-nav';
-
-vi.mock('next-intl/server', () => ({
-  getTranslations: vi.fn(async () => (key: string) => key),
-}));
-
-vi.mock('@/lib/actions/auth', () => ({
-  logoutAction: vi.fn(),
-}));
-
-vi.mock('@/lib/business', () => ({
-  getBusinesses: vi.fn(async () => []),
-  getActiveBusinessQuiet: vi.fn(async () => null),
-}));
-
-vi.mock('./business-switcher', () => ({
-  BusinessSwitcher: () => null,
-}));
-
+vi.mock('next-intl/server', () => ({ getTranslations: vi.fn(async () => (key: string) => key) }));
+vi.mock('@/lib/actions/auth', () => ({ logoutAction: vi.fn() }));
 vi.mock('next/navigation', () => ({
   usePathname: () => '/dashboard',
   useRouter: () => ({ prefetch: vi.fn() }),
 }));
-
-describe('DashboardNav responsive navigation', () => {
-  it('keeps desktop links and provides a phone/tablet menu with the same destinations', async () => {
+describe('DashboardNav presentation', () => {
+  it('preserves every operational destination in the vertical sidebar and full mobile menu', async () => {
     const { container } = render(await DashboardNav());
-
-    expect(container.querySelector('nav.lg\\:flex')).toHaveClass('hidden');
-    expect(container.querySelector('details.lg\\:hidden')).toBeInTheDocument();
-    expect(screen.getAllByRole('link', { name: 'nav.analytics' })).toHaveLength(2);
-    expect(screen.getAllByRole('link', { name: 'nav.billing' })).toHaveLength(2);
-    expect(screen.getAllByRole('button', { name: 'nav.logout' })).toHaveLength(2);
-  });
-
-  it('keeps the dashboard navigation usable when the optional business switcher cannot load', async () => {
-    vi.mocked(getBusinesses).mockRejectedValueOnce(new Error('Business API unavailable'));
-
-    const { container } = render(await DashboardNav());
-
-    expect(container.querySelector('nav.lg\\:flex')).toBeInTheDocument();
-    expect(screen.getAllByRole('link', { name: 'nav.feedback' })).toHaveLength(2);
+    const sidebar = container.querySelector('aside nav')!;
+    const mobile = container.querySelector('details nav')!;
+    for (const href of [
+      '/dashboard',
+      '/dashboard/branches',
+      '/dashboard/feedback',
+      '/dashboard/loyalty',
+      '/dashboard/loyalty/scan',
+      '/dashboard/settlements',
+      '/dashboard/messages',
+      '/dashboard/analytics',
+      '/dashboard/notifications',
+      '/dashboard/settings',
+      '/dashboard/settings/team',
+      '/dashboard/billing',
+      '/support',
+    ]) {
+      expect(sidebar.querySelector('a[href="' + href + '"]')).toBeInTheDocument();
+      expect(mobile.querySelector('a[href="' + href + '"]')).toBeInTheDocument();
+    }
+    expect(container.querySelectorAll('form')).toHaveLength(2);
   });
 });

@@ -1,9 +1,10 @@
 import { redirect } from 'next/navigation';
-import Link from 'next/link';
 import { getTranslations } from 'next-intl/server';
 import { hasCustomerSession } from '@/lib/customer-session';
 import { customerLogoutAction } from '@/lib/actions/customer-auth';
 import { Button } from '@/components/ui';
+import { WorkspaceShell } from '@/components/workspace/workspace-shell';
+import { WorkspaceNavigation } from '@/components/workspace/workspace-navigation';
 
 /** Customer counterpart to app/dashboard/layout.tsx -- same defense-in-depth
  * shape (middleware already scopes /loyalty as public, so this layout is
@@ -16,22 +17,35 @@ export default async function LoyaltyDashboardLayout({ children }: { children: R
   }
 
   const t = await getTranslations('loyalty.customer.shell');
+  const shell = await getTranslations('common.workspace');
 
   return (
-    <div className="min-h-screen bg-neutral-50">
-      <header className="border-b border-neutral-200 bg-white">
-        <div className="mx-auto flex max-w-3xl items-center justify-between px-6 py-4">
-          <Link href="/loyalty/dashboard" className="text-lg font-semibold text-neutral-900">
-            {t('brand')}
-          </Link>
-          <form action={customerLogoutAction}>
-            <Button type="submit" variant="ghost" size="sm">
-              {t('logout')}
-            </Button>
-          </form>
-        </div>
-      </header>
-      <main className="mx-auto max-w-3xl px-6 py-8">{children}</main>
-    </div>
+    <WorkspaceShell
+      footer={null}
+      skipLabel={shell('skip')}
+      context={<p className="text-sm font-semibold">{shell('customer')}</p>}
+      navigation={
+        <WorkspaceNavigation
+          home="/loyalty/dashboard"
+          label={shell('customer')}
+          menuLabel={shell('menu')}
+          items={[
+            { href: '/loyalty/dashboard', label: t('brand'), icon: 'star' },
+            { href: '/loyalty/dashboard/qr', label: shell('qr'), icon: 'qr' },
+            { href: '/loyalty/dashboard/settlements', label: shell('settlements'), icon: 'gift' },
+            { href: '/support', label: shell('support'), icon: 'chat' },
+          ]}
+          utilities={
+            <form action={customerLogoutAction}>
+              <Button type="submit" variant="ghost">
+                {t('logout')}
+              </Button>
+            </form>
+          }
+        />
+      }
+    >
+      {children}
+    </WorkspaceShell>
   );
 }

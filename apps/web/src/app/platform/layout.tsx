@@ -5,7 +5,7 @@ import { hasSession } from '@/lib/session';
 import { getCurrentUser } from '@/lib/platform';
 import { buttonVariants } from '@/components/ui';
 import { cn } from '@/lib/utils';
-import { AppFooter } from '@/components/brand';
+import { WorkspaceShell } from '@/components/workspace/workspace-shell';
 import { PlatformNav } from './platform-nav';
 
 /**
@@ -44,11 +44,14 @@ export default async function PlatformLayout({ children }: { children: React.Rea
     );
   }
 
+  const shell = await getTranslations('common.workspace');
   return (
-    <div className="min-h-screen bg-neutral-50">
-      <PlatformNav role={user.platformRole} />
-      <main className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-8">{children}</main>
-      <AppFooter />
-    </div>
+    <WorkspaceShell
+      navigation={<PlatformNav role={user.platformRole} />}
+      skipLabel={shell('skip')}
+      context={<p className="text-sm font-semibold">{shell('platform')}</p>}
+    >
+      {children}
+    </WorkspaceShell>
   );
 }
