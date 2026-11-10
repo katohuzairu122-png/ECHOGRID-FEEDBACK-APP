@@ -9,7 +9,7 @@ test('accepts only an exact current-main Web-only release binding', () => { asse
 for (const change of [{ expected: 'short' }, { runSha: 'b'.repeat(40) }, { main: 'b'.repeat(40) }, { ref: 'refs/heads/feature' }, { confirmation: 'DEPLOY_PRODUCTION_RELEASE' }]) {
   test('denies release binding ' + Object.keys(change)[0], () => assert.throws(() => assertReleaseBinding({ ...validBinding, ...change })));
 }
-const environment = { name: 'production', protection_rules: [{ type: 'required_reviewers', prevent_self_review: true, reviewers: [{ type: 'User' }] }], deployment_branch_policy: { protected_branches: true } };
+const environment = { name: 'production', protection_rules: [{ type: 'required_reviewers', prevent_self_review: true, reviewers: [{ type: 'User' }] }], deployment_branch_policy: { protected_branches: true, custom_branch_policies: false } };
 test('accepts configured independent protection', () => assert.doesNotThrow(() => assertProductionProtection(environment)));
 test('denies missing reviewers', () => assert.throws(() => assertProductionProtection({ ...environment, protection_rules: [] })));
 test('denies self-review', () => assert.throws(() => assertProductionProtection({ ...environment, protection_rules: [{ ...environment.protection_rules[0], prevent_self_review: false }] })));
@@ -33,7 +33,7 @@ test('rejects API target, remote resource bindings and cache helpers', () => {
 test('manual workflow binds CI, environment, immutable artifact and Web-only deploy', () => {
   const workflow = readFileSync(new URL('../.github/workflows/deploy-web-only.yml', import.meta.url), 'utf8');
   assert.match(workflow, /workflow_dispatch:/);
-  assert.doesNotMatch(workflow, /\n  (push|pull_request|schedule):/);
+  assert.doesNotMatch(workflow, /\n {2}(push|pull_request|schedule):/);
   assert.match(workflow, /group: production-release/);
   assert.match(workflow, /uses: \.\/\.github\/workflows\/ci-cd.yml/);
   assert.match(workflow, /needs: \[authorize, verify, package\]/);
