@@ -43,6 +43,8 @@ test('landing sign in, registration, failed login, session login, logout and pro
     (await context.cookies()).filter((cookie) => cookie.name === 'ff_access_token'),
   ).toHaveLength(0);
 
+  // React may reset uncontrolled fields after a completed Server Action.
+  await page.getByLabel('Email', { exact: true }).fill(email);
   await page.getByLabel('Password', { exact: true }).fill(password);
   await page.getByRole('button', { name: 'Show password' }).click();
   await expect(page.getByLabel('Password', { exact: true })).toHaveAttribute('type', 'text');
