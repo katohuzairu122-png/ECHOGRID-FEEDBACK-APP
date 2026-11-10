@@ -5,17 +5,19 @@ const {
   clearSessionMock,
   redirectMock,
   apiFetchMock,
+  setSessionMock,
 } = vi.hoisted(() => ({
   getRefreshTokenForLogoutMock: vi.fn(),
   clearSessionMock: vi.fn(),
   redirectMock: vi.fn(),
   apiFetchMock: vi.fn(),
+  setSessionMock: vi.fn(),
 }));
 
 vi.mock('@/lib/session', () => ({
   getRefreshTokenForLogout: getRefreshTokenForLogoutMock,
   clearSession: clearSessionMock,
-  setSession: vi.fn(),
+  setSession: setSessionMock,
 }));
 
 vi.mock('next/navigation', () => ({
@@ -49,7 +51,82 @@ import {
   requestPasswordResetAction,
   resetPasswordAction,
   signupAction,
+  loginAction,
 } from './auth';
+
+describe('loginAction', () => {
+  const credentials = (next = '/dashboard') => {
+    const form = new FormData();
+    form.set('email', 'user@example.com');
+    form.set('password', 'test-password');
+    form.set('next', next);
+    return form;
+  };
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.stubGlobal('fetch', vi.fn());
+  });
+  it('uses the existing API, stores the session and preserves an internal redirect', async () => {
+    const tokens = { accessToken: 'access-token', refreshToken: 'refresh-token' };
+    vi.mocked(fetch).mockResolvedValue(
+      new Response(JSON.stringify({ success: true, data: tokens })),
+    );
+    await loginAction({}, credentials('/dashboard/branches'));
+    expect(fetch).toHaveBeenCalledWith(
+      'https://api.example.test/api/v1/auth/login',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ email: 'user@example.com', password: 'test-password' }),
+      }),
+    );
+    expect(setSessionMock).toHaveBeenCalledWith(tokens);
+    expect(redirectMock).toHaveBeenCalledWith('/dashboard/branches');
+  });
+  it.each(['https://evil.test', '//evil.test'])(
+    'rejects the external redirect %s',
+    async (next) => {
+      vi.mocked(fetch).mockResolvedValue(
+        new Response(
+          JSON.stringify({ success: true, data: { accessToken: 'a', refreshToken: 'r' } }),
+        ),
+      );
+      await loginAction({}, credentials(next));
+      expect(redirectMock).toHaveBeenCalledWith('/dashboard');
+    },
+  );
+  it('shows authentication denial without creating a session or redirecting', async () => {
+    vi.mocked(fetch).mockResolvedValue(
+      new Response(
+        JSON.stringify({ success: false, error: { message: 'Invalid email or password.' } }),
+        { status: 401 },
+      ),
+    );
+    expect(await loginAction({}, credentials())).toEqual({ error: 'Invalid email or password.' });
+    expect(setSessionMock).not.toHaveBeenCalled();
+    expect(redirectMock).not.toHaveBeenCalled();
+  });
+  it.each(['network', 'invalid-json'])(
+    'returns a retryable error for %s failure',
+    async (failure) => {
+      if (failure === 'network') vi.mocked(fetch).mockRejectedValue(new Error('offline'));
+      else vi.mocked(fetch).mockResolvedValue(new Response('Unavailable', { status: 503 }));
+      expect(await loginAction({}, credentials())).toEqual({ errorKey: 'unavailable' });
+      expect(setSessionMock).not.toHaveBeenCalled();
+      expect(redirectMock).not.toHaveBeenCalled();
+    },
+  );
+  it('does not swallow the framework success redirect', async () => {
+    vi.mocked(fetch).mockResolvedValue(
+      new Response(
+        JSON.stringify({ success: true, data: { accessToken: 'a', refreshToken: 'r' } }),
+      ),
+    );
+    redirectMock.mockImplementationOnce(() => {
+      throw new Error('NEXT_REDIRECT');
+    });
+    await expect(loginAction({}, credentials())).rejects.toThrow('NEXT_REDIRECT');
+  });
+});
 
 describe('logoutAction', () => {
   beforeEach(() => {
