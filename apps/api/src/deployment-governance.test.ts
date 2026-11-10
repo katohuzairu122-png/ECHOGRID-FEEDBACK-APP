@@ -24,7 +24,8 @@ const jobNames = (n: string) => [...code(n).split(/^jobs:\n/m)[1]!.matchAll(/^ {
 const onBlock = (n: string) => /^on:\n((?:[ ].*\n|\n)*)/m.exec(code(n))![1]!;
 
 const RELEASE = 'deploy-production.yml';
-const DEPLOYERS = [RELEASE, 'deploy-staging.yml'];
+const WEB_ONLY = 'deploy-web-only.yml';
+const DEPLOYERS = [RELEASE, 'deploy-staging.yml', WEB_ONLY];
 
 describe('B3 production deployment governance (static workflow checks)', () => {
   it('1-2. pull-request and main-push CI contains no deploy step, no Cloudflare credential and no secret reference', () => {
@@ -35,7 +36,7 @@ describe('B3 production deployment governance (static workflow checks)', () => {
     for (const forbidden of [/wrangler-action/, /wrangler deploy/, /pnpm run deploy/, /opennextjs-cloudflare deploy/, /secrets\./, /CLOUDFLARE_API_TOKEN/, /CLOUDFLARE_ACCOUNT_ID/, /environment:/, /migrate-production/, /PRODUCTION_DATABASE_URL/]) expect(ci, String(forbidden)).not.toMatch(forbidden);
   });
 
-  it('only the two manual deploy workflows contain any deployment command', () => {
+  it('only the explicitly listed manual deploy workflows contain any deployment command', () => {
     for (const f of files.filter(x => !DEPLOYERS.includes(x))) {
       expect(code(f), f).not.toMatch(/wrangler-action|wrangler deploy|pnpm run deploy|opennextjs-cloudflare deploy|secrets\.CLOUDFLARE/);
     }
@@ -169,9 +170,9 @@ describe('B3 production deployment governance (static workflow checks)', () => {
     expect(job(RELEASE, 'deploy-web')).not.toContain('git fetch');
   });
 
-  it('Cloudflare credentials are referenced only by the two protected deploy workflows; staging and production use separate environments', () => {
+  it('Cloudflare credentials are referenced only by the listed protected deploy workflows; staging and production use separate environments', () => {
     const holders = files.filter(f => /secrets\.CLOUDFLARE/.test(code(f))).sort();
-    expect(holders).toEqual(['deploy-production.yml', 'deploy-staging.yml']);
+    expect(holders).toEqual([...DEPLOYERS].sort());
     expect(code('deploy-staging.yml')).toMatch(/environment: staging/);
     expect(code('deploy-staging.yml')).not.toMatch(/environment: production/);
     for (const j of jobNames(RELEASE).filter(x => /secrets\./.test(job(RELEASE, x)))) expect(job(RELEASE, j)).toMatch(/^ {4}environment: production$/m);
@@ -187,6 +188,35 @@ describe('B3 production deployment governance (static workflow checks)', () => {
     expect(doc).toMatch(/Effective production protection is \*\*UNVERIFIED\*\*/);
   });
 
+
+  it('Web-only release preserves exact-main, same-run CI, protected environment and verified-artifact gates', () => {
+    expect(onBlock(WEB_ONLY)).toMatch(/^ {2}workflow_dispatch:/m);
+    expect(onBlock(WEB_ONLY)).not.toMatch(/push:|pull_request|schedule:/);
+    expect(jobNames(WEB_ONLY)).toEqual(['authorize', 'verify', 'package', 'deploy-web']);
+    const authorize = job(WEB_ONLY, 'authorize');
+    expect(authorize).toContain('CURRENT_MAIN="$(git rev-parse HEAD)" node tools/web-only-release.mjs authorize');
+    expect(authorize).toContain('node tools/web-only-release.mjs protection');
+    expect(authorize).not.toContain('secrets.CLOUDFLARE');
+    expect(job(WEB_ONLY, 'verify')).toContain('uses: ./.github/workflows/ci-cd.yml');
+    const deploy = job(WEB_ONLY, 'deploy-web');
+    expect(deploy).toContain('needs: [authorize, verify, package]');
+    expect(deploy).toContain('environment: production');
+    expect(deploy).toContain('sha256sum --check web-worker.sha256');
+    expect(deploy).toContain('git ls-remote origin refs/heads/main');
+    expect(deploy).toContain('deploy -- --name=echo-grid-feedback-web --env=');
+    expect(deploy).toContain('node tools/web-only-release.mjs before');
+    expect(deploy).toContain('node tools/web-only-release.mjs after');
+    expect(deploy).not.toMatch(/db:migrate|filter @echo-grid-feedback\/api|deploy-api/);
+    const credentialJobs = jobNames(WEB_ONLY).filter(name => /secrets\.CLOUDFLARE/.test(job(WEB_ONLY, name)));
+    expect(credentialJobs).toEqual(['deploy-web']);
+    for (const name of jobNames(WEB_ONLY)) {
+      expect(job(WEB_ONLY, name)).not.toMatch(/continue-on-error/);
+      for (const line of job(WEB_ONLY, name).split('\n').filter(value => /^ {4}if:/.test(value))) {
+        expect(line).not.toMatch(/always\(\)|!cancelled\(\)|failure\(\)/);
+      }
+    }
+  });
+
   it('release documentation exists and states live enforcement is an owner action', () => {
     const doc = readFileSync(resolve(dir, '../../docs/PRODUCTION-RELEASE.md'), 'utf8');
     expect(doc).toMatch(/PENDING OWNER ACTION/);
@@ -194,3 +224,4 @@ describe('B3 production deployment governance (static workflow checks)', () => {
     expect(doc).toMatch(/Required reviewers/i);
   });
 });
+
