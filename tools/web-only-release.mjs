@@ -1,6 +1,7 @@
 import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 import { resolve } from 'node:path';
+import { stripVTControlCharacters } from 'node:util';
 
 export const TARGET = Object.freeze({
   account: 'cf205213947e3617297373060fe4c15f',
@@ -19,9 +20,10 @@ export function assertReleaseBinding({ expected, runSha, main, ref, confirmation
 export function assertProductionProtection(environment) {
   const reviewers = environment.protection_rules?.find(rule => rule.type === 'required_reviewers');
   const policy = environment.deployment_branch_policy;
+  const restricted = policy && ((policy.protected_branches === true && policy.custom_branch_policies === false) ||
+    (policy.custom_branch_policies === true && policy.protected_branches === false));
   if (environment.name !== 'production' || !Array.isArray(reviewers?.reviewers) || !reviewers.reviewers.length ||
-      reviewers.prevent_self_review !== true || !policy ||
-      (!policy.protected_branches && !policy.custom_branch_policies)) {
+      reviewers.prevent_self_review !== true || !restricted) {
     throw new Error('Production requires independent reviewers, prevention of self-review and branch restrictions');
   }
 }
@@ -97,7 +99,7 @@ async function main() {
   const current = await snapshot();
   if (mode === 'after') {
     const before = JSON.parse(readFileSync('provenance/before.json', 'utf8'));
-    const log = readFileSync('provenance/deploy.log', 'utf8').replace(/\x1b\[[0-9;]*m/g, '');
+    const log = stripVTControlCharacters(readFileSync('provenance/deploy.log', 'utf8'));
     const version = log.match(/Current Version ID:\s*([0-9a-f-]{36})/)?.[1];
     assertDeploymentContinuity(before, current, version);
     const responses = [];
