@@ -10,7 +10,7 @@ export function CampaignStat({
 }: {
   label: string;
   value: ReactNode;
-  hint?: string;
+  hint?: string | undefined;
   tone?: 'mint' | 'cyan' | 'violet';
 }) {
   return (
