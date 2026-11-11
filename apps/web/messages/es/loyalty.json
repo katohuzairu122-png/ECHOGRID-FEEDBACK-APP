@@ -181,7 +181,12 @@
       "unsupported": "Este navegador no admite el escaneo con cámara. Pegue el token QR del cliente a continuación.",
       "cameraDenied": "No se pudo abrir la cámara. Permita el acceso a la cámara o pegue el token QR del cliente a continuación.",
       "viewfinder": "Vista de cámara para escanear el código QR del cliente",
-      "pasteHeading": "O pegue el token QR"
+      "pasteHeading": "O pegue el token QR",
+      "loggedInAs": "Ha iniciado sesión como",
+      "scanHint": "Pulse «Escanear» para leer el código QR del cliente.",
+      "scanLarge": "Escanear",
+      "search": "Buscar clientes",
+      "manual": "Introducir el token QR manualmente"
     }
   },
   "customer": {
