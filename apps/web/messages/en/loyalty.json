@@ -234,6 +234,77 @@
       "replyPlaceholder": "Type a reply…",
       "sending": "Sending…",
       "send": "Send"
+    },
+    "community": {
+      "eyebrow": "Echo Grid Community",
+      "title": "Community hub",
+      "description": "Your Community membership, Community Points balance and recent Community activity.",
+      "points": {
+        "title": "Community Points",
+        "info": "Community Points are kept in their own ledger, separate from the loyalty points each business gives you.",
+        "balanceHint": "Your current balance, exactly as recorded.",
+        "noAccount": "No Community Points account has been recorded for you yet.",
+        "unavailable": "Your balance could not be loaded right now.",
+        "forbidden": "Your balance is not available with your current access.",
+        "accountStatus": "Points account: {status}",
+        "accountSuspendedNote": "This points account is suspended. The balance shown is the recorded balance."
+      },
+      "accountStatus": {
+        "active": "Active",
+        "suspended": "Suspended",
+        "closed": "Closed"
+      },
+      "membership": {
+        "title": "Membership",
+        "status": {
+          "active": "Active member",
+          "left": "Left the Community",
+          "suspended": "Membership suspended",
+          "absent": "Not a member"
+        },
+        "activeOn": "Member since {date}",
+        "leftOn": "Left on {date}",
+        "suspendedOn": "Suspended on {date}",
+        "absentHint": "You have not joined the Community. Joining and leaving are not available on this page yet.",
+        "policyVersion": "Policy version {version}",
+        "unavailable": "Your membership status could not be loaded right now.",
+        "forbidden": "Your membership status is not available with your current access."
+      },
+      "activity": {
+        "title": "Recent activity",
+        "description": "Your latest Community Points ledger entries, newest first.",
+        "empty": "No Community Points activity yet.",
+        "unavailable": "Your activity could not be loaded right now.",
+        "forbidden": "Your activity is not available with your current access.",
+        "at": "At {name}",
+        "reversalNote": "Reverses an earlier entry",
+        "newer": "← Newer",
+        "older": "Older →",
+        "pageLabel": "Activity pages",
+        "type": {
+          "earn": "Earned",
+          "redeem": "Redeemed",
+          "reverse": "Reversed",
+          "expire": "Expired",
+          "admin_adjustment": "Adjustment"
+        },
+        "source": {
+          "survey_completion": "Survey completion",
+          "redemption": "Redemption",
+          "reversal": "Reversal",
+          "expiration": "Expiration",
+          "admin_adjustment": "Administrative adjustment"
+        },
+        "pointsLabel": "{points} points",
+        "showing": "{count, plural, one {# entry on this page} other {# entries on this page}}"
+      },
+      "about": {
+        "membershipTitle": "About Community membership",
+        "membershipBody": "Community membership is separate from your loyalty cards at individual businesses. Your status here is shown exactly as it is recorded.",
+        "pointsTitle": "About Community Points",
+        "pointsBody": "Community Points are kept in their own ledger. This page only shows your balance and history; it cannot create, spend or change points."
+      },
+      "retry": "Try again"
     }
   }
 }

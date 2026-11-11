@@ -234,6 +234,77 @@
       "replyPlaceholder": "Écrivez une réponse…",
       "sending": "Envoi…",
       "send": "Envoyer"
+    },
+    "community": {
+      "eyebrow": "Communauté Echo Grid",
+      "title": "Espace Communauté",
+      "description": "Votre adhésion à la Communauté, votre solde de points Communauté et votre activité récente.",
+      "points": {
+        "title": "Points Communauté",
+        "info": "Les points Communauté sont tenus dans leur propre registre, séparé des points de fidélité de chaque entreprise.",
+        "balanceHint": "Votre solde actuel, tel qu’enregistré.",
+        "noAccount": "Aucun compte de points Communauté n’a encore été enregistré pour vous.",
+        "unavailable": "Votre solde n’a pas pu être chargé pour le moment.",
+        "forbidden": "Votre solde n’est pas disponible avec votre accès actuel.",
+        "accountStatus": "Compte de points : {status}",
+        "accountSuspendedNote": "Ce compte de points est suspendu. Le solde affiché est le solde enregistré."
+      },
+      "accountStatus": {
+        "active": "Actif",
+        "suspended": "Suspendu",
+        "closed": "Fermé"
+      },
+      "membership": {
+        "title": "Adhésion",
+        "status": {
+          "active": "Membre actif",
+          "left": "A quitté la Communauté",
+          "suspended": "Adhésion suspendue",
+          "absent": "Non membre"
+        },
+        "activeOn": "Membre depuis le {date}",
+        "leftOn": "Parti le {date}",
+        "suspendedOn": "Suspendu le {date}",
+        "absentHint": "Vous n’avez pas rejoint la Communauté. Rejoindre et quitter ne sont pas encore disponibles sur cette page.",
+        "policyVersion": "Version de la politique {version}",
+        "unavailable": "Votre statut d’adhésion n’a pas pu être chargé pour le moment.",
+        "forbidden": "Votre statut d’adhésion n’est pas disponible avec votre accès actuel."
+      },
+      "activity": {
+        "title": "Activité récente",
+        "description": "Vos dernières écritures de points Communauté, les plus récentes d’abord.",
+        "empty": "Aucune activité de points Communauté pour le moment.",
+        "unavailable": "Votre activité n’a pas pu être chargée pour le moment.",
+        "forbidden": "Votre activité n’est pas disponible avec votre accès actuel.",
+        "at": "Chez {name}",
+        "reversalNote": "Annule une écriture précédente",
+        "newer": "← Plus récent",
+        "older": "Plus ancien →",
+        "pageLabel": "Pages d’activité",
+        "type": {
+          "earn": "Gagné",
+          "redeem": "Utilisé",
+          "reverse": "Annulé",
+          "expire": "Expiré",
+          "admin_adjustment": "Ajustement"
+        },
+        "source": {
+          "survey_completion": "Enquête terminée",
+          "redemption": "Utilisation",
+          "reversal": "Annulation",
+          "expiration": "Expiration",
+          "admin_adjustment": "Ajustement administratif"
+        },
+        "pointsLabel": "{points} points",
+        "showing": "{count, plural, one {# écriture sur cette page} many {# d’écritures sur cette page} other {# écritures sur cette page}}"
+      },
+      "about": {
+        "membershipTitle": "À propos de l’adhésion à la Communauté",
+        "membershipBody": "L’adhésion à la Communauté est distincte de vos cartes de fidélité auprès de chaque entreprise. Votre statut est affiché exactement tel qu’il est enregistré.",
+        "pointsTitle": "À propos des points Communauté",
+        "pointsBody": "Les points Communauté sont tenus dans leur propre registre. Cette page n’affiche que votre solde et votre historique ; elle ne peut ni créer, ni dépenser, ni modifier des points."
+      },
+      "retry": "Réessayer"
     }
   }
 }
