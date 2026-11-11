@@ -11,6 +11,8 @@ export async function DashboardNav() {
       home="/dashboard"
       label={t('overview.workspace')}
       menuLabel={t('nav.menu')}
+      moreLabel={t('nav.more')}
+      closeLabel={t('nav.close')}
       items={[
         { href: '/dashboard', label: t('overview.title'), icon: 'store' },
         { href: '/dashboard/feedback', label: t('nav.feedback'), icon: 'chat' },

@@ -40,31 +40,76 @@ describe('shared workspace navigation', () => {
     expect(sidebar.getByRole('link', { name: 'Scan' })).toHaveAttribute('aria-current', 'page');
     expect(sidebar.getByRole('link', { name: 'Loyalty' })).not.toHaveAttribute('aria-current');
     expect(sidebar.getByRole('button', { name: 'Log out' })).toBeInTheDocument();
-    expect(screen.getByRole('navigation', { name: 'Business' }).querySelectorAll('a')).toHaveLength(
-      4,
-    );
   });
-  it('supports the full mobile menu, Escape dismissal and focus restoration', async () => {
-    const { container } = render(
+  const renderNav = () =>
+    render(
       <WorkspaceNavigation
         items={items}
         home="/dashboard"
         label="Business"
         menuLabel="Menu"
+        moreLabel="More"
+        closeLabel="Close"
         utilities={<button>Log out</button>}
       />,
     );
-    const menu = container.querySelector('details')!;
-    const summary = menu.querySelector('summary')!;
+  it('shows four primary destinations plus More in the bottom bar', () => {
+    renderNav();
+    const bar = screen.getByRole('navigation', { name: 'Business' });
+    expect(
+      within(bar)
+        .getAllByRole('link')
+        .map((a) => a.textContent),
+    ).toEqual(['Overview', 'Feedback', 'Loyalty', 'Scan']);
+    expect(within(bar).getByRole('button', { name: 'More' })).toHaveAttribute(
+      'aria-expanded',
+      'false',
+    );
+  });
+  it('puts overflow links and logout in the More sheet, with Escape dismissal and focus restore', async () => {
+    renderNav();
     const user = userEvent.setup();
-    await user.click(summary);
-    expect(menu.open).toBe(true);
-    expect(within(menu).getByRole('link', { name: 'Settings' })).toHaveAttribute(
+    const more = screen.getByRole('button', { name: 'More' });
+    await user.click(more);
+    const sheet = screen.getByRole('dialog', { name: 'More' });
+    expect(more).toHaveAttribute('aria-expanded', 'true');
+    expect(within(sheet).getByRole('link', { name: 'Settings' })).toHaveAttribute(
       'href',
       '/dashboard/settings',
     );
+    expect(within(sheet).getByRole('button', { name: 'Log out' })).toBeInTheDocument();
+    expect(within(sheet).queryByRole('link', { name: 'Feedback' })).toBeNull();
     await user.keyboard('{Escape}');
-    expect(menu.open).toBe(false);
-    expect(summary).toHaveFocus();
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(more).toHaveFocus();
+  });
+  it('traps Tab inside the sheet and closes via the close button', async () => {
+    renderNav();
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('button', { name: 'More' }));
+    const sheet = screen.getByRole('dialog');
+    const focusables =
+      within(sheet).getAllByRole('link').length + within(sheet).getAllByRole('button').length;
+    for (let i = 0; i < focusables + 2; i++) {
+      await user.tab();
+      expect(sheet.contains(document.activeElement)).toBe(true);
+    }
+    await user.click(within(sheet).getByRole('button', { name: 'Close' }));
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+  it('honours primaryCount for roles with fewer destinations', () => {
+    render(
+      <WorkspaceNavigation
+        items={items.slice(0, 3)}
+        home="/"
+        label="Customer"
+        menuLabel="Menu"
+        primaryCount={2}
+        utilities={null}
+      />,
+    );
+    expect(
+      within(screen.getByRole('navigation', { name: 'Customer' })).getAllByRole('link'),
+    ).toHaveLength(2);
   });
 });

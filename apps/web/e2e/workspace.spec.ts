@@ -38,14 +38,19 @@ test('Business Overview uses empty API data honestly and keeps navigation respon
       await expect(
         bottom.getByRole('link', { name: 'Business Overview', exact: true }),
       ).toHaveAttribute('aria-current', 'page');
-      const summary = page.locator('summary[aria-label="Dashboard navigation"]');
-      await summary.click();
-      await expect(
-        page.locator('details').getByRole('link', { name: 'Billing', exact: true }),
-      ).toBeVisible();
+      const more = bottom.getByRole('button', { name: 'More', exact: true });
+      await more.click();
+      const sheet = page.getByRole('dialog', { name: 'More' });
+      await expect(sheet.getByRole('link', { name: 'Billing', exact: true })).toBeVisible();
+      await expect(bottom.getByRole('link')).toHaveCount(4);
+      // Logout must stay on screen, inside the viewport, even on a short display.
+      await page.setViewportSize({ width, height: 480 });
+      const logout = sheet.getByRole('button', { name: 'Log out' });
+      await expect(logout).toBeInViewport();
+      await page.setViewportSize({ width, height: 900 });
       await page.keyboard.press('Escape');
-      await expect(summary).toBeFocused();
-      await expect(page.locator('details')).not.toHaveAttribute('open');
+      await expect(sheet).toBeHidden();
+      await expect(more).toBeFocused();
     }
   }
   await page.setViewportSize({ width: 360, height: 900 });

@@ -5,6 +5,7 @@ import { hasSession } from '@/lib/session';
 import { getCurrentUser } from '@/lib/platform';
 import { buttonVariants } from '@/components/ui';
 import { cn } from '@/lib/utils';
+import { WorkspaceThemeRoot } from '@/components/workspace/workspace-theme';
 import { WorkspaceShell } from '@/components/workspace/workspace-shell';
 import { PlatformNav } from './platform-nav';
 
@@ -32,7 +33,7 @@ export default async function PlatformLayout({ children }: { children: React.Rea
   if (!user?.platformRole) {
     const t = await getTranslations('platform.accessDenied');
     return (
-      <div className="flex min-h-screen items-center justify-center bg-neutral-50 px-4 sm:px-6">
+      <WorkspaceThemeRoot className="flex min-h-screen items-center justify-center bg-neutral-50 px-4 sm:px-6">
         <div className="max-w-sm text-center">
           <h1 className="text-lg font-semibold text-neutral-900">{t('title')}</h1>
           <p className="mt-2 text-sm text-neutral-500">{t('description')}</p>
@@ -40,7 +41,7 @@ export default async function PlatformLayout({ children }: { children: React.Rea
             {t('backToDashboard')}
           </Link>
         </div>
-      </div>
+      </WorkspaceThemeRoot>
     );
   }
 

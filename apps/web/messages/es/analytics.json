@@ -37,7 +37,7 @@
     "positive": "{count} positivos",
     "neutral": "{count} neutrales",
     "negative": "{count} negativos",
-    "feedbackCount": "{count} comentarios"
+    "feedbackCount": "{count, plural, one {# comentario} many {# de comentarios} other {# comentarios}}"
   },
   "search": {
     "backToOverview": "← Volver al resumen",

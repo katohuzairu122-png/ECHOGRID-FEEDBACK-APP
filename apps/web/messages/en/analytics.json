@@ -37,7 +37,7 @@
     "positive": "{count} positive",
     "neutral": "{count} neutral",
     "negative": "{count} negative",
-    "feedbackCount": "{count} feedback items"
+    "feedbackCount": "{count, plural, one {# feedback item} other {# feedback items}}"
   },
   "search": {
     "backToOverview": "← Back to overview",

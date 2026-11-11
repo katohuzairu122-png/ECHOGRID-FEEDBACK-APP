@@ -29,6 +29,9 @@ export default async function LoyaltyDashboardLayout({ children }: { children: R
           home="/loyalty/dashboard"
           label={shell('customer')}
           menuLabel={shell('menu')}
+          moreLabel={shell('more')}
+          closeLabel={shell('close')}
+          primaryCount={3}
           items={[
             { href: '/loyalty/dashboard', label: t('brand'), icon: 'star' },
             { href: '/loyalty/dashboard/qr', label: shell('qr'), icon: 'qr' },

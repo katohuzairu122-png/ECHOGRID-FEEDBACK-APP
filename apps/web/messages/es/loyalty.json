@@ -11,7 +11,7 @@
     "accounts": {
       "emptyTitle": "Aún no hay miembros",
       "emptyDescription": "Los clientes que se registren mediante el código QR de una sucursal aparecerán aquí.",
-      "visits": "{count} visitas",
+      "visits": "{count, plural, one {# visita} many {# de visitas} other {# visitas}}",
       "lastVisit": "Última visita {date}",
       "noVisits": "Sin visitas todavía",
       "suspended": "Suspendido",
@@ -187,7 +187,7 @@
       "title": "Mis Recompensas",
       "emptyTitle": "Aún no tienes tarjetas de fidelización",
       "emptyDescription": "Escanea el código QR de un negocio y regístrate para empezar a ganar puntos.",
-      "visits": "{count} visitas",
+      "visits": "{count, plural, one {# visita} many {# de visitas} other {# visitas}}",
       "businessFallback": "Negocio"
     },
     "businessDashboard": {

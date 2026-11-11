@@ -11,7 +11,7 @@
     "accounts": {
       "emptyTitle": "لا يوجد أعضاء في برنامج الولاء بعد",
       "emptyDescription": "سيظهر هنا العملاء الذين يسجلون الوصول عبر رمز QR الخاص بالفرع.",
-      "visits": "{count} زيارة",
+      "visits": "{count, plural, zero {لا زيارات} one {زيارة واحدة} two {زيارتان} few {# زيارات} many {# زيارة} other {# زيارة}}",
       "lastVisit": "آخر زيارة {date}",
       "noVisits": "لا توجد زيارات بعد",
       "suspended": "معلّق",
@@ -187,7 +187,7 @@
       "title": "مكافآتي",
       "emptyTitle": "لا توجد بطاقات ولاء بعد",
       "emptyDescription": "امسح رمز QR الخاص بالنشاط التجاري وسجّل الوصول لبدء كسب النقاط.",
-      "visits": "{count} زيارة",
+      "visits": "{count, plural, zero {لا زيارات} one {زيارة واحدة} two {زيارتان} few {# زيارات} many {# زيارة} other {# زيارة}}",
       "businessFallback": "النشاط التجاري"
     },
     "businessDashboard": {

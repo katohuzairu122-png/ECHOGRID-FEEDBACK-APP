@@ -66,7 +66,7 @@ export default async function CustomerMessagesPage({ params, searchParams }: Cus
               <div
                 className={`max-w-[80%] rounded-lg px-3 py-2 text-sm ${
                   message.senderType === 'customer'
-                    ? 'bg-brand-600 text-white'
+                    ? 'ws-solid'
                     : 'bg-neutral-100 text-neutral-900'
                 }`}
               >

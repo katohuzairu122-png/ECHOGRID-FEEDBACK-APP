@@ -67,7 +67,7 @@ export default async function MessageThreadPage({ params }: MessageThreadPagePro
                 <div
                   className={`max-w-[80%] rounded-lg px-3 py-2 text-sm ${
                     message.senderType === 'staff'
-                      ? 'bg-brand-600 text-white'
+                      ? 'ws-solid'
                       : 'bg-neutral-100 text-neutral-900'
                   }`}
                 >

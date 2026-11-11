@@ -18,11 +18,11 @@ export const buttonVariants = cva(
         // step is lighter at this position than the old custom scale's,
         // dropping white-on-brand-600 below WCAG AA (brand implementation,
         // Phase 2 contrast fix).
-        primary: 'bg-brand-700 text-white hover:bg-brand-800',
+        primary: 'ws-solid',
         secondary: 'bg-neutral-100 text-neutral-900 hover:bg-neutral-200',
         outline: 'border border-neutral-300 bg-transparent text-neutral-900 hover:bg-neutral-50',
         ghost: 'bg-transparent text-neutral-900 hover:bg-neutral-100',
-        danger: 'bg-danger text-white hover:opacity-90',
+        danger: 'bg-[var(--ws-danger-solid,var(--color-danger))] text-white hover:opacity-90',
       },
       size: {
         sm: 'h-8 px-3 text-sm',
@@ -38,8 +38,7 @@ export const buttonVariants = cva(
 );
 
 export interface ButtonProps
-  extends React.ButtonHTMLAttributes<HTMLButtonElement>,
-    VariantProps<typeof buttonVariants> {}
+  extends React.ButtonHTMLAttributes<HTMLButtonElement>, VariantProps<typeof buttonVariants> {}
 
 /**
  * Base button primitive every screen should use instead of a raw <button>.
