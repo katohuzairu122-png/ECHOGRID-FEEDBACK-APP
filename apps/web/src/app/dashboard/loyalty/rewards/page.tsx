@@ -4,8 +4,10 @@ import { getTranslations } from 'next-intl/server';
 import type { LoyaltyRewardDto, BranchDto } from '@echo-grid-feedback/shared-types';
 import { getActiveBusiness } from '@/lib/business';
 import { apiFetch } from '@/lib/api-client';
-import { Badge, Button, buttonVariants, Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui';
+import { Badge, Button, buttonVariants } from '@/components/ui';
 import { LoyaltySubnav } from '../loyalty-subnav';
+import { LoyaltyCatalogCard } from '../loyalty-catalog-card';
+import styles from '../loyalty-catalog.module.css';
 import { RewardFormDialog } from './reward-form-dialog';
 import { RewardRowActions } from './reward-row-actions';
 
@@ -13,63 +15,56 @@ export default async function LoyaltyRewardsPage() {
   const business = await getActiveBusiness();
   if (!business) redirect('/dashboard');
 
-  // i18n & Multi-Currency Block 6.
   const t = await getTranslations('loyalty.staff');
 
-  // Staff sees the full catalog, active and retired -- the customer-facing
-  // catalog (GET /loyalty/me/rewards/:businessId) filters to active-only.
-  //
-  // Continuing Development Block 6.8.1 (S6.1 campaign config UI) -- branches
-  // fetched alongside rewards so RewardFormDialog's new branch-scope
-  // <select> has real names to list, mirroring dashboard/feedback/page.tsx's
-  // BranchFilter precedent exactly (server-fetch, pass down as a prop, no
-  // client-side self-fetch). Safe for every role that can reach this page:
-  // rewards:manage implies branches:view for all three default roles that
-  // hold it (Owner/Admin/Manager -- confirmed against
-  // role-provisioning.service.ts before choosing this over 6.7.3's more
-  // defensive server-side-resolution pattern).
+  // Staff sees the full catalog, including paused/retired rewards. The
+  // customer-facing list is separately authorized and filters to active.
+  // Preserve both existing tenant-scoped reads: dialog branch options are
+  // resolved server-side, never invented on the client.
   const [rewards, branches] = await Promise.all([
     apiFetch<LoyaltyRewardDto[]>('/loyalty/rewards', { businessId: business.id }),
     apiFetch<BranchDto[]>('/branches', { businessId: business.id }),
   ]);
 
   return (
-    <div className="flex flex-col gap-6">
-      <div className="flex items-center justify-between">
+    <div className={styles.page}>
+      <header className={styles.header}>
         <div>
-          <h1 className="text-2xl font-semibold text-neutral-900">{t('title')}</h1>
-          <p className="text-sm text-neutral-500">{business.name}</p>
+          <p className={styles.eyebrow}>{business.name}</p>
+          <h1 className="text-2xl font-semibold">{t('subnav.rewards')}</h1>
         </div>
-        <RewardFormDialog branches={branches} trigger={<Button type="button">{t('rewards.newButton')}</Button>} />
-      </div>
+        <div className={styles.headerActions}>
+          <RewardFormDialog
+            branches={branches}
+            trigger={<Button type="button">{t('rewards.newButton')}</Button>}
+          />
+        </div>
+      </header>
 
       <LoyaltySubnav />
 
       {rewards.length === 0 ? (
-        <Card>
-          <CardHeader>
-            <CardTitle>{t('rewards.emptyTitle')}</CardTitle>
-            <CardDescription>{t('rewards.emptyDescription')}</CardDescription>
-          </CardHeader>
-        </Card>
+        <section className={styles.empty}>
+          <h2>{t('rewards.emptyTitle')}</h2>
+          <p>{t('rewards.emptyDescription')}</p>
+        </section>
       ) : (
-        <div className="flex flex-col gap-3">
-          {rewards.map((reward) => (
-            <Card key={reward.id}>
-              <CardContent className="flex items-center justify-between gap-4 py-4">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <p className="font-medium text-neutral-900">{reward.name}</p>
-                    {/* Continuing Development Block 6.8.2 -- widened from a
-                        binary active/neutral check once the edit dialog
-                        made 'paused' a real, reachable state (previously
-                        schema-only, nothing in the app could set it). Same
-                        three-way variant/label pairing as the campaign
-                        dashboard's own statusVariant/statusLabel
-                        (rewards/[id]/page.tsx), reused for consistency
-                        rather than a second independently-drifting version. */}
+        <section aria-label={t('subnav.rewards')}>
+          <ul className={styles.list}>
+            {rewards.map((reward) => (
+              <li key={reward.id}>
+                <LoyaltyCatalogCard
+                  kind="reward"
+                  title={reward.name}
+                  status={
                     <Badge
-                      variant={reward.status === 'active' ? 'brand' : reward.status === 'paused' ? 'warning' : 'neutral'}
+                      variant={
+                        reward.status === 'active'
+                          ? 'brand'
+                          : reward.status === 'paused'
+                            ? 'warning'
+                            : 'neutral'
+                      }
                     >
                       {reward.status === 'active'
                         ? t('rewards.active')
@@ -77,41 +72,40 @@ export default async function LoyaltyRewardsPage() {
                           ? t('rewards.paused')
                           : t('rewards.inactive')}
                     </Badge>
-                  </div>
-                  <p className="text-xs text-neutral-500">
-                    {/* CI fix (Block 6.6): pointsCost is nullable now (non-points
-                        reward types) -- same reasoning as reward-card.tsx. */}
-                    {reward.pointsCost !== null && t('rewards.pointsCost', { points: reward.pointsCost })}
-                    {reward.description ? ` · ${reward.description}` : ''}
-                  </p>
-                </div>
-                <div className="flex items-center gap-2">
-                  {/* Continuing Development Block 6.7.3 (S6.3 campaign
-                      dashboard) -- plain <Link> styled via buttonVariants,
-                      not <Button> wrapped in <Link>: nesting a real
-                      <button> inside an <a> breaks accessible-name
-                      computation (see buttonVariants' own export comment). */}
-                  <Link
-                    href={`/dashboard/loyalty/rewards/${reward.id}`}
-                    className={buttonVariants({ variant: 'outline', size: 'sm' })}
-                  >
-                    {t('campaignDashboard.viewButton')}
-                  </Link>
-                  <RewardFormDialog
-                    reward={reward}
-                    branches={branches}
-                    trigger={
-                      <Button type="button" variant="outline" size="sm">
-                        {t('rewards.editButton')}
-                      </Button>
-                    }
-                  />
-                  <RewardRowActions rewardId={reward.id} status={reward.status} />
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+                  }
+                  details={
+                    <>
+                      {reward.pointsCost !== null && (
+                        <span>{t('rewards.pointsCost', { points: reward.pointsCost })}</span>
+                      )}
+                      {reward.description && <span>{reward.description}</span>}
+                    </>
+                  }
+                  actions={
+                    <>
+                      <Link
+                        href={`/dashboard/loyalty/rewards/${reward.id}`}
+                        className={buttonVariants({ variant: 'outline', size: 'sm' })}
+                      >
+                        {t('campaignDashboard.viewButton')}
+                      </Link>
+                      <RewardFormDialog
+                        reward={reward}
+                        branches={branches}
+                        trigger={
+                          <Button type="button" variant="outline" size="sm">
+                            {t('rewards.editButton')}
+                          </Button>
+                        }
+                      />
+                      <RewardRowActions rewardId={reward.id} status={reward.status} />
+                    </>
+                  }
+                />
+              </li>
+            ))}
+          </ul>
+        </section>
       )}
     </div>
   );
