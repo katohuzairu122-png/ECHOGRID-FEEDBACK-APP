@@ -1,0 +1,159 @@
+name: Deploy production Web only
+
+on:
+  workflow_dispatch:
+    inputs:
+      expected_commit:
+        description: Exact reviewed current main SHA
+        required: true
+        type: string
+      confirmation:
+        description: Type DEPLOY_PRODUCTION_WEB_ONLY
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: production-release
+  cancel-in-progress: false
+
+jobs:
+  authorize:
+    runs-on: ubuntu-latest
+    outputs:
+      commit: ${{ steps.bind.outputs.commit }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Bind exact reviewed main
+        id: bind
+        env:
+          EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+          CONFIRMATION: ${{ inputs.confirmation }}
+          DISPATCH_REF: ${{ github.ref }}
+          RUN_SHA: ${{ github.sha }}
+        run: CURRENT_MAIN="$(git rev-parse HEAD)" node tools/web-only-release.mjs authorize
+      - name: Require configured independent environment approval
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node tools/web-only-release.mjs protection
+
+  verify:
+    needs: authorize
+    uses: ./.github/workflows/ci-cd.yml
+
+  package:
+    needs: [authorize, verify]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.authorize.outputs.commit }}
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.9.0
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Test release denials
+        run: node --test tools/web-only-release.test.mjs
+      - name: Build Web Worker
+        run: pnpm --filter @echo-grid-feedback/web exec opennextjs-cloudflare build
+        env:
+          NEXT_TELEMETRY_DISABLED: '1'
+      - name: Preview the packaged Worker without production API access
+        shell: bash
+        run: |
+          set -euo pipefail
+          pnpm --filter @echo-grid-feedback/web exec opennextjs-cloudflare preview --local --ip 127.0.0.1 --port 8799 --persist-to "$RUNNER_TEMP/web-preview" --var API_BASE_URL:http://127.0.0.1:1 > "$RUNNER_TEMP/web-preview.log" 2>&1 &
+          preview_pid=$!
+          trap 'kill "$preview_pid" 2>/dev/null || true' EXIT
+          for route in / /login; do
+            status=000
+            for attempt in $(seq 1 60); do
+              status=$(curl --silent --max-time 5 --output /dev/null --write-out '%{http_code}' "http://127.0.0.1:8799$route" || true)
+              [ "$status" = 200 ] && break
+              sleep 2
+            done
+            [ "$status" = 200 ] || { cat "$RUNNER_TEMP/web-preview.log"; exit 1; }
+          done
+      - name: Seal the verified Worker artifact
+        run: |
+          tar -C apps/web -czf web-worker.tgz .open-next
+          sha256sum web-worker.tgz > web-worker.sha256
+      - uses: actions/upload-artifact@v4
+        with:
+          name: web-worker-${{ needs.authorize.outputs.commit }}
+          path: |
+            web-worker.tgz
+            web-worker.sha256
+          if-no-files-found: error
+
+  deploy-web:
+    needs: [authorize, verify, package]
+    environment: production
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.authorize.outputs.commit }}
+      - name: Reject stale main after environment approval
+        env:
+          AUTHORIZED: ${{ needs.authorize.outputs.commit }}
+        run: |
+          test "$(git rev-parse HEAD)" = "$AUTHORIZED"
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$AUTHORIZED"
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.9.0
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - uses: actions/download-artifact@v4
+        with:
+          name: web-worker-${{ needs.authorize.outputs.commit }}
+      - name: Verify and restore the tested artifact without rebuilding
+        run: |
+          sha256sum --check web-worker.sha256
+          tar -xzf web-worker.tgz -C apps/web
+      - name: Verify exact Worker account, resource and domain before mutation
+        run: node tools/web-only-release.mjs before
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          AUTHORIZED_COMMIT: ${{ needs.authorize.outputs.commit }}
+      - name: Deploy only the existing production Web Worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          pnpm --filter @echo-grid-feedback/web exec opennextjs-cloudflare deploy -- --name=echo-grid-feedback-web --env= | tee provenance/deploy.log
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      - name: Verify deployed Web version, HTTP 200 and unchanged API deployment
+        run: node tools/web-only-release.mjs after
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          AUTHORIZED_COMMIT: ${{ needs.authorize.outputs.commit }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: web-only-release-provenance-${{ needs.authorize.outputs.commit }}
+          path: provenance/
+          if-no-files-found: warn

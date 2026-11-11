@@ -1,0 +1,19 @@
+name: Verify Web-only release contract
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/deploy-web-only.yml'
+      - '.github/workflows/verify-web-only-release.yml'
+      - 'tools/web-only-release*'
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node --test tools/web-only-release.test.mjs

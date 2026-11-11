@@ -1,6 +1,6 @@
 # Production release (HETA-01-F1 B3)
 
-Merging to `main` runs CI and **deploys nothing**. Production is released only by the manually dispatched
+Merging to `main` runs CI and **deploys nothing**. The paired API/Web release uses the manually dispatched
 `.github/workflows/deploy-production.yml`. **A dispatch performs real Cloudflare deployments; it is never a dry run or a no-op.**
 
 ## Flow
@@ -130,3 +130,9 @@ the actual production migration level, code/schema compatibility (see `runStripe
 when capture is enabled), backup availability, and that the Partner Credit write-denial guards and conservation constraints and the
 `historicalTierVerified`, `issuanceAuthorized`, `redemptionAuthorized` = `false` restrictions are unchanged. A green release is not database
 certification and authorizes no financial activation.
+
+
+## Separate Web-only amendment
+
+The proposed [Web-only release amendment](WEB-ONLY-RELEASE.md) defines a separate manual path for reviewed presentation-only releases. It preserves exact-main binding, same-run CI, independent production environment approval, artifact verification and API deployment stability checks. The original paired workflow remains unchanged. The amendment must be reviewed and integrated before use; no dispatch, environment certification or production approval is implied by this documentation.
+
