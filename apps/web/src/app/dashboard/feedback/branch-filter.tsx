@@ -2,7 +2,10 @@
 
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
+import { useId } from 'react';
 import type { BranchDto } from '@echo-grid-feedback/shared-types';
+import { Select } from '@/components/ui';
+import styles from './feedback-inbox.module.css';
 
 interface BranchFilterProps {
   branches: BranchDto[];
@@ -22,22 +25,32 @@ export function BranchFilter({ branches, selectedBranchId }: BranchFilterProps) 
   // i18n & Multi-Currency Block 5.
   const t = useTranslations('feedback.staff');
 
+  const id = useId();
+
   return (
-    <select
-      value={selectedBranchId ?? ''}
-      onChange={(e) => {
-        const value = e.target.value;
-        router.push(value ? `/dashboard/feedback?branchId=${value}` : '/dashboard/feedback');
-      }}
-      aria-label={t('filterAriaLabel')}
-      className="h-10 rounded-md border border-neutral-300 bg-white px-3 text-sm text-neutral-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600"
-    >
-      <option value="">{t('allBranches')}</option>
-      {branches.map((branch) => (
-        <option key={branch.id} value={branch.id}>
-          {branch.name}
-        </option>
-      ))}
-    </select>
+    <div className={styles.fieldInline}>
+      <label htmlFor={id}>{t('branchLabel')}</label>
+      <Select
+        id={id}
+        value={selectedBranchId ?? ''}
+        onChange={(e) => {
+          const value = e.target.value;
+          router.push(
+            value
+              ? `/dashboard/feedback?branchId=${encodeURIComponent(value)}`
+              : '/dashboard/feedback',
+          );
+        }}
+        aria-label={t('filterAriaLabel')}
+        className="min-h-11 w-auto min-w-48 rounded-xl"
+      >
+        <option value="">{t('allBranches')}</option>
+        {branches.map((branch) => (
+          <option key={branch.id} value={branch.id}>
+            {branch.name}
+          </option>
+        ))}
+      </Select>
+    </div>
   );
 }

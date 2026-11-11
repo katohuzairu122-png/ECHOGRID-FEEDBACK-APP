@@ -2,10 +2,11 @@
 
 import { useState, useTransition } from 'react';
 import { useTranslations, useFormatter } from 'next-intl';
-import type { FeedbackDto } from '@echo-grid-feedback/shared-types';
+import { sentimentPolarity, type FeedbackDto } from '@echo-grid-feedback/shared-types';
 import { bulkAssignToMeAction, bulkMarkReviewedAction } from '@/lib/actions/feedback';
 import { FeedbackActions } from './feedback-actions';
-import { Badge, Card, CardContent, StarDisplay } from '@/components/ui';
+import { Badge, StarDisplay } from '@/components/ui';
+import styles from './feedback-inbox.module.css';
 
 const URGENCY_VARIANT: Record<string, 'danger' | 'warning' | 'neutral'> = {
   P0_CRITICAL: 'danger',
@@ -13,6 +14,9 @@ const URGENCY_VARIANT: Record<string, 'danger' | 'warning' | 'neutral'> = {
   P2_NORMAL: 'neutral',
   P3_LOW: 'neutral',
 };
+
+// Sentiment polarity -> badge tone. Only the API's own classification is shown; null/'unknown' gets no badge.
+const POLARITY_VARIANT = { positive: 'success', neutral: 'neutral', negative: 'danger' } as const;
 
 interface FeedbackInboxListProps {
   items: FeedbackDto[];
@@ -70,101 +74,149 @@ export function FeedbackInboxList({ items, branchNames, currentUserId }: Feedbac
   }
 
   return (
-    <div className="flex flex-col gap-3">
-      <div className="flex items-center gap-3 border-b border-neutral-200 pb-2">
-        <input
-          type="checkbox"
-          checked={allSelected}
-          onChange={toggleAll}
-          aria-label={t('selectAllAriaLabel')}
-          className="size-4 rounded border-neutral-300 text-brand-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600"
-        />
-        {selected.size > 0 && (
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-sm text-neutral-600">{t('selectedCount', { count: selected.size })}</span>
-            <button
-              type="button"
-              onClick={handleBulkAssign}
-              disabled={pending}
-              className="h-8 rounded-md border border-neutral-300 px-3 text-xs font-medium text-neutral-700 hover:bg-neutral-50 disabled:opacity-50"
-            >
-              {t('bulkAssignToMe')}
-            </button>
-            <button
-              type="button"
-              onClick={handleBulkReview}
-              disabled={pending}
-              className="h-8 rounded-md border border-neutral-300 px-3 text-xs font-medium text-neutral-700 hover:bg-neutral-50 disabled:opacity-50"
-            >
-              {t('bulkMarkReviewed')}
-            </button>
-            <button
-              type="button"
-              onClick={() => setSelected(new Set())}
-              disabled={pending}
-              className="h-8 rounded-md px-3 text-xs font-medium text-neutral-500 hover:bg-neutral-50 disabled:opacity-50"
-            >
-              {t('clearSelection')}
-            </button>
-          </div>
-        )}
+    <div className="flex flex-col gap-4">
+      <div className={styles.listHead}>
+        <label className={styles.selectAll}>
+          <input
+            type="checkbox"
+            checked={allSelected}
+            onChange={toggleAll}
+            aria-label={t('selectAllAriaLabel')}
+            className={styles.checkbox}
+          />
+          <span aria-hidden="true">{t('selectAllAriaLabel')}</span>
+        </label>
+        <p className={styles.count}>{t('showingCount', { count: items.length })}</p>
       </div>
 
-      {items.map((item) => (
-        <Card key={item.id}>
-          <CardContent className="flex flex-col gap-3 py-4">
-            <div className="flex items-start justify-between gap-4">
-              <div className="flex items-start gap-3">
-                <input
-                  type="checkbox"
-                  checked={selected.has(item.id)}
-                  onChange={() => toggleOne(item.id)}
-                  aria-label={t('selectRowAriaLabel', {
-                    rating: item.rating,
-                    date: format.dateTime(new Date(item.createdAt), 'short'),
-                  })}
-                  className="mt-1 size-4 shrink-0 rounded border-neutral-300 text-brand-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600"
-                />
-                <div className="flex flex-col gap-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <StarDisplay value={item.rating} />
-                    <Badge variant={item.status === 'new' ? 'accent' : 'neutral'}>
-                      {item.status === 'new' ? t('statusNew') : t('statusReviewed')}
-                    </Badge>
-                    {item.urgency && (
-                      <Badge variant={URGENCY_VARIANT[item.urgency] ?? 'neutral'}>{t(`urgency.${item.urgency}`)}</Badge>
-                    )}
-                    {item.category && <Badge variant="neutral">{t(`categories.${item.category}`)}</Badge>}
-                    {item.assignedTo && (
-                      <Badge variant="brand">{item.assignedTo === currentUserId ? t('assignedToMe') : t('assigned')}</Badge>
-                    )}
+      <ul className={styles.list}>
+        {items.map((item) => {
+          const polarity = sentimentPolarity(item.sentiment);
+          const isSelected = selected.has(item.id);
+          return (
+            <li key={item.id}>
+              <article
+                className={styles.card}
+                data-selected={isSelected}
+                data-status={item.status}
+                {...(item.urgency ? { 'data-urgency': item.urgency } : {})}
+              >
+                <div className={styles.cardTop}>
+                  <div className={styles.cardLead}>
+                    <input
+                      type="checkbox"
+                      checked={isSelected}
+                      onChange={() => toggleOne(item.id)}
+                      aria-label={t('selectRowAriaLabel', {
+                        rating: item.rating,
+                        date: format.dateTime(new Date(item.createdAt), 'short'),
+                      })}
+                      className={styles.checkbox}
+                    />
+                    <div className="min-w-0">
+                      <div className={styles.rating}>
+                        <StarDisplay value={item.rating} />
+                        <span aria-hidden="true">{t('ratingOutOf', { rating: item.rating })}</span>
+                      </div>
+                      <div className={styles.badges}>
+                        <Badge variant={item.status === 'new' ? 'accent' : 'neutral'}>
+                          <span className="sr-only">{t('fieldStatus')} </span>
+                          {item.status === 'new' ? t('statusNew') : t('statusReviewed')}
+                        </Badge>
+                        {item.urgency && (
+                          <Badge variant={URGENCY_VARIANT[item.urgency] ?? 'neutral'}>
+                            <span className="sr-only">{t('fieldUrgency')} </span>
+                            {t(`urgency.${item.urgency}`)}
+                          </Badge>
+                        )}
+                        {item.sentiment && polarity ? (
+                          <Badge variant={POLARITY_VARIANT[polarity]}>
+                            <span className="sr-only">{t('fieldSentiment')} </span>
+                            {t(`sentiment.${item.sentiment as 'positive'}`)}
+                          </Badge>
+                        ) : item.analysisStatus === 'pending' ? (
+                          <Badge variant="neutral">{t('analysisPending')}</Badge>
+                        ) : item.analysisStatus === 'failed' ? (
+                          <Badge variant="warning">{t('analysisFailed')}</Badge>
+                        ) : null}
+                        {item.category && (
+                          <Badge variant="neutral">
+                            <span className="sr-only">{t('fieldCategory')} </span>
+                            {t(`categories.${item.category}`)}
+                          </Badge>
+                        )}
+                        {item.assignedTo && (
+                          <Badge variant="brand">
+                            {item.assignedTo === currentUserId ? t('assignedToMe') : t('assigned')}
+                          </Badge>
+                        )}
+                      </div>
+                      <p className={styles.meta}>
+                        {branchNames.get(item.branchId) ?? t('unknownBranch')} ·{' '}
+                        <time dateTime={item.createdAt}>
+                          {format.dateTime(new Date(item.createdAt), 'short')}
+                        </time>
+                      </p>
+                    </div>
                   </div>
-                  <p className="text-xs text-neutral-500">
-                    {branchNames.get(item.branchId) ?? t('unknownBranch')} ·{' '}
-                    {format.dateTime(new Date(item.createdAt), 'short')}
-                  </p>
+                  <FeedbackActions feedbackId={item.id} status={item.status} />
                 </div>
-              </div>
-              <FeedbackActions feedbackId={item.id} status={item.status} />
-            </div>
 
-            {item.comment && <p className="text-sm text-neutral-800">{item.comment}</p>}
+                {item.comment && <p className={styles.comment}>{item.comment}</p>}
 
-            {item.followUpQuestion && item.followUpAnswer && (
-              <div className="rounded-md bg-neutral-50 p-3">
-                <p className="text-xs font-medium text-neutral-500">{item.followUpQuestion}</p>
-                <p className="text-sm text-neutral-800">{item.followUpAnswer}</p>
-              </div>
-            )}
+                {item.followUpQuestion && item.followUpAnswer && (
+                  <div className={styles.followUp}>
+                    <p>{item.followUpQuestion}</p>
+                    <p className="text-sm">{item.followUpAnswer}</p>
+                  </div>
+                )}
 
-            {(item.customerName || item.customerEmail || item.customerPhone) && (
-              <p className="text-xs text-neutral-500">
-                {[item.customerName, item.customerEmail, item.customerPhone].filter(Boolean).join(' · ')}
-              </p>
-            )}
-          </CardContent>
-        </Card>
-      ))}
+                {(item.customerName || item.customerEmail || item.customerPhone) && (
+                  <p className={styles.customer}>
+                    {[item.customerName, item.customerEmail, item.customerPhone]
+                      .filter(Boolean)
+                      .join(' · ')}
+                  </p>
+                )}
+              </article>
+            </li>
+          );
+        })}
+      </ul>
+
+      {selected.size > 0 && (
+        <div
+          className={styles.bulkBar}
+          role="region"
+          aria-label={t('selectedCount', { count: selected.size })}
+        >
+          <span aria-live="polite">{t('selectedCount', { count: selected.size })}</span>
+          <button
+            type="button"
+            onClick={handleBulkAssign}
+            disabled={pending}
+            className={styles.secondaryButton}
+          >
+            {t('bulkAssignToMe')}
+          </button>
+          <button
+            type="button"
+            onClick={handleBulkReview}
+            disabled={pending}
+            className={styles.secondaryButton}
+          >
+            {t('bulkMarkReviewed')}
+          </button>
+          <button
+            type="button"
+            onClick={() => setSelected(new Set())}
+            disabled={pending}
+            className={styles.ghostButton}
+          >
+            {t('clearSelection')}
+          </button>
+        </div>
+      )}
     </div>
   );
 }

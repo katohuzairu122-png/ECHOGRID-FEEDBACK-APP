@@ -4,12 +4,14 @@ import { getTranslations } from 'next-intl/server';
 import type { BranchDto, FeedbackDto } from '@echo-grid-feedback/shared-types';
 import { getActiveBusiness } from '@/lib/business';
 import { getCurrentUser } from '@/lib/platform';
-import { apiFetch } from '@/lib/api-client';
+import { apiFetch, ApiError } from '@/lib/api-client';
 import { BranchFilter } from './branch-filter';
 import { SavedViewTabs } from './saved-view-tabs';
 import { FeedbackFilters } from './feedback-filters';
 import { FeedbackInboxList } from './feedback-inbox-list';
-import { Card, CardHeader, CardTitle, CardDescription } from '@/components/ui';
+import { buttonVariants } from '@/components/ui';
+import { cn } from '@/lib/utils';
+import styles from './feedback-inbox.module.css';
 
 /**
  * UI-chosen page size, independent of the API's own default (50) -- fits
@@ -58,13 +60,70 @@ export default async function FeedbackPage({ searchParams }: FeedbackPageProps) 
   category.forEach((c) => feedbackQuery.append('category', c));
   urgency.forEach((u) => feedbackQuery.append('urgency', u));
 
-  const [branches, page, currentUser] = await Promise.all([
-    apiFetch<BranchDto[]>('/branches', { businessId: business.id }),
-    apiFetch<{ items: FeedbackDto[]; hasMore: boolean }>(`/feedback?${feedbackQuery}`, { businessId: business.id }),
-    getCurrentUser(),
-  ]);
+  let loaded:
+    { branches: BranchDto[]; page: { items: FeedbackDto[]; hasMore: boolean } } | undefined;
+  let failure: 'forbidden' | 'unavailable' | undefined;
+  let currentUser: Awaited<ReturnType<typeof getCurrentUser>> | undefined;
+  try {
+    const [branches, page, user] = await Promise.all([
+      apiFetch<BranchDto[]>('/branches', { businessId: business.id }),
+      apiFetch<{ items: FeedbackDto[]; hasMore: boolean }>(`/feedback?${feedbackQuery}`, {
+        businessId: business.id,
+      }),
+      getCurrentUser(),
+    ]);
+    loaded = { branches, page };
+    currentUser = user;
+  } catch (error) {
+    // Never convert a denial or outage into an empty inbox; only an authentication expiry leaves the page.
+    failure = error instanceof ApiError && error.status === 403 ? 'forbidden' : 'unavailable';
+    if (error instanceof ApiError && error.status === 401) redirect('/login');
+  }
 
+  const header = (
+    <header className={styles.header}>
+      <div>
+        <p className={styles.eyebrow}>{business.name}</p>
+        <h1 className="text-2xl font-semibold">{t('title')}</h1>
+      </div>
+      <div className={styles.headerActions}>
+        <Link
+          href="/dashboard/feedback/forms"
+          className={cn(buttonVariants({ variant: 'outline' }), 'min-h-11 rounded-xl')}
+        >
+          {t('manageForms')}
+        </Link>
+        {loaded && <BranchFilter branches={loaded.branches} selectedBranchId={branchId} />}
+      </div>
+    </header>
+  );
+
+  if (!loaded) {
+    return (
+      <div className={styles.page}>
+        {header}
+        <section className={styles.state} data-tone="error" role="alert">
+          <h2>{failure === 'forbidden' ? t('forbiddenTitle') : t('unavailableTitle')}</h2>
+          <p className={styles.muted}>
+            {failure === 'forbidden' ? t('forbiddenDescription') : t('unavailableDescription')}
+          </p>
+          {failure !== 'forbidden' && (
+            <div className={styles.stateLinks}>
+              <Link href="/dashboard/feedback" className={buttonVariants({ variant: 'primary' })}>
+                {t('retry')}
+              </Link>
+            </div>
+          )}
+        </section>
+      </div>
+    );
+  }
+
+  const { branches, page } = loaded;
   const { items, hasMore } = page;
+  const filtersActive = Boolean(
+    search || category.length || urgency.length || savedView || branchId,
+  );
   const branchNames = new Map(branches.map((b) => [b.id, b.name]));
 
   // Carried into SavedViewTabs/FeedbackFilters so switching a saved view or
@@ -84,51 +143,47 @@ export default async function FeedbackPage({ searchParams }: FeedbackPageProps) 
   };
 
   return (
-    <div className="flex flex-col gap-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold text-neutral-900">{t('title')}</h1>
-          <p className="text-sm text-neutral-500">{business.name}</p>
-        </div>
-        <Link href="/dashboard/feedback/forms" className="text-sm font-medium text-brand-700 hover:underline">Manage forms</Link>
-        <BranchFilter branches={branches} selectedBranchId={branchId} />
-      </div>
+    <div className={styles.page}>
+      {header}
 
-      <SavedViewTabs activeSavedView={savedView} baseParams={baseParams} />
-      <FeedbackFilters search={search} category={category} urgency={urgency} baseParams={baseParams} />
+      <section className={styles.toolbar} aria-label={t('filtersLabel')}>
+        <SavedViewTabs activeSavedView={savedView} baseParams={baseParams} />
+        <FeedbackFilters
+          search={search}
+          category={category}
+          urgency={urgency}
+          baseParams={baseParams}
+        />
+      </section>
 
       {items.length === 0 ? (
-        <Card>
-          <CardHeader>
-            <CardTitle>{t('emptyTitle')}</CardTitle>
-            <CardDescription>{t('emptyDescription')}</CardDescription>
-          </CardHeader>
-        </Card>
+        <section className={styles.state}>
+          <h2>{filtersActive ? t('noResultsTitle') : t('emptyTitle')}</h2>
+          <p className={styles.muted}>
+            {filtersActive ? t('noResultsDescription') : t('emptyDescription')}
+          </p>
+          {filtersActive && (
+            <div className={styles.stateLinks}>
+              <Link href="/dashboard/feedback" className={buttonVariants({ variant: 'outline' })}>
+                {t('clearFilters')}
+              </Link>
+            </div>
+          )}
+        </section>
       ) : (
-        <FeedbackInboxList items={items} branchNames={branchNames} currentUserId={currentUser?.id} />
+        <FeedbackInboxList
+          items={items}
+          branchNames={branchNames}
+          currentUserId={currentUser?.id}
+        />
       )}
 
       {(offset > 0 || hasMore) && (
-        <div className="flex justify-center gap-4">
-          {offset > 0 && (
-            <Link
-              href={pageHref(Math.max(0, offset - PAGE_SIZE))}
-              className="text-sm font-medium text-brand-700 hover:underline"
-            >
-              {t('newer')}
-            </Link>
-          )}
-          {hasMore && (
-            <Link
-              href={pageHref(offset + PAGE_SIZE)}
-              className="text-sm font-medium text-brand-700 hover:underline"
-            >
-              {t('older')}
-            </Link>
-          )}
-        </div>
+        <nav className={styles.pager} aria-label={t('title')}>
+          {offset > 0 && <Link href={pageHref(Math.max(0, offset - PAGE_SIZE))}>{t('newer')}</Link>}
+          {hasMore && <Link href={pageHref(offset + PAGE_SIZE)}>{t('older')}</Link>}
+        </nav>
       )}
     </div>
   );
 }
-

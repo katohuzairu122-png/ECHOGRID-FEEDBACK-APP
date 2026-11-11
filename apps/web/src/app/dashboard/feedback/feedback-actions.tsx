@@ -4,6 +4,7 @@ import { useTransition } from 'react';
 import { useTranslations } from 'next-intl';
 import { markReviewedAction, deleteFeedbackAction } from '@/lib/actions/feedback';
 import { Button } from '@/components/ui';
+import styles from './feedback-inbox.module.css';
 
 interface FeedbackActionsProps {
   feedbackId: string;
@@ -42,7 +43,7 @@ export function FeedbackActions({ feedbackId, status }: FeedbackActionsProps) {
   };
 
   return (
-    <div className="flex shrink-0 items-center gap-2">
+    <div className={styles.actions}>
       {status === 'new' && (
         <Button
           type="button"

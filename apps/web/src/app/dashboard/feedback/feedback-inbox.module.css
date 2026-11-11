@@ -1,0 +1,413 @@
+/* UI Phase 2B: Feedback Inbox visual alignment. Shared workspace tokens only (--ws-*, --color-*); no parallel palette. */
+.page {
+  display: grid;
+  gap: 22px;
+}
+.header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+}
+.header h1 {
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+.eyebrow {
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  font-weight: 600;
+  color: var(--ws-accent-text);
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+.muted {
+  color: var(--ws-text-muted);
+  font-size: 13px;
+  line-height: 1.7;
+}
+.headerActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+.fieldInline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.fieldInline label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ws-text-muted);
+}
+.glass {
+  background: linear-gradient(160deg, color-mix(in srgb, var(--ws-c-mint) 6%, var(--ws-surface-2)), var(--ws-surface) 70%);
+  border: 1px solid var(--ws-border);
+  border-radius: 18px;
+  box-shadow: 0 14px 34px -26px #000, inset 0 1px 0 color-mix(in srgb, var(--ws-text) 6%, transparent);
+}
+.toolbar {
+  composes: glass;
+  padding: 18px;
+  display: grid;
+  gap: 16px;
+}
+.savedViews {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  scroll-snap-type: x proximity;
+  scrollbar-width: thin;
+}
+.savedViews a {
+  flex: 0 0 auto;
+  scroll-snap-align: start;
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--ws-border);
+  background: var(--ws-surface);
+  color: var(--ws-text-muted);
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
+}
+.savedViews a:hover {
+  color: var(--ws-text);
+  border-color: color-mix(in srgb, var(--ws-c-mint) 45%, var(--ws-border));
+}
+.savedViews a[aria-current='page'] {
+  color: var(--ws-solid-fg);
+  background: var(--ws-solid-bg);
+  border-color: var(--ws-solid-bg);
+  font-weight: 600;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ws-c-mint) 18%, transparent);
+}
+.filters {
+  display: grid;
+  grid-template-columns: minmax(220px, 1.4fr) repeat(2, minmax(160px, 1fr)) auto;
+  gap: 14px;
+  align-items: start;
+}
+.field {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+.field label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ws-text-muted);
+}
+.field input,
+.field select {
+  width: 100%;
+  min-height: 44px;
+  border-radius: 12px;
+}
+.field select[multiple] {
+  min-height: 104px;
+  padding: 6px;
+}
+.filterButtons {
+  align-self: end;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.filterButtons button {
+  min-height: 44px;
+  padding-inline: 18px;
+  border-radius: 12px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.secondaryButton {
+  border: 1px solid var(--ws-border);
+  background: var(--ws-surface-2);
+  color: var(--ws-text);
+}
+.secondaryButton:hover {
+  background: var(--ws-surface-3);
+}
+.count {
+  font-size: 12px;
+  color: var(--ws-text-faint);
+}
+.listHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.selectAll {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  font-size: 13px;
+  color: var(--ws-text-muted);
+}
+.checkbox {
+  width: 20px;
+  height: 20px;
+  flex: 0 0 auto;
+  accent-color: var(--ws-c-mint);
+  cursor: pointer;
+}
+.list {
+  display: grid;
+  gap: 14px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.card {
+  composes: glass;
+  position: relative;
+  padding: 18px 20px 18px 24px;
+  display: grid;
+  gap: 12px;
+  overflow: hidden;
+}
+.card::before {
+  content: '';
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: 0;
+  width: 4px;
+  background: var(--stripe, transparent);
+}
+.card[data-selected='true'] {
+  border-color: color-mix(in srgb, var(--ws-c-mint) 60%, var(--ws-border));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--ws-c-mint) 35%, transparent), 0 14px 34px -22px var(--ws-c-mint);
+}
+.card[data-urgency='P0_CRITICAL'] {
+  --stripe: var(--color-danger);
+}
+.card[data-urgency='P1_HIGH'] {
+  --stripe: var(--color-warning);
+}
+.card[data-status='new']:not([data-urgency='P0_CRITICAL']):not([data-urgency='P1_HIGH']) {
+  --stripe: var(--ws-c-mint);
+}
+.cardTop {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+.cardLead {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  min-width: 0;
+}
+.cardLead .checkbox {
+  margin-top: 2px;
+}
+.rating {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ws-text);
+}
+.badges {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+.meta {
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--ws-text-faint);
+}
+.comment {
+  font-size: 14px;
+  line-height: 1.75;
+  color: var(--ws-text);
+  overflow-wrap: anywhere;
+}
+.followUp {
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: var(--ws-surface);
+  border: 1px solid var(--ws-border-soft);
+}
+.followUp p:first-child {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ws-text-muted);
+  margin-bottom: 4px;
+}
+.customer {
+  font-size: 12px;
+  color: var(--ws-text-muted);
+  overflow-wrap: anywhere;
+}
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+.actions button {
+  min-height: 40px;
+  padding-inline: 14px;
+}
+.bulkBar {
+  position: sticky;
+  bottom: 16px;
+  z-index: 20;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--ws-surface-3) 92%, transparent);
+  backdrop-filter: blur(10px);
+  border: 1px solid color-mix(in srgb, var(--ws-c-mint) 40%, var(--ws-border));
+  box-shadow: 0 18px 40px -16px #000;
+}
+.bulkBar span {
+  font-size: 13px;
+  font-weight: 600;
+  margin-inline-end: 4px;
+}
+.bulkBar button {
+  min-height: 44px;
+  padding-inline: 14px;
+  border-radius: 12px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.bulkBar button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.ghostButton {
+  border: 0;
+  background: transparent;
+  color: var(--ws-text-muted);
+}
+.ghostButton:hover {
+  color: var(--ws-text);
+  background: var(--ws-surface-2);
+}
+.state {
+  composes: glass;
+  padding: 28px 24px;
+  display: grid;
+  gap: 8px;
+  justify-items: start;
+}
+.state h2 {
+  font-size: 16px;
+  font-weight: 600;
+}
+.state[data-tone='error'] {
+  border-color: color-mix(in srgb, var(--color-danger) 55%, var(--ws-border));
+}
+.stateLinks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 8px;
+}
+.pager {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+}
+.pager a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding-inline: 18px;
+  border-radius: 12px;
+  border: 1px solid var(--ws-border);
+  background: var(--ws-surface-2);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ws-accent-text);
+}
+.pager a:hover {
+  background: var(--ws-surface-3);
+}
+.skeleton {
+  display: grid;
+  gap: 14px;
+}
+.skeleton div {
+  border-radius: 18px;
+  background: var(--ws-surface-2);
+  animation: pulse 1.4s ease-in-out infinite;
+}
+@keyframes pulse {
+  50% {
+    opacity: 0.55;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .skeleton div {
+    animation: none;
+  }
+}
+@media (max-width: 1199px) {
+  .filters {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .filterButtons {
+    grid-column: 1 / -1;
+  }
+}
+@media (max-width: 1023px) {
+  .bulkBar {
+    bottom: calc(86px + env(safe-area-inset-bottom));
+  }
+}
+@media (max-width: 599px) {
+  .toolbar {
+    padding: 14px;
+  }
+  .filters {
+    grid-template-columns: 1fr;
+  }
+  .filterButtons button {
+    flex: 1 1 0;
+  }
+  .cardTop {
+    flex-direction: column;
+  }
+  .actions {
+    justify-content: flex-start;
+    width: 100%;
+  }
+  .card {
+    padding: 16px 16px 16px 20px;
+  }
+  .headerActions,
+  .fieldInline {
+    width: 100%;
+  }
+  .fieldInline select {
+    flex: 1;
+  }
+}
