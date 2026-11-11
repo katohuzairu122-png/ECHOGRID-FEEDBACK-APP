@@ -74,6 +74,13 @@ describe('workspace theme tokens', () => {
   });
 });
 
+describe('dark surface override', () => {
+  it('also themes an element that is itself the themed scope (portalled dialog popup)', () => {
+    expect(css).toContain("[data-ws-theme='dark'].bg-white:not([data-keep-light])");
+    expect(css).toContain("[data-ws-theme='dark'] .bg-white:not([data-keep-light])");
+  });
+});
+
 describe('WorkspaceThemeRoot', () => {
   function Probe() {
     return <span data-testid="probe">{useWorkspaceTheme() ?? 'none'}</span>;
