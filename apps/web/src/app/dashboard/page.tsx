@@ -11,6 +11,7 @@ import {
 import { LandingIcon } from '@/components/landing/landing-icon';
 import { Button, Select, SentimentTrendChart, buttonVariants } from '@/components/ui';
 import styles from '@/components/workspace/workspace.module.css';
+import { SentimentBreakdown } from '@/components/workspace/sentiment-breakdown';
 import { CreateBusinessForm } from './create-business-form';
 
 export default async function DashboardPage({
@@ -122,16 +123,6 @@ export default async function DashboardPage({
             <WorkspaceState>{unavailable(data.trend.status)}</WorkspaceState>
           ) : (
             <>
-              {totals && totals.total > 0 && (
-                <p className={styles.summary}>
-                  {t('sentimentSummary', {
-                    total: totals.total,
-                    positive: totals.positive,
-                    neutral: totals.neutral,
-                    negative: totals.negative,
-                  })}
-                </p>
-              )}
               <SentimentTrendChart
                 points={data.trend.data}
                 labels={{
@@ -142,6 +133,30 @@ export default async function DashboardPage({
                   negative: chart('negative'),
                 }}
               />
+              {totals && totals.total > 0 && (
+                <>
+                  <p className="sr-only">
+                    {t('sentimentSummary', {
+                      total: totals.total,
+                      positive: totals.positive,
+                      neutral: totals.neutral,
+                      negative: totals.negative,
+                    })}
+                  </p>
+                  <SentimentBreakdown
+                    totals={totals}
+                    labels={{
+                      negative: chart('negative'),
+                      neutral: chart('neutral'),
+                      positive: chart('positive'),
+                    }}
+                    formatCount={count}
+                    formatRate={(fraction) =>
+                      format.number(fraction, { style: 'percent', maximumFractionDigits: 0 })
+                    }
+                  />
+                </>
+              )}
               {data.trend.data.length > 0 && (
                 <details className="mt-4 text-xs">
                   <summary className="cursor-pointer py-3">{t('viewData')}</summary>
