@@ -4,8 +4,8 @@ Status: **Development only — independently reviewable draft**.
 
 ## Baseline and dependency
 - Baseline authoritative main: `68e668811ed08486fd1a836af27ff524ef5bf621` (merged PR #345).
-- Phase 2C-1 (PR #346, Accounts + shared Loyalty navigation) is open, draft, mergeable and has 25/25 hosted checks green.
-- **This block is independent of PR #346.** It changes separate files, does not import Phase 2C-1's new modules, and can be tested separately. Recheck current main and merge compatibility after PR #346 merges.
+- Phase 2C-1 (PR #346, Accounts + shared Loyalty navigation) **merged while Phase 2C-2 was being authored**. New main: `dc62cd3c0f5a1abc19ef24be4915faa69a44cdc2`. PR #346's exact-head checks were 25/25 PASS.
+- **This block is independent of PR #346.** It modifies different files and does not import Phase 2C-1's new modules. The branch remains based on the earlier main; GitHub currently reports PR #347 mergeable against the advanced main. Hosted PR merge CI must validate their combined code.
 
 ## Owner design objective
 Faithfully carry the approved Echo Grid dark authenticated workspace (navy #031824, mint #25E9B0, cyan, violet) through the existing staff Tiers and Rewards Catalog screens. Use existing Phase 1 workspace CSS tokens rather than a parallel palette or generic white cards.
