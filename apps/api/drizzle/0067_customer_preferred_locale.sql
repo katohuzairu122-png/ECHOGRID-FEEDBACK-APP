@@ -1,0 +1,2 @@
+ALTER TABLE "customers" ADD COLUMN "preferred_locale" text;--> statement-breakpoint
+ALTER TABLE "customers" ADD CONSTRAINT "customers_preferred_locale_check" CHECK ("customers"."preferred_locale" IS NULL OR "customers"."preferred_locale" IN ('en', 'es', 'fr', 'ar'));

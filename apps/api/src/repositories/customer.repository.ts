@@ -50,4 +50,13 @@ export class CustomerRepository extends BaseRepository {
       .returning();
     return row;
   }
+
+  async setPreferredLocale(id: string, locale: string): Promise<Customer | undefined> {
+    const [row] = await this.db
+      .update(customers)
+      .set({ preferredLocale: locale, updatedAt: new Date() })
+      .where(and(eq(customers.id, id), eq(customers.isDeleted, false)))
+      .returning();
+    return row;
+  }
 }

@@ -51,3 +51,14 @@ export function resolveSupportedLocale(candidate: string | null | undefined): Lo
   }
   return DEFAULT_LOCALE;
 }
+
+/**
+ * Customer language preference (customer + public surfaces). `null` means
+ * "no saved choice": the web falls back to the locale cookie, then the
+ * business default, then DEFAULT_LOCALE. Staff locale stays business-configured.
+ */
+export const customerLanguageSchema = z.object({ locale: localeSchema.nullable() });
+export const updateCustomerLanguageSchema = z.object({ locale: localeSchema });
+
+export type CustomerLanguageDto = z.infer<typeof customerLanguageSchema>;
+export type UpdateCustomerLanguageInput = z.infer<typeof updateCustomerLanguageSchema>;

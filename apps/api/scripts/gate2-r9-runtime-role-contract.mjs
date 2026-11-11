@@ -27,7 +27,7 @@ try {
   const applied = (await owner.query(
     'SELECT count(*)::int AS count FROM drizzle.__drizzle_migrations',
   )).rows[0];
-  assert(applied.count === 67, 'MIGRATIONS_NOT_REPLAYED');
+  assert(applied.count === 68, 'MIGRATIONS_NOT_REPLAYED');
 
   await owner.query(`CREATE ROLE ${candidateName} LOGIN INHERIT NOSUPERUSER
     NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS

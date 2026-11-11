@@ -470,6 +470,13 @@
       "when": 1793954045381,
       "tag": "0066_dev20b_durable_provenance",
       "breakpoints": true
+    },
+    {
+      "idx": 67,
+      "version": "7",
+      "when": 1794421424992,
+      "tag": "0067_customer_preferred_locale",
+      "breakpoints": true
     }
   ]
 }

@@ -38,6 +38,7 @@ function customer(status: Customer['status'] = 'active'): Customer {
     email: null,
     birthday: null,
     phoneVerifiedAt: new Date(),
+    preferredLocale: null,
     status,
     createdAt: new Date(),
     createdBy: null,
