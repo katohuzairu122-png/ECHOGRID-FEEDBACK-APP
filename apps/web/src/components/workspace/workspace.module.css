@@ -604,3 +604,81 @@
     align-items: flex-start;
   }
 }
+
+/* Phase 2A: grounded three-way sentiment comparison from the existing trend API. */
+.sentimentCards {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  list-style: none;
+  margin: 18px 0 0;
+  padding: 0;
+}
+.sentimentCard {
+  --sentiment-color: var(--ws-c-mint);
+  min-width: 0;
+  display: grid;
+  align-content: center;
+  gap: 7px;
+  padding: 15px;
+  background: linear-gradient(
+    145deg,
+    color-mix(in srgb, var(--sentiment-color) 14%, var(--ws-surface)),
+    var(--ws-surface-2)
+  );
+  border: 1px solid color-mix(in srgb, var(--sentiment-color) 44%, var(--ws-border));
+  border-radius: 14px;
+}
+.sentimentCard[data-sentiment='negative'] {
+  --sentiment-color: #fb7185;
+}
+.sentimentCard[data-sentiment='neutral'] {
+  --sentiment-color: #94a3b8;
+}
+.sentimentCard[data-sentiment='positive'] {
+  --sentiment-color: var(--ws-c-mint);
+}
+.sentimentLabel,
+.sentimentValues {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  flex-wrap: wrap;
+}
+.sentimentLabel {
+  color: var(--ws-text-muted);
+  font-size: 12px;
+}
+.sentimentDot {
+  flex: 0 0 auto;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--sentiment-color);
+}
+.sentimentCount {
+  color: var(--ws-text);
+  font-size: 23px;
+  font-weight: 650;
+  line-height: 1.2;
+}
+.sentimentRate {
+  color: var(--ws-text-muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+@media (max-width: 599px) {
+  .sentimentCards {
+    gap: 7px;
+  }
+  .sentimentCard {
+    padding: 12px 9px;
+  }
+  .sentimentCount {
+    font-size: 20px;
+  }
+  .sentimentLabel,
+  .sentimentRate {
+    font-size: 11px;
+  }
+}
