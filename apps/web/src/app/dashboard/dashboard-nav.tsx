@@ -1,73 +1,41 @@
-import Link from 'next/link';
 import { getTranslations } from 'next-intl/server';
 import { logoutAction } from '@/lib/actions/auth';
 import { Button } from '@/components/ui';
-import { Logo } from '@/components/brand';
 import { PwaInstallButton } from '@/components/pwa-install-button';
-import { DashboardMobileNav } from './dashboard-mobile-nav';
-import { DashboardNavLinks } from './dashboard-nav-links';
-import { BusinessSwitcher } from './business-switcher';
-import { getActiveBusinessQuiet, getBusinesses } from '@/lib/business';
-
-const NAV_ITEMS = [
-  ['branches', '/dashboard/branches'],
-  ['feedback', '/dashboard/feedback'],
-  ['loyalty', '/dashboard/loyalty'],
-  ['customerQr', '/dashboard/loyalty/scan'],
-  ['settlements', '/dashboard/settlements'],
-  ['messages', '/dashboard/messages'],
-  ['analytics', '/dashboard/analytics'],
-  ['notifications', '/dashboard/notifications'],
-  ['settings', '/dashboard/settings'],
-  ['team', '/dashboard/settings/team'],
-  ['billing', '/dashboard/billing'],
-  ['support', '/support'],
-] as const;
+import { WorkspaceNavigation } from '@/components/workspace/workspace-navigation';
 
 export async function DashboardNav() {
   const t = await getTranslations('dashboard');
-  // The switcher is optional dashboard chrome. A transient business-list
-  // failure must not take down the shared layout and strand every dashboard
-  // page behind a global error boundary.
-  const [businesses, activeBusiness] = await Promise.all([
-    getBusinesses().catch(() => []),
-    getActiveBusinessQuiet(),
-  ]);
-
   return (
-    <header className="border-b border-neutral-200 bg-white">
-      <div className="mx-auto max-w-6xl px-4 py-3 sm:px-6 lg:py-4">
-        <div className="flex items-center justify-between gap-3">
-          <Link href="/dashboard" aria-label="Echo Grid dashboard home">
-            <Logo variant="horizontal" iconSize={28} />
-          </Link>
-          <nav className="hidden items-center gap-2 lg:flex" aria-label={t('nav.menu')}>
-            <DashboardNavLinks
-              items={NAV_ITEMS.map(([key, href]) => ({ href, label: t(`nav.${key}`) }))}
-            />
-          </nav>
-          <div className="hidden items-center gap-1 lg:flex">
-            <PwaInstallButton label={t('nav.installApp')} iosHint={t('nav.installIosHint')} />
-            <form action={logoutAction}>
-              <Button type="submit" variant="ghost" size="sm">
-                {t('nav.logout')}
-              </Button>
-            </form>
-          </div>
-          <DashboardMobileNav
-            menuLabel={t('nav.menu')}
-            logoutLabel={t('nav.logout')}
-            installLabel={t('nav.installApp')}
-            installIosHint={t('nav.installIosHint')}
-            items={NAV_ITEMS.map(([key, href]) => ({ href, label: t(`nav.${key}`) }))}
-          />
-        </div>
-        {activeBusiness && (
-          <div className="mt-3">
-            <BusinessSwitcher businesses={businesses} activeBusinessId={activeBusiness.id} />
-          </div>
-        )}
-      </div>
-    </header>
+    <WorkspaceNavigation
+      home="/dashboard"
+      label={t('overview.workspace')}
+      menuLabel={t('nav.menu')}
+      items={[
+        { href: '/dashboard', label: t('overview.title'), icon: 'store' },
+        { href: '/dashboard/feedback', label: t('nav.feedback'), icon: 'chat' },
+        { href: '/dashboard/loyalty', label: t('nav.loyalty'), icon: 'star' },
+        { href: '/dashboard/analytics', label: t('nav.analytics'), icon: 'chart' },
+        { href: '/dashboard/branches', label: t('nav.branches'), icon: 'store' },
+        { href: '/dashboard/loyalty/scan', label: t('nav.customerQr'), icon: 'qr' },
+        { href: '/dashboard/settlements', label: t('nav.settlements'), icon: 'gift' },
+        { href: '/dashboard/messages', label: t('nav.messages'), icon: 'chat' },
+        { href: '/dashboard/notifications', label: t('nav.notifications'), icon: 'bell' },
+        { href: '/dashboard/settings', label: t('nav.settings'), icon: 'settings' },
+        { href: '/dashboard/settings/team', label: t('nav.team'), icon: 'users' },
+        { href: '/dashboard/billing', label: t('nav.billing'), icon: 'shield' },
+        { href: '/support', label: t('nav.support'), icon: 'chat' },
+      ]}
+      utilities={
+        <>
+          <PwaInstallButton label={t('nav.installApp')} iosHint={t('nav.installIosHint')} />
+          <form action={logoutAction}>
+            <Button type="submit" variant="ghost">
+              {t('nav.logout')}
+            </Button>
+          </form>
+        </>
+      }
+    />
   );
 }

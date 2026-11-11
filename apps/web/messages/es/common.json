@@ -18,5 +18,16 @@
   "status": {
     "error": "Ha ocurrido un error.",
     "success": "Guardado correctamente."
+  },
+  "workspace": {
+    "skip": "Ir al contenido",
+    "business": "Espacio del negocio",
+    "customer": "Cuenta de cliente",
+    "platform": "Administración",
+    "menu": "Toda la navegación",
+    "qr": "Mi QR de cliente",
+    "settlements": "Recompensas huérfanas",
+    "support": "Soporte",
+    "loading": "Cargando tu espacio…"
   }
 }

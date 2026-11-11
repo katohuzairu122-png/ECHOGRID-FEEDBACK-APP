@@ -33,7 +33,7 @@ test('staff sets up a loyalty tier, reward, and earning rates, end to end', asyn
   await page.getByLabel('URL slug').fill(`loyalty-e2e-business-${unique}`);
   await page.getByRole('button', { name: 'Create business' }).click();
 
-  await page.getByRole('link', { name: 'Loyalty' }).click();
+  await page.getByRole('link', { name: 'Loyalty', exact: true }).click();
   await expect(page).toHaveURL('/dashboard/loyalty');
 
   // --- Tiers ---

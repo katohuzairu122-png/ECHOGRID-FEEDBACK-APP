@@ -28,7 +28,8 @@ test('signup, create a business, create a branch, see it listed', async ({ page 
   await page.getByLabel('URL slug').fill(`e2e-business-${unique}`);
   await page.getByRole('button', { name: 'Create business' }).click();
 
-  await expect(page.getByRole('heading', { name: `E2E Business ${unique}` })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Business Overview', exact: true })).toBeVisible();
+  await expect(page.getByText(`E2E Business ${unique}`, { exact: true }).first()).toBeVisible();
 
   await page.getByRole('link', { name: 'View branches' }).click();
   await expect(page).toHaveURL('/dashboard/branches');

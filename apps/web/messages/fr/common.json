@@ -18,5 +18,16 @@
   "status": {
     "error": "Une erreur s'est produite.",
     "success": "Enregistré avec succès."
+  },
+  "workspace": {
+    "skip": "Aller au contenu",
+    "business": "Espace entreprise",
+    "customer": "Compte client",
+    "platform": "Administration",
+    "menu": "Toute la navigation",
+    "qr": "Mon QR client",
+    "settlements": "Récompenses orphelines",
+    "support": "Assistance",
+    "loading": "Chargement de votre espace…"
   }
 }

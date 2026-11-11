@@ -46,10 +46,8 @@ export default async function LoyaltyBusinessLayout({
 
   return (
     <NextIntlClientProvider locale={locale} messages={messages} formats={formats}>
-      <div className="flex min-h-screen flex-col bg-neutral-50">
-        <main className="mx-auto w-full max-w-3xl flex-1 px-6 py-8">{children}</main>
-        <AppFooter />
-      </div>
+      {children}
+      <AppFooter />
     </NextIntlClientProvider>
   );
 }

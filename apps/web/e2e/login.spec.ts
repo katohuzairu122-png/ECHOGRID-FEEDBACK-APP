@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { collapseDevelopmentBadge } from './helpers/development-chrome';
 
 // Runs with the existing disposable API/database fixture in CI. Never use
 // this account-creating test against production (the remote config rejects it).
@@ -31,6 +32,7 @@ test('landing sign in, registration, failed login, session login, logout and pro
   await page.getByLabel(/I agree to the Terms of Service/).check();
   await page.getByRole('button', { name: 'Create account' }).click();
   await expect(page).toHaveURL(/\/dashboard$/);
+  await collapseDevelopmentBadge(page);
   await page.getByRole('button', { name: 'Log out', exact: true }).click();
   await expect(page).toHaveURL(/\/login$/);
 
@@ -57,6 +59,7 @@ test('landing sign in, registration, failed login, session login, logout and pro
   );
   expect(session).toHaveLength(2);
   expect(session.every((cookie) => cookie.httpOnly && cookie.sameSite === 'Lax')).toBe(true);
+  await collapseDevelopmentBadge(page);
   await page.getByRole('button', { name: 'Log out', exact: true }).click();
   await expect(page).toHaveURL(/\/login$/);
   expect((await context.cookies()).filter((cookie) => cookie.name.startsWith('ff_'))).toHaveLength(
