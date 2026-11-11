@@ -20,7 +20,14 @@ function getDetectorCtor(): BarcodeDetectorCtor | undefined {
  * remains the way in. The camera stops as soon as a code is read, on Stop, or
  * on unmount.
  */
-export function QrCameraScanner({ onDetect }: { onDetect: (value: string) => void }) {
+export function QrCameraScanner({
+  onDetect,
+  large = false,
+}: {
+  onDetect: (value: string) => void;
+  /** Cashier landing: one very large primary Scan button. */
+  large?: boolean;
+}) {
   const t = useTranslations('loyalty.staff.serve');
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -93,16 +100,33 @@ export function QrCameraScanner({ onDetect }: { onDetect: (value: string) => voi
         className={active ? 'aspect-square w-full rounded-xl bg-black object-cover' : 'hidden'}
       />
       {active ? (
-        <Button type="button" variant="outline" onClick={stop}>
+        <Button
+          type="button"
+          variant="outline"
+          onClick={stop}
+          className={large ? 'w-full' : undefined}
+        >
           {t('stop')}
         </Button>
       ) : (
-        <Button type="button" onClick={start}>
-          {t('scan')}
+        <Button
+          type="button"
+          onClick={start}
+          className={large ? 'h-auto min-h-40 w-full text-2xl font-semibold' : undefined}
+        >
+          {t(large ? 'scanLarge' : 'scan')}
         </Button>
       )}
-      {active && <p role="status" className="text-sm">{t('scanning')}</p>}
-      {message && <p role="alert" className="text-sm">{message}</p>}
+      {active && (
+        <p role="status" className="text-sm">
+          {t('scanning')}
+        </p>
+      )}
+      {message && (
+        <p role="alert" className="text-sm">
+          {message}
+        </p>
+      )}
     </div>
   );
 }

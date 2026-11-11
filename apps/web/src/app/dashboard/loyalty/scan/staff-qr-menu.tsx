@@ -2,6 +2,7 @@
 
 import { useActionState, useRef } from 'react';
 import { useTranslations } from 'next-intl';
+import Link from 'next/link';
 import { QrCameraScanner } from '@/components/qr-camera-scanner';
 import { staffUnifiedQrAction, type StaffQrState } from '@/lib/actions/unified-qr';
 import { Button, Input, Label } from '@/components/ui';
@@ -18,37 +19,47 @@ export function StaffQrMenu({
   return (
     <div className="space-y-5 [&_button]:h-auto [&_button]:min-h-10 [&_button]:max-w-full [&_button]:whitespace-normal [&_button]:py-2">
       <QrCameraScanner
+        large
         onDetect={(value) => {
           if (tokenRef.current) tokenRef.current.value = value;
           formRef.current?.requestSubmit();
         }}
       />
-      <form ref={formRef} action={action} className="space-y-3">
-        <input type="hidden" name="operation" value="resolve" />
-        <Label htmlFor="token">{t('pasteHeading')}</Label>
-        <Input
-          ref={tokenRef}
-          id="token"
-          name="token"
-          defaultValue={state.token ?? ''}
-          required
-          autoComplete="off"
-        />
-        <Label htmlFor="branchId">Authorized business or branch</Label>
-        <select
-          id="branchId"
-          name="branchId"
-          defaultValue={state.branchId ?? contexts[0]?.branchId ?? ''}
-          className="w-full rounded border p-3"
-        >
-          {contexts.map((context) => (
-            <option key={context.branchId ?? 'business'} value={context.branchId ?? ''}>
-              {context.branchName ?? 'Business-wide access'}
-            </option>
-          ))}
-        </select>
-        <Button disabled={pending}>Resolve permitted actions</Button>
-      </form>
+      <Link
+        href="/dashboard/loyalty"
+        className="flex min-h-12 w-full items-center justify-center rounded-md border border-neutral-300 px-4 text-base font-medium"
+      >
+        {t('search')}
+      </Link>
+      <details open={Boolean(state.token || state.error)}>
+        <summary className="cursor-pointer text-sm">{t('manual')}</summary>
+        <form ref={formRef} action={action} className="mt-3 space-y-3">
+          <input type="hidden" name="operation" value="resolve" />
+          <Label htmlFor="token">{t('pasteHeading')}</Label>
+          <Input
+            ref={tokenRef}
+            id="token"
+            name="token"
+            defaultValue={state.token ?? ''}
+            required
+            autoComplete="off"
+          />
+          <Label htmlFor="branchId">Authorized business or branch</Label>
+          <select
+            id="branchId"
+            name="branchId"
+            defaultValue={state.branchId ?? contexts[0]?.branchId ?? ''}
+            className="w-full rounded border p-3"
+          >
+            {contexts.map((context) => (
+              <option key={context.branchId ?? 'business'} value={context.branchId ?? ''}>
+                {context.branchName ?? 'Business-wide access'}
+              </option>
+            ))}
+          </select>
+          <Button disabled={pending}>Resolve permitted actions</Button>
+        </form>
+      </details>
       {state.error && <p role="alert">{state.error}</p>}
       {!pending && state.result && state.businessId && (
         <ResolvedMenu
