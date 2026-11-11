@@ -6,7 +6,10 @@
       "tiers": "Tiers",
       "rewards": "Rewards",
       "redeem": "Confirm redemption",
-      "settings": "Settings"
+      "settings": "Settings",
+      "navigationLabel": "Loyalty sections",
+      "customerQr": "Customer QR",
+      "settlements": "Orphan settlement"
     },
     "accounts": {
       "emptyTitle": "No loyalty members yet",
@@ -15,7 +18,11 @@
       "lastVisit": "Last visit {date}",
       "noVisits": "No visits yet",
       "suspended": "Suspended",
-      "message": "Message"
+      "message": "Message",
+      "description": "Manage customer loyalty accounts and business-specific points.",
+      "sectionLabel": "Loyalty accounts",
+      "shownOnPage": "{count, plural, one {# account on this page} other {# accounts on this page}}",
+      "pointsLabel": "Business loyalty points"
     },
     "accountDialog": {
       "manageTrigger": "Manage",
