@@ -8,6 +8,8 @@ import { requestOtpAction } from '@/lib/actions/customer-auth';
 vi.mock('@/lib/actions/customer-auth', () => ({
   requestOtpAction: vi.fn(),
 }));
+vi.mock('@/lib/actions/language', () => ({ setLanguageAction: vi.fn() }));
+vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
 
 describe('OtpLoginForm', () => {
   beforeEach(() => {

@@ -25,6 +25,7 @@ function createFakeRepos() {
           email: input.email ?? null,
           birthday: input.birthday ?? null,
           phoneVerifiedAt: (input.phoneVerifiedAt as Date | undefined) ?? null,
+          preferredLocale: null,
           status: input.status ?? 'active',
           createdAt: new Date(),
           createdBy: input.createdBy ?? null,

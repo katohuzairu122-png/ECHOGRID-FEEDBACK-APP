@@ -10,6 +10,11 @@
       "replyPlaceholder": "Type a message…",
       "sending": "Sending…",
       "send": "Send"
-    }
+    },
+    "unavailableTitle": "Messages could not be loaded",
+    "unavailableDescription": "Something went wrong while loading your conversations. Nothing was changed. Try again.",
+    "forbiddenTitle": "Messages are not available with your current access",
+    "forbiddenDescription": "Ask a business owner to review your role or branch access.",
+    "retry": "Try again"
   }
 }

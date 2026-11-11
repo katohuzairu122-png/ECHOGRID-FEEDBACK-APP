@@ -4,6 +4,8 @@ import { getFormatter, getTranslations } from 'next-intl/server';
 import type { ConversationWithCustomerDto } from '@echo-grid-feedback/shared-types';
 import { getActiveBusiness } from '@/lib/business';
 import { apiFetch } from '@/lib/api-client';
+import { classifyMessagesError } from './messages-error';
+import { MessagesFailureNotice } from './messages-failure-notice';
 import { Badge, Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui';
 
 /** Staff landing page for Messages -- the conversation list, same card-list
@@ -15,9 +17,31 @@ export default async function MessagesPage() {
   const format = await getFormatter();
   const t = await getTranslations('messaging.staff');
 
-  const conversations = await apiFetch<ConversationWithCustomerDto[]>('/messaging/conversations?limit=50', {
-    businessId: business.id,
-  });
+  // A failed read is shown as an explicit state, never as an empty list or an unhandled crash.
+  // An expired session still goes to login; a denial and an outage are told apart.
+  let conversations: ConversationWithCustomerDto[] | undefined;
+  let failure: ReturnType<typeof classifyMessagesError> | undefined;
+  try {
+    conversations = await apiFetch<ConversationWithCustomerDto[]>(
+      '/messaging/conversations?limit=50',
+      { businessId: business.id },
+    );
+  } catch (error) {
+    failure = classifyMessagesError(error);
+  }
+  if (failure === 'login') redirect('/login');
+
+  if (!conversations) {
+    return (
+      <div className="flex flex-col gap-6">
+        <div>
+          <h1 className="text-2xl font-semibold text-neutral-900">{t('title')}</h1>
+          <p className="text-sm text-neutral-500">{business.name}</p>
+        </div>
+        <MessagesFailureNotice kind={failure === 'forbidden' ? 'forbidden' : 'unavailable'} />
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-6">
@@ -45,7 +69,9 @@ export default async function MessagesPage() {
                         {conversation.customer.fullName ?? conversation.customer.phone}
                       </p>
                       {conversation.unreadCount > 0 && (
-                        <Badge variant="accent">{t('unreadCount', { count: conversation.unreadCount })}</Badge>
+                        <Badge variant="accent">
+                          {t('unreadCount', { count: conversation.unreadCount })}
+                        </Badge>
                       )}
                     </div>
                     {conversation.lastMessagePreview && (

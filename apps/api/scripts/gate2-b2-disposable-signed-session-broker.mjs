@@ -42,7 +42,7 @@ try{
  assert.equal(identity.db,'echogrid_ci_pg18_b2_broker');
  assert.equal(identity.usr,'echogrid');
  assert.equal(Math.floor(identity.version/10000),18);
- assert.equal((await owner.query('SELECT count(*)::int n FROM drizzle.__drizzle_migrations')).rows[0].n,67);
+ assert.equal((await owner.query('SELECT count(*)::int n FROM drizzle.__drizzle_migrations')).rows[0].n,68);
  await owner.query('CREATE EXTENSION IF NOT EXISTS pgcrypto');
  await owner.query('CREATE SCHEMA gate2_b2');
  await owner.query('REVOKE ALL ON SCHEMA gate2_b2 FROM PUBLIC');

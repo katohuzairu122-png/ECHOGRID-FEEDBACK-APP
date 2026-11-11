@@ -3,6 +3,7 @@ import { getRequestConfig } from 'next-intl/server';
 import { DEFAULT_LOCALE, DEFAULT_TIMEZONE, resolveSupportedLocale } from '@echo-grid-feedback/shared-types';
 import { getActiveBusinessQuiet } from '@/lib/business';
 import { hasSession } from '@/lib/session';
+import { getLocaleOverride } from '@/lib/customer-language';
 import { loadMessages } from './load-messages';
 import { formats } from './formats';
 
@@ -34,9 +35,11 @@ export default getRequestConfig(async () => {
   // large majority of requests this config runs on (both anonymous QR
   // pages, every /loyalty/* customer page, /login itself) skip a doomed
   // API round trip entirely instead of making one just to get a 401.
+  let staffResolved = false;
   if (await hasSession()) {
     const business = await getActiveBusinessQuiet();
     if (business) {
+      staffResolved = true;
       // resolveSupportedLocale guards against a value outside
       // SUPPORTED_LOCALES even though BusinessDto types defaultLocale as
       // Locale already -- the API response is asserted, not
@@ -46,6 +49,13 @@ export default getRequestConfig(async () => {
       locale = resolveSupportedLocale(business.defaultLocale);
       timeZone = business.defaultTimezone || DEFAULT_TIMEZONE;
     }
+  }
+
+  // Customer + public surfaces (no staff business resolved): the visitor's
+  // own choice -- saved customer preference, then the locale cookie -- wins
+  // over the English default. Staff stay on their business's language.
+  if (!staffResolved) {
+    locale = (await getLocaleOverride()) ?? locale;
   }
 
   return {

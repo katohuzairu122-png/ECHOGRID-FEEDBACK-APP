@@ -31,10 +31,10 @@ const options = new Set(['sslmode', 'channel_binding']);
 if ([...parsed.searchParams.keys()].some(k => !options.has(k))) fail('URL_OPTIONS_DENIED');
 const journal = JSON.parse(readFileSync(resolve(root,'drizzle/meta/_journal.json'),'utf8'));
 if (journal.version !== '7' || journal.dialect !== 'postgresql' ||
-    journal.entries.length !== 67 ||
+    journal.entries.length !== 68 ||
     journal.entries[44].tag !== '0044_split07_multiunit_inert_conservation' ||
     journal.entries[45].tag !== '0045_heta01_f1_stripe_evidence' ||
-    journal.entries[66].tag !== '0066_dev20b_durable_provenance') {
+    journal.entries[67].tag !== '0067_customer_preferred_locale') {
   fail('REPOSITORY_JOURNAL_DENIED');
 }
 const client = new pg.Client({
@@ -90,7 +90,7 @@ try {
   console.log(JSON.stringify({
     gate:'GATE2_STAGING_SECRET_READONLY',status:'PASS',
     targetEndpointAllowlisted:true,database:'neondb',postgresMajor:18,
-    appliedMigrations:45,pendingMigrations:22,
+    appliedMigrations:45,pendingMigrations:23,
     historicalStoredHashHistoryMatchesVerifiedSnapshot:true,
     exactRepositorySqlHashMatches:exactHashes,historicalSqlHashDifferences:45-exactHashes,
     mostRecentAppliedMigrationHashExact:true,

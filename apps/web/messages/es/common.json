@@ -32,5 +32,8 @@
     "support": "Soporte",
     "loading": "Cargando tu espacio…",
     "community": "Comunidad"
+  },
+  "language": {
+    "label": "Idioma"
   }
 }
