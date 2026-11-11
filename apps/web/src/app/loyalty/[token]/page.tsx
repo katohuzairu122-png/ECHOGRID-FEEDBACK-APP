@@ -5,6 +5,8 @@ import { publicApiFetch } from '@/lib/public-api-client';
 import { ApiError } from '@/lib/api-client';
 import { hasCustomerSession } from '@/lib/customer-session';
 import { loadMessages } from '@/i18n/load-messages';
+import { getLocaleOverride } from '@/lib/customer-language';
+import { LanguageSelector } from '@/components/language-selector';
 import { formats } from '@/i18n/formats';
 import { CheckinPanel } from './checkin-panel';
 
@@ -36,11 +38,14 @@ export default async function LoyaltyCheckinPage({ params, searchParams }: Loyal
 
   const signedIn = await hasCustomerSession();
 
-  const locale = resolveSupportedLocale(qr.defaultLocale);
+  const locale = resolveSupportedLocale((await getLocaleOverride()) ?? qr.defaultLocale);
   const messages = await loadMessages(locale);
 
   return (
     <NextIntlClientProvider locale={locale} messages={messages} formats={formats}>
+      <div className="mx-auto flex w-full max-w-2xl justify-end px-4 pt-4">
+        <LanguageSelector className="w-40" />
+      </div>
       <CheckinPanel
         token={token}
         branchName={qr.branchName}
