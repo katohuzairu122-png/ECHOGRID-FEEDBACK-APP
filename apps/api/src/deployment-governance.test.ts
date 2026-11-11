@@ -203,7 +203,8 @@ describe('B3 production deployment governance (static workflow checks)', () => {
     expect(deploy).toContain('environment: production');
     expect(deploy).toContain('sha256sum --check web-worker.sha256');
     expect(deploy).toContain('git ls-remote origin refs/heads/main');
-    expect(deploy).toContain('deploy -- --name=echo-grid-feedback-web --env=');
+    expect(deploy).toContain('wrangler deploy --name=echo-grid-feedback-web --env=""');
+    expect(deploy).toContain("OPEN_NEXT_DEPLOY: 'true'");
     expect(deploy).toContain('node tools/web-only-release.mjs before');
     expect(deploy).toContain('node tools/web-only-release.mjs after');
     expect(deploy).not.toMatch(/db:migrate|filter @echo-grid-feedback\/api|deploy-api/);
@@ -224,4 +225,3 @@ describe('B3 production deployment governance (static workflow checks)', () => {
     expect(doc).toMatch(/Required reviewers/i);
   });
 });
-

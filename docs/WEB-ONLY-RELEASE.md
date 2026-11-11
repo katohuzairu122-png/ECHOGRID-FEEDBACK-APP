@@ -10,7 +10,7 @@ The existing production workflow deploys the API before the Web Worker. This sep
 4. Seal the resulting `.open-next` directory in a SHA-256-checked, same-run immutable artifact.
 5. Require the existing protected `production` environment approval. Recheck that main has not advanced, restore the tested artifact and install the pinned lockfile without rebuilding.
 6. Before deployment, verify the known production account, exact existing Worker UUID and domain mapping. Reject resource bindings or cache overrides that could create ancillary infrastructure.
-7. Deploy only `echo-grid-feedback-web`. Independently read back the 100% deployed version, check the homepage and login HTTP 200, and compare the API deployment fingerprint before/after. Record non-secret provenance.
+7. Deploy only `echo-grid-feedback-web` using pinned Wrangler with an explicit top-level environment and the sealed OpenNext bundle. This avoids rebuilding or running cache tooling during deployment. Independently read back the 100% deployed version, check the homepage and login HTTP 200, and compare the API deployment fingerprint before/after. Record non-secret provenance.
 
 ## Verified target identity
 
@@ -22,6 +22,8 @@ The existing production workflow deploys the API before the Web Worker. This sep
 ## Review and release boundary
 
 This amendment is not approval to merge or dispatch itself. Production protection metadata could not be inspected with the current GitHub connector; configured reviewers and successful enforcement are not claimed. The workflow explicitly checks those settings at dispatch and refuses an unprotected release. Owner review, integration into main and the protected environment approval remain required before deployment.
+
+Before authorizing a release, the owner must confirm that `production` allows deployment from `main` only and that Cloudflare credentials are scoped to the environment, with no repository-level copies. Workflow checks cannot prove secret placement.
 
 The existing API-first release workflow, all API/database/migration code, Stripe configuration and financial activation remain untouched. No secrets are created or printed. No database commands or migrations run in the Web deployment jobs; the required existing CI uses disposable databases as before. A failed post-deployment check does not authorize API changes or an automatic rollback.
 

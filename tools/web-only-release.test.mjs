@@ -39,6 +39,7 @@ test('manual workflow binds CI, environment, immutable artifact and Web-only dep
   assert.match(workflow, /needs: \[authorize, verify, package\]/);
   assert.match(workflow, /environment: production/);
   assert.match(workflow, /sha256sum --check web-worker.sha256/);
-  assert.match(workflow, /deploy -- --name=echo-grid-feedback-web --env=/);
+  assert.match(workflow, /wrangler deploy --name=echo-grid-feedback-web --env=""/);
+  assert.match(workflow, /OPEN_NEXT_DEPLOY: 'true'/);
   assert.doesNotMatch(workflow, /command: deploy|db:migrate|secret put|wrangler deploy.*api|filter @echo-grid-feedback\/api/);
 });
