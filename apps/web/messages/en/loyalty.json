@@ -181,7 +181,12 @@
       "unsupported": "Camera scanning is not supported in this browser. Paste the customer’s QR token below instead.",
       "cameraDenied": "The camera could not be opened. Allow camera access, or paste the customer’s QR token below.",
       "viewfinder": "Camera view for scanning the customer QR code",
-      "pasteHeading": "Or paste the QR token"
+      "pasteHeading": "Or paste the QR token",
+      "loggedInAs": "You are logged in as",
+      "scanHint": "Press “Scan” to scan the customer’s QR code.",
+      "scanLarge": "Scan",
+      "search": "Search customers",
+      "manual": "Enter the QR token manually"
     }
   },
   "customer": {

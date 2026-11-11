@@ -181,7 +181,12 @@
       "unsupported": "Le scan par caméra n’est pas pris en charge par ce navigateur. Collez plutôt le jeton QR du client ci-dessous.",
       "cameraDenied": "La caméra n’a pas pu s’ouvrir. Autorisez l’accès à la caméra ou collez le jeton QR du client ci-dessous.",
       "viewfinder": "Vue caméra pour scanner le code QR du client",
-      "pasteHeading": "Ou collez le jeton QR"
+      "pasteHeading": "Ou collez le jeton QR",
+      "loggedInAs": "Vous êtes connecté en tant que",
+      "scanHint": "Appuyez sur « Scanner » pour lire le code QR du client.",
+      "scanLarge": "Scanner",
+      "search": "Rechercher des clients",
+      "manual": "Saisir le jeton QR manuellement"
     }
   },
   "customer": {
