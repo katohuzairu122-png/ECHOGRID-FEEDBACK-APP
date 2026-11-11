@@ -192,7 +192,8 @@
     "final": {
       "title": "Ready to Build",
       "accent": "Stronger Customer Relationships?",
-      "description": "Start with feedback. Create an engagement experience that grows with your business."
+      "description": "Start with feedback. Create an engagement experience that grows with your business.",
+      "talk": "Talk to us"
     },
     "footer": {
       "company": "An INFINICUS company",
@@ -223,6 +224,13 @@
       "trend": "Feedback trend — sample data",
       "period": "Example month",
       "qrCaption": "Illustrative QR · opens this website"
+    },
+    "stats": {
+      "label": "Echo Grid at a glance",
+      "languages": "Languages supported",
+      "qr": "Branch QR code per location",
+      "plans": "Plans, starting free",
+      "industries": "Business types served"
     }
   }
 }

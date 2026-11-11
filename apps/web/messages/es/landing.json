@@ -192,7 +192,8 @@
     "final": {
       "title": "¿Listo para construir",
       "accent": "relaciones más fuertes?",
-      "description": "Empieza con las opiniones y crea una experiencia que crezca con tu negocio."
+      "description": "Empieza con las opiniones y crea una experiencia que crezca con tu negocio.",
+      "talk": "Háblenos"
     },
     "footer": {
       "company": "Una empresa de INFINICUS",
@@ -223,6 +224,13 @@
       "trend": "Tendencia — datos de ejemplo",
       "period": "Mes de ejemplo",
       "qrCaption": "QR ilustrativo · abre esta web"
+    },
+    "stats": {
+      "label": "Echo Grid de un vistazo",
+      "languages": "Idiomas compatibles",
+      "qr": "Código QR por sucursal",
+      "plans": "Planes, desde gratis",
+      "industries": "Tipos de negocio atendidos"
     }
   }
 }
