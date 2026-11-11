@@ -36,6 +36,7 @@ export default async function LoyaltyDashboardLayout({ children }: { children: R
           items={[
             { href: '/loyalty/dashboard', label: t('brand'), icon: 'star' },
             { href: '/loyalty/dashboard/community', label: shell('community'), icon: 'users' },
+            { href: '/loyalty/dashboard/surveys', label: shell('surveys'), icon: 'chart' },
             { href: '/loyalty/dashboard/qr', label: shell('qr'), icon: 'qr' },
             { href: '/loyalty/dashboard/settlements', label: shell('settlements'), icon: 'gift' },
             { href: '/support', label: shell('support'), icon: 'chat' },

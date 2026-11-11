@@ -56,6 +56,7 @@ describe('authenticated workspace layout boundaries', () => {
     for (const href of [
       '/loyalty/dashboard',
       '/loyalty/dashboard/community',
+      '/loyalty/dashboard/surveys',
       '/loyalty/dashboard/qr',
       '/loyalty/dashboard/settlements',
       '/support',
@@ -64,8 +65,8 @@ describe('authenticated workspace layout boundaries', () => {
     }
     expect(sidebar.querySelector('button[type="submit"]')).toBeInTheDocument(); // logout stays available
     expect(sidebar.querySelector('[data-testid="language-selector"]')).toBeInTheDocument(); // shared language selector
-    // No Surveys destination until a functioning Surveys interface exists.
-    expect(sidebar.querySelector('a[href*="survey"]')).toBeNull();
+    // Surveys is a destination now that a functioning Surveys interface exists (H2).
+    expect(sidebar.querySelector('a[href="/loyalty/dashboard/surveys"]')).toBeInTheDocument();
   });
   it('requires staff authentication before reading platform identity', async () => {
     await expect(PlatformLayout({ children: null })).rejects.toThrow('redirect:/login');

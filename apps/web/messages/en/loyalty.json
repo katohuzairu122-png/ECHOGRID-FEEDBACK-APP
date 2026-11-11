@@ -321,6 +321,56 @@
         "pointsBody": "Community Points are kept in their own ledger. This page only shows your balance and history; it cannot create, spend or change points."
       },
       "retry": "Try again"
+    },
+    "surveys": {
+      "title": "Surveys",
+      "eyebrow": "Echo Grid Surveys",
+      "subtitle": "Your survey history. Take a survey from a business’s QR code or a survey link.",
+      "historyTitle": "Your surveys",
+      "status": {
+        "started": "In progress",
+        "submitted": "Submitted",
+        "completed": "Completed",
+        "invalidated": "Not counted"
+      },
+      "startedOn": "Started {date}",
+      "submittedOn": "Submitted {date}",
+      "completedOn": "Completed {date}",
+      "atBusiness": "at {business}",
+      "continue": "Continue",
+      "open": "Open",
+      "emptyTitle": "No surveys yet",
+      "emptyDescription": "When a business invites you to a survey you can take it here. Scan a business QR code to see the surveys available to you.",
+      "unavailable": "Your surveys could not be loaded right now.",
+      "forbidden": "Surveys are not available with your current access.",
+      "retry": "Try again",
+      "older": "Older",
+      "newer": "Newer",
+      "pagination": "Survey pages",
+      "take": {
+        "back": "Back to surveys",
+        "notFound": "This survey could not be found.",
+        "forbidden": "This survey is not available to your account.",
+        "unavailable": "This survey could not be loaded right now.",
+        "noQuestions": "This survey has no questions.",
+        "consent": "I agree to share my answers for this survey.",
+        "required": "Required",
+        "optional": "Optional",
+        "yes": "Yes",
+        "no": "No",
+        "submit": "Submit answers",
+        "submitting": "Submitting…",
+        "successTitle": "Thank you",
+        "successBody": "Your answers were submitted.",
+        "ratingOf": "{value} of {max}",
+        "errors": {
+          "forbidden": "This survey is not available to your account.",
+          "closed": "This survey is closed, or you have already taken it.",
+          "invalid": "Please check your answers and try again.",
+          "unavailable": "We could not submit your answers. Please try again."
+        }
+      },
+      "surveyFallback": "Survey"
     }
   }
 }
