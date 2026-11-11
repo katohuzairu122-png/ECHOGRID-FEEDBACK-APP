@@ -192,7 +192,8 @@
     "final": {
       "title": "Prêt à créer",
       "accent": "des relations clients plus fortes ?",
-      "description": "Commencez par les avis et créez une expérience qui évolue avec votre entreprise."
+      "description": "Commencez par les avis et créez une expérience qui évolue avec votre entreprise.",
+      "talk": "Parlez-nous"
     },
     "footer": {
       "company": "Une entreprise INFINICUS",
@@ -223,6 +224,13 @@
       "trend": "Tendance — données fictives",
       "period": "Mois fictif",
       "qrCaption": "QR illustratif · ouvre ce site"
+    },
+    "stats": {
+      "label": "Echo Grid en un coup d’œil",
+      "languages": "Langues prises en charge",
+      "qr": "Code QR par site",
+      "plans": "Formules, à partir de gratuit",
+      "industries": "Types d’entreprise servis"
     }
   }
 }

@@ -2,6 +2,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { getTranslations } from 'next-intl/server';
 import { redirect } from 'next/navigation';
+import { SUPPORTED_LOCALES } from '@echo-grid-feedback/shared-types';
 import { hasSession } from '@/lib/session';
 import { Logo } from '@/components/brand';
 import { LandingIcon, type LandingIconName } from '@/components/landing/landing-icon';
@@ -210,6 +211,23 @@ export default async function RootPage() {
           ))}
         </ol>
       </section>
+      <section className={styles.statsBand} aria-label={t('stats.label')}>
+        <dl>
+          {(
+            [
+              [SUPPORTED_LOCALES.length, 'languages'],
+              [1, 'qr'],
+              [LANDING_PLANS.length, 'plans'],
+              [INDUSTRY_ICONS.length, 'industries'],
+            ] as const
+          ).map(([value, key]) => (
+            <div key={key}>
+              <dt>{t(`stats.${key}`)}</dt>
+              <dd>{value}</dd>
+            </div>
+          ))}
+        </dl>
+      </section>
       <section
         id="customers"
         className={`${styles.section} ${styles.customerSection}`}
@@ -307,7 +325,12 @@ export default async function RootPage() {
           </h2>
           <p>{t('final.description')}</p>
         </div>
-        {cta(t('startFree'))}
+        <div className={styles.finalActions}>
+          {cta(t('startFree'))}
+          <Link href="/support" className={styles.outlineCta}>
+            {t('final.talk')}
+          </Link>
+        </div>
       </section>
       <footer className={styles.footer}>
         <div className={styles.footerBrand}>

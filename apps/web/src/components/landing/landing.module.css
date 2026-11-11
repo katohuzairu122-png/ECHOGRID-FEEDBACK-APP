@@ -1552,3 +1552,47 @@
     transition: none;
   }
 }
+
+/* Facts band: every figure is derived from real constants (locales, plans, industries), never hand-typed marketing claims. */
+.statsBand {
+  background: #04202f;
+  color: #fff;
+  padding: 44px max(24px, calc((100vw - 1312px) / 2));
+}
+.statsBand dl {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 24px;
+  margin: 0;
+  text-align: center;
+}
+.statsBand dl > div {
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 8px;
+}
+.statsBand dd {
+  margin: 0;
+  font-size: 44px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  color: #00df9d;
+}
+.statsBand dt {
+  font-size: 13px;
+  color: #e5edf3;
+}
+.finalActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+}
+@media (max-width: 720px) {
+  .statsBand dl {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .statsBand dd {
+    font-size: 36px;
+  }
+}
