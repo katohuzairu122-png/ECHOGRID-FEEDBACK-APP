@@ -1,4 +1,5 @@
-import { render } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import { DashboardNav } from './dashboard-nav';
 vi.mock('next-intl/server', () => ({ getTranslations: vi.fn(async () => (key: string) => key) }));
@@ -11,7 +12,16 @@ describe('DashboardNav presentation', () => {
   it('preserves every operational destination in the vertical sidebar and full mobile menu', async () => {
     const { container } = render(await DashboardNav());
     const sidebar = container.querySelector('aside nav')!;
-    const mobile = container.querySelector('details nav')!;
+    const user = userEvent.setup();
+    const bar = container.querySelector('nav[class*="bottomNav"]')!;
+    expect(Array.from(bar.querySelectorAll('a')).map((a) => a.getAttribute('href'))).toEqual([
+      '/dashboard',
+      '/dashboard/feedback',
+      '/dashboard/loyalty',
+      '/dashboard/analytics',
+    ]);
+    await user.click(screen.getByRole('button', { name: 'nav.more' }));
+    const sheet = screen.getByRole('dialog');
     for (const href of [
       '/dashboard',
       '/dashboard/branches',
@@ -28,8 +38,12 @@ describe('DashboardNav presentation', () => {
       '/support',
     ]) {
       expect(sidebar.querySelector('a[href="' + href + '"]')).toBeInTheDocument();
-      expect(mobile.querySelector('a[href="' + href + '"]')).toBeInTheDocument();
+      expect(
+        bar.querySelector('a[href="' + href + '"]') ??
+          sheet.querySelector('a[href="' + href + '"]'),
+      ).toBeInTheDocument();
     }
-    expect(container.querySelectorAll('form')).toHaveLength(2);
+    expect(container.querySelectorAll('aside form')).toHaveLength(1);
+    expect(sheet.querySelectorAll('form')).toHaveLength(1);
   });
 });

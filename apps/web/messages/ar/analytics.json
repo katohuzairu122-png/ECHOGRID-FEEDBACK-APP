@@ -37,7 +37,7 @@
     "positive": "{count} إيجابي",
     "neutral": "{count} محايد",
     "negative": "{count} سلبي",
-    "feedbackCount": "{count} من عناصر الملاحظات"
+    "feedbackCount": "{count, plural, zero {لا ملاحظات} one {ملاحظة واحدة} two {ملاحظتان} few {# ملاحظات} many {# ملاحظة} other {# ملاحظة}}"
   },
   "search": {
     "backToOverview": "العودة إلى النظرة العامة →",

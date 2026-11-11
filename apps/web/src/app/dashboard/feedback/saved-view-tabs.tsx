@@ -44,7 +44,7 @@ export async function SavedViewTabs({ activeSavedView, baseParams }: SavedViewTa
   const tabClass = (isActive: boolean) =>
     cn(
       'whitespace-nowrap rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
-      isActive ? 'bg-brand-600 text-white' : 'text-neutral-600 hover:bg-neutral-100',
+      isActive ? 'ws-solid' : 'text-neutral-600 hover:bg-neutral-100',
     );
 
   return (

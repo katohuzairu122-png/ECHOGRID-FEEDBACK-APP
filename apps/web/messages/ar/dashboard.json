@@ -1,6 +1,8 @@
 {
   "nav": {
     "menu": "التنقل في لوحة التحكم",
+    "more": "المزيد",
+    "close": "إغلاق",
     "installApp": "تثبيت التطبيق",
     "installIosHint": "لتثبيت Echo Grid، اضغط على مشاركة، ثم إضافة إلى الشاشة الرئيسية.",
     "branches": "الفروع",
@@ -154,7 +156,7 @@
     "forms": "إدارة نماذج الآراء",
     "scanCustomer": "مسح رمز عميل",
     "settlements": "مراجعة المكافآت اليتيمة",
-    "branchCount": "{count, number} فروع متاحة",
+    "branchCount": "{count, plural, zero {لا توجد فروع متاحة} one {فرع واحد متاح} two {فرعان متاحان} few {# فروع متاحة} many {# فرعًا متاحًا} other {# فرع متاح}}",
     "recentFeedback": "أحدث الآراء",
     "viewAll": "عرض الكل",
     "noFeedback": "لا توجد آراء لعرضها بعد.",
@@ -167,10 +169,17 @@
     "loyaltyHint": "كل حساب ورصيد يخص هذا النشاط. أعداد المعاينة ليست إجمالي العملاء.",
     "noLoyalty": "لا توجد حسابات ولاء لعرضها بعد.",
     "customer": "عميل",
-    "points": "{count, number} نقاط ولاء للنشاط",
-    "visits": "{count, number} زيارات",
+    "points": "{count, plural, zero {لا توجد نقاط ولاء للنشاط} one {نقطة ولاء واحدة للنشاط} two {نقطتا ولاء للنشاط} few {# نقاط ولاء للنشاط} many {# نقطة ولاء للنشاط} other {# نقطة ولاء للنشاط}}",
+    "visits": "{count, plural, zero {لا زيارات} one {زيارة واحدة} two {زيارتان} few {# زيارات} many {# زيارة} other {# زيارة}}",
     "platform": "إدارة المنصة",
     "openPlatform": "فتح لوحة الإدارة",
-    "platformHint": "استخدم صلاحياتك الحالية في مساحة إدارة المنصة المنفصلة."
+    "platformHint": "استخدم صلاحياتك الحالية في مساحة إدارة المنصة المنفصلة.",
+    "branchFilterLabel": "الفرع",
+    "allBranches": "جميع الفروع",
+    "applyFilter": "تطبيق التصفية",
+    "branchFilterNote": "تنطبق تصفية الفرع على مخطط المشاعر وقوائم الملاحظات. حسابات الولاء وعدد الفروع تخص النشاط التجاري بالكامل.",
+    "branchFilterInvalid": "هذا الفرع غير متاح لك، لذلك تُعرض جميع الفروع.",
+    "branchFilterActive": "مُصفّى حسب {name}",
+    "sentimentSummary": "{total, plural, zero {لا توجد ملاحظات مصنفة} one {ملاحظة مصنفة واحدة} two {ملاحظتان مصنفتان} few {# ملاحظات مصنفة} many {# ملاحظة مصنفة} other {# ملاحظة مصنفة}} في هذه الفترة: {positive, number} إيجابية، {neutral, number} محايدة، {negative, number} سلبية."
   }
 }

@@ -12,6 +12,8 @@ export async function PlatformNav({ role }: { role: PlatformRole }) {
       home="/platform"
       label={t('brand')}
       menuLabel={t('menu')}
+      moreLabel={t('more')}
+      closeLabel={t('close')}
       items={[
         { href: '/platform', label: t('brand'), icon: 'shield' },
         { href: '/platform/businesses', label: t('directory'), icon: 'store' },

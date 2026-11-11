@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { Dialog as BaseDialog } from '@base-ui-components/react/dialog';
 import { cn } from '@/lib/utils';
+import { useWorkspaceTheme } from '@/components/workspace/workspace-theme';
 
 /**
  * Thin styling layer over Base UI's Dialog primitive. Base UI was chosen
@@ -21,13 +22,16 @@ export function DialogContent({
   children,
   ...props
 }: React.ComponentProps<typeof BaseDialog.Popup>) {
+  // Portals render outside the workspace root, so re-apply its theme here.
+  const theme = useWorkspaceTheme();
   return (
     <BaseDialog.Portal>
       <BaseDialog.Backdrop className="fixed inset-0 z-50 bg-neutral-950/40" />
       <BaseDialog.Popup
+        data-ws-theme={theme}
         className={cn(
           'fixed left-1/2 top-1/2 z-[60] w-full max-w-md -translate-x-1/2 -translate-y-1/2',
-          'rounded-lg border border-neutral-200 bg-white p-6 shadow-lg',
+          'rounded-lg border border-neutral-200 bg-white p-6 text-neutral-900 shadow-lg',
           className,
         )}
         {...props}
@@ -43,7 +47,10 @@ export function DialogTitle({
   ...props
 }: React.ComponentProps<typeof BaseDialog.Title>) {
   return (
-    <BaseDialog.Title className={cn('text-lg font-semibold text-neutral-900', className)} {...props} />
+    <BaseDialog.Title
+      className={cn('text-lg font-semibold text-neutral-900', className)}
+      {...props}
+    />
   );
 }
 

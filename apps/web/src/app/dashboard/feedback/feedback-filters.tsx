@@ -117,7 +117,7 @@ export function FeedbackFilters({ search, category, urgency, baseParams }: Feedb
       <div className="flex gap-2">
         <button
           type="submit"
-          className="h-9 rounded-md bg-brand-600 px-4 text-sm font-medium text-white hover:bg-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600"
+          className="h-9 rounded-md ws-solid px-4 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600"
         >
           {t('search')}
         </button>

@@ -19,7 +19,9 @@ export type LandingIconName =
   | 'fitness'
   | 'arrow'
   | 'play'
-  | 'check';
+  | 'check'
+  | 'more'
+  | 'close';
 const paths: Partial<Record<LandingIconName, string>> = {
   qr: 'M3 3h6v6H3z M15 3h6v6h-6z M3 15h6v6H3z M15 15h2v2h-2z M19 15h2v6h-4v-2h-2 M12 3v3 M12 9v3H3 M9 12v3 M12 18v3 M15 12h6',
   bell: 'M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9 M10 21h4',
@@ -40,6 +42,8 @@ const paths: Partial<Record<LandingIconName, string>> = {
   arrow: 'M4 12h16 M14 6l6 6-6 6',
   play: 'M9 6v12l10-6z',
   check: 'M5 12l4 4L19 6',
+  more: 'M5 12h.01 M12 12h.01 M19 12h.01',
+  close: 'M6 6l12 12 M18 6 6 18',
 };
 export function LandingIcon({
   name,

@@ -19,7 +19,7 @@ export function CustomerQrDisplay({ token, expiresAt }: { token: string; expires
         <p role="status">QR expired. Generate a fresh QR.</p>
       ) : (
         <>
-          <div className="w-fit max-w-full bg-white p-4">
+          <div data-keep-light="" className="w-fit max-w-full bg-white p-4">
             <QRCode value={token} size={220} title="Short-lived customer identity" />
           </div>
           <details>

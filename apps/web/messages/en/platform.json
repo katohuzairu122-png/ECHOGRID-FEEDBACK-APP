@@ -11,7 +11,9 @@
       "billing": "Billing",
       "admin": "Admin"
     },
-    "menu": "Admin navigation"
+    "menu": "Admin navigation",
+    "more": "More",
+    "close": "Close"
   },
   "accessDenied": {
     "title": "Platform admin access required",

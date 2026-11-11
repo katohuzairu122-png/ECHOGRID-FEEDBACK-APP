@@ -11,6 +11,13 @@ interface SentimentTrendChartProps {
   };
 }
 
+// Theme-aware series colors: the workspace scope remaps success/danger and supplies a neutral that stays
+// legible on dark panels; outside a workspace they resolve to the original palette.
+const SERIES = {
+  positive: 'var(--color-success)',
+  neutral: 'var(--ws-chart-neutral, var(--color-neutral-300))',
+  negative: 'var(--color-danger)',
+} as const;
 const CHART_HEIGHT = 160;
 const BAR_GAP = 2;
 
@@ -52,20 +59,26 @@ export function SentimentTrendChart({ points, labels }: SentimentTrendChartProps
 
           return (
             <g key={point.bucket}>
-              <rect x={x} y={CHART_HEIGHT - negH} width={w} height={negH} className="fill-danger" />
+              <rect
+                x={x}
+                y={CHART_HEIGHT - negH}
+                width={w}
+                height={negH}
+                style={{ fill: SERIES.negative }}
+              />
               <rect
                 x={x}
                 y={CHART_HEIGHT - negH - neuH}
                 width={w}
                 height={neuH}
-                className="fill-neutral-300"
+                style={{ fill: SERIES.neutral }}
               />
               <rect
                 x={x}
                 y={CHART_HEIGHT - negH - neuH - posH}
                 width={w}
                 height={posH}
-                className="fill-success"
+                style={{ fill: SERIES.positive }}
               />
             </g>
           );
@@ -76,18 +89,18 @@ export function SentimentTrendChart({ points, labels }: SentimentTrendChartProps
         <span>{points[points.length - 1]?.bucket}</span>
       </div>
       <div className="flex items-center justify-center gap-4 text-xs text-neutral-600">
-        <ChartLegendItem colorClass="bg-success" label={labels.positive} />
-        <ChartLegendItem colorClass="bg-neutral-300" label={labels.neutral} />
-        <ChartLegendItem colorClass="bg-danger" label={labels.negative} />
+        <ChartLegendItem color={SERIES.positive} label={labels.positive} />
+        <ChartLegendItem color={SERIES.neutral} label={labels.neutral} />
+        <ChartLegendItem color={SERIES.negative} label={labels.negative} />
       </div>
     </div>
   );
 }
 
-function ChartLegendItem({ colorClass, label }: { colorClass: string; label: string }) {
+function ChartLegendItem({ color, label }: { color: string; label: string }) {
   return (
     <span className="flex items-center gap-1.5">
-      <span className={`h-2 w-2 rounded-full ${colorClass}`} />
+      <span className="h-2 w-2 rounded-full" style={{ backgroundColor: color }} />
       {label}
     </span>
   );

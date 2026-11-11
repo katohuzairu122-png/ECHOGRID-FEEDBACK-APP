@@ -100,3 +100,132 @@ body {
   color: var(--color-neutral-900);
   background-color: var(--color-neutral-50);
 }
+
+/* ==========================================================================
+   Workspace themes (UI Phase 1: visual fidelity)
+
+   The authenticated workspaces (business, customer, platform) render inside an
+   element carrying data-ws-theme. DARK is the default and follows the approved
+   Echo Grid landing/mockup identity (deep navy canvas, emerald-mint primary
+   accent, cyan, blue and violet supporting accents). LIGHT is preserved as a
+   complete, selectable token set for a later optional light mode: nothing
+   selects it yet, but switching is a one-attribute change (data-ws-theme="light").
+
+   Semantic --ws-* tokens drive the workspace chrome. Inside the scope the
+   existing Tailwind scales (neutral, brand, accent and the single-shade
+   status colors) are re-pointed, so every existing page that uses those
+   utilities is themed without touching its markup. Public pages carry no
+   data-ws-theme and are unaffected. Contrast of the key pairs is asserted by
+   workspace-theme.test.ts, which reads THIS file.
+   ========================================================================== */
+[data-ws-theme] {
+  --ws-mint: #25e9b0;
+  --ws-cyan: #22d3ee;
+  --ws-blue: #5b9bff;
+  --ws-violet: #a78bfa;
+  --ws-radius: 20px;
+  color: var(--ws-text);
+}
+
+[data-ws-theme='dark'] {
+  color-scheme: dark;
+  --ws-canvas: #031824;
+  --ws-chrome: #02121b;
+  --ws-surface: #071f2e;
+  --ws-surface-2: #0a2a3c;
+  --ws-surface-3: #0e3449;
+  --ws-border: #1a4157;
+  --ws-border-soft: #123448;
+  --ws-text: #eef7fb;
+  --ws-text-muted: #a3bfcd;
+  --ws-text-faint: #86a6b8;
+  --ws-accent-text: #25e9b0;
+  --ws-solid-bg: #25e9b0;
+  --ws-solid-fg: #031824;
+  --ws-solid-hover: #5ff2c8;
+  --ws-danger-solid: #d1363b;
+  --ws-focus: #22d3ee;
+  --ws-glow: 0 10px 30px #00000040;
+  --ws-chart-neutral: #7f9fb0;
+
+  --color-neutral-50: #0a2a3c;
+  --color-neutral-100: #0e3449;
+  --color-neutral-200: #1a4a61;
+  --color-neutral-300: #3a82a1;
+  --color-neutral-400: #7194a9;
+  --color-neutral-500: #8fb0c2;
+  --color-neutral-600: #a9c4d3;
+  --color-neutral-700: #c3d9e5;
+  --color-neutral-800: #dcebf3;
+  --color-neutral-900: #eef7fb;
+  --color-neutral-950: #f8fcfe;
+
+  --color-brand-50: #0a3a38;
+  --color-brand-100: #0c4a43;
+  --color-brand-200: #0f5f53;
+  --color-brand-300: #12806c;
+  --color-brand-400: #4ff0c1;
+  --color-brand-500: #25e9b0;
+  --color-brand-600: #25e9b0;
+  --color-brand-700: #5ff0c6;
+  --color-brand-800: #8ff5d8;
+  --color-brand-900: #c0fae9;
+  --color-brand-950: #e6fdf6;
+
+  --color-accent-700: #67e8f9;
+
+  --color-success: #4ade9e;
+  --color-warning: #fbbf24;
+  --color-danger: #ff8080;
+  --color-info: #7db6ff;
+}
+
+[data-ws-theme='light'] {
+  color-scheme: light;
+  --ws-canvas: #f4f7fb;
+  --ws-chrome: #031824;
+  --ws-surface: #ffffff;
+  --ws-surface-2: #f8fafc;
+  --ws-surface-3: #f1f5f9;
+  --ws-border: #e2e8f0;
+  --ws-border-soft: #eef2f6;
+  --ws-text: #0f2137;
+  --ws-text-muted: #475569;
+  --ws-text-faint: #5b6b80;
+  --ws-accent-text: #047857;
+  --ws-solid-bg: #047857;
+  --ws-solid-fg: #ffffff;
+  --ws-solid-hover: #065f46;
+  --ws-danger-solid: #d64545;
+  --ws-focus: #0891b2;
+  --ws-glow: 0 3px 14px #16375305;
+  --ws-chart-neutral: #cbd5e1;
+}
+
+/* Surfaces that hardcode bg-white become the themed input/card surface, except
+   where white is functional (a scannable QR code, a switch knob). */
+[data-ws-theme='dark'] .bg-white:not([data-keep-light]) {
+  background-color: var(--ws-surface-2);
+}
+[data-ws-theme='dark'] ::placeholder {
+  color: var(--color-neutral-400);
+}
+[data-ws-theme='dark'] option {
+  background-color: var(--ws-surface-2);
+  color: var(--ws-text);
+}
+
+/* The page behind a dark workspace must not flash light on overscroll. */
+body:has([data-ws-root][data-ws-theme='dark']) {
+  background-color: #031824;
+}
+
+/* Solid accent control (theme-aware): mint with navy text in dark, deep emerald
+   with white text in light. */
+.ws-solid {
+  background-color: var(--ws-solid-bg, var(--color-brand-700));
+  color: var(--ws-solid-fg, #ffffff);
+}
+.ws-solid:hover {
+  background-color: var(--ws-solid-hover, var(--color-brand-800));
+}

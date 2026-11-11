@@ -9,23 +9,35 @@ import {
   WorkspaceState,
 } from '@/components/workspace/overview-components';
 import { LandingIcon } from '@/components/landing/landing-icon';
-import { SentimentTrendChart, buttonVariants } from '@/components/ui';
+import { Button, Select, SentimentTrendChart, buttonVariants } from '@/components/ui';
 import styles from '@/components/workspace/workspace.module.css';
 import { CreateBusinessForm } from './create-business-form';
 
-export default async function DashboardPage() {
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ branch?: string | string[] }>;
+}) {
   const business = await getActiveBusiness();
   if (!business) return <CreateBusinessForm />;
+  const rawBranch = (await searchParams)?.branch;
+  const requestedBranch =
+    typeof rawBranch === 'string' && rawBranch.length <= 64 ? rawBranch : undefined;
   const [t, format, user, data] = await Promise.all([
     getTranslations('dashboard.overview'),
     getFormatter(),
     getCurrentUser(),
-    getBusinessOverview(business.id),
+    getBusinessOverview(business.id, requestedBranch),
   ]);
   const chart = await getTranslations('analytics.page.chart');
   const totals = data.trend.status === 'ready' ? trendTotals(data.trend.data) : null;
   const unavailable = (status: string) => t(status === 'forbidden' ? 'forbidden' : 'unavailable');
   const count = (value: number) => format.number(value);
+  const branchList = data.branches.status === 'ready' ? data.branches.data : [];
+  const activeBranch =
+    data.branchFilter.status === 'active'
+      ? branchList.find((b) => b.id === data.branchFilter.branchId)
+      : undefined;
   return (
     <div className={styles.overview}>
       <header className={styles.pageHeading}>
@@ -38,6 +50,27 @@ export default async function DashboardPage() {
           {t('viewBranches')}
         </Link>
       </header>
+      {branchList.length > 1 && (
+        <form method="get" className={styles.filterBar} aria-describedby="branch-filter-note">
+          <label htmlFor="branch-filter">{t('branchFilterLabel')}</label>
+          <Select id="branch-filter" name="branch" defaultValue={activeBranch?.id ?? ''}>
+            <option value="">{t('allBranches')}</option>
+            {branchList.map((b) => (
+              <option key={b.id} value={b.id}>
+                {b.name}
+              </option>
+            ))}
+          </Select>
+          <Button type="submit" variant="secondary">
+            {t('applyFilter')}
+          </Button>
+          <p id="branch-filter-note" className={styles.muted}>
+            {activeBranch ? t('branchFilterActive', { name: activeBranch.name }) + '. ' : ''}
+            {data.branchFilter.status === 'invalid' ? t('branchFilterInvalid') + ' ' : ''}
+            {t('branchFilterNote')}
+          </p>
+        </form>
+      )}
       <div className={styles.metricGrid}>
         <MetricCard
           icon="chat"
@@ -89,6 +122,16 @@ export default async function DashboardPage() {
             <WorkspaceState>{unavailable(data.trend.status)}</WorkspaceState>
           ) : (
             <>
+              {totals && totals.total > 0 && (
+                <p className={styles.summary}>
+                  {t('sentimentSummary', {
+                    total: totals.total,
+                    positive: totals.positive,
+                    neutral: totals.neutral,
+                    negative: totals.negative,
+                  })}
+                </p>
+              )}
               <SentimentTrendChart
                 points={data.trend.data}
                 labels={{

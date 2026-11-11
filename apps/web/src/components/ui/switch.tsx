@@ -41,7 +41,7 @@ export const Switch = React.forwardRef<HTMLInputElement, SwitchProps>(
           'peer-disabled:cursor-not-allowed peer-disabled:opacity-50',
         )}
       />
-      <span className="pointer-events-none absolute left-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform peer-checked:translate-x-5" />
+      <span data-keep-light="" className="pointer-events-none absolute left-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform peer-checked:translate-x-5" />
     </label>
   ),
 );

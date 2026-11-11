@@ -11,7 +11,7 @@
     "accounts": {
       "emptyTitle": "No loyalty members yet",
       "emptyDescription": "Customers who check in via a branch's QR code will appear here.",
-      "visits": "{count} visits",
+      "visits": "{count, plural, one {# visit} other {# visits}}",
       "lastVisit": "Last visit {date}",
       "noVisits": "No visits yet",
       "suspended": "Suspended",
@@ -187,7 +187,7 @@
       "title": "My Rewards",
       "emptyTitle": "No loyalty cards yet",
       "emptyDescription": "Scan a business's QR code and check in to start earning points.",
-      "visits": "{count} visits",
+      "visits": "{count, plural, one {# visit} other {# visits}}",
       "businessFallback": "Business"
     },
     "businessDashboard": {

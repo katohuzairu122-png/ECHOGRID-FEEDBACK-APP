@@ -1,6 +1,8 @@
 {
   "nav": {
     "menu": "Navigation du tableau de bord",
+    "more": "Plus",
+    "close": "Fermer",
     "installApp": "Installer l’application",
     "installIosHint": "Pour installer Echo Grid, touchez Partager, puis Sur l’écran d’accueil.",
     "branches": "Succursales",
@@ -154,7 +156,7 @@
     "forms": "Gérer les formulaires",
     "scanCustomer": "Scanner le QR d’un client",
     "settlements": "Consulter les récompenses orphelines",
-    "branchCount": "{count, number} établissements accessibles",
+    "branchCount": "{count, plural, one {# succursale accessible} many {# de succursales accessibles} other {# succursales accessibles}}",
     "recentFeedback": "Avis récents",
     "viewAll": "Tout voir",
     "noFeedback": "Aucun avis à afficher.",
@@ -167,10 +169,17 @@
     "loyaltyHint": "Chaque compte et solde appartient à cette entreprise. Cet aperçu ne représente pas le nombre total de clients.",
     "noLoyalty": "Aucun compte de fidélité à afficher.",
     "customer": "Client",
-    "points": "{count, number} points de fidélité de l’entreprise",
-    "visits": "{count, number} visites",
+    "points": "{count, plural, one {# point de fidélité de l’entreprise} many {# de points de fidélité de l’entreprise} other {# points de fidélité de l’entreprise}}",
+    "visits": "{count, plural, one {# visite} many {# de visites} other {# visites}}",
     "platform": "Administration de la plateforme",
     "openPlatform": "Ouvrir la console",
-    "platformHint": "Utilisez vos droits existants dans l’espace administrateur distinct."
+    "platformHint": "Utilisez vos droits existants dans l’espace administrateur distinct.",
+    "branchFilterLabel": "Succursale",
+    "allBranches": "Toutes les succursales",
+    "applyFilter": "Appliquer le filtre",
+    "branchFilterNote": "Le filtre par succursale s’applique au graphique de sentiment et aux listes d’avis. Les comptes de fidélité et le nombre de succursales concernent toute l’entreprise.",
+    "branchFilterInvalid": "Cette succursale n’est pas disponible pour vous ; toutes les succursales sont affichées.",
+    "branchFilterActive": "Filtré sur {name}",
+    "sentimentSummary": "{total, plural, one {# avis classé} many {# d’avis classés} other {# avis classés}} sur cette période : {positive, number} positifs, {neutral, number} neutres, {negative, number} négatifs."
   }
 }

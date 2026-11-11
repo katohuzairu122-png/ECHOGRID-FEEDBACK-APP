@@ -1,6 +1,8 @@
 {
   "nav": {
     "menu": "Dashboard navigation",
+    "more": "More",
+    "close": "Close",
     "installApp": "Install app",
     "installIosHint": "To install Echo Grid, tap Share, then Add to Home Screen.",
     "branches": "Branches",
@@ -154,7 +156,7 @@
     "forms": "Manage feedback forms",
     "scanCustomer": "Scan a customer QR",
     "settlements": "Review orphan settlements",
-    "branchCount": "{count, number} accessible branches",
+    "branchCount": "{count, plural, one {# accessible branch} other {# accessible branches}}",
     "recentFeedback": "Recent feedback",
     "viewAll": "View all",
     "noFeedback": "No feedback to display yet.",
@@ -167,10 +169,17 @@
     "loyaltyHint": "Each account and balance belongs to this business. Preview counts are not total customers.",
     "noLoyalty": "No loyalty accounts to display yet.",
     "customer": "Customer",
-    "points": "{count, number} business loyalty points",
-    "visits": "{count, number} visits",
+    "points": "{count, plural, one {# business loyalty point} other {# business loyalty points}}",
+    "visits": "{count, plural, one {# visit} other {# visits}}",
     "platform": "Platform administration",
     "openPlatform": "Open console",
-    "platformHint": "Use your existing platform permissions in the separate admin workspace."
+    "platformHint": "Use your existing platform permissions in the separate admin workspace.",
+    "branchFilterLabel": "Branch",
+    "allBranches": "All branches",
+    "applyFilter": "Apply filter",
+    "branchFilterNote": "The branch filter applies to the sentiment chart and feedback lists. Loyalty accounts and the branch count are business-wide.",
+    "branchFilterInvalid": "That branch is not available to you, so all branches are shown.",
+    "branchFilterActive": "Filtered to {name}",
+    "sentimentSummary": "{total, plural, one {# classified feedback item} other {# classified feedback items}} in this period: {positive, number} positive, {neutral, number} neutral, {negative, number} negative."
   }
 }

@@ -8,7 +8,7 @@ export async function CustomerQrActions({ token }: { token: string }) {
   if (!result) {
     return (
       <nav aria-label="Branch activities" className="mt-5 flex flex-wrap gap-3">
-        <a href="#feedback-form" className="rounded-lg bg-brand-700 px-5 py-3 text-white">
+        <a href="#feedback-form" className="rounded-lg ws-solid px-5 py-3">
           Leave feedback
         </a>
         <Link
@@ -27,7 +27,7 @@ export async function CustomerQrActions({ token }: { token: string }) {
       className="mt-5 flex flex-wrap items-start gap-3"
     >
       {actions.has('LEAVE_FEEDBACK') && (
-        <a href="#feedback-form" className="rounded-lg bg-brand-700 px-5 py-3 text-white">
+        <a href="#feedback-form" className="rounded-lg ws-solid px-5 py-3">
           Leave feedback
         </a>
       )}

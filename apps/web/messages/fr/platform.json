@@ -11,7 +11,9 @@
       "billing": "Facturation",
       "admin": "Administrateur"
     },
-    "menu": "Navigation d’administration"
+    "menu": "Navigation d’administration",
+    "more": "Plus",
+    "close": "Fermer"
   },
   "accessDenied": {
     "title": "Accès administrateur de la plateforme requis",

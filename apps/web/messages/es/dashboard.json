@@ -1,6 +1,8 @@
 {
   "nav": {
     "menu": "Navegación del panel",
+    "more": "Más",
+    "close": "Cerrar",
     "installApp": "Instalar aplicación",
     "installIosHint": "Para instalar Echo Grid, toca Compartir y luego Añadir a la pantalla de inicio.",
     "branches": "Sucursales",
@@ -154,7 +156,7 @@
     "forms": "Gestionar formularios",
     "scanCustomer": "Escanear QR de cliente",
     "settlements": "Revisar recompensas huérfanas",
-    "branchCount": "{count, number} sucursales accesibles",
+    "branchCount": "{count, plural, one {# sucursal accesible} many {# de sucursales accesibles} other {# sucursales accesibles}}",
     "recentFeedback": "Opiniones recientes",
     "viewAll": "Ver todo",
     "noFeedback": "Aún no hay opiniones para mostrar.",
@@ -167,10 +169,17 @@
     "loyaltyHint": "Cada cuenta y saldo pertenece a este negocio. La vista previa no es el total de clientes.",
     "noLoyalty": "Aún no hay cuentas para mostrar.",
     "customer": "Cliente",
-    "points": "{count, number} puntos de fidelización del negocio",
-    "visits": "{count, number} visitas",
+    "points": "{count, plural, one {# punto de fidelización del negocio} many {# de puntos de fidelización del negocio} other {# puntos de fidelización del negocio}}",
+    "visits": "{count, plural, one {# visita} many {# de visitas} other {# visitas}}",
     "platform": "Administración de plataforma",
     "openPlatform": "Abrir consola",
-    "platformHint": "Utiliza tus permisos existentes en el espacio de administración independiente."
+    "platformHint": "Utiliza tus permisos existentes en el espacio de administración independiente.",
+    "branchFilterLabel": "Sucursal",
+    "allBranches": "Todas las sucursales",
+    "applyFilter": "Aplicar filtro",
+    "branchFilterNote": "El filtro de sucursal se aplica al gráfico de sentimiento y a las listas de comentarios. Las cuentas de fidelización y el número de sucursales son de todo el negocio.",
+    "branchFilterInvalid": "Esa sucursal no está disponible para usted, por lo que se muestran todas las sucursales.",
+    "branchFilterActive": "Filtrado por {name}",
+    "sentimentSummary": "{total, plural, one {# comentario clasificado} many {# de comentarios clasificados} other {# comentarios clasificados}} en este período: {positive, number} positivos, {neutral, number} neutros, {negative, number} negativos."
   }
 }
