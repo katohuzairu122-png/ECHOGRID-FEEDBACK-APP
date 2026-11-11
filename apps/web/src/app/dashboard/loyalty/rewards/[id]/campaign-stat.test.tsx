@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import { CampaignStat } from './campaign-stat';
 
 describe('CampaignStat', () => {
@@ -10,11 +10,10 @@ describe('CampaignStat', () => {
         <CampaignStat label="Outstanding" value="3" />
       </dl>,
     );
-    const list = screen.getByRole('list');
-    expect(within(list).getByText('Redeemed').tagName).toBe('DT');
-    expect(within(list).getByText('12').tagName).toBe('DD');
-    expect(within(list).getByText('Outstanding')).toBeInTheDocument();
-    expect(within(list).getByText('3')).toBeInTheDocument();
+    expect(screen.getByText('Redeemed').tagName).toBe('DT');
+    expect(screen.getByText('12').tagName).toBe('DD');
+    expect(screen.getByText('Outstanding').tagName).toBe('DT');
+    expect(screen.getByText('3').tagName).toBe('DD');
   });
 
   it('preserves explicit unavailable-rate text instead of inventing a zero', () => {
