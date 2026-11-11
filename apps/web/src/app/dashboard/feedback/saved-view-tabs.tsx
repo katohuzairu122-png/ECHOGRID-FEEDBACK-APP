@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { getTranslations } from 'next-intl/server';
-import { cn } from '@/lib/utils';
+import styles from './feedback-inbox.module.css';
 
 const SAVED_VIEWS = [
   'critical_now',
@@ -41,22 +41,17 @@ export async function SavedViewTabs({ activeSavedView, baseParams }: SavedViewTa
     return qs ? `/dashboard/feedback?${qs}` : '/dashboard/feedback';
   };
 
-  const tabClass = (isActive: boolean) =>
-    cn(
-      'whitespace-nowrap rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
-      isActive ? 'ws-solid' : 'text-neutral-600 hover:bg-neutral-100',
-    );
+  const staff = await getTranslations('feedback.staff');
 
   return (
-    <nav aria-label={t('all')} className="flex flex-wrap gap-1.5">
-      <Link href={hrefFor(undefined)} className={tabClass(!activeSavedView)} aria-current={!activeSavedView ? 'page' : undefined}>
+    <nav aria-label={staff('savedViewsLabel')} className={styles.savedViews}>
+      <Link href={hrefFor(undefined)} aria-current={!activeSavedView ? 'page' : undefined}>
         {t('all')}
       </Link>
       {SAVED_VIEWS.map((view) => (
         <Link
           key={view}
           href={hrefFor(view)}
-          className={tabClass(activeSavedView === view)}
           aria-current={activeSavedView === view ? 'page' : undefined}
         >
           {t(view)}
