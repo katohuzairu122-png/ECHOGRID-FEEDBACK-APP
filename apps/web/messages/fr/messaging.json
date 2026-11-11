@@ -10,6 +10,11 @@
       "replyPlaceholder": "Écrivez un message…",
       "sending": "Envoi…",
       "send": "Envoyer"
-    }
+    },
+    "unavailableTitle": "Impossible de charger les messages",
+    "unavailableDescription": "Un problème est survenu lors du chargement de vos conversations. Rien n’a été modifié. Réessayez.",
+    "forbiddenTitle": "Les messages ne sont pas disponibles avec votre accès actuel",
+    "forbiddenDescription": "Demandez à un propriétaire de vérifier votre rôle ou votre accès aux succursales.",
+    "retry": "Réessayer"
   }
 }
