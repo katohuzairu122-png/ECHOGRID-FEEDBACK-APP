@@ -29,6 +29,7 @@ vi.mock('@/lib/platform', () => ({
 }));
 vi.mock('@/lib/actions/auth', () => ({ logoutAction: vi.fn() }));
 vi.mock('@/lib/actions/customer-auth', () => ({ customerLogoutAction: vi.fn() }));
+vi.mock('@/components/language-selector', () => ({ LanguageSelector: () => <span data-testid="language-selector" /> }));
 describe('authenticated workspace layout boundaries', () => {
   beforeEach(() => {
     identity.staff = false;
@@ -62,6 +63,7 @@ describe('authenticated workspace layout boundaries', () => {
       expect(sidebar.querySelector('a[href="' + href + '"]'), href).toBeInTheDocument();
     }
     expect(sidebar.querySelector('button[type="submit"]')).toBeInTheDocument(); // logout stays available
+    expect(sidebar.querySelector('[data-testid="language-selector"]')).toBeInTheDocument(); // shared language selector
     // No Surveys destination until a functioning Surveys interface exists.
     expect(sidebar.querySelector('a[href*="survey"]')).toBeNull();
   });

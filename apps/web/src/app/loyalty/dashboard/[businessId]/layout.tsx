@@ -2,6 +2,7 @@ import { NextIntlClientProvider } from 'next-intl';
 import { resolveSupportedLocale, type BusinessPublicDto } from '@echo-grid-feedback/shared-types';
 import { publicApiFetch } from '@/lib/public-api-client';
 import { loadMessages } from '@/i18n/load-messages';
+import { getLocaleOverride } from '@/lib/customer-language';
 import { formats } from '@/i18n/formats';
 import { AppFooter } from '@/components/brand';
 
@@ -41,7 +42,8 @@ export default async function LoyaltyBusinessLayout({
     business = null;
   }
 
-  const locale = resolveSupportedLocale(business?.defaultLocale);
+  // Customer's own choice (saved preference, then cookie) > business default > English.
+  const locale = resolveSupportedLocale((await getLocaleOverride()) ?? business?.defaultLocale);
   const messages = await loadMessages(locale);
 
   return (

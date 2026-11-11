@@ -23,9 +23,17 @@ export const customers = pgTable(
     email: text('email'),
     birthday: date('birthday'), // month/day matter most (birthday rewards); full date stored, year optional in the UI
     phoneVerifiedAt: timestamp('phone_verified_at', { withTimezone: true }),
+    // Saved UI language (customer + public surfaces). NULL = no explicit choice.
+    preferredLocale: text('preferred_locale'),
     status: text('status').notNull().default('active'),
     ...auditColumns,
     ...softDeleteColumns,
   },
-  (table) => [check('customers_status_check', sql`${table.status} IN ('active', 'suspended')`)],
+  (table) => [
+    check('customers_status_check', sql`${table.status} IN ('active', 'suspended')`),
+    check(
+      'customers_preferred_locale_check',
+      sql`${table.preferredLocale} IS NULL OR ${table.preferredLocale} IN ('en', 'es', 'fr', 'ar')`,
+    ),
+  ],
 );

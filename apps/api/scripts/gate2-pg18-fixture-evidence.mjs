@@ -43,12 +43,12 @@ try {
   const migrationCount = Number((await db.query(
     'SELECT count(*)::int AS count FROM drizzle.__drizzle_migrations',
   )).rows[0]?.count);
-  const expectedMigrationCount = action === 'verify' ? 67 : 45;
+  const expectedMigrationCount = action === 'verify' ? 68 : 45;
   if (migrationCount !== expectedMigrationCount) throw new Error('GATE2_R4_MIGRATION_PHASE_MISMATCH');
   const migrations = (await db.query(
     'SELECT created_at::text AS created_at FROM drizzle.__drizzle_migrations ORDER BY id',
   )).rows;
-  const expectedCount = action === 'verify' ? 67 : 45;
+  const expectedCount = action === 'verify' ? 68 : 45;
   if (migrations.length !== expectedCount) throw new Error('GATE2_R4_MIGRATION_COUNT_MISMATCH');
   if (action === 'seed') {
     await db.query('BEGIN');

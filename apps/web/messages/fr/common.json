@@ -32,5 +32,8 @@
     "support": "Assistance",
     "loading": "Chargement de votre espace…",
     "community": "Communauté"
+  },
+  "language": {
+    "label": "Langue"
   }
 }

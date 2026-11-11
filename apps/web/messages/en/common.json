@@ -32,5 +32,8 @@
     "support": "Support",
     "loading": "Loading your workspace…",
     "community": "Community"
+  },
+  "language": {
+    "label": "Language"
   }
 }

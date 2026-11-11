@@ -6,6 +6,8 @@ import { resolveSupportedLocale, type QrResolveDto } from '@echo-grid-feedback/s
 import { publicApiFetch } from '@/lib/public-api-client';
 import { ApiError } from '@/lib/api-client';
 import { loadMessages } from '@/i18n/load-messages';
+import { getLocaleOverride } from '@/lib/customer-language';
+import { LanguageSelector } from '@/components/language-selector';
 import { formats } from '@/i18n/formats';
 import { FeedbackForm } from './feedback-form';
 import { QrScanRecorder } from './qr-scan-recorder';
@@ -44,12 +46,15 @@ export default async function FeedbackLandingPage({ params }: FeedbackLandingPag
   // business's locale from -- qr already carries defaultLocale (i18n &
   // Multi-Currency Block 2), so this overrides the root layout's
   // staff-resolved default with the scanned branch's own business locale.
-  const locale = resolveSupportedLocale(qr.defaultLocale);
+  const locale = resolveSupportedLocale((await getLocaleOverride()) ?? qr.defaultLocale);
   const messages = await loadMessages(locale);
 
   return (
     <NextIntlClientProvider locale={locale} messages={messages} formats={formats}>
       <QrScanRecorder token={token} />
+      <div className="mx-auto flex w-full max-w-2xl justify-end px-4 pt-4">
+        <LanguageSelector className="w-40" />
+      </div>
       <section aria-label="Branch QR actions" className="mx-auto w-full max-w-2xl px-4 pt-8">
         <p className="text-sm font-semibold uppercase tracking-wide text-brand-600">
           Echo Grid · Branch engagement

@@ -3,6 +3,7 @@ import { getTranslations } from 'next-intl/server';
 import { hasCustomerSession } from '@/lib/customer-session';
 import { customerLogoutAction } from '@/lib/actions/customer-auth';
 import { Button } from '@/components/ui';
+import { LanguageSelector } from '@/components/language-selector';
 import { WorkspaceShell } from '@/components/workspace/workspace-shell';
 import { WorkspaceNavigation } from '@/components/workspace/workspace-navigation';
 
@@ -40,11 +41,14 @@ export default async function LoyaltyDashboardLayout({ children }: { children: R
             { href: '/support', label: shell('support'), icon: 'chat' },
           ]}
           utilities={
-            <form action={customerLogoutAction}>
-              <Button type="submit" variant="ghost">
-                {t('logout')}
-              </Button>
-            </form>
+            <>
+              <LanguageSelector className="w-36" />
+              <form action={customerLogoutAction}>
+                <Button type="submit" variant="ghost">
+                  {t('logout')}
+                </Button>
+              </form>
+            </>
           }
         />
       }
