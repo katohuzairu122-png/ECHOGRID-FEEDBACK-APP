@@ -32,6 +32,16 @@ export async function CustomerQrActions({ token }: { token: string }) {
         </a>
       )}
       {actions.has('JOIN_LOYALTY') && <JoinQrMembership token={token} />}
+      {actions.has('TAKE_SURVEY') &&
+        result.surveyCampaigns.map((campaign) => (
+          <Link
+            key={campaign.campaignId}
+            href={`/loyalty/dashboard/surveys/${campaign.campaignId}`}
+            className="rounded-lg border px-5 py-3"
+          >
+            Take survey: {campaign.name}
+          </Link>
+        ))}
       {actions.has('OPEN_LOYALTY_CARD') && (
         <Link
           href={`/loyalty/dashboard/${result.businessId}`}

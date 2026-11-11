@@ -316,6 +316,56 @@
         "pointsBody": "Les points Communauté sont tenus dans leur propre registre. Cette page n’affiche que votre solde et votre historique ; elle ne peut ni créer, ni dépenser, ni modifier des points."
       },
       "retry": "Réessayer"
+    },
+    "surveys": {
+      "title": "Enquêtes",
+      "eyebrow": "Enquêtes Echo Grid",
+      "subtitle": "Votre historique d’enquêtes. Répondez à une enquête depuis le code QR d’un commerce ou un lien d’enquête.",
+      "historyTitle": "Vos enquêtes",
+      "status": {
+        "started": "En cours",
+        "submitted": "Envoyée",
+        "completed": "Terminée",
+        "invalidated": "Non comptabilisée"
+      },
+      "startedOn": "Commencée le {date}",
+      "submittedOn": "Envoyée le {date}",
+      "completedOn": "Terminée le {date}",
+      "atBusiness": "chez {business}",
+      "continue": "Continuer",
+      "open": "Ouvrir",
+      "emptyTitle": "Aucune enquête pour l’instant",
+      "emptyDescription": "Lorsqu’un commerce vous invite à une enquête, vous pouvez y répondre ici. Scannez le code QR d’un commerce pour voir les enquêtes disponibles.",
+      "unavailable": "Vos enquêtes n’ont pas pu être chargées pour le moment.",
+      "forbidden": "Les enquêtes ne sont pas disponibles avec votre accès actuel.",
+      "retry": "Réessayer",
+      "older": "Plus anciennes",
+      "newer": "Plus récentes",
+      "pagination": "Pages d’enquêtes",
+      "take": {
+        "back": "Retour aux enquêtes",
+        "notFound": "Cette enquête est introuvable.",
+        "forbidden": "Cette enquête n’est pas disponible pour votre compte.",
+        "unavailable": "Cette enquête n’a pas pu être chargée pour le moment.",
+        "noQuestions": "Cette enquête ne comporte aucune question.",
+        "consent": "J’accepte de partager mes réponses pour cette enquête.",
+        "required": "Obligatoire",
+        "optional": "Facultatif",
+        "yes": "Oui",
+        "no": "Non",
+        "submit": "Envoyer les réponses",
+        "submitting": "Envoi…",
+        "successTitle": "Merci",
+        "successBody": "Vos réponses ont bien été envoyées.",
+        "ratingOf": "{value} sur {max}",
+        "errors": {
+          "forbidden": "Cette enquête n’est pas disponible pour votre compte.",
+          "closed": "Cette enquête est close ou vous y avez déjà répondu.",
+          "invalid": "Vérifiez vos réponses et réessayez.",
+          "unavailable": "Vos réponses n’ont pas pu être envoyées. Veuillez réessayer."
+        }
+      },
+      "surveyFallback": "Enquête"
     }
   }
 }

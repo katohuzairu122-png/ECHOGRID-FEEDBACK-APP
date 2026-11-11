@@ -316,6 +316,56 @@
         "pointsBody": "Los Puntos de la Comunidad se llevan en su propio registro. Esta página solo muestra su saldo e historial; no puede crear, gastar ni cambiar puntos."
       },
       "retry": "Reintentar"
+    },
+    "surveys": {
+      "title": "Encuestas",
+      "eyebrow": "Encuestas Echo Grid",
+      "subtitle": "Su historial de encuestas. Responda una encuesta desde el código QR de un negocio o un enlace de encuesta.",
+      "historyTitle": "Sus encuestas",
+      "status": {
+        "started": "En curso",
+        "submitted": "Enviada",
+        "completed": "Completada",
+        "invalidated": "No contabilizada"
+      },
+      "startedOn": "Iniciada el {date}",
+      "submittedOn": "Enviada el {date}",
+      "completedOn": "Completada el {date}",
+      "atBusiness": "en {business}",
+      "continue": "Continuar",
+      "open": "Abrir",
+      "emptyTitle": "Aún no hay encuestas",
+      "emptyDescription": "Cuando un negocio le invite a una encuesta podrá responderla aquí. Escanee el código QR de un negocio para ver las encuestas disponibles.",
+      "unavailable": "No se pudieron cargar sus encuestas en este momento.",
+      "forbidden": "Las encuestas no están disponibles con su acceso actual.",
+      "retry": "Reintentar",
+      "older": "Anteriores",
+      "newer": "Más recientes",
+      "pagination": "Páginas de encuestas",
+      "take": {
+        "back": "Volver a encuestas",
+        "notFound": "No se encontró esta encuesta.",
+        "forbidden": "Esta encuesta no está disponible para su cuenta.",
+        "unavailable": "No se pudo cargar esta encuesta en este momento.",
+        "noQuestions": "Esta encuesta no tiene preguntas.",
+        "consent": "Acepto compartir mis respuestas de esta encuesta.",
+        "required": "Obligatoria",
+        "optional": "Opcional",
+        "yes": "Sí",
+        "no": "No",
+        "submit": "Enviar respuestas",
+        "submitting": "Enviando…",
+        "successTitle": "Gracias",
+        "successBody": "Sus respuestas se enviaron.",
+        "ratingOf": "{value} de {max}",
+        "errors": {
+          "forbidden": "Esta encuesta no está disponible para su cuenta.",
+          "closed": "Esta encuesta está cerrada o ya la respondió.",
+          "invalid": "Revise sus respuestas e inténtelo de nuevo.",
+          "unavailable": "No pudimos enviar sus respuestas. Inténtelo de nuevo."
+        }
+      },
+      "surveyFallback": "Encuesta"
     }
   }
 }
