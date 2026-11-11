@@ -1,7 +1,12 @@
 'use client';
 import { useActionState } from 'react';
 import { businessSettlementAction } from '@/lib/actions/settlements';
-import { Button, Input, Label } from '@/components/ui';
+import { Button, Input, Label, Select } from '@/components/ui';
+
+// Agreement box: the existing required consent checkbox, presented as a clear, tappable panel.
+const AGREEMENT_BOX =
+  'flex cursor-pointer items-start gap-3 rounded-lg border border-neutral-300 p-4 text-sm leading-relaxed';
+const AGREEMENT_CHECKBOX = 'mt-0.5 size-5 shrink-0 accent-brand-600';
 
 export function BusinessSettlementForm({
   contexts,
@@ -12,37 +17,42 @@ export function BusinessSettlementForm({
   const allowed = new Set(state.allowedActions ?? []);
   return (
     <div className="space-y-5">
-      <form action={action} className="space-y-3 rounded-xl border bg-white p-5">
-        <Label htmlFor="branchId">Authorized business or branch</Label>
-        <select
-          id="branchId"
-          name="branchId"
-          defaultValue={state.branchId ?? contexts[0]?.branchId ?? ''}
-          className="w-full rounded border p-3"
-        >
-          {contexts.map((context) => (
-            <option key={context.branchId ?? 'business'} value={context.branchId ?? ''}>
-              {context.branchName ?? 'Business-wide access'}
-            </option>
-          ))}
-        </select>
-        <Button name="operation" value="list" disabled={pending}>
-          Load authorized settlement queue
-        </Button>
-        <Label htmlFor="settlementId">Customer-provided settlement reference</Label>
-        <Input
-          id="settlementId"
-          name="settlementId"
-          defaultValue={state.inspected?.settlementId ?? ''}
-          autoComplete="off"
-        />
-        <Label htmlFor="authorizationId">Customer-provided access authorization reference</Label>
-        <Input
-          id="authorizationId"
-          name="authorizationId"
-          defaultValue={state.accessAuthorizationId ?? ''}
-          autoComplete="off"
-        />
+      <form action={action} className="space-y-5 rounded-xl border bg-white p-5">
+        <div className="space-y-2">
+          <Label htmlFor="branchId">Authorized business or branch</Label>
+          <Select
+            id="branchId"
+            name="branchId"
+            defaultValue={state.branchId ?? contexts[0]?.branchId ?? ''}
+          >
+            {contexts.map((context) => (
+              <option key={context.branchId ?? 'business'} value={context.branchId ?? ''}>
+                {context.branchName ?? 'Business-wide access'}
+              </option>
+            ))}
+          </Select>
+          <Button name="operation" value="list" variant="secondary" disabled={pending}>
+            Load authorized settlement queue
+          </Button>
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="settlementId">Customer-provided settlement reference</Label>
+          <Input
+            id="settlementId"
+            name="settlementId"
+            defaultValue={state.inspected?.settlementId ?? ''}
+            autoComplete="off"
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="authorizationId">Customer-provided access authorization reference</Label>
+          <Input
+            id="authorizationId"
+            name="authorizationId"
+            defaultValue={state.accessAuthorizationId ?? ''}
+            autoComplete="off"
+          />
+        </div>
         <Button name="operation" value="inspect" disabled={pending}>
           Inspect consented reward information
         </Button>
@@ -64,34 +74,47 @@ export function BusinessSettlementForm({
                 name="authorizationId"
                 value={state.accessAuthorizationId ?? ''}
               />
-              <Label htmlFor="benefitType">Concrete benefit to fulfill</Label>
-              <select id="benefitType" name="benefitType" className="w-full rounded border p-3">
-                <option value="discount">Discount</option>
-                <option value="free_item">Free item</option>
-                <option value="voucher">Voucher</option>
-              </select>
-              <Label htmlFor="title">Benefit title</Label>
-              <Input id="title" name="title" maxLength={120} required />
-              <Label htmlFor="description">Benefit description</Label>
-              <textarea
-                id="description"
-                name="description"
-                maxLength={1000}
-                required
-                className="w-full rounded border p-3"
-              />
-              <Label htmlFor="terms">Benefit terms</Label>
-              <textarea
-                id="terms"
-                name="terms"
-                maxLength={2000}
-                className="w-full rounded border p-3"
-              />
-              <Label htmlFor="reference">Fulfillment reference (optional)</Label>
-              <Input id="reference" name="reference" maxLength={200} />
-              <label className="flex gap-2">
-                <input type="checkbox" name="consent" required />I independently accept this
-                settlement and commit this business to the benefit described above.
+              <div className="space-y-2">
+                <Label htmlFor="benefitType">Concrete benefit to fulfill</Label>
+                <Select id="benefitType" name="benefitType">
+                  <option value="discount">Discount</option>
+                  <option value="free_item">Free item</option>
+                  <option value="voucher">Voucher</option>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="title">Benefit title</Label>
+                <Input id="title" name="title" maxLength={120} required />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="description">Benefit description</Label>
+                <textarea
+                  id="description"
+                  name="description"
+                  maxLength={1000}
+                  required
+                  className="w-full rounded border p-3"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="terms">Benefit terms</Label>
+                <textarea
+                  id="terms"
+                  name="terms"
+                  maxLength={2000}
+                  className="w-full rounded border p-3"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="reference">Fulfillment reference (optional)</Label>
+                <Input id="reference" name="reference" maxLength={200} />
+              </div>
+              <label className={AGREEMENT_BOX}>
+                <input type="checkbox" name="consent" required className={AGREEMENT_CHECKBOX} />
+                <span>
+                  I independently accept this settlement and commit this business to the benefit
+                  described above.
+                </span>
               </label>
               <Button name="operation" value="accept" disabled={pending}>
                 Accept and reserve orphan reward
@@ -127,9 +150,9 @@ export function BusinessSettlementForm({
                   <input type="hidden" name="settlementId" value={settlement.id} />
                   <input type="hidden" name="reviewedBusinessId" value={state.businessId} />
                   <input type="hidden" name="branchId" value={state.branchId ?? ''} />
-                  <label className="flex gap-2">
-                    <input type="checkbox" name="consent" required />I confirm actual fulfillment of
-                    the customer-reviewed benefit.
+                  <label className={AGREEMENT_BOX}>
+                    <input type="checkbox" name="consent" required className={AGREEMENT_CHECKBOX} />
+                    <span>I confirm actual fulfillment of the customer-reviewed benefit.</span>
                   </label>
                   <Button name="operation" value="fulfill" disabled={pending}>
                     Confirm orphan settlement fulfillment
