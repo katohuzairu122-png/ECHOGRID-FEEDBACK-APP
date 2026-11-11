@@ -15,11 +15,11 @@ export async function DashboardNav() {
       closeLabel={t('nav.close')}
       items={[
         { href: '/dashboard', label: t('overview.title'), icon: 'store' },
+        { href: '/dashboard/loyalty/scan', label: t('nav.serve'), icon: 'qr' },
         { href: '/dashboard/feedback', label: t('nav.feedback'), icon: 'chat' },
         { href: '/dashboard/loyalty', label: t('nav.loyalty'), icon: 'star' },
         { href: '/dashboard/analytics', label: t('nav.analytics'), icon: 'chart' },
         { href: '/dashboard/branches', label: t('nav.branches'), icon: 'store' },
-        { href: '/dashboard/loyalty/scan', label: t('nav.customerQr'), icon: 'qr' },
         { href: '/dashboard/settlements', label: t('nav.settlements'), icon: 'gift' },
         { href: '/dashboard/messages', label: t('nav.messages'), icon: 'chat' },
         { href: '/dashboard/notifications', label: t('nav.notifications'), icon: 'bell' },

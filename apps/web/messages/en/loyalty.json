@@ -171,6 +171,17 @@
       "saved": "Settings saved.",
       "saving": "Saving…",
       "save": "Save settings"
+    },
+    "serve": {
+      "title": "Serve customers",
+      "subtitle": "Scan the customer’s QR code, then choose what to do. Scanning alone never grants points or redeems a reward.",
+      "scan": "Scan customer QR",
+      "stop": "Stop camera",
+      "scanning": "Point the camera at the customer’s QR code.",
+      "unsupported": "Camera scanning is not supported in this browser. Paste the customer’s QR token below instead.",
+      "cameraDenied": "The camera could not be opened. Allow camera access, or paste the customer’s QR token below.",
+      "viewfinder": "Camera view for scanning the customer QR code",
+      "pasteHeading": "Or paste the QR token"
     }
   },
   "customer": {
