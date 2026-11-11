@@ -94,7 +94,7 @@
   display: grid;
   grid-template-columns: minmax(220px, 1.4fr) repeat(2, minmax(160px, 1fr)) auto;
   gap: 14px;
-  align-items: end;
+  align-items: start;
 }
 .field {
   display: grid;
@@ -117,6 +117,7 @@
   padding: 6px;
 }
 .filterButtons {
+  align-self: end;
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
