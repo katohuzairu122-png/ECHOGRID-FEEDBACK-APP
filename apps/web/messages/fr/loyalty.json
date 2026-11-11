@@ -171,6 +171,17 @@
       "saved": "Paramètres enregistrés.",
       "saving": "Enregistrement…",
       "save": "Enregistrer les paramètres"
+    },
+    "serve": {
+      "title": "Servir les clients",
+      "subtitle": "Scannez le code QR du client, puis choisissez l’action. Le scan seul n’accorde jamais de points et n’échange aucune récompense.",
+      "scan": "Scanner le QR du client",
+      "stop": "Arrêter la caméra",
+      "scanning": "Dirigez la caméra vers le code QR du client.",
+      "unsupported": "Le scan par caméra n’est pas pris en charge par ce navigateur. Collez plutôt le jeton QR du client ci-dessous.",
+      "cameraDenied": "La caméra n’a pas pu s’ouvrir. Autorisez l’accès à la caméra ou collez le jeton QR du client ci-dessous.",
+      "viewfinder": "Vue caméra pour scanner le code QR du client",
+      "pasteHeading": "Ou collez le jeton QR"
     }
   },
   "customer": {

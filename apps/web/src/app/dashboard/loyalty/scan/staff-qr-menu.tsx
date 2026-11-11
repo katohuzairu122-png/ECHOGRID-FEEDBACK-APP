@@ -1,6 +1,8 @@
 'use client';
 
-import { useActionState } from 'react';
+import { useActionState, useRef } from 'react';
+import { useTranslations } from 'next-intl';
+import { QrCameraScanner } from '@/components/qr-camera-scanner';
 import { staffUnifiedQrAction, type StaffQrState } from '@/lib/actions/unified-qr';
 import { Button, Input, Label } from '@/components/ui';
 
@@ -10,12 +12,22 @@ export function StaffQrMenu({
   contexts: { branchId: string | null; branchName: string | null }[];
 }) {
   const [state, action, pending] = useActionState(staffUnifiedQrAction, {});
+  const t = useTranslations('loyalty.staff.serve');
+  const formRef = useRef<HTMLFormElement>(null);
+  const tokenRef = useRef<HTMLInputElement>(null);
   return (
     <div className="space-y-5 [&_button]:h-auto [&_button]:min-h-10 [&_button]:max-w-full [&_button]:whitespace-normal [&_button]:py-2">
-      <form action={action} className="space-y-3">
+      <QrCameraScanner
+        onDetect={(value) => {
+          if (tokenRef.current) tokenRef.current.value = value;
+          formRef.current?.requestSubmit();
+        }}
+      />
+      <form ref={formRef} action={action} className="space-y-3">
         <input type="hidden" name="operation" value="resolve" />
-        <Label htmlFor="token">Customer QR token</Label>
+        <Label htmlFor="token">{t('pasteHeading')}</Label>
         <Input
+          ref={tokenRef}
           id="token"
           name="token"
           defaultValue={state.token ?? ''}

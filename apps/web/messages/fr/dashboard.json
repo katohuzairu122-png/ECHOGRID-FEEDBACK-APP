@@ -17,7 +17,8 @@
     "support": "Assistance",
     "logout": "Se déconnecter",
     "customerQr": "QR client",
-    "settlements": "Règlement des récompenses orphelines"
+    "settlements": "Règlement des récompenses orphelines",
+    "serve": "Servir les clients"
   },
   "home": {
     "branchesTitle": "Succursales",

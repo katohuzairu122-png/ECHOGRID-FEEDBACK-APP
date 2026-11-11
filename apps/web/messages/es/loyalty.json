@@ -171,6 +171,17 @@
       "saved": "Configuración guardada.",
       "saving": "Guardando…",
       "save": "Guardar configuración"
+    },
+    "serve": {
+      "title": "Atender clientes",
+      "subtitle": "Escanee el código QR del cliente y elija qué hacer. Escanear por sí solo nunca otorga puntos ni canjea una recompensa.",
+      "scan": "Escanear QR del cliente",
+      "stop": "Detener cámara",
+      "scanning": "Apunte la cámara al código QR del cliente.",
+      "unsupported": "Este navegador no admite el escaneo con cámara. Pegue el token QR del cliente a continuación.",
+      "cameraDenied": "No se pudo abrir la cámara. Permita el acceso a la cámara o pegue el token QR del cliente a continuación.",
+      "viewfinder": "Vista de cámara para escanear el código QR del cliente",
+      "pasteHeading": "O pegue el token QR"
     }
   },
   "customer": {

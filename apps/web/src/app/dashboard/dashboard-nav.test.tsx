@@ -16,9 +16,9 @@ describe('DashboardNav presentation', () => {
     const bar = container.querySelector('nav[class*="bottomNav"]')!;
     expect(Array.from(bar.querySelectorAll('a')).map((a) => a.getAttribute('href'))).toEqual([
       '/dashboard',
+      '/dashboard/loyalty/scan', // cashier "Serve customers" tab is a primary destination
       '/dashboard/feedback',
       '/dashboard/loyalty',
-      '/dashboard/analytics',
     ]);
     await user.click(screen.getByRole('button', { name: 'nav.more' }));
     const sheet = screen.getByRole('dialog');
