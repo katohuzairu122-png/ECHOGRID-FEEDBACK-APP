@@ -10,6 +10,11 @@
       "replyPlaceholder": "Escribe un mensaje…",
       "sending": "Enviando…",
       "send": "Enviar"
-    }
+    },
+    "unavailableTitle": "No se pudieron cargar los mensajes",
+    "unavailableDescription": "Algo salió mal al cargar sus conversaciones. No se cambió nada. Inténtelo de nuevo.",
+    "forbiddenTitle": "Los mensajes no están disponibles con su acceso actual",
+    "forbiddenDescription": "Pida a un propietario que revise su rol o su acceso a sucursales.",
+    "retry": "Reintentar"
   }
 }
