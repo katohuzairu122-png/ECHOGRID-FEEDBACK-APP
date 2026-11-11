@@ -1,0 +1,92 @@
+/* Phase 2C-2: loyalty tiers and rewards catalog. Theme scoped to authenticated
+ * workspace semantic tokens; no new global colors or business mutations. */
+.page { display: grid; gap: 22px; }
+.header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  justify-content: space-between;
+  gap: 18px;
+}
+.header h1 { font-weight: 600; margin-top: 6px; }
+.eyebrow {
+  color: var(--ws-accent-text);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .12em;
+}
+.headerActions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.headerActions :global(button) { min-height: 44px; }
+.list { display: grid; gap: 14px; list-style: none; margin: 0; padding: 0; }
+.card {
+  --catalog-accent: var(--ws-c-violet);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  min-width: 0;
+  padding: 22px;
+  background: linear-gradient(
+    150deg,
+    color-mix(in srgb, var(--catalog-accent) 9%, var(--ws-surface)),
+    var(--ws-surface) 70%
+  );
+  border: 1px solid color-mix(in srgb, var(--catalog-accent) 38%, var(--ws-border));
+  border-radius: var(--ws-radius);
+  box-shadow: 0 15px 36px -26px #000;
+}
+.card[data-catalog-kind='reward'] { --catalog-accent: var(--ws-c-mint); }
+.cardBody { display: flex; align-items: start; gap: 14px; flex: 1 1 250px; min-width: 0; }
+.cardIcon {
+  flex: 0 0 44px;
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  color: var(--catalog-accent);
+  background: color-mix(in srgb, var(--catalog-accent) 12%, var(--ws-surface-2));
+  border: 1px solid color-mix(in srgb, var(--catalog-accent) 35%, var(--ws-border));
+  border-radius: 13px;
+}
+.cardDetails { min-width: 0; display: grid; gap: 7px; }
+.titleRow { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.itemTitle { color: var(--ws-text); font-size: 15px; font-weight: 600; overflow-wrap: anywhere; }
+.metadata {
+  display: flex;
+  gap: 8px 12px;
+  flex-wrap: wrap;
+  color: var(--ws-text-muted);
+  font-size: 12px;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+.actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 9px; }
+.actions :global(button), .actions a {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.actions :global(button):focus-visible, .actions a:focus-visible,
+.headerActions :global(button):focus-visible {
+  outline: 3px solid var(--ws-focus);
+  outline-offset: 3px;
+}
+.empty {
+  display: grid;
+  gap: 8px;
+  padding: 26px 24px;
+  background: var(--ws-surface);
+  border: 1px solid var(--ws-border);
+  border-radius: var(--ws-radius);
+}
+.empty h2 { color: var(--ws-text); font-size: 16px; font-weight: 600; }
+.empty p { color: var(--ws-text-muted); font-size: 13px; line-height: 1.7; }
+@media (max-width: 599px) {
+  .card { padding: 17px; align-items: stretch; }
+  .cardBody { flex-basis: 100%; }
+  .actions { width: 100%; justify-content: flex-start; border-top: 1px solid var(--ws-border-soft); padding-top: 13px; }
+  .actions > * { min-width: 0; }
+}
