@@ -1,0 +1,117 @@
+/* Echo Grid UI Phase 2C-1 — loyalty accounts and navigation.
+ * All surfaces consume Phase 1 --ws-* workspace tokens; business-specific
+ * points and visits are presented from existing authorized API data only. */
+.page { display: grid; gap: 22px; }
+.header { display: grid; gap: 6px; }
+.header h1 { font-weight: 600; }
+.eyebrow {
+  color: var(--ws-accent-text);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+.muted { color: var(--ws-text-muted); font-size: 13px; line-height: 1.7; }
+.subnav {
+  min-width: 0;
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 3px 0 12px;
+  border-bottom: 1px solid var(--ws-border);
+  scrollbar-width: thin;
+  scroll-snap-type: x proximity;
+}
+.subnav a {
+  flex: 0 0 auto;
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 44px;
+  padding: 9px 14px;
+  border: 1px solid var(--ws-border);
+  border-radius: 999px;
+  color: var(--ws-text-muted);
+  background: var(--ws-surface);
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+  scroll-snap-align: start;
+  transition: color .15s, border-color .15s, background .15s;
+}
+.subnav a:hover {
+  color: var(--ws-text);
+  border-color: color-mix(in srgb, var(--ws-c-mint) 55%, var(--ws-border));
+}
+.subnav a[aria-current='page'] {
+  color: var(--ws-solid-fg);
+  background: var(--ws-solid-bg);
+  border-color: var(--ws-solid-bg);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ws-c-mint) 18%, transparent);
+  font-weight: 600;
+}
+.subnav a:focus-visible, .actions :global(button):focus-visible {
+  outline: 3px solid var(--ws-focus);
+  outline-offset: 3px;
+}
+.listHeading { display: flex; gap: 12px; justify-content: space-between; flex-wrap: wrap; align-items: baseline; }
+.count { font-size: 12px; color: var(--ws-text-faint); }
+.accounts { display: grid; gap: 14px; margin: 0; padding: 0; list-style: none; }
+.accountCard {
+  position: relative;
+  display: grid;
+  gap: 20px;
+  padding: 20px 22px;
+  border: 1px solid color-mix(in srgb, var(--ws-c-violet) 32%, var(--ws-border));
+  border-radius: var(--ws-radius);
+  background: linear-gradient(148deg, color-mix(in srgb, var(--ws-c-violet) 8%, var(--ws-surface)), var(--ws-surface) 65%);
+  box-shadow: 0 15px 36px -27px #000;
+}
+.accountTop { display: flex; justify-content: space-between; align-items: flex-start; gap: 14px; flex-wrap: wrap; }
+.identity { display: flex; gap: 14px; align-items: flex-start; min-width: 0; }
+.avatar {
+  width: 42px;
+  height: 42px;
+  flex: 0 0 42px;
+  border: 1px solid color-mix(in srgb, var(--ws-c-violet) 38%, var(--ws-border));
+  border-radius: 13px;
+  display: grid;
+  place-items: center;
+  background: color-mix(in srgb, var(--ws-c-violet) 12%, var(--ws-surface-2));
+  color: var(--ws-text);
+}
+.customerName { font-size: 15px; font-weight: 600; color: var(--ws-text); overflow-wrap: anywhere; }
+.visitLine { margin-top: 6px; color: var(--ws-text-muted); font-size: 12px; line-height: 1.7; }
+.accountBottom {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  align-items: end;
+  justify-content: space-between;
+  border-top: 1px solid var(--ws-border-soft);
+  padding-top: 15px;
+}
+.points { display: grid; gap: 4px; }
+.pointsLabel { color: var(--ws-text-muted); font-size: 12px; }
+.pointsValue { color: var(--ws-accent-text); font-size: 26px; font-weight: 650; line-height: 1.2; font-variant-numeric: tabular-nums; }
+.actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.actions :global(button) { min-height: 44px; border-radius: 12px; }
+.empty {
+  padding: 26px 24px;
+  border-radius: 18px;
+  border: 1px solid var(--ws-border);
+  background: var(--ws-surface);
+}
+.empty h2 { font-size: 16px; font-weight: 600; color: var(--ws-text); }
+.empty p { color: var(--ws-text-muted); font-size: 13px; margin-top: 7px; }
+@media (max-width: 599px) {
+  .accountCard { padding: 17px; }
+  .accountBottom { align-items: stretch; }
+  .actions { width: 100%; }
+  .actions > :global(form) { flex: 1 1 auto; }
+  .actions :global(button) { min-height: 44px; }
+  .actions > :global(form) :global(button) { width: 100%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .subnav a { transition: none; }
+}

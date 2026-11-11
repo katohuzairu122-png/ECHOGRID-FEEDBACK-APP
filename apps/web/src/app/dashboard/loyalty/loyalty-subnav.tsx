@@ -1,7 +1,8 @@
 import { getTranslations } from 'next-intl/server';
 import { LoyaltySubnavLinks } from './loyalty-subnav-links';
+import styles from './loyalty-visual.module.css';
 
-/** Local sub-navigation for Loyalty staff screens. */
+/** Shared staff navigation across account, tier, campaign, QR and settings screens. */
 export async function LoyaltySubnav() {
   const t = await getTranslations('loyalty.staff.subnav');
   const items = [
@@ -9,12 +10,12 @@ export async function LoyaltySubnav() {
     { href: '/dashboard/loyalty/tiers', label: t('tiers') },
     { href: '/dashboard/loyalty/rewards', label: t('rewards') },
     { href: '/dashboard/loyalty/redeem', label: t('redeem') },
-    { href: '/dashboard/loyalty/scan', label: 'Customer QR' },
-    { href: '/dashboard/settlements', label: 'Orphan settlement' },
+    { href: '/dashboard/loyalty/scan', label: t('customerQr') },
+    { href: '/dashboard/settlements', label: t('settlements') },
     { href: '/dashboard/loyalty/settings', label: t('settings') },
   ];
   return (
-    <nav className="flex flex-wrap gap-2 border-b border-neutral-200 pb-3">
+    <nav className={styles.subnav} aria-label={t('navigationLabel')}>
       <LoyaltySubnavLinks items={items} />
     </nav>
   );

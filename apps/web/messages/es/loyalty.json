@@ -6,7 +6,10 @@
       "tiers": "Niveles",
       "rewards": "Recompensas",
       "redeem": "Confirmar canje",
-      "settings": "Configuración"
+      "settings": "Configuración",
+      "navigationLabel": "Secciones de fidelización",
+      "customerQr": "QR del cliente",
+      "settlements": "Liquidación de recompensas huérfanas"
     },
     "accounts": {
       "emptyTitle": "Aún no hay miembros",
@@ -15,7 +18,11 @@
       "lastVisit": "Última visita {date}",
       "noVisits": "Sin visitas todavía",
       "suspended": "Suspendido",
-      "message": "Mensaje"
+      "message": "Mensaje",
+      "description": "Gestiona las cuentas de fidelización y los puntos de este negocio.",
+      "sectionLabel": "Cuentas de fidelización",
+      "shownOnPage": "{count, plural, one {# cuenta en esta página} other {# cuentas en esta página}}",
+      "pointsLabel": "Puntos de fidelización del negocio"
     },
     "accountDialog": {
       "manageTrigger": "Gestionar",

@@ -6,7 +6,10 @@
       "tiers": "المستويات",
       "rewards": "المكافآت",
       "redeem": "تأكيد الاستبدال",
-      "settings": "الإعدادات"
+      "settings": "الإعدادات",
+      "navigationLabel": "أقسام الولاء",
+      "customerQr": "رمز QR للعميل",
+      "settlements": "تسوية المكافآت غير المرتبطة"
     },
     "accounts": {
       "emptyTitle": "لا يوجد أعضاء في برنامج الولاء بعد",
@@ -15,7 +18,11 @@
       "lastVisit": "آخر زيارة {date}",
       "noVisits": "لا توجد زيارات بعد",
       "suspended": "معلّق",
-      "message": "رسالة"
+      "message": "رسالة",
+      "description": "إدارة حسابات الولاء والنقاط الخاصة بهذه المنشأة.",
+      "sectionLabel": "حسابات الولاء",
+      "shownOnPage": "الحسابات المعروضة في هذه الصفحة: {count, number}",
+      "pointsLabel": "نقاط الولاء الخاصة بالمنشأة"
     },
     "accountDialog": {
       "manageTrigger": "إدارة",

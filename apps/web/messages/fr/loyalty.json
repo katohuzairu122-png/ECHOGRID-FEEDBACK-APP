@@ -6,7 +6,10 @@
       "tiers": "Niveaux",
       "rewards": "Récompenses",
       "redeem": "Confirmer l'échange",
-      "settings": "Paramètres"
+      "settings": "Paramètres",
+      "navigationLabel": "Rubriques de fidélité",
+      "customerQr": "QR client",
+      "settlements": "Règlement des récompenses orphelines"
     },
     "accounts": {
       "emptyTitle": "Aucun membre pour le moment",
@@ -15,7 +18,11 @@
       "lastVisit": "Dernière visite {date}",
       "noVisits": "Aucune visite pour le moment",
       "suspended": "Suspendu",
-      "message": "Message"
+      "message": "Message",
+      "description": "Gérez les comptes de fidélité et les points propres à cette entreprise.",
+      "sectionLabel": "Comptes de fidélité",
+      "shownOnPage": "{count, plural, one {# compte sur cette page} other {# comptes sur cette page}}",
+      "pointsLabel": "Points de fidélité de l'entreprise"
     },
     "accountDialog": {
       "manageTrigger": "Gérer",
