@@ -203,7 +203,10 @@ body {
 }
 
 /* Surfaces that hardcode bg-white become the themed input/card surface, except
-   where white is functional (a scannable QR code, a switch knob). */
+   where white is functional (a scannable QR code, a switch knob). The themed element
+   itself can also carry bg-white (a portalled dialog popup re-applies data-ws-theme on
+   the popup), so match the element as well as its descendants. */
+[data-ws-theme='dark'].bg-white:not([data-keep-light]),
 [data-ws-theme='dark'] .bg-white:not([data-keep-light]) {
   background-color: var(--ws-surface-2);
 }
