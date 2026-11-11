@@ -141,8 +141,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          pnpm --filter @echo-grid-feedback/web exec opennextjs-cloudflare deploy -- --name=echo-grid-feedback-web --env= | tee provenance/deploy.log
+          pnpm --filter @echo-grid-feedback/web exec wrangler deploy --name=echo-grid-feedback-web --env="" | tee provenance/deploy.log
         env:
+          # Deploy the sealed OpenNext bundle directly; do not rebuild or invoke its cache tooling.
+          OPEN_NEXT_DEPLOY: 'true'
+          CLOUDFLARE_LOAD_DEV_VARS_FROM_DOT_ENV: 'false'
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       - name: Verify deployed Web version, HTTP 200 and unchanged API deployment
