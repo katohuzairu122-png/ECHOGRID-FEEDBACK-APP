@@ -130,6 +130,22 @@
       "customPrice": "Precio personalizado",
       "contactSales": "Contactar con ventas",
       "freePrice": "Gratis"
+    },
+    "partner": {
+      "title": "Términos del Programa de Socios",
+      "description": "Solo lectura. Esta página muestra los términos actuales del Programa de Socios. No acepta los términos ni inscribe a su negocio.",
+      "back": "Volver a facturación",
+      "termsHeading": "Términos del programa",
+      "versionLabel": "Versión de la política",
+      "digestLabel": "Huella de los términos (SHA-256)",
+      "statusHeading": "Inscripción",
+      "statusBody": "El estado de inscripción aún no se muestra aquí. Aceptar los términos e inscribirse son pasos separados que requieren aprobación explícita.",
+      "forbidden": "Los términos del Programa de Socios son visibles para usuarios con gestión de facturación de todo el negocio.",
+      "unavailable": "No se pudieron cargar los términos en este momento.",
+      "retry": "Reintentar",
+      "linkTitle": "Programa de Socios",
+      "linkDescription": "Consulte los términos actuales del Programa de Socios (solo lectura).",
+      "linkCta": "Ver términos"
     }
   },
   "overview": {

@@ -130,6 +130,22 @@
       "customPrice": "Custom pricing",
       "contactSales": "Contact sales",
       "freePrice": "Free"
+    },
+    "partner": {
+      "title": "Partner Program terms",
+      "description": "Read-only. This page shows the current Partner Program terms. It does not accept the terms or enroll your business.",
+      "back": "Back to billing",
+      "termsHeading": "Program terms",
+      "versionLabel": "Policy version",
+      "digestLabel": "Terms digest (SHA-256)",
+      "statusHeading": "Enrollment",
+      "statusBody": "Enrollment status is not shown here yet. Accepting the terms and enrolling are separate steps that need explicit approval.",
+      "forbidden": "Partner Program terms are visible to users with business-wide billing management access.",
+      "unavailable": "The terms could not be loaded right now.",
+      "retry": "Try again",
+      "linkTitle": "Partner Program",
+      "linkDescription": "View the current Partner Program terms (read-only).",
+      "linkCta": "View terms"
     }
   },
   "overview": {
