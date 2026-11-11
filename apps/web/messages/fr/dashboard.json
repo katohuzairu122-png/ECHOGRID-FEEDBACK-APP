@@ -130,6 +130,22 @@
       "customPrice": "Tarification personnalisée",
       "contactSales": "Contacter les ventes",
       "freePrice": "Gratuit"
+    },
+    "partner": {
+      "title": "Conditions du programme partenaire",
+      "description": "Lecture seule. Cette page affiche les conditions actuelles du programme partenaire. Elle n’accepte pas les conditions et n’inscrit pas votre entreprise.",
+      "back": "Retour à la facturation",
+      "termsHeading": "Conditions du programme",
+      "versionLabel": "Version de la politique",
+      "digestLabel": "Empreinte des conditions (SHA-256)",
+      "statusHeading": "Inscription",
+      "statusBody": "Le statut d’inscription n’est pas encore affiché ici. L’acceptation des conditions et l’inscription sont des étapes distinctes qui nécessitent une approbation explicite.",
+      "forbidden": "Les conditions du programme partenaire sont visibles pour les utilisateurs disposant de la gestion de facturation de toute l’entreprise.",
+      "unavailable": "Les conditions n’ont pas pu être chargées pour le moment.",
+      "retry": "Réessayer",
+      "linkTitle": "Programme partenaire",
+      "linkDescription": "Consultez les conditions actuelles du programme partenaire (lecture seule).",
+      "linkCta": "Voir les conditions"
     }
   },
   "overview": {

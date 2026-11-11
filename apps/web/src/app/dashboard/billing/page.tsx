@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { getTranslations, getFormatter } from 'next-intl/server';
 import type {
@@ -106,6 +107,21 @@ export default async function BillingPage() {
           ))}
         </div>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>{t('partner.linkTitle')}</CardTitle>
+          <CardDescription>{t('partner.linkDescription')}</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Link
+            href="/dashboard/billing/partner-terms"
+            className="text-sm font-medium text-brand-700 underline"
+          >
+            {t('partner.linkCta')}
+          </Link>
+        </CardContent>
+      </Card>
     </div>
   );
 }
