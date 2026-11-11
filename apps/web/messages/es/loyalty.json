@@ -234,6 +234,77 @@
       "replyPlaceholder": "Escribe una respuesta…",
       "sending": "Enviando…",
       "send": "Enviar"
+    },
+    "community": {
+      "eyebrow": "Comunidad Echo Grid",
+      "title": "Centro de la Comunidad",
+      "description": "Su membresía de la Comunidad, su saldo de Puntos de la Comunidad y su actividad reciente.",
+      "points": {
+        "title": "Puntos de la Comunidad",
+        "info": "Los Puntos de la Comunidad se llevan en su propio registro, separado de los puntos de fidelidad de cada negocio.",
+        "balanceHint": "Su saldo actual, tal como está registrado.",
+        "noAccount": "Todavía no se ha registrado una cuenta de Puntos de la Comunidad para usted.",
+        "unavailable": "No se pudo cargar su saldo en este momento.",
+        "forbidden": "Su saldo no está disponible con su acceso actual.",
+        "accountStatus": "Cuenta de puntos: {status}",
+        "accountSuspendedNote": "Esta cuenta de puntos está suspendida. El saldo mostrado es el saldo registrado."
+      },
+      "accountStatus": {
+        "active": "Activa",
+        "suspended": "Suspendida",
+        "closed": "Cerrada"
+      },
+      "membership": {
+        "title": "Membresía",
+        "status": {
+          "active": "Miembro activo",
+          "left": "Dejó la Comunidad",
+          "suspended": "Membresía suspendida",
+          "absent": "No es miembro"
+        },
+        "activeOn": "Miembro desde {date}",
+        "leftOn": "Se fue el {date}",
+        "suspendedOn": "Suspendida el {date}",
+        "absentHint": "No se ha unido a la Comunidad. Unirse y salir aún no están disponibles en esta página.",
+        "policyVersion": "Versión de la política {version}",
+        "unavailable": "No se pudo cargar el estado de su membresía en este momento.",
+        "forbidden": "El estado de su membresía no está disponible con su acceso actual."
+      },
+      "activity": {
+        "title": "Actividad reciente",
+        "description": "Sus últimas entradas del registro de Puntos de la Comunidad, las más recientes primero.",
+        "empty": "Todavía no hay actividad de Puntos de la Comunidad.",
+        "unavailable": "No se pudo cargar su actividad en este momento.",
+        "forbidden": "Su actividad no está disponible con su acceso actual.",
+        "at": "En {name}",
+        "reversalNote": "Revierte una entrada anterior",
+        "newer": "← Más reciente",
+        "older": "Más antigua →",
+        "pageLabel": "Páginas de actividad",
+        "type": {
+          "earn": "Ganado",
+          "redeem": "Canjeado",
+          "reverse": "Revertido",
+          "expire": "Vencido",
+          "admin_adjustment": "Ajuste"
+        },
+        "source": {
+          "survey_completion": "Encuesta completada",
+          "redemption": "Canje",
+          "reversal": "Reversión",
+          "expiration": "Vencimiento",
+          "admin_adjustment": "Ajuste administrativo"
+        },
+        "pointsLabel": "{points} puntos",
+        "showing": "{count, plural, one {# entrada en esta página} many {# de entradas en esta página} other {# entradas en esta página}}"
+      },
+      "about": {
+        "membershipTitle": "Acerca de la membresía de la Comunidad",
+        "membershipBody": "La membresía de la Comunidad es independiente de sus tarjetas de fidelidad en cada negocio. Su estado aquí se muestra exactamente como está registrado.",
+        "pointsTitle": "Acerca de los Puntos de la Comunidad",
+        "pointsBody": "Los Puntos de la Comunidad se llevan en su propio registro. Esta página solo muestra su saldo e historial; no puede crear, gastar ni cambiar puntos."
+      },
+      "retry": "Reintentar"
     }
   }
 }

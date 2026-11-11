@@ -48,6 +48,23 @@ describe('authenticated workspace layout boundaries', () => {
     identity.staff = true;
     await expect(CustomerLayout({ children: null })).rejects.toThrow('redirect:/loyalty/login');
   });
+  it('adds Community to the customer navigation while keeping every existing destination', async () => {
+    identity.customer = true;
+    const { container } = render(await CustomerLayout({ children: <p>Customer content</p> }));
+    const sidebar = container.querySelector('aside')!;
+    for (const href of [
+      '/loyalty/dashboard',
+      '/loyalty/dashboard/community',
+      '/loyalty/dashboard/qr',
+      '/loyalty/dashboard/settlements',
+      '/support',
+    ]) {
+      expect(sidebar.querySelector('a[href="' + href + '"]'), href).toBeInTheDocument();
+    }
+    expect(sidebar.querySelector('button[type="submit"]')).toBeInTheDocument(); // logout stays available
+    // No Surveys destination until a functioning Surveys interface exists.
+    expect(sidebar.querySelector('a[href*="survey"]')).toBeNull();
+  });
   it('requires staff authentication before reading platform identity', async () => {
     await expect(PlatformLayout({ children: null })).rejects.toThrow('redirect:/login');
     expect(getCurrentUser).not.toHaveBeenCalled();
