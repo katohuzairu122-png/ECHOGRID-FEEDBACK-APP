@@ -4,7 +4,9 @@ import { getFormatter, getTranslations } from 'next-intl/server';
 import type { CampaignDashboardDto } from '@echo-grid-feedback/shared-types';
 import { getActiveBusiness } from '@/lib/business';
 import { apiFetch, ApiError } from '@/lib/api-client';
-import { Badge, Card, CardContent, CardDescription, CardHeader, CardTitle, Progress } from '@/components/ui';
+import { Badge, Progress } from '@/components/ui';
+import { CampaignStat } from './campaign-stat';
+import styles from './campaign-detail.module.css';
 import { RewardCard } from '@/app/loyalty/dashboard/[businessId]/reward-card';
 import { LoyaltySubnav } from '../../loyalty-subnav';
 
@@ -94,28 +96,28 @@ export default async function CampaignDashboardPage({ params }: CampaignDashboar
   }
 
   return (
-    <div className="flex flex-col gap-6">
-      <div>
-        <Link href="/dashboard/loyalty/rewards" className="text-sm text-neutral-500 hover:text-brand-700">
+    <div className={styles.page}>
+      <header className={styles.header}>
+        <Link href="/dashboard/loyalty/rewards" className={styles.backLink}>
           {t('campaignDashboard.backLink')}
         </Link>
-        <div className="mt-1 flex items-center gap-2">
-          <h1 className="text-2xl font-semibold text-neutral-900">{reward.name}</h1>
+        <p className={styles.eyebrow}>{business.name}</p>
+        <div className={styles.titleRow}>
+          <h1>{reward.name}</h1>
           <Badge variant={statusVariant}>{statusLabel}</Badge>
         </div>
-        <p className="text-sm text-neutral-500">{business.name}</p>
-      </div>
+      </header>
 
       <LoyaltySubnav />
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle>{t('campaignDashboard.budgetHeading')}</CardTitle>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-3">
+      <div className={styles.grid}>
+        <section className={styles.panel} data-panel="budget" aria-labelledby="campaign-budget">
+          <div className={styles.panelHeader}>
+            <h2 id="campaign-budget">{t('campaignDashboard.budgetHeading')}</h2>
+          </div>
+          <div className={styles.panelBody}>
             {stats.budgetUsed === null ? (
-              <CardDescription>{t('campaignDashboard.budgetNotApplicable')}</CardDescription>
+              <p className={styles.muted}>{t('campaignDashboard.budgetNotApplicable')}</p>
             ) : budgetPercent !== null && stats.budgetTotal !== null ? (
               <Progress
                 value={budgetPercent}
@@ -125,77 +127,90 @@ export default async function CampaignDashboardPage({ params }: CampaignDashboar
                 })}
               />
             ) : (
-              <p className="text-sm text-neutral-700">
+              <p className={styles.muted}>
                 {t('campaignDashboard.budgetUsedNoCap', { used: money(stats.budgetUsed) })}
               </p>
             )}
             {stats.outstandingLiability !== null && (
-              <p className="text-xs text-neutral-500">
+              <p className={styles.secondary}>
                 {t('campaignDashboard.outstandingLiabilityLabel')}: {money(stats.outstandingLiability)}
               </p>
             )}
-          </CardContent>
-        </Card>
+          </div>
+        </section>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>{t('campaignDashboard.activityHeading')}</CardTitle>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-3">
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-neutral-600">{t('campaignDashboard.outstanding')}</span>
-              <span className="text-lg font-semibold text-neutral-900">{stats.outstandingCount}</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-neutral-600">{t('campaignDashboard.redeemed')}</span>
-              <span className="text-lg font-semibold text-neutral-900">{stats.redeemedCount}</span>
-            </div>
-            <div className="flex items-center justify-between border-t border-neutral-100 pt-3">
-              <span className="text-sm text-neutral-600">{t('campaignDashboard.redemptionRateLabel')}</span>
-              <span className="text-sm font-medium text-neutral-900">
-                {stats.redemptionRate !== null
-                  ? format.number(stats.redemptionRate, { style: 'percent', maximumFractionDigits: 0 })
-                  : t('campaignDashboard.redemptionRateNoData')}
-              </span>
-            </div>
-          </CardContent>
-        </Card>
+        <section className={styles.panel} data-panel="activity" aria-labelledby="campaign-activity">
+          <div className={styles.panelHeader}>
+            <h2 id="campaign-activity">{t('campaignDashboard.activityHeading')}</h2>
+          </div>
+          <div className={styles.panelBody}>
+            <dl className={styles.stats}>
+              <CampaignStat
+                label={t('campaignDashboard.outstanding')}
+                value={format.number(stats.outstandingCount)}
+                tone="mint"
+              />
+              <CampaignStat
+                label={t('campaignDashboard.redeemed')}
+                value={format.number(stats.redeemedCount)}
+                tone="cyan"
+              />
+              <CampaignStat
+                label={t('campaignDashboard.redemptionRateLabel')}
+                value={
+                  stats.redemptionRate === null
+                    ? '—'
+                    : format.number(stats.redemptionRate, {
+                        style: 'percent',
+                        maximumFractionDigits: 0,
+                      })
+                }
+                hint={
+                  stats.redemptionRate === null
+                    ? t('campaignDashboard.redemptionRateNoData')
+                    : undefined
+                }
+                tone="violet"
+              />
+            </dl>
+          </div>
+        </section>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>{t('campaignDashboard.scopeHeading')}</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm text-neutral-700">
+        <section className={styles.panel} data-panel="scope" aria-labelledby="campaign-scope">
+          <div className={styles.panelHeader}>
+            <h2 id="campaign-scope">{t('campaignDashboard.scopeHeading')}</h2>
+          </div>
+          <div className={styles.panelBody}>
+            <p className={styles.scopeValue}>
               {branchName
                 ? t('campaignDashboard.scopeOneBranch', { branchName })
                 : t('campaignDashboard.scopeAllBranches')}
             </p>
-          </CardContent>
-        </Card>
+          </div>
+        </section>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>{t('campaignDashboard.termsHeading')}</CardTitle>
-          </CardHeader>
-          <CardContent>
+        <section className={styles.panel} data-panel="terms" aria-labelledby="campaign-terms">
+          <div className={styles.panelHeader}>
+            <h2 id="campaign-terms">{t('campaignDashboard.termsHeading')}</h2>
+          </div>
+          <div className={styles.panelBody}>
             {terms.length === 0 ? (
-              <p className="text-sm text-neutral-700">{t('campaignDashboard.termsNone')}</p>
+              <p className={styles.muted}>{t('campaignDashboard.termsNone')}</p>
             ) : (
-              <ul className="flex flex-col gap-1.5 text-sm text-neutral-700">
+              <ul className={styles.terms}>
                 {terms.map((line) => (
                   <li key={line}>{line}</li>
                 ))}
               </ul>
             )}
-          </CardContent>
-        </Card>
+          </div>
+        </section>
       </div>
 
-      <div className="max-w-sm">
-        <h2 className="mb-2 text-sm font-medium text-neutral-700">{t('campaignDashboard.previewHeading')}</h2>
+      <section className={styles.preview} aria-labelledby="campaign-customer-preview">
+        <h2 id="campaign-customer-preview">{t('campaignDashboard.previewHeading')}</h2>
         <RewardCard reward={reward} businessId={business.id} readOnly />
-      </div>
+      </section>
     </div>
   );
 }
