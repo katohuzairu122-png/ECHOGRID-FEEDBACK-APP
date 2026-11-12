@@ -14,7 +14,6 @@ vi.mock('@/lib/qr-decode', async (orig) => ({
   ...(await orig<typeof QrDecode>()),
   readPixels: vi.fn(() => ({ data: new Uint8ClampedArray(4), width: 1, height: 1 })),
   decodeImageData: vi.fn(async () => 'local.token.1'),
-  decodeImageFile: vi.fn(),
 }));
 
 describe('QrCameraScanner', () => {
@@ -48,19 +47,10 @@ describe('QrCameraScanner', () => {
     expect(getUserMedia).not.toHaveBeenCalled();
   });
 
-  it('reads a code from an uploaded image and reports image errors', async () => {
-    const { decodeImageFile } = await import('@/lib/qr-decode');
-    const onDetect = vi.fn();
-    vi.mocked(decodeImageFile)
-      .mockResolvedValueOnce({ value: 'img.token.2' })
-      .mockResolvedValueOnce({ value: null, reason: 'unreadable' });
-    render(<QrCameraScanner onDetect={onDetect} />);
-    const input = screen.getByLabelText('Upload a photo of the QR code', { selector: 'input' });
-    const user = userEvent.setup();
-    await user.upload(input, new File(['x'], 'qr.png', { type: 'image/png' }));
-    await waitFor(() => expect(onDetect).toHaveBeenCalledWith('img.token.2'));
-    await user.upload(input, new File(['x'], 'blank.png', { type: 'image/png' }));
-    expect(await screen.findByRole('alert')).toHaveTextContent(/No QR code could be read/i);
+  it('offers no still-image upload: the cashier scans with the camera or enters the token', () => {
+    const { container } = render(<QrCameraScanner onDetect={vi.fn()} />);
+    expect(container.querySelector('input[type="file"]')).toBeNull();
+    expect(screen.queryByText(/upload a photo/i)).toBeNull();
   });
 
   it('explains the fallback when the browser has no camera API at all', async () => {
