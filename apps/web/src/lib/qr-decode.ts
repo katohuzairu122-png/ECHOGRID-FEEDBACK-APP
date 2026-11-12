@@ -2,12 +2,10 @@ import type { QRCode } from 'jsqr';
 
 /** Largest side, in pixels, a frame or image is scaled to before decoding (bounds CPU and memory). */
 export const MAX_DECODE_SIDE = 800;
-/** Uploaded image size limit (bytes). */
-export const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
 
 /**
  * Local QR decoding (jsQR, bundled with the app: no remote script, no network call, nothing leaves the
- * device). Used only where the browser has no native BarcodeDetector. The decoder is loaded on first use so
+ * device). Used only where the browser has no native BarcodeDetector, on live camera frames. The decoder is loaded on first use so
  * the dependency does not weigh on pages that never scan.
  */
 export async function decodeImageData(
@@ -38,27 +36,4 @@ export function readPixels(
   if (!ctx) return null;
   ctx.drawImage(source, 0, 0, width, height);
   return { data: ctx.getImageData(0, 0, width, height).data, width, height };
-}
-
-/** Decodes a still image the cashier chose (photo of a QR). Validates type and size first. */
-export async function decodeImageFile(
-  file: File,
-  canvas: HTMLCanvasElement,
-): Promise<{ value: string | null; reason?: 'type' | 'size' | 'unreadable' }> {
-  if (!file.type.startsWith('image/')) return { value: null, reason: 'type' };
-  if (file.size > MAX_IMAGE_BYTES) return { value: null, reason: 'size' };
-  let bitmap: ImageBitmap;
-  try {
-    bitmap = await createImageBitmap(file);
-  } catch {
-    return { value: null, reason: 'unreadable' };
-  }
-  try {
-    const pixels = readPixels(bitmap, bitmap.width, bitmap.height, canvas);
-    if (!pixels) return { value: null, reason: 'unreadable' };
-    const value = await decodeImageData(pixels.data, pixels.width, pixels.height);
-    return value ? { value } : { value: null, reason: 'unreadable' };
-  } finally {
-    bitmap.close();
-  }
 }

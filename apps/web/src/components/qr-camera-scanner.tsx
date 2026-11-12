@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { Button } from '@/components/ui';
-import { decodeImageData, decodeImageFile, readPixels } from '@/lib/qr-decode';
+import { decodeImageData, readPixels } from '@/lib/qr-decode';
 
 interface BarcodeDetectorLike {
   detect(source: CanvasImageSource): Promise<{ rawValue: string }[]>;
@@ -108,18 +108,6 @@ export function QrCameraScanner({
     }
   }
 
-  async function onImage(event: React.ChangeEvent<HTMLInputElement>) {
-    const input = event.currentTarget;
-    const file = input.files?.[0];
-    input.value = '';
-    if (!file) return;
-    setMessage(null);
-    if (!canvasRef.current) canvasRef.current = document.createElement('canvas');
-    const result = await decodeImageFile(file, canvasRef.current);
-    if (result.value) onDetect(result.value);
-    else setMessage(t(result.reason === 'size' ? 'imageTooLarge' : 'imageNoCode'));
-  }
-
   return (
     <div className="space-y-3">
       <video
@@ -146,12 +134,6 @@ export function QrCameraScanner({
         >
           {t(large ? 'scanLarge' : 'scan')}
         </Button>
-      )}
-      {!active && (
-        <label className="flex min-h-12 w-full cursor-pointer items-center justify-center rounded-md border border-neutral-300 px-4 text-base font-medium">
-          {t('uploadImage')}
-          <input type="file" accept="image/*" className="sr-only" onChange={onImage} />
-        </label>
       )}
       {active && (
         <p role="status" className="text-sm">

@@ -21,12 +21,11 @@ describe('StaffQrMenu (cashier Serve customers)', () => {
     expect(screen.getByLabelText(/QR token/i, { selector: 'input[name="token"]' })).toHaveFocus();
   });
 
-  it('offers scan, photo upload and manual entry together', () => {
-    render(<StaffQrMenu contexts={[{ branchId: null, branchName: null }]} />);
+  it('offers scan and manual entry, with no photo upload', () => {
+    const { container } = render(<StaffQrMenu contexts={[{ branchId: null, branchName: null }]} />);
     expect(screen.getByRole('button', { name: 'Scan' })).toBeInTheDocument();
-    expect(
-      screen.getByLabelText('Upload a photo of the QR code', { selector: 'input' }),
-    ).toBeInTheDocument();
+    expect(container.querySelector('input[type="file"]')).toBeNull();
+    expect(screen.queryByText(/upload a photo/i)).toBeNull();
     expect(screen.getByText('Enter the QR token manually')).toBeInTheDocument();
   });
 });
