@@ -69,4 +69,13 @@ describe('loyalty OTP verification route', () => {
     expect(target.searchParams.get('error')).toBe('Code is invalid or has expired.');
     expect(response.cookies.get(CUSTOMER_TOKEN_COOKIE)).toBeUndefined();
   });
+  it.each(['/\\evil.test/phish', '//evil.test', '/%5Cevil.test', 'https://evil.test'])(
+    'never redirects off-origin after login (next=%s)',
+    async (badNext) => {
+      vi.mocked(publicApiFetch).mockResolvedValue({ accessToken: 'customer-token' });
+      const response = await POST(request({ code: '123456', next: badNext }));
+      expect(response.status).toBe(303);
+      expect(response.headers.get('location')).toBe('https://echo-grid.uk/loyalty/dashboard');
+    },
+  );
 });
