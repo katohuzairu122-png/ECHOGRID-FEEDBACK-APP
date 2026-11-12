@@ -203,7 +203,7 @@
   },
   "customer": {
     "shell": {
-      "brand": "Mis Recompensas",
+      "brand": "Mi fidelidad",
       "logout": "Cerrar sesión"
     },
     "login": {
@@ -218,13 +218,6 @@
       "verifying": "Verificando…",
       "verify": "Verificar"
     },
-    "myRewards": {
-      "title": "Mis Recompensas",
-      "emptyTitle": "Aún no tienes tarjetas de fidelización",
-      "emptyDescription": "Escanea el código QR de un negocio y regístrate para empezar a ganar puntos.",
-      "visits": "{count, plural, one {# visita} many {# de visitas} other {# visitas}}",
-      "businessFallback": "Negocio"
-    },
     "businessDashboard": {
       "messages": "Mensajes",
       "notificationPreferences": "Preferencias de notificaciones →",
@@ -232,7 +225,8 @@
       "progressToNextTier": "{remaining} pts para {tierName}",
       "topTierReached": "Nivel máximo alcanzado",
       "rewardsHeading": "Recompensas",
-      "recentActivityHeading": "Actividad reciente"
+      "recentActivityHeading": "Actividad reciente",
+      "backToWallet": "← Mis programas de fidelidad"
     },
     "rewardCard": {
       "points": "{points} pts",
@@ -383,6 +377,28 @@
         }
       },
       "surveyFallback": "Encuesta"
+    },
+    "wallet": {
+      "title": "Mis programas de fidelidad",
+      "intro": "Una sola cuenta para todos los programas de fidelidad a los que te has unido. Cada negocio conserva su propia membresía, puntos y recompensas.",
+      "actionsLabel": "Acciones rápidas",
+      "showQr": "Mostrar mi QR de cliente",
+      "settlements": "Liquidaciones huérfanas",
+      "count": "{count, plural, one {# negocio} other {# negocios}}",
+      "openBusiness": "Abrir {name}: recompensas y actividad",
+      "businessFallback": "Negocio",
+      "paused": "En pausa",
+      "visits": "{count, plural, one {# visita} other {# visitas}}",
+      "lastVisit": "Última visita el {date}",
+      "noVisitsYet": "Aún no hay visitas",
+      "viewDetails": "Ver recompensas y actividad",
+      "points": "{points, number} pts",
+      "separateNote": "Los puntos y las recompensas pertenecen a cada negocio y nunca se combinan.",
+      "emptyTitle": "Aún no te has unido a ningún programa de fidelidad",
+      "emptyDescription": "Para unirte, escanea el código QR que un negocio participante muestra en su mostrador. Tus membresías aparecerán aquí.",
+      "unavailableTitle": "No podemos cargar tus programas en este momento",
+      "unavailableBody": "Es algo temporal y tus membresías no han cambiado. Inténtalo de nuevo en un momento.",
+      "retry": "Reintentar"
     }
   }
 }

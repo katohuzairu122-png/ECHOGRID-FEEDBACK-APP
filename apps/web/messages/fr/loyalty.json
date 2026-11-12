@@ -203,7 +203,7 @@
   },
   "customer": {
     "shell": {
-      "brand": "Mes récompenses",
+      "brand": "Ma fidélité",
       "logout": "Se déconnecter"
     },
     "login": {
@@ -218,13 +218,6 @@
       "verifying": "Vérification…",
       "verify": "Vérifier"
     },
-    "myRewards": {
-      "title": "Mes récompenses",
-      "emptyTitle": "Aucune carte de fidélité pour le moment",
-      "emptyDescription": "Scannez le code QR d'une entreprise et enregistrez-vous pour commencer à gagner des points.",
-      "visits": "{count, plural, one {# visite} many {# de visites} other {# visites}}",
-      "businessFallback": "Entreprise"
-    },
     "businessDashboard": {
       "messages": "Messages",
       "notificationPreferences": "Préférences de notifications →",
@@ -232,7 +225,8 @@
       "progressToNextTier": "{remaining} pts avant {tierName}",
       "topTierReached": "Niveau maximum atteint",
       "rewardsHeading": "Récompenses",
-      "recentActivityHeading": "Activité récente"
+      "recentActivityHeading": "Activité récente",
+      "backToWallet": "← Mes programmes de fidélité"
     },
     "rewardCard": {
       "points": "{points} pts",
@@ -383,6 +377,28 @@
         }
       },
       "surveyFallback": "Enquête"
+    },
+    "wallet": {
+      "title": "Mes programmes de fidélité",
+      "intro": "Un seul compte pour tous les programmes de fidélité que vous avez rejoints. Chaque entreprise garde sa propre adhésion, ses points et ses récompenses.",
+      "actionsLabel": "Actions rapides",
+      "showQr": "Afficher mon QR client",
+      "settlements": "Règlements orphelins",
+      "count": "{count, plural, one {# entreprise} other {# entreprises}}",
+      "openBusiness": "Ouvrir {name} : récompenses et activité",
+      "businessFallback": "Entreprise",
+      "paused": "En pause",
+      "visits": "{count, plural, one {# visite} other {# visites}}",
+      "lastVisit": "Dernière visite le {date}",
+      "noVisitsYet": "Aucune visite pour le moment",
+      "viewDetails": "Voir les récompenses et l’activité",
+      "points": "{points, number} pts",
+      "separateNote": "Les points et récompenses appartiennent à chaque entreprise et ne sont jamais cumulés.",
+      "emptyTitle": "Vous n’avez encore rejoint aucun programme de fidélité",
+      "emptyDescription": "Pour rejoindre, scannez le code QR qu’une entreprise participante affiche à son comptoir. Vos adhésions apparaîtront ici.",
+      "unavailableTitle": "Impossible de charger vos programmes pour le moment",
+      "unavailableBody": "C’est temporaire et vos adhésions n’ont pas changé. Veuillez réessayer dans un instant.",
+      "retry": "Réessayer"
     }
   }
 }
