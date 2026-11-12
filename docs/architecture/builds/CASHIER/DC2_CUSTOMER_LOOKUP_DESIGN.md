@@ -81,12 +81,23 @@ After validating the cashier workspace on staging, the owner asked that the cash
 
 `POST /accounts/:id/purchase` accepts any account id the cashier holds and does not verify that the account was reached through a proof. Today that is acceptable because a cashier cannot learn an account id without a scan. After D-C2 they could. Recommended companion hardening, as its own authorized block: require a valid, unexpired `resolve` or `lookup` token for the same business and account when recording a purchase. D-C2 can ship without it only if the caps in 4.4 and the audit are in place.
 
+### 4.7 Owner direction (2026-11-12): one field for scanner device or phone
+
+The owner asked that "Verify with QR token" become a single **customer search** that works with either a connected scanner device or a typed phone number, to speed up counter operations. The camera scan stays as it is. The scanner device works as a keyboard: it types the code and presses Enter.
+
+- **One field, always visible and focused.** It replaces both the "Verify with QR token" button and the collapsed "Enter the QR token manually" section. Today a cashier must click to open a hidden section before a hardware scanner can type into it.
+- **Input detection.** A long string with letters or token separators is treated as a scanned customer token and resolved exactly as today. A value made of digits (with an optional leading `+`, spaces, dashes or brackets) of phone length is treated as a phone lookup (section 4.2). Anything else shows "Scan a QR code or enter a phone number". No guessing beyond those two shapes.
+- **Scanner behaviour.** Keep focus after every action and after "next customer". Submit on Enter only. Trim whitespace and control characters that some scanners add before or after the code. Never submit a partial value.
+- **Same safety path.** A device-scanned token is verified exactly like a camera-scanned one: signed, short-lived, business-scoped. Nothing about token security changes.
+- **Label honesty.** The control may only be labelled as a search (for example "Find customer") once phone lookup exists. Until D-C2b ships, the field must say what it does ("Scan or enter customer QR code"), the same lesson as D-C1 (a "Search customers" button that was only a token check).
+- **Split for speed.** The scanner-ready field needs no API change and can ship first as a web-only block (D-C2c-0). Phone lookup follows D-C2b.
+
 ## 5. Web experience (proposed)
 
 - Keep **Scan** as the primary action.
-- Replace the QR-token-only manual entry with a single **"Look up member by phone"** field (labelled exactly that; no "search" wording). Phase 2 adds the Echo Grid ID to the same field with format detection.
+- Replace the QR-token-only manual entry with the single field described in 4.7: scanner device or phone number. Once phone lookup exists it may be labelled as a customer search; before that it must say "Scan or enter customer QR code". Phase 2 adds the Echo Grid ID to the same field with format detection.
 - Show the result as a compact card (first name, masked phone, tier, points) with the same follow-on actions as a scanned customer, plus a small "identified by phone" badge.
-- Keep "Enter the QR token manually" as a fallback (for example for a customer who can show a token but not a QR image).
+- The separate "Enter the QR token manually" section goes away: pasting or typing a token into the same field still works.
 - All new strings in en, fr, es and ar; native review required for fr, es and ar.
 - Phone input: accept the national format and normalize with the business country, and show the normalized number before the lookup is sent. The country source is an open detail (section 9).
 
@@ -130,17 +141,18 @@ Any migration needs its own authorization, a Neon snapshot first, staging before
 
 ## 9. Owner decisions needed
 
-| ID     | Question                                                                                          | Recommendation                                                                                                     |
-| ------ | ------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| D-C2-1 | Phone only first, or both phone and Echo Grid ID?                                                 | Phone first. The ID does not exist and belongs in the CUSTOMER-AUTH-01B data contract.                             |
-| D-C2-2 | May a lookup alone record a purchase, or is it view-only?                                         | Allow purchases, flagged and capped, with audit and a manager report.                                              |
-| D-C2-3 | Must the customer confirm (for example with an SMS code) before a lookup-identified purchase?     | Not in Phase 1. It would add SMS cost and depends on the pending Twilio decision. Revisit if fraud signals appear. |
-| D-C2-4 | Daily caps: how many lookup-identified purchases per cashier and business, and what total amount? | Owner sets the numbers; the design only requires that caps exist.                                                  |
-| D-C2-5 | Add the nullable `identified_by` column now (migration) or rely on audit rows?                    | Add it; reporting and caps are simpler and safer.                                                                  |
-| D-C2-6 | Should the customer's `points_earned` notification say it was recorded by lookup?                 | Yes.                                                                                                               |
-| D-C2-7 | Which country defaults national phone input?                                                      | The business's configured country; confirm where that setting lives.                                               |
-| D-C2-8 | Separate permission (`loyalty:lookup`) so owners can switch lookup off per role?                  | Not needed now. Revisit only if owners ask for per-role control.                                                   |
-| D-C2-9 | Authorize the companion hardening (proof token on the purchase endpoint) and when?                | Yes, before or together with D-C2b.                                                                                |
+| ID      | Question                                                                                          | Recommendation                                                                                                     |
+| ------- | ------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| D-C2-1  | Phone only first, or both phone and Echo Grid ID?                                                 | Phone first. The ID does not exist and belongs in the CUSTOMER-AUTH-01B data contract.                             |
+| D-C2-2  | May a lookup alone record a purchase, or is it view-only?                                         | Allow purchases, flagged and capped, with audit and a manager report.                                              |
+| D-C2-3  | Must the customer confirm (for example with an SMS code) before a lookup-identified purchase?     | Not in Phase 1. It would add SMS cost and depends on the pending Twilio decision. Revisit if fraud signals appear. |
+| D-C2-4  | Daily caps: how many lookup-identified purchases per cashier and business, and what total amount? | Owner sets the numbers; the design only requires that caps exist.                                                  |
+| D-C2-5  | Add the nullable `identified_by` column now (migration) or rely on audit rows?                    | Add it; reporting and caps are simpler and safer.                                                                  |
+| D-C2-6  | Should the customer's `points_earned` notification say it was recorded by lookup?                 | Yes.                                                                                                               |
+| D-C2-7  | Which country defaults national phone input?                                                      | The business's configured country; confirm where that setting lives.                                               |
+| D-C2-8  | Separate permission (`loyalty:lookup`) so owners can switch lookup off per role?                  | Not needed now. Revisit only if owners ask for per-role control.                                                   |
+| D-C2-9  | Authorize the companion hardening (proof token on the purchase endpoint) and when?                | Yes, before or together with D-C2b.                                                                                |
+| D-C2-10 | Ship the scanner-ready field first (D-C2c-0, web only), before phone lookup exists?               | Yes. It removes the extra click for hardware scanners now and carries no API or data risk.                         |
 
 ## 10. Not covered
 
