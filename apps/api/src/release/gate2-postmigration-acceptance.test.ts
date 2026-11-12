@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { assessGate2PostMigration, type Gate2PostMigrationEvidence } from './gate2-postmigration-acceptance';
 
 const observed=():Gate2PostMigrationEvidence=>({
-  environment:'production', migrationsApplied:68,uniqueMigrationTimestamps:68,
+  environment:'production', migrationsApplied:69,uniqueMigrationTimestamps:69,
   rlsEnabled:9,forceRlsEnabled:9,enabledFinancialGuards:6,
   runtimeDatabaseRole:'neondb_owner',runtimeBypassRls:true,
   credentialExclusiveToRestrictedBroker:false,

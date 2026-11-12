@@ -23,6 +23,10 @@ import { CustomerMembershipRepository } from './customer-membership.repository';
 import { ConsentGrantRepository } from './consent-grant.repository';
 import { CustomerActionAuthorizationRepository } from './customer-action-authorization.repository';
 import { OtpCodeRepository } from './otp-code.repository';
+import { CustomerCredentialRepository } from './customer-credential.repository';
+import { CustomerSessionRepository } from './customer-session.repository';
+import { CustomerRefreshTokenRepository } from './customer-refresh-token.repository';
+import { CustomerAuthEventRepository } from './customer-auth-event.repository';
 import { LoyaltyTierRepository } from './loyalty-tier.repository';
 import { LoyaltyRewardRepository } from './loyalty-reward.repository';
 import { LoyaltyAccountRepository } from './loyalty-account.repository';
@@ -129,6 +133,10 @@ export function createRepositories(db: Db) {
     consentGrants: new ConsentGrantRepository(db),
     customerActionAuthorizations: new CustomerActionAuthorizationRepository(db),
     otpCodes: new OtpCodeRepository(db),
+    customerCredentials: new CustomerCredentialRepository(db),
+    customerSessions: new CustomerSessionRepository(db),
+    customerRefreshTokens: new CustomerRefreshTokenRepository(db),
+    customerAuthEvents: new CustomerAuthEventRepository(db),
     loyaltyTiers: new LoyaltyTierRepository(db),
     loyaltyRewards: new LoyaltyRewardRepository(db),
     loyaltyAccounts: new LoyaltyAccountRepository(db),
