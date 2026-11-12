@@ -19,8 +19,8 @@ const poppins = Poppins({
   display: 'swap',
 });
 
-const TAGLINE = 'Every Voice Drives Better Decisions.';
-const DESCRIPTION = `Echo Grid — ${TAGLINE} AI-powered customer feedback, loyalty, and sentiment analytics for multi-branch businesses. An INFINICUS company.`;
+const TAGLINE = 'One account. All your loyalties.';
+const DESCRIPTION = `Echo Grid — ${TAGLINE} The loyalty network: one customer account for the loyalty programs of participating businesses, with feedback, rewards and customer insights for businesses. An INFINICUS company.`;
 
 export const metadata: Metadata = {
   metadataBase: new URL(APP_URL),

@@ -36,13 +36,13 @@
       "menu": "Menú"
     },
     "hero": {
-      "title": "Convierte cada visita",
-      "accent": "en valor duradero",
-      "description": "Conecta con tus clientes, recoge opiniones reales y fomenta la fidelidad de cada negocio con un único QR de sucursal.",
+      "title": "Una cuenta.",
+      "accent": "Todos tus programas de fidelidad.",
+      "description": "Echo Grid reúne tu fidelidad con los negocios participantes en una sola experiencia: accede a tus membresías, sigue tus recompensas disponibles y opina con una sola cuenta de cliente.",
       "watch": "Descubre cómo funciona",
-      "proof0": "Relaciones más fuertes",
-      "proof1": "Opiniones e información reales",
-      "proof2": "Para empresas de cualquier tamaño"
+      "proof0": "Una sola cuenta de cliente",
+      "proof1": "Fidelidad y recompensas propias de cada negocio",
+      "proof2": "Opiniones que ayudan a los negocios a mejorar"
     },
     "features": {
       "title": "Todo lo que necesitas en una plataforma",
@@ -76,9 +76,9 @@
     },
     "business": {
       "eyebrow": "Para empresas",
-      "title": "Haz crecer tu negocio",
-      "accent": "con clientes fieles",
-      "description": "Escucha, aprende y fortalece las relaciones con herramientas para tu negocio y sus sucursales.",
+      "title": "Convierte las visitas",
+      "accent": "en relaciones duraderas",
+      "description": "Construye fidelidad, gestiona recompensas, recoge opiniones y comprende la experiencia de tus clientes con una sola plataforma.",
       "points": {
         "0": "Opiniones e interacción mediante QR de sucursal",
         "1": "Fidelidad y recompensas configurables por negocio",
@@ -113,15 +113,15 @@
     },
     "customer": {
       "eyebrow": "Para clientes",
-      "title": "Escanea. Participa.",
-      "accent": "Construye fidelidad.",
-      "description": "Únete a los negocios que elijas, opina y consulta recompensas disponibles con una cuenta y saldos separados por negocio.",
+      "title": "Tus negocios favoritos.",
+      "accent": "Un solo lugar para tu fidelidad.",
+      "description": "Accede a los programas de fidelidad de los negocios participantes sin crear una cuenta de cliente distinta para cada uno. Mantén tus recompensas organizadas y comparte experiencias que ayuden a los negocios a mejorar.",
       "cta": "Abre tu cuenta de cliente",
       "benefitsTitle": "Tu experiencia como cliente",
       "items": {
         "0": {
-          "title": "Una identidad de cliente",
-          "description": "Usa tu cuenta con los negocios participantes."
+          "title": "Una sola cuenta de cliente",
+          "description": "Usa una sola cuenta con los negocios participantes, sin registrarte por separado en cada uno."
         },
         "1": {
           "title": "Recompensas por negocio",
@@ -136,8 +136,8 @@
           "description": "Ve tu actividad y recompensas por negocio."
         },
         "4": {
-          "title": "Relaciones separadas",
-          "description": "Cada negocio tiene su propia membresía y saldo."
+          "title": "Tus membresías siguen separadas",
+          "description": "Cada negocio tiene su propia membresía y saldo de fidelidad. Los negocios no ven los clientes de otros y unirte a uno nunca te inscribe en otro."
         },
         "5": {
           "title": "Recompensas disponibles",
@@ -192,7 +192,7 @@
     "final": {
       "title": "¿Listo para construir",
       "accent": "relaciones más fuertes?",
-      "description": "Empieza con las opiniones y crea una experiencia que crezca con tu negocio.",
+      "description": "Empieza con la fidelidad y las opiniones. Crea una experiencia que crezca con tu negocio.",
       "talk": "Háblenos"
     },
     "footer": {

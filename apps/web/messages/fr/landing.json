@@ -36,13 +36,13 @@
       "menu": "Menu"
     },
     "hero": {
-      "title": "Transformez chaque visite",
-      "accent": "en valeur durable",
-      "description": "Échangez avec vos clients, recueillez leurs avis et développez la fidélité propre à chaque entreprise avec un seul QR par établissement.",
+      "title": "Un seul compte.",
+      "accent": "Tous vos programmes de fidélité.",
+      "description": "Echo Grid réunit votre fidélité auprès des entreprises participantes en une seule expérience : accédez à vos adhésions, suivez vos récompenses éligibles et donnez votre avis avec un seul compte client.",
       "watch": "Voir le fonctionnement",
-      "proof0": "Des relations plus fortes",
-      "proof1": "Des avis et analyses utiles",
-      "proof2": "Pour toutes les entreprises"
+      "proof0": "Un seul compte client",
+      "proof1": "Fidélité et récompenses propres à chaque entreprise",
+      "proof2": "Des avis qui aident les entreprises à progresser"
     },
     "features": {
       "title": "Tout ce dont vous avez besoin",
@@ -76,9 +76,9 @@
     },
     "business": {
       "eyebrow": "Pour les entreprises",
-      "title": "Développez votre activité",
-      "accent": "avec des clients fidèles",
-      "description": "Écoutez, apprenez et renforcez vos relations grâce à des outils pour vos établissements.",
+      "title": "Transformez les visites",
+      "accent": "en relations durables",
+      "description": "Développez la fidélité, gérez les récompenses, recueillez les avis et comprenez l’expérience client avec une seule plateforme.",
       "points": {
         "0": "Avis et engagement via le QR d’établissement",
         "1": "Programmes de fidélité et récompenses configurables",
@@ -113,15 +113,15 @@
     },
     "customer": {
       "eyebrow": "Pour les clients",
-      "title": "Scannez. Participez.",
-      "accent": "Développez votre fidélité.",
-      "description": "Rejoignez les entreprises de votre choix, donnez votre avis et consultez les récompenses avec un compte et des soldes distincts par entreprise.",
+      "title": "Vos entreprises préférées.",
+      "accent": "Un seul endroit pour votre fidélité.",
+      "description": "Accédez aux programmes de fidélité des entreprises participantes sans créer un compte client distinct pour chacune. Gardez vos récompenses organisées et partagez des expériences qui aident les entreprises à s’améliorer.",
       "cta": "Ouvrir votre compte client",
       "benefitsTitle": "Votre expérience client",
       "items": {
         "0": {
-          "title": "Une identité client",
-          "description": "Utilisez votre compte auprès des entreprises participantes."
+          "title": "Un seul compte client",
+          "description": "Utilisez un seul compte auprès des entreprises participantes, sans inscription séparée pour chacune."
         },
         "1": {
           "title": "Récompenses par entreprise",
@@ -136,8 +136,8 @@
           "description": "Consultez votre activité et vos récompenses par entreprise."
         },
         "4": {
-          "title": "Des relations distinctes",
-          "description": "Chaque entreprise possède son adhésion et son solde."
+          "title": "Vos adhésions restent distinctes",
+          "description": "Chaque entreprise a sa propre adhésion et son propre solde de fidélité. Les entreprises ne voient pas les clients des autres, et rejoindre l’une ne vous inscrit jamais à une autre."
         },
         "5": {
           "title": "Récompenses disponibles",
@@ -192,7 +192,7 @@
     "final": {
       "title": "Prêt à créer",
       "accent": "des relations clients plus fortes ?",
-      "description": "Commencez par les avis et créez une expérience qui évolue avec votre entreprise.",
+      "description": "Commencez par la fidélité et les avis. Créez une expérience qui évolue avec votre entreprise.",
       "talk": "Parlez-nous"
     },
     "footer": {

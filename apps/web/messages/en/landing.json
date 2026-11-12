@@ -36,13 +36,13 @@
       "menu": "Menu"
     },
     "hero": {
-      "title": "Turn Every Visit",
-      "accent": "Into Lasting Value",
-      "description": "Connect with customers, collect real feedback and build business-specific loyalty — all from a single branch QR code.",
+      "title": "One account.",
+      "accent": "All your loyalties.",
+      "description": "Echo Grid brings your loyalty with participating businesses into one connected experience: access your memberships, track eligible rewards and share feedback with one customer account.",
       "watch": "See How It Works",
-      "proof0": "Stronger customer relationships",
-      "proof1": "Real feedback and insights",
-      "proof2": "Built for businesses of any size"
+      "proof0": "One customer account",
+      "proof1": "Business-specific loyalty and rewards",
+      "proof2": "Feedback that helps businesses improve"
     },
     "features": {
       "title": "Everything You Need in One Platform",
@@ -76,9 +76,9 @@
     },
     "business": {
       "eyebrow": "For businesses",
-      "title": "Grow Your Business",
-      "accent": "with Loyal Customers",
-      "description": "Listen, learn and build stronger relationships with tools for your business and branches.",
+      "title": "Turn customer visits",
+      "accent": "into lasting relationships",
+      "description": "Build loyalty, manage rewards, collect feedback and understand customer experiences through one platform.",
       "points": {
         "0": "Branch QR feedback and customer engagement",
         "1": "Configurable business loyalty and rewards",
@@ -113,15 +113,15 @@
     },
     "customer": {
       "eyebrow": "For customers",
-      "title": "Scan. Engage.",
-      "accent": "Build Loyalty.",
-      "description": "Join businesses you choose, give feedback and view eligible rewards — with one customer account and separate loyalty balances for each business.",
+      "title": "Your favorite businesses.",
+      "accent": "One place for your loyalty.",
+      "description": "Access loyalty programs from participating businesses without creating a separate customer account for every one. Keep your rewards organized and share experiences that help businesses improve.",
       "cta": "Open Your Customer Account",
       "benefitsTitle": "Your Customer Experience",
       "items": {
         "0": {
-          "title": "One customer identity",
-          "description": "Use your customer account with participating businesses."
+          "title": "One customer account",
+          "description": "Use one account with participating businesses, with no separate sign-up for each."
         },
         "1": {
           "title": "Business-specific rewards",
@@ -136,8 +136,8 @@
           "description": "View your loyalty activity and rewards per business."
         },
         "4": {
-          "title": "Separate relationships",
-          "description": "Each business has its own membership and loyalty balance."
+          "title": "Your memberships stay separate",
+          "description": "Each business has its own membership and loyalty balance. Businesses can’t see each other’s customers, and joining one never enrolls you with another."
         },
         "5": {
           "title": "View available rewards",
@@ -192,7 +192,7 @@
     "final": {
       "title": "Ready to Build",
       "accent": "Stronger Customer Relationships?",
-      "description": "Start with feedback. Create an engagement experience that grows with your business.",
+      "description": "Start with loyalty and feedback. Create an engagement experience that grows with your business.",
       "talk": "Talk to us"
     },
     "footer": {
