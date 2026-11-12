@@ -36,7 +36,7 @@ try {
   "SELECT current_database() db,current_user username,current_setting('server_version_num')::int version"
  )).rows[0];
  check(info.db==='echogrid_ci_pg18_principal'&&info.username==='echogrid'&&Math.floor(info.version/10000)===18,'DATABASE_IDENTITY');
- check((await owner.query('SELECT count(*)::int n FROM drizzle.__drizzle_migrations')).rows[0].n===68,'MIGRATION_COUNT');
+ check((await owner.query('SELECT count(*)::int n FROM drizzle.__drizzle_migrations')).rows[0].n===69,'MIGRATION_COUNT');
 
  for(const {name} of tables){
   const flags=(await owner.query('SELECT relrowsecurity,relforcerowsecurity FROM pg_class WHERE oid=$1::regclass',['public.'+name])).rows[0];
