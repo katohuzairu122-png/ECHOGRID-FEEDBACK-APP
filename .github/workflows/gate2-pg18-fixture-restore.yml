@@ -87,7 +87,7 @@ jobs:
           set -euo pipefail
           git show HEAD:apps/api/drizzle/meta/_journal.json > apps/api/drizzle/meta/_journal.json
           git diff --exit-code -- apps/api/drizzle/meta/_journal.json
-      - name: Upgrade original synthetic tenant database from 45 to 68
+      - name: Upgrade original synthetic tenant database from 45 to 69
         run: pnpm --filter @echo-grid-feedback/api db:migrate
       - name: Verify post-upgrade migration and financial security
         working-directory: apps/api
@@ -95,7 +95,7 @@ jobs:
       - name: Verify original tenant records survived all 23 migrations
         working-directory: apps/api
         run: node scripts/gate2-pg18-fixture-evidence.mjs verify
-      - name: Upgrade restored disposable backup from 45 to 68
+      - name: Upgrade restored disposable backup from 45 to 69
         env:
           DATABASE_URL: postgresql://echogrid:echogrid@localhost:5432/echogrid_ci_pg18_restored
         run: pnpm --filter @echo-grid-feedback/api db:migrate
@@ -109,7 +109,7 @@ jobs:
         run: |
           set -euo pipefail
           for db in echogrid_ci_pg18_upgrade echogrid_ci_pg18_restored; do
-            test "$(psql -h localhost -U echogrid -d "$db" -Atc 'SELECT count(*) FROM drizzle.__drizzle_migrations')" = '68'
+            test "$(psql -h localhost -U echogrid -d "$db" -Atc 'SELECT count(*) FROM drizzle.__drizzle_migrations')" = '69'
             psql -h localhost -U echogrid -d "$db" -Atc "
               SELECT md5(string_agg(created_at::text, ',' ORDER BY id))
               FROM drizzle.__drizzle_migrations" > "$RUNNER_TEMP/$db.digest"
