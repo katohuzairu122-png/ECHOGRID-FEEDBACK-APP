@@ -160,20 +160,31 @@ loyaltyRoutes.post('/accounts/:id/purchase', requirePermission('loyalty:manage')
   });
 });
 
-loyaltyRoutes.post('/accounts/:id/adjust', requirePermission('loyalty:manage'), requireBusinessWideAccess, async (c) => {
-  const body = await parseJsonBody(c.req.raw, adjustPointsSchema);
-  return withDb(c, async (db) => {
-    const account = await new LoyaltyAccountService(db).adjustPoints(
-      c.get('businessId'),
-      c.req.param('id'),
-      body.points,
-      body.notes,
-      c.get('userId'),
-    );
-    c.set('auditMetadata', { action: 'loyalty.points_adjusted', entityType: 'loyalty_account', entityId: account.id });
-    return ok(c, account);
-  });
-});
+// Manual balance changes are an administrative correction, not counter service. `loyalty:manage` alone is
+// held by the front-counter Staff role (purchase validation and redemption need it), so it must not
+// authorize this route by itself: `rewards:manage` (programme administration, which front-counter staff do
+// not hold) is required as well. A dedicated `loyalty:adjust` permission is the intended long-term shape but
+// needs a role-grant backfill, which is an owner decision gate (see the cashier RBAC remediation record).
+loyaltyRoutes.post(
+  '/accounts/:id/adjust',
+  requirePermission('loyalty:manage'),
+  requirePermission('rewards:manage'),
+  requireBusinessWideAccess,
+  async (c) => {
+    const body = await parseJsonBody(c.req.raw, adjustPointsSchema);
+    return withDb(c, async (db) => {
+      const account = await new LoyaltyAccountService(db).adjustPoints(
+        c.get('businessId'),
+        c.req.param('id'),
+        body.points,
+        body.notes,
+        c.get('userId'),
+      );
+      c.set('auditMetadata', { action: 'loyalty.points_adjusted', entityType: 'loyalty_account', entityId: account.id });
+      return ok(c, account);
+    });
+  },
+);
 
 // ---- Program settings (Block 3) ------------------------------------------
 
