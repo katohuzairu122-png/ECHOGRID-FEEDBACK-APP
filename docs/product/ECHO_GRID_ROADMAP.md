@@ -44,17 +44,17 @@ Messages page failure in production (cause unknown); duplicate-tier HTTP 500 was
 
 Requirements and blocks: `docs/architecture/builds/CUSTOMER-AUTH/CUSTOMER_AUTH_01_REQUIREMENTS_AND_ROADMAP.md`. See also `docs/architecture/builds/CUSTOMER-AUTH/CUSTOMER_AUTH_01_RECONCILIATION_2026_11_12.md` for the **proposed** D-B9/MG-02 ordering, refresh-token contract corrections and exact-head PG18 validation gates. PR #384's 01C document was missing from `main` and is being restored in the same **unmerged** documentation PR. PRs #385/#387 remain draft and not activated.
 
-| Block | Content                                                                           | Gate                                                           |
-| ----- | --------------------------------------------------------------------------------- | -------------------------------------------------------------- |
-| G0    | Owner answers to CA-01 to CA-10                                                   | Owner                                                          |
-| 01A   | Architecture and security assessment of the 90-day customer session (design only) | Authorization                                                  |
-| 01B   | Data contract (design only)                                                       | Owner review                                                   |
-| 01C   | Existing-customer migration plan (design only)                                    | Owner review                                                   |
+| Block | Content                                                                           | Gate                                                                                                                               |
+| ----- | --------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| G0    | Owner answers to CA-01 to CA-10                                                   | Owner                                                                                                                              |
+| 01A   | Architecture and security assessment of the 90-day customer session (design only) | Authorization                                                                                                                      |
+| 01B   | Data contract (design only)                                                       | Owner review                                                                                                                       |
+| 01C   | Existing-customer migration plan (design only)                                    | Owner review                                                                                                                       |
 | 01D   | API with new storage and a migration                                              | **Merge NO-GO** until D-B9/MG-02, security review, Gate 2/PG18 exact-head certification and staged release sequencing are approved |
-| 01E   | Web registration, login, recovery, sessions                                       | Own authorization                                              |
-| 01F   | Business-QR path with explicit join choice                                        | Own authorization                                              |
-| 01G   | Remote enrollment                                                                 | Blocked until BDPN-01 is live and a D-18 amendment is approved |
-| 01H   | Certification and progressive rollout                                             | Owner                                                          |
+| 01E   | Web registration, login, recovery, sessions                                       | Own authorization                                                                                                                  |
+| 01F   | Business-QR path with explicit join choice                                        | Own authorization                                                                                                                  |
+| 01G   | Remote enrollment                                                                 | Blocked until BDPN-01 is live and a D-18 amendment is approved                                                                     |
+| 01H   | Certification and progressive rollout                                             | Owner                                                                                                                              |
 
 ## 3. Suggested order
 
