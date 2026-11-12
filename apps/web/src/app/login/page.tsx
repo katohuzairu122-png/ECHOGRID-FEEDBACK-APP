@@ -7,6 +7,7 @@ import { loginAction, type AuthActionState } from '@/lib/actions/auth';
 import { Button, Input, Label } from '@/components/ui';
 import { Logo } from '@/components/brand';
 import { LandingIcon } from '@/components/landing/landing-icon';
+import { safeInternalPath } from '@/lib/safe-redirect';
 import styles from './login.module.css';
 
 const initialState: AuthActionState = {};
@@ -15,7 +16,7 @@ export default function LoginPage() {
   const [next, setNext] = useState('/dashboard');
   useEffect(() => {
     const requested = new URLSearchParams(window.location.search).get('next');
-    if (requested?.startsWith('/') && !requested.startsWith('//')) setNext(requested);
+    setNext(safeInternalPath(requested, '/dashboard'));
   }, []);
   const [state, formAction, pending] = useActionState(loginAction, initialState);
   const [showPassword, setShowPassword] = useState(false);

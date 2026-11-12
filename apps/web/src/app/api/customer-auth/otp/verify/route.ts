@@ -6,14 +6,12 @@ import {
   CUSTOMER_TOKEN_COOKIE,
 } from '@/lib/customer-cookies';
 import { publicApiFetch } from '@/lib/public-api-client';
+import { safeInternalPath } from '@/lib/safe-redirect';
 
 const CUSTOMER_TOKEN_MAX_AGE = 90 * 24 * 60 * 60;
 
 function safeNext(value: unknown): string {
-  if (typeof value !== 'string' || !value.startsWith('/') || value.startsWith('//')) {
-    return '/loyalty/dashboard';
-  }
-  return value;
+  return safeInternalPath(value, '/loyalty/dashboard');
 }
 
 function verificationErrorRedirect(
