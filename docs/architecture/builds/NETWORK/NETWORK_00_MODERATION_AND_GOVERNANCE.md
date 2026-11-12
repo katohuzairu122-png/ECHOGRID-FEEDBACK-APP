@@ -30,14 +30,14 @@ User-visible content creates continuing obligations (review, abuse handling, dis
 
 ## 4. Reporting
 
-| Item               | Proposal                                                                                                                                             |
-| ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Who can report     | Any signed-in customer; any business user (for posts by others)                                                                                      |
-| Reasons            | Code-owned list (spam, harassment, impersonation, misleading, illegal, personal data, other)                                                         |
-| Limits             | Per-user rate limit; duplicate reports collapse                                                                                                      |
-| Privacy            | The author never learns who reported                                                                                                                 |
+| Item               | Proposal                                                                                                                                    |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| Who can report     | Any signed-in customer; any business user (for posts by others)                                                                             |
+| Reasons            | Code-owned list (spam, harassment, impersonation, misleading, illegal, personal data, other)                                                |
+| Limits             | Per-user rate limit; duplicate reports collapse                                                                                             |
+| Privacy            | The author never learns who reported                                                                                                        |
 | Handling           | Reports queue for moderators; a post with repeated reports may be auto-**hidden pending review** only if the owner approves that rule (G-1) |
-| Abuse of reporting | Repeated bad-faith reporting is itself reviewable                                                                                                    |
+| Abuse of reporting | Repeated bad-faith reporting is itself reviewable                                                                                           |
 
 ## 5. Abuse cases and responses
 
