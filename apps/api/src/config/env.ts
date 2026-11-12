@@ -235,6 +235,25 @@ export interface Bindings {
    * every successful call is a real Anthropic API charge, unlike a free
    * feedback submission or a rate-limited retry against it. */
   FOLLOWUP_QUESTION_RATE_LIMITER: RateLimit;
+  /**
+   * CUSTOMER-AUTH-01D-5: per-surface, per-dimension limiters for customer
+   * authentication (customer-auth/customer-auth-rate-limit.ts). All OPTIONAL and
+   * NOT declared in wrangler.toml yet: the namespace ids and budgets are owner
+   * decisions (docs/architecture/builds/CUSTOMER-AUTH/CUSTOMER_AUTH_01D5_RATE_LIMITS.md).
+   * The checker fails closed when one a route needs is absent.
+   */
+  CUSTOMER_AUTH_RL_OTP_REQUEST_PHONE?: RateLimit;
+  CUSTOMER_AUTH_RL_OTP_REQUEST_SOURCE?: RateLimit;
+  CUSTOMER_AUTH_RL_OTP_REQUEST_GLOBAL?: RateLimit;
+  CUSTOMER_AUTH_RL_OTP_VERIFY_PHONE?: RateLimit;
+  CUSTOMER_AUTH_RL_OTP_VERIFY_SOURCE?: RateLimit;
+  CUSTOMER_AUTH_RL_PASSWORD_LOGIN_PHONE?: RateLimit;
+  CUSTOMER_AUTH_RL_PASSWORD_LOGIN_SOURCE?: RateLimit;
+  CUSTOMER_AUTH_RL_PASSWORD_LOGIN_PHONE_SOURCE?: RateLimit;
+  CUSTOMER_AUTH_RL_PASSWORD_RECOVERY_PHONE?: RateLimit;
+  CUSTOMER_AUTH_RL_PASSWORD_RECOVERY_SOURCE?: RateLimit;
+  CUSTOMER_AUTH_RL_SESSION_REFRESH_SOURCE?: RateLimit;
+  CUSTOMER_AUTH_RL_PASSWORD_CHANGE_CUSTOMER?: RateLimit;
   /** Guards POST /loyalty/actions/lookup-customer (cashier phone lookup). Keyed by business and staff user so one
    * cashier cannot exhaust another's budget; deliberately small because every call probes the member list. */
   LOOKUP_RATE_LIMITER: RateLimit;
