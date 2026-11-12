@@ -280,21 +280,21 @@ The migration is additive and the new tables are empty until the feature is swit
 
 CA items are from the roadmap. D-B items are new in this block.
 
-| ID    | Question                                                                  | Default used here (PROPOSED)                     | Needed before        |
-| ----- | ------------------------------------------------------------------------- | ------------------------------------------------ | -------------------- |
-| CA-01 | Confirm reuse of the PBKDF2 implementation with separate customer storage | Yes                                              | 01D                  |
-| CA-02 | Access and refresh lifetimes, idle and absolute limits                    | 15 min access, 30 day absolute, idle limit open  | 01D                  |
-| CA-04 | Recovery option. Only R1 needs **no** new storage                         | R1, with opt-in R2 later                         | 01C, 01D             |
-| CA-08 | Whether and where notice acceptance is stored                             | Not stored in these tables (D-B6)                | 01D                  |
-| D-B1  | Store IP-derived data on sessions and events at all, and how coarse       | Coarse hint or none                              | 01D                  |
-| D-B2  | Retention for dead sessions and for events                                | Owner and legal input needed. No number proposed | 01D                  |
-| D-B3  | Durable failed-attempt counters on the credential row                     | Limiter only, no counters                        | 01D                  |
-| D-B4  | Record unknown-phone attempts as keyed hashes                             | Yes, with a new secret                           | 01D                  |
-| D-B5  | Database trigger to enforce append-only events                            | Service-level only, trigger optional             | 01D                  |
-| D-B7  | Add row-level security on the new tables                                  | Not required, defense in depth                   | 01D                  |
-| D-B8  | Maximum concurrent sessions per customer, and behavior at the cap         | Cap and evict oldest, value needed               | 01D                  |
-| D-B9  | Migration order against BDPN and the `0067` rollout | `0067`, auth `0068` (OFF), then BDPN next free slot; **approval pending** | Before any migration |
-| MG-02 | Add the per-customer cutoff for legacy token invalidation | Yes: `legacy_tokens_invalid_before` in unapplied auth migration; **approval pending** | Before 01D-2 merge |
+| ID    | Question                                                                  | Default used here (PROPOSED)                                                          | Needed before        |
+| ----- | ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- | -------------------- |
+| CA-01 | Confirm reuse of the PBKDF2 implementation with separate customer storage | Yes                                                                                   | 01D                  |
+| CA-02 | Access and refresh lifetimes, idle and absolute limits                    | 15 min access, 30 day absolute, idle limit open                                       | 01D                  |
+| CA-04 | Recovery option. Only R1 needs **no** new storage                         | R1, with opt-in R2 later                                                              | 01C, 01D             |
+| CA-08 | Whether and where notice acceptance is stored                             | Not stored in these tables (D-B6)                                                     | 01D                  |
+| D-B1  | Store IP-derived data on sessions and events at all, and how coarse       | Coarse hint or none                                                                   | 01D                  |
+| D-B2  | Retention for dead sessions and for events                                | Owner and legal input needed. No number proposed                                      | 01D                  |
+| D-B3  | Durable failed-attempt counters on the credential row                     | Limiter only, no counters                                                             | 01D                  |
+| D-B4  | Record unknown-phone attempts as keyed hashes                             | Yes, with a new secret                                                                | 01D                  |
+| D-B5  | Database trigger to enforce append-only events                            | Service-level only, trigger optional                                                  | 01D                  |
+| D-B7  | Add row-level security on the new tables                                  | Not required, defense in depth                                                        | 01D                  |
+| D-B8  | Maximum concurrent sessions per customer, and behavior at the cap         | Cap and evict oldest, value needed                                                    | 01D                  |
+| D-B9  | Migration order against BDPN and the `0067` rollout                       | `0067`, auth `0068` (OFF), then BDPN next free slot; **approval pending**             | Before any migration |
+| MG-02 | Add the per-customer cutoff for legacy token invalidation                 | Yes: `legacy_tokens_invalid_before` in unapplied auth migration; **approval pending** | Before 01D-2 merge   |
 
 ---
 
