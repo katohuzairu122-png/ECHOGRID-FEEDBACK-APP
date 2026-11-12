@@ -16,6 +16,24 @@ export class CustomerCredentialRepository extends BaseRepository {
     });
   }
 
+  /**
+   * Narrow legacy-token verification read. Unlike findByCustomerId, this does
+   * not expose the password hash to the request authentication middleware.
+   * Undefined means no credential (OTP-only cohort); a row with null cutoff
+   * is distinguishable and must be treated as a fail-closed configuration gap
+   * for a credentialed customer by the future verification service.
+   */
+  async findLegacyTokenCutoff(
+    customerId: string,
+  ): Promise<{ legacyTokensInvalidBefore: Date | null } | undefined> {
+    const rows = await this.db
+      .select({ legacyTokensInvalidBefore: customerCredentials.legacyTokensInvalidBefore })
+      .from(customerCredentials)
+      .where(eq(customerCredentials.customerId, customerId))
+      .limit(1);
+    return rows[0];
+  }
+
   async exists(customerId: string): Promise<boolean> {
     const rows = await this.db
       .select({ customerId: customerCredentials.customerId })
@@ -57,8 +75,8 @@ export class CustomerCredentialRepository extends BaseRepository {
       .update(customerCredentials)
       .set({
         passwordHash: input.passwordHash,
-        passwordChangedAt: input.now,
-        updatedAt: input.now,
+        passwordChangedAt: sql`GREATEST(${customerCredentials.passwordChangedAt}, ${input.now})`,
+        updatedAt: sql`GREATEST(${customerCredentials.updatedAt}, ${input.now})`,
         // Monotonic even under concurrent changes or a skewed caller clock.
         legacyTokensInvalidBefore: sql`GREATEST(${customerCredentials.legacyTokensInvalidBefore}, ${input.now})`,
       })
@@ -81,7 +99,7 @@ export class CustomerCredentialRepository extends BaseRepository {
       .update(customerCredentials)
       .set({
         legacyTokensInvalidBefore: sql`GREATEST(${customerCredentials.legacyTokensInvalidBefore}, ${now})`,
-        updatedAt: now,
+        updatedAt: sql`GREATEST(${customerCredentials.updatedAt}, ${now})`,
       })
       .where(eq(customerCredentials.customerId, customerId))
       .returning({ customerId: customerCredentials.customerId });
