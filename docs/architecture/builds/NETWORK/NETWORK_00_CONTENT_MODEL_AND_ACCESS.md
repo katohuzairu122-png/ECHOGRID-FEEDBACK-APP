@@ -4,6 +4,14 @@
 Baseline `origin/main` @ `7fd8bfe`. Parent record: `decisions/ECHO_GRID_NETWORK_ARCHITECTURE_AMENDMENT_V1_PROPOSED.md` (`N-xx` decisions). BDPN references: `builds/BDPN/` (`D-xx`, 01A schema, 01B moderation, 01C API).
 The model deliberately **reuses the BDPN-01 patterns** (immutable revisions plus a live pointer, opaque handle, content digest, state-machine and immutability triggers, composite tenant foreign keys) so the platform has one publication discipline, not two.
 
+## 0. Customer Community composition — owner direction (2026-11-12)
+
+- The future Network Feed is a **subsection of the existing Community tab**, not a second customer primary navigation item. The customer entry point remains `/loyalty/dashboard/community`.
+- Preserve Split 05's read-only membership and Community Points presentation as the `Points & Membership` subsection. A future nested `/loyalty/dashboard/community/feed` route is a **proposal**, not an approved route implementation.
+- All post, follow, moderation and report entities remain `network_*` and all feed APIs remain `/network/*`. There is no direct join to Community Points, loyalty, memberships, feedback, consent or business-private customer tables.
+- When the Feed is disabled or inaccessible, the existing Community experience must remain usable; hide the Feed subsection instead of exposing disabled or unauthorized content.
+- Only NETWORK-02, after its own authorization, may introduce the integrated customer sub-navigation. No UI/navigation is changed by this document.
+
 ## 1. Content classes (v1 and later)
 
 | Class                        | Author                     | v1                                          | Intended audience       | Notes                                                     |
