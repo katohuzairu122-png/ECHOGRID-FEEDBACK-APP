@@ -477,6 +477,13 @@
       "when": 1794421424992,
       "tag": "0067_customer_preferred_locale",
       "breakpoints": true
+    },
+    {
+      "idx": 68,
+      "version": "7",
+      "when": 1794498300052,
+      "tag": "0068_customer_auth_sessions",
+      "breakpoints": true
     }
   ]
 }

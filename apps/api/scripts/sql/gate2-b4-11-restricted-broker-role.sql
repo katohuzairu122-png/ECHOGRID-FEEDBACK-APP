@@ -1,5 +1,5 @@
 -- Gate 2 B4-11 (DISPOSABLE POSTGRESQL 18 ONLY, NOT A MIGRATION): a restricted nonowner broker login whose ONLY capability is one fixed, use-time-authorized operation.
--- Executed only by scripts/gate2-b4-11-disposable-restricted-broker-role.mjs inside a CI-created database after the 68 committed migrations were replayed. Never applied to Neon, staging or production.
+-- Executed only by scripts/gate2-b4-11-disposable-restricted-broker-role.mjs inside a CI-created database after the 69 committed migrations were replayed. Never applied to Neon, staging or production.
 --
 -- Trust model (B4-07 decision): PostgreSQL cannot verify the Ed25519 assertion, so the isolated broker SERVICE verifies it and then connects as the broker login. The database therefore trusts the LOGIN (whose credential only
 -- that service holds) for "a verified request was made", and trusts NOTHING else the caller says: the routine re-derives authorization from persisted state at USE TIME (live exact session, active actor/business, branch ownership,
