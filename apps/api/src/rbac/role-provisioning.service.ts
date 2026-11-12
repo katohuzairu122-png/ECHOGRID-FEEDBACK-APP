@@ -52,6 +52,9 @@ const DEFAULT_ROLES: Record<DefaultRoleName, string[]> = {
     'loyalty:view',
     'loyalty:manage',
     'rewards:manage',
+    'loyalty:serve',
+    'loyalty:accounts:view',
+    'loyalty:adjust',
     'analytics:view',
     'analytics:manage',
     'notifications:view',
@@ -89,6 +92,9 @@ const DEFAULT_ROLES: Record<DefaultRoleName, string[]> = {
     'loyalty:view',
     'loyalty:manage',
     'rewards:manage',
+    'loyalty:serve',
+    'loyalty:accounts:view',
+    'loyalty:adjust',
     'analytics:view',
     'analytics:manage',
     'notifications:view',
@@ -114,6 +120,9 @@ const DEFAULT_ROLES: Record<DefaultRoleName, string[]> = {
     'loyalty:view',
     'loyalty:manage',
     'rewards:manage',
+    'loyalty:serve',
+    'loyalty:accounts:view',
+    'loyalty:adjust',
     'analytics:view',
     'analytics:manage',
     'notifications:view',
@@ -124,38 +133,17 @@ const DEFAULT_ROLES: Record<DefaultRoleName, string[]> = {
     'messages:view',
     'messages:send',
   ],
-  // Staff can see feedback about their own branch's service (day-to-day
-  // context) but not triage it -- marking reviewed / removing a submission
-  // reads as a supervisory action, consistent with Staff being view-only
-  // everywhere else in this table. Loyalty is different: recording a
-  // purchase/check-in and confirming a redemption are literally front-counter
-  // tasks, so Staff gets loyalty:manage too -- but NOT rewards:manage, which
-  // is program configuration (point costs, tiers) and a real fraud vector if
-  // left open to front-line staff. Analytics gets neither key at all --
-  // trend/summary data is business-strategy information, not a front-counter
-  // task, so it stays out of Staff's default entirely (a stricter cut than
-  // even feedback:manage, which Staff is merely denied, not omitted from
-  // context around). Notifications' business-wide settings (kill switches,
-  // SMS cap) follow the same cut as rewards:manage -- program-level
-  // configuration with real cost/noise consequences, not a front-counter
-  // task. This is separate from a Staff member managing their OWN
-  // notification preferences, which needs no permission at all (self-service,
-  // same reasoning as a customer managing their own loyalty account) --
-  // notifications:view/:manage gate the business-wide settings screen only.
-  // Messaging follows loyalty:manage's cut, not rewards:manage's: replying
-  // to a customer about their visit is a front-counter task, not program
-  // configuration. No separate 'messages:manage' concept exists (unlike
-  // rewards) because there's no comparable fraud/cost surface to gate --
-  // every role that can see a conversation can also send in it.
-  Staff: [
-    'business:view',
-    'branches:view',
-    'feedback:view',
-    'loyalty:view',
-    'loyalty:manage',
-    'messages:view',
-    'messages:send',
-  ],
+  // Staff is the front-counter (cashier) role and is deliberately minimal (D-C1):
+  // verified QR service through loyalty:serve (resolve a signed customer QR,
+  // record a purchase, review and confirm a redemption) plus the two view keys
+  // the cashier workspace needs. It does NOT hold loyalty:view, loyalty:manage,
+  // loyalty:accounts:view, loyalty:adjust, rewards:manage, feedback:* or
+  // messages:*, so it cannot browse the account directory, read feedback or
+  // conversations, configure the programme or adjust balances, whatever the UI
+  // shows. Before D-C1 it also held loyalty:view, loyalty:manage, feedback:view,
+  // messages:view and messages:send; existing businesses are reconciled by
+  // db/seed/loyalty-permissions-reconcile.seed.ts under a separate gate.
+  Staff: ['business:view', 'branches:view', 'loyalty:serve'],
 };
 
 /**

@@ -11,9 +11,9 @@ import { CASHIER_HOME } from '@/lib/workspace-guard';
 
 /** Permission each management destination needs to appear. Presentation only: the API enforces each one. */
 const REQUIRED: Record<string, string | undefined> = {
-  '/dashboard/loyalty/scan': 'loyalty:manage',
+  '/dashboard/loyalty/scan': 'loyalty:serve',
   '/dashboard/feedback': 'feedback:view',
-  '/dashboard/loyalty': 'loyalty:view',
+  '/dashboard/loyalty': 'loyalty:accounts:view',
   '/dashboard/analytics': 'analytics:view',
   '/dashboard/branches': 'branches:view',
   '/dashboard/settlements': 'settlement:view',

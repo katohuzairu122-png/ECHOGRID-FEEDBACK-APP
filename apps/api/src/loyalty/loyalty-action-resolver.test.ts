@@ -174,7 +174,7 @@ describe('LoyaltyActionResolver', () => {
         resolver(true).resolveCustomerForStaff({
           customerQrToken: token,
           businessId: BUSINESS_ID,
-          permissions: new Set(['loyalty:view', 'loyalty:manage']),
+          permissions: new Set(['loyalty:serve']),
         }),
       ).rejects.toMatchObject({ status: 404, code: 'CUSTOMER_QR_NOT_FOUND' });
     }
@@ -184,19 +184,21 @@ describe('LoyaltyActionResolver', () => {
     const result = await resolver(true).resolveCustomerForStaff({
       customerQrToken: await signCustomerQrToken(CUSTOMER_ID, SECRET),
       businessId: crypto.randomUUID(),
-      permissions: new Set(['loyalty:view', 'loyalty:manage']),
+      permissions: new Set(['loyalty:serve']),
     });
     expect(result.loyaltyAccountId).toBeNull();
     expect(result.actions).toEqual([]);
   });
 
-  it('view-only staff cannot validate purchases, grant progress or redeem', async () => {
-    const result = await resolver(true).resolveCustomerForStaff({
-      customerQrToken: await signCustomerQrToken(CUSTOMER_ID, SECRET),
-      businessId: BUSINESS_ID,
-      permissions: new Set(['loyalty:view']),
-    });
-    expect(result.actions).toEqual(['VIEW_ALLOWED_MEMBERSHIP_STATE']);
+  it('legacy loyalty:view / loyalty:manage alone no longer authorize any loyalty action (D-C1, fails closed)', async () => {
+    for (const permissions of [['loyalty:view'], ['loyalty:manage'], ['loyalty:view', 'loyalty:manage'], ['loyalty:accounts:view', 'loyalty:adjust']]) {
+      const result = await resolver(true).resolveCustomerForStaff({
+        customerQrToken: await signCustomerQrToken(CUSTOMER_ID, SECRET),
+        businessId: BUSINESS_ID,
+        permissions: new Set(permissions),
+      });
+      expect(result.actions, permissions.join('+')).toEqual([]);
+    }
   });
 
   it('does not offer enrollment or check-in at an inactive receiving business', async () => {
@@ -220,7 +222,7 @@ describe('LoyaltyActionResolver', () => {
     const result = await resolver(true).resolveCustomerForStaff({
       customerQrToken: token,
       businessId: BUSINESS_ID,
-      permissions: new Set(['loyalty:view', 'loyalty:manage']),
+      permissions: new Set(['loyalty:serve']),
     });
 
     expect(result.membershipStatus).toBe('active');
@@ -238,7 +240,7 @@ describe('LoyaltyActionResolver', () => {
     const result = await resolver(false, [], false, false).resolveCustomerForStaff({
       customerQrToken: token,
       businessId: BUSINESS_ID,
-      permissions: new Set(['loyalty:view', 'settlement:view']),
+      permissions: new Set(['loyalty:serve', 'settlement:view']),
     });
 
     expect(result.membershipStatus).toBe('none');
@@ -251,7 +253,7 @@ describe('LoyaltyActionResolver', () => {
     const result = await resolver(false, [], false, true).resolveCustomerForStaff({
       customerQrToken: token,
       businessId: BUSINESS_ID,
-      permissions: new Set(['loyalty:view']),
+      permissions: new Set(['loyalty:serve']),
     });
 
     expect(result.actions).not.toContain('REQUEST_ORPHAN_SETTLEMENT_ACCESS');
@@ -262,7 +264,7 @@ describe('LoyaltyActionResolver', () => {
     const result = await resolver(false).resolveCustomerForStaff({
       customerQrToken: token,
       businessId: BUSINESS_ID,
-      permissions: new Set(['loyalty:view', 'loyalty:manage']),
+      permissions: new Set(['loyalty:serve']),
     });
     expect(result.membershipStatus).toBe('none');
     expect(result.loyaltyAccountId).toBeNull();

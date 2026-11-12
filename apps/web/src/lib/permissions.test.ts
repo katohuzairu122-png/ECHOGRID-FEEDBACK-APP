@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { canConfigureProgramme, classifyWorkspace, isCounterStaff } from './workspace-access';
 
 const access = (known: boolean, ...p: string[]) => ({ known, permissions: new Set(p) });
-const STAFF = [
+// D-C1 default Staff (cashier) and the historical default (an unreconciled role).
+const STAFF = ['business:view', 'branches:view', 'loyalty:serve'];
+const LEGACY_STAFF = [
   'business:view',
   'branches:view',
   'feedback:view',
@@ -16,6 +18,15 @@ describe('workspace classification (by effective permissions only)', () => {
   it('classifies the default Staff grants as cashier', () => {
     expect(classifyWorkspace(access(true, ...STAFF))).toBe('cashier');
     expect(isCounterStaff(access(true, ...STAFF))).toBe(true);
+  });
+  it('still presents an unreconciled legacy Staff role as cashier (the API is the authority)', () => {
+    expect(classifyWorkspace(access(true, ...LEGACY_STAFF))).toBe('cashier');
+  });
+  it.each([
+    ['accounts directory', 'loyalty:accounts:view'],
+    ['manual adjustment', 'loyalty:adjust'],
+  ])('is not a cashier when it also holds %s', (_n, key) => {
+    expect(classifyWorkspace(access(true, ...STAFF, key))).toBe('management');
   });
   it.each([
     ['owner/admin/manager programme administration', [...STAFF, 'rewards:manage']],

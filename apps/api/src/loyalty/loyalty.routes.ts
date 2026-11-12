@@ -53,7 +53,7 @@ async function withDb<T>(c: Context<Env>, fn: (db: Database) => Promise<T>): Pro
 
 // ---- Core QR action resolution (Split 03) ---------------------------------
 
-loyaltyRoutes.post('/actions/resolve-customer', requirePermission('loyalty:view'), async (c) => {
+loyaltyRoutes.post('/actions/resolve-customer', requirePermission('loyalty:serve'), async (c) => {
   const body = await parseJsonBody(c.req.raw, resolveCustomerQrSchema);
   return withDb(c, async (db) => {
     const result = await new LoyaltyActionResolver(createRepositories(db), {
@@ -70,7 +70,7 @@ loyaltyRoutes.post('/actions/resolve-customer', requirePermission('loyalty:view'
 
 // ---- Accounts & points engine (Block 3) ---------------------------------
 
-loyaltyRoutes.get('/accounts', requirePermission('loyalty:view'), requireBusinessWideAccess, async (c) => {
+loyaltyRoutes.get('/accounts', requirePermission('loyalty:accounts:view'), requireBusinessWideAccess, async (c) => {
   const url = new URL(c.req.url);
   const limit = Number(url.searchParams.get('limit')) || undefined;
   const offset = Number(url.searchParams.get('offset')) || undefined;
@@ -80,14 +80,14 @@ loyaltyRoutes.get('/accounts', requirePermission('loyalty:view'), requireBusines
   });
 });
 
-loyaltyRoutes.get('/accounts/:id', requirePermission('loyalty:view'), requireBusinessWideAccess, async (c) => {
+loyaltyRoutes.get('/accounts/:id', requirePermission('loyalty:accounts:view'), requireBusinessWideAccess, async (c) => {
   return withDb(c, async (db) => {
     const account = await new LoyaltyAccountService(db).getAccount(c.req.param('id'), c.get('businessId'));
     return ok(c, account);
   });
 });
 
-loyaltyRoutes.get('/accounts/:id/transactions', requirePermission('loyalty:view'), requireBusinessWideAccess, async (c) => {
+loyaltyRoutes.get('/accounts/:id/transactions', requirePermission('loyalty:accounts:view'), requireBusinessWideAccess, async (c) => {
   const url = new URL(c.req.url);
   const limit = Number(url.searchParams.get('limit')) || undefined;
   const offset = Number(url.searchParams.get('offset')) || undefined;
@@ -101,7 +101,7 @@ loyaltyRoutes.get('/accounts/:id/transactions', requirePermission('loyalty:view'
   });
 });
 
-loyaltyRoutes.post('/accounts/:id/purchase', requirePermission('loyalty:manage'), async (c) => {
+loyaltyRoutes.post('/accounts/:id/purchase', requirePermission('loyalty:serve'), async (c) => {
   const body = await parseJsonBody(c.req.raw, recordPurchaseSchema);
   return withDb(c, async (db) => {
     const businessId = c.get('businessId');
@@ -160,15 +160,13 @@ loyaltyRoutes.post('/accounts/:id/purchase', requirePermission('loyalty:manage')
   });
 });
 
-// Manual balance changes are an administrative correction, not counter service. `loyalty:manage` alone is
-// held by the front-counter Staff role (purchase validation and redemption need it), so it must not
-// authorize this route by itself: `rewards:manage` (programme administration, which front-counter staff do
-// not hold) is required as well. A dedicated `loyalty:adjust` permission is the intended long-term shape but
-// needs a role-grant backfill, which is an owner decision gate (see the cashier RBAC remediation record).
+// Manual balance changes are an administrative correction, not counter service. They need the dedicated
+// `loyalty:adjust` permission, which the front-counter Staff role never holds (D-C1). Role reconciliation
+// grants it only to roles that held BOTH loyalty:manage and rewards:manage before, which is exactly who could
+// adjust balances before D-C1, so no existing administrator loses the capability and no cashier gains it.
 loyaltyRoutes.post(
   '/accounts/:id/adjust',
-  requirePermission('loyalty:manage'),
-  requirePermission('rewards:manage'),
+  requirePermission('loyalty:adjust'),
   requireBusinessWideAccess,
   async (c) => {
     const body = await parseJsonBody(c.req.raw, adjustPointsSchema);
@@ -302,7 +300,7 @@ loyaltyRoutes.delete('/rewards/:id', requirePermission('rewards:manage'), requir
 
 // ---- Campaign dashboard (Block 6.7.2, S6.3) --------------------------------
 
-// Read-only, gated on loyalty:view -- matches GET /rewards's own permission
+// Read-only, gated on loyalty:view (programme configuration) -- matches GET /rewards's own permission
 // rather than rewards:manage, since this reports on a campaign but changes
 // nothing. Returns the CampaignDashboard shape straight from the service
 // with no serialization step, same as GET /rewards above: the reward row's
@@ -322,14 +320,14 @@ loyaltyRoutes.get('/rewards/:id/dashboard', requirePermission('loyalty:view'), r
 
 // ---- Redemption confirmation (Block 4) -------------------------------------
 
-loyaltyRoutes.get('/redemptions/:code', requirePermission('loyalty:view'), async (c) => {
+loyaltyRoutes.get('/redemptions/:code', requirePermission('loyalty:serve'), async (c) => {
   return withDb(c, async (db) => {
     const transaction = await new LoyaltyRedemptionService(db).lookup(c.get('businessId'), c.req.param('code'));
     return ok(c, transaction);
   });
 });
 
-loyaltyRoutes.post('/redemptions/:code/confirm', requirePermission('loyalty:manage'), async (c) => {
+loyaltyRoutes.post('/redemptions/:code/confirm', requirePermission('loyalty:serve'), async (c) => {
   const businessId = c.get('businessId');
   // Continuing Development Block 6.3 (S6.8 "eligible branch") -- optional,
   // same as resolveTenantContext's own c.get('branchId'): set only when the

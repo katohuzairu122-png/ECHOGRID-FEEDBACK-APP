@@ -86,23 +86,24 @@ describe.skipIf(!process.env.DATABASE_URL)('Unified QR action scope (real Postgr
     const own = await resolver.resolveCustomerForStaff({
       customerQrToken: token,
       businessId,
-      permissions: new Set(['loyalty:view', 'loyalty:manage']),
+      permissions: new Set(['loyalty:serve']),
     });
     expect(own.loyaltyAccountId).toBe(accountId);
     expect(own.actions).toContain('REDEEM_REWARD');
     const other = await resolver.resolveCustomerForStaff({
       customerQrToken: token,
       businessId: otherBusinessId,
-      permissions: new Set(['loyalty:view', 'loyalty:manage']),
+      permissions: new Set(['loyalty:serve']),
     });
     expect(other.loyaltyAccountId).toBeNull();
     expect(other.actions).toEqual([]);
-    const viewOnly = await resolver.resolveCustomerForStaff({
+    // D-C1: legacy loyalty:view / loyalty:manage no longer authorize any loyalty action.
+    const legacyOnly = await resolver.resolveCustomerForStaff({
       customerQrToken: token,
       businessId,
-      permissions: new Set(['loyalty:view']),
+      permissions: new Set(['loyalty:view', 'loyalty:manage']),
     });
-    expect(viewOnly.actions).toEqual(['VIEW_ALLOWED_MEMBERSHIP_STATE']);
+    expect(legacyOnly.actions).toEqual([]);
   });
 
   it('resolving a scanned business QR selects eligible actions without granting points or creating economic history', async () => {

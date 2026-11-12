@@ -126,7 +126,12 @@ describe.skipIf(!process.env.DATABASE_URL)('team invitation lifecycle (integrati
     expect(new Set(memberships.map((membership) => membership.businessId))).toEqual(
       new Set([primaryBusinessId, invitedBusinessId]),
     );
-    expect((await repos.permissions.findEffectiveKeys(invitedUserId, invitedBusinessId, branchAId)).has('feedback:view')).toBe(true);
+    // D-C1: the Staff (cashier) role serves customers and holds no feedback, messaging or loyalty-administration key.
+    const staffKeys = await repos.permissions.findEffectiveKeys(invitedUserId, invitedBusinessId, branchAId);
+    expect(staffKeys.has('loyalty:serve')).toBe(true);
+    for (const key of ['feedback:view', 'messages:view', 'loyalty:view', 'loyalty:manage', 'loyalty:accounts:view', 'loyalty:adjust']) {
+      expect(staffKeys.has(key), key).toBe(false);
+    }
     expect((await repos.permissions.findEffectiveKeys(invitedUserId, invitedBusinessId, branchBId)).size).toBe(0);
 
     await repos.userBusinessRoles.revoke(branchGrant.id, ownerUserId);
@@ -142,7 +147,7 @@ describe.skipIf(!process.env.DATABASE_URL)('team invitation lifecycle (integrati
 
     await repos.userBusinessRoles.revoke(businessWideGrant.id, ownerUserId);
     expect((await repos.permissions.findEffectiveKeys(invitedUserId, invitedBusinessId, branchAId)).size).toBe(0);
-    expect((await repos.permissions.findEffectiveKeys(invitedUserId, primaryBusinessId)).has('feedback:view')).toBe(true);
+    expect((await repos.permissions.findEffectiveKeys(invitedUserId, primaryBusinessId)).has('loyalty:serve')).toBe(true);
 
     const cancelledToken = `cancelled-${crypto.randomUUID()}`;
     const cancelledInvitation = await repos.teamInvitations.create({
