@@ -30,6 +30,37 @@ export class CustomerRepository extends BaseRepository {
     return row;
   }
 
+  /**
+   * Find-or-create keyed on the phone, safe under concurrency. Two simultaneous
+   * first verifications of one new phone previously raced (read, then plain
+   * insert) and the loser hit the unique constraint. Here the insert is
+   * `ON CONFLICT DO NOTHING`, then the winner's row is re-read.
+   *
+   * A conflict with NO visible row means the phone is held by a soft-deleted
+   * customer (the unique constraint covers deleted rows, `findByPhone` does not).
+   * That is returned as `customer: undefined` so the caller can refuse cleanly
+   * instead of crashing. An existing but unverified customer is marked verified,
+   * because the caller has just proven the phone.
+   */
+  async createIfAbsent(input: {
+    phone: string;
+    phoneVerifiedAt: Date;
+  }): Promise<{ customer: Customer | undefined; created: boolean }> {
+    const inserted = await this.db
+      .insert(customers)
+      .values({ phone: input.phone, phoneVerifiedAt: input.phoneVerifiedAt })
+      .onConflictDoNothing({ target: customers.phone })
+      .returning();
+    if (inserted[0]) return { customer: inserted[0], created: true };
+
+    const existing = await this.findByPhone(input.phone);
+    if (!existing) return { customer: undefined, created: false };
+    if (!existing.phoneVerifiedAt) {
+      return { customer: (await this.markPhoneVerified(existing.id)) ?? existing, created: false };
+    }
+    return { customer: existing, created: false };
+  }
+
   async markPhoneVerified(id: string): Promise<Customer | undefined> {
     const [row] = await this.db
       .update(customers)

@@ -3,11 +3,13 @@
 import type {
   LoyaltyResolvedActionDto,
   LoyaltyTransactionDto,
+  LookupCustomerResultDto,
 } from '@echo-grid-feedback/shared-types';
 import { apiFetch, ApiError } from '@/lib/api-client';
 import { getActiveBusiness } from '@/lib/business';
 import { rethrowControlFlow } from '@/lib/rethrow-control-flow';
 import { classifyQrFailure, type StaffQrErrorKind } from '@/lib/qr-failure';
+import { classifyCashierInput } from '@/lib/cashier-identifier';
 
 export type { StaffQrErrorKind };
 
@@ -25,6 +27,8 @@ export interface StaffQrState {
   /** Machine-readable outcome so the UI can show a precise, localized message; never carries token data. */
   errorKind?: StaffQrErrorKind;
   result?: StaffQrResult;
+  /** Customer identified by phone lookup (D-C2). The lookup token is the only handle: no ids are ever shown. */
+  lookup?: LookupCustomerResultDto;
   businessId?: string;
   branchId?: string | undefined;
   transaction?: LoyaltyTransactionDto;
@@ -63,14 +67,58 @@ function failure(err: unknown): StaffQrState {
   };
 }
 
+async function businessScope(branchId: string, expectedBusinessId?: string) {
+  const business = await getActiveBusiness();
+  if (!business || (expectedBusinessId && business.id !== expectedBusinessId)) {
+    throw new ApiError(
+      'Business context changed. Look the customer up again.',
+      403,
+      'BUSINESS_CONTEXT_CHANGED',
+    );
+  }
+  return {
+    businessId: business.id,
+    ...(branchId ? { branchId } : {}),
+    cache: 'no-store' as const,
+  };
+}
+
 export async function resolveStaffQrAction(
   _prev: StaffQrState,
   form: FormData,
 ): Promise<StaffQrState> {
   try {
-    // Scanners and paste can add whitespace or control characters around the code; a token never contains them.
-    const token = String(form.get('token') ?? '').replace(/[\s\p{Cc}]/gu, '');
-    const { result, scope } = await resolve(token, String(form.get('branchId') ?? '').trim());
+    // One field for a scanner, paste or typing. Only a signed QR token or a phone number with its country code
+    // is accepted; nothing else is guessed (see classifyCashierInput).
+    const input = classifyCashierInput(String(form.get('token') ?? ''));
+    if (input.kind === 'invalid') {
+      return {
+        error:
+          input.reason === 'countryCode'
+            ? 'Enter the phone number with the country code, for example +15551234567.'
+            : 'Scan a QR code or enter a phone number.',
+        errorKind: input.reason === 'countryCode' ? 'phoneCountryCode' : 'unrecognizedInput',
+      };
+    }
+    const branchId = String(form.get('branchId') ?? '').trim();
+
+    if (input.kind === 'phone') {
+      const scope = await businessScope(branchId);
+      const lookup = await apiFetch<LookupCustomerResultDto>('/loyalty/actions/lookup-customer', {
+        ...scope,
+        method: 'POST',
+        body: JSON.stringify({ phone: input.value }),
+      });
+      return {
+        lookup,
+        businessId: scope.businessId,
+        branchId: scope.branchId,
+        purchaseRequestKey: crypto.randomUUID(),
+      };
+    }
+
+    const token = input.value;
+    const { result, scope } = await resolve(token, branchId);
     return {
       result,
       token,
@@ -86,6 +134,43 @@ export async function resolveStaffQrAction(
     };
   } catch (err) {
     return failure(err);
+  }
+}
+
+/**
+ * Records a purchase for a customer identified by phone lookup. The lookup token is the only handle: it is
+ * re-verified server-side (binding, expiry, membership, daily caps) and the loyalty account id is never sent to
+ * or from the browser. Reward redemption is not offered on this path (it needs the customer's own code).
+ */
+export async function staffLookupPurchaseAction(
+  _prev: StaffQrState,
+  form: FormData,
+): Promise<StaffQrState> {
+  const lookupToken = String(form.get('lookupToken') ?? '');
+  const businessId = String(form.get('businessId') ?? '');
+  const branchId = String(form.get('branchId') ?? '').trim();
+  const idempotencyKey = String(form.get('idempotencyKey') ?? _prev.purchaseRequestKey ?? '');
+  const kept: StaffQrState = {
+    ...(_prev.lookup ? { lookup: _prev.lookup } : {}),
+    businessId,
+    branchId: branchId || undefined,
+    purchaseRequestKey: idempotencyKey,
+    purchaseCompleted: Boolean(_prev.purchaseCompleted),
+  };
+  try {
+    const scope = await businessScope(branchId, businessId);
+    await apiFetch('/loyalty/actions/lookup-purchase', {
+      ...scope,
+      method: 'POST',
+      body: JSON.stringify({
+        lookupToken,
+        purchaseAmount: Number(form.get('purchaseAmount')),
+        idempotencyKey,
+      }),
+    });
+    return { ...kept, success: true, purchaseCompleted: true };
+  } catch (err) {
+    return { ...kept, ...failure(err) };
   }
 }
 
@@ -166,6 +251,7 @@ export async function staffUnifiedQrAction(
   form: FormData,
 ): Promise<StaffQrState> {
   if (form.get('operation') === 'resolve') return resolveStaffQrAction(prev, form);
+  if (form.get('operation') === 'lookup-purchase') return staffLookupPurchaseAction(prev, form);
   return staffQrTransactionAction(
     String(form.get('token') ?? ''),
     String(form.get('branchId') ?? ''),

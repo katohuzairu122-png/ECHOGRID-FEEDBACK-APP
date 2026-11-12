@@ -483,6 +483,26 @@ export const resolveCustomerQrSchema = z.object({
   customerQrToken: z.string().min(1),
 });
 
+/**
+ * Cashier phone lookup (D-C2). E.164 only: the web normalizes what the cashier types before sending, and the
+ * server never guesses a country. Exact match only: no prefix, partial or name search.
+ */
+export const lookupCustomerSchema = z.object({
+  phone: z
+    .string()
+    .trim()
+    .regex(/^\+[1-9]\d{7,14}$/, {
+      error: 'Enter the phone number with country code, for example +15551234567.',
+    }),
+});
+
+/** Records a purchase for a customer identified by phone lookup, using the short-lived lookup token as the handle. */
+export const lookupPurchaseSchema = z.object({
+  lookupToken: z.string().min(1),
+  purchaseAmount: z.number().positive().max(1_000_000),
+  idempotencyKey: z.string().trim().min(8).max(200),
+});
+
 export const resolveBusinessQrActionsSchema = z.object({
   businessQrToken: z.string().min(1),
 });
@@ -529,3 +549,15 @@ export const resolveBusinessQrActionsResultSchema = z.object({
 export type LoyaltyResolvedActionDto = z.infer<typeof loyaltyResolvedActionSchema>;
 export type ResolvedSurveyCampaignDto = z.infer<typeof resolvedSurveyCampaignSchema>;
 export type ResolveBusinessQrActionsResultDto = z.infer<typeof resolveBusinessQrActionsResultSchema>;
+
+/**
+ * Result of a cashier phone lookup. Deliberately minimal: first name, masked phone and the actions allowed. No
+ * customer id, loyalty account id, email, birthday or full phone number is ever returned.
+ */
+export interface LookupCustomerResultDto {
+  lookupToken: string;
+  displayName: string;
+  phoneMasked: string;
+  membershipStatus: 'active';
+  actions: LoyaltyResolvedActionDto[];
+}

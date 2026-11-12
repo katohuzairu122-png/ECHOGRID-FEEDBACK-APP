@@ -181,8 +181,8 @@
       "unsupported": "La lecture par caméra n’est pas disponible dans ce navigateur. Saisissez le jeton QR ci-dessous.",
       "cameraDenied": "La caméra n’a pas pu être ouverte. Autorisez l’accès à la caméra ou saisissez le jeton QR ci-dessous.",
       "viewfinder": "Vue caméra pour scanner le code QR du client",
-      "scanField": "Code QR du client (lecteur ou collage)",
-      "scanFieldHint": "Utilisez un lecteur connecté, la caméra ou collez le code, puis appuyez sur Entrée.",
+      "scanField": "Trouver un client : scanner ou saisir le numéro de téléphone",
+      "scanFieldHint": "Utilisez un lecteur connecté ou la caméra, ou saisissez le numéro de téléphone du client avec l’indicatif du pays (par exemple +15551234567), puis appuyez sur Entrée.",
       "loggedInAs": "Vous êtes connecté en tant que",
       "scanHint": "Appuyez sur « Scanner » pour lire le code QR du client.",
       "scanLarge": "Scanner",
@@ -193,7 +193,22 @@
         "branch": "Vous n’êtes pas autorisé pour ce lieu. Choisissez un lieu où vous travaillez.",
         "invalidQr": "Ce code QR est expiré, remplacé ou non reconnu. Demandez au client d’actualiser son code QR.",
         "rateLimited": "Trop de tentatives. Patientez un instant puis réessayez.",
-        "unavailable": "Le service est indisponible pour le moment. Rien n’a été enregistré. Réessayez bientôt."
+        "unavailable": "Le service est indisponible pour le moment. Rien n’a été enregistré. Réessayez bientôt.",
+        "memberNotFound": "Aucun membre trouvé avec ce numéro. Vérifiez le numéro ou scannez le code QR du client.",
+        "lookupExpired": "Cette recherche a expiré. Recherchez à nouveau le client.",
+        "lookupThrottled": "Trop de recherches sans résultat. Patientez quelques minutes ou scannez le code QR du client.",
+        "lookupCap": "La limite des achats saisis par téléphone est atteinte. Scannez plutôt le code QR du client.",
+        "phoneCountryCode": "Saisissez le numéro avec l’indicatif du pays, par exemple +15551234567.",
+        "unrecognizedInput": "Scannez un code QR ou saisissez un numéro de téléphone."
+      },
+      "lookup": {
+        "identified": "Identifié par téléphone",
+        "purchaseHeading": "Valider l’achat et accorder la progression de fidélité",
+        "amount": "Montant de l’achat",
+        "confirmPurchase": "Confirmer l’achat vérifié",
+        "noPurchase": "Les achats ne sont pas disponibles pour cette adhésion.",
+        "redemptionNote": "La remise d’une récompense nécessite le code QR du client. Scannez-le pour l’échanger.",
+        "done": "Action terminée. Recherchez à nouveau le client avant une autre action."
       }
     }
   },

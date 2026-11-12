@@ -254,6 +254,9 @@ export interface Bindings {
   CUSTOMER_AUTH_RL_PASSWORD_RECOVERY_SOURCE?: RateLimit;
   CUSTOMER_AUTH_RL_SESSION_REFRESH_SOURCE?: RateLimit;
   CUSTOMER_AUTH_RL_PASSWORD_CHANGE_CUSTOMER?: RateLimit;
+  /** Guards POST /loyalty/actions/lookup-customer (cashier phone lookup). Keyed by business and staff user so one
+   * cashier cannot exhaust another's budget; deliberately small because every call probes the member list. */
+  LOOKUP_RATE_LIMITER: RateLimit;
 }
 
 const environmentSchema = z.enum(['development', 'staging', 'production']);

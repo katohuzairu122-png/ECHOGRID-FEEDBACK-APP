@@ -558,6 +558,53 @@ export class CustomerSessionService {
     });
   }
 
+  /**
+   * Completes a password recovery AFTER the caller has verified phone
+   * ownership. In ONE transaction: set the credential (create it if the
+   * customer had none, otherwise replace the hash), which also advances the
+   * legacy cutoff, and revoke EVERY live session of the customer (01B I6).
+   * Nothing is kept: whoever held a session before recovery loses it, which is
+   * the point of recovering. The caller then establishes a fresh session.
+   * `passwordHash` is computed by the caller BEFORE this call.
+   */
+  async completeRecovery(input: {
+    customerId: string;
+    passwordHash: string;
+  }): Promise<{ ok: true; revoked: number } | { ok: false; reason: 'customer_inactive' }> {
+    const now = this.clock();
+    return this.inTransaction(async (tx) => {
+      const customer = await tx.customers.findById(input.customerId);
+      if (!customer || !customerMayHaveSession({ status: customer.status, isDeleted: false })) {
+        return { ok: false, reason: 'customer_inactive' } as const;
+      }
+      const created = await tx.credentials.create({
+        customerId: input.customerId,
+        passwordHash: input.passwordHash,
+        now,
+      });
+      if (!created) {
+        await tx.credentials.change({
+          customerId: input.customerId,
+          passwordHash: input.passwordHash,
+          now,
+        });
+      }
+      const revoked = await tx.sessions.revokeAllForCustomer({
+        customerId: input.customerId,
+        reason: 'recovery',
+        now,
+      });
+      await tx.events.append({
+        customerId: input.customerId,
+        eventType: 'recovery_completed',
+        outcome: 'success',
+        metadata: { session_count: revoked },
+        now,
+      });
+      return { ok: true, revoked } as const;
+    });
+  }
+
   private async gateSensitiveChange(
     tx: Stores,
     customerId: string,
