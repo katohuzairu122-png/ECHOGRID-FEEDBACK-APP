@@ -28,7 +28,7 @@ const DEFAULT_ROLES: Record<string, string[]> = {
     'team:invite', 'team:remove', 'team:view', 'roles:manage', 'roles:view',
     'business:view', 'business:manage_settings', 'business:delete',
     'branches:view', 'branches:manage', 'audit:view',
-    'feedback:view', 'feedback:manage', 'survey:view', 'survey:manage', 'survey:responses:view', 'loyalty:view', 'loyalty:manage', 'rewards:manage',
+    'feedback:view', 'feedback:manage', 'survey:view', 'survey:manage', 'survey:responses:view', 'loyalty:view', 'loyalty:manage', 'rewards:manage', 'loyalty:serve', 'loyalty:accounts:view', 'loyalty:adjust',
     'analytics:view', 'analytics:manage', 'notifications:view', 'notifications:manage',
     'settlement:view', 'settlement:accept', 'settlement:fulfill',
     'billing:view', 'billing:manage', 'messages:view', 'messages:send',
@@ -37,7 +37,7 @@ const DEFAULT_ROLES: Record<string, string[]> = {
     'team:invite', 'team:remove', 'team:view', 'roles:manage', 'roles:view',
     'business:view', 'business:manage_settings',
     'branches:view', 'branches:manage', 'audit:view',
-    'feedback:view', 'feedback:manage', 'survey:view', 'survey:manage', 'survey:responses:view', 'loyalty:view', 'loyalty:manage', 'rewards:manage',
+    'feedback:view', 'feedback:manage', 'survey:view', 'survey:manage', 'survey:responses:view', 'loyalty:view', 'loyalty:manage', 'rewards:manage', 'loyalty:serve', 'loyalty:accounts:view', 'loyalty:adjust',
     'analytics:view', 'analytics:manage', 'notifications:view', 'notifications:manage',
     'settlement:view', 'settlement:accept', 'settlement:fulfill',
     'billing:view', 'messages:view', 'messages:send',
@@ -45,15 +45,14 @@ const DEFAULT_ROLES: Record<string, string[]> = {
   Manager: [
     'team:view', 'roles:view', 'business:view',
     'branches:view', 'branches:manage',
-    'feedback:view', 'feedback:manage', 'survey:view', 'survey:manage', 'survey:responses:view', 'loyalty:view', 'loyalty:manage', 'rewards:manage',
+    'feedback:view', 'feedback:manage', 'survey:view', 'survey:manage', 'survey:responses:view', 'loyalty:view', 'loyalty:manage', 'rewards:manage', 'loyalty:serve', 'loyalty:accounts:view', 'loyalty:adjust',
     'analytics:view', 'analytics:manage', 'notifications:view', 'notifications:manage',
     'settlement:view', 'settlement:accept', 'settlement:fulfill',
     'messages:view', 'messages:send',
   ],
-  Staff: [
-    'business:view', 'branches:view', 'feedback:view', 'loyalty:view', 'loyalty:manage',
-    'messages:view', 'messages:send',
-  ],
+  // D-C1: the least-privilege cashier default (see rbac/loyalty-permissions.ts). This script only ADDS grants;
+  // reducing an existing Staff role is done by loyalty-permissions-reconcile.seed.ts under its own gate.
+  Staff: ['business:view', 'branches:view', 'loyalty:serve'],
 };
 
 async function main() {

@@ -56,12 +56,27 @@ const PERMISSIONS: NewPermission[] = [
   },
   {
     key: 'loyalty:view',
-    description: 'View customer loyalty accounts, balances, and transaction history.',
+    description: 'View loyalty programme configuration (tiers, rewards, settings). Account directory access needs loyalty:accounts:view.',
     category: 'Loyalty',
   },
   {
     key: 'loyalty:manage',
-    description: 'Record purchases/check-ins and confirm reward redemptions at the counter.',
+    description: 'Legacy. Superseded by loyalty:serve (counter service) and loyalty:adjust; no route requires it any more.',
+    category: 'Loyalty',
+  },
+  {
+    key: 'loyalty:serve',
+    description: 'Front-counter service: verify a signed customer QR, record a purchase, review and confirm a reward handoff.',
+    category: 'Loyalty',
+  },
+  {
+    key: 'loyalty:accounts:view',
+    description: 'View the business-wide loyalty account directory, account details and transaction history.',
+    category: 'Loyalty',
+  },
+  {
+    key: 'loyalty:adjust',
+    description: 'Apply manual balance adjustments to a loyalty account (administrative correction).',
     category: 'Loyalty',
   },
   {
