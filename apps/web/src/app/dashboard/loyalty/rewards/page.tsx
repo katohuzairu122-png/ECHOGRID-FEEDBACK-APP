@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
 import type { LoyaltyRewardDto, BranchDto } from '@echo-grid-feedback/shared-types';
 import { getActiveBusiness } from '@/lib/business';
+import { canConfigureProgramme, getMyAccess } from '@/lib/permissions';
 import { apiFetch } from '@/lib/api-client';
 import { Badge, Button, buttonVariants } from '@/components/ui';
 import { LoyaltySubnav } from '../loyalty-subnav';
@@ -14,6 +15,8 @@ import { RewardRowActions } from './reward-row-actions';
 export default async function LoyaltyRewardsPage() {
   const business = await getActiveBusiness();
   if (!business) redirect('/dashboard');
+  // Programme configuration is for the business owner and admins, not counter staff.
+  if (!canConfigureProgramme(await getMyAccess())) redirect('/dashboard/loyalty');
 
   const t = await getTranslations('loyalty.staff');
 

@@ -18,7 +18,8 @@
     "logout": "Log out",
     "customerQr": "Customer QR",
     "settlements": "Orphan settlement",
-    "serve": "Serve customers"
+    "serve": "Serve customers",
+    "customers": "Customer list"
   },
   "home": {
     "branchesTitle": "Branches",
