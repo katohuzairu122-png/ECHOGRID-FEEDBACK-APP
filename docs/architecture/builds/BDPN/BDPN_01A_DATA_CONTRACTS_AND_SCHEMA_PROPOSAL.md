@@ -304,3 +304,5 @@ omitted, never partially shown.
   - the contract was reviewed against Splits 01, 02, 05, 07 and 08 and BDPN v1.0, and it introduces no consent, notification,
     promotional, loyalty, Community Points, Partner Credit or billing data.
 - BDPN-01B, 01C, 01D and 01E are **not started** and still need their own explicit authorization.
+
+> **Erratum (2026-11-12).** The statements in this document that staging is "at 45" or that "23 migrations are pending" are **superseded**. The repository record dated 2026-11-09 (commit 52b990c) reports both the production Neon project and the staging branch at 67 journal entries; only `0067` is beyond that record. The live state of each environment is **not verified**. See `BDPN_MIGRATION_PLAN_AND_STATE_CORRECTION.md`. The D-19 principle (backlog first, then one BDPN migration) stands; the backlog is `0067`.
