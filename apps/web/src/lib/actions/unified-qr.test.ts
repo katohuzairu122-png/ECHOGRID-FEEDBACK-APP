@@ -7,6 +7,7 @@ vi.mock('@/lib/api-client', async () => ({
 vi.mock('@/lib/business', () => ({ getActiveBusiness: mocks.business }));
 import { resolveStaffQrAction, staffQrTransactionAction, staffUnifiedQrAction } from './unified-qr';
 import { ApiError } from '@/lib/api-error';
+import { classifyQrFailure } from '@/lib/qr-failure';
 
 const result = {
   customerId: 'customer',
@@ -164,5 +165,20 @@ describe('staff QR action authorization', () => {
     const redirect = { digest: 'NEXT_REDIRECT;replace;/login;307;' };
     mocks.business.mockRejectedValue(redirect);
     await expect(resolveStaffQrAction({}, form({ token: 'qr' }))).rejects.toBe(redirect);
+  });
+});
+
+describe('classifyQrFailure', () => {
+  it.each([
+    [new ApiError('x', 401), 'session'],
+    [new ApiError('x', 429), 'rateLimited'],
+    [new ApiError('x', 404, 'CUSTOMER_QR_NOT_FOUND'), 'invalidQr'],
+    [new ApiError('x', 403, 'BRANCH_ACCESS_DENIED'), 'branch'],
+    [new ApiError('x', 403, 'PERMISSION_DENIED'), 'permission'],
+    [new ApiError('x', 500), 'unavailable'],
+    [new Error('network'), 'unavailable'],
+    [new ApiError('x', 403, 'BUSINESS_CONTEXT_CHANGED'), 'other'],
+  ])('%#', (err, kind) => {
+    expect(classifyQrFailure(err)).toBe(kind);
   });
 });

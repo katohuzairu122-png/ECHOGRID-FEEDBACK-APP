@@ -1,12 +1,15 @@
 import { getTranslations } from 'next-intl/server';
-import { canConfigureProgramme, getMyAccess } from '@/lib/permissions';
+import { canConfigureProgramme, classifyWorkspace, getMyAccess } from '@/lib/permissions';
 import { LoyaltySubnavLinks } from './loyalty-subnav-links';
 import styles from './loyalty-visual.module.css';
 
 /** Shared staff navigation across account, tier, campaign, QR and settings screens. */
 export async function LoyaltySubnav() {
   const t = await getTranslations('loyalty.staff.subnav');
-  const configure = canConfigureProgramme(await getMyAccess());
+  const access = await getMyAccess();
+  // Counter staff work from Serve customers; the administrative sub-navigation is not shown to them.
+  if (classifyWorkspace(access) === 'cashier') return null;
+  const configure = canConfigureProgramme(access);
   const items = [
     { href: '/dashboard/loyalty', label: t('accounts') },
     ...(configure

@@ -18,8 +18,7 @@
     "logout": "Se déconnecter",
     "customerQr": "QR client",
     "settlements": "Règlement des récompenses orphelines",
-    "serve": "Servir les clients",
-    "customers": "Liste des clients"
+    "serve": "Servir les clients"
   },
   "home": {
     "branchesTitle": "Succursales",
@@ -199,5 +198,13 @@
     "branchFilterInvalid": "Cette succursale n’est pas disponible pour vous ; toutes les succursales sont affichées.",
     "branchFilterActive": "Filtré sur {name}",
     "sentimentSummary": "{total, plural, one {# avis classé} many {# d’avis classés} other {# avis classés}} sur cette période : {positive, number} positifs, {neutral, number} neutres, {negative, number} négatifs."
+  },
+  "restricted": {
+    "unavailableTitle": "Impossible de confirmer votre accès",
+    "unavailableBody": "Vos autorisations n’ont pas pu être chargées ; cette page n’est donc pas affichée. Réessayez, ou déconnectez-vous puis reconnectez-vous.",
+    "forbiddenTitle": "Vous n’avez pas accès à cette page",
+    "forbiddenBody": "Demandez à un propriétaire ou à un administrateur de l’entreprise si vous en avez besoin.",
+    "retry": "Réessayer",
+    "logout": "Se déconnecter"
   }
 }

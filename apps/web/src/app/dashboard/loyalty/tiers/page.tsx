@@ -2,7 +2,6 @@ import { redirect } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
 import type { LoyaltyTierDto } from '@echo-grid-feedback/shared-types';
 import { getActiveBusiness } from '@/lib/business';
-import { canConfigureProgramme, getMyAccess } from '@/lib/permissions';
 import { apiFetch } from '@/lib/api-client';
 import { Button } from '@/components/ui';
 import { LoyaltySubnav } from '../loyalty-subnav';
@@ -14,8 +13,6 @@ import { DeleteTierButton } from './delete-tier-button';
 export default async function LoyaltyTiersPage() {
   const business = await getActiveBusiness();
   if (!business) redirect('/dashboard');
-  // Programme configuration is for the business owner and admins, not counter staff.
-  if (!canConfigureProgramme(await getMyAccess())) redirect('/dashboard/loyalty');
 
   const t = await getTranslations('loyalty.staff');
   const tiers = await apiFetch<LoyaltyTierDto[]>('/loyalty/tiers', { businessId: business.id });

@@ -7,6 +7,9 @@ import type {
 import { apiFetch, ApiError } from '@/lib/api-client';
 import { getActiveBusiness } from '@/lib/business';
 import { rethrowControlFlow } from '@/lib/rethrow-control-flow';
+import { classifyQrFailure, type StaffQrErrorKind } from '@/lib/qr-failure';
+
+export type { StaffQrErrorKind };
 
 export interface StaffQrResult {
   customerId: string;
@@ -19,6 +22,8 @@ export interface StaffQrState {
   purchaseRequestKey?: string;
   purchaseCompleted?: boolean;
   error?: string;
+  /** Machine-readable outcome so the UI can show a precise, localized message; never carries token data. */
+  errorKind?: StaffQrErrorKind;
   result?: StaffQrResult;
   businessId?: string;
   branchId?: string | undefined;
@@ -31,7 +36,11 @@ export interface StaffQrState {
 async function resolve(token: string, branchId: string, expectedBusinessId?: string) {
   const business = await getActiveBusiness();
   if (!business || (expectedBusinessId && business.id !== expectedBusinessId)) {
-    throw new ApiError('Business context changed. Resolve the QR again.', 403);
+    throw new ApiError(
+      'Business context changed. Resolve the QR again.',
+      403,
+      'BUSINESS_CONTEXT_CHANGED',
+    );
   }
   const scope = {
     businessId: business.id,
@@ -50,6 +59,7 @@ function failure(err: unknown): StaffQrState {
   rethrowControlFlow(err);
   return {
     error: err instanceof ApiError ? err.message : 'Unable to complete this action. Try again.',
+    errorKind: classifyQrFailure(err),
   };
 }
 

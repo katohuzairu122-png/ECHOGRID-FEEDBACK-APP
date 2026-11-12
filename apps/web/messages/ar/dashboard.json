@@ -18,8 +18,7 @@
     "logout": "تسجيل الخروج",
     "customerQr": "رمز QR للعميل",
     "settlements": "تسوية المكافآت اليتيمة",
-    "serve": "خدمة العملاء",
-    "customers": "قائمة العملاء"
+    "serve": "خدمة العملاء"
   },
   "home": {
     "branchesTitle": "الفروع",
@@ -199,5 +198,13 @@
     "branchFilterInvalid": "هذا الفرع غير متاح لك، لذلك تُعرض جميع الفروع.",
     "branchFilterActive": "مُصفّى حسب {name}",
     "sentimentSummary": "{total, plural, zero {لا توجد ملاحظات مصنفة} one {ملاحظة مصنفة واحدة} two {ملاحظتان مصنفتان} few {# ملاحظات مصنفة} many {# ملاحظة مصنفة} other {# ملاحظة مصنفة}} في هذه الفترة: {positive, number} إيجابية، {neutral, number} محايدة، {negative, number} سلبية."
+  },
+  "restricted": {
+    "unavailableTitle": "تعذر تأكيد صلاحية الوصول",
+    "unavailableBody": "تعذر تحميل صلاحياتك، لذلك لا تُعرض هذه الصفحة. حاول مرة أخرى أو سجّل الخروج ثم الدخول.",
+    "forbiddenTitle": "ليس لديك صلاحية الوصول إلى هذه الصفحة",
+    "forbiddenBody": "اطلب ذلك من مالك النشاط أو مسؤوله إذا كنت بحاجة إليها.",
+    "retry": "إعادة المحاولة",
+    "logout": "تسجيل الخروج"
   }
 }

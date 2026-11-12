@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 import { getFormatter, getTranslations } from 'next-intl/server';
 import { getActiveBusiness } from '@/lib/business';
+import { managementGate } from '@/lib/workspace-guard';
 import { apiFetch } from '@/lib/api-client';
 import type { LoyaltyAccountWithCustomerDto } from '@echo-grid-feedback/shared-types';
 import { Button } from '@/components/ui';
@@ -18,6 +19,8 @@ const PAGE_SIZE = 20;
 export default async function LoyaltyDashboardPage() {
   const business = await getActiveBusiness();
   if (!business) redirect('/dashboard');
+  const blocked = await managementGate();
+  if (blocked) return blocked;
 
   const format = await getFormatter();
   const t = await getTranslations('loyalty.staff');

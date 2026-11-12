@@ -38,7 +38,11 @@ export function StaffQrMenu({
       >
         {t('search')}
       </button>
-      <details id="cashier-manual-lookup" ref={manualLookupRef} open={Boolean(state.token || state.error)}>
+      <details
+        id="cashier-manual-lookup"
+        ref={manualLookupRef}
+        open={Boolean(state.token || state.error)}
+      >
         <summary className="cursor-pointer text-sm">{t('manual')}</summary>
         <form ref={formRef} action={action} className="mt-3 space-y-3">
           <input type="hidden" name="operation" value="resolve" />
@@ -67,7 +71,13 @@ export function StaffQrMenu({
           <Button disabled={pending}>Resolve permitted actions</Button>
         </form>
       </details>
-      {state.error && <p role="alert">{state.error}</p>}
+      {state.error && (
+        <p role="alert">
+          {state.errorKind && state.errorKind !== 'other'
+            ? t(`errors.${state.errorKind}`)
+            : state.error}
+        </p>
+      )}
       {!pending && state.result && state.businessId && (
         <ResolvedMenu
           key={`${state.token}:${state.businessId}:${state.branchId}`}

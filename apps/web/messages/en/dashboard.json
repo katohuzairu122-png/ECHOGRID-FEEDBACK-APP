@@ -18,8 +18,7 @@
     "logout": "Log out",
     "customerQr": "Customer QR",
     "settlements": "Orphan settlement",
-    "serve": "Serve customers",
-    "customers": "Customer list"
+    "serve": "Serve customers"
   },
   "home": {
     "branchesTitle": "Branches",
@@ -199,5 +198,13 @@
     "branchFilterInvalid": "That branch is not available to you, so all branches are shown.",
     "branchFilterActive": "Filtered to {name}",
     "sentimentSummary": "{total, plural, one {# classified feedback item} other {# classified feedback items}} in this period: {positive, number} positive, {neutral, number} neutral, {negative, number} negative."
+  },
+  "restricted": {
+    "unavailableTitle": "We couldn’t confirm your access",
+    "unavailableBody": "Your permissions could not be loaded, so this page is not shown. Try again, or sign out and back in.",
+    "forbiddenTitle": "You don’t have access to this page",
+    "forbiddenBody": "Ask a business owner or administrator if you need it.",
+    "retry": "Try again",
+    "logout": "Sign out"
   }
 }
