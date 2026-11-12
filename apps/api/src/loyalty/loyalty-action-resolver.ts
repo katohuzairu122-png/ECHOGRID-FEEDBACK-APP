@@ -80,8 +80,8 @@ export class LoyaltyActionResolver {
 
     const actions: LoyaltyResolvedAction[] = [];
     if (membership && account) {
-      if (input.permissions.has('loyalty:view')) actions.push('VIEW_ALLOWED_MEMBERSHIP_STATE');
-      if (input.permissions.has('loyalty:manage') && account.status !== 'suspended') {
+      if (input.permissions.has('loyalty:serve')) actions.push('VIEW_ALLOWED_MEMBERSHIP_STATE');
+      if (input.permissions.has('loyalty:serve') && account.status !== 'suspended') {
         actions.push('VALIDATE_PURCHASE', 'GRANT_LOYALTY_PROGRESS', 'REDEEM_REWARD');
       }
     }

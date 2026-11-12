@@ -297,7 +297,7 @@ loyaltyCustomerRoutes.post('/accounts/:businessId/redeem', async (c) => {
     // Notify STAFF, not the customer -- a staff member needs to know a code
     // is waiting to be confirmed at the counter. Same "after the redeem()
     // transaction has committed" ordering as every other trigger in this
-    // module. loyalty:manage is held by all four default roles (including
+    // module. loyalty:serve is held by all four default roles (including
     // Staff -- confirming a redemption is a front-counter task), so no
     // permission filter narrows this broadcast. Uses its own fresh
     // connection (runInBackground), not the outer `repos` -- see that
