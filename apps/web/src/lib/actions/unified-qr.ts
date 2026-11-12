@@ -68,7 +68,8 @@ export async function resolveStaffQrAction(
   form: FormData,
 ): Promise<StaffQrState> {
   try {
-    const token = String(form.get('token') ?? '');
+    // Scanners and paste can add whitespace or control characters around the code; a token never contains them.
+    const token = String(form.get('token') ?? '').replace(/[\s\p{Cc}]/gu, '');
     const { result, scope } = await resolve(token, String(form.get('branchId') ?? '').trim());
     return {
       result,

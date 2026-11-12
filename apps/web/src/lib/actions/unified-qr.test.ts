@@ -25,6 +25,20 @@ beforeEach(() => {
   mocks.business.mockResolvedValue({ id: 'business' });
   mocks.api.mockResolvedValue(result);
 });
+describe('scanner and paste input cleaning', () => {
+  it('strips whitespace and control characters a scanner or paste adds around the code', async () => {
+    const state = await resolveStaffQrAction(
+      {},
+      form({ operation: 'resolve', token: '\u0002 aaa.bbb.ccc \r\n', branchId: '' }),
+    );
+    expect(mocks.api).toHaveBeenCalledWith(
+      '/loyalty/actions/resolve-customer',
+      expect.objectContaining({ body: JSON.stringify({ customerQrToken: 'aaa.bbb.ccc' }) }),
+    );
+    expect(state.token).toBe('aaa.bbb.ccc');
+  });
+});
+
 describe('staff QR action authorization', () => {
   it('never trusts permissions carried in posted action state', async () => {
     mocks.api.mockResolvedValue({ ...result, actions: ['VIEW_ALLOWED_MEMBERSHIP_STATE'] });
