@@ -485,6 +485,43 @@ describe.skipIf(!process.env.DATABASE_URL)('customer auth storage (integration)'
       expect(t.rows[0].revoked_at).not.toBeNull();
     });
 
+    it('replay-induced revocation affects the compromised session, not the other device', async () => {
+      const c = (await repos.customers.findByPhone(PHONES[2]!))!;
+      const compromised = await newSession(c.id);
+      const otherDevice = await newSession(c.id);
+      const badToken = await repos.customerRefreshTokens.issue({
+        sessionId: compromised.id,
+        tokenHash: await hash(),
+        expiresAt: new Date(Date.now() + DAY),
+        now: NOW(),
+      });
+      const goodToken = await repos.customerRefreshTokens.issue({
+        sessionId: otherDevice.id,
+        tokenHash: await hash(),
+        expiresAt: new Date(Date.now() + DAY),
+        now: NOW(),
+      });
+
+      expect(
+        await repos.customerSessions.revoke({
+          sessionId: compromised.id,
+          customerId: c.id,
+          reason: 'replay_detected',
+          now: NOW(),
+        }),
+      ).toBe(true);
+      expect((await repos.customerSessions.findById(compromised.id))!.revokedReason).toBe(
+        'replay_detected',
+      );
+      expect((await repos.customerSessions.findById(otherDevice.id))!.revokedAt).toBeNull();
+      const tokens = await client.query(
+        'SELECT id, revoked_at FROM customer_refresh_tokens WHERE id = ANY($1)',
+        [[badToken.id, goodToken.id]],
+      );
+      expect(tokens.rows.find((row) => row.id === badToken.id)!.revoked_at).not.toBeNull();
+      expect(tokens.rows.find((row) => row.id === goodToken.id)!.revoked_at).toBeNull();
+    });
+
     it('surfaces a suspended customer through the joined read so the policy can deny it (I7)', async () => {
       await client.query(`UPDATE customers SET status='suspended' WHERE phone=$1`, [PHONES[1]!]);
       const c = (await repos.customers.findByPhone(PHONES[1]!))!;
@@ -555,6 +592,38 @@ describe.skipIf(!process.env.DATABASE_URL)('customer auth storage (integration)'
       expect(old.rotated_at).not.toBeNull();
       const winner = r1.rotated ? r1 : r2;
       expect(winner.rotated && old.replaced_by_token_id === winner.successor.id).toBe(true);
+    });
+
+    it('concurrent session revocation and exchange leaves no usable token behind', async () => {
+      const c = (await repos.customers.findByPhone(PHONES[0]!))!;
+      const session = await newSession(c.id);
+      const predecessor = await repos.customerRefreshTokens.issue({
+        sessionId: session.id,
+        tokenHash: await hash(),
+        expiresAt: new Date(Date.now() + DAY),
+        now: NOW(),
+      });
+      const [exchange, revoke] = await Promise.all([
+        repos.customerRefreshTokens.exchange({
+          oldTokenId: predecessor.id,
+          successor: { tokenHash: await hash(), expiresAt: new Date(Date.now() + DAY) },
+          now: NOW(),
+        }),
+        repos2.customerSessions.revoke({
+          sessionId: session.id,
+          customerId: c.id,
+          reason: 'replay_detected',
+          now: NOW(),
+        }),
+      ]);
+      expect(revoke).toBe(true);
+      expect([true, false]).toContain(exchange.rotated);
+      const active = await client.query(
+        'SELECT id FROM customer_refresh_tokens WHERE session_id=$1 AND revoked_at IS NULL',
+        [session.id],
+      );
+      expect(active.rowCount).toBe(0);
+      expect((await repos.customerSessions.findById(session.id))!.revokedAt).not.toBeNull();
     });
 
     it('refuses to exchange an already rotated, a revoked, or an unknown token and inserts nothing', async () => {
