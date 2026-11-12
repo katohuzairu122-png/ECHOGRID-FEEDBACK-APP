@@ -16,14 +16,7 @@ vi.mock('./permissions', async () => ({
 
 import { CASHIER_HOME, managementGate, programmeGate } from './workspace-guard';
 
-const STAFF = [
-  'business:view',
-  'branches:view',
-  'feedback:view',
-  'loyalty:view',
-  'loyalty:manage',
-  'messages:view',
-];
+const STAFF = ['business:view', 'branches:view', 'loyalty:serve'];
 const variantOf = (node: unknown) => (node as { props: { variant: string } }).props.variant;
 const set = (known: boolean, ...p: string[]) =>
   access.mockResolvedValue({ known, permissions: new Set(p) });

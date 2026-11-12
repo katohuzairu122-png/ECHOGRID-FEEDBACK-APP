@@ -22,6 +22,9 @@ const FULL = [
   'feedback:view',
   'loyalty:view',
   'loyalty:manage',
+  'loyalty:serve',
+  'loyalty:accounts:view',
+  'loyalty:adjust',
   'messages:view',
   'messages:send',
   'rewards:manage',
@@ -33,8 +36,12 @@ const FULL = [
   'settlement:view',
 ];
 const owner = { known: true, permissions: new Set(FULL) };
-// Default Staff (cashier) grants.
+// Default Staff (cashier) grants after D-C1, and the pre-D-C1 default (an unreconciled role).
 const cashier = {
+  known: true,
+  permissions: new Set(['business:view', 'branches:view', 'loyalty:serve']),
+};
+const legacyCashier = {
   known: true,
   permissions: new Set([
     'business:view',
@@ -80,6 +87,15 @@ describe('DashboardNav presentation', () => {
       expect(sidebar.querySelector('a[href="' + href + '"]')).not.toBeInTheDocument();
       expect(sheet.querySelector('a[href="' + href + '"]')).not.toBeInTheDocument();
     }
+  });
+
+  it('an unreconciled legacy cashier still sees only Serve customers and Support', async () => {
+    vi.mocked(getMyAccess).mockResolvedValue(legacyCashier);
+    const { container } = render(await DashboardNav());
+    expect(hrefs(container.querySelector('aside nav')!)).toEqual([
+      '/dashboard/loyalty/scan',
+      '/support',
+    ]);
   });
 
   it('unavailable permissions: no privileged destination is shown and sign-out remains', async () => {

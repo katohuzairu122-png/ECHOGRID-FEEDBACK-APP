@@ -15,6 +15,8 @@ export type WorkspaceKind = 'cashier' | 'management' | 'unavailable';
  */
 export const MANAGEMENT_PERMISSIONS: readonly string[] = [
   'rewards:manage',
+  'loyalty:accounts:view',
+  'loyalty:adjust',
   'analytics:view',
   'analytics:manage',
   'team:view',
@@ -41,7 +43,11 @@ export const MANAGEMENT_PERMISSIONS: readonly string[] = [
 export function classifyWorkspace(access: MyAccess): WorkspaceKind {
   if (!access.known) return 'unavailable';
   const holdsManagement = MANAGEMENT_PERMISSIONS.some((p) => access.permissions.has(p));
-  if (!holdsManagement && access.permissions.has('loyalty:manage')) return 'cashier';
+  // loyalty:serve is the D-C1 cashier permission. Legacy loyalty:manage still counts for the presentation of
+  // roles that were not reconciled yet; the API (which needs loyalty:serve) remains the authority.
+  const serves =
+    access.permissions.has('loyalty:serve') || access.permissions.has('loyalty:manage');
+  if (!holdsManagement && serves) return 'cashier';
   return 'management';
 }
 
