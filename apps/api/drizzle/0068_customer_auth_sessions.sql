@@ -4,6 +4,7 @@ CREATE TABLE "customer_credentials" (
 	"password_set_at" timestamp with time zone NOT NULL,
 	"password_changed_at" timestamp with time zone NOT NULL,
 	"last_verified_at" timestamp with time zone,
+	"legacy_tokens_invalid_before" timestamp with time zone,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
