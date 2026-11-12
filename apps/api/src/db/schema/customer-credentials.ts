@@ -24,6 +24,9 @@ export const customerCredentials = pgTable('customer_credentials', {
   passwordSetAt: timestamp('password_set_at', { withTimezone: true }).notNull(),
   passwordChangedAt: timestamp('password_changed_at', { withTimezone: true }).notNull(),
   lastVerifiedAt: timestamp('last_verified_at', { withTimezone: true }),
+  // Proposed MG-02. A credentialed customer's legacy 90-day JWTs at or before
+  // this cutoff must not authenticate. Nullable for compatibility only.
+  legacyTokensInvalidBefore: timestamp('legacy_tokens_invalid_before', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
