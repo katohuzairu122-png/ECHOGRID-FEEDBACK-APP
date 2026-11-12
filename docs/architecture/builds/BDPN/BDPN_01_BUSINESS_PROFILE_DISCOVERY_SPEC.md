@@ -354,3 +354,5 @@ in the Security and Sequence documents.
 Personalized recommendations; sponsored or paid placement; offers or campaigns; any marketing or notification send;
 creation or modification of consent grants; B2B marketplace functionality; Partner Credit or Stripe effects;
 loyalty or Community Point changes; and any production configuration, migration or deployment.
+
+> **Erratum (2026-11-12).** The statements in this document that staging is "at 45" or that "23 migrations are pending" are **superseded**. The repository record dated 2026-11-09 (commit 52b990c) reports both the production Neon project and the staging branch at 67 journal entries; only `0067` is beyond that record. The live state of each environment is **not verified**. See `BDPN_MIGRATION_PLAN_AND_STATE_CORRECTION.md`. The D-19 principle (backlog first, then one BDPN migration) stands; the backlog is `0067`.

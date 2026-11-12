@@ -158,3 +158,5 @@ product, legal or economic policy, no recommendation is made.
 2. A fresh reconciliation against the then-current `origin/main` and any decisions made in the interim.
 3. Confirmation that no proposed capability bypasses customer consent or tenant isolation (Security document sections 1, 4, 5).
 4. Explicit authorization of the single next block; **no block starts automatically**.
+
+> **Erratum (2026-11-12).** The statements in this document that staging is "at 45" or that "23 migrations are pending" are **superseded**. The repository record dated 2026-11-09 (commit 52b990c) reports both the production Neon project and the staging branch at 67 journal entries; only `0067` is beyond that record. The live state of each environment is **not verified**. See `BDPN_MIGRATION_PLAN_AND_STATE_CORRECTION.md`. The D-19 principle (backlog first, then one BDPN migration) stands; the backlog is `0067`.
