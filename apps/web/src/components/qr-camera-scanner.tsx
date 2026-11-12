@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { Button } from '@/components/ui';
+import { decodeImageData, decodeImageFile, readPixels } from '@/lib/qr-decode';
 
 interface BarcodeDetectorLike {
   detect(source: CanvasImageSource): Promise<{ rawValue: string }[]>;
@@ -14,11 +15,12 @@ function getDetectorCtor(): BarcodeDetectorCtor | undefined {
 }
 
 /**
- * Camera QR scanner for the cashier tab. Uses the browser's built-in
- * BarcodeDetector (no new dependency). Where it is unavailable (e.g. iOS
- * Safari) or the camera is denied, it says so and the caller's paste field
- * remains the way in. The camera stops as soon as a code is read, on Stop, or
- * on unmount.
+ * Camera QR scanner for the cashier tab. Uses the browser's built-in BarcodeDetector where it exists and
+ * otherwise a local decoder (jsQR, bundled; nothing is fetched or sent anywhere), so a missing
+ * BarcodeDetector no longer means "no scanning". Where there is no camera at all, the camera is denied or
+ * the page is not a secure context, it says so; an image upload and the caller's manual token field remain.
+ * The camera stops as soon as a code is read, on Stop, or on unmount. A detected value is reported once and
+ * is never logged or placed in a URL.
  */
 export function QrCameraScanner({
   onDetect,
@@ -32,6 +34,7 @@ export function QrCameraScanner({
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [active, setActive] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
@@ -48,8 +51,12 @@ export function QrCameraScanner({
   async function start() {
     setMessage(null);
     const Detector = getDetectorCtor();
-    if (!Detector || !navigator.mediaDevices?.getUserMedia) {
+    if (!navigator.mediaDevices?.getUserMedia) {
       setMessage(t('unsupported'));
+      return;
+    }
+    if (typeof window !== 'undefined' && window.isSecureContext === false) {
+      setMessage(t('insecure'));
       return;
     }
     try {
@@ -66,15 +73,26 @@ export function QrCameraScanner({
       video.srcObject = stream;
       await video.play();
       setActive(true);
-      const detector = new Detector({ formats: ['qr_code'] });
+      const native = Detector ? new Detector({ formats: ['qr_code'] }) : null;
+      if (!canvasRef.current) canvasRef.current = document.createElement('canvas');
+      const canvas = canvasRef.current;
       let busy = false;
+      let done = false;
       timerRef.current = setInterval(async () => {
-        if (busy) return;
+        if (busy || done) return;
         busy = true;
         try {
-          const codes = await detector.detect(video);
-          const value = codes[0]?.rawValue?.trim();
-          if (value) {
+          let value: string | undefined;
+          if (native) {
+            value = (await native.detect(video))[0]?.rawValue?.trim();
+          } else {
+            const pixels = readPixels(video, video.videoWidth, video.videoHeight, canvas);
+            value = pixels
+              ? ((await decodeImageData(pixels.data, pixels.width, pixels.height)) ?? undefined)
+              : undefined;
+          }
+          if (value && !done) {
+            done = true;
             stop();
             onDetect(value);
           }
@@ -88,6 +106,18 @@ export function QrCameraScanner({
       stop();
       setMessage(t('cameraDenied'));
     }
+  }
+
+  async function onImage(event: React.ChangeEvent<HTMLInputElement>) {
+    const input = event.currentTarget;
+    const file = input.files?.[0];
+    input.value = '';
+    if (!file) return;
+    setMessage(null);
+    if (!canvasRef.current) canvasRef.current = document.createElement('canvas');
+    const result = await decodeImageFile(file, canvasRef.current);
+    if (result.value) onDetect(result.value);
+    else setMessage(t(result.reason === 'size' ? 'imageTooLarge' : 'imageNoCode'));
   }
 
   return (
@@ -116,6 +146,12 @@ export function QrCameraScanner({
         >
           {t(large ? 'scanLarge' : 'scan')}
         </Button>
+      )}
+      {!active && (
+        <label className="flex min-h-12 w-full cursor-pointer items-center justify-center rounded-md border border-neutral-300 px-4 text-base font-medium">
+          {t('uploadImage')}
+          <input type="file" accept="image/*" className="sr-only" onChange={onImage} />
+        </label>
       )}
       {active && (
         <p role="status" className="text-sm">
