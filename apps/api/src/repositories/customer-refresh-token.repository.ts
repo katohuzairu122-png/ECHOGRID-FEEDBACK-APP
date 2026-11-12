@@ -1,5 +1,5 @@
 import { and, eq, isNull, lt } from 'drizzle-orm';
-import { customerRefreshTokens } from '../db/schema';
+import { customerRefreshTokens, customerSessions } from '../db/schema';
 import { BaseRepository } from './base.repository';
 
 export type CustomerRefreshToken = typeof customerRefreshTokens.$inferSelect;
@@ -44,8 +44,11 @@ export class CustomerRefreshTokenRepository extends BaseRepository {
    * against the committed row, so of two concurrent exchanges exactly one
    * wins; the loser gets `{ rotated: false }` and inserts nothing. The
    * successor is created in the same transaction, so a failure never leaves a
-   * half-rotated chain. This is a storage guard only: whether the caller may
-   * rotate at all is decided by session-policy.ts `evaluateRefresh`.
+   * half-rotated chain. Lock the owning session BEFORE updating any refresh
+   * token, matching CustomerSessionRepository.revoke's session-first lock order.
+   * This prevents a refresh/revoke race leaving a new unrevoked successor after
+   * its session is revoked. This is still a storage guard: the owning service
+   * must verify customer status, caller authority, and replay policy.
    */
   async exchange(input: {
     oldTokenId: string;
@@ -53,6 +56,36 @@ export class CustomerRefreshTokenRepository extends BaseRepository {
     now: Date;
   }): Promise<ExchangeResult> {
     return this.db.transaction(async (tx) => {
+      // Resolve the owner without first taking a token row lock. The subsequent
+      // guarded UPDATE still determines whether the predecessor is unused.
+      const [predecessor] = await tx
+        .select({ sessionId: customerRefreshTokens.sessionId })
+        .from(customerRefreshTokens)
+        .where(eq(customerRefreshTokens.id, input.oldTokenId))
+        .limit(1);
+      if (!predecessor) return { rotated: false } as const;
+
+      // Revocation takes this same session lock before touching its tokens.
+      // Whichever operation wins, the final committed state cannot contain a
+      // usable successor after revocation.
+      const [session] = await tx
+        .select({
+          revokedAt: customerSessions.revokedAt,
+          absoluteExpiresAt: customerSessions.absoluteExpiresAt,
+          idleExpiresAt: customerSessions.idleExpiresAt,
+        })
+        .from(customerSessions)
+        .where(eq(customerSessions.id, predecessor.sessionId))
+        .for('update');
+      if (
+        !session ||
+        session.revokedAt !== null ||
+        input.now >= session.absoluteExpiresAt ||
+        input.now >= session.idleExpiresAt
+      ) {
+        return { rotated: false } as const;
+      }
+
       const claimed = await tx
         .update(customerRefreshTokens)
         .set({ rotatedAt: input.now })
