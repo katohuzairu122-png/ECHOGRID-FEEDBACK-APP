@@ -18,8 +18,7 @@
     "logout": "Cerrar sesión",
     "customerQr": "QR del cliente",
     "settlements": "Liquidación de recompensas huérfanas",
-    "serve": "Atender clientes",
-    "customers": "Lista de clientes"
+    "serve": "Atender clientes"
   },
   "home": {
     "branchesTitle": "Sucursales",
@@ -199,5 +198,13 @@
     "branchFilterInvalid": "Esa sucursal no está disponible para usted, por lo que se muestran todas las sucursales.",
     "branchFilterActive": "Filtrado por {name}",
     "sentimentSummary": "{total, plural, one {# comentario clasificado} many {# de comentarios clasificados} other {# comentarios clasificados}} en este período: {positive, number} positivos, {neutral, number} neutros, {negative, number} negativos."
+  },
+  "restricted": {
+    "unavailableTitle": "No pudimos confirmar su acceso",
+    "unavailableBody": "No se pudieron cargar sus permisos, por lo que no se muestra esta página. Vuelva a intentarlo o cierre sesión y vuelva a entrar.",
+    "forbiddenTitle": "No tiene acceso a esta página",
+    "forbiddenBody": "Consulte con un propietario o administrador del negocio si la necesita.",
+    "retry": "Reintentar",
+    "logout": "Cerrar sesión"
   }
 }

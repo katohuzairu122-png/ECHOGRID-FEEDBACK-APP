@@ -178,15 +178,27 @@
       "scan": "Scan customer QR",
       "stop": "Stop camera",
       "scanning": "Point the camera at the customer’s QR code.",
-      "unsupported": "Camera scanning is not supported in this browser. Paste the customer’s QR token below instead.",
-      "cameraDenied": "The camera could not be opened. Allow camera access, or paste the customer’s QR token below.",
+      "unsupported": "Camera scanning is not available in this browser. Upload a photo of the QR code, or enter the QR token below.",
+      "cameraDenied": "The camera could not be opened. Allow camera access, upload a photo of the QR code, or enter the QR token below.",
       "viewfinder": "Camera view for scanning the customer QR code",
       "pasteHeading": "Or paste the QR token",
       "loggedInAs": "You are logged in as",
       "scanHint": "Press “Scan” to scan the customer’s QR code.",
       "scanLarge": "Scan",
-      "search": "Search customers",
-      "manual": "Enter the QR token manually"
+      "search": "Verify with QR token",
+      "manual": "Enter the QR token manually",
+      "insecure": "The camera needs a secure (HTTPS) connection. Upload a photo of the QR code, or enter the QR token below.",
+      "uploadImage": "Upload a photo of the QR code",
+      "imageNoCode": "No QR code could be read in that image. Try a clearer photo, or enter the QR token below.",
+      "imageTooLarge": "That image is too large. Use a smaller photo, or enter the QR token below.",
+      "errors": {
+        "session": "Your session has ended. Sign in again to continue.",
+        "permission": "Your role is not allowed to do this. Ask a manager if you need it.",
+        "branch": "You are not authorized for this location. Choose a location you work at.",
+        "invalidQr": "This QR code is expired, already replaced or not recognized. Ask the customer to refresh their QR code.",
+        "rateLimited": "Too many attempts. Wait a moment and try again.",
+        "unavailable": "The service is unavailable right now. Nothing was recorded. Try again shortly."
+      }
     }
   },
   "customer": {

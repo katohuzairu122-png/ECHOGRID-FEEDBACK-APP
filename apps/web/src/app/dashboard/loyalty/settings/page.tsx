@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
 import type { LoyaltySettingsDto } from '@echo-grid-feedback/shared-types';
 import { getActiveBusiness } from '@/lib/business';
+import { managementGate } from '@/lib/workspace-guard';
 import { apiFetch } from '@/lib/api-client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui';
 import { LoyaltySubnav } from '../loyalty-subnav';
@@ -10,6 +11,8 @@ import { SettingsForm } from './settings-form';
 export default async function LoyaltySettingsPage() {
   const business = await getActiveBusiness();
   if (!business) redirect('/dashboard');
+  const blocked = await managementGate();
+  if (blocked) return blocked;
 
   const settings = await apiFetch<LoyaltySettingsDto>('/loyalty/settings', { businessId: business.id });
   // i18n & Multi-Currency Block 6.

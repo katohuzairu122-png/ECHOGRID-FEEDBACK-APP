@@ -1,8 +1,7 @@
 import Link from 'next/link';
-import { redirect } from 'next/navigation';
 import { getFormatter, getTranslations } from 'next-intl/server';
 import { getActiveBusiness } from '@/lib/business';
-import { getMyAccess, isCounterStaff } from '@/lib/permissions';
+import { managementGate } from '@/lib/workspace-guard';
 import { getCurrentUser } from '@/lib/platform';
 import { getBusinessOverview, trendTotals } from '@/lib/business-overview';
 import {
@@ -23,8 +22,9 @@ export default async function DashboardPage({
 }) {
   const business = await getActiveBusiness();
   if (!business) return <CreateBusinessForm />;
-  // Cashiers land on "Serve customers"; the business overview is for those who manage the business.
-  if (isCounterStaff(await getMyAccess())) redirect('/dashboard/loyalty/scan');
+  // Cashiers land on "Serve customers"; an unconfirmed permission set shows a restricted state.
+  const blocked = await managementGate();
+  if (blocked) return blocked;
   const rawBranch = (await searchParams)?.branch;
   const requestedBranch =
     typeof rawBranch === 'string' && rawBranch.length <= 64 ? rawBranch : undefined;

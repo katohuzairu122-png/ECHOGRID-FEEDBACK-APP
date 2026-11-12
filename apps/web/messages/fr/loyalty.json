@@ -178,15 +178,27 @@
       "scan": "Scanner le QR du client",
       "stop": "Arrêter la caméra",
       "scanning": "Dirigez la caméra vers le code QR du client.",
-      "unsupported": "Le scan par caméra n’est pas pris en charge par ce navigateur. Collez plutôt le jeton QR du client ci-dessous.",
-      "cameraDenied": "La caméra n’a pas pu s’ouvrir. Autorisez l’accès à la caméra ou collez le jeton QR du client ci-dessous.",
+      "unsupported": "La lecture par caméra n’est pas disponible dans ce navigateur. Téléversez une photo du code QR ou saisissez le jeton QR ci-dessous.",
+      "cameraDenied": "La caméra n’a pas pu être ouverte. Autorisez l’accès à la caméra, téléversez une photo du code QR ou saisissez le jeton QR ci-dessous.",
       "viewfinder": "Vue caméra pour scanner le code QR du client",
       "pasteHeading": "Ou collez le jeton QR",
       "loggedInAs": "Vous êtes connecté en tant que",
       "scanHint": "Appuyez sur « Scanner » pour lire le code QR du client.",
       "scanLarge": "Scanner",
-      "search": "Rechercher des clients",
-      "manual": "Saisir le jeton QR manuellement"
+      "search": "Vérifier avec le jeton QR",
+      "manual": "Saisir le jeton QR manuellement",
+      "insecure": "La caméra nécessite une connexion sécurisée (HTTPS). Téléversez une photo du code QR ou saisissez le jeton QR ci-dessous.",
+      "uploadImage": "Téléverser une photo du code QR",
+      "imageNoCode": "Aucun code QR lisible dans cette image. Essayez une photo plus nette ou saisissez le jeton QR ci-dessous.",
+      "imageTooLarge": "Cette image est trop volumineuse. Utilisez une photo plus petite ou saisissez le jeton QR ci-dessous.",
+      "errors": {
+        "session": "Votre session est terminée. Reconnectez-vous pour continuer.",
+        "permission": "Votre rôle ne permet pas cette action. Demandez à un responsable si nécessaire.",
+        "branch": "Vous n’êtes pas autorisé pour ce lieu. Choisissez un lieu où vous travaillez.",
+        "invalidQr": "Ce code QR est expiré, remplacé ou non reconnu. Demandez au client d’actualiser son code QR.",
+        "rateLimited": "Trop de tentatives. Patientez un instant puis réessayez.",
+        "unavailable": "Le service est indisponible pour le moment. Rien n’a été enregistré. Réessayez bientôt."
+      }
     }
   },
   "customer": {

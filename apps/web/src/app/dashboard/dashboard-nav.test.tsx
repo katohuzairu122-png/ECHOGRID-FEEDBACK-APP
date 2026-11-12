@@ -16,50 +16,92 @@ vi.mock('next/navigation', () => ({
   usePathname: () => '/dashboard',
   useRouter: () => ({ prefetch: vi.fn() }),
 }));
-const owner = {
-  known: true,
-  permissions: new Set(['loyalty:manage', 'rewards:manage', 'analytics:view', 'team:view']),
-};
+const FULL = [
+  'business:view',
+  'branches:view',
+  'feedback:view',
+  'loyalty:view',
+  'loyalty:manage',
+  'messages:view',
+  'messages:send',
+  'rewards:manage',
+  'analytics:view',
+  'notifications:view',
+  'business:manage_settings',
+  'team:view',
+  'billing:view',
+  'settlement:view',
+];
+const owner = { known: true, permissions: new Set(FULL) };
+// Default Staff (cashier) grants.
 const cashier = {
   known: true,
-  permissions: new Set(['loyalty:view', 'loyalty:manage', 'feedback:view', 'messages:view']),
+  permissions: new Set([
+    'business:view',
+    'branches:view',
+    'feedback:view',
+    'loyalty:view',
+    'loyalty:manage',
+    'messages:view',
+    'messages:send',
+  ]),
 };
+const hrefs = (el: Element) =>
+  Array.from(el.querySelectorAll('a')).map((a) => a.getAttribute('href'));
+const ADMIN = [
+  '/dashboard',
+  '/dashboard/loyalty',
+  '/dashboard/feedback',
+  '/dashboard/messages',
+  '/dashboard/analytics',
+  '/dashboard/branches',
+  '/dashboard/settlements',
+  '/dashboard/notifications',
+  '/dashboard/settings',
+  '/dashboard/settings/team',
+  '/dashboard/billing',
+  '/dashboard/loyalty/tiers',
+  '/dashboard/loyalty/rewards',
+];
 
 describe('DashboardNav presentation', () => {
-  it('cashier: Serve customers is the home and only primary tab; configuration is not shown', async () => {
+  it('cashier: Serve customers is the only workspace; the More menu has no administrative destination', async () => {
     vi.mocked(getMyAccess).mockResolvedValue(cashier);
     const { container } = render(await DashboardNav());
     const sidebar = container.querySelector('aside nav')!;
     const bar = container.querySelector('nav[class*="bottomNav"]')!;
-    const hrefs = (el: Element) =>
-      Array.from(el.querySelectorAll('a')).map((a) => a.getAttribute('href'));
     expect(hrefs(bar)).toEqual(['/dashboard/loyalty/scan']);
-    expect(hrefs(sidebar)).toEqual([
-      '/dashboard/loyalty/scan',
-      '/dashboard/loyalty',
-      '/dashboard/feedback',
-      '/dashboard/messages',
-      '/support',
-    ]);
-    for (const hidden of [
-      '/dashboard/analytics',
-      '/dashboard/settings',
-      '/dashboard/settings/team',
-      '/dashboard/billing',
-      '/dashboard/branches',
-      '/dashboard/loyalty/tiers',
-    ])
-      expect(sidebar.querySelector('a[href="' + hidden + '"]')).not.toBeInTheDocument();
+    expect(hrefs(sidebar)).toEqual(['/dashboard/loyalty/scan', '/support']);
     await userEvent.setup().click(screen.getByRole('button', { name: 'nav.more' }));
-    expect(
-      screen.getByRole('dialog').querySelector('a[href="/dashboard/loyalty"]'),
-    ).toBeInTheDocument();
+    const sheet = screen.getByRole('dialog');
+    expect(hrefs(sheet)).toEqual(['/support']);
+    expect(sheet.querySelectorAll('form')).toHaveLength(1); // sign out stays available
+    for (const href of ADMIN) {
+      expect(sidebar.querySelector('a[href="' + href + '"]')).not.toBeInTheDocument();
+      expect(sheet.querySelector('a[href="' + href + '"]')).not.toBeInTheDocument();
+    }
   });
 
-  it('an unreadable permission set never turns an owner into a cashier', async () => {
+  it('unavailable permissions: no privileged destination is shown and sign-out remains', async () => {
     vi.mocked(getMyAccess).mockResolvedValue({ known: false, permissions: new Set() });
     const { container } = render(await DashboardNav());
-    expect(container.querySelector('aside nav a[href="/dashboard/analytics"]')).toBeInTheDocument();
+    expect(hrefs(container.querySelector('aside nav')!)).toEqual(['/support']);
+    const nav = container.querySelector('aside nav')!;
+    for (const href of [...ADMIN, '/dashboard/loyalty/scan'])
+      expect(nav.querySelector('a[href="' + href + '"]')).not.toBeInTheDocument();
+    expect(container.querySelectorAll('aside form')).toHaveLength(1);
+  });
+
+  it('manager without billing:view or team grants does not see billing or team', async () => {
+    vi.mocked(getMyAccess).mockResolvedValue({
+      known: true,
+      permissions: new Set(FULL.filter((p) => p !== 'billing:view' && p !== 'team:view')),
+    });
+    const { container } = render(await DashboardNav());
+    const sidebar = container.querySelector('aside nav')!;
+    expect(sidebar.querySelector('a[href="/dashboard/billing"]')).not.toBeInTheDocument();
+    expect(sidebar.querySelector('a[href="/dashboard/settings/team"]')).not.toBeInTheDocument();
+    expect(sidebar.querySelector('a[href="/dashboard/analytics"]')).toBeInTheDocument();
   });
 
   it('preserves every operational destination in the vertical sidebar and full mobile menu', async () => {
