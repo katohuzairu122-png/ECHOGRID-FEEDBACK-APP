@@ -18,7 +18,8 @@
     "logout": "Cerrar sesión",
     "customerQr": "QR del cliente",
     "settlements": "Liquidación de recompensas huérfanas",
-    "serve": "Atender clientes"
+    "serve": "Atender clientes",
+    "customers": "Lista de clientes"
   },
   "home": {
     "branchesTitle": "Sucursales",
