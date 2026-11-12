@@ -275,6 +275,16 @@ namespace_id = "1005"
 limit = 5
 period = 60
 
+# Guards the cashier phone lookup (loyalty.routes.ts, POST /actions/lookup-customer). Keyed by business and staff
+# user, not IP. Every call probes the business's member list by phone, so the budget is small. 10/min/cashier is a
+# starting estimate; the miss throttle in CustomerLookupService is the second, stricter control.
+[[ratelimits]]
+name = "LOOKUP_RATE_LIMITER"
+namespace_id = "1006"
+[ratelimits.simple]
+limit = 10
+period = 60
+
 # Cron triggers -- fire the `scheduled` export (src/index.ts, Sentiment
 # Analytics Block 3), which enqueues one generate_summary job per business
 # per period. Business-wide only (branchId null) for now; per-branch
@@ -395,6 +405,13 @@ name = "FOLLOWUP_QUESTION_RATE_LIMITER"
 namespace_id = "2005"
 [env.staging.ratelimits.simple]
 limit = 5
+period = 60
+
+[[env.staging.ratelimits]]
+name = "LOOKUP_RATE_LIMITER"
+namespace_id = "2006"
+[env.staging.ratelimits.simple]
+limit = 10
 period = 60
 [env.staging.triggers]
 crons = [
