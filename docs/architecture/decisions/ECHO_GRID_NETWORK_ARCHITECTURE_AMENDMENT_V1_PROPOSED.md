@@ -41,13 +41,23 @@ Define how Echo Grid grows from a loyalty platform into a connected customer-bus
 
 | Surface                            | Audience                  | Working name                              | Status            |
 | ---------------------------------- | ------------------------- | ----------------------------------------- | ----------------- |
-| Existing points and membership hub | Customers                 | **Community** (unchanged)                 | Exists, read-only |
-| Customer content stream            | Signed-in customers       | **Feed** (working name, N-01)             | Not built         |
+| Existing membership and points hub | Customers                 | **Community** (one top-level tab)         | Exists, read-only |
+| Customer content stream            | Signed-in customers       | **Feed** (inside Community, not a tab)    | Not built         |
 | Business publishing area           | Authorized business users | **Publish** (working name)                | Not built         |
 | Echo Grid official account         | Customers                 | "Echo Grid" with a visible official badge | Not built         |
 | Business-only network              | Verified businesses       | **Business Network** (Split 09)           | Not specified     |
 
-"Community" keeps its current meaning. The feed must not reuse the word, because the points hub already owns it.
+**Owner direction (2026-11-12): Feed and the existing Community hub share ONE top-level customer navigation tab, `Community`.** `Feed` is an internal subsection, not a second primary tab. Community Points and membership remain the exclusive responsibility of Split 05; feed data and permissions remain in the separate Network domain.
+
+### 4.1 One-tab composition — owner-directed, design only
+
+- **Customer navigation:** Preserve the single existing `Community` destination at `/loyalty/dashboard/community`. Do not add a second top-level `Feed` item or duplicate the Community menu.
+- **Inside Community:** Provide an internal `Feed` subsection for approved posts and an internal `Points & Membership` subsection for the existing Split 05 functionality. This is a presentation composition, **not** a merging of tables, points, membership, identity or authorization.
+- **Existing behavior:** Until the feed is independently implemented and activated, the Community destination continues to display the existing read-only membership and points hub; no dead Feed control or "coming soon" claim is displayed by default.
+- **Route sketch (not approved implementation):** Keep `/loyalty/dashboard/community` as the stable existing hub entry point, and place future feed UI under a nested route such as `/loyalty/dashboard/community/feed`. The final route contract requires review in NETWORK-02; existing bookmarks and Points navigation must remain valid.
+- **Backend isolation:** The feed keeps `/network/*` endpoints and `network_*` storage, not Split 05 `/community/*` APIs or points tables. `N-17` therefore reserves the `network` API/storage namespace, but **does not prohibit** a Community-nested customer UI route.
+- **Security and launch:** A `Feed` subsection is visible only when the separately approved per-environment feed flag is enabled and customer authorization succeeds. A disabled, empty, erroneous or withdrawn feed must not hide or interrupt existing Community Points/membership functionality. Each subsection retains its own permission and data contracts.
+- **Not authorized:** No production UI, navigation, routing, schema, API, release or activation change follows from this direction. All other `N-xx` decisions remain pending owner approval.
 
 ## 5. Non-negotiable invariants (binding on every NETWORK block)
 
@@ -72,7 +82,7 @@ Define how Echo Grid grows from a loyalty platform into a connected customer-bus
 | -------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Section 1, canonical flow                          | **Unchanged.** Posts are not promotions: nothing is sent outward                                                                                   |
 | Section 2, ownership table                         | Adds one row (Network content, section 3 above). No existing row changes                                                                           |
-| Section 3, Mode A (in-app discovery)               | Mode A stays profile discovery. The feed is a **separate, additional in-app surface** ("Mode C: published content"), not consent and not promotion |
+| Section 3, Mode A (in-app discovery)               | Mode A stays profile discovery. The feed is an **additional, separately authorized content capability nested inside the existing customer Community tab** ("Mode C: published content"), not consent and not promotion |
 | Section 4, business announcement contract (future) | NETWORK-01 is the in-app, moderated realization. It does **not** include outbound delivery, which remains BDPN-02 to 04                            |
 | Section 5, roadmap                                 | NETWORK blocks are inserted **after** BDPN-01 (published profiles), never before it                                                                |
 | Section 7, open decisions                          | Unchanged and still open (consent wording, personalization, caps)                                                                                  |
@@ -96,7 +106,7 @@ Interactions with BDPN-01 decisions that this record **depends on or must not we
 
 | ID   | Decision                                              | Options                                                                            | Recommendation                                                                                |
 | ---- | ----------------------------------------------------- | ---------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
-| N-01 | Name of the customer content stream                   | Feed, Updates, Network                                                             | **Feed** (avoid "Community")                                                                  |
+| N-01 | Customer navigation and content name                  | Separate tabs or one Community tab with an internal Feed                           | **Owner-directed: one Community tab; Feed subsection**. Final internal labels remain reviewable |
 | N-02 | Storage shape                                         | One shared content envelope for all domains, or separate storage per domain        | One envelope for customer-visible posts (platform and business); **B2B in separate tables**   |
 | N-03 | Moderation timing for business and official posts     | Pre-moderation (approve before visible) or post-moderation (visible then reviewed) | **Pre-moderation in v1**, consistent with D-14                                                |
 | N-04 | Who may publish for a business                        | Owners and Admins through a new business permission, business-wide only            | **Yes**; mirrors D-02. Branch-scoped users cannot publish                                     |
@@ -112,7 +122,7 @@ Interactions with BDPN-01 decisions that this record **depends on or must not we
 | N-14 | Analytics                                             | None, explicit-action counts, reach                                                | **None in v1** (D-17). Revisit with a privacy review                                          |
 | N-15 | Minimum customer age and eligibility for user content | Unknown                                                                            | **Blocks customer-created content** until decided                                             |
 | N-16 | Language                                              | Per-post content language, no auto-translation                                     | **Per-post `contentLocale`; no auto-translation in v1**                                       |
-| N-17 | Feed name collisions in code and UI                   | Reserve namespaces                                                                 | **Reserve `network` namespace; never `community`**                                            |
+| N-17 | Feed namespace versus customer UI placement           | Separate API/storage names and optionally nested customer UI route                 | **Reserve `network` for API/storage; customer UI may be nested below `/community`**            |
 
 ## 8. What this record does not claim
 
