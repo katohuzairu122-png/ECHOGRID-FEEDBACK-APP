@@ -181,8 +181,8 @@
       "unsupported": "Camera scanning is not available in this browser. Enter the QR token below.",
       "cameraDenied": "The camera could not be opened. Allow camera access, or enter the QR token below.",
       "viewfinder": "Camera view for scanning the customer QR code",
-      "scanField": "Customer QR code (scanner or paste)",
-      "scanFieldHint": "Use a connected scanner, the camera, or paste the code, then press Enter.",
+      "scanField": "Find customer: scan, or enter phone number",
+      "scanFieldHint": "Use a connected scanner or the camera, or type the customer’s phone number with country code (for example +15551234567), then press Enter.",
       "loggedInAs": "You are logged in as",
       "scanHint": "Press “Scan” to scan the customer’s QR code.",
       "scanLarge": "Scan",
@@ -193,7 +193,22 @@
         "branch": "You are not authorized for this location. Choose a location you work at.",
         "invalidQr": "This QR code is expired, already replaced or not recognized. Ask the customer to refresh their QR code.",
         "rateLimited": "Too many attempts. Wait a moment and try again.",
-        "unavailable": "The service is unavailable right now. Nothing was recorded. Try again shortly."
+        "unavailable": "The service is unavailable right now. Nothing was recorded. Try again shortly.",
+        "memberNotFound": "No member found with this phone number. Check the number, or scan the customer’s QR code.",
+        "lookupExpired": "This lookup has expired. Look the customer up again.",
+        "lookupThrottled": "Too many lookups found no member. Wait a few minutes, or scan the customer’s QR code.",
+        "lookupCap": "The limit for purchases entered by phone has been reached. Scan the customer’s QR code instead.",
+        "phoneCountryCode": "Enter the phone number with the country code, for example +15551234567.",
+        "unrecognizedInput": "Scan a QR code or enter a phone number."
+      },
+      "lookup": {
+        "identified": "Identified by phone",
+        "purchaseHeading": "Validate purchase and grant loyalty progress",
+        "amount": "Purchase amount",
+        "confirmPurchase": "Confirm verified purchase",
+        "noPurchase": "Purchases are not available for this membership.",
+        "redemptionNote": "Reward handoff needs the customer’s QR code. Scan it to redeem a reward.",
+        "done": "Action completed. Look the customer up again before another action."
       }
     }
   },
