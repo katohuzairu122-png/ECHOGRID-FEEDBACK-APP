@@ -80,8 +80,8 @@ export class CustomerRefreshTokenRepository extends BaseRepository {
       if (
         !session ||
         session.revokedAt !== null ||
-        input.now >= session.absoluteExpiresAt ||
-        input.now >= session.idleExpiresAt
+        input.now.getTime() >= session.absoluteExpiresAt.getTime() ||
+        input.now.getTime() >= session.idleExpiresAt.getTime()
       ) {
         return { rotated: false } as const;
       }
