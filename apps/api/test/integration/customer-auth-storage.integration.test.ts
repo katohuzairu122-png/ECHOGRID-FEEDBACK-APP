@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { Client } from 'pg';
 import { buildDb } from '../../src/db/client';
 import { createRepositories } from '../../src/repositories';
+import { evaluateLegacyToken } from '../../src/customer-auth/session-policy';
 import {
   generateRefreshCredential,
   hashRefreshCredential,
@@ -24,7 +25,7 @@ describe.skipIf(!process.env.DATABASE_URL)('customer auth storage (integration)'
   let repos2: ReturnType<typeof createRepositories>;
 
   const RUN = Date.now().toString().slice(-8);
-  const PHONES = [`+1555${RUN}1`, `+1555${RUN}2`, `+1555${RUN}3`];
+  const PHONES = [`+1555${RUN}1`, `+1555${RUN}2`, `+1555${RUN}3`, `+1555${RUN}4`, `+1555${RUN}5`];
   const HOUR = 60 * 60 * 1000;
   const DAY = 24 * HOUR;
   const NOW = () => new Date();
@@ -252,6 +253,81 @@ describe.skipIf(!process.env.DATABASE_URL)('customer auth storage (integration)'
         }),
       ).toBe(false);
       expect((await repos.customerCredentials.findByCustomerId(c.id))!.passwordHash).toBe(winner);
+    });
+
+    it('sets the legacy cutoff atomically with first password enrollment and preserves OTP-only accounts', async () => {
+      const c = await newCustomer(3);
+      const firstTime = new Date('2026-11-12T12:00:00.350Z');
+
+      // An OTP-only customer has no credential or cutoff row.
+      expect(await repos.customerCredentials.exists(c.id)).toBe(false);
+      expect(await repos.customerCredentials.advanceLegacyTokenCutoff(c.id, firstTime)).toBe(false);
+      expect(await repos.customerCredentials.exists(c.id)).toBe(false);
+
+      expect(
+        await repos.customerCredentials.create({
+          customerId: c.id,
+          passwordHash: 'test-hash-only',
+          now: firstTime,
+        }),
+      ).toBe(true);
+      const record = (await repos.customerCredentials.findByCustomerId(c.id))!;
+      expect(record.legacyTokensInvalidBefore?.getTime()).toBe(firstTime.getTime());
+
+      // Second-precision legacy JWT iat at the cutoff is deliberately rejected.
+      expect(
+        evaluateLegacyToken({
+          iatSeconds: Math.floor(firstTime.getTime() / 1000),
+          legacyAccepted: true,
+          invalidBefore: record.legacyTokensInvalidBefore,
+        }),
+      ).toMatchObject({ accept: false, reason: 'before_cutoff' });
+      expect(
+        evaluateLegacyToken({
+          iatSeconds: Math.floor(firstTime.getTime() / 1000) + 1,
+          legacyAccepted: true,
+          invalidBefore: record.legacyTokensInvalidBefore,
+        }),
+      ).toEqual({ accept: true });
+    });
+
+    it('keeps legacy cutoff monotonic across password changes and logout-all', async () => {
+      const c = await newCustomer(4);
+      const first = new Date('2026-11-12T13:00:00.500Z');
+      const later = new Date('2026-11-12T13:05:00.600Z');
+      const earlier = new Date('2026-11-12T13:01:00.000Z');
+      const final = new Date('2026-11-12T13:10:00.700Z');
+      await repos.customerCredentials.create({ customerId: c.id, passwordHash: 'first', now: first });
+
+      await repos.customerCredentials.change({
+        customerId: c.id,
+        passwordHash: 'second',
+        now: later,
+      });
+      let record = (await repos.customerCredentials.findByCustomerId(c.id))!;
+      expect(record.legacyTokensInvalidBefore?.getTime()).toBe(later.getTime());
+
+      // A skewed timestamp cannot resurrect a previously invalidated token.
+      await repos.customerCredentials.change({
+        customerId: c.id,
+        passwordHash: 'third',
+        now: earlier,
+      });
+      record = (await repos.customerCredentials.findByCustomerId(c.id))!;
+      expect(record.passwordHash).toBe('third');
+      expect(record.legacyTokensInvalidBefore?.getTime()).toBe(later.getTime());
+
+      expect(await repos.customerCredentials.advanceLegacyTokenCutoff(c.id, final)).toBe(true);
+      expect(await repos.customerCredentials.advanceLegacyTokenCutoff(c.id, first)).toBe(true);
+      record = (await repos.customerCredentials.findByCustomerId(c.id))!;
+      expect(record.legacyTokensInvalidBefore?.getTime()).toBe(final.getTime());
+
+      // No per-customer data may be changed using an unrelated customer ID.
+      const other = await repos.customers.findByPhone(PHONES[3]!);
+      expect(await repos.customerCredentials.advanceLegacyTokenCutoff(other!.id, final)).toBe(true);
+      expect(
+        (await repos.customerCredentials.findByCustomerId(c.id))!.legacyTokensInvalidBefore?.getTime(),
+      ).toBe(final.getTime());
     });
 
     it('changes the hash and records verification; reports false when there is no credential', async () => {
