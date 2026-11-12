@@ -1,6 +1,7 @@
 'use server';
 
 import { redirect } from 'next/navigation';
+import { safeInternalPath } from '@/lib/safe-redirect';
 import type { CustomerAuthResponse } from '@echo-grid-feedback/shared-types';
 import { publicApiFetch } from '@/lib/public-api-client';
 import { ApiError } from '@/lib/api-client';
@@ -65,9 +66,7 @@ export async function verifyOtpAction(
   const phone = (await getPendingCustomerPhone()) ?? '';
   const code = String(formData.get('code') ?? '').trim();
   const requestedNext = String(formData.get('next') ?? '/loyalty/dashboard');
-  const next = requestedNext.startsWith('/') && !requestedNext.startsWith('//')
-    ? requestedNext
-    : '/loyalty/dashboard';
+  const next = safeInternalPath(requestedNext, '/loyalty/dashboard');
 
   let result: CustomerAuthResponse;
   try {

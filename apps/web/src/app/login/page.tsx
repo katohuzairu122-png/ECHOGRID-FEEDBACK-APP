@@ -1,6 +1,7 @@
 'use client';
 
 import { useActionState, useEffect, useRef, useState } from 'react';
+import { safeInternalPath } from '@/lib/safe-redirect';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import { loginAction, type AuthActionState } from '@/lib/actions/auth';
@@ -15,7 +16,7 @@ export default function LoginPage() {
   const [next, setNext] = useState('/dashboard');
   useEffect(() => {
     const requested = new URLSearchParams(window.location.search).get('next');
-    if (requested?.startsWith('/') && !requested.startsWith('//')) setNext(requested);
+    setNext(safeInternalPath(requested, '/dashboard'));
   }, []);
   const [state, formAction, pending] = useActionState(loginAction, initialState);
   const [showPassword, setShowPassword] = useState(false);

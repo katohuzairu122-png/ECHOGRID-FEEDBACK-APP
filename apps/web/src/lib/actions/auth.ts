@@ -1,6 +1,7 @@
 'use server';
 
 import { redirect } from 'next/navigation';
+import { safeInternalPath } from '@/lib/safe-redirect';
 import { setSession, getRefreshTokenForLogout, clearSession } from '@/lib/session';
 import { API_BASE_URL, apiFetch, ApiError } from '@/lib/api-client';
 
@@ -64,9 +65,7 @@ export async function loginAction(
   const email = String(formData.get('email') ?? '');
   const password = String(formData.get('password') ?? '');
   const requestedNext = String(formData.get('next') ?? '/dashboard');
-  const next = requestedNext.startsWith('/') && !requestedNext.startsWith('//')
-    ? requestedNext
-    : '/dashboard';
+  const next = safeInternalPath(requestedNext, '/dashboard');
 
   let result: AuthActionState;
   try {
@@ -88,9 +87,7 @@ export async function signupAction(
   const fullName = String(formData.get('fullName') ?? '');
   const acceptTerms = formData.get('acceptTerms') === 'on';
   const requestedNext = String(formData.get('next') ?? '/dashboard');
-  const next = requestedNext.startsWith('/') && !requestedNext.startsWith('//')
-    ? requestedNext
-    : '/dashboard';
+  const next = safeInternalPath(requestedNext, '/dashboard');
 
   // Server Actions are public HTTP endpoints, so the browser's required
   // checkbox is reinforced here before an account can be created.

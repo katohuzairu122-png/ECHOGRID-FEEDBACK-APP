@@ -1,6 +1,7 @@
 'use client';
 
 import { useActionState, useEffect, useState } from 'react';
+import { safeInternalPath } from '@/lib/safe-redirect';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import { signupAction, type AuthActionState } from '@/lib/actions/auth';
@@ -13,7 +14,7 @@ export default function SignupPage() {
   const [next, setNext] = useState('/dashboard');
   useEffect(() => {
     const requested = new URLSearchParams(window.location.search).get('next');
-    if (requested?.startsWith('/') && !requested.startsWith('//')) setNext(requested);
+    setNext(safeInternalPath(requested, '/dashboard'));
   }, []);
   const [state, formAction, pending] = useActionState(signupAction, initialState);
   // i18n & Multi-Currency Block 4 -- see login/page.tsx's identical note on

@@ -70,3 +70,24 @@ describe('loyalty OTP verification route', () => {
     expect(response.cookies.get(CUSTOMER_TOKEN_COOKIE)).toBeUndefined();
   });
 });
+
+describe('loyalty OTP verification route: open-redirect guard', () => {
+  beforeEach(() => vi.resetAllMocks());
+
+  it.each(['/\\evil.test/phish', '//evil.test', 'https://evil.test', '/%5Cevil.test', 'javascript:alert(1)'])(
+    'never redirects off-origin for next=%j',
+    async (hostile) => {
+      vi.mocked(publicApiFetch).mockResolvedValue({ accessToken: 'customer-token' });
+      const response = await POST(request({ code: '123456', next: hostile }));
+      expect(response.status).toBe(303);
+      expect(response.headers.get('location')).toBe('https://echo-grid.uk/loyalty/dashboard');
+    },
+  );
+
+  it('does not echo a hostile next into the error redirect', async () => {
+    const response = await POST(request({ code: '', next: '/\\evil.test' }));
+    const target = new URL(response.headers.get('location')!);
+    expect(target.origin).toBe('https://echo-grid.uk');
+    expect(target.searchParams.get('next')).toBe('/loyalty/dashboard');
+  });
+});
