@@ -203,7 +203,7 @@
   },
   "customer": {
     "shell": {
-      "brand": "مكافآتي",
+      "brand": "ولائي",
       "logout": "تسجيل الخروج"
     },
     "login": {
@@ -218,13 +218,6 @@
       "verifying": "جارٍ التحقق…",
       "verify": "تحقق"
     },
-    "myRewards": {
-      "title": "مكافآتي",
-      "emptyTitle": "لا توجد بطاقات ولاء بعد",
-      "emptyDescription": "امسح رمز QR الخاص بالنشاط التجاري وسجّل الوصول لبدء كسب النقاط.",
-      "visits": "{count, plural, zero {لا زيارات} one {زيارة واحدة} two {زيارتان} few {# زيارات} many {# زيارة} other {# زيارة}}",
-      "businessFallback": "النشاط التجاري"
-    },
     "businessDashboard": {
       "messages": "الرسائل",
       "notificationPreferences": "تفضيلات الإشعارات ←",
@@ -232,7 +225,8 @@
       "progressToNextTier": "متبقي {remaining} نقطة للوصول إلى {tierName}",
       "topTierReached": "تم الوصول إلى أعلى مستوى",
       "rewardsHeading": "المكافآت",
-      "recentActivityHeading": "النشاط الأخير"
+      "recentActivityHeading": "النشاط الأخير",
+      "backToWallet": "← برامج ولائي"
     },
     "rewardCard": {
       "points": "{points} نقطة",
@@ -383,6 +377,28 @@
         }
       },
       "surveyFallback": "استطلاع"
+    },
+    "wallet": {
+      "title": "برامج ولائي",
+      "intro": "حساب واحد لكل برامج الولاء التي انضممت إليها. يحتفظ كل نشاط بعضويته ونقاطه ومكافآته الخاصة.",
+      "actionsLabel": "إجراءات سريعة",
+      "showQr": "عرض رمز QR الخاص بي",
+      "settlements": "التسويات اليتيمة",
+      "count": "{count, plural, one {# نشاط} two {# نشاطان} few {# أنشطة} many {# نشاطاً} other {# نشاط}}",
+      "openBusiness": "فتح {name}: المكافآت والنشاط",
+      "businessFallback": "نشاط تجاري",
+      "paused": "متوقف مؤقتاً",
+      "visits": "{count, plural, one {# زيارة} two {زيارتان} few {# زيارات} many {# زيارة} other {# زيارة}}",
+      "lastVisit": "آخر زيارة {date}",
+      "noVisitsYet": "لا توجد زيارات بعد",
+      "viewDetails": "عرض المكافآت والنشاط",
+      "points": "{points, number} نقطة",
+      "separateNote": "النقاط والمكافآت تخص كل نشاط تجاري ولا تُجمع معاً أبداً.",
+      "emptyTitle": "لم تنضم إلى أي برنامج ولاء بعد",
+      "emptyDescription": "للانضمام، امسح رمز QR الذي يعرضه نشاط مشارك عند الكاونتر. ستظهر عضوياتك هنا.",
+      "unavailableTitle": "تعذر تحميل برامج ولائك حالياً",
+      "unavailableBody": "هذا مؤقت ولم يتغير شيء في عضوياتك. يرجى المحاولة مرة أخرى بعد قليل.",
+      "retry": "إعادة المحاولة"
     }
   }
 }

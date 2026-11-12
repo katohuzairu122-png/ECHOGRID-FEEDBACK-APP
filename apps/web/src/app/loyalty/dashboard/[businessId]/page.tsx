@@ -67,20 +67,28 @@ export default async function LoyaltyBusinessPage({ params }: LoyaltyBusinessPag
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-center justify-end gap-4">
+      <div className="flex items-center justify-between gap-4">
         <Link
-          href={`/loyalty/dashboard/${businessId}/messages`}
-          className="flex items-center gap-1.5 text-sm font-medium text-brand-700 hover:underline"
-        >
-          {t('messages')}
-          {unreadMessageCount > 0 && <Badge variant="accent">{unreadMessageCount}</Badge>}
-        </Link>
-        <Link
-          href={`/loyalty/dashboard/${businessId}/notifications`}
+          href="/loyalty/dashboard"
           className="text-sm font-medium text-brand-700 hover:underline"
         >
-          {t('notificationPreferences')}
+          {t('backToWallet')}
         </Link>
+        <div className="flex items-center gap-4">
+          <Link
+            href={`/loyalty/dashboard/${businessId}/messages`}
+            className="flex items-center gap-1.5 text-sm font-medium text-brand-700 hover:underline"
+          >
+            {t('messages')}
+            {unreadMessageCount > 0 && <Badge variant="accent">{unreadMessageCount}</Badge>}
+          </Link>
+          <Link
+            href={`/loyalty/dashboard/${businessId}/notifications`}
+            className="text-sm font-medium text-brand-700 hover:underline"
+          >
+            {t('notificationPreferences')}
+          </Link>
+        </div>
       </div>
 
       <Card>

@@ -203,7 +203,7 @@
   },
   "customer": {
     "shell": {
-      "brand": "My Rewards",
+      "brand": "My loyalties",
       "logout": "Log out"
     },
     "login": {
@@ -218,13 +218,6 @@
       "verifying": "Verifying…",
       "verify": "Verify"
     },
-    "myRewards": {
-      "title": "My Rewards",
-      "emptyTitle": "No loyalty cards yet",
-      "emptyDescription": "Scan a business's QR code and check in to start earning points.",
-      "visits": "{count, plural, one {# visit} other {# visits}}",
-      "businessFallback": "Business"
-    },
     "businessDashboard": {
       "messages": "Messages",
       "notificationPreferences": "Notification preferences →",
@@ -232,7 +225,8 @@
       "progressToNextTier": "{remaining} pts to {tierName}",
       "topTierReached": "Top tier reached",
       "rewardsHeading": "Rewards",
-      "recentActivityHeading": "Recent activity"
+      "recentActivityHeading": "Recent activity",
+      "backToWallet": "← My loyalties"
     },
     "rewardCard": {
       "points": "{points} pts",
@@ -383,6 +377,28 @@
         }
       },
       "surveyFallback": "Survey"
+    },
+    "wallet": {
+      "title": "My loyalties",
+      "intro": "One account for every loyalty program you have joined. Each business keeps its own membership, points and rewards.",
+      "actionsLabel": "Quick actions",
+      "showQr": "Show my customer QR",
+      "settlements": "Orphan settlements",
+      "count": "{count, plural, one {# business} other {# businesses}}",
+      "openBusiness": "Open {name}: rewards and activity",
+      "businessFallback": "Business",
+      "paused": "Paused",
+      "visits": "{count, plural, one {# visit} other {# visits}}",
+      "lastVisit": "Last visit {date}",
+      "noVisitsYet": "No visits yet",
+      "viewDetails": "View rewards and activity",
+      "points": "{points, number} pts",
+      "separateNote": "Points and rewards belong to each business and are never combined.",
+      "emptyTitle": "You haven’t joined a loyalty program yet",
+      "emptyDescription": "To join, scan the QR code a participating business shows at its counter. Your memberships will appear here.",
+      "unavailableTitle": "We can’t load your loyalties right now",
+      "unavailableBody": "This is temporary and nothing has changed on your memberships. Please try again in a moment.",
+      "retry": "Try again"
     }
   }
 }
