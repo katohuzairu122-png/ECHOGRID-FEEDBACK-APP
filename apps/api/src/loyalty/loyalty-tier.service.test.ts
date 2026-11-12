@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { LoyaltyTierService } from './loyalty-tier.service';
 import type { LoyaltyTier, NewLoyaltyTier } from '../repositories/loyalty-tier.repository';
 
@@ -67,6 +67,68 @@ describe('LoyaltyTierService', () => {
   it('create defaults sortOrder to 0 when not given', async () => {
     const tier = await service.create(BUSINESS_A, { name: 'Silver', minPoints: 100 }, ACTOR);
     expect(tier.sortOrder).toBe(0);
+  });
+
+  it('returns 409 for a wrapped postgres.js duplicate tier-name constraint on create', async () => {
+    const driverError = Object.assign(new Error('unique violation'), {
+      code: '23505',
+      constraint_name: 'loyalty_tiers_business_name_key',
+    });
+    vi.spyOn(repos.loyaltyTiers, 'create').mockRejectedValueOnce(
+      Object.assign(new Error('Drizzle query failed'), { cause: driverError }),
+    );
+
+    await expect(service.create(BUSINESS_A, { name: 'Gold', minPoints: 100 }, ACTOR)).rejects.toMatchObject({
+      status: 409,
+      code: 'LOYALTY_TIER_ALREADY_EXISTS',
+      message: 'A loyalty tier with this name already exists.',
+    });
+  });
+
+  it('returns 409 for a pg-style duplicate tier-name constraint on update', async () => {
+    const tier = await service.create(BUSINESS_A, { name: 'Silver', minPoints: 100 }, ACTOR);
+    vi.spyOn(repos.loyaltyTiers, 'update').mockRejectedValueOnce(
+      Object.assign(new Error('unique violation'), {
+        code: '23505',
+        constraint: 'loyalty_tiers_business_name_key',
+      }),
+    );
+
+    await expect(service.update(tier.id, BUSINESS_A, { name: 'Gold' }, ACTOR)).rejects.toMatchObject({
+      status: 409,
+      code: 'LOYALTY_TIER_ALREADY_EXISTS',
+    });
+  });
+
+  it('does not reinterpret a different unique constraint as a tier-name conflict', async () => {
+    const differentConstraint = Object.assign(new Error('different unique violation'), {
+      code: '23505',
+      constraint_name: 'some_other_unique_key',
+    });
+    vi.spyOn(repos.loyaltyTiers, 'create').mockRejectedValueOnce(differentConstraint);
+
+    await expect(service.create(BUSINESS_A, { name: 'Gold', minPoints: 100 }, ACTOR)).rejects.toBe(
+      differentConstraint,
+    );
+  });
+
+  it('does not infer a tier-name conflict from a message without matching SQLSTATE', async () => {
+    const unrelated = Object.assign(new Error('loyalty_tiers_business_name_key'), {
+      code: '23503',
+      constraint_name: 'loyalty_tiers_business_name_key',
+    });
+    vi.spyOn(repos.loyaltyTiers, 'create').mockRejectedValueOnce(unrelated);
+
+    await expect(service.create(BUSINESS_A, { name: 'Gold', minPoints: 100 }, ACTOR)).rejects.toBe(
+      unrelated,
+    );
+  });
+
+  it('keeps not-found update errors as 404, not duplicate-name conflicts', async () => {
+    await expect(service.update('nonexistent', BUSINESS_A, { name: 'Gold' }, ACTOR)).rejects.toMatchObject({
+      status: 404,
+      code: 'LOYALTY_TIER_NOT_FOUND',
+    });
   });
 
   it('list returns tiers sorted by sortOrder, scoped to one business', async () => {
