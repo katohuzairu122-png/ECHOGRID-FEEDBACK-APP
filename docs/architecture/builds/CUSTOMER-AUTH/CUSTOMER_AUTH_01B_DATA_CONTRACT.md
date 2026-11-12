@@ -90,8 +90,11 @@ One password credential per customer. Absence of a row means "no password yet" (
 | `password_set_at`                        | timestamptz, not null                             | First time a password was set                                                               |
 | `password_changed_at`                    | timestamptz, not null                             | Latest change. Used by step-up and by session revocation logic                              |
 | `last_verified_at`                       | timestamptz, null                                 | Last successful password check, for the "recent verification" step-up window                |
+| `legacy_tokens_invalid_before`           | timestamptz, null (MG-02 **proposed**)            | Reject older legacy JWTs after password enrollment, recovery or logout-all                  |
 | `failed_attempt_count`, `last_failed_at` | integer and timestamptz, optional                 | **Decision D-B3.** Only if progressive delay needs durable state. The limiter may be enough |
 | `created_at`, `updated_at`               | timestamptz                                       | Standard timestamps. No `created_by`, because the customer is the actor                     |
+
+**01B-AMEND-1 (MG-02; proposed, not approved):** `legacy_tokens_invalid_before` is needed to invalidate existing 90-day customer JWTs issued before password enrollment or reset. The security service must set the cutoff transactionally with password enrollment, change, recovery and logout-all; verified legacy access-token `iat` values at or before this timestamp must fail closed. Existing customers without a credential remain on the compatible OTP path. Draft migration `0068_customer_auth_sessions.sql` in PR #387 **does not contain this column**. It must be corrected and independently verified before any migration is merged or applied. No live token is affected by this documentation.
 
 Rules: the hash is never returned by any API or repository read model. A password change sets `password_changed_at` and triggers revocation of other sessions (invariant I6). A history of old hashes is **not** stored, because current guidance does not require it and it enlarges what a leak exposes. If the owner wants reuse prevention, that is a new decision.
 
@@ -182,12 +185,14 @@ Session:   (none) ──create──► LIVE ──refresh──► LIVE (idle w
 
 Refresh token:  ISSUED ──exchange──► ROTATED (rotated_at set, successor issued)
                   │                      │
-                  │                      └─ presented again inside grace ──► same successor (no new row)
+                  │                      └─ presented again inside grace ──► retryable 409; no new row, no revocation
                   │                      └─ presented again after grace ───► REPLAY ─► session REVOKED
                   └─ session revoked / expiry ─────────────────────────────► DEAD
 
 Credential:  ABSENT ──set after verified OTP──► PRESENT ──change──► PRESENT (all other sessions revoked)
 ```
+
+**Refresh-concurrency correction (proposed):** Only successor **hashes** are retained; the service cannot reissue the same raw successor to a losing concurrent refresh. It must return a retryable conflict (HTTP 409, no credential) within the grace window, without revocation. Replay **outside** the grace window revokes the compromised session and its refresh chain under I4, not every unrelated session. Password change, recovery and explicit logout-all retain their separate multi-session revocation under I6. This reconciles the 01D-1 policy with the proposed storage model, subject to owner review and a real service-layer concurrency test.
 
 Expiry is evaluated from timestamps at read time. A cleanup job only **removes** long-dead rows (section 10). Correctness never depends on the cleanup having run.
 
@@ -242,7 +247,7 @@ The keyed hash for `subject_key` needs a server secret (a new secret, separate f
 
 One additive migration, name provisional, for example `0068_customer_auth_sessions`:
 
-1. Create `customer_credentials`, `customer_sessions`, `customer_refresh_tokens`, `customer_auth_events` with their constraints and indexes.
+1. Create `customer_credentials`, `customer_sessions`, `customer_refresh_tokens`, `customer_auth_events` with their constraints and indexes. **Before approval**, incorporate the proposed per-customer `legacy_tokens_invalid_before` cutoff in the same additive migration (MG-02) and regenerate the Drizzle snapshot.
 2. **No change** to `customers`, `otp_codes`, `otp_request_cooldowns` or any existing table.
 3. **No data backfill.** New tables start empty, so existing customers are untouched.
 
@@ -261,7 +266,7 @@ A second migration is **not** expected. If the owner chooses R2 email recovery (
 ### 11.3 Sequencing (important)
 
 1. `0067` (customer preferred locale) is **pending in production and staging**. It must be applied and verified first.
-2. **BDPN also proposes migration 68.** Both cannot be 68. Whichever lands second takes the next number, and the journal pin moves again in its own PR. The roadmap says no two schema or authorization changes should land together, so the owner must set the order.
+2. **D-B9 proposed order, not owner-approved:** after `0067` is applied and verified in each target environment, independently certify customer-authentication `0068` development (flag OFF). BDPN would take the **next free migration number** (currently `0069`) after refetching main. BDPN may not reuse `0068`; re-pin Gate 2 in each owning PR. If the owner instead prioritizes BDPN, re-number customer-auth before it merges. Never apply `0067` and `0068` as an unreviewed combined live step.
 3. D-C1 rollout is independent and must not be blocked or reordered by this work.
 4. No migration is authorized by this document. Each environment needs its own authorized sequence, as the BDPN plan describes for `0067`.
 
@@ -275,26 +280,27 @@ The migration is additive and the new tables are empty until the feature is swit
 
 CA items are from the roadmap. D-B items are new in this block.
 
-| ID    | Question                                                                  | Default used here (PROPOSED)                     | Needed before        |
-| ----- | ------------------------------------------------------------------------- | ------------------------------------------------ | -------------------- |
-| CA-01 | Confirm reuse of the PBKDF2 implementation with separate customer storage | Yes                                              | 01D                  |
-| CA-02 | Access and refresh lifetimes, idle and absolute limits                    | 15 min access, 30 day absolute, idle limit open  | 01D                  |
-| CA-04 | Recovery option. Only R1 needs **no** new storage                         | R1, with opt-in R2 later                         | 01C, 01D             |
-| CA-08 | Whether and where notice acceptance is stored                             | Not stored in these tables (D-B6)                | 01D                  |
-| D-B1  | Store IP-derived data on sessions and events at all, and how coarse       | Coarse hint or none                              | 01D                  |
-| D-B2  | Retention for dead sessions and for events                                | Owner and legal input needed. No number proposed | 01D                  |
-| D-B3  | Durable failed-attempt counters on the credential row                     | Limiter only, no counters                        | 01D                  |
-| D-B4  | Record unknown-phone attempts as keyed hashes                             | Yes, with a new secret                           | 01D                  |
-| D-B5  | Database trigger to enforce append-only events                            | Service-level only, trigger optional             | 01D                  |
-| D-B7  | Add row-level security on the new tables                                  | Not required, defense in depth                   | 01D                  |
-| D-B8  | Maximum concurrent sessions per customer, and behavior at the cap         | Cap and evict oldest, value needed               | 01D                  |
-| D-B9  | Migration order against the BDPN migration and the `0067` rollout         | `0067` first, then the owner picks BDPN or auth  | Before any migration |
+| ID    | Question                                                                  | Default used here (PROPOSED)                                                          | Needed before        |
+| ----- | ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- | -------------------- |
+| CA-01 | Confirm reuse of the PBKDF2 implementation with separate customer storage | Yes                                                                                   | 01D                  |
+| CA-02 | Access and refresh lifetimes, idle and absolute limits                    | 15 min access, 30 day absolute, idle limit open                                       | 01D                  |
+| CA-04 | Recovery option. Only R1 needs **no** new storage                         | R1, with opt-in R2 later                                                              | 01C, 01D             |
+| CA-08 | Whether and where notice acceptance is stored                             | Not stored in these tables (D-B6)                                                     | 01D                  |
+| D-B1  | Store IP-derived data on sessions and events at all, and how coarse       | Coarse hint or none                                                                   | 01D                  |
+| D-B2  | Retention for dead sessions and for events                                | Owner and legal input needed. No number proposed                                      | 01D                  |
+| D-B3  | Durable failed-attempt counters on the credential row                     | Limiter only, no counters                                                             | 01D                  |
+| D-B4  | Record unknown-phone attempts as keyed hashes                             | Yes, with a new secret                                                                | 01D                  |
+| D-B5  | Database trigger to enforce append-only events                            | Service-level only, trigger optional                                                  | 01D                  |
+| D-B7  | Add row-level security on the new tables                                  | Not required, defense in depth                                                        | 01D                  |
+| D-B8  | Maximum concurrent sessions per customer, and behavior at the cap         | Cap and evict oldest, value needed                                                    | 01D                  |
+| D-B9  | Migration order against BDPN and the `0067` rollout                       | `0067`, auth `0068` (OFF), then BDPN next free slot; **approval pending**             | Before any migration |
+| MG-02 | Add the per-customer cutoff for legacy token invalidation                 | Yes: `legacy_tokens_invalid_before` in unapplied auth migration; **approval pending** | Before 01D-2 merge   |
 
 ---
 
 ## 13. Interface 01C and 01D must respect
 
-**For 01C (existing-customer migration).** No backfill is needed. A credential row is created only after a verified OTP and an explicit password choice. A customer without a credential row keeps working exactly as today. Creation must be safe to repeat: the credential primary key makes a second attempt a no-op or an update, never a duplicate identity. No existing token is invalidated by the migration. Legacy tokens have no session row, so their use is counted through `legacy_token_used` events.
+**For 01C (existing-customer migration).** The 01C document from stacked PR #384 was missing from `main` at the reconciliation baseline and is being restored separately, documentation-only. No backfill is needed. A credential row is created only after a verified OTP and an explicit password choice. A customer without a credential row keeps working exactly as today. Creation must be safe to repeat: the credential primary key makes a second attempt a no-op or an update, never a duplicate identity. No existing token is invalidated by the migration. Legacy tokens have no session row, so their use is counted through `legacy_token_used` events. Once a customer has established a credential, legacy-token acceptance also requires the proposed cutoff check (MG-02); without a cutoff, password enrollment must not be activated.
 
 **For 01D (API), repository operations the contract requires** (names are descriptive, not code):
 
