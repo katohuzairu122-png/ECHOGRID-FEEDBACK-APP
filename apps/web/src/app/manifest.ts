@@ -4,7 +4,7 @@ export default function manifest(): MetadataRoute.Manifest {
   return {
     name: 'Echo Grid',
     short_name: 'Echo Grid',
-    description: 'Every Voice Drives Better Decisions.',
+    description: 'One account. All your loyalties.',
     start_url: '/',
     scope: '/',
     theme_color: '#10b981',

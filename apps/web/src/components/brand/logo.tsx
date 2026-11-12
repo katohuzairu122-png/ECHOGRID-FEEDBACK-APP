@@ -101,7 +101,7 @@ export interface LogoProps {
   iconSize?: number | undefined;
 }
 
-const TAGLINE = 'Every Voice Drives Better Decisions.';
+const TAGLINE = 'One account. All your loyalties.';
 
 export function Logo({ variant = 'horizontal', className, iconSize = 32 }: LogoProps) {
   if (variant === 'icon') {

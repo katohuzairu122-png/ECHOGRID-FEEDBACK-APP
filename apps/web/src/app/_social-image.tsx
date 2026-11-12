@@ -45,7 +45,7 @@ export function socialImageContent() {
         <span style={{ color: '#ffffff' }}>Echo</span>
         <span style={{ color: '#34d399', marginLeft: 20 }}>Grid</span>
       </div>
-      <div style={{ display: 'flex', fontSize: 28, color: '#cbd5e1' }}>Every Voice Drives Better Decisions.</div>
+      <div style={{ display: 'flex', fontSize: 28, color: '#cbd5e1' }}>One account. All your loyalties.</div>
       <div style={{ display: 'flex', fontSize: 20, color: '#94a3b8' }}>An INFINICUS Company</div>
     </div>
   );
