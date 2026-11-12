@@ -2,7 +2,6 @@
 
 import { useActionState, useRef } from 'react';
 import { useTranslations } from 'next-intl';
-import Link from 'next/link';
 import { QrCameraScanner } from '@/components/qr-camera-scanner';
 import { staffUnifiedQrAction, type StaffQrState } from '@/lib/actions/unified-qr';
 import { Button, Input, Label } from '@/components/ui';
@@ -16,6 +15,7 @@ export function StaffQrMenu({
   const t = useTranslations('loyalty.staff.serve');
   const formRef = useRef<HTMLFormElement>(null);
   const tokenRef = useRef<HTMLInputElement>(null);
+  const manualLookupRef = useRef<HTMLDetailsElement>(null);
   return (
     <div className="space-y-5 [&_button]:h-auto [&_button]:min-h-10 [&_button]:max-w-full [&_button]:whitespace-normal [&_button]:py-2">
       <QrCameraScanner
@@ -25,13 +25,20 @@ export function StaffQrMenu({
           formRef.current?.requestSubmit();
         }}
       />
-      <Link
-        href="/dashboard/loyalty"
+      {/* Customer lookup stays in the verified, business-scoped QR service flow.
+          The general loyalty account list is an administrative destination. */}
+      <button
+        type="button"
         className="flex min-h-12 w-full items-center justify-center rounded-md border border-neutral-300 px-4 text-base font-medium"
+        aria-controls="cashier-manual-lookup"
+        onClick={() => {
+          if (manualLookupRef.current) manualLookupRef.current.open = true;
+          tokenRef.current?.focus();
+        }}
       >
         {t('search')}
-      </Link>
-      <details open={Boolean(state.token || state.error)}>
+      </button>
+      <details id="cashier-manual-lookup" ref={manualLookupRef} open={Boolean(state.token || state.error)}>
         <summary className="cursor-pointer text-sm">{t('manual')}</summary>
         <form ref={formRef} action={action} className="mt-3 space-y-3">
           <input type="hidden" name="operation" value="resolve" />
