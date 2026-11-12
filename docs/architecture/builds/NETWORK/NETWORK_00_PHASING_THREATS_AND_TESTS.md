@@ -10,7 +10,7 @@ Nothing here authorizes a block, a migration, a release or any public claim.
 | 0           | Phase 1 public copy                             | Done (merged)                                                                   | Positioning only; no network claim                                                                                 |
 | 1           | BDPN-01 (A to E, designs done)                  | Owner answers, D-16, D-24                                                       | Published business profiles and discovery. **Prerequisite for every NETWORK block**                                |
 | 2           | **NETWORK-01** Official and business publishing | BDPN-01 live in at least staging, content policy for posts, two reviewers named | Posts, revisions, moderation, reports, audit. No customer-facing feed beyond what is needed to prove it internally |
-| 3           | **NETWORK-02** Feed read model and Follow       | NETWORK-01                                                                      | Signed-in feed (deterministic, no-store), follows (count at most), "Following" filter                              |
+| 3           | **NETWORK-02** Feed read model and Follow       | NETWORK-01                                                                      | Signed-in Feed nested in the existing Community tab (deterministic, no-store), follows (count at most), "Following" filter; no second primary tab                              |
 | 4           | **NETWORK-03** Customer engagement              | Conditions in the moderation companion, section 7                               | Customer posts and reactions, only if gated conditions are met                                                     |
 | 5           | **NETWORK-04** Business Network (B2B)           | A Split 09 specification (not yet written)                                      | Separate tables, separate permissions, no feed exposure                                                            |
 | 6           | **NETWORK-05** Commercial                       | D-24, billing authority, legal review                                           | Subscription gates, sponsored placement, analytics: separate approvals                                             |
@@ -62,10 +62,10 @@ Differences from the earlier proposals: certification is per block, not one fina
 | Service                    | Every legal and illegal transition; idempotency; version conflict; separation of duties                                                                                                                                                         |
 | API (real routers)         | Permission matrix for each actor (business owner, business staff, branch-scoped, moderator, impersonator, customer, suspended customer, anonymous); uniform not-found; no-store headers; rate limits per customer                               |
 | DB (disposable PostgreSQL) | Triggers and constraints fire for a direct SQL session; composite foreign keys; reviewer differs from submitter; immutability; cascade on customer deletion for follows                                                                         |
-| Browser                    | Feed states (list, empty, no match, unavailable, not enabled); report flow; follow and unfollow; Arabic layout at 390 and 1280 px; keyboard path; contrast                                                                                      |
+| Browser                    | One Community top-level tab, Feed and Points & Membership internal navigation; Feed states (list, empty, no match, unavailable, not enabled); report flow; follow and unfollow; Arabic layout at 390 and 1280 px; keyboard path; contrast                                                                                      |
 | Non-effects                | Row counts of memberships, loyalty accounts and transactions, Community Points tables, consent grants, notifications and messages **identical** before and after a feed session; only the expected `GET` calls and follow writes on the network |
 | Disabled mode              | Flag off: routes answer not enabled; entry points hidden                                                                                                                                                                                        |
-| Existing behaviour         | Community hub, Surveys, loyalty, cashier workspace unchanged                                                                                                                                                                                    |
+| Existing behaviour         | Existing Community hub URL, membership and points remain accessible when Feed disabled, empty or in error; Surveys, loyalty and cashier workspace unchanged                                                                                                                                                                                    |
 | Claims                     | A guard test that public copy contains no network claim before release                                                                                                                                                                          |
 
 ## 5. Privacy and data-protection checklist (before NETWORK-02)
@@ -93,7 +93,16 @@ Differences from the earlier proposals: certification is per block, not one fina
 | Scope creep into a social product                  | v1 is text-first, no media, no comments; each addition is its own gated block                   |
 | Privacy pressure from business growth incentives   | Count-only follows; no audiences; no exports; consent contract separate                         |
 | Commercial uncertainty                             | Validate merchant demand before any advertising product; D-24 first                             |
-| Name and concept confusion (Community versus Feed) | Reserve namespaces; consistent copy                                                             |
+| Name and concept confusion (Community versus Feed) | One customer Community tab with Feed subsection; reserve `network` for APIs and storage; separate points and Feed domain contracts                                                             |
+
+### Customer integrated navigation acceptance
+
+1. Only one top-level customer `Community` navigation destination exists in desktop and mobile views.
+2. Existing `/loyalty/dashboard/community` visits, bookmarks and links continue to show functional membership and Community Points, with no change to points ledgers.
+3. After separate NETWORK-02 approval and activation, the Feed is accessible *within* Community, with stable internal navigation back to Points & Membership.
+4. With the Feed flag off or its API unavailable, Community Points and membership remain accessible and there is no second Feed primary tab.
+5. Feed reads and follows never create or alter memberships, points, consent grants, messaging or financial records; customer and business denial tests remain mandatory.
+6. Localizations include English, French, Spanish and Arabic RTL; responsive and keyboard-accessible internal navigation must be verified.
 
 ## 8. Success measures (targets set after a pilot)
 
