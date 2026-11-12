@@ -235,6 +235,9 @@ export interface Bindings {
    * every successful call is a real Anthropic API charge, unlike a free
    * feedback submission or a rate-limited retry against it. */
   FOLLOWUP_QUESTION_RATE_LIMITER: RateLimit;
+  /** Guards POST /loyalty/actions/lookup-customer (cashier phone lookup). Keyed by business and staff user so one
+   * cashier cannot exhaust another's budget; deliberately small because every call probes the member list. */
+  LOOKUP_RATE_LIMITER: RateLimit;
 }
 
 const environmentSchema = z.enum(['development', 'staging', 'production']);

@@ -1,4 +1,4 @@
-import { eq, and, gte, lte } from 'drizzle-orm';
+import { eq, and, gte, lte, count } from 'drizzle-orm';
 import { auditLog } from '../db/schema';
 import { BaseRepository } from './base.repository';
 
@@ -26,6 +26,20 @@ export class AuditLogRepository extends BaseRepository {
    * describing, since the entry is written after the real work is done. */
   async record(entry: NewAuditLogEntry): Promise<void> {
     await this.db.insert(auditLog).values(entry);
+  }
+
+  /** Rows of one action since a time, optionally for one business and one actor. Used for rolling limits. */
+  async countSince(input: {
+    action: string;
+    since: Date;
+    businessId?: string;
+    actorUserId?: string;
+  }): Promise<number> {
+    const conditions = [eq(auditLog.action, input.action), gte(auditLog.createdAt, input.since)];
+    if (input.businessId) conditions.push(eq(auditLog.businessId, input.businessId));
+    if (input.actorUserId) conditions.push(eq(auditLog.actorUserId, input.actorUserId));
+    const [row] = await this.db.select({ value: count() }).from(auditLog).where(and(...conditions));
+    return Number(row?.value ?? 0);
   }
 
   async listForBusiness(

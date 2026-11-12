@@ -78,6 +78,14 @@ export function StaffQrMenu({
             : state.error}
         </p>
       )}
+      {!pending && state.lookup && state.businessId && (
+        <LookupMenu
+          key={`${state.lookup.lookupToken}:${state.businessId}:${state.branchId}`}
+          state={state}
+          action={action}
+          pending={pending}
+        />
+      )}
       {!pending && state.result && state.businessId && (
         <ResolvedMenu
           key={`${state.token}:${state.businessId}:${state.branchId}`}
@@ -183,5 +191,58 @@ function QrContextFields({ state }: { state: StaffQrState }) {
       <input type="hidden" name="businessId" value={state.businessId ?? ''} />
       <input type="hidden" name="branchId" value={state.branchId ?? ''} />
     </>
+  );
+}
+
+/**
+ * A customer identified by phone lookup. Shows only a first name and a masked number (never an id), and offers
+ * the purchase form only: reward redemption needs the customer's own QR code and code.
+ */
+function LookupMenu({
+  state,
+  action,
+  pending,
+}: {
+  state: StaffQrState;
+  action: (form: FormData) => void;
+  pending: boolean;
+}) {
+  const t = useTranslations('loyalty.staff.serve.lookup');
+  const lookup = state.lookup!;
+  const canRecordPurchase =
+    lookup.actions.includes('VALIDATE_PURCHASE') && lookup.actions.includes('GRANT_LOYALTY_PROGRESS');
+  return (
+    <div className="space-y-4 rounded-xl border bg-white p-5">
+      <div>
+        <p className="text-lg font-semibold">{lookup.displayName}</p>
+        <p className="text-sm text-neutral-600">
+          {lookup.phoneMasked} · {t('identified')}
+        </p>
+      </div>
+      {canRecordPurchase ? (
+        <form action={action} className="space-y-3">
+          <input type="hidden" name="operation" value="lookup-purchase" />
+          <input type="hidden" name="lookupToken" value={lookup.lookupToken} />
+          <input type="hidden" name="businessId" value={state.businessId ?? ''} />
+          <input type="hidden" name="branchId" value={state.branchId ?? ''} />
+          <input type="hidden" name="idempotencyKey" value={state.purchaseRequestKey ?? ''} />
+          <h2 className="font-semibold">{t('purchaseHeading')}</h2>
+          <Label htmlFor="lookupPurchaseAmount">{t('amount')}</Label>
+          <Input
+            id="lookupPurchaseAmount"
+            name="purchaseAmount"
+            type="number"
+            min="0.01"
+            step="0.01"
+            required
+          />
+          <Button disabled={pending || state.purchaseCompleted}>{t('confirmPurchase')}</Button>
+        </form>
+      ) : (
+        <p className="text-sm">{t('noPurchase')}</p>
+      )}
+      <p className="text-sm text-neutral-600">{t('redemptionNote')}</p>
+      {state.success && <p role="status">{t('done')}</p>}
+    </div>
   );
 }

@@ -8,9 +8,12 @@ import {
   updateRewardSchema,
   updateLoyaltySettingsSchema,
   resolveCustomerQrSchema,
+  lookupCustomerSchema,
+  lookupPurchaseSchema,
 } from '@echo-grid-feedback/shared-types';
 import type { Bindings } from '../config/env';
 import { createDb, type Database } from '../db/client';
+import type { LoyaltyPurchaseChannel } from '../db/schema/loyalty-purchase-events';
 import { createRepositories, type LoyaltySettings } from '../repositories';
 import { authenticate, type AuthVariables } from '../middleware/authenticate';
 import { resolveTenantContext, type TenantVariables } from '../middleware/tenant-context';
@@ -26,6 +29,8 @@ import { LoyaltyRewardService } from './loyalty-reward.service';
 import { LoyaltyRedemptionService } from './loyalty-redemption.service';
 import { NotificationService } from '../notifications/notification.service';
 import { LoyaltyActionResolver } from './loyalty-action-resolver';
+import { CustomerLookupService, LOOKUP_PURCHASE_AUDIT } from './customer-lookup.service';
+import { AppError } from '../lib/errors';
 
 type Env = {
   Bindings: Bindings;
@@ -101,62 +106,147 @@ loyaltyRoutes.get('/accounts/:id/transactions', requirePermission('loyalty:accou
   });
 });
 
+type PurchaseInput = {
+  purchaseAmount: number;
+  idempotencyKey: string;
+  externalReference?: string | undefined;
+  channel: LoyaltyPurchaseChannel;
+};
+
+/**
+ * Records one purchase and fires the post-commit notifications. Shared by the account-id route (customer
+ * identified by a scanned QR) and the lookup route (customer identified by phone lookup), so the two can never
+ * drift apart. Only the audit entry differs.
+ */
+async function recordPurchaseAndNotify(
+  c: Context<Env>,
+  db: Database,
+  accountId: string,
+  body: PurchaseInput,
+  audit: { action: string; details?: unknown },
+) {
+  const businessId = c.get('businessId');
+
+  // Fetched BEFORE the mutation so the tier comparison below has a real
+  // "before" to compare against -- LoyaltyAccountService's return value is
+  // only the "after" state, and tier-change detection needs both.
+  const before = await new LoyaltyAccountService(db).getAccount(accountId, businessId);
+  const purchase = await new LoyaltyAccountService(db).recordPurchase({
+    businessId,
+    ...(c.get('branchId') ? { branchId: c.get('branchId') } : {}),
+    accountId,
+    purchaseAmount: body.purchaseAmount,
+    idempotencyKey: body.idempotencyKey,
+    ...(body.externalReference !== undefined ? { externalReference: body.externalReference } : {}),
+    channel: body.channel,
+    staffUserId: c.get('userId'),
+  });
+  const account = purchase.account;
+  c.set('auditMetadata', {
+    action: audit.action,
+    entityType: 'loyalty_account',
+    entityId: account.id,
+    ...(audit.details !== undefined ? { details: audit.details } : {}),
+  });
+
+  // Notification triggers run AFTER recordPurchase's own transaction has
+  // committed, never inside it -- LoyaltyAccountService owns a
+  // db.transaction() directly (see its own class comment), and enqueueing
+  // to an external queue has no atomicity with that transaction. Firing
+  // here means we only ever notify about a purchase that really landed.
+  // Uses its own fresh connection (runInBackground), not the outer
+  // `repos` -- see that helper's doc comment for why reusing it races
+  // withDb's own close().
+  const pointsEarned = purchase.inserted ? account.points - before.points : 0;
+  c.executionCtx.waitUntil(
+    runInBackground(c.env.HYPERDRIVE, async (repos) => {
+      const business = await repos.businesses.findById(businessId);
+      if (!business || pointsEarned <= 0) return;
+      const notifications = new NotificationService(repos, c.env.JOBS);
+      await notifications.notify(
+        businessId,
+        { customerId: account.customerId },
+        { eventType: 'points_earned', businessName: business.name, pointsEarned, newBalance: account.points },
+      );
+      if (account.tierId && account.tierId !== before.tierId) {
+        const tier = await repos.loyaltyTiers.findById(account.tierId, businessId);
+        if (tier) {
+          await notifications.notify(
+            businessId,
+            { customerId: account.customerId },
+            { eventType: 'tier_upgraded', businessName: business.name, tierName: tier.name },
+          );
+        }
+      }
+    }),
+  );
+
+  return account;
+}
+
 loyaltyRoutes.post('/accounts/:id/purchase', requirePermission('loyalty:serve'), async (c) => {
   const body = await parseJsonBody(c.req.raw, recordPurchaseSchema);
   return withDb(c, async (db) => {
-    const businessId = c.get('businessId');
-    const accountId = c.req.param('id');
+    const account = await recordPurchaseAndNotify(c, db, c.req.param('id'), body, {
+      action: 'loyalty.purchase_recorded',
+    });
+    return ok(c, account);
+  });
+});
 
-    // Fetched BEFORE the mutation so the tier comparison below has a real
-    // "before" to compare against -- LoyaltyAccountService's return value is
-    // only the "after" state, and tier-change detection needs both.
-    const before = await new LoyaltyAccountService(db).getAccount(accountId, businessId);
-    const purchase = await new LoyaltyAccountService(db).recordPurchase({
-      businessId,
-      ...(c.get('branchId') ? { branchId: c.get('branchId') } : {}),
-      accountId,
-      purchaseAmount: body.purchaseAmount,
-      idempotencyKey: body.idempotencyKey,
-      ...(body.externalReference !== undefined ? { externalReference: body.externalReference } : {}),
-      channel: body.channel,
+// ---- Cashier phone lookup (D-C2) -------------------------------------------
+// Finds an ACTIVE member of this business by exact phone number. Controls (design section 4): a dedicated rate
+// limit keyed by business and cashier, a miss throttle, an audit row per lookup (HMAC of the phone, never the
+// number), a short-lived signed token as the only handle, and no reward redemption through a lookup.
+
+loyaltyRoutes.post('/actions/lookup-customer', requirePermission('loyalty:serve'), async (c) => {
+  const { success } = await c.env.LOOKUP_RATE_LIMITER.limit({
+    key: `${c.get('businessId')}:${c.get('userId')}`,
+  });
+  if (!success) throw new AppError('Too many requests. Please try again shortly.', 429, 'RATE_LIMITED');
+
+  const body = await parseJsonBody(c.req.raw, lookupCustomerSchema);
+  return withDb(c, async (db) => {
+    const result = await new CustomerLookupService(createRepositories(db), {
+      QR_TOKEN_SECRET: c.env.QR_TOKEN_SECRET,
+      QR_TOKEN_SECRET_PREVIOUS: c.env.QR_TOKEN_SECRET_PREVIOUS,
+    }).lookup({
+      phone: body.phone,
+      businessId: c.get('businessId'),
+      staffUserId: c.get('userId'),
+      ipAddress: c.req.header('cf-connecting-ip') ?? null,
+      userAgent: c.req.header('user-agent') ?? null,
+    });
+    // The service wrote the audit row itself (hits and misses), so the generic request audit is skipped.
+    c.set('auditAlreadyRecorded', true);
+    return ok(c, result);
+  });
+});
+
+loyaltyRoutes.post('/actions/lookup-purchase', requirePermission('loyalty:serve'), async (c) => {
+  const body = await parseJsonBody(c.req.raw, lookupPurchaseSchema);
+  return withDb(c, async (db) => {
+    const { accountId } = await new CustomerLookupService(createRepositories(db), {
+      QR_TOKEN_SECRET: c.env.QR_TOKEN_SECRET,
+      QR_TOKEN_SECRET_PREVIOUS: c.env.QR_TOKEN_SECRET_PREVIOUS,
+    }).resolvePurchaseTarget({
+      lookupToken: body.lookupToken,
+      businessId: c.get('businessId'),
       staffUserId: c.get('userId'),
     });
-    const account = purchase.account;
-    c.set('auditMetadata', { action: 'loyalty.purchase_recorded', entityType: 'loyalty_account', entityId: account.id });
-
-    // Notification triggers run AFTER recordPurchase's own transaction has
-    // committed, never inside it -- LoyaltyAccountService owns a
-    // db.transaction() directly (see its own class comment), and enqueueing
-    // to an external queue has no atomicity with that transaction. Firing
-    // here means we only ever notify about a purchase that really landed.
-    // Uses its own fresh connection (runInBackground), not the outer
-    // `repos` -- see that helper's doc comment for why reusing it races
-    // withDb's own close().
-    const pointsEarned = purchase.inserted ? account.points - before.points : 0;
-    c.executionCtx.waitUntil(
-      runInBackground(c.env.HYPERDRIVE, async (repos) => {
-        const business = await repos.businesses.findById(businessId);
-        if (!business || pointsEarned <= 0) return;
-        const notifications = new NotificationService(repos, c.env.JOBS);
-        await notifications.notify(
-          businessId,
-          { customerId: account.customerId },
-          { eventType: 'points_earned', businessName: business.name, pointsEarned, newBalance: account.points },
-        );
-        if (account.tierId && account.tierId !== before.tierId) {
-          const tier = await repos.loyaltyTiers.findById(account.tierId, businessId);
-          if (tier) {
-            await notifications.notify(
-              businessId,
-              { customerId: account.customerId },
-              { eventType: 'tier_upgraded', businessName: business.name, tierName: tier.name },
-            );
-          }
-        }
-      }),
+    // The loyalty account id is never returned to the cashier on this path: the token is the only handle.
+    await recordPurchaseAndNotify(
+      c,
+      db,
+      accountId,
+      {
+        purchaseAmount: body.purchaseAmount,
+        idempotencyKey: body.idempotencyKey,
+        channel: 'other',
+      },
+      { action: LOOKUP_PURCHASE_AUDIT, details: { identifiedBy: 'lookup' } },
     );
-
-    return ok(c, account);
+    return ok(c, { success: true });
   });
 });
 

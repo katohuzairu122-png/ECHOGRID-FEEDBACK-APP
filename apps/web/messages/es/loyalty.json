@@ -181,8 +181,8 @@
       "unsupported": "La lectura con cámara no está disponible en este navegador. Introduzca el token QR a continuación.",
       "cameraDenied": "No se pudo abrir la cámara. Permita el acceso a la cámara o introduzca el token QR a continuación.",
       "viewfinder": "Vista de cámara para escanear el código QR del cliente",
-      "scanField": "Código QR del cliente (lector o pegar)",
-      "scanFieldHint": "Use un lector conectado, la cámara o pegue el código y pulse Intro.",
+      "scanField": "Buscar cliente: escanear o introducir el teléfono",
+      "scanFieldHint": "Use un lector conectado o la cámara, o escriba el teléfono del cliente con el código de país (por ejemplo +15551234567) y pulse Intro.",
       "loggedInAs": "Ha iniciado sesión como",
       "scanHint": "Pulse «Escanear» para leer el código QR del cliente.",
       "scanLarge": "Escanear",
@@ -193,7 +193,22 @@
         "branch": "No está autorizado para esta ubicación. Elija una ubicación en la que trabaje.",
         "invalidQr": "Este código QR ha caducado, fue reemplazado o no se reconoce. Pida al cliente que actualice su código QR.",
         "rateLimited": "Demasiados intentos. Espere un momento e inténtelo de nuevo.",
-        "unavailable": "El servicio no está disponible en este momento. No se registró nada. Inténtelo de nuevo en breve."
+        "unavailable": "El servicio no está disponible en este momento. No se registró nada. Inténtelo de nuevo en breve.",
+        "memberNotFound": "No se encontró ningún miembro con este número. Compruebe el número o escanee el código QR del cliente.",
+        "lookupExpired": "Esta búsqueda ha caducado. Busque de nuevo al cliente.",
+        "lookupThrottled": "Demasiadas búsquedas sin resultado. Espere unos minutos o escanee el código QR del cliente.",
+        "lookupCap": "Se alcanzó el límite de compras introducidas por teléfono. Escanee en su lugar el código QR del cliente.",
+        "phoneCountryCode": "Introduzca el número con el código de país, por ejemplo +15551234567.",
+        "unrecognizedInput": "Escanee un código QR o introduzca un número de teléfono."
+      },
+      "lookup": {
+        "identified": "Identificado por teléfono",
+        "purchaseHeading": "Validar la compra y otorgar progreso de fidelidad",
+        "amount": "Importe de la compra",
+        "confirmPurchase": "Confirmar compra verificada",
+        "noPurchase": "Las compras no están disponibles para esta membresía.",
+        "redemptionNote": "La entrega de una recompensa requiere el código QR del cliente. Escanéelo para canjear.",
+        "done": "Acción completada. Busque de nuevo al cliente antes de otra acción."
       }
     }
   },

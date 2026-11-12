@@ -157,3 +157,16 @@ Any migration needs its own authorization, a Neon snapshot first, staging before
 ## 10. Not covered
 
 Name search, partial phone search, browsing the member list, joining a customer from the cashier side, remote enrollment (CUSTOMER-AUTH-01G, blocked on BDPN-01), and any financial, settlement or Partner Credit behavior.
+
+## 11. Implementation notes (D-C2b and D-C2c, built 2026-11-12)
+
+The build follows this design with these deliberate differences, each chosen to avoid a migration or a weaker control:
+
+- **No migration.** Limits and the "identified by lookup" marker come from `audit_log` rows (`loyalty.customer_lookup`, `loyalty.customer_lookup_miss`, `loyalty.purchase_recorded_via_lookup`), not a new `identified_by` column. The column in section 6 stays an optional later improvement.
+- **No fraud-signal row.** The `fraud_signals` table requires a branch and a fixed signal type list, so repeated misses are handled by a miss throttle counted from the audit log (8 misses in 10 minutes locks lookups out for the cashier until they age out), not a fraud signal.
+- **No account id leaves the server on this path (stronger than 4.6).** `POST /loyalty/actions/lookup-customer` returns only a first name, a masked number, the allowed actions and a 2-minute signed token. Purchases go through `POST /loyalty/actions/lookup-purchase` with that token, which re-checks token binding, expiry, membership, account state and the daily caps. A cashier therefore never holds an account id obtained without a scan, so the separate hardening D-C2e is not needed for this path. The existing account-id purchase route is unchanged and still has the property described in 4.6.
+- **Caps are counts only,** per cashier (40) and per business (200) over a rolling 24 hours. There is no amount cap yet. Both numbers are starting estimates for the owner (D-C2-4).
+- **Phone entry needs the country code.** The web accepts spaces, dashes, dots and brackets, and `00` as `+`, but refuses a number without a country code instead of guessing (D-C2-7 stays open). Names and partial numbers are not accepted.
+- **Uniform misses are best effort.** All misses return the same status, code and message. Response time is not padded.
+- **New configuration.** A `LOOKUP_RATE_LIMITER` binding (10 per minute, keyed by business and cashier) in both environments, namespaces 1006 and 2006. It takes effect only when the API is deployed with this `wrangler.toml`.
+- **Not built:** the Echo Grid ID (Phase 2), national-format phone entry, a manager report of lookup-identified purchases, and the customer-facing "recorded by lookup" wording in the points notification (D-C2-6).

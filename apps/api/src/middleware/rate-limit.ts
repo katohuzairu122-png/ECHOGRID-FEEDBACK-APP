@@ -26,7 +26,8 @@ type RateLimitBinding =
   | 'API_RATE_LIMITER'
   | 'PUBLIC_RATE_LIMITER'
   | 'OTP_RATE_LIMITER'
-  | 'FOLLOWUP_QUESTION_RATE_LIMITER';
+  | 'FOLLOWUP_QUESTION_RATE_LIMITER'
+  | 'LOOKUP_RATE_LIMITER';
 
 type RateLimitKeyResolver = (request: Request) => string | Promise<string>;
 
