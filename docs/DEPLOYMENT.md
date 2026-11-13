@@ -56,12 +56,11 @@ Condensed checklist:
 
 - [ ] `wrangler login` (once per machine, not per environment)
 - [ ] `wrangler hyperdrive create` → paste the returned ID into `wrangler.toml`'s `[[hyperdrive]].id`
-- [ ] `wrangler r2 bucket create echo-grid-feedback-uploads`
 - [ ] `wrangler kv namespace create CACHE` → paste the returned ID into `wrangler.toml`'s `[[kv_namespaces]].id`
 - [ ] `wrangler queues create echo-grid-feedback-jobs`
 - [ ] `wrangler queues create echo-grid-feedback-jobs-dlq`
 
-R2 buckets and queues are referenced by name in `wrangler.toml` (already
+Queues are referenced by name in `wrangler.toml` (already
 correct) — only Hyperdrive and KV return an ID you have to paste in
 manually. The four `[[ratelimits]]` blocks are self-defined labels, not
 provisioned resources — leave `namespace_id = "1001"`–`"1004"` as-is.

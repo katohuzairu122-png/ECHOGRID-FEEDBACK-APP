@@ -201,7 +201,6 @@ export interface Bindings {
 
   /** Resource bindings, provisioned with the Cloudflare CLI (see README). */
   HYPERDRIVE: Hyperdrive;
-  UPLOADS: R2Bucket;
   CACHE: KVNamespace;
   JOBS: Queue<PlatformJob>;
 

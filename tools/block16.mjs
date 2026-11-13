@@ -63,7 +63,7 @@ async function envAudit() {
     const placeholders = [/your[-_]/i, /replace[-_ ]me/i, /example\.com/i];
     const found = placeholders.filter((pattern) => pattern.test(combined)).map(String);
     if (found.length) throw new Error(`Placeholder production configuration found: ${found.join(', ')}`);
-    for (const marker of ['[[hyperdrive]]', '[[r2_buckets]]', '[[kv_namespaces]]', '[[queues.producers]]', '[ai]', '[observability]']) if (!api.includes(marker)) throw new Error(`API binding missing: ${marker}`);
+    for (const marker of ['[[hyperdrive]]', '[[kv_namespaces]]', '[[queues.producers]]', '[ai]', '[observability]']) if (!api.includes(marker)) throw new Error(`API binding missing: ${marker}`);
     for (const marker of ['[vars]', 'API_BASE_URL', 'APP_URL', '[assets]', '[observability]']) if (!web.includes(marker)) throw new Error(`Web configuration missing: ${marker}`);
     if (!/ALLOWED_ORIGINS\s*=\s*"https:\/\//.test(api) || !/WEB_BASE_URL\s*=\s*"https:\/\//.test(api)) throw new Error('API production origins must use HTTPS');
     if (!/API_BASE_URL\s*=\s*"https:\/\//.test(web) || !/APP_URL\s*=\s*"https:\/\//.test(web)) throw new Error('Web production URLs must use HTTPS');
