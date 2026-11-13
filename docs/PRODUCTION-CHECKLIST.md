@@ -33,7 +33,7 @@ this checklist:
 
 - [ ] Production Neon database — a distinct project from dev/staging, with
       its own backup policy confirmed active (see below)
-- [ ] Production Hyperdrive, R2 bucket, KV namespace, queue + DLQ — all
+- [ ] Production Hyperdrive, KV namespace, queue + DLQ — all
       distinct from staging's, all provisioned per
       [SETUP.md](./SETUP.md#provisioning-cloudflare-resources)
 - [ ] Production `ALLOWED_ORIGINS` set to the real production web domain

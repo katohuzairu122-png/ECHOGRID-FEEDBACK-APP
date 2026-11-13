@@ -39,10 +39,6 @@ cd apps/api
 npx wrangler hyperdrive create echo-grid-feedback-db \
   --connection-string="postgresql://<user>:<password>@<neon-host>/<db>?sslmode=require"
 
-# R2 bucket -- receipts, exports, and other business-uploaded files (NOT QR
-# images -- those render client-side from a token + URL, see ARCHITECTURE.md)
-npx wrangler r2 bucket create echo-grid-feedback-uploads
-
 # KV namespace -- cache / session support
 npx wrangler kv namespace create CACHE
 
@@ -115,8 +111,8 @@ Each `create` command prints an ID. Paste them into the placeholder fields in
 | `[[hyperdrive]].id` | ID from `wrangler hyperdrive create` |
 | `[[kv_namespaces]].id` | ID from `wrangler kv namespace create` |
 
-R2 buckets and queues are referenced by name (already set correctly); no ID
-substitution needed for those two. The four `[[ratelimits]]` blocks
+Queues are referenced by name (already set correctly); no ID
+substitution needed. (No R2 bucket is bound; re-add one only when a feature stores files.) The four `[[ratelimits]]` blocks
 (`namespace_id = "1001"` / `"1002"` / `"1003"` / `"1004"`, the third added in
 QR Engagement Block 2 for the public QR/feedback surface, the fourth in
 Digital Loyalty Block 2 for SMS OTP requests — 3/min/IP, the platform's
@@ -171,7 +167,6 @@ environment before that environment can run):
 | Binding | Provisioned by | Required? | Notes |
 |---|---|---|---|
 | `HYPERDRIVE` | `wrangler hyperdrive create --connection-string=<DATABASE_URL>` | Required | Returns an ID — paste into `wrangler.toml`'s `[[hyperdrive]].id`. One per environment; never share a Hyperdrive/database between dev, staging, and production. |
-| `UPLOADS` (R2) | `wrangler r2 bucket create echo-grid-feedback-uploads` | Required | Referenced by name in `wrangler.toml`, already correct — no ID to paste in. Use a distinct bucket name per environment if provisioning more than one. |
 | `CACHE` (KV) | `wrangler kv namespace create CACHE` | Required | Returns an ID — paste into `wrangler.toml`'s `[[kv_namespaces]].id`. |
 | `JOBS` (Queue) | `wrangler queues create echo-grid-feedback-jobs` | Required | Referenced by name, already correct. |
 | dead-letter queue | `wrangler queues create echo-grid-feedback-jobs-dlq` | Required | Referenced by name, already correct. |

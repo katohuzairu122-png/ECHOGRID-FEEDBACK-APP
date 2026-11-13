@@ -162,15 +162,8 @@ id = "542dd173d3d14d54ac66c0f1f69e5ff9"
 # through Hyperdrive). It is only used by `wrangler dev` to proxy Hyperdrive
 # locally; if that's ever needed, set it via a local, gitignored mechanism
 # (.dev.vars or a shell env var), never by editing this file.
-# Object storage for receipts, exports, and other business-uploaded files.
-# QR codes are rendered client-side from a token + known URL (no server-side
-# image generation/storage -- see README's QR Engagement section), so this
-# bucket is never used for QR images. Provision with:
-#   npx wrangler r2 bucket create echo-grid-feedback-uploads
-[[r2_buckets]]
-binding = "UPLOADS"
-bucket_name = "echo-grid-feedback-uploads"
-
+# No R2 bucket is bound: nothing in the API stores files. Re-add an
+# [[r2_buckets]] binding (and UPLOADS in env.ts) when a feature needs uploads.
 # Cache / session support. Provision with:
 #   npx wrangler kv namespace create CACHE
 [[kv_namespaces]]
@@ -355,10 +348,6 @@ class_name = "PasswordHasherDurableObject"
 [[env.staging.hyperdrive]]
 binding = "HYPERDRIVE"
 id = "fdf777957ac54455aca7ecaa1f12f5bf"
-
-[[env.staging.r2_buckets]]
-binding = "UPLOADS"
-bucket_name = "echo-grid-feedback-uploads-staging"
 
 [[env.staging.kv_namespaces]]
 binding = "CACHE"
