@@ -189,7 +189,7 @@ Metrics for `echo-grid-feedback-web`, filter "Specific versions (1)" = `3087cbd8
 | Failed request | CPU time **50 ms**, wall time 523 ms. | VERIFIED |
 | Comparison | A production `GET /` returned HTTP 200 with CPU time 719 ms and wall time 786 ms. | VERIFIED |
 | Settings | Staging Worker Settings showed "CPU Time Limit (ms)" empty (no explicit limit). Cloudflare docs say Workers on the old Bundled model received an automatic 50 ms limit in 2024, but the empty field does not confirm that. | CAUSE UNEXPLAINED |
-| Later behavior | Other staging pages logged at info level without errors at about 17:07 UTC; red error bars only around 17:56 and 18:03 UTC. After the 2026-11-13 staging and production releases the behavior was not yet rechecked. | NOT VERIFIED |
+| Later behavior | Other staging pages logged at info level without errors at about 18:07 UTC (21:07 Kuwait time); red error bars only around 17:56 and 18:03 UTC. After the 2026-11-13 staging and production releases the behavior was not yet rechecked. | NOT VERIFIED |
 
 **Block 0 is therefore NOT certified.** Next evidence: the CPU time of a successful staging request, the same Settings section on production, and a recheck of `GET /` on staging after the new staging Web version.
 
