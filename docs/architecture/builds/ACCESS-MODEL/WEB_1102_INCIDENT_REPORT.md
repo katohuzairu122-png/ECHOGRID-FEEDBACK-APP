@@ -177,9 +177,21 @@ Metrics for `echo-grid-feedback-web`, filter "Specific versions (1)" = `3087cbd8
 | Asset requests (all versions) | 4xx 0, 5xx 0.                                                                                                            | VERIFIED |
 | Per-version error panels      | The "Errors by invocation status" legend was not captured; the filtered Errors card (0) is the evidence used.            | LIMITATION |
 
-**Conclusion:** on Workers Paid, version `3087cbd8` shows no errors over 62 invocations. The sample is small and the window is short, so this is evidence the fix works, not a long-run guarantee. **Recommendation:** owner may certify Block 0 as resolved; keep watching the Errors card during normal use.
+**Conclusion:** on Workers Paid, version `3087cbd8` shows no errors over 62 invocations. The sample is small and the window is short, so this is evidence the fix works, not a long-run guarantee. **Recommendation (superseded by section 10c):** hold certification. A later staging error (10c) is unexplained.
 
 **Open observation (not an incident):** CPU time per request is not understood. The CPU Time card for `3087cbd8` showed 103 ms, while the Active deployment card showed a median of 288 ms (24 h, all-version view) and 416.3 ms (6 h). These disagree with each other and with the local warm measurement of about 17 to 19 ms. Likely causes (unconfirmed): cold-start initialisation counted in a small sample, and different aggregations (median versus other). With a 30 second limit this cannot reproduce Error 1102, but Paid bills CPU time, so it should be re-read under steady traffic and investigated if it persists.
+
+## 10c. Staging Worker CPU-limit errors, 2026-11-13 17:55 to 17:56 UTC (owner screenshots and logs)
+
+| Item | Finding | Status |
+| ---- | ------- | ------ |
+| Error | `echo-grid-feedback-web-staging`, version `a841c982`, `GET /`: "Worker exceeded CPU time limit" (Ray ID `a59fa6d03d9b698f`, HTTP 503), repeated at 17:55:40 to 17:56:11. | VERIFIED |
+| Failed request | CPU time **50 ms**, wall time 523 ms. | VERIFIED |
+| Comparison | A production `GET /` returned HTTP 200 with CPU time 719 ms and wall time 786 ms. | VERIFIED |
+| Settings | Staging Worker Settings showed "CPU Time Limit (ms)" empty (no explicit limit). Cloudflare docs say Workers on the old Bundled model received an automatic 50 ms limit in 2024, but the empty field does not confirm that. | CAUSE UNEXPLAINED |
+| Later behavior | Other staging pages logged at info level without errors at about 18:07 UTC (21:07 Kuwait time); red error bars only around 17:56 and 18:03 UTC. After the 2026-11-13 staging and production releases the behavior was not yet rechecked. | NOT VERIFIED |
+
+**Block 0 is therefore NOT certified.** Next evidence: the CPU time of a successful staging request, the same Settings section on production, and a recheck of `GET /` on staging after the new staging Web version.
 
 ## 11. Open items
 
