@@ -38,7 +38,7 @@ export async function DashboardNav() {
     { href: '/dashboard/analytics', label: t('nav.analytics'), icon: 'chart' },
     { href: '/dashboard/branches', label: t('nav.branches'), icon: 'store' },
     { href: '/dashboard/settlements', label: t('nav.settlements'), icon: 'gift' },
-    { href: '/dashboard/messages', label: t('nav.messages'), icon: 'chat' },
+    { href: '/dashboard/messages', label: t('nav.messages'), icon: 'chat', badgeSource: 'staff-messages' },
     { href: '/dashboard/notifications', label: t('nav.notifications'), icon: 'bell' },
     { href: '/dashboard/settings', label: t('nav.settings'), icon: 'settings' },
     { href: '/dashboard/settings/team', label: t('nav.team'), icon: 'users' },

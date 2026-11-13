@@ -412,7 +412,8 @@
       "emptyDescription": "Pour rejoindre, scannez le code QR qu’une entreprise participante affiche à son comptoir. Vos adhésions apparaîtront ici.",
       "unavailableTitle": "Impossible de charger vos programmes pour le moment",
       "unavailableBody": "C’est temporaire et vos adhésions n’ont pas changé. Veuillez réessayer dans un instant.",
-      "retry": "Réessayer"
+      "retry": "Réessayer",
+      "newMessages": "{count, plural, one {# nouveau message} other {# nouveaux messages}}"
     }
   }
 }

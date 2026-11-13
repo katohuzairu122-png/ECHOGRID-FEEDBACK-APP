@@ -34,7 +34,12 @@ export default async function LoyaltyDashboardLayout({ children }: { children: R
           closeLabel={shell('close')}
           primaryCount={3}
           items={[
-            { href: '/loyalty/dashboard', label: t('brand'), icon: 'star' },
+            {
+              href: '/loyalty/dashboard',
+              label: t('brand'),
+              icon: 'star',
+              badgeSource: 'customer-messages',
+            },
             { href: '/loyalty/dashboard/community', label: shell('community'), icon: 'users' },
             { href: '/loyalty/dashboard/surveys', label: shell('surveys'), icon: 'chart' },
             { href: '/loyalty/dashboard/qr', label: shell('qr'), icon: 'qr' },

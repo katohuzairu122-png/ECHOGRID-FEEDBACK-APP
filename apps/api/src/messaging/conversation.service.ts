@@ -105,6 +105,19 @@ export class ConversationService {
     return repos.messages.listForConversation(conversation.id, options);
   }
 
+  async unreadSummaryForStaff(businessId: string) {
+    return createRepositories(this.db).conversations.unreadSummaryForBusiness(businessId);
+  }
+
+  async unreadSummaryForCustomer(customerId: string) {
+    const byBusiness = await createRepositories(this.db).conversations.unreadSummaryForCustomer(customerId);
+    return {
+      unreadMessages: byBusiness.reduce((sum, b) => sum + b.unreadMessages, 0),
+      unreadConversations: byBusiness.length,
+      byBusiness,
+    };
+  }
+
   async markReadByCustomer(customerId: string, businessId: string): Promise<void> {
     const repos = createRepositories(this.db);
     const conversation = await this.requireConversationForCustomer(repos, customerId, businessId);

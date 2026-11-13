@@ -412,7 +412,8 @@
       "emptyDescription": "To join, scan the QR code a participating business shows at its counter. Your memberships will appear here.",
       "unavailableTitle": "We can’t load your loyalties right now",
       "unavailableBody": "This is temporary and nothing has changed on your memberships. Please try again in a moment.",
-      "retry": "Try again"
+      "retry": "Try again",
+      "newMessages": "{count, plural, one {# new message} other {# new messages}}"
     }
   }
 }

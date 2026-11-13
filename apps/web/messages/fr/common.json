@@ -32,7 +32,8 @@
     "support": "Assistance",
     "loading": "Chargement de votre espace…",
     "community": "Communauté",
-    "surveys": "Enquêtes"
+    "surveys": "Enquêtes",
+    "unreadMessages": "{count, plural, one {# message non lu} other {# messages non lus}}"
   },
   "language": {
     "label": "Langue"

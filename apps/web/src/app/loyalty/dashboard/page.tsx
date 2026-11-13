@@ -1,4 +1,8 @@
-import type { LoyaltyAccountDto, BusinessPublicDto } from '@echo-grid-feedback/shared-types';
+import type {
+  LoyaltyAccountDto,
+  BusinessPublicDto,
+  CustomerMessagingUnreadSummaryDto,
+} from '@echo-grid-feedback/shared-types';
 import { customerApiFetch } from '@/lib/customer-api-client';
 import { publicApiFetch } from '@/lib/public-api-client';
 import { rethrowControlFlow } from '@/lib/rethrow-control-flow';
@@ -24,5 +28,14 @@ export default async function LoyaltyCustomerDashboardPage() {
     const business = await publicApiFetch<BusinessPublicDto>(`/businesses/${businessId}/public`);
     return business.name;
   });
-  return <LoyaltyWalletView entries={entries} />;
+  // Cards with something new from the business get a mark. A failed read just shows no marks (but a signed-out
+  // customer still goes to the login page, which rethrowControlFlow keeps).
+  let unreadByBusiness: Record<string, number> = {};
+  try {
+    const unread = await customerApiFetch<CustomerMessagingUnreadSummaryDto>('/messaging/me/unread-count');
+    unreadByBusiness = Object.fromEntries(unread.byBusiness.map((b) => [b.businessId, b.unreadMessages]));
+  } catch (error) {
+    rethrowControlFlow(error);
+  }
+  return <LoyaltyWalletView entries={entries} unreadByBusiness={unreadByBusiness} />;
 }

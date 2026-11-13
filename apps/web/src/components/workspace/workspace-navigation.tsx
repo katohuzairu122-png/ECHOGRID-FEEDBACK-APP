@@ -5,12 +5,16 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Logo } from '@/components/brand';
 import { LandingIcon, type LandingIconName } from '@/components/landing/landing-icon';
+import type { UnreadSource } from '@/lib/unread-store';
+import { NavUnreadBadge, NavUnreadDot } from './nav-unread-badge';
 import styles from './workspace.module.css';
 
 export interface WorkspaceNavItem {
   href: string;
   label: string;
   icon: LandingIconName;
+  /** Shows an unread-count badge on this item, fed by the shared poller in lib/unread-store. */
+  badgeSource?: UnreadSource;
 }
 
 export function activeWorkspaceHref(pathname: string, items: WorkspaceNavItem[]) {
@@ -55,6 +59,7 @@ export function WorkspaceNavigation({
   const primary = items.slice(0, primaryCount);
   const overflow = items.slice(primaryCount);
   const moreActive = overflow.some((item) => item.href === active);
+  const overflowSources = overflow.flatMap((item) => (item.badgeSource ? [item.badgeSource] : []));
 
   const [open, setOpen] = useState(false);
   const sheetId = useId();
@@ -123,6 +128,7 @@ export function WorkspaceNavigation({
       >
         <LandingIcon name={item.icon} width={21} height={21} />
         <span>{item.label}</span>
+        {item.badgeSource && <NavUnreadBadge source={item.badgeSource} />}
       </Link>
     ));
 
@@ -155,6 +161,7 @@ export function WorkspaceNavigation({
         >
           <LandingIcon name="more" width={21} height={21} />
           <span>{more}</span>
+          {overflowSources.length > 0 && <NavUnreadDot sources={overflowSources} />}
         </button>
       </nav>
       {open && (

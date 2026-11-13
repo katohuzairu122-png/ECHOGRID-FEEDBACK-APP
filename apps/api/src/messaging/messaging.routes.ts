@@ -39,6 +39,13 @@ async function withDb<T>(c: Context<Env>, fn: (db: Database) => Promise<T>): Pro
   }
 }
 
+/** Read-only unread total for the menu badge. Registered before the parameterised conversation routes. */
+messagingRoutes.get('/unread-count', requirePermission('messages:view'), async (c) => {
+  return withDb(c, async (db) => {
+    return ok(c, await new ConversationService(db).unreadSummaryForStaff(c.get('businessId')));
+  });
+});
+
 messagingRoutes.get('/conversations', requirePermission('messages:view'), async (c) => {
   const url = new URL(c.req.url);
   const { limit, offset } = parseListPagination(url.searchParams, 1000);
