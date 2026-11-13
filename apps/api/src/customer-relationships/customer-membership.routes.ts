@@ -4,7 +4,7 @@ import type { Bindings } from '../config/env';
 import { createDb, type Database } from '../db/client';
 import { createRepositories } from '../repositories';
 import { customerAuthenticate, type CustomerAuthVariables } from '../middleware/customer-authenticate';
-import { rateLimit } from '../middleware/rate-limit';
+import { rateLimitByCustomer } from '../middleware/rate-limit';
 import { parseJsonBody } from '../lib/validate';
 import { ok } from '../lib/response';
 import { AppError } from '../lib/errors';
@@ -14,7 +14,7 @@ import { CustomerMembershipService } from './customer-membership.service';
 type Env = { Bindings: Bindings; Variables: CustomerAuthVariables };
 
 export const customerMembershipRoutes = new Hono<Env>();
-customerMembershipRoutes.use('*', customerAuthenticate, rateLimit('PUBLIC_RATE_LIMITER'));
+customerMembershipRoutes.use('*', customerAuthenticate, rateLimitByCustomer());
 
 async function withDb<T>(c: Context<Env>, fn: (db: Database) => Promise<T>): Promise<T> {
   const { db, close } = await createDb(c.env.HYPERDRIVE);

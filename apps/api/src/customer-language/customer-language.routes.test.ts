@@ -12,7 +12,10 @@ vi.mock('../repositories', () => ({ createRepositories: () => ({
   customers: { findById: mocks.findCustomer, setPreferredLocale: mocks.setPreferredLocale },
   users: { findById: mocks.findUser },
 }) }));
-vi.mock('../middleware/rate-limit', () => ({ rateLimit: () => async (_c: unknown, next: () => Promise<void>) => next() }));
+vi.mock('../middleware/rate-limit', () => ({
+  rateLimit: () => async (_c: unknown, next: () => Promise<void>) => next(),
+  rateLimitByCustomer: () => async (_c: unknown, next: () => Promise<void>) => next(),
+}));
 vi.mock('../middleware/audit', () => ({ auditTrail: async (_c: unknown, next: () => Promise<void>) => next() }));
 
 import worker from '../index';

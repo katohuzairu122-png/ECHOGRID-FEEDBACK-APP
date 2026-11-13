@@ -3,7 +3,7 @@ import { sendMessageSchema } from '@echo-grid-feedback/shared-types';
 import type { Bindings } from '../config/env';
 import { createDb, type Database } from '../db/client';
 import { customerAuthenticate, type CustomerAuthVariables } from '../middleware/customer-authenticate';
-import { rateLimit } from '../middleware/rate-limit';
+import { rateLimitByCustomer } from '../middleware/rate-limit';
 import { parseJsonBody } from '../lib/validate';
 import { parseListPagination } from '../lib/list-pagination';
 import { ok } from '../lib/response';
@@ -22,7 +22,7 @@ type Env = { Bindings: Bindings; Variables: CustomerAuthVariables };
  */
 export const messagingCustomerRoutes = new Hono<Env>();
 
-messagingCustomerRoutes.use('*', customerAuthenticate, rateLimit('PUBLIC_RATE_LIMITER'));
+messagingCustomerRoutes.use('*', customerAuthenticate, rateLimitByCustomer());
 
 async function withDb<T>(c: Context<Env>, fn: (db: Database) => Promise<T>): Promise<T> {
   const { db, close } = await createDb(c.env.HYPERDRIVE);

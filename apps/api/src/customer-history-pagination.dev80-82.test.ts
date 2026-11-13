@@ -19,6 +19,7 @@ vi.mock('./middleware/customer-authenticate', () => ({
 }));
 vi.mock('./middleware/rate-limit', () => ({
   rateLimit: () => async (_c: unknown, next: Next) => next(),
+  rateLimitByCustomer: () => async (_c: unknown, next: Next) => next(),
 }));
 vi.mock('./db/client', () => ({
   createDb: mocks.createDb,

@@ -5,7 +5,7 @@ import {
   customerAuthenticate,
   type CustomerAuthVariables,
 } from '../middleware/customer-authenticate';
-import { rateLimit } from '../middleware/rate-limit';
+import { rateLimitByCustomer } from '../middleware/rate-limit';
 import { ok } from '../lib/response';
 import { AppError } from '../lib/errors';
 import { CommunityPointCustomerService } from './community-point-customer.service';
@@ -17,7 +17,7 @@ export const communityPointCustomerRoutes = new Hono<Env>();
 communityPointCustomerRoutes.use(
   '*',
   customerAuthenticate,
-  rateLimit('PUBLIC_RATE_LIMITER'),
+  rateLimitByCustomer(),
 );
 
 async function withDb<T>(c: Context<Env>, fn: (db: Database) => Promise<T>): Promise<T> {

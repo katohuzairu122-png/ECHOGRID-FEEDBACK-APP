@@ -3,7 +3,7 @@ import { orphanSettlementAccessAuthorizationSchema } from '@echo-grid-feedback/s
 import type { Bindings } from '../config/env';
 import { createDb, type Database } from '../db/client';
 import { customerAuthenticate, type CustomerAuthVariables } from '../middleware/customer-authenticate';
-import { rateLimit } from '../middleware/rate-limit';
+import { rateLimitByCustomer } from '../middleware/rate-limit';
 import { parseJsonBody } from '../lib/validate';
 import { ok } from '../lib/response';
 import { AppError } from '../lib/errors';
@@ -13,7 +13,7 @@ import { CustomerOrphanAccessService } from './customer-orphan-access.service';
 type Env = { Bindings: Bindings; Variables: CustomerAuthVariables };
 
 export const orphanCustomerRoutes = new Hono<Env>();
-orphanCustomerRoutes.use('*', customerAuthenticate, rateLimit('PUBLIC_RATE_LIMITER'));
+orphanCustomerRoutes.use('*', customerAuthenticate, rateLimitByCustomer());
 
 async function withDb<T>(c: Context<Env>, fn: (db: Database) => Promise<T>): Promise<T> {
   const { db, close } = await createDb(c.env.HYPERDRIVE);
