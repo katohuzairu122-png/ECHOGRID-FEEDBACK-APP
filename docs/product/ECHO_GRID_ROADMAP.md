@@ -1,32 +1,38 @@
 # Echo Grid roadmap
 
-**Status: WORKING ROADMAP, UPDATED 2026-11-12. DOCUMENTATION ONLY. No date is promised. Every row is a separate block that needs its own authorization.**
-Reconciliation source baseline: `main` at `0321c40f303f967f4e02bf6caf0097c20e4243f1` (2026-11-12). Financial activation remains NO-GO. Current head must be rechecked before implementation.
+**Status: WORKING ROADMAP, UPDATED 2026-11-13. DOCUMENTATION ONLY. No date is promised. Every row is a separate block that needs its own authorization.**
+Reconciliation source baseline: `main` at `532e65c4e554ccd1df53f38565b9ff5d81902f90` (2026-11-13, merge of PR #402). Financial activation remains NO-GO. Current head must be rechecked before implementation.
 
 ## 1. Where things stand
 
-- Merged to `main` and **not deployed**: Phase 1 public copy, Phase 2 customer loyalty wallet, D-C1 cashier permissions, cashier hardening, BDPN designs, NETWORK-00 design.
-- Last deployed release: web-only run pinned to `b2f85ac`.
-- Migration `0067` is pending in production and staging. Read-only check on 2026-11-12: 67 rows applied in each, all matching by timestamp, only `0067` pending. Some SQL hashes differ (59 and 54 of 67 match); cause open.
-- D-C1 is merged but no reconciliation has run anywhere.
+- **Production release (A6) completed 2026-11-13.** In order: restore point; permission catalog 24 to 34 keys; D-C1 Phase A (600 grants over 240 roles); messages fix for one business (6 grants); migrations `0067` and `0068` (run 43420468101); API and web deploy of `main` `532e65c4` (run 43421810874, every post-deploy check passed); D-C1 Phase B (298 removals over 60 Staff roles). Each stage was separately authorized, and the protected `production` environment required the owner's approval for the migration and for each deploy job. Production is at migration 69 of 69.
+- **Staging** runs `main` `532e65c4` (deploy run 10). Staging had the full sequence first: snapshot, catalog seed, Phase A, `0067`, `0068`, Phase B, synthetic Staff user, and deploys.
+- **Restore points** in the production Neon project: `snap-polished-mode-ata0w63g` (before migrations and grants), `snap-old-term-atbwadwh` (before Phase B), and the older 2026-11-09 snapshot.
+- **Merged to `main` since the 2026-11-12 baseline:** cashier phone-or-scan lookup in one field (#392, D-C2b and D-C2c) and the always-ready scan field (#386); cashier form cleanup (#395) and QR photo upload removal (#380); Echo Grid watermark (#396); customer messaging thread tests (#397); per-customer rate limit (#398); unread-message indicators (#399); Web Push design (#400); quicker customer feedback form (#401); feedback inbox filter dropdowns (#402); and the customer-auth domain-layer blocks (#389 to #394), which are not wired and not enabled.
+- **Open:** A7 (live-site checks, owner), the Error 1102 report in 2.E, and the items in sections 2.E to 2.J.
+- **Resolved:** the earlier SQL-hash differences between environments are harmless. Older migrations were normalized after they had been applied, and Drizzle identifies a migration by its journal timestamp, which matched everywhere.
 
 ## 2. Tracks
 
 ### A. Coordinated release
 
-| Step | Content                                                                                        | Gate                               |
-| ---- | ---------------------------------------------------------------------------------------------- | ---------------------------------- |
-| A1   | Investigate SQL-hash differences; verify restore readiness and environment targets (read-only) | Authorization                      |
-| A2   | Seed the permission catalog; D-C1 Phase A dry run on staging, review, apply                    | Per-stage authorization            |
-| A3   | Apply `0067` to staging and verify                                                             | Authorization, restore point first |
-| A4   | Deploy the coordinated API and Web release to staging; D-C1 Phase B                            | Per-stage authorization            |
-| A5   | Staging validation (cashier, manager, owner, customer wallet, landing)                         | Owner                              |
-| A6   | Repeat for production                                                                          | Separate authorization per stage   |
-| A7   | Re-verify public claims on the live site; real-device checks; native review of fr, es, ar      | Owner                              |
+| Step | Content                                                                                        | Gate                               | Status                                                                                             |
+| ---- | ---------------------------------------------------------------------------------------------- | ---------------------------------- | -------------------------------------------------------------------------------------------------- |
+| A1   | Investigate SQL-hash differences; verify restore readiness and environment targets (read-only) | Authorization                      | Done. Hash differences explained as harmless.                                                      |
+| A2   | Seed the permission catalog; D-C1 Phase A dry run on staging, review, apply                    | Per-stage authorization            | Done on staging.                                                                                   |
+| A3   | Apply `0067` to staging and verify                                                             | Authorization, restore point first | Done on staging (`0068` also applied).                                                             |
+| A4   | Deploy the coordinated API and Web release to staging; D-C1 Phase B                            | Per-stage authorization            | Done on staging.                                                                                   |
+| A5   | Staging validation (cashier, manager, owner, customer wallet, landing)                         | Owner                              | Partly done by the owner; the signed-in checks have not been seen by Claude.                       |
+| A6   | Repeat for production                                                                          | Separate authorization per stage   | **Done 2026-11-13**: snapshot, catalog, Phase A, messages fix, `0067` and `0068`, deploy, Phase B. |
+| A7   | Re-verify public claims on the live site; real-device checks; native review of fr, es, ar      | Owner                              | **Open.** Live check as Owner, Staff and customer, and the unread badge on a real phone.           |
+
+Production release record: migration run 43420468101 and deploy run 43421810874, both on `main` `532e65c4`. The release does not enable financial features.
 
 ### B. Cashier and RBAC
 
-D-C1 rulings (see `DC1_PROPOSED_OWNER_RULINGS.md`): staging first, keep custom roles until reviewed, accept the view-only narrowing, remove `business:view` and `branches:view` from Staff in a separate block, retire `loyalty:manage` later, no new feedback or messaging permissions. D-C2 name or phone customer search remains a separate owner decision.
+D-C1 is **applied in production and staging**: Staff roles now hold only `business:view`, `branches:view` and `loyalty:serve`; Owner, Admin and Manager gained `loyalty:serve`, `loyalty:adjust` and `loyalty:accounts:view`. The audit log records every role changed (303 reconcile rows in production). Remaining from the D-C1 rulings: remove `business:view` and `branches:view` from Staff in a separate block, retire `loyalty:manage` later, and no new feedback or messaging permissions.
+
+D-C2 customer search by phone or scan in one field is merged (#392). Still open: the owner decisions D-C2-1 to D-C2-10, confirmation of the limits (limiter 10 per minute, throttle 8 per 10 minutes, caps 40 and 200 per day), D-C2e hardening, a PostgreSQL integration test for the lookup endpoints, and a staging test member for the phone lookup test.
 
 ### C. Positioning and Network
 
@@ -38,7 +44,12 @@ Designs complete. Needs your open-question answers, D-16 and D-24. Then 01A migr
 
 ### E. Known issues
 
-Messages page failure in production (cause unknown); duplicate-tier HTTP 500 was remediated in merged PR #378 (25/25 CI; production deployment not verified); limiter keying and wallet request volume (O-E1) remain.
+- **Error 1102 "Worker exceeded CPU time limit" on echo-grid.uk (open, production).** Reported 2026-11-13 12:42:51 UTC (Ray ID a59ddbd89edbb903). Cloudflare Observability shows the errors are on the **web Worker** `echo-grid-feedback-web` (script version `f2ae60ee`), on `GET /` and `GET /dashboard`, recurring from about 12:24 UTC, right after the production web deploy. A failure on the public landing page means it is not specific to one feature. Root cause not yet found. Config note: `apps/web/wrangler.toml` sets no CPU limit, so the account plan's default applies. Mitigation: roll the web Worker back to its previous version in the Cloudflare dashboard (this removes today's web changes; the API and database changes are additive and stay). Next steps: confirm the account's Workers plan and CPU limit, then compare per-request work before and after this release.
+- **Staff Messages page "not available with your current access" (production).** Cause found and fixed 2026-11-13: one business ("Infinicus simulation engine v3") had roles created without `messages:view` and `messages:send`. Its Owner, Admin and Manager were granted them (6 rows); Staff deliberately were not.
+- **Customer Messages page "Something went wrong".** Cause unconfirmed. The leading suspect was the shared IP-keyed limiter; the per-customer limiter (#398) is deployed to staging and production. A Cloudflare log lookup of reference 4208449032 would confirm. The messages page still shows a whole-page error instead of an inline retry; that fix is not built.
+- **Rate limiting:** customer routes are now limited per customer (60 per minute). The global `API_RATE_LIMITER` is still IP-keyed and unchanged.
+- **Email and SMS non-delivery on production:** unexplained. A read-only Resend and Twilio check is not yet authorized.
+- Duplicate-tier HTTP 500 was remediated in merged PR #378.
 
 ### G. CUSTOMER-AUTH-01 (separate workstream)
 
@@ -60,9 +71,17 @@ Requirements and blocks: `docs/architecture/builds/CUSTOMER-AUTH/CUSTOMER_AUTH_0
 
 Phone/desktop push notifications for new messages (WhatsApp-style), after the in-app unread indicators (PR #399). Design: `docs/architecture/builds/WEB-PUSH/WEB_PUSH_01_DESIGN.md`. Needs owner answers WP-1 to WP-6, a migration, owner-held VAPID keys, a sender on Workers, service-worker handlers and a staging device test. **Not built, not scheduled; each block needs its own authorization.**
 
+### I. Messaging and notifications
+
+Step 1, in-app unread indicators, is **done and in production** (#399): count badges on the Messages and My Rewards menu items, a dot on "More" on small screens, the tab title and app-icon badge, and a "new messages" mark on wallet cards. Customer polling relies on the per-customer limiter (#398). Step 2, phone push notifications, is track H and is not built.
+
+### J. Everyday usability
+
+Done: cashier form cleanup and one-field lookup; watermark; quicker customer feedback form (rating plus optional chips, one comment box) (#401); feedback inbox filters as dropdowns (#402, one choice per category and urgency). Not started: simplify the business-side form builder (Form name, Key, Question, Type, Required) for quick setup; the branch dropdown on the feedback inbox still drops the other filters when changed.
+
 ## 3. Suggested order
 
-1. Now: your D-C1 rulings and the BDPN answers; authorize the read-only checks in A1; CUSTOMER-AUTH-01 G0 to 01C (documentation only).
-2. Next: the staged release in A2 to A6.
-3. After the release is stable: 01D to 01F, the D-C1 Staff cleanup (`business:view` and `branches:view`), BDPN implementation.
-4. Last: remote enrollment, Network publishing and Feed, commercial, WEB-PUSH-01 (when the owner schedules it).
+1. Now (owner): the live check in A7 as Owner, Staff and customer, and report whether Error 1102 recurs (with the page); answer D-C2, BDPN, CA-01 to CA-10 and WP-1 to WP-6 when ready; say whether to run the read-only Resend and Twilio check.
+2. Next: investigate Error 1102 once the page and Worker are known; the inline retry for the Messages page; simplify the business-side form builder.
+3. After the release is stable: CUSTOMER-AUTH-01 01D to 01F (gated), the D-C1 Staff cleanup (`business:view` and `branches:view`), BDPN implementation, and the WEB-PUSH-01 build when the owner schedules it.
+4. Last: remote enrollment, Network publishing and Feed, commercial.
