@@ -1,6 +1,6 @@
 # WEB-1102: production Web Worker CPU-limit incident (read-only investigation)
 
-**Status: INVESTIGATION RECORD. ROOT CAUSE NOT YET FOUND. No fix is proposed for deployment, and nothing here was deployed, rolled back or changed by this document.**
+**Status (updated 2026-11-13 evening): root cause identified (Workers Free 10 ms CPU limit); fix (Workers Paid plus Web redeploy) verified on a small sample, see sections 10a and 10b. The text below the status updates is the original investigation record and still says the cause was not found; read sections 10a and 10b first. This document itself deployed, rolled back and changed nothing.**
 Written 2026-11-13 from GitHub run records, the repository at `main` `532e65c4`, the owner's Cloudflare Observability screenshot, and local measurements. Labels: VERIFIED, PROPOSED, BLOCKED, NOT IMPLEMENTED, NOT TESTED.
 
 ## 1. Verdict
@@ -165,6 +165,21 @@ Assessed by diffing API route files between the previous production API (`2b2652
 | Docs check                                       | Free plan CPU is 10 ms per request; Paid is 30 seconds by default. Isolates have limited leeway for occasional overage. Cloudflare says server-rendered apps usually need Paid.                                                                                                                                                                                        | VERIFIED against Cloudflare documentation                                  |
 
 **Block 0 remains open, with two of three conditions met:** the plan is Paid (verified) and the new version is active (verified). Still needed: a clean observation window under real traffic (Metrics, last 30 minutes, "Errors by type" showing no "Exceeded CPU Time Limits"). A short burst of requests to the public site, or normal use of the dashboard, will provide it.
+
+## 10b. Observation under traffic, 2026-11-13 about 17:45 UTC (owner screenshots)
+
+Metrics for `echo-grid-feedback-web`, filter "Specific versions (1)" = `3087cbd8`, range "Last 6 hours", version deployed about 49 minutes earlier at 100% of traffic:
+
+| Item                          | Finding                                                                                                                  | Status   |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------ | -------- |
+| Errors (version `3087cbd8`)   | **0** (Errors card). Error rate on the Active deployment card: 0%.                                                       | VERIFIED |
+| Invocations (`3087cbd8`)      | 62 in the window (other versions in the same window: `f2ae60ee` 428, `b3ef5ec8` 14).                                      | VERIFIED |
+| Asset requests (all versions) | 4xx 0, 5xx 0.                                                                                                            | VERIFIED |
+| Per-version error panels      | The "Errors by invocation status" legend was not captured; the filtered Errors card (0) is the evidence used.            | LIMITATION |
+
+**Conclusion:** on Workers Paid, version `3087cbd8` shows no errors over 62 invocations. The sample is small and the window is short, so this is evidence the fix works, not a long-run guarantee. **Recommendation:** owner may certify Block 0 as resolved; keep watching the Errors card during normal use.
+
+**Open observation (not an incident):** CPU time per request is not understood. The CPU Time card for `3087cbd8` showed 103 ms, while the Active deployment card showed a median of 288 ms (24 h, all-version view) and 416.3 ms (6 h). These disagree with each other and with the local warm measurement of about 17 to 19 ms. Likely causes (unconfirmed): cold-start initialisation counted in a small sample, and different aggregations (median versus other). With a 30 second limit this cannot reproduce Error 1102, but Paid bills CPU time, so it should be re-read under steady traffic and investigated if it persists.
 
 ## 11. Open items
 
