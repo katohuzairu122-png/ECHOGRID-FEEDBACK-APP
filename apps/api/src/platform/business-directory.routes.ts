@@ -14,6 +14,7 @@ import { parseJsonBody } from '../lib/validate';
 import { ok } from '../lib/response';
 import { AppError } from '../lib/errors';
 import { ImpersonationService } from './impersonation.service';
+import { isPlatformImpersonationEnabled } from './impersonation-policy';
 
 type Env = {
   Bindings: Bindings;
@@ -172,6 +173,12 @@ platformBusinessRoutes.post(
   '/:id/impersonate',
   requirePlatformRole(['support', 'admin']),
   async (c) => {
+    // Owner ruling D1: this privileged operation is disabled by default,
+    // regardless of caller role, until separately authorized to be enabled.
+    // The gate runs BEFORE input parsing, repository access and JWT issuance.
+    if (!isPlatformImpersonationEnabled(c.env)) {
+      throw new AppError('Platform impersonation is disabled.', 403, 'PLATFORM_IMPERSONATION_DISABLED');
+    }
     const businessId = c.req.param('id');
     const body = await parseJsonBody(c.req.raw, impersonateSchema);
 
