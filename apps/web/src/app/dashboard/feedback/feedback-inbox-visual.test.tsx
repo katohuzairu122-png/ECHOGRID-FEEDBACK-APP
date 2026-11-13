@@ -1,12 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithIntl } from '@/test-utils';
 import type { FeedbackDto } from '@echo-grid-feedback/shared-types';
 import { FeedbackInboxList } from './feedback-inbox-list';
 import { FeedbackFilters } from './feedback-filters';
 import { BranchFilter } from './branch-filter';
-import { SavedViewTabs } from './saved-view-tabs';
 
 const push = vi.hoisted(() => vi.fn());
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push }) }));
@@ -117,9 +116,10 @@ describe('Feedback Inbox visual alignment (presentation only)', () => {
     renderWithIntl(
       <FeedbackFilters
         search=""
+        savedView="critical_now"
         category={[]}
         urgency={[]}
-        baseParams={{ branchId: 'br-1', savedView: 'critical_now' }}
+        baseParams={{ branchId: 'br-1' }}
       />,
     );
     expect(screen.getByRole('search', { name: 'Search and filters' })).toBeInTheDocument();
@@ -144,20 +144,60 @@ describe('Feedback Inbox visual alignment (presentation only)', () => {
     expect(push).toHaveBeenCalledWith('/dashboard/feedback?branchId=br-1');
   });
 
-  it('saved views are a labelled nav with exactly one current page and preserved params in hrefs', async () => {
-    render(
-      await SavedViewTabs({ activeSavedView: 'critical_now', baseParams: { branchId: 'br-1' } }),
+  it('view, category and urgency are single-choice dropdowns that apply on change and keep the other filters', async () => {
+    const user = userEvent.setup();
+    renderWithIntl(
+      <FeedbackFilters
+        search="late"
+        savedView="critical_now"
+        category={[]}
+        urgency={['P1_HIGH']}
+        baseParams={{ branchId: 'br-1' }}
+      />,
     );
-    const nav = screen.getByRole('navigation', { name: 'Saved views' });
-    const current = within(nav)
-      .getAllByRole('link')
-      .filter((a) => a.getAttribute('aria-current') === 'page');
-    expect(current).toHaveLength(1);
-    expect(current[0]).toHaveTextContent('Critical now');
-    expect(within(nav).getByRole('link', { name: 'All' })).toHaveAttribute(
-      'href',
-      '/dashboard/feedback?branchId=br-1',
+    for (const name of ['View', 'Category', 'Urgency']) {
+      const select = screen.getByRole('combobox', { name });
+      expect(select).not.toHaveAttribute('multiple');
+    }
+    expect(screen.getByRole('combobox', { name: 'View' })).toHaveValue('critical_now');
+    expect(screen.getByRole('combobox', { name: 'Urgency' })).toHaveValue('P1_HIGH');
+    expect(within(screen.getByRole('combobox', { name: 'View' })).getAllByRole('option')).toHaveLength(9);
+
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Category' }), 'service_quality');
+    const url = new URL(push.mock.calls.at(-1)![0] as string, 'http://x');
+    expect(url.searchParams.getAll('category')).toEqual(['service_quality']);
+    expect(url.searchParams.get('urgency')).toBe('P1_HIGH');
+    expect(url.searchParams.get('savedView')).toBe('critical_now');
+    expect(url.searchParams.get('branchId')).toBe('br-1');
+    expect(url.searchParams.get('search')).toBe('late');
+    expect(url.searchParams.has('offset')).toBe(false);
+  });
+
+  it('choosing "All" in a dropdown removes that filter only', async () => {
+    const user = userEvent.setup();
+    renderWithIntl(
+      <FeedbackFilters
+        savedView="critical_now"
+        category={['service_quality']}
+        urgency={[]}
+        baseParams={{ branchId: 'br-1' }}
+      />,
     );
-    expect(within(nav).getAllByRole('link')).toHaveLength(9);
+    await user.selectOptions(screen.getByRole('combobox', { name: 'View' }), '');
+    const url = new URL(push.mock.calls.at(-1)![0] as string, 'http://x');
+    expect(url.searchParams.has('savedView')).toBe(false);
+    expect(url.searchParams.getAll('category')).toEqual(['service_quality']);
+    expect(url.searchParams.get('branchId')).toBe('br-1');
+  });
+
+  it('shows the first value of an old multi-value link and replaces it with one choice', async () => {
+    const user = userEvent.setup();
+    renderWithIntl(
+      <FeedbackFilters category={['service_quality', 'cleanliness']} urgency={[]} baseParams={{}} />,
+    );
+    expect(screen.getByRole('combobox', { name: 'Category' })).toHaveValue('service_quality');
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Urgency' }), 'P1_HIGH');
+    const url = new URL(push.mock.calls.at(-1)![0] as string, 'http://x');
+    expect(url.searchParams.getAll('category')).toEqual(['service_quality']);
   });
 });
