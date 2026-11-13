@@ -1,7 +1,7 @@
 # ACCESS-MODEL-01: who signs in to which part (design, version 2)
 
 **Status: DESIGN ONLY. Nothing here is built, migrated, deployed or authorized. Every block needs its own authorization. Financial activation remains NO-GO.**
-Version 2, 2026-11-13. Supersedes version 1 in this pull request. Written from the owner's two handwritten sketches and the master directive, and verified against the code on `main` `532e65c4`. Labels: **VERIFIED** (seen in code or run records), **PROPOSED** (a recommendation awaiting the owner), **BLOCKED**, **NOT IMPLEMENTED**, **NOT TESTED**.
+Version 2, 2026-11-13 (owner rulings recorded in section 3a). Supersedes version 1 in this pull request. Written from the owner's two handwritten sketches and the master directive, and verified against the code on `main` `532e65c4`. Labels: **VERIFIED** (seen in code or run records), **PROPOSED** (a recommendation awaiting the owner), **BLOCKED**, **NOT IMPLEMENTED**, **NOT TESTED**.
 Companion documents in this folder: `ACCESS_SEC_01_ASSESSMENT.md` (privileged-access security) and `WEB_1102_INCIDENT_REPORT.md` (production Web incident).
 
 **Priority order: WEB-1102, then ACCESS-SEC-01, then AM-A to AM-F. No new Web feature goes to production until WEB-1102 is resolved and certified.**
@@ -30,9 +30,9 @@ After **any successful authentication**, work out which destinations the authent
 
 Customer and staff authentication are separate domains in the code: customers use phone OTP (`/customer-auth/otp/*`), staff and platform users use email and password. A shared phone, email or name must **never** link them automatically. If one person genuinely has customer, business and platform identities, linking requires: independent verification of each identity, explicit binding and authorization, server-side role and permission checks, separate session trust domains, auditable link and unlink, and protection against role escalation and session substitution. **The chooser is not an authorization mechanism:** every backend request enforces actor, tenant, role, session and permission on its own. Until a linking design is approved, a chooser can only offer destinations within **one** authentication domain (for example a staff identity that also has a platform role).
 
-## 3. Owner decisions D1 to D6 (PROPOSED, none yet ratified)
+## 3. Owner decisions D1 to D6 (RATIFIED by the owner on 2026-11-13, see section 3a)
 
-These are recommendations, not locked architecture. **No approval is inferred from a recommendation.**
+The wording below was the proposal. **The owner ratified all six on 2026-11-13 (section 3a).** Where this table and section 3a differ in detail, section 3a governs.
 
 | #   | Topic                      | Proposed ruling                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | --- | -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -43,6 +43,27 @@ These are recommendations, not locked architecture. **No approval is inferred fr
 | D5  | Remember destination       | Do not remember the last choice in v1. Single-destination accounts enter directly; multi-destination accounts choose each time. Switching must not weaken session isolation.                                                                                                                                                                                                                                                                                         |
 | D6  | Chooser timing             | After successful authentication by any authorized method (see section 2). No pre-authentication role lookup.                                                                                                                                                                                                                                                                                                                                                         |
 
+### 3a. Owner rulings recorded 2026-11-13 (RATIFIED; documentation only)
+
+The owner ruled on every item in section 3 and on the open decisions in section 13. This section records those rulings. **They authorize documentation only. No implementation, MFA activation, impersonation flag change, merge, migration or deployment is authorized by them.**
+
+| Item | Ruling |
+| ---- | ------ |
+| D1 | **APPROVED.** The platform console manages platform data and businesses. No code deployments, database migrations or secret access. Impersonation is excluded from v1. |
+| D2 | **APPROVED.** Survey oversight only in v1: view, pause and close. Platform-created surveys are deferred. |
+| D3 | **APPROVED.** Aggregate customer counts only, with privacy protections, small-group rounding and audit logging. No customer lists or exports. |
+| D4 | **APPROVED.** Read-only legal status: document versions, effective dates, and terms acceptance only where evidence already exists. |
+| D5 | **APPROVED.** Do not remember destinations in v1. Single-destination users enter directly; multi-destination users choose after each new sign-in. |
+| D6 | **APPROVED.** The "Where to?" chooser appears only after successful authentication by any authorized method. No pre-authentication role disclosure. |
+| Impersonation (live capability) | **OPTION A.** Disable the existing impersonation through a **server-enforced feature flag**, in a separately authorized, tested release. Preserve historical audit records. Do not remove the implementation code or disrupt other administrative permissions. **Not yet done:** impersonation remains live until that release is authorized and shipped. |
+| MFA | **APPROVED.** Mandatory, API-enforced MFA for all platform-role users first, supporting passkeys or authenticator-app verification, with recent-authentication step-up for sensitive actions. Cloudflare Access may be added later as defense in depth, never as a replacement for API authorization. **Not yet built or activated.** |
+| Break-glass | **APPROVED WITH CONDITIONS.** Single-use, securely hashed recovery codes; secure enrollment, regeneration, revocation, rate limiting and audit logging; and a separately controlled emergency administrator with restricted recovery procedures. **Not yet designed in detail or built.** |
+| Terms-acceptance storage | **DEFERRED.** Show existing verifiable evidence only. No new database storage in ACCESS-MODEL-01. |
+| Handwritten "surveys" | **Interpretation accepted:** use "survey oversight", not "platform survey creation", for v1. The original handwriting remains subject to verification. |
+| Handwritten "final customer number" | **Interpretation accepted:** aggregated unique platform customers, per-business membership counts and period-based counts. The original handwriting remains subject to verification. |
+| Development | **NOT AUTHORIZED.** Do not implement AM-B, activate MFA, change impersonation flags, merge, migrate or deploy without separate authorization. |
+| Release gate | **Preserved.** The WEB-1102 production-stability restriction stays until the Worker CPU-limit incident is independently resolved and verified. |
+
 ## 4. Corrections to version 1 of this document
 
 1. D6 widened from "after a password" to any authorized authentication method.
@@ -50,7 +71,7 @@ These are recommendations, not locked architecture. **No approval is inferred fr
 3. D3 expanded with counting semantics and small-group protections.
 4. **Terms acceptance:** version 1 said it is "recorded at signup". **That is not verified.** The signup form has a required checkbox and the action reads it, but no stored acceptance record was found in the API or database schema. A legal status page showing acceptance evidence would need new storage (its own migration block).
 5. Added the separate-identity-domains rule and the rule that the chooser is not authorization.
-6. The two handwritten lines ("creates surveys" and "final customer number") remain the owner's to confirm against the original drawings; they are carried as PROPOSED readings only.
+6. The two handwritten lines ("creates surveys" and "final customer number"): the owner accepted the interpretations on 2026-11-13 (section 3a), subject to verification against the original drawings.
 7. Block sequence re-ordered so production stability and platform security come first.
 
 ## 5. Current implementation (VERIFIED against source, `main` `532e65c4`)
@@ -106,7 +127,7 @@ Remain compatible with CUSTOMER-AUTH-01: one persistent global customer identity
 | -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
 | **0. WEB-1102**      | Diagnose the CPU-limit regression, confirm deployed versions, prepare a minimal remediation. See `WEB_1102_INCIDENT_REPORT.md`.                                                              | **Release blocked until verified.**                                   |
 | **1. ACCESS-SEC-01** | Privileged authentication (application MFA, optionally Cloudflare Access), break-glass, role provisioning. See `ACCESS_SEC_01_ASSESSMENT.md`.                                                | Owner decisions; no production security change without authorization. |
-| **2. AM-A**          | Owner ratifies D1 to D6 and confirms this document.                                                                                                                                          | Owner.                                                                |
+| **2. AM-A**          | **D1 to D6 ratified by the owner on 2026-11-13 (section 3a).** Closes when the owner merges this reconciliation.                                                                                                                                          | Owner.                                                                |
 | **3. AM-B**          | Post-authentication "Where to?" chooser (section 2). Web only, no migration unless justified.                                                                                                | Own authorization; after block 0.                                     |
 | **4. AM-C**          | Platform business area, as separate reviewable sub-blocks: customer counts, community oversight, survey oversight, reports and support, legal status, authorized billing and business pages. | Own authorization; **requires block 1 enforced**.                     |
 | **5. AM-D**          | Split business console and dashboard; compatibility redirects only where safe; D-C1 permissions authoritative.                                                                               | Own authorization.                                                    |
@@ -130,13 +151,10 @@ Remain compatible with CUSTOMER-AUTH-01: one persistent global customer identity
 - **Signup page has no background watermark** (owner screenshot, 2026-11-13): the "Create your account" page lacks the Echo Grid watermark pattern that the workspace pages have. Recorded for later; **not built**.
 - Simplify the business-side feedback form builder; messages page inline retry.
 
-## 13. Open owner decisions
+## 13. Owner decisions (resolved 2026-11-13, see section 3a)
 
-1. Ratify or amend D1 to D6, including the impersonation amendment and what to do about the live impersonation capability.
-2. Confirm the two handwritten lines (surveys; final customer number).
-3. MFA versus Cloudflare Access (or both), and the break-glass design (ACCESS-SEC-01).
-4. Whether terms-acceptance evidence is wanted in version 1 (requires new storage).
-5. Approval to build any block.
+1. D1 to D6, impersonation (Option A), MFA, break-glass, terms-acceptance storage and the two handwritten lines: **ruled** (section 3a).
+2. **Still open:** certification of WEB-1102 (Block 0); separate authorization for each build block; the detailed break-glass and emergency-administrator design; the date and release for disabling impersonation.
 
 ## 14. Release assessment
 

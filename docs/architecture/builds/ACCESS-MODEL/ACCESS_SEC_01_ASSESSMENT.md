@@ -89,3 +89,10 @@ No MFA enabled, no Cloudflare Access policy created, no platform account provisi
 ## 7. Acceptance criteria for the future build
 
 A platform route is refused without a verified second factor; a role removal ends access on the next request; the last admin cannot be removed; step-up is enforced on listed actions; every grant, revoke and failed factor is audited; the privileged API paths are protected independently of the web page; and a recovery drill is performed once in staging.
+
+## 8. Owner rulings, 2026-11-13 (recorded; nothing built or activated)
+
+- **Order:** application MFA enforced in the API for all platform-role users **first**; passkey or authenticator-app verification; recent-authentication step-up for sensitive actions. Cloudflare Access may be added later as defense in depth, **not** as a replacement for API authorization.
+- **Break-glass (approved with conditions):** single-use, securely hashed recovery codes; secure enrollment, regeneration and revocation; rate limiting; audit logging; and a **separately controlled emergency administrator** with restricted recovery procedures (detailed design still to be written and approved).
+- **Impersonation:** Option A. Disable it through a server-enforced feature flag in a separately authorized, tested release; preserve historical audit records; keep the code; do not disrupt other administrative permissions. **It is still live in production until that release.**
+- **Status:** none of this is implemented. No MFA, flag change, account provisioning or Cloudflare Access policy was made. Each needs its own authorization.
