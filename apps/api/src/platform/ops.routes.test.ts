@@ -72,7 +72,7 @@ function executionCtx(): ExecutionContext {
 }
 
 async function callTestAlert(
-  options: { token?: string | undefined; body?: unknown; path?: string } = {},
+  options: { token?: string | undefined; body?: unknown; path?: string; impersonationEnabled?: boolean } = {},
 ): Promise<Response> {
   const headers: Record<string, string> = { 'content-type': 'application/json' };
   if (options.token) headers.authorization = `Bearer ${options.token}`;
@@ -84,7 +84,7 @@ async function callTestAlert(
       headers,
       ...(options.body === undefined ? {} : { body: JSON.stringify(options.body) }),
     },
-    env,
+    options.impersonationEnabled ? { ...env, PLATFORM_IMPERSONATION_ENABLED: 'true' } : env,
     executionCtx(),
   );
 }
@@ -172,7 +172,7 @@ describe('POST /platform/ops/test-alert -- authorization', () => {
       SUPPORT_ACTOR_ID,
       JWT_SECRET,
     );
-    const response = await callTestAlert({ token });
+    const response = await callTestAlert({ token, impersonationEnabled: true });
 
     expect(response.status).toBe(403);
     expect(await errorCodeOf(response)).toBe('IMPERSONATED_PLATFORM_ACCESS_DENIED');
