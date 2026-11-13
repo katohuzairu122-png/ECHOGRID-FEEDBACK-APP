@@ -6,7 +6,7 @@ import {
   customerAuthenticate,
   type CustomerAuthVariables,
 } from '../middleware/customer-authenticate';
-import { rateLimit } from '../middleware/rate-limit';
+import { rateLimitByCustomer } from '../middleware/rate-limit';
 import { parseJsonBody } from '../lib/validate';
 import { ok } from '../lib/response';
 import { CustomerSettlementCompletionService } from './customer-settlement-completion.service';
@@ -21,7 +21,7 @@ type Env = {
 
 export const orphanSettlementCustomerRoutes = new Hono<Env>();
 
-orphanSettlementCustomerRoutes.use('*', customerAuthenticate, rateLimit('PUBLIC_RATE_LIMITER'));
+orphanSettlementCustomerRoutes.use('*', customerAuthenticate, rateLimitByCustomer());
 
 async function withDb<T>(c: Context<Env>, fn: (db: Database) => Promise<T>): Promise<T> {
   const { db, close } = await createDb(c.env.HYPERDRIVE);

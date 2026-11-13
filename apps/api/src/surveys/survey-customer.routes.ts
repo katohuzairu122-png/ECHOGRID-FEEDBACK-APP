@@ -7,7 +7,7 @@ import type { Bindings } from '../config/env';
 import { createDb, type Database } from '../db/client';
 import { createRepositories } from '../repositories';
 import { customerAuthenticate, type CustomerAuthVariables } from '../middleware/customer-authenticate';
-import { rateLimit } from '../middleware/rate-limit';
+import { rateLimitByCustomer } from '../middleware/rate-limit';
 import { parseJsonBody } from '../lib/validate';
 import { ok } from '../lib/response';
 import { parseListPagination } from '../lib/list-pagination';
@@ -20,7 +20,7 @@ type Env = {
 
 export const surveyCustomerRoutes = new Hono<Env>();
 
-surveyCustomerRoutes.use('*', customerAuthenticate, rateLimit('PUBLIC_RATE_LIMITER'));
+surveyCustomerRoutes.use('*', customerAuthenticate, rateLimitByCustomer());
 
 function serializeCampaignDetail(result: Awaited<ReturnType<SurveyParticipationService['getCampaign']>>) {
   return {

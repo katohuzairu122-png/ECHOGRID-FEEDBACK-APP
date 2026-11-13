@@ -285,6 +285,16 @@ namespace_id = "1006"
 limit = 10
 period = 60
 
+# Per-customer budget for every route behind customerAuthenticate (rateLimitByCustomer). Keyed by the customer id,
+# not the IP: the web app calls this Worker Worker-to-Worker, so an IP key put every customer in one shared bucket.
+# 60/min per customer is a starting estimate (a wallet load makes several calls plus background refreshes).
+[[ratelimits]]
+name = "CUSTOMER_API_RATE_LIMITER"
+namespace_id = "1007"
+[ratelimits.simple]
+limit = 60
+period = 60
+
 # Cron triggers -- fire the `scheduled` export (src/index.ts, Sentiment
 # Analytics Block 3), which enqueues one generate_summary job per business
 # per period. Business-wide only (branchId null) for now; per-branch
@@ -412,6 +422,13 @@ name = "LOOKUP_RATE_LIMITER"
 namespace_id = "2006"
 [env.staging.ratelimits.simple]
 limit = 10
+period = 60
+
+[[env.staging.ratelimits]]
+name = "CUSTOMER_API_RATE_LIMITER"
+namespace_id = "2007"
+[env.staging.ratelimits.simple]
+limit = 60
 period = 60
 [env.staging.triggers]
 crons = [

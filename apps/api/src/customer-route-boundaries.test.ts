@@ -26,7 +26,10 @@ vi.mock('./repositories', () => ({ createRepositories: () => ({
   communityPointAccounts: { findByCustomerId: mocks.getCommunityPointAccount },
   communityPointTransactions: { listForCustomer: mocks.listCommunityPointTransactions },
 }) }));
-vi.mock('./middleware/rate-limit', () => ({ rateLimit: () => async (_c: unknown, next: () => Promise<void>) => next() }));
+vi.mock('./middleware/rate-limit', () => ({
+  rateLimit: () => async (_c: unknown, next: () => Promise<void>) => next(),
+  rateLimitByCustomer: () => async (_c: unknown, next: () => Promise<void>) => next(),
+}));
 vi.mock('./middleware/audit', () => ({ auditTrail: async (_c: unknown, next: () => Promise<void>) => next() }));
 
 import worker from './index';

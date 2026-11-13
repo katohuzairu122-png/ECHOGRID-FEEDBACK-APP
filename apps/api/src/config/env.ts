@@ -257,6 +257,10 @@ export interface Bindings {
   /** Guards POST /loyalty/actions/lookup-customer (cashier phone lookup). Keyed by business and staff user so one
    * cashier cannot exhaust another's budget; deliberately small because every call probes the member list. */
   LOOKUP_RATE_LIMITER: RateLimit;
+  /** Per-customer budget for every route behind customerAuthenticate (middleware/rate-limit.ts,
+   * rateLimitByCustomer). Optional in the type so a missing binding falls back to PUBLIC_RATE_LIMITER keyed by
+   * customer instead of crashing; wrangler.toml declares it for both environments. */
+  CUSTOMER_API_RATE_LIMITER?: RateLimit;
 }
 
 const environmentSchema = z.enum(['development', 'staging', 'production']);

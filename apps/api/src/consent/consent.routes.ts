@@ -3,7 +3,7 @@ import type { Bindings } from '../config/env';
 import { createDb, type Database } from '../db/client';
 import { createRepositories } from '../repositories';
 import { customerAuthenticate, type CustomerAuthVariables } from '../middleware/customer-authenticate';
-import { rateLimit } from '../middleware/rate-limit';
+import { rateLimitByCustomer } from '../middleware/rate-limit';
 import { ok } from '../lib/response';
 import { AppError } from '../lib/errors';
 import { parseListPagination } from '../lib/list-pagination';
@@ -11,7 +11,7 @@ import { parseListPagination } from '../lib/list-pagination';
 type Env = { Bindings: Bindings; Variables: CustomerAuthVariables };
 
 export const consentRoutes = new Hono<Env>();
-consentRoutes.use('*', customerAuthenticate, rateLimit('PUBLIC_RATE_LIMITER'));
+consentRoutes.use('*', customerAuthenticate, rateLimitByCustomer());
 
 async function withDb<T>(c: Context<Env>, fn: (db: Database) => Promise<T>): Promise<T> {
   const { db, close } = await createDb(c.env.HYPERDRIVE);

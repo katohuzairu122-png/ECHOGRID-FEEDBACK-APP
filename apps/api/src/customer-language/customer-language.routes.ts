@@ -4,7 +4,7 @@ import type { Bindings } from '../config/env';
 import { createDb } from '../db/client';
 import { createRepositories } from '../repositories';
 import { customerAuthenticate, type CustomerAuthVariables } from '../middleware/customer-authenticate';
-import { rateLimit } from '../middleware/rate-limit';
+import { rateLimitByCustomer } from '../middleware/rate-limit';
 import { parseJsonBody } from '../lib/validate';
 import { ok } from '../lib/response';
 import { AppError } from '../lib/errors';
@@ -16,7 +16,7 @@ type Env = { Bindings: Bindings; Variables: CustomerAuthVariables };
  * read or written (customerId comes from the verified JWT, never the request).
  */
 export const customerLanguageRoutes = new Hono<Env>();
-customerLanguageRoutes.use('*', customerAuthenticate, rateLimit('PUBLIC_RATE_LIMITER'));
+customerLanguageRoutes.use('*', customerAuthenticate, rateLimitByCustomer());
 
 customerLanguageRoutes.get('/', async (c) => {
   const { db, close } = await createDb(c.env.HYPERDRIVE);
