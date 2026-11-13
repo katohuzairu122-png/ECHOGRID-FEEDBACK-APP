@@ -72,7 +72,7 @@ async function request(
 ): Promise<Response> {
   const token = opts.token ?? await signAccessToken(opts.userId ?? ADMIN_ID, ACCESS_SECRET);
   return app.request(
-    `/api/v1/platform/businesses${path}`,
+    `/api/v1/platform/businesses${path === '/' ? '' : path}`,
     {
       method: opts.method ?? 'POST',
       headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
