@@ -97,6 +97,8 @@
     "thankYouTitle": "Thank you!",
     "thankYouDescription": "Your feedback for {branchName} has been received.",
     "heading": "How was your visit?",
+    "typeLabelOptional": "What is this about? (optional)",
+    "moreDisclosure": "More details (optional)",
     "typeLabel": "What would you like to share?",
     "typePlaceholder": "Choose one",
     "typeComplaint": "Complaint",

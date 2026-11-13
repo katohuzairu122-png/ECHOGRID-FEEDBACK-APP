@@ -37,7 +37,7 @@ describe('FeedbackForm', () => {
 
     renderWithIntl(<FeedbackForm token="tok123" branchName="Downtown" businessName="Echo Grid" submissionKey={crypto.randomUUID()} />);
 
-    await user.selectOptions(screen.getByLabelText('What would you like to share?'), 'Other');
+    await user.click(screen.getByRole('radio', { name: 'Other' }));
     await user.click(screen.getByRole('radio', { name: '5 stars' }));
     await user.type(screen.getByLabelText('Comments (optional)'), 'Loved it');
     await user.click(screen.getByRole('button', { name: 'Continue' }));
@@ -57,7 +57,7 @@ describe('FeedbackForm', () => {
 
     renderWithIntl(<FeedbackForm token="tok123" branchName="Downtown" businessName="Echo Grid" submissionKey={crypto.randomUUID()} />);
 
-    await user.selectOptions(screen.getByLabelText('What would you like to share?'), 'Compliment');
+    await user.click(screen.getByRole('radio', { name: 'Compliment' }));
     await user.click(screen.getByRole('radio', { name: '5 stars' }));
     await user.click(screen.getByRole('button', { name: 'Continue' }));
 
@@ -80,7 +80,7 @@ describe('FeedbackForm', () => {
 
     renderWithIntl(<FeedbackForm token="tok123" branchName="Downtown" businessName="Echo Grid" submissionKey={crypto.randomUUID()} />);
 
-    await user.selectOptions(screen.getByLabelText('What would you like to share?'), 'Suggestion');
+    await user.click(screen.getByRole('radio', { name: 'Suggestion' }));
     await user.click(screen.getByRole('radio', { name: '4 stars' }));
     await user.click(screen.getByRole('button', { name: 'Continue' }));
 
@@ -99,7 +99,7 @@ describe('FeedbackForm', () => {
 
     renderWithIntl(<FeedbackForm token="tok123" branchName="Downtown" businessName="Echo Grid" submissionKey={crypto.randomUUID()} />);
 
-    await user.selectOptions(screen.getByLabelText('What would you like to share?'), 'Compliment');
+    await user.click(screen.getByRole('radio', { name: 'Compliment' }));
     await user.click(screen.getByRole('radio', { name: '5 stars' }));
     await user.click(screen.getByRole('button', { name: 'Continue' }));
     await user.click(await screen.findByRole('button', { name: 'Submit feedback' }));
@@ -112,11 +112,51 @@ describe('FeedbackForm', () => {
     const user = userEvent.setup();
     renderWithIntl(<FeedbackForm token="tok123" branchName="Downtown" businessName="Echo Grid" submissionKey={crypto.randomUUID()} />);
 
-    await user.selectOptions(screen.getByLabelText('What would you like to share?'), 'Complaint');
+    await user.click(screen.getByRole('radio', { name: 'Complaint' }));
 
     expect(screen.getByLabelText('What went wrong?')).toBeRequired();
     expect(screen.getByLabelText('How could we improve? (optional)')).not.toBeRequired();
     expect(screen.getByLabelText('Any other advice? (optional)')).not.toBeRequired();
+  });
+
+  it('needs only a star rating to continue: no type, no comment', async () => {
+    const user = userEvent.setup();
+    const { container } = renderWithIntl(<FeedbackForm token="tok123" branchName="Downtown" businessName="Echo Grid" submissionKey={crypto.randomUUID()} />);
+    const form = container.querySelector('form') as HTMLFormElement;
+
+    expect(form.checkValidity()).toBe(false); // no rating yet
+    for (const radio of screen.getAllByRole('radio').filter((r) => (r as HTMLInputElement).name === 'feedbackType')) {
+      expect(radio).not.toBeRequired();
+    }
+    expect(screen.getByLabelText('Comments (optional)')).not.toBeRequired();
+    expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('radio', { name: '5 stars' }));
+    expect(form.checkValidity()).toBe(true); // rating alone is enough
+    expect(screen.getByRole('button', { name: 'Continue' })).toBeEnabled();
+  });
+
+  it('offers the four types as single-choice chips and lets the customer change their pick', async () => {
+    const user = userEvent.setup();
+    renderWithIntl(<FeedbackForm token="tok123" branchName="Downtown" businessName="Echo Grid" submissionKey={crypto.randomUUID()} />);
+
+    const compliment = screen.getByRole('radio', { name: 'Compliment' });
+    const complaint = screen.getByRole('radio', { name: 'Complaint' });
+    expect(screen.getByRole('radio', { name: 'Suggestion' })).toBeInTheDocument();
+    expect(screen.getByRole('radio', { name: 'Other' })).toBeInTheDocument();
+    await user.click(compliment);
+    expect(compliment).toBeChecked();
+    await user.click(complaint);
+    expect(complaint).toBeChecked();
+    expect(compliment).not.toBeChecked();
+  });
+
+  it('keeps the extra suggestion and advice fields inside a collapsed section', () => {
+    renderWithIntl(<FeedbackForm token="tok123" branchName="Downtown" businessName="Echo Grid" submissionKey={crypto.randomUUID()} />);
+
+    const more = screen.getByText('More details (optional)').closest('details');
+    expect(more).not.toBeNull();
+    expect(more).not.toHaveAttribute('open');
+    expect(more).toContainElement(screen.getByLabelText('How could we improve? (optional)'));
   });
 });
 

@@ -27,6 +27,14 @@ import { navigateWithCommittedCookies } from '@/lib/browser-navigation';
 const followUpInitial: FollowUpQuestionState = {};
 const submitInitial: FeedbackFormState = {};
 
+/** Quick-pick chips: optional, one tap, same values the server already understands. */
+const FEEDBACK_TYPES = [
+  { value: 'Compliment', key: 'typeCompliment' },
+  { value: 'Suggestion', key: 'typeSuggestion' },
+  { value: 'Complaint', key: 'typeComplaint' },
+  { value: 'Other', key: 'typeOther' },
+] as const;
+
 interface FeedbackFormProps {
   token: string;
   branchName: string;
@@ -102,38 +110,59 @@ export function FeedbackForm({ token, branchName, businessName, submissionKey, f
                     <StarRating name="rating" required />
                   </div>
 
-                  <div className="flex flex-col gap-1.5">
-                    <Label htmlFor="feedbackType">{t('typeLabel')}</Label>
-                    <select id="feedbackType" name="feedbackType" value={feedbackType} onChange={(event) => setFeedbackType(event.target.value)} required className="h-10 rounded-md border border-neutral-300 bg-white px-3">
-                      <option value="">{t('typePlaceholder')}</option>
-                      <option value="Complaint">{t('typeComplaint')}</option>
-                      <option value="Suggestion">{t('typeSuggestion')}</option>
-                      <option value="Compliment">{t('typeCompliment')}</option>
-                      <option value="Other">{t('typeOther')}</option>
-                    </select>
-                  </div>
+                  <fieldset className="flex flex-col gap-2">
+                    <legend className="text-sm font-medium text-neutral-700">{t('typeLabelOptional')}</legend>
+                    <div className="flex flex-wrap gap-2">
+                      {FEEDBACK_TYPES.map(({ value, key }) => (
+                        <label
+                          key={value}
+                          className={`cursor-pointer rounded-full border px-4 py-2 text-sm transition-colors has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-offset-2 ${
+                            feedbackType === value
+                              ? 'border-neutral-900 bg-neutral-900 text-white'
+                              : 'border-neutral-300 bg-white text-neutral-800 hover:border-neutral-500'
+                          }`}
+                        >
+                          <input
+                            type="radio"
+                            name="feedbackType"
+                            value={value}
+                            checked={feedbackType === value}
+                            onChange={() => setFeedbackType(value)}
+                            className="sr-only"
+                          />
+                          {t(key)}
+                        </label>
+                      ))}
+                    </div>
+                  </fieldset>
 
                   <div className="flex flex-col gap-1.5">
                     <Label htmlFor="comment">{feedbackType === 'Complaint' ? t('complaintLabel') : t('commentLabel')}</Label>
                     <Textarea
                       id="comment"
                       name="comment"
-                      rows={4}
+                      rows={3}
                       maxLength={1000}
                       placeholder={feedbackType === 'Complaint' ? t('complaintPlaceholder') : t('commentPlaceholder')}
                       required={feedbackType === 'Complaint'}
                     />
                   </div>
 
-                  <div className="flex flex-col gap-1.5">
-                    <Label htmlFor="suggestion">{t('suggestionLabel')}</Label>
-                    <Textarea id="suggestion" name="suggestion" rows={2} maxLength={400} placeholder={t('suggestionPlaceholder')} />
-                  </div>
-
-                  <div className="flex flex-col gap-1.5">
-                    <Label htmlFor="advice">{t('adviceLabel')}</Label>
-                    <Textarea id="advice" name="advice" rows={2} maxLength={400} placeholder={t('advicePlaceholder')} />
-                  </div>
+                  <details className="rounded-md border border-neutral-200 p-3">
+                    <summary className="cursor-pointer text-sm font-medium text-neutral-700">
+                      {t('moreDisclosure')}
+                    </summary>
+                    <div className="mt-3 flex flex-col gap-3">
+                      <div className="flex flex-col gap-1.5">
+                        <Label htmlFor="suggestion">{t('suggestionLabel')}</Label>
+                        <Textarea id="suggestion" name="suggestion" rows={2} maxLength={400} placeholder={t('suggestionPlaceholder')} />
+                      </div>
+                      <div className="flex flex-col gap-1.5">
+                        <Label htmlFor="advice">{t('adviceLabel')}</Label>
+                        <Textarea id="advice" name="advice" rows={2} maxLength={400} placeholder={t('advicePlaceholder')} />
+                      </div>
+                    </div>
+                  </details>
 
                   <details className="rounded-md border border-neutral-200 p-3">
                     <summary className="cursor-pointer text-sm font-medium text-neutral-700">
