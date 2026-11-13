@@ -6,7 +6,6 @@ import { getActiveBusiness } from '@/lib/business';
 import { getCurrentUser } from '@/lib/platform';
 import { apiFetch, ApiError } from '@/lib/api-client';
 import { BranchFilter } from './branch-filter';
-import { SavedViewTabs } from './saved-view-tabs';
 import { FeedbackFilters } from './feedback-filters';
 import { FeedbackInboxList } from './feedback-inbox-list';
 import { buttonVariants } from '@/components/ui';
@@ -126,13 +125,11 @@ export default async function FeedbackPage({ searchParams }: FeedbackPageProps) 
   );
   const branchNames = new Map(branches.map((b) => [b.id, b.name]));
 
-  // Carried into SavedViewTabs/FeedbackFilters so switching a saved view or
-  // submitting the filter form never silently drops the other active
-  // filters -- every param EXCEPT offset (a new filter/view always starts
-  // back at page 1) survives into the base for the next navigation.
+  // Carried into FeedbackFilters so changing a dropdown or submitting the
+  // search never silently drops the branch scope; the view, category,
+  // urgency and search are passed separately and offset always resets.
   const baseParams: Record<string, string> = {};
   if (branchId) baseParams.branchId = branchId;
-  if (savedView) baseParams.savedView = savedView;
   if (search) baseParams.search = search;
 
   const pageHref = (nextOffset: number) => {
@@ -147,9 +144,9 @@ export default async function FeedbackPage({ searchParams }: FeedbackPageProps) 
       {header}
 
       <section className={styles.toolbar} aria-label={t('filtersLabel')}>
-        <SavedViewTabs activeSavedView={savedView} baseParams={baseParams} />
         <FeedbackFilters
           search={search}
+          savedView={savedView}
           category={category}
           urgency={urgency}
           baseParams={baseParams}
