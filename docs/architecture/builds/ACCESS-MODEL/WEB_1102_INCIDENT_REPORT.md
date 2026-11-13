@@ -35,52 +35,73 @@ Next diagnostic action: the owner reads the active Web version id and its deploy
 
 ## 4. Evidence
 
-**Observed (owner screenshot, VERIFIED as reported):** error is the CPU execution limit ("Worker exceeded CPU time limit"; Cloudflare page "Error 1102, Worker exceeded resource limits"), not wall-clock latency or a memory error message. It affects the public landing page as well as the dashboard, so it is not specific to one feature.
+**Observed (owner screenshot, VERIFIED as reported):** the error is the CPU execution limit ("Worker exceeded CPU time limit"; Cloudflare page "Error 1102, Worker exceeded resource limits"), not a wall-clock, memory or other exception. It affects the public landing page as well as the dashboard, so it is not specific to one feature.
 
-**Local measurement (VERIFIED, NOT a production measurement):** I built the Worker at `b2f85ac0` and at `532e65c4` and ran both in Cloudflare's local runtime (workerd), measuring workerd CPU per request over 30 warm requests and the first (cold) request:
+### 4.1 Local measurement method (VERIFIED, NOT a production measurement)
 
-| Page                                | Old, warm | New, warm | Old, cold | New, cold |
-| ----------------------------------- | --------- | --------- | --------- | --------- |
-| `/`                                 | 39.3 ms   | 40.3 ms   | 290 ms    | 280 ms    |
-| `/login`                            | 18.0      | 21.3      | 60        | 70        |
-| `/signup`                           | 23.7      | 22.7      | 40        | 30        |
-| `/privacy`                          | 19.0      | 21.7      | 40        | 40        |
-| `/loyalty/login`                    | 19.3      | 18.0      | 80        | 110       |
-| `/dashboard` (signed out, redirect) | 4.7       | 6.0       | 0         | 10        |
+I built the Worker at `b2f85ac0` (old) and `532e65c4` (new) and ran each in Cloudflare's local runtime (workerd) against the **same new API and a throwaway PostgreSQL 16 with all 69 migrations** (which is the current production combination: old Web with new API). CPU is the sum of CPU time of both runtime processes that `wrangler dev` starts (a proxy and the process that runs the Worker). Requests were made from a signed-in browser session with the cache bypassed. Each figure is the average over 20 warm requests; each build was run 4 times, alternating, and the table shows the median and range. CPU time is read in 10 ms ticks, so single numbers are good to about 1 ms only after averaging.
 
-Main server bundle: 7.39 MB (old) to 7.56 MB (new), +2.3%. A CPU profile shows time spread across Next.js and React rendering inside one bundled file, with no single hot spot; function names are minified, so features cannot be attributed.
+**Correction recorded:** the first signed-in harness I wrote counted only the proxy process and under-reported CPU by about 7x. I found the error by listing the processes, fixed it, and discarded those numbers. The figures below use the corrected method. The signed-out figures in the earlier version of this report (summing all runtime processes) agree with it.
 
-Caveats: this sandbox is not the Cloudflare edge, so absolute numbers do not transfer; only the old-to-new comparison does. A signed-in `/dashboard` could not be measured because it needs the API. Production CPU-time metrics were **not available** to me.
+### 4.2 Result: warm CPU per request, median of 4 runs (ms)
 
-## 3a. What is NOT supported by the evidence
+| Page                     | Old  | New  | Difference                                              |
+| ------------------------ | ---- | ---- | ------------------------------------------------------- |
+| `/` signed out           | 50.8 | 51.2 | +0.5                                                    |
+| `/login`                 | 28.5 | 29.5 | +1.0                                                    |
+| `/privacy`               | 26.5 | 24.2 | -2.2                                                    |
+| `/` signed in (redirect) | 31.2 | 34.0 | +2.8                                                    |
+| `/dashboard`             | 38.5 | 44.2 | **+5.8** (ranges 36 to 40 vs 41 to 46, not overlapping) |
+| `/dashboard/feedback`    | 38.2 | 38.8 | +0.5                                                    |
+| `/dashboard/loyalty`     | 38.2 | 34.8 | -3.5                                                    |
+| `/dashboard/messages`    | 30.2 | 33.0 | +2.8                                                    |
+| `/dashboard/settings`    | 28.0 | 31.8 | +3.8                                                    |
 
-- "The new release made pages heavier": **not supported**. Measured per-request CPU is about the same.
+First request after start (cold), `/`: old 130 to 160 ms, new 110 to 160 ms. Main server bundle: 7.39 MB (old) to 7.56 MB (new), +2.3%.
+
+### 4.3 What the measurements say
+
+1. **Public pages are equal old versus new.** No regression in the landing, login or privacy pages.
+2. **Signed-in pages are slightly higher on the new build** (about 1 to 6 ms, up to about 15%); only `/dashboard` home is consistently higher. Not enough to explain a failure that did not occur with the old build, unless the account sits close to its limit.
+3. **Every request is expensive, old and new:** about 25 to 50 ms locally even for a plain redirect, and 110 to 160 ms for the first request after a cold start. That large fixed cost per request is the dominant factor, and it was already present in the old release.
+4. **Profile (new build, unminified wrapper, 40 warm requests to `/privacy`):** CPU is spread across the Next.js and React server runtime and OpenNext's request handling, with no single hot spot. Request routing in the OpenNext layer (route pattern compilation and matching) is visible at roughly a tenth of the Worker's own CPU. The Next.js server code itself is pre-minified by Next, so its functions cannot be named.
+
+Caveats: this sandbox is not the Cloudflare edge, so absolute numbers do not transfer; only the old-versus-new comparison does. Production CPU metrics, the real plan and real production data were **not available** to me. The local database holds no production data.
+
+### 4.4 What is NOT supported by the evidence
+
+- "The new release made pages much heavier": **not supported** (section 4.2).
 - "The unread-badge polling caused it": **not supported** for these errors, because `/` does not run it. Polling remains a possible traffic contributor and is NOT TESTED under load.
-- OpenNext, Next.js and authentication middleware were not shown responsible. The Worker runs Next.js in minimal mode (`NEXT_PRIVATE_MINIMAL_MODE`), so the Next.js middleware file is skipped; the landing page and dashboard layouts perform their own session checks.
+- OpenNext, Next.js and authentication middleware were not shown responsible. The Worker runs Next.js in minimal mode (`NEXT_PRIVATE_MINIMAL_MODE`), which skips the Next.js middleware file; layouts perform their own session checks.
 
 ## 5. Bounded hypotheses (none confirmed)
 
-| #   | Hypothesis                                                                                                                                           | For                                                                                        | Against / unknown                                                                    |
-| --- | ---------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------ |
-| H1  | The account's Workers plan CPU limit is low (for example the Free plan's 10 ms per request) and the pages sit near it; a small shift tips them over. | Even `/` costs about 40 ms locally; no `limits.cpu_ms` is set in `apps/web/wrangler.toml`. | The old release served traffic for days under the same limit. Plan is unknown to me. |
-| H2  | Cold-start CPU (initialising a 7.5 MB server bundle) exceeds the limit when isolates are recycled; more cold starts after a deploy.                  | Cold requests cost 250 to 290 ms locally; errors began right after a fresh deploy.         | Old and new cold costs are equal locally.                                            |
-| H3  | A Cloudflare-side or account-side event at about 12:24 UTC coincided with the deploy.                                                                | Rollback to a different Worker version also changes the isolate set.                       | No evidence either way.                                                              |
-| H4  | Traffic shape changed (for example a burst of requests right after deploy).                                                                          | Unknown.                                                                                   | Not tested.                                                                          |
+| #   | Hypothesis                                                                                                                                                                                                             | For                                                                                                               | Against / unknown                                                                                              |
+| --- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| H1  | The account's Workers plan has a low CPU limit (for example the Free plan's 10 ms per request) and every page sits near it, so a small increase (the new dashboard is up to about 15% higher) tips some requests over. | Every request costs a large fixed amount, even a redirect; no `limits.cpu_ms` is set in `apps/web/wrangler.toml`. | The old release served traffic for days under the same limit. The real edge CPU per request is unknown to me.  |
+| H2  | Cold-start work (initialising a 7.5 MB server bundle) exceeds the limit when isolates are recycled, which happens after every deploy.                                                                                  | First request costs 110 to 160 ms locally; the errors began within a minute of the deploy.                        | Old and new cold costs are about equal locally.                                                                |
+| H3  | A runaway or very slow code path that only occurs with production data or state, burning CPU until the limit.                                                                                                          | A Paid-plan limit is far higher than these pages need, so errors on `/` would then need a loop.                   | No loop was found; the same code is clean locally and on staging smoke tests. NOT TESTED with production data. |
+| H4  | A Cloudflare-side or account-side event around 12:24 UTC coincided with the deploy.                                                                                                                                    | A rollback also changes the isolate set.                                                                          | No evidence either way.                                                                                        |
 
-## 6. Evidence still needed (read-only, owner side)
+## 6. Evidence still needed (read-only, owner side) and how each result decides the path
 
-1. Cloudflare Workers, `echo-grid-feedback-web`, **Metrics**: CPU time (median and 99th percentile) per Worker **version**, comparing the active version before `f2ae60ee` with `f2ae60ee`.
-2. **Settings**: the Workers plan, and whether a CPU limit (`limits.cpu_ms`) applies.
-3. Workers Logs for Ray ID `a59ddbd89edbb903` and the request count over the window.
-4. Optional, low-risk reproduction: a controlled burst of about 50 requests to the staging landing page while watching staging Observability. Staging runs the same code on the same account, so it should show the same limit if H1 or H2 is true. NOT TESTED.
+1. Cloudflare, Workers, `echo-grid-feedback-web`, **Settings**: the Workers **plan** and whether a CPU limit applies.
+2. **Metrics**: CPU time (median and 99th percentile) per Worker **version**, comparing the active version before `f2ae60ee` with `f2ae60ee`, and the request count over the window.
+3. **Workers Logs** for Ray ID `a59ddbd89edbb903`: the CPU and wall time recorded on erroring invocations.
+4. Optional reproduction: a controlled burst of about 50 requests to the staging landing page while watching staging Observability (same code, same account).
+
+**Decision tree**
+
+- Plan is **Free** (or a CPU limit near 10 ms): H1 is likely. Move to a plan with a higher CPU limit, then redeploy the same code to staging first and run the burst test. Optional later work: cut per-request cost (section 7).
+- Plan is **Paid** and the erroring invocations show CPU close to the maximum: H3, a runaway path. Find the request in Workers Logs, reproduce it locally with the same inputs, fix, and add a regression test.
+- Plan is **Paid** and CPU per request is modest: H4 or a deploy-time effect; re-deploy to staging, observe, and compare versions before any production attempt.
 
 ## 7. Minimal remediation plan (PROPOSED, NOT IMPLEMENTED)
 
-Chosen by the confirmed cause:
-
-- **If plan-limited (H1):** raise the plan or CPU limit (a billing decision for the owner), then redeploy the same code to staging first and run the burst test. No code change.
-- **If cold-start or per-request cost is the driver (H2):** reduce work per request, for example avoid loading all message namespaces per request where not needed, serve the landing page without per-request cookie work where safe, and measure again with the same local harness before any release.
-- **In every case:** no speculative fix reaches production. Each change is measured old versus new with the harness above and a staging burst test.
+- **Decided by the evidence above; no speculative fix reaches production.** Each change is measured old versus new with the harness in Appendix A and a staging burst test before any production attempt.
+- **Plan or limit (if H1):** a billing decision for the owner, no code change.
+- **Per-request cost (optional, any hypothesis):** reduce fixed work per request, for example avoid loading every message namespace on pages that need few, avoid per-request route-pattern compilation where configuration allows, and keep public pages free of cookie-dependent rendering where safe. Each is a separate, measured change, not a bundle.
+- **Do not redeploy the Web release** until one path above is confirmed and a staging burst passes.
 
 ## 8. Regression test plan (PROPOSED, NOT IMPLEMENTED)
 
@@ -109,3 +130,180 @@ Assessed by diffing API route files between the previous production API (`2b2652
 - Active production Web version after the rollback: UNVERIFIED.
 - Root cause: UNKNOWN.
 - Production CPU metrics and plan: BLOCKED on owner access to Cloudflare.
+
+## Appendix A: reproducing the measurement (read-only, local)
+
+Prerequisites: PostgreSQL 16 on a throwaway port with a role `echogrid` / password `echogrid`, the repository migrated and the permission catalog seeded (`pnpm --filter @echo-grid-feedback/api db:migrate` and `db:seed` with `DATABASE_URL` pointing at it), the API running with `CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE` set to that local database and `wrangler dev --local --port 8787`, and each Web build produced with `pnpm exec opennextjs-cloudflare build`. **Never point these at production or staging databases.** The script starts the Web Worker, signs up a throwaway user in a browser, then measures CPU. Run it once per build and compare medians over several runs: `node signed.mjs <apps/web dir> <port> <label> 20`.
+
+```js
+import { spawn, execSync } from 'node:child_process';
+import { createRequire } from 'node:module';
+const require = createRequire('/home/user/p1/apps/web/package.json');
+const { chromium } = require('@playwright/test');
+const [dir, port, label, N = '20'] = [
+  process.argv[2],
+  +process.argv[3],
+  process.argv[4],
+  +(process.argv[5] || 20),
+];
+const HZ = +execSync('getconf CLK_TCK').toString();
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const base = `http://127.0.0.1:${port}`;
+const p = spawn(
+  'pnpm',
+  [
+    'exec',
+    'wrangler',
+    'dev',
+    '--local',
+    '--port',
+    String(port),
+    '--var',
+    'API_BASE_URL:http://127.0.0.1:8787',
+    '--var',
+    `APP_URL:${base}`,
+    '--show-interactive-dev-session=false',
+  ],
+  {
+    cwd: dir,
+    env: { ...process.env, WRANGLER_SEND_METRICS: 'false', CI: '1' },
+    stdio: 'ignore',
+    detached: true,
+  },
+);
+function webCpu() {
+  // CPU ticks of ALL workerd processes in THIS wrangler instance's process group (proxy + user worker)
+  const out = execSync('ps -eo pid,pgid,args')
+    .toString()
+    .split('\n')
+    .filter((l) => l.includes('workerd serve') && l.trim().split(/\s+/)[1] == String(p.pid));
+  let tot = 0;
+  const pids = [];
+  for (const l of out) {
+    const pid = l.trim().split(/\s+/)[0];
+    try {
+      const f = require('node:fs')
+        .readFileSync(`/proc/${pid}/stat`, 'utf8')
+        .split(')')
+        .pop()
+        .trim()
+        .split(/\s+/);
+      tot += +f[11] + +f[12];
+      pids.push(pid);
+    } catch {}
+  }
+  return { tot, pids };
+}
+let browser;
+try {
+  for (let i = 0; i < 120; i++) {
+    try {
+      await fetch(`${base}/robots.txt`);
+      break;
+    } catch {
+      await sleep(1000);
+    }
+  }
+  await sleep(2000);
+  browser = await chromium.launch({
+    executablePath: '/opt/pw-browsers/chromium',
+    args: ['--no-sandbox'],
+  });
+  const ctx = await browser.newContext();
+  const page = await ctx.newPage();
+  const doGet0 = (path) =>
+    page.evaluate(async (p) => {
+      const r = await fetch(p, { redirect: 'manual', credentials: 'include', cache: 'no-store' });
+      await r.text();
+      return r.type === 'opaqueredirect' ? 'redirect' : r.status;
+    }, path);
+  const measure = async (path) => {
+    const t0 = webCpu().tot;
+    await doGet0(path);
+    await sleep(300);
+    const t1 = webCpu().tot;
+    const a = webCpu().tot;
+    const walls = [];
+    const codes = new Set();
+    for (let i = 0; i < N; i++) {
+      const t = Date.now();
+      const st = await doGet0(path);
+      walls.push(Date.now() - t);
+      codes.add(st);
+    }
+    await sleep(500);
+    const b = webCpu().tot;
+    return {
+      status: [...codes].join('/'),
+      firstCpuMs: Math.round(((t1 - t0) * 1000) / HZ),
+      warmCpuMsPerReq: +(((b - a) * 1000) / HZ / N).toFixed(1),
+      wallMsAvg: Math.round(walls.reduce((x, y) => x + y, 0) / N),
+    };
+  };
+  const u = Date.now();
+  await page.goto(`${base}/signup`);
+  await sleep(1500);
+  const signedOut = {};
+  for (const path of ['/', '/login', '/privacy']) signedOut[path] = await measure(path);
+  await page.getByLabel('Full name').fill('Cpu Probe');
+  await page.getByLabel('Email').fill(`cpu-${label}-${u}@example.test`);
+  await page.getByLabel('Password', { exact: true }).fill('a-strong-test-password');
+  await page.getByLabel(/I agree to the Terms of Service/).check();
+  await page.getByRole('button', { name: 'Create account' }).click();
+  await page.getByLabel('Business name').fill(`Probe ${u}`);
+  await page.getByLabel('URL slug').fill(`probe-${label}-${u}`);
+  await page.getByRole('button', { name: 'Create business' }).click();
+  await page
+    .getByRole('heading', { name: 'Business Overview', exact: true })
+    .waitFor({ timeout: 60000 });
+  await sleep(1500);
+  const paths = [
+    '/',
+    '/dashboard',
+    '/dashboard/feedback',
+    '/dashboard/loyalty',
+    '/dashboard/messages',
+    '/dashboard/settings',
+  ];
+  const doGet = (path) =>
+    page.evaluate(async (p) => {
+      const r = await fetch(p, { redirect: 'manual', credentials: 'include', cache: 'no-store' });
+      await r.text();
+      return r.type === 'opaqueredirect' ? 'redirect' : r.status;
+    }, path);
+  const result = { label, workerdPids: webCpu().pids.length, signedOut, paths: {} };
+  for (const path of paths) {
+    const t0 = webCpu().tot;
+    await doGet(path);
+    await sleep(300);
+    const t1 = webCpu().tot;
+    const a = webCpu().tot;
+    const walls = [];
+    const codes = new Set();
+    for (let i = 0; i < N; i++) {
+      const t = Date.now();
+      const st = await doGet(path);
+      walls.push(Date.now() - t);
+      codes.add(st);
+    }
+    await sleep(500);
+    const b = webCpu().tot;
+    result.paths[path] = {
+      status: [...codes].join('/'),
+      firstCpuMs: Math.round(((t1 - t0) * 1000) / HZ),
+      warmCpuMsPerReq: +(((b - a) * 1000) / HZ / N).toFixed(1),
+      wallMsAvg: Math.round(walls.reduce((x, y) => x + y, 0) / N),
+    };
+  }
+  console.log(JSON.stringify(result, null, 1));
+} catch (e) {
+  console.log('ERROR', e.message.split('\n')[0]);
+} finally {
+  try {
+    await browser?.close();
+  } catch {}
+  try {
+    process.kill(-p.pid, 'SIGTERM');
+  } catch {}
+}
+```
