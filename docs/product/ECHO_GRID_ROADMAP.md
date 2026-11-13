@@ -9,7 +9,9 @@ Reconciliation source baseline: `main` at `532e65c4e554ccd1df53f38565b9ff5d81902
 - **Staging** runs `main` `532e65c4` (deploy run 10). Staging had the full sequence first: snapshot, catalog seed, Phase A, `0067`, `0068`, Phase B, synthetic Staff user, and deploys.
 - **Restore points** in the production Neon project: `snap-polished-mode-ata0w63g` (before migrations and grants), `snap-old-term-atbwadwh` (before Phase B), and the older 2026-11-09 snapshot.
 - **Merged to `main` since the 2026-11-12 baseline:** cashier phone-or-scan lookup in one field (#392, D-C2b and D-C2c) and the always-ready scan field (#386); cashier form cleanup (#395) and QR photo upload removal (#380); Echo Grid watermark (#396); customer messaging thread tests (#397); per-customer rate limit (#398); unread-message indicators (#399); Web Push design (#400); quicker customer feedback form (#401); feedback inbox filter dropdowns (#402); and the customer-auth domain-layer blocks (#389 to #394), which are not wired and not enabled.
-- **Open:** A7 (live-site checks, owner), the Error 1102 report in 2.E, and the items in sections 2.E to 2.J.
+- **Open:** A7 (live-site checks, owner), the Error 1102 report in 2.E, and the items in sections 2.E to 2.K.
+- **Production Web is on an earlier version since 2026-11-13** (dashboard rollback after Error 1102; see 2.E). The API, database and role grants are current. No Web release until Block 0 (2.K) is certified.
+- **Merged after the first 2026-11-13 refresh:** the platform console guide (#404) and the access model design set (#405).
 - **Resolved:** the earlier SQL-hash differences between environments are harmless. Older migrations were normalized after they had been applied, and Drizzle identifies a migration by its journal timestamp, which matched everywhere.
 
 ## 2. Tracks
@@ -44,7 +46,7 @@ Designs complete. Needs your open-question answers, D-16 and D-24. Then 01A migr
 
 ### E. Known issues
 
-- **Error 1102 "Worker exceeded CPU time limit" on echo-grid.uk (open, production).** Reported 2026-11-13 12:42:51 UTC (Ray ID a59ddbd89edbb903). Cloudflare Observability shows the errors are on the **web Worker** `echo-grid-feedback-web` (script version `f2ae60ee`), on `GET /` and `GET /dashboard`, recurring from about 12:24 UTC, right after the production web deploy. A failure on the public landing page means it is not specific to one feature. Root cause not yet found. Config note: `apps/web/wrangler.toml` sets no CPU limit, so the account plan's default applies. Mitigation: roll the web Worker back to its previous version in the Cloudflare dashboard (this removes today's web changes; the API and database changes are additive and stay). Next steps: confirm the account's Workers plan and CPU limit, then compare per-request work before and after this release.
+- **Error 1102 "Worker exceeded CPU time limit" on echo-grid.uk (open, production; Block 0).** Reported 2026-11-13 12:42:51 UTC (Ray ID a59ddbd89edbb903). Errors are on the **web Worker** `echo-grid-feedback-web` (version `f2ae60ee`, `main` `532e65c4`), on `GET /` and `GET /dashboard`, starting within a minute of the web deploy finishing at 12:23:53 UTC. The owner rolled the Web Worker back in the Cloudflare dashboard and the errors stopped, so production now runs an earlier Web version (not recorded in GitHub; most likely the `b2f85ac0` build) with the current API and database. **Root cause not found.** Local measurement (old versus new, same API, 4 alternating runs) shows public pages equal and signed-in pages 0 to 6 ms higher, with a large fixed cost of about 25 to 50 ms per request locally on both builds. Still needed from Cloudflare: the Workers plan and CPU limit, CPU time per Worker version, and Workers Logs for the Ray ID. **Web release is NO-GO** until diagnosed and certified. Full record and decision tree: `docs/architecture/builds/ACCESS-MODEL/WEB_1102_INCIDENT_REPORT.md`.
 - **Staff Messages page "not available with your current access" (production).** Cause found and fixed 2026-11-13: one business ("Infinicus simulation engine v3") had roles created without `messages:view` and `messages:send`. Its Owner, Admin and Manager were granted them (6 rows); Staff deliberately were not.
 - **Customer Messages page "Something went wrong".** Cause unconfirmed. The leading suspect was the shared IP-keyed limiter; the per-customer limiter (#398) is deployed to staging and production. A Cloudflare log lookup of reference 4208449032 would confirm. The messages page still shows a whole-page error instead of an inline retry; that fix is not built.
 - **Rate limiting:** customer routes are now limited per customer (60 per minute). The global `API_RATE_LIMITER` is still IP-keyed and unchanged.
@@ -77,11 +79,29 @@ Step 1, in-app unread indicators, is **done and in production** (#399): count ba
 
 ### J. Everyday usability
 
-Done: cashier form cleanup and one-field lookup; watermark; quicker customer feedback form (rating plus optional chips, one comment box) (#401); feedback inbox filters as dropdowns (#402, one choice per category and urgency). Not started: simplify the business-side form builder (Form name, Key, Question, Type, Required) for quick setup; the branch dropdown on the feedback inbox still drops the other filters when changed.
+Done: cashier form cleanup and one-field lookup; watermark; quicker customer feedback form (rating plus optional chips, one comment box) (#401); feedback inbox filters as dropdowns (#402, one choice per category and urgency). Not started: the signup page has no Echo Grid background watermark (owner screenshot, 2026-11-13); simplify the business-side form builder (Form name, Key, Question, Type, Required) for quick setup; the branch dropdown on the feedback inbox still drops the other filters when changed.
+
+### K. Access model, privileged-access security and Web stability (designed, not built)
+
+Documents (merged): `docs/architecture/builds/ACCESS-MODEL/ACCESS_MODEL_01_DESIGN.md` (three audiences, two places each, chooser after any authentication, separate customer and staff identity domains, proposed decisions D1 to D6), `ACCESS_SEC_01_ASSESSMENT.md` (platform administrator security) and `WEB_1102_INCIDENT_REPORT.md`. The decisions D1 to D6 are **proposed and not yet ratified by the owner**. Also see `docs/PLATFORM-CONSOLE-GUIDE.md`.
+
+| Block | Content                                                                                                                   | Gate                                                                 |
+| ----- | ------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| 0     | WEB-1102: diagnose the CPU-limit regression, confirm versions, certify a fix                                              | **Web release blocked** until verified                               |
+| 1     | ACCESS-SEC-01: application MFA (and optionally Cloudflare Access), role provisioning, break-glass, impersonation decision | Owner decisions; no production security change without authorization |
+| 2     | AM-A: owner ratifies D1 to D6 and confirms the design                                                                     | Owner                                                                |
+| 3     | AM-B: post-authentication "Where to?" chooser (web only)                                                                  | Own authorization; after block 0                                     |
+| 4     | AM-C: platform business area (customer counts, community, survey oversight, reports and support, legal status)            | Own authorization; requires block 1 enforced                         |
+| 5     | AM-D: split the business area into console and dashboard                                                                  | Own authorization                                                    |
+| 6     | AM-E: customer Loyalty and Community destination selection                                                                | Own authorization                                                    |
+| 7     | AM-F: platform-created surveys, legal requests, any approved privileged support (including impersonation)                 | Not in version 1                                                     |
+
+Findings recorded from the investigation: impersonation is already implemented (support and admin) although version 1 does not approve it; no stored terms-acceptance record exists; customer password login is not wired and the `0068` tables are empty; platform roles can only be set by a script or directly in the database, and production has one active platform admin.
 
 ## 3. Suggested order
 
-1. Now (owner): the live check in A7 as Owner, Staff and customer, and report whether Error 1102 recurs (with the page); answer D-C2, BDPN, CA-01 to CA-10 and WP-1 to WP-6 when ready; say whether to run the read-only Resend and Twilio check.
-2. Next: investigate Error 1102 once the page and Worker are known; the inline retry for the Messages page; simplify the business-side form builder.
-3. After the release is stable: CUSTOMER-AUTH-01 01D to 01F (gated), the D-C1 Staff cleanup (`business:view` and `branches:view`), BDPN implementation, and the WEB-PUSH-01 build when the owner schedules it.
-4. Last: remote enrollment, Network publishing and Feed, commercial.
+1. Now (owner): send the Cloudflare evidence for Block 0 (plan and CPU limit, CPU time per Worker version, Workers Logs for the Ray ID, active Web version); decide on MFA and the live impersonation capability (Block 1); the live check in A7; answer D-C2, BDPN, CA-01 to CA-10 and WP-1 to WP-6 when ready.
+2. Next: Block 0 (find the cause and certify a fix), then Block 1 (ACCESS-SEC-01), then AM-A ratification.
+3. After that: AM-B chooser, AM-C platform business area, AM-D console and dashboard split, AM-E customer chooser; the inline retry for the Messages page; simplify the business-side form builder.
+4. After the release is stable: CUSTOMER-AUTH-01 01D to 01F (gated), the D-C1 Staff cleanup (`business:view` and `branches:view`), BDPN implementation, and the WEB-PUSH-01 build when the owner schedules it.
+5. Last: remote enrollment, Network publishing and Feed, commercial, AM-F.
