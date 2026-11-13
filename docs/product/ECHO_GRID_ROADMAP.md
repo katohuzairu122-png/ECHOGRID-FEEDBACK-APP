@@ -56,9 +56,13 @@ Requirements and blocks: `docs/architecture/builds/CUSTOMER-AUTH/CUSTOMER_AUTH_0
 | 01G   | Remote enrollment                                                                 | Blocked until BDPN-01 is live and a D-18 amendment is approved                                                                     |
 | 01H   | Certification and progressive rollout                                             | Owner                                                                                                                              |
 
+### H. WEB-PUSH-01 (future feature, design only)
+
+Phone/desktop push notifications for new messages (WhatsApp-style), after the in-app unread indicators (PR #399). Design: `docs/architecture/builds/WEB-PUSH/WEB_PUSH_01_DESIGN.md`. Needs owner answers WP-1 to WP-6, a migration, owner-held VAPID keys, a sender on Workers, service-worker handlers and a staging device test. **Not built, not scheduled; each block needs its own authorization.**
+
 ## 3. Suggested order
 
 1. Now: your D-C1 rulings and the BDPN answers; authorize the read-only checks in A1; CUSTOMER-AUTH-01 G0 to 01C (documentation only).
 2. Next: the staged release in A2 to A6.
 3. After the release is stable: 01D to 01F, the D-C1 Staff cleanup (`business:view` and `branches:view`), BDPN implementation.
-4. Last: remote enrollment, Network publishing and Feed, commercial.
+4. Last: remote enrollment, Network publishing and Feed, commercial, WEB-PUSH-01 (when the owner schedules it).
