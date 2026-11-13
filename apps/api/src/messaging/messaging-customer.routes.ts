@@ -33,6 +33,13 @@ async function withDb<T>(c: Context<Env>, fn: (db: Database) => Promise<T>): Pro
   }
 }
 
+/** Read-only unread total (and per business) for the customer badge and the wallet cards. */
+messagingCustomerRoutes.get('/unread-count', async (c) => {
+  return withDb(c, async (db) => {
+    return ok(c, await new ConversationService(db).unreadSummaryForCustomer(c.get('customerId')));
+  });
+});
+
 messagingCustomerRoutes.get('/conversations', async (c) => {
   const { limit = 100, offset = 0 } = parseListPagination(new URL(c.req.url).searchParams, 100);
   return withDb(c, async (db) => {

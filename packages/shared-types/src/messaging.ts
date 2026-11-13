@@ -61,3 +61,17 @@ export const conversationWithBusinessSchema = conversationSchema.extend({
   unreadCount: z.number().int(),
 });
 export type ConversationWithBusinessDto = z.infer<typeof conversationWithBusinessSchema>;
+
+/**
+ * Unread counts for the menu badge and the app icon badge (read only, cheap to poll). "Unread" always means sent
+ * by the OTHER party and not yet read by the viewer: customer messages for staff, staff messages for a customer.
+ */
+export interface MessagingUnreadSummaryDto {
+  unreadMessages: number;
+  unreadConversations: number;
+}
+
+export interface CustomerMessagingUnreadSummaryDto extends MessagingUnreadSummaryDto {
+  /** Per business, so the wallet can mark the cards that have something new. Only businesses with unread messages. */
+  byBusiness: { businessId: string; unreadMessages: number }[];
+}

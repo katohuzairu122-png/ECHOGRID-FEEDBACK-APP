@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   listConversations: vi.fn(async () => []),
   findConversation: vi.fn(async () => ({ id: 'thread-a' })),
   listMessages: vi.fn(async () => []),
+  unreadSummaryForCustomer: vi.fn(async () => [] as { businessId: string; unreadMessages: number }[]),
   listParticipations: vi.fn(async () => []),
   getCommunityStatus: vi.fn(async () => null),
   getCommunityPointAccount: vi.fn(async () => undefined),
@@ -19,7 +20,11 @@ vi.mock('./repositories', () => ({ createRepositories: () => ({
   customers: { findById: mocks.findCustomer },
   users: { findById: mocks.findUser },
   loyaltyAccounts: { listForCustomer: mocks.listAccounts },
-  conversations: { listForCustomer: mocks.listConversations, findByCustomerAndBusiness: mocks.findConversation },
+  conversations: {
+    listForCustomer: mocks.listConversations,
+    findByCustomerAndBusiness: mocks.findConversation,
+    unreadSummaryForCustomer: mocks.unreadSummaryForCustomer,
+  },
   messages: { listForConversation: mocks.listMessages },
   surveyParticipations: { listForCustomer: mocks.listParticipations },
   communityMemberships: { findByCustomerId: mocks.getCommunityStatus },
@@ -57,6 +62,36 @@ describe('mounted customer and staff route boundaries', () => {
       expect(list).toHaveBeenCalledWith(customerId);
     }
     expect(mocks.findUser).not.toHaveBeenCalled();
+  });
+
+  it('serves the customer unread summary from a customer session, scoped to that customer, and refuses anonymous callers', async () => {
+    const anonymous = await worker.fetch(new Request('https://api.test/api/v1/messaging/me/unread-count'), env, ctx);
+    expect(anonymous.status).toBe(401);
+    expect(mocks.unreadSummaryForCustomer).not.toHaveBeenCalled();
+
+    mocks.unreadSummaryForCustomer.mockResolvedValueOnce([
+      { businessId: 'business-a', unreadMessages: 2 },
+      { businessId: 'business-b', unreadMessages: 1 },
+    ]);
+    const token = await signCustomerAccessToken(customerId, env.CUSTOMER_JWT_SECRET);
+    const response = await worker.fetch(
+      new Request('https://api.test/api/v1/messaging/me/unread-count', { headers: { Authorization: `Bearer ${token}` } }),
+      env,
+      ctx,
+    );
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      success: true,
+      data: {
+        unreadMessages: 3,
+        unreadConversations: 2,
+        byBusiness: [
+          { businessId: 'business-a', unreadMessages: 2 },
+          { businessId: 'business-b', unreadMessages: 1 },
+        ],
+      },
+    });
+    expect(mocks.unreadSummaryForCustomer).toHaveBeenCalledWith(customerId);
   });
 
   it.each([

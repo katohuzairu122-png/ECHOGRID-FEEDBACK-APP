@@ -714,3 +714,43 @@
     display: none;
   }
 }
+
+/* Unread message indicators (see components/workspace/nav-unread-badge.tsx). */
+.navBadge {
+  margin-inline-start: auto;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--ws-c-mint);
+  color: #031824;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  display: inline-grid;
+  place-items: center;
+}
+.navDot {
+  position: absolute;
+  top: 6px;
+  inset-inline-start: calc(50% + 6px);
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: var(--ws-c-mint);
+  box-shadow: 0 0 0 2px var(--ws-chrome);
+}
+.bottomNav a,
+.bottomNav .moreButton {
+  position: relative;
+}
+.bottomNav .navBadge {
+  position: absolute;
+  top: 2px;
+  inset-inline-start: calc(50% + 4px);
+  margin: 0;
+  min-width: 18px;
+  height: 18px;
+  font-size: 10px;
+  box-shadow: 0 0 0 2px var(--ws-chrome);
+}

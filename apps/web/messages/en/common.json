@@ -32,7 +32,8 @@
     "support": "Support",
     "loading": "Loading your workspace…",
     "community": "Community",
-    "surveys": "Surveys"
+    "surveys": "Surveys",
+    "unreadMessages": "{count, plural, one {# unread message} other {# unread messages}}"
   },
   "language": {
     "label": "Language"

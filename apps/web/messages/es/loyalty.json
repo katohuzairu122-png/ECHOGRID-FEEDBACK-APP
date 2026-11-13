@@ -412,7 +412,8 @@
       "emptyDescription": "Para unirte, escanea el código QR que un negocio participante muestra en su mostrador. Tus membresías aparecerán aquí.",
       "unavailableTitle": "No podemos cargar tus programas en este momento",
       "unavailableBody": "Es algo temporal y tus membresías no han cambiado. Inténtalo de nuevo en un momento.",
-      "retry": "Reintentar"
+      "retry": "Reintentar",
+      "newMessages": "{count, plural, one {# mensaje nuevo} other {# mensajes nuevos}}"
     }
   }
 }

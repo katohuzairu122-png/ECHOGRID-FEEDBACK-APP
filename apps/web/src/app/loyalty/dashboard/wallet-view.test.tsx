@@ -100,4 +100,19 @@ describe('LoyaltyWalletView', () => {
     );
     expect(screen.queryByText(/haven’t joined/i)).not.toBeInTheDocument();
   });
+
+  it('marks only the business that has unread messages for this customer', () => {
+    renderWithIntl(
+      <LoyaltyWalletView
+        entries={[
+          { account: account({ id: 'a1', businessId: 'b1' }), businessName: 'Cafe One' },
+          { account: account({ id: 'a2', businessId: 'b2' }), businessName: 'Gym Two' },
+        ]}
+        unreadByBusiness={{ b2: 2 }}
+      />,
+    );
+    const items = within(screen.getByRole('list')).getAllByRole('listitem');
+    expect(within(items[0]!).queryByText(/new message/)).not.toBeInTheDocument();
+    expect(within(items[1]!).getByText('2 new messages')).toBeInTheDocument();
+  });
 });

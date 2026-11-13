@@ -7,7 +7,14 @@ import type { WalletEntry } from '@/lib/loyalty-wallet';
  * The customer's loyalty wallet: one account, one card per business. Each business keeps its own membership,
  * points and rewards, so nothing here adds points across businesses.
  */
-export function LoyaltyWalletView({ entries }: { entries: readonly WalletEntry[] }) {
+export function LoyaltyWalletView({
+  entries,
+  unreadByBusiness = {},
+}: {
+  entries: readonly WalletEntry[];
+  /** Unread business messages per business id; a card with any gets a mark. */
+  unreadByBusiness?: Readonly<Record<string, number>>;
+}) {
   const t = useTranslations('loyalty.customer.wallet');
   const format = useFormatter();
 
@@ -43,6 +50,7 @@ export function LoyaltyWalletView({ entries }: { entries: readonly WalletEntry[]
             {entries.map(({ account, businessName }) => {
               const name = businessName ?? t('businessFallback');
               const paused = account.status !== 'active';
+              const unread = unreadByBusiness[account.businessId] ?? 0;
               return (
                 <li key={account.id}>
                   <Link
@@ -56,6 +64,9 @@ export function LoyaltyWalletView({ entries }: { entries: readonly WalletEntry[]
                           <p className="flex items-center gap-2 font-medium text-neutral-900">
                             <span className="truncate">{name}</span>
                             {paused && <Badge variant="accent">{t('paused')}</Badge>}
+                            {unread > 0 && (
+                              <Badge variant="accent">{t('newMessages', { count: unread })}</Badge>
+                            )}
                           </p>
                           <p className="text-xs text-neutral-500">
                             {t('visits', { count: account.visitCount })}

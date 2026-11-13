@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import { renderWithIntl } from '@/test-utils';
 import BusinessLayout from '@/app/dashboard/layout';
 import CustomerLayout from '@/app/loyalty/dashboard/layout';
 import PlatformLayout from '@/app/platform/layout';
@@ -51,7 +52,8 @@ describe('authenticated workspace layout boundaries', () => {
   });
   it('adds Community to the customer navigation while keeping every existing destination', async () => {
     identity.customer = true;
-    const { container } = render(await CustomerLayout({ children: <p>Customer content</p> }));
+    // The customer navigation now holds a client badge that reads its label from the i18n provider the app always has.
+    const { container } = renderWithIntl(await CustomerLayout({ children: <p>Customer content</p> }));
     const sidebar = container.querySelector('aside')!;
     for (const href of [
       '/loyalty/dashboard',

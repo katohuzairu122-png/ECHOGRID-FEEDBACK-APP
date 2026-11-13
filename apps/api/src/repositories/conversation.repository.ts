@@ -129,4 +129,48 @@ export class ConversationRepository extends BaseRepository {
     if (!row) throw new Error('Insert returned no row');
     return row;
   }
+
+  /** Unread customer messages across a business (the staff menu badge). One aggregate, backed by the
+   * (conversation_id, sender_type, read_at) index; deleted conversations never count. */
+  async unreadSummaryForBusiness(businessId: string): Promise<{ unreadMessages: number; unreadConversations: number }> {
+    const [row] = await this.db
+      .select({
+        unreadMessages: sql<number>`count(${messages.id})::int`,
+        unreadConversations: sql<number>`count(DISTINCT ${messages.conversationId})::int`,
+      })
+      .from(messages)
+      .innerJoin(conversations, eq(conversations.id, messages.conversationId))
+      .where(
+        and(
+          eq(conversations.businessId, businessId),
+          eq(conversations.isDeleted, false),
+          eq(messages.senderType, 'customer'),
+          sql`${messages.readAt} IS NULL`,
+        ),
+      );
+    return { unreadMessages: row?.unreadMessages ?? 0, unreadConversations: row?.unreadConversations ?? 0 };
+  }
+
+  /** Unread staff messages for one customer, per business (the customer badge and the wallet card marks). */
+  async unreadSummaryForCustomer(
+    customerId: string,
+  ): Promise<{ businessId: string; unreadMessages: number }[]> {
+    const rows = await this.db
+      .select({
+        businessId: conversations.businessId,
+        unreadMessages: sql<number>`count(${messages.id})::int`,
+      })
+      .from(messages)
+      .innerJoin(conversations, eq(conversations.id, messages.conversationId))
+      .where(
+        and(
+          eq(conversations.customerId, customerId),
+          eq(conversations.isDeleted, false),
+          eq(messages.senderType, 'staff'),
+          sql`${messages.readAt} IS NULL`,
+        ),
+      )
+      .groupBy(conversations.businessId);
+    return rows;
+  }
 }
