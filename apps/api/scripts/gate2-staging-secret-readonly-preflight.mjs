@@ -34,7 +34,7 @@ if (journal.version !== '7' || journal.dialect !== 'postgresql' ||
     journal.entries.length !== 70 ||
     journal.entries[44].tag !== '0044_split07_multiunit_inert_conservation' ||
     journal.entries[45].tag !== '0045_heta01_f1_stripe_evidence' ||
-    journal.entries[70].tag !== '0069_platform_customer_sanctions') {
+    journal.entries[69].tag !== '0069_platform_customer_sanctions') {
   fail('REPOSITORY_JOURNAL_DENIED');
 }
 const client = new pg.Client({

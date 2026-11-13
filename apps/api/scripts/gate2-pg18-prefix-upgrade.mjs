@@ -35,7 +35,7 @@ const expectedFromGit = JSON.parse((await import('node:child_process')).execFile
 if (expectedFromGit.entries.length !== 70 ||
     expectedFromGit.entries[44].tag !== '0044_split07_multiunit_inert_conservation' ||
     expectedFromGit.entries[45].tag !== '0045_heta01_f1_stripe_evidence' ||
-    expectedFromGit.entries[70].tag !== '0069_platform_customer_sanctions') {
+    expectedFromGit.entries[69].tag !== '0069_platform_customer_sanctions') {
   throw new Error('GATE2_FULL_JOURNAL_UNEXPECTED');
 }
 const expected = expectedFromGit.entries;
