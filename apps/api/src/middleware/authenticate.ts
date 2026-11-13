@@ -4,6 +4,7 @@ import { verifyAccessToken } from '../auth/jwt';
 import { AppError } from '../lib/errors';
 import { createDb } from '../db/client';
 import { createRepositories } from '../repositories';
+import { isPlatformImpersonationEnabled } from '../platform/impersonation-policy';
 
 export type AuthVariables = {
   userId: string;
@@ -37,6 +38,13 @@ export const authenticate = createMiddleware<{ Bindings: Bindings; Variables: Au
     try {
       payload = await verifyAccessToken(token, c.env.JWT_ACCESS_SECRET);
     } catch {
+      throw new AppError('Invalid or expired access token.', 401, 'UNAUTHENTICATED');
+    }
+
+    // A disabled flag also invalidates ALREADY-ISSUED impersonation JWTs.
+    // Gating issuance alone leaves up to 30 minutes of unwanted access.
+    // Check before database lookups; return the normal opaque auth denial.
+    if (payload.impersonatedBy && !isPlatformImpersonationEnabled(c.env)) {
       throw new AppError('Invalid or expired access token.', 401, 'UNAUTHENTICATED');
     }
 

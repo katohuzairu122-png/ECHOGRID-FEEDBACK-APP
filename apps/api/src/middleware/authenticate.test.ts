@@ -70,6 +70,9 @@ async function request(token: string): Promise<Response> {
 describe('authenticate account-state enforcement', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // Existing account-state scenarios exercise impersonation only when the
+    // separate privileged feature has been explicitly opted in for the test.
+    env.PLATFORM_IMPERSONATION_ENABLED = 'true';
     mocks.findById.mockImplementation(async (id) => user(id));
   });
 
@@ -97,6 +100,14 @@ describe('authenticate account-state enforcement', () => {
     const response = await request(await signAccessToken(SUBJECT_ID, JWT_SECRET));
 
     expect(response.status).toBe(401);
+  });
+
+  it('rejects a valid pre-existing impersonation token when flag is removed', async () => {
+    env.PLATFORM_IMPERSONATION_ENABLED = undefined;
+    const { token } = await signImpersonationToken(SUBJECT_ID, ACTOR_ID, JWT_SECRET);
+    const response = await request(token);
+    expect(response.status).toBe(401);
+    expect(mocks.findById).not.toHaveBeenCalled();
   });
 
   it('accepts impersonation only while both target and actor are active', async () => {

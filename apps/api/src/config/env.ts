@@ -28,6 +28,11 @@ export interface Bindings {
   JWT_ACCESS_SECRET: string;
   JWT_REFRESH_SECRET: string;
 
+  /** ACCESS-SEC-01A: disabled unless the deployment explicitly opts in with
+   * the exact string 'true'. V1 owner ruling D1 does NOT authorize opt-in.
+   * Keep optional to preserve old environments; absent means disabled. */
+  PLATFORM_IMPERSONATION_ENABLED?: string | undefined;
+
   /**
    * DEV-12 deployment restrictions for the internal Stripe-read administrator API (internal/stripe-read-admin.routes.ts). BOTH must be set for the routes to exist at all; otherwise every
    * request answers 404. Neither value grants any capability: they only decide whether the already-authenticated administrator surface is reachable on this deployment. Intentionally NOT in
