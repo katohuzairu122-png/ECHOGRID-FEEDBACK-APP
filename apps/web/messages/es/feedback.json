@@ -97,6 +97,8 @@
     "thankYouTitle": "¡Gracias!",
     "thankYouDescription": "Hemos recibido tu comentario para {branchName}.",
     "heading": "¿Cómo fue tu visita?",
+    "typeLabelOptional": "¿De qué se trata? (opcional)",
+    "moreDisclosure": "Más detalles (opcional)",
     "typeLabel": "¿Qué te gustaría compartir?",
     "typePlaceholder": "Elige una opción",
     "typeComplaint": "Queja",

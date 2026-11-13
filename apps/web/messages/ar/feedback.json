@@ -97,6 +97,8 @@
     "thankYouTitle": "شكرًا لك!",
     "thankYouDescription": "تم استلام ملاحظاتك حول {branchName}.",
     "heading": "كيف كانت زيارتك؟",
+    "typeLabelOptional": "ما موضوع ملاحظتك؟ (اختياري)",
+    "moreDisclosure": "مزيد من التفاصيل (اختياري)",
     "typeLabel": "ما الذي تود مشاركته؟",
     "typePlaceholder": "اختر خيارًا",
     "typeComplaint": "شكوى",
