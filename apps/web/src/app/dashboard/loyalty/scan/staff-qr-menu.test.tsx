@@ -97,4 +97,49 @@ describe('StaffQrMenu (cashier Serve customers)', () => {
     expect(await screen.findByText(/Purchases are not available/)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Confirm verified purchase' })).toBeNull();
   });
+
+  describe('location selector and the search button', () => {
+    it('hides the location selector when there is a single location and still sends its scope', () => {
+      const { container } = render(
+        <StaffQrMenu contexts={[{ branchId: 'branch-7', branchName: 'Main street' }]} />,
+      );
+      expect(screen.queryByRole('combobox')).toBeNull();
+      expect(screen.queryByText('Authorized business or branch')).toBeNull();
+      expect(container.querySelector('input[type="hidden"][name="branchId"]')).toHaveValue('branch-7');
+    });
+
+    it('sends an empty scope for single business-wide access', () => {
+      const { container } = render(<StaffQrMenu contexts={[{ branchId: null, branchName: null }]} />);
+      expect(container.querySelector('input[type="hidden"][name="branchId"]')).toHaveValue('');
+    });
+
+    it('keeps the selector, translated, for a cashier who works at several locations', () => {
+      render(
+        <StaffQrMenu
+          contexts={[
+            { branchId: null, branchName: null },
+            { branchId: 'branch-7', branchName: 'Main street' },
+          ]}
+        />,
+      );
+      const select = screen.getByLabelText('Location');
+      expect(select).toBeInTheDocument();
+      expect(screen.getByRole('option', { name: 'Business-wide access' })).toBeInTheDocument();
+      expect(screen.getByRole('option', { name: 'Main street' })).toBeInTheDocument();
+    });
+
+    it('shows one clearly labelled submit button straight after the field', () => {
+      render(<StaffQrMenu contexts={[{ branchId: null, branchName: null }]} />);
+      expect(screen.queryByRole('button', { name: 'Resolve permitted actions' })).toBeNull();
+      const button = screen.getByRole('button', { name: 'Find customer' });
+      expect((button as HTMLButtonElement).type).toBe('submit');
+      const field = screen.getByLabelText(/Find customer: scan/i, {
+        selector: 'input',
+      }) as HTMLInputElement;
+      expect(field).toHaveAttribute('enterkeyhint', 'search');
+      expect(field.form).toBe(button.closest('form'));
+      // the button follows the field in document order, with no selector in between
+      expect(field.compareDocumentPosition(button) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    });
+  });
 });

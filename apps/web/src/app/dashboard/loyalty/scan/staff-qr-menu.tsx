@@ -48,6 +48,7 @@ export function StaffQrMenu({
             autoFocus
             autoComplete="off"
             autoCapitalize="off"
+            enterKeyHint="search"
             spellCheck={false}
             aria-describedby="token-hint"
             onFocus={(event) => event.currentTarget.select()}
@@ -55,20 +56,30 @@ export function StaffQrMenu({
           <p id="token-hint" className="text-sm text-neutral-600">
             {t('scanFieldHint')}
           </p>
-          <Label htmlFor="branchId">Authorized business or branch</Label>
-          <select
-            id="branchId"
-            name="branchId"
-            defaultValue={state.branchId ?? contexts[0]?.branchId ?? ''}
-            className="w-full rounded border p-3"
-          >
-            {contexts.map((context) => (
-              <option key={context.branchId ?? 'business'} value={context.branchId ?? ''}>
-                {context.branchName ?? 'Business-wide access'}
-              </option>
-            ))}
-          </select>
-          <Button disabled={pending}>Resolve permitted actions</Button>
+          {/* A cashier with a single location has nothing to choose, so the selector is hidden and the one
+              scope is sent as a hidden field. It stays for a cashier who works at several locations. */}
+          {contexts.length > 1 ? (
+            <>
+              <Label htmlFor="branchId">{t('branchLabel')}</Label>
+              <select
+                id="branchId"
+                name="branchId"
+                defaultValue={state.branchId ?? contexts[0]?.branchId ?? ''}
+                className="w-full rounded border p-3"
+              >
+                {contexts.map((context) => (
+                  <option key={context.branchId ?? 'business'} value={context.branchId ?? ''}>
+                    {context.branchName ?? t('businessWide')}
+                  </option>
+                ))}
+              </select>
+            </>
+          ) : (
+            <input type="hidden" name="branchId" value={contexts[0]?.branchId ?? ''} />
+          )}
+          <Button disabled={pending} className="w-full">
+            {t('findCustomer')}
+          </Button>
         </form>
       </div>
       {state.error && (
