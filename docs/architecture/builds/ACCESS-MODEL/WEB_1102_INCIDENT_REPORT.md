@@ -5,7 +5,8 @@ Written 2026-11-13 from GitHub run records, the repository at `main` `532e65c4`,
 
 ## 1. Verdict
 
-**Release verdict: NO-GO for any production Web deploy** (including redispatching `532e65c4`) until this incident is diagnosed and a fix is certified. The API and database changes are separate and remain in place.
+**Release verdict: NO-GO for any production Web deploy until the plan question below is resolved and a staging burst test passes.**
+**Most likely cause (supported by owner-supplied Cloudflare evidence, section 4.5): the account is on the Workers Free plan, whose limit is 10 ms of CPU per request, and this application's median request already costs more than that.** The newer release raised the error rate, but the older release also hit the limit. The API and database changes are separate and remain in place.
 
 ## 2. Verified timeline (UTC)
 
@@ -18,18 +19,18 @@ Written 2026-11-13 from GitHub run records, the repository at `main` `532e65c4`,
 | 12:22 to 12:23:53 | **Web deployed** (success); post-deploy checks 2E to 2H passed.                                                                                                                                                                         | VERIFIED                               |
 | from about 12:24  | Cloudflare Observability shows "Worker exceeded CPU time limit" on `echo-grid-feedback-web`, script version `f2ae60ee`, on `GET /` and `GET /dashboard`. Red bars on the chart from about 12:33; log rows visible 12:42:51 to 12:48:27. | Owner screenshot: VERIFIED as reported |
 | 12:42:51          | Owner reports Error 1102 on echo-grid.uk, Ray ID `a59ddbd89edbb903`.                                                                                                                                                                    | Owner screenshot                       |
-| after 12:48       | Owner rolled the web Worker back in the Cloudflare dashboard; errors stopped.                                                                                                                                                           | Owner report                           |
+| after 12:48       | Owner reports rolling the web Worker back in the Cloudflare dashboard and the errors stopping. **Not confirmed by Cloudflare Metrics**, which later showed `f2ae60ee` as the active version at 100% of traffic (section 4.5).           | Owner report; Metrics screenshot       |
 
 The errors begin within about a minute of the web deploy finishing.
 
 ## 3. Versions
 
-| Item                   | Value                                                                                                                                           | Status                                  |
-| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------- |
-| Impacted Web           | `main` `532e65c4`, Worker version `f2ae60ee`                                                                                                    | VERIFIED (run record and Observability) |
-| Current production API | `532e65c4` (deployed 12:16 UTC)                                                                                                                 | VERIFIED                                |
-| Current production Web | **Not recorded in GitHub.** The dashboard rollback returned the Worker to the previous version, most likely the `b2f85ac0` build of 2026-11-12. | **UNVERIFIED**                          |
-| Production database    | migration 69 of 69 (`0068`), Phase A and B role grants applied                                                                                  | VERIFIED                                |
+| Item                   | Value                                                                                                                                                                                                                                                                  | Status                                                                            |
+| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| Impacted Web           | `main` `532e65c4`, Worker version `f2ae60ee`                                                                                                                                                                                                                           | VERIFIED (run record and Observability)                                           |
+| Current production API | `532e65c4` (deployed 12:16 UTC)                                                                                                                                                                                                                                        | VERIFIED                                                                          |
+| Current production Web | **CONFLICT.** The owner reports rolling back and the errors stopping, but the Cloudflare Metrics "Active deployment" row (screenshot, about 2 hours after the deploy) shows version `f2ae60ee` at 100% of traffic. The older version seen in the charts is `b3ef5ec8`. | **UNVERIFIED: the owner must confirm the active version in the Deployments tab.** |
+| Production database    | migration 69 of 69 (`0068`), Phase A and B role grants applied                                                                                                                                                                                                         | VERIFIED                                                                          |
 
 Next diagnostic action: the owner reads the active Web version id and its deployment date in Cloudflare (Workers, `echo-grid-feedback-web`, Deployments) and confirms it matches the `b2f85ac0` build.
 
@@ -74,6 +75,32 @@ Caveats: this sandbox is not the Cloudflare edge, so absolute numbers do not tra
 - "The unread-badge polling caused it": **not supported** for these errors, because `/` does not run it. Polling remains a possible traffic contributor and is NOT TESTED under load.
 - OpenNext, Next.js and authentication middleware were not shown responsible. The Worker runs Next.js in minimal mode (`NEXT_PRIVATE_MINIMAL_MODE`), which skips the Next.js middleware file; layouts perform their own session checks.
 
+### 4.5 Production evidence supplied by the owner (Cloudflare dashboard screenshots, 2026-11-13)
+
+Read from screenshots of Metrics (last 24 hours), the Workers plans page and the Observability page. The images are small; figures marked "unclear" could not be read reliably.
+
+| Item                        | Value                                                                                                              | Status                                                  |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------- |
+| Account plan                | **Workers Free** (Observability banner: "You're on Workers Free ... 200K events per day")                          | VERIFIED                                                |
+| Free plan CPU limit         | **10 ms per request** (plans page); Paid is $5 per month with a far higher CPU allowance                           | VERIFIED                                                |
+| Errors by type, 24 h        | **Exceeded CPU Time Limits: 23**; Exceeded Memory: 0; Internal: 0                                                  | VERIFIED                                                |
+| Invocations by version      | `b3ef5ec8` (older): about 3,000; `f2ae60ee` (this release): 388                                                    | VERIFIED                                                |
+| Errors by version           | `b3ef5ec8`: 8; `f2ae60ee`: 15                                                                                      | VERIFIED                                                |
+| Error rate                  | `b3ef5ec8` about 0.3%; `f2ae60ee` 3.9% (about 14 times higher; small sample on the newer version)                  | VERIFIED, derived                                       |
+| Median CPU time, `f2ae60ee` | **16.88 ms**, above the 10 ms Free limit                                                                           | VERIFIED                                                |
+| CPU Time chart legend       | P50 104, P90 259, P99 421, P999 465 over 24 h; units and scope unclear and not consistent with the 16.88 ms figure | UNCLEAR                                                 |
+| Memory                      | median about 36 MB, 99th percentile about 48 MB                                                                    | VERIFIED (not a memory problem)                         |
+| Active deployment           | `f2ae60ee`, 100% of traffic, deployed about 2 h earlier, 0.1 requests per second                                   | VERIFIED, **conflicts with the reported rollback**      |
+| Subrequests by host         | API host: 589 successful and 279 with an orange (non-2xx) chip; `echo-grid.uk`: 11                                 | PARTLY UNCLEAR: the 279 needs identifying (status code) |
+| Workers Traces              | Disabled                                                                                                           | VERIFIED                                                |
+
+What this means:
+
+- The **Free-plan 10 ms limit is verified**, and the median request on the new version (16.88 ms) is above it. This strongly supports hypothesis H1.
+- The **older version also produced CPU-limit errors** (8, including a burst of several at once the evening before), so the limit was already being hit before this release. The new release made it about 14 times more frequent in this sample.
+- My local measurements (sections 4.2 and 4.3) fit this: the old and new builds cost nearly the same, and the new build is a little heavier on signed-in pages. A small increase against a limit that is already too low raises the error rate sharply.
+- Because the owner's rollback is not reflected in the Metrics screenshot, **the failing version may still be live.** Upgrading the plan would then fix it immediately with no redeploy.
+
 ## 5. Bounded hypotheses (none confirmed)
 
 | #   | Hypothesis                                                                                                                                                                                                             | For                                                                                                               | Against / unknown                                                                                              |
@@ -82,6 +109,8 @@ Caveats: this sandbox is not the Cloudflare edge, so absolute numbers do not tra
 | H2  | Cold-start work (initialising a 7.5 MB server bundle) exceeds the limit when isolates are recycled, which happens after every deploy.                                                                                  | First request costs 110 to 160 ms locally; the errors began within a minute of the deploy.                        | Old and new cold costs are about equal locally.                                                                |
 | H3  | A runaway or very slow code path that only occurs with production data or state, burning CPU until the limit.                                                                                                          | A Paid-plan limit is far higher than these pages need, so errors on `/` would then need a loop.                   | No loop was found; the same code is clean locally and on staging smoke tests. NOT TESTED with production data. |
 | H4  | A Cloudflare-side or account-side event around 12:24 UTC coincided with the deploy.                                                                                                                                    | A rollback also changes the isolate set.                                                                          | No evidence either way.                                                                                        |
+
+**Status after section 4.5:** H1 (plan CPU limit) is **supported by verified evidence**. H2 (cold-start cost) remains possible and compounds H1. H3 (a runaway path with production data) is now **unlikely**: the median CPU is modest relative to a Paid limit and the errors are the plain limit message with memory fine. H4 (a Cloudflare-side event) is not supported, because the older version also errored.
 
 ## 6. Evidence still needed (read-only, owner side) and how each result decides the path
 
@@ -92,7 +121,7 @@ Caveats: this sandbox is not the Cloudflare edge, so absolute numbers do not tra
 
 **Decision tree**
 
-- Plan is **Free** (or a CPU limit near 10 ms): H1 is likely. Move to a plan with a higher CPU limit, then redeploy the same code to staging first and run the burst test. Optional later work: cut per-request cost (section 7).
+- Plan is **Free** (or a CPU limit near 10 ms): H1 is likely. **THIS BRANCH APPLIES (verified Free plan).** Move to a plan with a higher CPU limit, then redeploy the same code to staging first and run the burst test. Optional later work: cut per-request cost (section 7).
 - Plan is **Paid** and the erroring invocations show CPU close to the maximum: H3, a runaway path. Find the request in Workers Logs, reproduce it locally with the same inputs, fix, and add a regression test.
 - Plan is **Paid** and CPU per request is modest: H4 or a deploy-time effect; re-deploy to staging, observe, and compare versions before any production attempt.
 
@@ -127,9 +156,12 @@ Assessed by diffing API route files between the previous production API (`2b2652
 
 ## 11. Open items
 
-- Active production Web version after the rollback: UNVERIFIED.
-- Root cause: UNKNOWN.
-- Production CPU metrics and plan: BLOCKED on owner access to Cloudflare.
+- **Owner decision:** upgrade the Cloudflare account to Workers Paid (a billing decision; about $5 per month plus usage), which raises the CPU limit far above this application's needs. If the failing version is still live, errors should stop at once without a redeploy. This also applies to the API Worker on the same account.
+- **Owner to confirm** the active Web version in the Deployments tab (the screenshot conflicts with the reported rollback).
+- **Owner to identify** the orange (non-2xx) chip on 279 subrequests to the API host (the status code), and read the CPU Time chart legend units.
+- Root cause: **LIKELY (plan limit), not fully confirmed** until a staging burst test after the upgrade passes.
+- After the upgrade: redeploy the Web release to staging, run a controlled burst (about 50 requests) and watch Errors by version, then a separate authorization for production.
+- Optional later work: reduce per-request CPU (section 7), so the application is not close to any limit.
 
 ## Appendix A: reproducing the measurement (read-only, local)
 
