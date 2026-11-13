@@ -40,6 +40,7 @@ function customer(status: Customer['status'] = 'active'): Customer {
     phoneVerifiedAt: new Date(),
     preferredLocale: null,
     status,
+    suspendedUntil: null,
     createdAt: new Date(),
     createdBy: null,
     updatedAt: new Date(),

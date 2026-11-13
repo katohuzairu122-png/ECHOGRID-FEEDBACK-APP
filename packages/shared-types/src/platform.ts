@@ -230,3 +230,67 @@ export const platformMrrSummarySchema = z.object({
 });
 
 export type PlatformMrrSummaryDto = z.infer<typeof platformMrrSummarySchema>;
+
+/**
+ * Platform customer moderation (PLATFORM-CUSTOMERS-01, D3 amendment).
+ * The list shows that a customer exists with a masked identifier; it never
+ * returns the full name, email, full phone or any activity.
+ */
+export const platformCustomerStatusSchema = z.enum(['active', 'suspended', 'banned']);
+
+export const customerSanctionActionSchema = z.enum(['warning', 'suspend', 'ban', 'lift']);
+
+export const platformCustomerSchema = z.object({
+  id: z.uuid(),
+  maskedPhone: z.string(),
+  status: platformCustomerStatusSchema,
+  suspendedUntil: z.string().nullable(),
+  businessCount: z.number().int().nonnegative(),
+  joinedAt: z.string(),
+});
+
+export type PlatformCustomerDto = z.infer<typeof platformCustomerSchema>;
+
+export const customerSanctionEntrySchema = z.object({
+  id: z.uuid(),
+  action: customerSanctionActionSchema,
+  reason: z.string(),
+  suspendedUntil: z.string().nullable(),
+  createdAt: z.string(),
+});
+
+export type CustomerSanctionEntryDto = z.infer<typeof customerSanctionEntrySchema>;
+
+export const platformCustomerDetailSchema = platformCustomerSchema.extend({
+  warningCount: z.number().int().nonnegative(),
+  history: z.array(customerSanctionEntrySchema),
+});
+
+export type PlatformCustomerDetailDto = z.infer<typeof platformCustomerDetailSchema>;
+
+/** Longest suspension a platform admin can set in one action. */
+export const MAX_CUSTOMER_SUSPENSION_DAYS = 365;
+
+export const applyCustomerSanctionSchema = z
+  .object({
+    action: customerSanctionActionSchema,
+    reason: z.string().trim().min(5).max(500),
+    // Required for 'suspend' (a suspension always has an end), forbidden otherwise.
+    suspendedUntil: z.iso.datetime().optional(),
+    // Lets an admin suspend or ban without a prior warning for severe fraud.
+    // The reason is mandatory either way and the flag is recorded in the audit log.
+    skipWarning: z.boolean().optional(),
+  })
+  .superRefine((value, ctx) => {
+    if (value.action === 'suspend' && !value.suspendedUntil) {
+      ctx.addIssue({ code: 'custom', path: ['suspendedUntil'], message: 'A suspension needs an end date.' });
+    }
+    if (value.action !== 'suspend' && value.suspendedUntil) {
+      ctx.addIssue({ code: 'custom', path: ['suspendedUntil'], message: 'Only a suspension has an end date.' });
+    }
+    if (value.skipWarning && (value.action === 'warning' || value.action === 'lift')) {
+      ctx.addIssue({ code: 'custom', path: ['skipWarning'], message: 'skipWarning applies to suspend or ban only.' });
+    }
+  });
+
+export type ApplyCustomerSanctionInput = z.infer<typeof applyCustomerSanctionSchema>;

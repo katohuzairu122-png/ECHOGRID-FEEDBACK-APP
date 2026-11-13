@@ -23,6 +23,7 @@ export * from './ai-usage-log';
 export * from './critical-incidents';
 export * from './fraud-signals';
 export * from './customers';
+export * from './customer-sanctions';
 export * from './business-customer-memberships';
 export * from './consent-grants';
 export * from './customer-action-authorizations';

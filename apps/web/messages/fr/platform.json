@@ -13,7 +13,8 @@
     },
     "menu": "Navigation d’administration",
     "more": "Plus",
-    "close": "Fermer"
+    "close": "Fermer",
+    "customers": "Clients"
   },
   "accessDenied": {
     "title": "Accès administrateur de la plateforme requis",
@@ -181,6 +182,55 @@
       "saving": "Enregistrement…",
       "create": "Créer le forfait",
       "saveChanges": "Enregistrer les modifications"
+    }
+  },
+  "customers": {
+    "title": "Clients",
+    "privacyNote": "Les clients sont affichés comme présents, avec un numéro masqué. Les noms, e-mails et activités ne sont pas affichés ici.",
+    "searchLabel": "Trouver un client",
+    "searchPlaceholder": "Identifiant client ou numéro complet (+965...)",
+    "searchHint": "Recherchez par identifiant client ou par numéro complet commençant par +.",
+    "statusLabel": "Statut",
+    "anyStatus": "Tous les statuts",
+    "withoutBusiness": "Dans aucune entreprise",
+    "apply": "Appliquer",
+    "listTitle": "Clients inscrits",
+    "listDescription": "Ouvrez un client pour avertir, suspendre, bannir ou lever une restriction.",
+    "empty": "Aucun client trouvé.",
+    "businessesCount": "{count, plural, one {# entreprise} other {# entreprises}}",
+    "newer": "Plus récents",
+    "older": "Plus anciens",
+    "back": "Retour aux clients",
+    "status": {
+      "active": "Actif",
+      "suspended": "Suspendu",
+      "banned": "Banni"
+    },
+    "detail": {
+      "privacyNote": "Le nom complet, l'e-mail et l'activité ne sont pas affichés.",
+      "summary": "Client",
+      "until": "Suspendu jusqu'au {date}",
+      "businesses": "Entreprises",
+      "warnings": "Avertissements",
+      "joined": "Inscrit le",
+      "actionTitle": "Agir",
+      "actionDescription": "Une suspension ou un bannissement suit normalement un avertissement. Chaque action est enregistrée avec votre motif.",
+      "history": "Historique",
+      "noHistory": "Aucune action enregistrée.",
+      "form": {
+        "actionLabel": "Action",
+        "warning": "Avertissement",
+        "suspend": "Suspendre pour une durée",
+        "ban": "Bannir",
+        "lift": "Lever la restriction",
+        "daysLabel": "Jours (1 à 365)",
+        "reasonLabel": "Motif (obligatoire)",
+        "reasonPlaceholder": "Ce qui s'est passé et pourquoi cette action",
+        "skipWarning": "Ignorer l'avertissement (fraude grave uniquement)",
+        "submit": "Appliquer",
+        "saving": "Enregistrement...",
+        "success": "Terminé."
+      }
     }
   }
 }

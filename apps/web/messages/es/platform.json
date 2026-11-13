@@ -13,7 +13,8 @@
     },
     "menu": "Navegación de administración",
     "more": "Más",
-    "close": "Cerrar"
+    "close": "Cerrar",
+    "customers": "Clientes"
   },
   "accessDenied": {
     "title": "Se requiere acceso de administrador de plataforma",
@@ -181,6 +182,55 @@
       "saving": "Guardando…",
       "create": "Crear plan",
       "saveChanges": "Guardar cambios"
+    }
+  },
+  "customers": {
+    "title": "Clientes",
+    "privacyNote": "Los clientes se muestran como presentes, con un teléfono enmascarado. Aquí no se muestran nombres, correos ni actividad.",
+    "searchLabel": "Buscar un cliente",
+    "searchPlaceholder": "ID de cliente o teléfono completo (+965...)",
+    "searchHint": "Busque por ID de cliente o por un teléfono completo que empiece por +.",
+    "statusLabel": "Estado",
+    "anyStatus": "Cualquier estado",
+    "withoutBusiness": "En ningún negocio",
+    "apply": "Aplicar",
+    "listTitle": "Clientes registrados",
+    "listDescription": "Abra un cliente para advertir, suspender, vetar o levantar una restricción.",
+    "empty": "Ningún cliente coincide.",
+    "businessesCount": "{count, plural, one {# negocio} other {# negocios}}",
+    "newer": "Más recientes",
+    "older": "Más antiguos",
+    "back": "Volver a clientes",
+    "status": {
+      "active": "Activo",
+      "suspended": "Suspendido",
+      "banned": "Vetado"
+    },
+    "detail": {
+      "privacyNote": "No se muestran el nombre completo, el correo ni la actividad.",
+      "summary": "Cliente",
+      "until": "Suspendido hasta {date}",
+      "businesses": "Negocios",
+      "warnings": "Advertencias",
+      "joined": "Registro",
+      "actionTitle": "Tomar medidas",
+      "actionDescription": "Una suspensión o veto normalmente sigue a una advertencia. Cada acción queda registrada con su motivo.",
+      "history": "Historial",
+      "noHistory": "No hay acciones registradas.",
+      "form": {
+        "actionLabel": "Acción",
+        "warning": "Advertencia",
+        "suspend": "Suspender por un periodo",
+        "ban": "Vetar",
+        "lift": "Levantar restricción",
+        "daysLabel": "Días (1 a 365)",
+        "reasonLabel": "Motivo (obligatorio)",
+        "reasonPlaceholder": "Qué ocurrió y por qué esta acción",
+        "skipWarning": "Omitir la advertencia (solo fraude grave)",
+        "submit": "Aplicar",
+        "saving": "Guardando...",
+        "success": "Hecho."
+      }
     }
   }
 }

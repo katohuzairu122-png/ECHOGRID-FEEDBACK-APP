@@ -19,6 +19,7 @@ import { AiUsageLogRepository } from './ai-usage-log.repository';
 import { CriticalIncidentRepository } from './critical-incident.repository';
 import { FraudSignalRepository } from './fraud-signal.repository';
 import { CustomerRepository } from './customer.repository';
+import { CustomerSanctionRepository } from './customer-sanction.repository';
 import { CustomerMembershipRepository } from './customer-membership.repository';
 import { ConsentGrantRepository } from './consent-grant.repository';
 import { CustomerActionAuthorizationRepository } from './customer-action-authorization.repository';
@@ -54,6 +55,7 @@ import { OrphanSettlementRepository } from './orphan-settlement.repository';
 import { OrphanSettlementEventRepository } from './orphan-settlement-event.repository';
 
 export * from './business.repository';
+export * from './customer-sanction.repository';
 export * from './business-category.repository';
 export * from './branch.repository';
 export * from './user.repository';
@@ -129,6 +131,7 @@ export function createRepositories(db: Db) {
     criticalIncidents: new CriticalIncidentRepository(db),
     fraudSignals: new FraudSignalRepository(db),
     customers: new CustomerRepository(db),
+    customerSanctions: new CustomerSanctionRepository(db),
     customerMemberships: new CustomerMembershipRepository(db),
     consentGrants: new ConsentGrantRepository(db),
     customerActionAuthorizations: new CustomerActionAuthorizationRepository(db),

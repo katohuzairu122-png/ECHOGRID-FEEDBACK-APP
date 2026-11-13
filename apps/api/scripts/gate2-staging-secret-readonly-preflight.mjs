@@ -31,10 +31,10 @@ const options = new Set(['sslmode', 'channel_binding']);
 if ([...parsed.searchParams.keys()].some(k => !options.has(k))) fail('URL_OPTIONS_DENIED');
 const journal = JSON.parse(readFileSync(resolve(root,'drizzle/meta/_journal.json'),'utf8'));
 if (journal.version !== '7' || journal.dialect !== 'postgresql' ||
-    journal.entries.length !== 69 ||
+    journal.entries.length !== 70 ||
     journal.entries[44].tag !== '0044_split07_multiunit_inert_conservation' ||
     journal.entries[45].tag !== '0045_heta01_f1_stripe_evidence' ||
-    journal.entries[68].tag !== '0068_customer_auth_sessions') {
+    journal.entries[70].tag !== '0069_platform_customer_sanctions') {
   fail('REPOSITORY_JOURNAL_DENIED');
 }
 const client = new pg.Client({
