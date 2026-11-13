@@ -8,6 +8,7 @@
   color: var(--ws-text);
   background: var(--ws-canvas);
   font-family: var(--font-sans);
+  isolation: isolate;
 }
 .workspace *,
 .workspace *::before,
@@ -680,5 +681,36 @@
   .sentimentLabel,
   .sentimentRate {
     font-size: 11px;
+  }
+}
+
+/*
+ * Brand watermark: a faint, repeating Echo Grid mark behind every workspace page, in the spirit of a chat
+ * wallpaper. It is one CSS layer on the workspace root (no component, no JS, no network request: the tile is an
+ * inline SVG built from the logo's own path), so it appears on every tab and works offline from the cached CSS.
+ * It sits behind all content (z-index -1 inside an isolated stacking context), never takes pointer events, is
+ * invisible to assistive technology (it is not in the DOM), is hidden in print and forced-colors mode, and stays
+ * at 5% opacity so text contrast and the opaque QR and camera areas are unaffected.
+ */
+.workspace::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-image: var(--ws-watermark);
+  background-size: 200px 200px;
+  background-repeat: repeat;
+  opacity: 0.05;
+}
+.workspace[data-ws-theme='dark'] {
+  --ws-watermark: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200' viewBox='0 0 200 200'%3E%3Cg transform='translate(14 16) rotate(-14 20 20) scale(1.15)' fill='none' stroke='%23ffffff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 5C11.716 5 5 10.82 5 18c0 4.09 2.176 7.74 5.59 10.128L9 34l6.46-3.23C16.87 30.905 18.404 31 20 31c8.284 0 15-5.82 15-13S28.284 5 20 5Z'/%3E%3Cg stroke-width='1.25'%3E%3Cline x1='14' y1='15' x2='20' y2='12'/%3E%3Cline x1='20' y1='12' x2='26' y2='15'/%3E%3Cline x1='14' y1='15' x2='16.5' y2='21'/%3E%3Cline x1='26' y1='15' x2='23.5' y2='21'/%3E%3Cline x1='16.5' y1='21' x2='23.5' y2='21'/%3E%3C/g%3E%3Cg fill='%23ffffff' stroke='none'%3E%3Ccircle cx='20' cy='12' r='2.4'/%3E%3Ccircle cx='14' cy='15' r='2.4'/%3E%3Ccircle cx='26' cy='15' r='2.4'/%3E%3Ccircle cx='16.5' cy='21' r='2.4'/%3E%3Ccircle cx='23.5' cy='21' r='2.4'/%3E%3C/g%3E%3C/g%3E%3Cg transform='translate(112 104) rotate(12 20 20) scale(0.95)' fill='none' stroke='%23ffffff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 5C11.716 5 5 10.82 5 18c0 4.09 2.176 7.74 5.59 10.128L9 34l6.46-3.23C16.87 30.905 18.404 31 20 31c8.284 0 15-5.82 15-13S28.284 5 20 5Z'/%3E%3Cg stroke-width='1.25'%3E%3Cline x1='14' y1='15' x2='20' y2='12'/%3E%3Cline x1='20' y1='12' x2='26' y2='15'/%3E%3Cline x1='14' y1='15' x2='16.5' y2='21'/%3E%3Cline x1='26' y1='15' x2='23.5' y2='21'/%3E%3Cline x1='16.5' y1='21' x2='23.5' y2='21'/%3E%3C/g%3E%3Cg fill='%23ffffff' stroke='none'%3E%3Ccircle cx='20' cy='12' r='2.4'/%3E%3Ccircle cx='14' cy='15' r='2.4'/%3E%3Ccircle cx='26' cy='15' r='2.4'/%3E%3Ccircle cx='16.5' cy='21' r='2.4'/%3E%3Ccircle cx='23.5' cy='21' r='2.4'/%3E%3C/g%3E%3C/g%3E%3Cg stroke='%23ffffff' stroke-width='1.25' stroke-linecap='round'%3E%3Cline x1='98' y1='30' x2='116' y2='44'/%3E%3Cline x1='36' y1='150' x2='54' y2='134'/%3E%3C/g%3E%3Ccircle cx='98' cy='30' r='2' fill='%23ffffff'/%3E%3Ccircle cx='176' cy='64' r='2' fill='%23ffffff'/%3E%3Ccircle cx='36' cy='150' r='2' fill='%23ffffff'/%3E%3Ccircle cx='154' cy='176' r='2' fill='%23ffffff'/%3E%3C/svg%3E");
+}
+.workspace[data-ws-theme='light'] {
+  --ws-watermark: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200' viewBox='0 0 200 200'%3E%3Cg transform='translate(14 16) rotate(-14 20 20) scale(1.15)' fill='none' stroke='%230f172a' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 5C11.716 5 5 10.82 5 18c0 4.09 2.176 7.74 5.59 10.128L9 34l6.46-3.23C16.87 30.905 18.404 31 20 31c8.284 0 15-5.82 15-13S28.284 5 20 5Z'/%3E%3Cg stroke-width='1.25'%3E%3Cline x1='14' y1='15' x2='20' y2='12'/%3E%3Cline x1='20' y1='12' x2='26' y2='15'/%3E%3Cline x1='14' y1='15' x2='16.5' y2='21'/%3E%3Cline x1='26' y1='15' x2='23.5' y2='21'/%3E%3Cline x1='16.5' y1='21' x2='23.5' y2='21'/%3E%3C/g%3E%3Cg fill='%230f172a' stroke='none'%3E%3Ccircle cx='20' cy='12' r='2.4'/%3E%3Ccircle cx='14' cy='15' r='2.4'/%3E%3Ccircle cx='26' cy='15' r='2.4'/%3E%3Ccircle cx='16.5' cy='21' r='2.4'/%3E%3Ccircle cx='23.5' cy='21' r='2.4'/%3E%3C/g%3E%3C/g%3E%3Cg transform='translate(112 104) rotate(12 20 20) scale(0.95)' fill='none' stroke='%230f172a' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 5C11.716 5 5 10.82 5 18c0 4.09 2.176 7.74 5.59 10.128L9 34l6.46-3.23C16.87 30.905 18.404 31 20 31c8.284 0 15-5.82 15-13S28.284 5 20 5Z'/%3E%3Cg stroke-width='1.25'%3E%3Cline x1='14' y1='15' x2='20' y2='12'/%3E%3Cline x1='20' y1='12' x2='26' y2='15'/%3E%3Cline x1='14' y1='15' x2='16.5' y2='21'/%3E%3Cline x1='26' y1='15' x2='23.5' y2='21'/%3E%3Cline x1='16.5' y1='21' x2='23.5' y2='21'/%3E%3C/g%3E%3Cg fill='%230f172a' stroke='none'%3E%3Ccircle cx='20' cy='12' r='2.4'/%3E%3Ccircle cx='14' cy='15' r='2.4'/%3E%3Ccircle cx='26' cy='15' r='2.4'/%3E%3Ccircle cx='16.5' cy='21' r='2.4'/%3E%3Ccircle cx='23.5' cy='21' r='2.4'/%3E%3C/g%3E%3C/g%3E%3Cg stroke='%230f172a' stroke-width='1.25' stroke-linecap='round'%3E%3Cline x1='98' y1='30' x2='116' y2='44'/%3E%3Cline x1='36' y1='150' x2='54' y2='134'/%3E%3C/g%3E%3Ccircle cx='98' cy='30' r='2' fill='%230f172a'/%3E%3Ccircle cx='176' cy='64' r='2' fill='%230f172a'/%3E%3Ccircle cx='36' cy='150' r='2' fill='%230f172a'/%3E%3Ccircle cx='154' cy='176' r='2' fill='%230f172a'/%3E%3C/svg%3E");
+}
+@media print, (forced-colors: active) {
+  .workspace::before {
+    display: none;
   }
 }
