@@ -32,6 +32,9 @@ export function DialogContent({
         className={cn(
           'fixed left-1/2 top-1/2 z-[60] w-full max-w-md -translate-x-1/2 -translate-y-1/2',
           'rounded-lg border border-neutral-200 bg-white p-6 text-neutral-900 shadow-lg',
+          // A tall form (for example the reward form) is taller than a phone screen. Without
+          // a height cap the centred dialog is clipped top and bottom and cannot scroll.
+          'max-h-[calc(100dvh-2rem)] overflow-y-auto overscroll-contain',
           className,
         )}
         {...props}
