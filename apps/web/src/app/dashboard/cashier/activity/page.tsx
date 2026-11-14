@@ -18,6 +18,9 @@ const CATEGORIES = [
   'security',
 ] as const;
 
+// next-intl message keys cannot contain '.', so stored action names (`loyalty.customer_lookup`) map to `loyalty_customer_lookup`.
+const actionKey = (action: string) => action.replaceAll('.', '_');
+
 interface ActivityItem {
   correlationId: string;
   timestamp: string;
@@ -140,7 +143,7 @@ export default async function CashierActivityPage({
               {result.items.map((i) => (
                 <tr key={i.correlationId}>
                   <td className="whitespace-nowrap px-3 py-2">{format.dateTime(new Date(i.timestamp), { dateStyle: 'medium', timeStyle: 'short' })}</td>
-                  <td className="px-3 py-2">{t.has(`actions.${i.action}`) ? t(`actions.${i.action}`) : i.action}</td>
+                  <td className="px-3 py-2">{t.has(`actions.${actionKey(i.action)}`) ? t(`actions.${actionKey(i.action)}`) : i.action}</td>
                   <td className="px-3 py-2">{i.actor.name ?? '—'}</td>
                   <td className="px-3 py-2">{i.branchName ?? t('businessWide')}</td>
                   <td className="px-3 py-2">{t(`outcome.${i.outcome}`)}</td>
