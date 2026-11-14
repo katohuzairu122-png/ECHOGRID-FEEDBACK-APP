@@ -76,7 +76,33 @@ API_BASE_URL = "https://echo-grid-feedback-api-staging.katohuzairu122.workers.de
 APP_URL = "https://echo-grid-feedback-web-staging.katohuzairu122.workers.dev"
 NODE_ENV = "production"
 NEXT_PRIVATE_MINIMAL_MODE = "1"
+# CASHIER-PWA-01: where the dashboard's "Open Cashier App" points (the staging cashier Worker below).
+CASHIER_APP_URL = "https://echo-grid-feedback-cashier-staging.katohuzairu122.workers.dev"
 
 [env.staging.assets]
+directory = ".open-next/assets"
+binding = "ASSETS"
+
+# =============================================================================
+# CASHIER PWA, STAGING (CASHIER-PWA-DEPLOY-01). A dedicated Worker deployed from the SAME OpenNext build as the staging
+# web Worker; only its runtime configuration differs. CASHIER_HOST makes /cashier/* available on this host (everywhere
+# else it is a 404) and redirects staff surfaces on this host into the cashier app. It reuses the staging API. Staging
+# only, on a temporary workers.dev hostname: the production hostname cashier.echo-grid.uk is NOT bound here, and no
+# production Worker, domain or database is touched.
+# =============================================================================
+[env.cashier-staging]
+name = "echo-grid-feedback-cashier-staging"
+workers_dev = true
+routes = []
+
+[env.cashier-staging.vars]
+API_BASE_URL = "https://echo-grid-feedback-api-staging.katohuzairu122.workers.dev"
+APP_URL = "https://echo-grid-feedback-cashier-staging.katohuzairu122.workers.dev"
+NODE_ENV = "production"
+NEXT_PRIVATE_MINIMAL_MODE = "1"
+CASHIER_HOST = "echo-grid-feedback-cashier-staging.katohuzairu122.workers.dev"
+CASHIER_APP_URL = "https://echo-grid-feedback-cashier-staging.katohuzairu122.workers.dev"
+
+[env.cashier-staging.assets]
 directory = ".open-next/assets"
 binding = "ASSETS"
