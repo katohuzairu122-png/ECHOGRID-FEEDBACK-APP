@@ -35,6 +35,7 @@ import CashierLayout from './layout';
 import { CashierShell as CashierAppLayout } from '@/components/cashier/cashier-shell';
 import { GET as manifestGet } from './manifest.webmanifest/route';
 import { GET as refreshGet, POST as refreshPost } from './session/refresh/route';
+import { requestOrigin, safeNext } from '@/lib/cashier/refresh-guard';
 
 const prod = (host: string | null, cashierHost: string | null = 'cashier.echo-grid.uk') => {
   m.host = host;
@@ -123,7 +124,7 @@ describe('refresh route (SEC-CASHIER-R1 F3)', () => {
 
   beforeEach(() => prod('cashier.echo-grid.uk'));
 
-  it('GET never rotates a token and never redirects: it is a same-origin hand-off page', async () => {
+  it('GET never rotates a token and never redirects: it is a hand-off page', async () => {
     for (const site of ['same-origin', 'same-site', 'cross-site', 'none', undefined]) {
       const res = await get(undefined, site ? { 'sec-fetch-site': site } : {});
       expect(res.status, String(site)).toBe(200);
@@ -133,13 +134,64 @@ describe('refresh route (SEC-CASHIER-R1 F3)', () => {
       expect(html).toContain('method="post"');
       expect(html).toContain('action="/cashier/session/refresh"');
     }
-    expect(m.refreshSession).not.toHaveBeenCalled(); // a cross-site navigation, link or bookmark cannot force a rotation
+    expect(m.refreshSession).not.toHaveBeenCalled();
+  });
+
+  it('submits itself only for a navigation the user started here; from another site (or with no header) a tap is required', async () => {
+    for (const site of ['same-origin', 'none']) {
+      const html = await (await get(undefined, { 'sec-fetch-site': site })).text();
+      expect(html, site).toContain("getElementById('refresh').submit()");
+    }
+    for (const headers of [{ 'sec-fetch-site': 'cross-site' }, { 'sec-fetch-site': 'same-site' }, {}]) {
+      const html = await (await get(undefined, headers)).text();
+      expect(html, JSON.stringify(headers)).not.toContain('.submit()');
+      expect(html, JSON.stringify(headers)).toContain('Continue to the cashier app'); // an explicit user gesture
+    }
+  });
+
+  it('a second consecutive hand-off after a successful rotation ends at the sign-in (no lap)', async () => {
+    const res = await refreshGet(new NextRequest(URL_, { headers: { cookie: 'ff_cashier_hop=1', 'sec-fetch-site': 'same-origin' } }));
+    expect(res.status).toBe(303);
+    expect(res.headers.get('location')).toBe('https://cashier.echo-grid.uk/cashier/login?reason=session');
+    expect(m.refreshSession).not.toHaveBeenCalled();
+    m.refreshSession.mockResolvedValue(true);
+    const ok = await post(same, '/cashier/redeem');
+    expect(ok.headers.get('set-cookie')).toMatch(/ff_cashier_hop=1;.*Max-Age=20/i);
   });
 
   it('the hand-off page carries only a validated next path, escaped', async () => {
     expect(await (await get('/cashier/redeem')).text()).toContain('value="/cashier/redeem"');
+    expect(await (await get('/cashier/redeem?tab=2')).text()).toContain('value="/cashier/redeem?tab=2"');
     for (const bad of ['https://evil.example/x', '//evil.example', '/dashboard', '/cashier/session/refresh', '/cashier/login', '/cashier\\evil', '"><script>x</script>'])
       expect(await (await get(bad)).text(), bad).toContain('value="/cashier"');
+  });
+
+  it('path normalisation cannot turn an /cashier prefix into another destination', async () => {
+    for (const bad of [
+      '/cashier/../dashboard/settings',
+      '/cashier/%2e%2e/dashboard',
+      '/cashier/x/../login',
+      '/cashier/./session/refresh',
+      '/cashier/\tsession/refresh',
+      '/cashier/session/../session/refresh',
+      '/cashier/..//evil.example/x',
+      '/cashier/login',
+      '/cashier/loginx',
+    ])
+      expect(safeNext(bad), JSON.stringify(bad)).toBe('/cashier');
+    expect(safeNext('/cashier/redeem')).toBe('/cashier/redeem');
+    expect(safeNext('/cashier')).toBe('/cashier');
+    expect(safeNext(null)).toBe('/cashier');
+    expect(safeNext('')).toBe('/cashier');
+  });
+
+  it('request origin: a garbage protocol cannot throw, and a configured CASHIER_APP_URL decides for its own host', () => {
+    const req = (headers: Record<string, string>) => new NextRequest('http://localhost:3000/x', { headers });
+    expect(requestOrigin(req({ host: 'cashier.echo-grid.uk', 'x-forwarded-proto': 'a b' }))).toBe('http://cashier.echo-grid.uk');
+    expect(requestOrigin(req({ host: 'cashier.echo-grid.uk', 'x-forwarded-proto': 'https' }))).toBe('https://cashier.echo-grid.uk');
+    vi.stubEnv('CASHIER_APP_URL', 'https://cashier.echo-grid.uk');
+    expect(requestOrigin(req({ host: 'cashier.echo-grid.uk', 'x-forwarded-proto': 'http' }))).toBe('https://cashier.echo-grid.uk');
+    expect(requestOrigin(req({ host: 'other.example', 'x-forwarded-proto': 'https' }))).toBe('https://other.example');
   });
 
   it('POST from the same origin rotates once and returns into the app', async () => {
