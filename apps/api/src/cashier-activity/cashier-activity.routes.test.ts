@@ -290,8 +290,8 @@ describe('SEC-CASHIER-R1 F1: visibility is decided per branch from effective per
     const t = await web(MIX_MA_SB);
     const forged = btoa(`2026-01-01T00:00:00.000Z|${ROW}|${BR2}`).replace(/=+$/, ''); // extra field naming branch B
     const res = await get(`?cursor=${forged}`, t, BIZ_A, BR1);
-    expect([200, 400]).toContain(res.status);
-    if (res.status === 200) expect(scopeOf().branchIds).toEqual([BR1]);
+    expect(res.status).toBe(200); // the decoder ignores the extra field: only the position is taken
+    expect(scopeOf().branchIds).toEqual([BR1]);
     m.list.mockClear();
     expect((await get('?cursor=%00%00', t, BIZ_A, BR1)).status).toBe(400);
     expect(m.list).not.toHaveBeenCalled();

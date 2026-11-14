@@ -175,6 +175,8 @@ describe('refresh route (SEC-CASHIER-R1 F3)', () => {
       '/cashier/\tsession/refresh',
       '/cashier/session/../session/refresh',
       '/cashier/..//evil.example/x',
+      '/cashier//session/refresh',
+      '/cashier//login',
       '/cashier/login',
       '/cashier/loginx',
     ])
