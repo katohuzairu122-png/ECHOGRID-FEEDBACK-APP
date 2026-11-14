@@ -227,6 +227,11 @@ export interface Bindings {
   /** Rate limiting bindings (Block 7, extended in QR Engagement Block 2) --
    * namespace_id values are defined directly in wrangler.toml, not
    * provisioned via CLI. */
+  /**
+   * SEC-CASHIER-R2 F6 (optional): secret shared ONLY with the web Worker to sign the real client address it forwards in
+   * `x-echo-client` (see lib/client-attribution.ts). Unset = the header is never trusted and behaviour is unchanged.
+   */
+  CLIENT_ATTRIBUTION_SECRET?: string | undefined;
   AUTH_RATE_LIMITER: RateLimit;
   API_RATE_LIMITER: RateLimit;
   PUBLIC_RATE_LIMITER: RateLimit;

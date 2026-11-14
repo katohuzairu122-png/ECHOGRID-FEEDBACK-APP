@@ -20,7 +20,8 @@ import { createAccountSecurityEmailService } from '../notifications/email.servic
 import { parseJsonBody } from '../lib/validate';
 import { ok } from '../lib/response';
 import { AppError } from '../lib/errors';
-import { rateLimit } from '../middleware/rate-limit';
+import { cashierAuthRateLimit, rateLimit } from '../middleware/rate-limit';
+import { resolveClient } from '../lib/client-attribution';
 import { authenticate, type AuthVariables } from '../middleware/authenticate';
 import type { AuditVariables } from '../middleware/audit';
 
@@ -111,13 +112,14 @@ authRoutes.post('/login', rateLimit('AUTH_RATE_LIMITER'), async (c) => {
  * purpose: a cashier access token cannot call them. Each records an audit entry attributed to the staff user and
  * visible in the business's own audit log.
  */
-authRoutes.post('/cashier/login', rateLimit('AUTH_RATE_LIMITER'), async (c) => {
+authRoutes.post('/cashier/login', cashierAuthRateLimit('login'), async (c) => {
   const body = await parseJsonBody(c.req.raw, cashierLoginSchema);
+  const client = await resolveClient(c.req.raw.headers, c.env.CLIENT_ATTRIBUTION_SECRET);
   const result = await withCashierService(c, (service) =>
     service.login({
       ...body,
-      userAgent: c.req.header('user-agent'),
-      ipAddress: c.req.header('cf-connecting-ip'),
+      userAgent: client.userAgent,
+      ipAddress: client.ip,
     }),
   );
   c.set('userId', result.userId);
@@ -133,13 +135,14 @@ authRoutes.post('/cashier/login', rateLimit('AUTH_RATE_LIMITER'), async (c) => {
   return ok(c, publicResult);
 });
 
-authRoutes.post('/cashier/session', rateLimit('AUTH_RATE_LIMITER'), async (c) => {
+authRoutes.post('/cashier/session', cashierAuthRateLimit('session'), async (c) => {
   const body = await parseJsonBody(c.req.raw, cashierSessionSchema);
+  const client = await resolveClient(c.req.raw.headers, c.env.CLIENT_ATTRIBUTION_SECRET);
   const result = await withCashierService(c, (service) =>
     service.createSession({
       ...body,
-      userAgent: c.req.header('user-agent'),
-      ipAddress: c.req.header('cf-connecting-ip'),
+      userAgent: client.userAgent,
+      ipAddress: client.ip,
     }),
   );
   c.set('userId', result.userId);
@@ -153,14 +156,14 @@ authRoutes.post('/cashier/session', rateLimit('AUTH_RATE_LIMITER'), async (c) =>
   return ok(c, { status: 'authenticated', ...publicResult });
 });
 
-authRoutes.post('/cashier/refresh', async (c) => {
+authRoutes.post('/cashier/refresh', cashierAuthRateLimit('refresh'), async (c) => {
   const body = await parseJsonBody(c.req.raw, refreshSchema);
   const result = await withCashierService(c, (service) => service.refresh(body.refreshToken));
   const { userId: _userId, ...publicResult } = result;
   return ok(c, publicResult);
 });
 
-authRoutes.post('/cashier/logout', async (c) => {
+authRoutes.post('/cashier/logout', cashierAuthRateLimit('logout'), async (c) => {
   const body = await parseJsonBody(c.req.raw, refreshSchema);
   const ended = await withCashierService(c, (service) => service.logout(body.refreshToken));
   if (ended) {

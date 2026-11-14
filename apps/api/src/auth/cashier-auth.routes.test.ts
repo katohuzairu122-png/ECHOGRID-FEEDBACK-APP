@@ -19,6 +19,7 @@ vi.mock('./pbkdf2-worker', () => ({ createDurableObjectPbkdf2Worker: () => ({}) 
 vi.mock('../middleware/rate-limit', () => ({
   rateLimit: () => async (_c: unknown, next: () => Promise<void>) => next(),
   rateLimitByCustomer: () => async (_c: unknown, next: () => Promise<void>) => next(),
+  cashierAuthRateLimit: () => async (_c: unknown, next: () => Promise<void>) => next(),
 }));
 vi.mock('./cashier-auth.service', () => ({
   CashierAuthService: class {
