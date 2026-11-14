@@ -36,6 +36,7 @@ export const SPEC = [
   ['qr_codes', 'branches', 'branch_id', 'STRAIGHT'],
   ['qr_scan_events', 'branches', 'branch_id', 'STRAIGHT'],
   ['qr_scan_events', 'qr_codes', 'qr_code_id', 'STRAIGHT'],
+  ['refresh_tokens', 'branches', 'branch_id', 'NULLABLE_TENANT_DECISION'],
   ['signed_evidence_events', 'signed_evidence_records', 'evidence_id', 'GUARDED_BY_TRIGGER', 'evidence_id'],
   ['survey_campaigns', 'branches', 'branch_id', 'NULLABLE_TENANT_DECISION'],
   ['survey_campaigns', 'surveys', 'survey_id', 'NULLABLE_TENANT_DECISION'],
