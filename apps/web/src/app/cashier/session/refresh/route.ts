@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { headers } from 'next/headers';
 import { isCashierAppAvailable } from '@/lib/cashier/host';
 import { refreshCashierSession } from '@/lib/cashier/auth-api';
-import { isSameOriginRequest, safeNext } from '@/lib/cashier/refresh-guard';
+import { isSameOriginRequest, requestOrigin, safeNext } from '@/lib/cashier/refresh-guard';
 
 /**
  * Cashier session refresh (SEC-CASHIER-R1 F3).
@@ -52,10 +52,11 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   if (!(await available())) return new NextResponse('Not found', { status: 404 });
-  const login = new URL(LOGIN_AFTER_FAILURE, request.url);
+  const base = requestOrigin(request);
+  const login = new URL(LOGIN_AFTER_FAILURE, base);
   if (!isSameOriginRequest(request)) return NextResponse.redirect(login, 303);
   const form = await request.formData().catch(() => null);
   const next = safeNext(typeof form?.get('next') === 'string' ? (form?.get('next') as string) : null);
   const ok = await refreshCashierSession();
-  return NextResponse.redirect(ok ? new URL(next, request.url) : login, 303);
+  return NextResponse.redirect(ok ? new URL(next, base) : login, 303);
 }

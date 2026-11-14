@@ -174,6 +174,21 @@ describe('refresh route (SEC-CASHIER-R1 F3)', () => {
     expect(res.headers.get('location')).not.toContain('/session/refresh');
   });
 
+  it('uses the Host the browser sent, not the server bind address, for redirects and the same-origin check', async () => {
+    m.refreshSession.mockResolvedValue(true);
+    const req = (headers: Record<string, string>) => {
+      const body = new FormData();
+      body.set('next', '/cashier');
+      return refreshPost(new NextRequest('http://localhost:3000/cashier/session/refresh', { method: 'POST', headers, body }));
+    };
+    const ok = await req({ host: 'cashier.echo-grid.uk', 'x-forwarded-proto': 'https', origin: 'https://cashier.echo-grid.uk' });
+    expect(ok.headers.get('location')).toBe('https://cashier.echo-grid.uk/cashier');
+    m.refreshSession.mockClear();
+    const forged = await req({ host: 'cashier.echo-grid.uk', 'x-forwarded-proto': 'https', origin: 'https://evil.example' });
+    expect(forged.headers.get('location')).toBe('https://cashier.echo-grid.uk/cashier/login?reason=session');
+    expect(m.refreshSession).not.toHaveBeenCalled();
+  });
+
   it('is a 404 off the cashier host, for both methods', async () => {
     prod('echo-grid.uk');
     expect((await get()).status).toBe(404);
