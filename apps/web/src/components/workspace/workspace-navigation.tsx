@@ -15,6 +15,12 @@ export interface WorkspaceNavItem {
   icon: LandingIconName;
   /** Shows an unread-count badge on this item, fed by the shared poller in lib/unread-store. */
   badgeSource?: UnreadSource;
+  /**
+   * Navigate with a full page load instead of a client-side transition. A document's Permissions-Policy is fixed when
+   * it loads, so a client-side transition into a page that needs the camera keeps the previous page's policy (camera
+   * denied) until a reload. Used for the QR scanner page (SEC-CASHIER-R2 F9).
+   */
+  hardNavigation?: boolean;
 }
 
 export function activeWorkspaceHref(pathname: string, items: WorkspaceNavItem[]) {
@@ -119,18 +125,25 @@ export function WorkspaceNavigation({
   }, [open, close]);
 
   const links = (subset: WorkspaceNavItem[], onNavigate?: () => void) =>
-    subset.map((item) => (
-      <Link
-        key={item.href}
-        href={item.href}
-        aria-current={active === item.href ? 'page' : undefined}
-        {...(onNavigate ? { onClick: onNavigate } : {})}
-      >
-        <LandingIcon name={item.icon} width={21} height={21} />
-        <span>{item.label}</span>
-        {item.badgeSource && <NavUnreadBadge source={item.badgeSource} />}
-      </Link>
-    ));
+    subset.map((item) => {
+      const content = (
+        <>
+          <LandingIcon name={item.icon} width={21} height={21} />
+          <span>{item.label}</span>
+          {item.badgeSource && <NavUnreadBadge source={item.badgeSource} />}
+        </>
+      );
+      const current = active === item.href ? ('page' as const) : undefined;
+      return item.hardNavigation ? (
+        <a key={item.href} href={item.href} aria-current={current} {...(onNavigate ? { onClick: onNavigate } : {})}>
+          {content}
+        </a>
+      ) : (
+        <Link key={item.href} href={item.href} aria-current={current} {...(onNavigate ? { onClick: onNavigate } : {})}>
+          {content}
+        </Link>
+      );
+    });
 
   return (
     <>

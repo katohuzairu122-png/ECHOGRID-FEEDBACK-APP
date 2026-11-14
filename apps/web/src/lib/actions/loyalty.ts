@@ -374,7 +374,7 @@ export async function lookupRedemptionAction(
 
   const code = String(formData.get('code') ?? '').trim().toUpperCase();
   try {
-    const transaction = await apiFetch<LoyaltyTransactionDto>(`/loyalty/redemptions/${code}`, {
+    const transaction = await apiFetch<LoyaltyTransactionDto>(`/loyalty/redemptions/${encodeURIComponent(code)}`, {
       businessId: business.id,
     });
     return { transaction };
@@ -388,7 +388,7 @@ export async function confirmRedemptionAction(code: string): Promise<LoyaltyTran
   const business = await getActiveBusiness();
   if (!business) throw new Error('No active business.');
 
-  return apiFetch<LoyaltyTransactionDto>(`/loyalty/redemptions/${code}/confirm`, {
+  return apiFetch<LoyaltyTransactionDto>(`/loyalty/redemptions/${encodeURIComponent(code)}/confirm`, {
     method: 'POST',
     businessId: business.id,
   });

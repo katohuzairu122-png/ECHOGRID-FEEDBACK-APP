@@ -11,6 +11,7 @@ import {
 } from '../actions/loyalty';
 import type { LoyaltyTransactionDto } from '@echo-grid-feedback/shared-types';
 import { runInCashierSurface } from './surface';
+import { requireCashierOrigin } from './host-guard';
 import {
   ensureCashierAccess,
   postCashierAuth,
@@ -54,6 +55,7 @@ export async function cashierLoginAction(
   _prev: CashierLoginState,
   form: FormData,
 ): Promise<CashierLoginState> {
+  await requireCashierOrigin();
   try {
     const result = await postCashierAuth<CashierLoginResponse>('login', {
       email: text(form, 'email'),
@@ -76,6 +78,7 @@ export async function cashierSelectAction(
   _prev: CashierLoginState,
   form: FormData,
 ): Promise<CashierLoginState> {
+  await requireCashierOrigin();
   const ticket = await getCashierSelectionTicket();
   if (!ticket) return { error: 'expired' };
   const branchId = text(form, 'branchId');
@@ -95,6 +98,7 @@ export async function cashierSelectAction(
 
 /** Ends THIS cashier session on the server (best effort) and clears the cashier cookies. Never touches staff cookies. */
 export async function cashierLogoutAction(): Promise<void> {
+  await requireCashierOrigin();
   const refreshToken = await getCashierRefreshToken();
   if (refreshToken) await postCashierAuth('logout', { refreshToken }).catch(() => undefined);
   await clearCashierSession();
@@ -107,6 +111,7 @@ export async function cashierLogoutAction(): Promise<void> {
  * user to the cashier sign-in when the session is gone. Nothing here widens what the cashier token may call.
  */
 async function withCashier<T>(work: () => Promise<T>): Promise<T> {
+  await requireCashierOrigin();
   if (!(await ensureCashierAccess())) redirect(LOGIN);
   return runInCashierSurface(work);
 }
