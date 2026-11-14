@@ -144,6 +144,22 @@ describe('B3 production deployment governance (static workflow checks)', () => {
     expect(code(RELEASE)).not.toContain('--env staging');
   });
 
+  it('CASHIER-PWA-DEPLOY-01: the cashier Worker is a staging-only step of the staging workflow, from the same build, never in production', () => {
+    const s = code('deploy-staging.yml');
+    expect(s).toContain('opennextjs-cloudflare deploy --env cashier-staging');
+    // Same artifact: the only build step precedes both deploys; the cashier step does not rebuild.
+    expect(s.match(/opennextjs-cloudflare build/g)).toHaveLength(1);
+    expect(s.indexOf('opennextjs-cloudflare build')).toBeLessThan(s.indexOf('--env cashier-staging'));
+    for (const f of [RELEASE, WEB_ONLY]) expect(code(f), f).not.toMatch(/cashier/);
+    const toml = readFileSync(resolve(dir, '../../apps/web/wrangler.toml'), 'utf8').replace(/\r\n/g, '\n');
+    const cashier = toml.slice(toml.indexOf('[env.cashier-staging]'));
+    expect(cashier).toContain('name = "echo-grid-feedback-cashier-staging"');
+    expect(cashier).toContain('workers_dev = true');
+    expect(cashier).toContain('routes = []'); // no custom domain: the production hostname is not bound here
+    expect(toml.slice(0, toml.indexOf('[env.staging]'))).not.toMatch(/CASHIER_HOST/); // production config has no cashier host
+    expect(toml).not.toMatch(/routes\s*=\s*\[[^\]]*cashier\.echo-grid\.uk/);
+  });
+
   it('12. both certification workflows remain manual-only', () => {
     for (const f of ['heta-f1-certification.yml', 'split07-neon-certification.yml']) {
       expect(onBlock(f), f).toMatch(/^ {2}workflow_dispatch:/m);
