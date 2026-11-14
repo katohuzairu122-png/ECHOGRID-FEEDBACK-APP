@@ -16,8 +16,9 @@ The cashier application stays attached to the existing Echo Grid business accoun
 7. Cashier sessions cannot reach administrative endpoints.
 8. An "Install Cashier App" entry point is provided in the existing business dashboard.
 9. The same authoritative customer, reward, transaction and loyalty records are used.
-10. Role revocation, staff removal and business suspension are enforced across both applications.
-    This section records decisions; it authorizes documentation only. The hostname below is a **proposal for owner approval**, not a decision.
+10. Role revocation, staff removal and business suspension are enforced across both applications. 11. **Hostname `cashier.echo-grid.uk`** and a **dedicated Worker** (decided 2026-11-14).
+11. **No device PIN and no mandatory device enrollment** in the initial release (decided 2026-11-14).
+    This section records decisions; it authorizes documentation only. Block C1 (read-only preflight) is recorded in `CASHIER_PWA_01_C1_PREFLIGHT.md`; C2 is not started.
 
 ## 1. Objective and scope
 
@@ -48,7 +49,7 @@ Two ways to host a separate origin were compared.
 
 - Cashier mode (i): a request-host guard in the Web middleware makes the cashier Worker answer only cashier routes (anything else is 404), and makes the main Worker redirect or 404 `/cashier/*`. No cashier cookie or route exists on the main origin and vice versa.
 - Shared: the same API Worker, the same identity provider (`/auth/*`), the same Hyperdrive and database. The cashier Worker holds no database access and no secrets beyond what the Web Worker holds today (its configuration is the API address and the application URL).
-- **Hostname proposal (for owner approval, not decided):** production `cashier.echo-grid.uk` (a subdomain of the registered domain already used); staging: a second `workers.dev` Worker such as `echo-grid-feedback-cashier-staging` (no custom domain exists on staging today). No domain is created or configured by this document.
+- **Hostname (decided):** production `cashier.echo-grid.uk` (a subdomain of the registered domain already used); staging: a second `workers.dev` Worker (proposal `echo-grid-feedback-cashier-staging`; no custom domain exists on staging today). Worker names are still proposals. No domain is created or configured by this document; whether the hostname is free of an existing DNS record is **UNKNOWN** (see the C1 preflight).
 
 ### 3.2 Authentication architecture (PROPOSED)
 
