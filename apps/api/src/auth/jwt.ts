@@ -18,6 +18,13 @@ export type AccessTokenPayload = {
   // DEV-11-R1: the persisted SESSION this token belongs to (refresh_tokens.session_id), signed with the token. Absent on legacy tokens and on impersonation tokens; privileged administrative
   // functions refuse a token without it. Never read from a request parameter: it is trusted only because the signature covers it.
   sid?: string;
+  // CASHIER-PWA-01 C2: a cashier-scoped token. `client` marks it, `bid` binds it to ONE business and `brid` to ONE
+  // branch (absent for a business-wide binding). All three are covered by the signature and are never read from a
+  // request parameter. A cashier token is accepted only on the explicit allow-list in middleware/cashier-scope.ts,
+  // and never together with impersonation. Ordinary tokens carry none of these claims.
+  client?: 'cashier';
+  bid?: string;
+  brid?: string;
   iat: number;
   exp: number;
 };
@@ -43,6 +50,9 @@ function now(): number {
   return Math.floor(Date.now() / 1000);
 }
 
+export const CASHIER_CLIENT = 'cashier' as const;
+const ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export const SESSION_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 
 export async function signAccessToken(userId: string, secret: string, sessionId?: string): Promise<string> {
@@ -53,6 +63,33 @@ export async function signAccessToken(userId: string, secret: string, sessionId?
     ...(sessionId !== undefined ? { sid: sessionId } : {}),
     iat: now(),
     exp: now() + ACCESS_TOKEN_TTL_SECONDS,
+  };
+  return sign(payload, secret, 'HS256');
+}
+
+/**
+ * Signs a cashier-scoped access token (CASHIER-PWA-01 C2). Nothing issues one yet: the cashier login flow is a later
+ * block, so this exists to fix the contract and to let tests exercise the allow-list. A session id is mandatory and
+ * the business must be a well-formed id; the branch is optional.
+ */
+export async function signCashierAccessToken(
+  userId: string,
+  secret: string,
+  binding: { sessionId: string; businessId: string; branchId?: string | null },
+): Promise<string> {
+  if (!SESSION_ID_PATTERN.test(binding.sessionId)) throw new Error('Invalid session id.');
+  if (!ID_PATTERN.test(binding.businessId)) throw new Error('Invalid business id.');
+  if (binding.branchId != null && !ID_PATTERN.test(binding.branchId)) throw new Error('Invalid branch id.');
+  const iat = now();
+  const payload: AccessTokenPayload = {
+    sub: userId,
+    type: 'access',
+    client: CASHIER_CLIENT,
+    bid: binding.businessId,
+    ...(binding.branchId != null ? { brid: binding.branchId } : {}),
+    sid: binding.sessionId,
+    iat,
+    exp: iat + ACCESS_TOKEN_TTL_SECONDS,
   };
   return sign(payload, secret, 'HS256');
 }
@@ -101,6 +138,35 @@ export async function signImpersonationToken(
  * never verify as the other -- the `type` field is defense in depth on top
  * of that, in case of a future secret-management mistake.
  */
+/**
+ * Cashier-scope claims are all-or-nothing. A token without `client` must not carry a binding (a half-formed or
+ * tampered token is refused, not treated as an ordinary one). A token with `client` must be exactly a cashier token:
+ * the known client value, a well-formed business binding, an optional well-formed branch, a mandatory session id,
+ * and no impersonation.
+ */
+function assertScopeClaims(payload: AccessTokenPayload): void {
+  const p = payload as Record<string, unknown>;
+  if (p.client === undefined) {
+    if (p.bid !== undefined || p.brid !== undefined) throw new Error('Binding claims without a client.');
+    return;
+  }
+  if (p.client !== CASHIER_CLIENT) throw new Error('Unknown token client.');
+  if (typeof p.bid !== 'string' || !ID_PATTERN.test(p.bid)) throw new Error('Invalid business binding.');
+  if (p.brid !== undefined && (typeof p.brid !== 'string' || !ID_PATTERN.test(p.brid))) throw new Error('Invalid branch binding.');
+  if (typeof p.sid !== 'string') throw new Error('A cashier token needs a session id.');
+  if (p.impersonatedBy !== undefined) throw new Error('A cashier token cannot be an impersonation token.');
+}
+
+/** Verifies a token and requires it to be a cashier-scoped one: an ordinary access token is refused. */
+export async function verifyCashierAccessToken(
+  token: string,
+  secret: string,
+): Promise<AccessTokenPayload & { client: 'cashier'; bid: string }> {
+  const payload = await verifyAccessToken(token, secret);
+  if (payload.client !== CASHIER_CLIENT || payload.bid === undefined) throw new Error('Not a cashier token');
+  return payload as AccessTokenPayload & { client: 'cashier'; bid: string };
+}
+
 export async function verifyAccessToken(
   token: string,
   secret: string,
@@ -108,6 +174,7 @@ export async function verifyAccessToken(
   const payload = (await verify(token, secret, 'HS256')) as AccessTokenPayload;
   if (payload.type !== 'access') throw new Error('Not an access token');
   // a session claim, when present, must be a well-formed random session id: a malformed one is a forged or corrupt token, not an absent binding
+  assertScopeClaims(payload);
   if (payload.sid !== undefined && (typeof payload.sid !== 'string' || !SESSION_ID_PATTERN.test(payload.sid))) throw new Error('Malformed session claim');
   return payload;
 }

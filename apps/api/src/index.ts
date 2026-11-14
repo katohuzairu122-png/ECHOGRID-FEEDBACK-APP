@@ -1,3 +1,4 @@
+import { cashierScopeGuard } from './middleware/cashier-scope';
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { secureHeaders } from 'hono/secure-headers';
@@ -138,6 +139,9 @@ api.use(
   }),
 );
 api.use('*', rateLimit('API_RATE_LIMITER'));
+// CASHIER-PWA-01 C2: refuse a cashier-scoped token on every route that is not on the explicit allow-list, before any
+// handler runs. Mounted on the whole router so routes added later are denied by default.
+api.use('*', cashierScopeGuard);
 api.use('*', auditTrail);
 
 api.route('/auth', authRoutes);
@@ -700,6 +704,11 @@ async function sweepUnacknowledgedCriticalIncidents(env: Bindings): Promise<void
   } finally {
     await close();
   }
+}
+
+/** Registered routes (method and full path), for the cashier allow-list introspection test. */
+export function listRegisteredRoutes(): { method: string; path: string }[] {
+  return app.routes.map((r) => ({ method: r.method, path: r.path }));
 }
 
 export default {
