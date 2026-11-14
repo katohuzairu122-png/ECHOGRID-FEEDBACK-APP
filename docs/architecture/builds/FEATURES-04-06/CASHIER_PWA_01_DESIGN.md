@@ -1,123 +1,157 @@
-# CASHIER-PWA-01: independent cashier app and session (design only)
+# CASHIER-PWA-01: independent cashier app on a separate origin (design, version 2)
 
-**Status: DESIGN ONLY. Nothing here is built, migrated, deployed or authorized. Owner review is required before any development block. Financial activation remains NO-GO. The WEB-1102 production restriction is unchanged (Block 0 is not certified).**
-Baseline: `main` `de997da6` (2026-11-14). Open PR at inspection: #415 (dialog scroll fix, unrelated). Labels: **VERIFIED** (read in source), **PROPOSED**, **NOT IMPLEMENTED**, **BLOCKED**, **UNKNOWN**.
+**Status: DESIGN ONLY. Nothing here is built, migrated, deployed or authorized. The owner approved the architecture on 2026-11-14 (section 0); development blocks C1 and later each need their own explicit authorization. Financial activation remains NO-GO. The WEB-1102 production restriction is unchanged (Block 0 is not certified).**
+Baseline: `main` `de997da6` (2026-11-14). Version 2 supersedes version 1 in PR #416 (open, unmerged at the time of writing). Labels: **VERIFIED** (read in source), **PROPOSED**, **NOT IMPLEMENTED**, **BLOCKED**, **UNKNOWN**.
+
+## 0. Owner decision record (2026-11-14, RATIFIED)
+
+The cashier application stays attached to the existing Echo Grid business account. Approved:
+
+1. A dedicated cashier PWA hosted on a **separate origin**.
+2. It reuses existing staff identities, credentials, business IDs, memberships and branch assignments.
+3. It establishes an **independent cashier authentication session**.
+4. No separate cashier accounts, no duplicate businesses, no duplicate loyalty databases.
+5. Existing API-enforced permissions and tenant isolation are preserved.
+6. Owners and managers may use cashier operations when authorized.
+7. Cashier sessions cannot reach administrative endpoints.
+8. An "Install Cashier App" entry point is provided in the existing business dashboard.
+9. The same authoritative customer, reward, transaction and loyalty records are used.
+10. Role revocation, staff removal and business suspension are enforced across both applications.
+    This section records decisions; it authorizes documentation only. The hostname below is a **proposal for owner approval**, not a decision.
 
 ## 1. Objective and scope
 
-Let a business administrator and a cashier work at the same time without their sign-ins colliding, by giving the cashier an installable app with its own session. In scope: cashier sign-in, session isolation, install and routing, screens, permission boundaries. Out of scope: loyalty program rules (REWARD-CONFIG-01), timezone (TIMEZONE-01), billing, any change to customer authentication.
+Let administrators and cashiers work at the same time without sign-in collisions, with the cashier app on its own origin and session, and one shared API, identity provider and database. In scope: separate-origin architecture, authentication and session model, install entry point, permissions, test plan. Out of scope: loyalty program rules (REWARD-CONFIG-01), timezone (TIMEZONE-01), billing, customer authentication.
 
 ## 2. Verified existing implementation
 
-- **One staff session per browser origin (VERIFIED).** The Web app stores the staff session in two httpOnly cookies, `ff_access_token` (15 minutes) and `ff_refresh_token` (30 days), `SameSite=lax`, `Path=/` (`apps/web/src/lib/session.ts`, `cookies.ts`). A second staff sign-in on the same origin replaces them, which is the collision the owner describes. Impersonation stashes the real admin session in `ff_admin_*` cookies and sets `ff_impersonating`; the active business is `ff_active_business`.
-- **Cashier definition (VERIFIED).** D-C1 gives counter staff only `loyalty:serve` (plus read access to the business and branches); owner and manager keep management permissions. The Web app classifies a workspace as cashier, management or unavailable (`classifyWorkspace`) and redirects cashiers to `/dashboard/loyalty/scan` (`CASHIER_HOME`). Every `loyalty:serve` route is enforced on the API (`requirePermission('loyalty:serve')`): resolve-customer, lookup-customer, lookup-purchase, record purchase, redemption lookup and confirm.
-- **API session model (VERIFIED).** `refresh_tokens` rows carry `tokenHash`, `sessionId`, `issuedAt`, `expiresAt`, `revokedAt`, `replacedByTokenId` (rotation), `userAgent`, `ipAddress`. Staff endpoints: login, refresh, logout, `/auth/me`. There is no per-client or per-business binding on a staff token.
-- **PWA (VERIFIED).** One manifest (`apps/web/src/app/manifest.ts`): `start_url '/'`, `scope '/'`, name "Echo Grid", 192 and 512 icons. One service worker (`public/sw.js`, registered globally): network-first for navigations with a cached offline page only; it deliberately caches no authenticated responses.
-- **Not present (NOT IMPLEMENTED):** a cashier manifest, "Install" entry point, cashier sign-in page, scope-limited tokens, a cashier session list or remote revoke, device registration.
+- **Staff session cookies are host-only (VERIFIED).** `setSession` writes `ff_access_token` (15 minutes) and `ff_refresh_token` (30 days) as httpOnly, `SameSite=lax`, `Path=/` cookies with **no `Domain` attribute** (`apps/web/src/lib/session.ts`). A different hostname therefore never receives them, so a separate origin isolates the sessions with no extra code. Impersonation stashes the admin session in `ff_admin_*` cookies; the active business is `ff_active_business`.
+- **The browser never calls the API directly for session work (VERIFIED in the code path read).** The Web app is a backend-for-frontend: server actions and server components call the API with `apiFetch` using `API_BASE_URL`, adding the bearer token and the `X-Business-Id` and `X-Branch-Id` headers read from cookies. The API CORS allow-list (`ALLOWED_ORIGINS`) therefore applies to browser-side calls only; **UNKNOWN:** whether any browser-side fetch to the API exists (a repository-wide search is part of C1).
+- **Deployment shape (VERIFIED):** the Web app is one OpenNext Cloudflare Worker (`echo-grid-feedback-web`) with `APP_URL = https://echo-grid.uk` and `API_BASE_URL` pointing at the API Worker's `workers.dev` address (a custom API domain is planned in comments, not configured). Staging uses `workers.dev` addresses only (no custom domain). Custom domains are not declared in `apps/web/wrangler.toml` (**UNKNOWN:** how the production domain is attached; it is presumably a dashboard setting).
+- **Content security policy (VERIFIED):** `frame-ancestors 'none'`, `form-action 'self'`, `default-src 'self'`; server actions use Next's default same-host origin check (no `allowedOrigins` override). A second hostname serving its own pages satisfies both without change.
+- **Cashier permissions (VERIFIED):** D-C1 `loyalty:serve` for counter actions, enforced on the API (`requirePermission('loyalty:serve')`); the Web app routes cashiers to `/dashboard/loyalty/scan`.
+- **Per-request enforcement (VERIFIED):** `authenticate` loads the user and refuses a non-active user on every request; `resolveTenantContext` then checks the business membership first and the business status second, on every request, with no caching. So role revocation, staff removal and business suspension already take effect on the very next request for any token, wherever it was issued.
+- **Refresh tokens (VERIFIED):** `refresh_tokens` has `tokenHash`, `sessionId`, `issuedAt`, `expiresAt`, `revokedAt`, `replacedByTokenId` (rotation), `userAgent`, `ipAddress`. There is no client type or business binding.
+- **PWA (VERIFIED):** one manifest (`start_url '/'`, `scope '/'`), one service worker (network-first navigation, cached offline page only, no authenticated caching).
+- **Not present (NOT IMPLEMENTED):** the cashier origin, cashier manifest, install entry point, cashier login, scope-limited token, device or session list, remote revoke.
 
 ## 3. Proposed target design
 
-### 3.1 Authentication architecture (PROPOSED)
+### 3.1 Origin architecture (PROPOSED)
 
-Same staff identity, new **cashier session** type. No identity linking: the cashier signs in with the existing staff email and password and nothing else is merged.
+Two ways to host a separate origin were compared.
 
-- New endpoint `POST /auth/cashier/login`: validates the staff credentials, requires the user to hold `loyalty:serve` in the chosen business, and issues a **scope-limited** token pair. The access token carries claims `client: "cashier"`, `businessId`, and `branchId` (or null for business-wide staff). The refresh token row records `client = cashier` and the same `businessId` and `branchId`.
-- **API allow-list:** a token with `client: "cashier"` is accepted only on the counter routes (the `loyalty:serve` routes, `GET /businesses/me`, `GET /auth/me`, refresh and logout). On every other route the middleware refuses it, whatever permissions the user holds. Even a stolen cashier token therefore cannot reach settings, team, billing, rewards configuration or analytics.
-- **Tenant binding:** the `X-Business-Id` and `X-Branch-Id` headers must equal the token claims or the request is refused. The cashier cannot switch business inside the app.
-- Permissions are still re-read from the database on each request (existing behavior), so a demoted cashier loses access on the next call.
+| Option                                      | What it is                                                                                                                                                                                                               | Verdict                                                                                                                                           |
+| ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| (i) Dedicated cashier Worker                | A second Worker built from the **same repository and build**, with its own hostname, started in cashier mode (configuration `CASHIER_APP=true`). It serves only `/cashier/*`, the shared static assets and the manifest. | **Recommended**                                                                                                                                   |
+| (ii) Second hostname on the existing Worker | Attach another custom domain to `echo-grid-feedback-web` and branch on the request host                                                                                                                                  | Fewer resources, but staging has only one `workers.dev` hostname so isolation could not be tested there, and one deployment would carry both apps |
 
-### 3.2 Session isolation strategy (PROPOSED)
+- Cashier mode (i): a request-host guard in the Web middleware makes the cashier Worker answer only cashier routes (anything else is 404), and makes the main Worker redirect or 404 `/cashier/*`. No cashier cookie or route exists on the main origin and vice versa.
+- Shared: the same API Worker, the same identity provider (`/auth/*`), the same Hyperdrive and database. The cashier Worker holds no database access and no secrets beyond what the Web Worker holds today (its configuration is the API address and the application URL).
+- **Hostname proposal (for owner approval, not decided):** production `cashier.echo-grid.uk` (a subdomain of the registered domain already used); staging: a second `workers.dev` Worker such as `echo-grid-feedback-cashier-staging` (no custom domain exists on staging today). No domain is created or configured by this document.
 
-The manifest does not isolate cookies. Two options were evaluated.
+### 3.2 Authentication architecture (PROPOSED)
 
-| Option                                               | Isolation                                                                     | Cost                                                                                | Verdict                                  |
-| ---------------------------------------------------- | ----------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- | ---------------------------------------- |
-| A. Same origin, distinct cookie names                | Admin and cashier cookies never overwrite each other; separate token families | None: no new domain                                                                 | **Recommended**                          |
-| B. Separate origin (for example a cashier subdomain) | Strongest: the browser keeps cookie jars apart                                | New hostname, Worker route, allowed-origin and CORS changes, another deploy surface | Not now; revisit if A fails device tests |
+- **Independent sign-in (recommended over handoff).** The cashier signs in on the cashier origin with their **own existing staff email and password**; no credentials or tokens are handed across origins. Reasons: accountability (each action is attributable to the person), no transfer of administrator privilege, and cookies cannot be shared across origins anyway. A secure handoff would need a one-time code exchanged between origins; it is described as an alternative in section 11 only for device enrollment, not for signing in.
+- **New API endpoint** `POST /auth/cashier/login` (the API stays single and shared): checks the existing credentials with the existing rate limiter and lockout rules, requires the user to hold `loyalty:serve` (or a management permission) in the chosen business, and issues a **scope-limited token pair**. Claims: `client: "cashier"`, `businessId`, `branchId` (null for business-wide staff). The refresh row records `client = cashier` plus the same business and branch.
+- **Scope allow-list on the API (the real privilege boundary).** Origin isolation protects browser cookies, but both apps call the same API, so the API must also refuse a cashier token on every administrative route. A `client: "cashier"` token is accepted only on the counter routes (`loyalty:serve` routes, `GET /businesses/me`, `GET /auth/me`, refresh, logout, the branch recent-activity read). Anything else returns the normal opaque denial, whatever permissions the user holds.
+- **Tenant binding:** `X-Business-Id` and `X-Branch-Id` must equal the token claims; the cashier cannot switch business without signing in again.
+- **Owners and managers:** they may sign in at the cashier origin with their own credentials; their cashier token is still scope-limited (decision 7), so using the cashier app never exposes administrative endpoints.
+- **Cookies on the cashier origin:** `ff_cashier_access` and `ff_cashier_refresh` (httpOnly, `Secure`, `SameSite=strict` is considered because no cross-site navigation is needed; host-only). Distinct names are kept even on a separate origin because `localhost` development shares cookies across ports and the names prevent accidental reuse.
 
-- Option A: cashier cookies `ff_cashier_access` and `ff_cashier_refresh`, used only by `/cashier/*` routes and server actions. `/dashboard` and `/platform` never read them, and `/cashier` never reads `ff_access_token`. Cookie path scoping is **not** treated as a security boundary; the security boundary is the scope-limited token and the API allow-list in 3.1.
-- Because sessions are independent token families (`sessionId`), signing out of the cashier app revokes only that family; the admin session is untouched, and the reverse.
-- **UNKNOWN (must be tested, not assumed):** whether an installed PWA shares cookie storage with the browser on each platform (Android Chrome, iOS Safari home-screen apps, desktop Chrome and Edge). Option A is chosen so the design does not depend on the answer.
+### 3.3 Session behavior (PROPOSED)
 
-### 3.3 Installation and routing (PROPOSED)
+- **Refresh:** rotation as today (the old refresh token is replaced and reuse is detected); cashier refresh has its own shorter lifetime (section 11).
+- **Logout:** revokes only the cashier token family (`sessionId`); the admin session on the main origin is untouched, and the reverse.
+- **Revocation and role changes:** per-request checks (verified above) apply unchanged: demoting a cashier, removing staff, or suspending the business ends access on the next request across both apps. Additionally (new): an owner view of active cashier sessions (device user agent, branch, last used) with remote revoke, and "revoke all of this user's sessions" on staff removal.
+- **Impersonation:** cashier sessions are refused while a request carries an impersonation token, and impersonation can never open the cashier origin.
 
-- Routes: `/cashier` (landing and install), `/cashier/login`, `/cashier/select` (business and branch, only if the user has several), `/cashier/serve` (the existing Serve customers flow, reused), `/cashier/activity` (recent activity of this device's branch), `/cashier/account`.
-- Second manifest at `/cashier/manifest.webmanifest`: `id "/cashier"`, `start_url "/cashier"`, `scope "/cashier/"`, name "Echo Grid Cashier", `display standalone`, its own icon set. The `/cashier` pages link only this manifest.
-- "Install Cashier App" button on `/cashier` (Chrome and Edge use the install prompt; iOS shows "Add to Home Screen" instructions). A link to it is added to the existing Serve customers page for managers.
-- The service worker keeps today's rule (network-first, offline shell only, no caching of authenticated data); a separate offline page for the cashier scope.
+### 3.4 Business and branch context (PROPOSED)
 
-### 3.4 Permission matrix (PROPOSED, enforced by the API)
+After credential check the API returns the user's businesses and branch grants (existing membership data). One business and one branch: selected automatically. Several: the cashier picks on the sign-in flow; the API validates the choice against the same membership and branch-grant rules `resolveTenantContext` uses, then binds it into the token. A user with a role grant on the business but no branch grant for the chosen branch is refused (existing rule: "branch context is required for this role").
 
-| Capability                                            | Cashier app               | Admin or manager dashboard |
-| ----------------------------------------------------- | ------------------------- | -------------------------- |
-| Resolve customer QR, lookup customer, lookup purchase | Yes (`loyalty:serve`)     | Yes                        |
-| Record a purchase, confirm a redemption               | Yes                       | Yes                        |
-| Recent activity of own branch                         | Yes (read only)           | Yes (all branches)         |
-| Business settings, team, roles, billing               | **No**                    | Yes                        |
-| Rewards, tiers and program configuration              | **No**                    | Yes (owner, manager)       |
-| Loyalty adjustments, customer directory               | **No**                    | Per D-C1                   |
-| Switch business                                       | **No** (bound at sign-in) | Yes                        |
+### 3.5 Reuse without duplicating business logic (PROPOSED)
 
-### 3.5 Cashier screen inventory (PROPOSED)
+The cashier origin reuses the existing counter routes and services unchanged (resolve customer, lookup, purchase, redemption confirm); only the token that reaches them differs. The Serve customers components move into a shared module imported by both the main dashboard and the cashier routes, so there is one implementation of the screens as well. Customer, reward, ledger and loyalty records stay in the existing database (decisions 4 and 9). No new tables hold business data; the only new storage is the refresh-token client and binding columns and cashier audit actions.
 
-Sign-in; business and branch picker; Serve (scan or type a customer lookup); customer card with purchase entry; redemption code confirm; recent activity (see the open item below); account and sign out; offline notice.
+### 3.6 Installation and routing (PROPOSED)
+
+- Cashier origin routes: `/` (landing and install), `/login`, `/select`, `/serve`, `/activity`, `/account` (the `/cashier` prefix is internal to the codebase; the cashier hostname serves them from its root).
+- Manifest on the cashier origin: `id` and `scope` at the origin root, `start_url "/"`, name "Echo Grid Cashier", own icons; a service worker for the cashier origin keeps today's rule (network-first, offline page only, no authenticated caching).
+- **Install entry point (decision 8):** on the existing dashboard Serve customers page and in the owner settings, an "Install Cashier App" panel that explains the app, shows the cashier address with a copy button and QR code, and links to it; the browser's own install prompt appears on the cashier origin. iOS shows "Add to Home Screen" steps. The dashboard does not install anything itself (a PWA installs only from its own origin).
+
+### 3.7 Permission matrix (enforced by the API)
+
+| Capability                                                          | Cashier app (cashier token)        | Admin or manager dashboard |
+| ------------------------------------------------------------------- | ---------------------------------- | -------------------------- |
+| Resolve customer QR, lookup customer, lookup purchase               | Yes (`loyalty:serve`)              | Yes                        |
+| Record purchase, confirm redemption                                 | Yes                                | Yes                        |
+| Recent activity of the bound branch (read only)                     | Yes                                | Yes (all branches)         |
+| Settings, team, roles, billing, rewards, tiers, programs, analytics | **No** (refused by the allow-list) | Per D-C1                   |
+| Loyalty adjustments, customer directory                             | **No**                             | Per D-C1                   |
+| Switch business or branch                                           | **No** (sign in again)             | Yes                        |
 
 ## 4. Data ownership and contracts
 
-Staff users and roles are unchanged. New data (PROPOSED, needs a migration and Gate 2 re-pin): `refresh_tokens.client` (`web` default, `cashier`), `business_id` and `branch_id` columns on cashier rows, and an audit action set (`auth.cashier_login`, `auth.cashier_logout`, `auth.cashier_session_revoked`). The "recent activity" endpoint is a new read API (also requested as a bug report): it lists purchases and redemptions for the token's branch with time, cashier and amount; it does not exist today (VERIFIED: only per-customer history exists).
+No separate accounts or data stores (decisions 2 and 4): the same `users`, role grants, branches and loyalty tables. New (PROPOSED, needs a migration and the Gate 2 re-pin): `refresh_tokens.client`, `business_id` and `branch_id` for cashier rows; audit actions `auth.cashier_login`, `auth.cashier_logout`, `auth.cashier_session_revoked`; a read endpoint for branch recent activity (requested separately as a bug report and VERIFIED missing today).
 
 ## 5. Authentication and authorization
 
-Covered in 3.1 and 3.4. Additional rules: cashier login uses the existing rate limiter; password reset and MFA rules for staff are unchanged; cashier sessions are refused while impersonating; platform roles cannot open the cashier app through impersonation.
+Sections 3.2 to 3.4 and 3.7. Additional rules: the cashier login shares the staff rate limiter and password rules; password reset and invitation emails stay on the main origin (they use `WEB_BASE_URL`, unchanged); the cashier origin offers a "forgot password" link that goes to the main origin.
 
 ## 6. UI and user journeys
 
-Admin: unchanged. Manager: opens Serve customers, taps "Set up a cashier device", sees the install link. Cashier: opens `/cashier`, installs, signs in once (refresh lifetime shorter than the admin's, see open decisions), picks the branch if needed, serves customers; signing out or an idle timeout returns to the cashier sign-in only.
+Admin: unchanged, plus the install panel. Manager: opens the install panel, copies the cashier link or shows its QR code to the device. Cashier: opens the cashier address, installs, signs in with their own email and password, picks the branch if needed, serves customers, signs out or times out back to the cashier sign-in. Owner: sees active cashier sessions and can revoke them.
 
 ## 7. Security and failure handling (threat analysis)
 
-| Threat                                                                                                                                                                                       | Control                                                                                          |
-| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
-| Cookie collision between admin and cashier                                                                                                                                                   | Distinct cookie names and token families (3.2)                                                   |
-| Stolen cashier token used on admin APIs                                                                                                                                                      | Scope claim with API route allow-list (3.1)                                                      |
-| Session substitution (admin token in the cashier app)                                                                                                                                        | `/cashier` accepts only `client: "cashier"` tokens; the reverse is refused                       |
-| Cross-tenant use                                                                                                                                                                             | Header and claim must match; permissions re-read per request                                     |
-| Privilege escalation by role change                                                                                                                                                          | Per-request permission read; cashier tokens cannot gain scope                                    |
-| Shared or lost device                                                                                                                                                                        | Short refresh lifetime, owner-visible session list with remote revoke, logout revokes the family |
-| XSS or CSRF                                                                                                                                                                                  | httpOnly cookies, `SameSite`, server-action origin checks (existing)                             |
-| Offline replay or stale data                                                                                                                                                                 | No authenticated caching in the service worker                                                   |
-| Audit gaps                                                                                                                                                                                   | Login, logout, revoke and each counter action are audited with branch and device user agent      |
-| Failure handling: an expired or revoked session returns to `/cashier/login` with no data left on screen; a refused scope returns a clear "not allowed in the cashier app" page, not a crash. |
+| Threat                                                                                                                                                                           | Control                                                                                                      |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| Session collision between admin and cashier                                                                                                                                      | Separate origins (host-only cookies) plus distinct cookie names and separate token families                  |
+| Stolen cashier token used against administrative APIs                                                                                                                            | Scope claim and API allow-list (the origin does not protect the shared API)                                  |
+| Admin token placed in the cashier app, or the reverse                                                                                                                            | Each origin accepts only its own token type; the API refuses a mismatch                                      |
+| Cross-tenant use                                                                                                                                                                 | Header and claim must match; membership and business status re-read per request                              |
+| Role removed, staff removed, business suspended                                                                                                                                  | Per-request checks apply to both apps; remote revoke for sessions                                            |
+| Open redirect or origin confusion between the two hostnames                                                                                                                      | Fixed, configured hostnames only; no redirect targets taken from request input; guard rejects the wrong host |
+| Phishing look-alike of the cashier hostname                                                                                                                                      | Hostname shown in the install panel; consider a name shown on screen after sign-in                           |
+| Shared or lost device                                                                                                                                                            | Short refresh lifetime, remote revoke, logout revokes the family, optional device enrollment                 |
+| XSS, CSRF                                                                                                                                                                        | httpOnly cookies, `SameSite`, Next's server-action origin check, existing CSP                                |
+| Offline replay or stale data                                                                                                                                                     | No authenticated caching in the service worker                                                               |
+| Audit gaps                                                                                                                                                                       | Login, logout, revoke and each counter action audited with branch and user agent                             |
+| Failure handling: an expired or revoked session returns to the cashier sign-in with no data left on screen; a refused scope shows a clear "not allowed in the cashier app" page. |
 
 ## 8. Backward compatibility
 
-Existing admin and cashier users keep working unchanged through `/dashboard`; the cashier app is opt-in. The old counter redirect (`CASHIER_HOME`) stays until the owner retires it. No customer-facing change. One migration (refresh token client and binding), purely additive.
+The main origin and every existing admin or cashier flow are unchanged; the cashier app is opt-in. The old counter redirect remains until the owner retires it. Additive migration only. No customer-facing change.
 
 ## 9. Dependencies
 
-- Independent of TIMEZONE-01 and REWARD-CONFIG-01, except that "recent activity" should show business-local times (TIMEZONE-01 display rule, which already works in the Web app) and that purchase verification must resolve the active program once REWARD-CONFIG-01 exists.
-- Any migration needs the Gate 2 re-pin and owner authorization (staging first). No Web feature goes to production before WEB-1102 is certified.
+- Hosting: a second Worker (or domain), its deployment workflow and a custom-domain record are needed for production; they are infrastructure steps that need separate owner authorization and are not created here.
+- API changes and a migration come first (C2, C3); both need the Gate 2 re-pin and authorization (staging first).
+- The recent-activity endpoint also serves the owner's bug report. Business-local time display follows TIMEZONE-01; purchase screens read the active program from REWARD-CONFIG-01 once it exists. No Web feature goes to production before WEB-1102 is certified.
 
 ## 10. Acceptance criteria
 
-A cashier token is refused on every non-counter route (test each route group); a cashier token with a mismatched business header is refused; signing in to the cashier app does not log out an admin in the same browser, and the reverse; logout and remote revoke end only the targeted family; a demoted user loses counter access on the next request; the manifests install on Android Chrome, desktop Chrome and Edge, and the iOS home-screen flow is documented from a real test; no authenticated response is cached; all actions appear in the audit log.
+A cashier token is refused on every administrative route group (a test per group); a mismatched business or branch header is refused; signing in on the cashier origin never changes the admin session in the same browser, and the reverse; logout and remote revoke end only the targeted family; demotion, staff removal and business suspension stop cashier access on the next request; owners and managers sign in with their own credentials and still get a scope-limited token; the main origin cannot serve cashier routes and the cashier origin cannot serve any other route; the manifest installs on Android Chrome, desktop Chrome and Edge, and the iOS home-screen flow is documented from a real device test; no authenticated response is cached; every login, logout, revoke and counter action is audited.
 
-## 11. Open owner decisions
+## 11. Open owner decisions and remaining conflicts
 
-1. Option A (same origin) or B (separate origin).
-2. Refresh lifetime and idle timeout for cashier sessions (proposal: 12 hours absolute, 2 hours idle).
-3. Whether owners and managers may also sign in to the cashier app.
-4. Whether a shift PIN or device registration is wanted.
-5. What "recent activity" shows, who sees which branch, and whether customer names are masked.
-6. Maximum simultaneous cashier sessions per user.
+1. **Hostname:** approve `cashier.echo-grid.uk` or choose another; and the staging approach (second `workers.dev` Worker).
+2. **Hosting shape:** dedicated cashier Worker (recommended) versus a second hostname on the existing Worker.
+3. Cashier refresh lifetime and idle timeout (proposal: 12 hours absolute, 2 hours idle).
+4. Whether a shift PIN or a device-enrollment code (the only handoff considered) is wanted.
+5. Maximum simultaneous cashier sessions per user.
+6. What the branch recent-activity screen shows, who sees which branch, and whether customer names are masked.
+7. Whether the cashier address and a name check should be shown at sign-in to resist look-alike domains.
+8. **Conflicts to resolve:** the API still has no scope concept, so origin isolation alone is not enough (resolved by 3.2, needs C2); the owner's decision 6 (owners and managers may use cashier operations) is kept compatible with decision 7 by scope-limiting every cashier token; production domain attachment is currently undocumented in the repository.
 
-## 12. Implementation block breakdown (PROPOSED, each needs authorization)
+## 12. Implementation block breakdown (PROPOSED, each needs explicit authorization)
 
-- C1: owner review and decisions.
-- C2: API scope claim, allow-list and tenant binding, with tests (no UI).
-- C3: cashier login, refresh and logout endpoints, token-family columns (migration).
-- C4: `/cashier` pages and second manifest; reuse of Serve customers.
-- C5: install UX and service worker rules.
-- C6: owner session list and remote revoke; audit actions.
-- C7: "recent activity" read API and page.
-- C8: real-device test matrix and acceptance run.
+- **C1:** owner decisions above; repository-wide search for any browser-side API call; document how the production domain is attached. No code.
+- **C2:** API scope claim, allow-list and tenant binding, with route-by-route tests (no UI, no migration).
+- **C3:** cashier login, refresh and logout endpoints and token-family columns (migration, Gate 2 re-pin).
+- **C4:** cashier Worker mode, host guard, `/login` `/select` `/serve` pages reusing shared components, manifest.
+- **C5:** install panel on the main dashboard and install UX; service worker rules.
+- **C6:** owner session list, remote revoke, audit actions.
+- **C7:** branch recent-activity API and page.
+- **C8:** staging origin setup (second Worker) and real-device test matrix; production hostname only after separate authorization.
