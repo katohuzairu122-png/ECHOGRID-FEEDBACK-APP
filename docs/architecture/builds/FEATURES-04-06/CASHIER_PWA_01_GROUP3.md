@@ -20,3 +20,9 @@ R1 Owner/Admin session admin only (unchanged). R2 nav entry for `loyalty:serve`.
 
 ## Verification levels (see the completion report for results)
 1 source level, 2 local runtime (Next.js / local workerd), 3 Cloudflare Workers runtime, 4 real device. Levels 3 and 4 are not claimed unless stated in the report.
+
+## Verification performed (development, on a throwaway PG16 and local tooling)
+- Source level: API vitest 190 files / 2968 tests, web vitest 102 files / 662 tests, both typecheck projects, eslint (0 errors; 4 pre-existing warnings in api index.ts). Scratch-DB integration: cashier migration, sessions, activity (4) plus the existing loyalty points, redemption and reward suites.
+- Local Workers-runtime (wrangler dev, local workerd, NOT the Cloudflare edge): OpenNext build succeeded; API worker plus web worker with `CASHIER_HOST=cashier.localhost`; 42 API-level scenario checks (cashier sign-in, allow-list denials, business substitution, audit/activity, pagination, replay, revocation, isolation) and 28 Chromium (Pixel 7 emulation) checks (host redirects, manifests, UI sign-in, cookies, nav, offline banner, revocation to sign-in) all passed.
+- Not verified: Cloudflare edge runtime and real hostnames/DNS, real-device install, camera QR scanning, production middleware behaviour beyond the minimal-mode build used locally, hosted-environment secrets.
+- Test-harness note: an early browser failure was a plain-http non-localhost origin refusing Secure cookies (not an app defect); an apparent offline-banner failure was the harness matching Next's always-present route announcer (role=alert).
