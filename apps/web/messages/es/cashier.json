@@ -48,8 +48,8 @@
       "title": "Instalar la app de cajero",
       "button": "Instalar",
       "ios": "En iPhone o iPad: toca Compartir y luego Añadir a pantalla de inicio.",
-      "unsupported": "Tu navegador no puede instalar apps. Puedes seguir usando la app en el navegador, o abrirla en Chrome, Edge o Safari para instalarla.",
-      "installed": "La app de cajero está instalada en este dispositivo."
+      "installed": "La app de cajero está instalada en este dispositivo.",
+      "manual": "Si no hay un botón Instalar arriba, tu navegador aún no lo ha ofrecido. En Chrome o Edge abre el menú del navegador y elige Instalar app (o Añadir a pantalla de inicio)."
     }
   },
   "offline": {

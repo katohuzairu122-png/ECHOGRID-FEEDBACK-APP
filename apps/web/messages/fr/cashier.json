@@ -48,8 +48,8 @@
       "title": "Installer l'application de caisse",
       "button": "Installer",
       "ios": "Sur iPhone ou iPad : touchez Partager, puis Sur l'écran d'accueil.",
-      "unsupported": "Votre navigateur ne peut pas installer d'applications. Vous pouvez continuer dans le navigateur, ou ouvrir l'application dans Chrome, Edge ou Safari pour l'installer.",
-      "installed": "L'application de caisse est installée sur cet appareil."
+      "installed": "L'application de caisse est installée sur cet appareil.",
+      "manual": "S'il n'y a pas de bouton Installer ci-dessus, votre navigateur n'en a pas encore proposé. Dans Chrome ou Edge, ouvrez le menu du navigateur et choisissez Installer l'application (ou Ajouter à l'écran d'accueil)."
     }
   },
   "offline": {

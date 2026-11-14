@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next';
 import { headers } from 'next/headers';
 import { notFound } from 'next/navigation';
 import { isCashierAppAvailable } from '@/lib/cashier/host';
+import { InstallCapture } from '@/components/cashier/install-capture';
 
 export const metadata: Metadata = {
   title: 'Echo Grid Cashier',
@@ -22,5 +23,10 @@ export const viewport: Viewport = { themeColor: '#10b981', width: 'device-width'
 export default async function CashierLayout({ children }: { children: React.ReactNode }) {
   const host = (await headers()).get('host');
   if (!isCashierAppAvailable(host)) notFound();
-  return <div className="min-h-dvh bg-neutral-50 text-neutral-900">{children}</div>;
+  return (
+    <div className="min-h-dvh bg-neutral-50 text-neutral-900">
+      <InstallCapture />
+      {children}
+    </div>
+  );
 }
