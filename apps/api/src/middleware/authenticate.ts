@@ -63,7 +63,8 @@ export const authenticate = createMiddleware<{ Bindings: Bindings; Variables: Au
 
     const { db, close } = await createDb(c.env.HYPERDRIVE);
     try {
-      const users = createRepositories(db).users;
+      const repos = createRepositories(db);
+      const users = repos.users;
       const subject = await users.findById(payload.sub);
       if (!subject || subject.status !== 'active') {
         throw new AppError('Invalid or expired access token.', 401, 'UNAUTHENTICATED');
@@ -74,6 +75,15 @@ export const authenticate = createMiddleware<{ Bindings: Bindings; Variables: Au
         if (!actor || actor.status !== 'active') {
           throw new AppError('Invalid or expired access token.', 401, 'UNAUTHENTICATED');
         }
+      }
+
+      // CASHIER-PWA-01 C6: a cashier access token lives only while its session does. Revocation (owner action,
+      // sign-out, replay detection, expiry) takes effect on the very next request, not at the next refresh.
+      if (payload.client === 'cashier') {
+        const live = payload.sid
+          ? await repos.refreshTokens.isSessionLive(payload.sub, payload.sid, Date.now())
+          : false;
+        if (!live) throw new AppError('Invalid or expired access token.', 401, 'UNAUTHENTICATED');
       }
 
       c.set('userId', payload.sub);

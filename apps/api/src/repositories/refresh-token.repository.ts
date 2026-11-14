@@ -1,5 +1,5 @@
-import { eq, and, isNull, gt } from 'drizzle-orm';
-import { refreshTokens } from '../db/schema';
+import { eq, and, isNull, gt, desc } from 'drizzle-orm';
+import { refreshTokens, users, branches } from '../db/schema';
 import { BaseRepository } from './base.repository';
 
 export type RefreshToken = typeof refreshTokens.$inferSelect;
@@ -90,4 +90,94 @@ export class RefreshTokenRepository extends BaseRepository {
       .returning({ id: refreshTokens.id });
     return rows.length;
   }
+
+  /**
+   * CASHIER-PWA-01 C6: the LIVE cashier sessions of exactly one business. A session is live while it has an unrevoked,
+   * unexpired row; rotation revokes the predecessor so there is one such row per session. `issuedAt` of that row is
+   * the last sign-in or refresh. Business-scoped by construction: the business id is a mandatory predicate, so there is
+   * no cross-business read path.
+   */
+  async listLiveCashierSessionsForBusiness(
+    businessId: string,
+    nowMs: number,
+    limit = 200,
+  ): Promise<CashierSessionRow[]> {
+    return this.db
+      .select({
+        sessionId: refreshTokens.sessionId,
+        userId: refreshTokens.userId,
+        userName: users.fullName,
+        userEmail: users.email,
+        branchId: refreshTokens.branchId,
+        branchName: branches.name,
+        deviceLabel: refreshTokens.deviceLabel,
+        lastActiveAt: refreshTokens.issuedAt,
+        expiresAt: refreshTokens.expiresAt,
+      })
+      .from(refreshTokens)
+      .innerJoin(users, eq(users.id, refreshTokens.userId))
+      .leftJoin(branches, eq(branches.id, refreshTokens.branchId))
+      .where(
+        and(
+          eq(refreshTokens.client, 'cashier'),
+          eq(refreshTokens.businessId, businessId),
+          isNull(refreshTokens.revokedAt),
+          gt(refreshTokens.expiresAt, new Date(nowMs)),
+        ),
+      )
+      .orderBy(desc(refreshTokens.issuedAt))
+      .limit(limit) as unknown as CashierSessionRow[];
+  }
+
+  /**
+   * Revokes one cashier session of one business. The predicate pins client, business and session id, so a web
+   * session, another business's cashier session, or an unknown id matches nothing (returns null). Returns the
+   * revoked session's owner for the audit entry.
+   */
+  async revokeCashierSession(
+    businessId: string,
+    sessionId: string,
+  ): Promise<{ userId: string; branchId: string | null } | null> {
+    const rows = await this.db
+      .update(refreshTokens)
+      .set({ revokedAt: new Date() })
+      .where(
+        and(
+          eq(refreshTokens.client, 'cashier'),
+          eq(refreshTokens.businessId, businessId),
+          eq(refreshTokens.sessionId, sessionId),
+          isNull(refreshTokens.revokedAt),
+        ),
+      )
+      .returning({ userId: refreshTokens.userId, branchId: refreshTokens.branchId });
+    return rows[0] ?? null;
+  }
+
+  /** Revokes every live cashier session of one business (and only cashier sessions: web sessions are never touched). */
+  async revokeAllCashierSessionsForBusiness(businessId: string): Promise<number> {
+    const rows = await this.db
+      .update(refreshTokens)
+      .set({ revokedAt: new Date() })
+      .where(
+        and(
+          eq(refreshTokens.client, 'cashier'),
+          eq(refreshTokens.businessId, businessId),
+          isNull(refreshTokens.revokedAt),
+        ),
+      )
+      .returning({ id: refreshTokens.id });
+    return rows.length;
+  }
+}
+
+export interface CashierSessionRow {
+  sessionId: string | null;
+  userId: string;
+  userName: string;
+  userEmail: string;
+  branchId: string | null;
+  branchName: string | null;
+  deviceLabel: string | null;
+  lastActiveAt: Date;
+  expiresAt: Date;
 }
