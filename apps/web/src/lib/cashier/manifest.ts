@@ -10,7 +10,7 @@ export function cashierManifest(): MetadataRoute.Manifest {
     short_name: 'Cashier',
     description: 'Serve customers and handle loyalty at the counter.',
     id: '/cashier',
-    start_url: '/cashier',
+    start_url: '/cashier/',
     scope: '/cashier/',
     display: 'standalone',
     orientation: 'any',

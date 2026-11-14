@@ -483,3 +483,34 @@ describe('the guard in front of the whole application (every bearer surface, bef
     expect(await staff.text()).toContain('MISSING_BUSINESS_CONTEXT');
   });
 });
+
+describe('C7/C8: the real application mounts the cashier management routes behind the same guard', () => {
+  const real = (path: string, token: string, method = 'GET') =>
+    worker.fetch(
+      new Request(`https://api.test${path}`, {
+        method,
+        headers: { Authorization: `Bearer ${token}`, 'X-Business-Id': BIZ_A },
+      }),
+      env,
+      ctx(),
+    );
+
+  it.each([
+    ['GET', '/api/v1/cashier-sessions'],
+    ['POST', '/api/v1/cashier-sessions/revoke-all'],
+    ['DELETE', '/api/v1/cashier-sessions/eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee'],
+    ['GET', '/api/v1/cashier-activity'],
+  ])('a cashier token, even the owner\'s, is refused on %s %s before any handler or database work', async (method, path) => {
+    const res = await real(path, await cashierToken(OWNER, BIZ_A), method);
+    expect(res.status).toBe(403);
+    expect(((await res.json()) as { error: { code: string } }).error.code).toBe('CASHIER_ROUTE_DENIED');
+    expect(mocks.membership).not.toHaveBeenCalled();
+  });
+
+  it('an allowed route refuses a cashier token whose session was revoked, through the real application', async () => {
+    mocks.live.mockResolvedValue(false);
+    const res = await real('/api/v1/businesses/me', await cashierToken(CASHIER, BIZ_A));
+    expect(res.status).toBe(401);
+    expect(mocks.membership).not.toHaveBeenCalled();
+  });
+});

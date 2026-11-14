@@ -96,6 +96,65 @@
       "revokedAll": "Se cerró sesión en todos los dispositivos de cajero.",
       "failed": "No se pudo cerrar la sesión del dispositivo. Inténtalo de nuevo.",
       "loadFailed": "No se pudieron cargar las sesiones de cajero."
+    },
+    "activity": {
+      "title": "Actividad de cajero",
+      "subtitle": "Lo que pasó en el mostrador: búsquedas, verificaciones de QR, puntos, canjes y sesiones de dispositivos.",
+      "back": "Volver a la app de cajero",
+      "open": "Ver actividad de cajero",
+      "filters": {
+        "category": "Actividad",
+        "branch": "Sucursal",
+        "allBranches": "Todas las sucursales",
+        "all": "Toda la actividad",
+        "apply": "Aplicar filtros"
+      },
+      "categories": {
+        "customer_lookup": "Búsquedas de clientes",
+        "qr_verification": "Verificación de QR",
+        "points_issued": "Puntos otorgados",
+        "redemption_attempt": "Intentos de canje",
+        "redemption_success": "Canjes exitosos",
+        "redemption_failure": "Canjes fallidos",
+        "session": "Sesiones de dispositivos",
+        "security": "Eventos de seguridad"
+      },
+      "columns": {
+        "when": "Cuándo",
+        "what": "Actividad",
+        "who": "Personal",
+        "branch": "Sucursal",
+        "outcome": "Resultado",
+        "reference": "Referencia"
+      },
+      "outcome": {
+        "success": "Correcto",
+        "failure": "Fallido"
+      },
+      "actions": {
+        "loyalty.customer_lookup": "Cliente encontrado por teléfono",
+        "loyalty.customer_lookup_miss": "La búsqueda por teléfono no encontró miembro",
+        "cashier.qr_verified": "QR de cliente verificado",
+        "cashier.qr_rejected": "QR de cliente rechazado",
+        "loyalty.purchase_recorded": "Compra registrada, puntos otorgados",
+        "loyalty.purchase_recorded_via_lookup": "Compra registrada tras búsqueda por teléfono",
+        "cashier.redemption_lookup": "Código de canje revisado",
+        "loyalty.redemption_confirmed": "Canje confirmado",
+        "cashier.redemption_rejected": "Canje rechazado",
+        "cashier_session.revoked": "Dispositivo de cajero desconectado por un gerente",
+        "cashier_session.revoked_all": "Todos los dispositivos de cajero desconectados",
+        "auth.cashier_login": "Cajero con sesión iniciada",
+        "auth.cashier_logout": "Cajero con sesión cerrada",
+        "security.authentication_failed": "Inicio de sesión rechazado",
+        "security.authorization_failed": "Acción rechazada"
+      },
+      "businessWide": "Todas las sucursales",
+      "empty": "Ninguna actividad de cajero coincide con estos filtros.",
+      "older": "Mostrar actividad anterior",
+      "loadFailed": "No se pudo cargar la actividad de cajero.",
+      "noAccess": "Tu rol no puede ver la actividad de cajero. Pídelo al propietario o a un administrador.",
+      "branchRequired": "Elige una sucursal para ver su actividad.",
+      "correlation": "ID de referencia"
     }
   }
 }

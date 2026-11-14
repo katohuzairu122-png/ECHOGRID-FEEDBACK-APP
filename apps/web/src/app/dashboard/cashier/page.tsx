@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { getTranslations } from 'next-intl/server';
 import { apiFetch } from '@/lib/api-client';
 import { getActiveBusiness } from '@/lib/business';
@@ -67,6 +68,12 @@ export default async function CashierAppPage() {
             <p className="text-sm text-neutral-600">{t('unsupportedNote')}</p>
           </div>
         </>
+      )}
+
+      {(canManage || access.permissions.has('audit:view') || access.permissions.has('loyalty:accounts:view')) && (
+        <Link href="/dashboard/cashier/activity" className="inline-block text-sm underline">
+          {t('activity.open')}
+        </Link>
       )}
 
       {canManage && sessions && <CashierSessionsPanel sessions={sessions} />}

@@ -513,7 +513,7 @@ describe('logout', () => {
     expect(await cashierService(w).logout('garbage')).toBeNull();
     await expect(webService(w).refresh(web.refreshToken)).resolves.toBeTruthy();
     const ended = await cashierService(w).logout(c.refreshToken);
-    expect(ended).toEqual({ userId: u.id, businessId: BIZ_A });
+    expect(ended).toEqual({ userId: u.id, businessId: BIZ_A, branchId: BR_A1 });
     await expect(cashierService(w).refresh(c.refreshToken)).rejects.toBeInstanceOf(AuthError);
   });
 
@@ -533,5 +533,69 @@ describe('logout', () => {
     if (c.status !== 'authenticated') throw new Error('expected sign-in');
     await w.repos.refreshTokens.revokeAllForUser(u.id);
     await expect(cashierService(w).refresh(c.refreshToken)).rejects.toBeInstanceOf(AuthError);
+  });
+});
+
+describe('R4: business and branch display names (information disclosure)', () => {
+  it('a session response names only the business and branch it is bound to', async () => {
+    const u = await w.addUser('multi');
+    w.grants.push({ userId: u.id, businessId: BIZ_A, branchId: BR_A1, role: 'Staff' });
+    w.grants.push({ userId: u.id, businessId: BIZ_B, branchId: null, role: 'Manager' });
+    const first = await cashierService(w).login({ email: u.email, password: u.password });
+    if (first.status !== 'selection_required') throw new Error('expected a selection');
+    const session = await cashierService(w).createSession({ ticket: first.ticket, businessId: BIZ_A, branchId: BR_A1 });
+    expect(session.session).toMatchObject({ businessId: BIZ_A, branchId: BR_A1, businessName: 'Cafe A', branchName: 'A one' });
+    const text = JSON.stringify(session.session);
+    for (const other of ['Shop B', 'A two', 'B one', BIZ_B]) expect(text).not.toContain(other);
+    const next = await cashierService(w).refresh(session.refreshToken);
+    expect(next.session).toMatchObject({ businessName: 'Cafe A', branchName: 'A one' });
+    expect(JSON.stringify(next.session)).not.toContain('Shop B');
+  });
+
+  it('a business-wide session carries no branch name; the names come from the stored binding, not the request', async () => {
+    const u = await w.addUser('wide');
+    w.grants.push({ userId: u.id, businessId: BIZ_A, branchId: null, role: 'Owner' });
+    const first = await cashierService(w).login({ email: u.email, password: u.password });
+    if (first.status !== 'selection_required') throw new Error('expected a selection');
+    const s = await cashierService(w).createSession({ ticket: first.ticket, businessId: BIZ_A });
+    expect(s.session).toMatchObject({ branchId: null, branchName: null, businessName: 'Cafe A' });
+    // Even if the business is renamed, a refresh reports the current name of the SAME bound business only.
+    w.businesses.get(BIZ_A)!.name = 'Cafe A (renamed)';
+    expect((await cashierService(w).refresh(s.refreshToken)).session.businessName).toBe('Cafe A (renamed)');
+  });
+
+  it('the sign-in choices list only places this user may serve (no other business is disclosed)', async () => {
+    const u = await w.addUser('only-a');
+    w.grants.push({ userId: u.id, businessId: BIZ_A, branchId: BR_A1, role: 'Staff' });
+    w.grants.push({ userId: u.id, businessId: BIZ_A, branchId: BR_A2, role: 'Staff' });
+    const first = await cashierService(w).login({ email: u.email, password: u.password });
+    if (first.status !== 'selection_required') throw new Error('expected a selection');
+    expect(JSON.stringify(first.choices)).not.toContain('Shop B');
+    expect(first.choices.map((c) => c.businessId)).toEqual([BIZ_A]);
+  });
+
+  it('a suspended business yields no session and so discloses no names', async () => {
+    const u = await w.addUser('susp');
+    w.grants.push({ userId: u.id, businessId: BIZ_A, branchId: BR_A1, role: 'Staff' });
+    w.businesses.get(BIZ_A)!.status = 'suspended';
+    await expect(cashierService(w).login({ email: u.email, password: u.password })).rejects.toMatchObject({ code: 'CASHIER_ACCESS_DENIED' });
+  });
+});
+
+describe('C8: the 12-hour sliding session window', () => {
+  it('every rotation issues a fresh 12 hours, and a session past its window cannot refresh', async () => {
+    const u = await w.addUser('slide');
+    w.grants.push({ userId: u.id, businessId: BIZ_A, branchId: BR_A1, role: 'Staff' });
+    const r = await cashierService(w).login({ email: u.email, password: u.password });
+    if (r.status !== 'authenticated') throw new Error('expected sign-in');
+    const firstRow = [...w.tokens.values()][0]!;
+    firstRow.expiresAt = new Date(Date.now() + 60_000); // nearly out of window
+    const next = await cashierService(w).refresh(r.refreshToken);
+    const newest = [...w.tokens.values()].find((t) => !t.revokedAt)!;
+    expect(newest.expiresAt.getTime() - Date.now()).toBeGreaterThan(11 * 3600 * 1000);
+    expect(newest.expiresAt.getTime() - Date.now()).toBeLessThanOrEqual(12 * 3600 * 1000 + 5000);
+    // Idle past the window: the (rotated) token's row is expired, and refresh refuses it.
+    newest.expiresAt = new Date(Date.now() - 1000);
+    await expect(cashierService(w).refresh(next.refreshToken)).rejects.toMatchObject({ code: 'INVALID_REFRESH_TOKEN' });
   });
 });

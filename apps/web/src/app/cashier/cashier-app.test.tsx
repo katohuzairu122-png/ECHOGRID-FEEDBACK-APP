@@ -77,7 +77,7 @@ describe('manifest', () => {
   it('is an installable, cashier-scoped app identity', async () => {
     prod('cashier.echo-grid.uk');
     const manifest = await (await manifestGet()).json();
-    expect(manifest).toMatchObject({ name: 'Echo Grid Cashier', display: 'standalone', start_url: '/cashier', scope: '/cashier/', id: '/cashier' });
+    expect(manifest).toMatchObject({ name: 'Echo Grid Cashier', display: 'standalone', start_url: '/cashier/', scope: '/cashier/', id: '/cashier' });
     const sizes = manifest.icons.map((i: { sizes: string }) => i.sizes);
     expect(sizes).toEqual(expect.arrayContaining(['192x192', '512x512']));
   });
@@ -104,9 +104,9 @@ describe('session gate', () => {
     await expect(CashierAppLayout({ children: null })).resolves.toBeTruthy();
   });
 
-  it('a missing context cookie signs in again', async () => {
+  it('a missing context cookie goes to the refresh handler (which re-issues it), never to a sign-in loop', async () => {
     m.ctx.mockResolvedValue(null);
-    expect(await redirected(CashierAppLayout({ children: null }))).toContain('/cashier/login');
+    expect(await redirected(CashierAppLayout({ children: null }))).toContain('/cashier/session/refresh');
   });
 });
 
@@ -124,8 +124,20 @@ describe('refresh route', () => {
       expect((await call(bad)).headers.get('location')).toBe('https://cashier.echo-grid.uk/cashier');
   });
 
+  it('refuses to rotate a token for a cross-site navigation, and allows same-origin and typed URLs', async () => {
+    m.refreshSession.mockResolvedValue(true);
+    const withSite = (site: string) =>
+      refreshGet(new NextRequest('https://cashier.echo-grid.uk/cashier/session/refresh', { headers: { 'sec-fetch-site': site } }));
+    expect((await withSite('cross-site')).headers.get('location')).toBe('https://cashier.echo-grid.uk/cashier');
+    expect((await withSite('same-site')).headers.get('location')).toBe('https://cashier.echo-grid.uk/cashier');
+    expect(m.refreshSession).not.toHaveBeenCalled();
+    await withSite('same-origin');
+    await withSite('none');
+    expect(m.refreshSession).toHaveBeenCalledTimes(2);
+  });
+
   it('a session that cannot refresh (revoked, expired, replayed) lands on the sign-in', async () => {
     m.refreshSession.mockResolvedValue(false);
-    expect((await call('/cashier/redeem')).headers.get('location')).toBe('https://cashier.echo-grid.uk/cashier/login');
+    expect((await call('/cashier/redeem')).headers.get('location')).toBe('https://cashier.echo-grid.uk/cashier/login?reason=session');
   });
 });

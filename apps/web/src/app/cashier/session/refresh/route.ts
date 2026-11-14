@@ -13,6 +13,12 @@ export async function GET(request: NextRequest) {
   if (!isCashierAppAvailable((await headers()).get('host'))) {
     return new NextResponse('Not found', { status: 404 });
   }
+  // Rotating a token is a state change behind a GET, so refuse it when another site triggered the navigation. The
+  // cashier layout's own redirect is same-origin, so normal use is unaffected.
+  const site = request.headers.get('sec-fetch-site');
+  if (site && site !== 'same-origin' && site !== 'none') {
+    return NextResponse.redirect(new URL('/cashier', request.url));
+  }
   const requested = request.nextUrl.searchParams.get('next') ?? '';
   // Only ever back into the cashier app, and never to the sign-in or this handler (no loops, no open redirect).
   const safe =
@@ -20,5 +26,5 @@ export async function GET(request: NextRequest) {
       ? requested
       : '/cashier';
   const ok = await refreshCashierSession();
-  return NextResponse.redirect(new URL(ok ? safe : '/cashier/login', request.url));
+  return NextResponse.redirect(new URL(ok ? safe : '/cashier/login?reason=session', request.url));
 }

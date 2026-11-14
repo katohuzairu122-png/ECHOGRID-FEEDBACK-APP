@@ -35,10 +35,27 @@ describe('cashier refresh', () => {
   });
 
   it('a revoked, expired or replayed session cannot refresh: cookies are cleared, nothing is stored', async () => {
-    vi.stubGlobal('fetch', vi.fn(async () => fail(401, 'REFRESH_TOKEN_REVOKED')));
+    vi.stubGlobal('fetch', vi.fn(async () => fail(401, 'INVALID_REFRESH_TOKEN')));
     expect(await refreshCashierSession()).toBe(false);
     expect(m.clear).toHaveBeenCalled();
     expect(m.set).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['network failure', () => Promise.reject(new Error('offline'))],
+    ['API 5xx', async () => fail(503, 'UNAVAILABLE')],
+    ['rate limit', async () => fail(429, 'RATE_LIMITED')],
+    ['concurrent rotation by another request', async () => fail(409, 'REFRESH_TOKEN_ROTATED')],
+  ])('a transient failure (%s) keeps the cookies, so a live session is never signed out', async (_n, respond) => {
+    vi.stubGlobal('fetch', vi.fn(respond));
+    expect(await refreshCashierSession()).toBe(false);
+    expect(m.clear).not.toHaveBeenCalled();
+  });
+
+  it.each(['CASHIER_ACCESS_REVOKED', 'ACCOUNT_INACTIVE'])('a definitive refusal (%s) clears the cashier cookies', async (code) => {
+    vi.stubGlobal('fetch', vi.fn(async () => fail(403, code)));
+    expect(await refreshCashierSession()).toBe(false);
+    expect(m.clear).toHaveBeenCalled();
   });
 
   it('no refresh cookie: nothing to rotate, no network call', async () => {
