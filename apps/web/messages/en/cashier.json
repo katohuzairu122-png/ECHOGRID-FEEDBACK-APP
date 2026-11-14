@@ -48,8 +48,8 @@
       "title": "Install the cashier app",
       "button": "Install",
       "ios": "On iPhone or iPad: tap Share, then Add to Home Screen.",
-      "unsupported": "Your browser cannot install apps. You can keep using the cashier app in the browser, or open it in Chrome, Edge or Safari to install it.",
-      "installed": "The cashier app is installed on this device."
+      "installed": "The cashier app is installed on this device.",
+      "manual": "If there is no Install button above, your browser has not offered one yet. In Chrome or Edge open the browser menu and choose Install app (or Add to Home screen)."
     }
   },
   "offline": {

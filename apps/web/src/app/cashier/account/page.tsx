@@ -2,7 +2,7 @@ import { getTranslations } from 'next-intl/server';
 import { CashierShell } from '@/components/cashier/cashier-shell';
 import { getCashierContext } from '@/lib/cashier/session';
 import { cashierLogoutAction } from '@/lib/cashier/actions';
-import { PwaInstallButton } from '@/components/pwa-install-button';
+import { CashierInstall } from '@/components/cashier/cashier-install';
 import { Button } from '@/components/ui';
 
 async function AccountScreen() {
@@ -25,9 +25,14 @@ async function AccountScreen() {
       </dl>
       <div className="space-y-2">
         <h2 className="font-semibold">{t('install.title')}</h2>
-        {/* Renders only where the browser offers an install; otherwise the plain-text fallback below is all there is. */}
-        <PwaInstallButton label={t('install.button')} iosHint={t('install.ios')} />
-        <p className="text-sm text-neutral-600">{t('install.unsupported')}</p>
+        <CashierInstall
+          copy={{
+            button: t('install.button'),
+            installed: t('install.installed'),
+            ios: t('install.ios'),
+            manual: t('install.manual'),
+          }}
+        />
       </div>
       <form action={cashierLogoutAction} className="space-y-2">
         <Button type="submit" variant="secondary" className="min-h-12 w-full">
