@@ -143,8 +143,10 @@ api.use(
 api.use('*', rateLimit('API_RATE_LIMITER'));
 // CASHIER-PWA-01 C2: refuse a cashier-scoped token on every route that is not on the explicit allow-list, before any
 // handler runs. Mounted on the whole router so routes added later are denied by default.
-api.use('*', cashierScopeGuard);
+// SEC-CASHIER-R1 (F2): the audit middleware is mounted BEFORE the guard, so a refusal thrown by the guard (and by
+// everything after it) passes through the audit recorder and leaves a security event.
 api.use('*', auditTrail);
+api.use('*', cashierScopeGuard);
 
 api.route('/auth', authRoutes);
 api.route('/cashier-sessions', cashierSessionRoutes);

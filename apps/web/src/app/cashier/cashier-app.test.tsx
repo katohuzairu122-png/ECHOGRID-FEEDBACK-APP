@@ -34,7 +34,7 @@ import { ApiError } from '@/lib/api-error';
 import CashierLayout from './layout';
 import { CashierShell as CashierAppLayout } from '@/components/cashier/cashier-shell';
 import { GET as manifestGet } from './manifest.webmanifest/route';
-import { GET as refreshGet } from './session/refresh/route';
+import { GET as refreshGet, POST as refreshPost } from './session/refresh/route';
 
 const prod = (host: string | null, cashierHost: string | null = 'cashier.echo-grid.uk') => {
   m.host = host;
@@ -110,34 +110,74 @@ describe('session gate', () => {
   });
 });
 
-describe('refresh route', () => {
-  const call = (next?: string) =>
-    refreshGet(new NextRequest(`https://cashier.echo-grid.uk/cashier/session/refresh${next ? `?next=${encodeURIComponent(next)}` : ''}`));
+describe('refresh route (SEC-CASHIER-R1 F3)', () => {
+  const URL_ = 'https://cashier.echo-grid.uk/cashier/session/refresh';
+  const get = (next?: string, headers: Record<string, string> = {}) =>
+    refreshGet(new NextRequest(`${URL_}${next ? `?next=${encodeURIComponent(next)}` : ''}`, { headers }));
+  const post = (headers: Record<string, string> = {}, next?: string) => {
+    const body = new FormData();
+    if (next !== undefined) body.set('next', next);
+    return refreshPost(new NextRequest(URL_, { method: 'POST', headers, body }));
+  };
+  const same = { origin: 'https://cashier.echo-grid.uk' };
 
   beforeEach(() => prod('cashier.echo-grid.uk'));
 
-  it('success returns to the cashier app; the destination can only be inside it', async () => {
-    m.refreshSession.mockResolvedValue(true);
-    expect((await call()).headers.get('location')).toBe('https://cashier.echo-grid.uk/cashier');
-    expect((await call('/cashier/redeem')).headers.get('location')).toBe('https://cashier.echo-grid.uk/cashier/redeem');
-    for (const bad of ['https://evil.example/x', '//evil.example', '/dashboard', '/cashier/session/refresh', '/cashier/login'])
-      expect((await call(bad)).headers.get('location')).toBe('https://cashier.echo-grid.uk/cashier');
+  it('GET never rotates a token and never redirects: it is a same-origin hand-off page', async () => {
+    for (const site of ['same-origin', 'same-site', 'cross-site', 'none', undefined]) {
+      const res = await get(undefined, site ? { 'sec-fetch-site': site } : {});
+      expect(res.status, String(site)).toBe(200);
+      expect(res.headers.get('location')).toBeNull();
+      expect(res.headers.get('cache-control')).toBe('no-store');
+      const html = await res.text();
+      expect(html).toContain('method="post"');
+      expect(html).toContain('action="/cashier/session/refresh"');
+    }
+    expect(m.refreshSession).not.toHaveBeenCalled(); // a cross-site navigation, link or bookmark cannot force a rotation
   });
 
-  it('refuses to rotate a token for a cross-site navigation, and allows same-origin and typed URLs', async () => {
+  it('the hand-off page carries only a validated next path, escaped', async () => {
+    expect(await (await get('/cashier/redeem')).text()).toContain('value="/cashier/redeem"');
+    for (const bad of ['https://evil.example/x', '//evil.example', '/dashboard', '/cashier/session/refresh', '/cashier/login', '/cashier\\evil', '"><script>x</script>'])
+      expect(await (await get(bad)).text(), bad).toContain('value="/cashier"');
+  });
+
+  it('POST from the same origin rotates once and returns into the app', async () => {
     m.refreshSession.mockResolvedValue(true);
-    const withSite = (site: string) =>
-      refreshGet(new NextRequest('https://cashier.echo-grid.uk/cashier/session/refresh', { headers: { 'sec-fetch-site': site } }));
-    expect((await withSite('cross-site')).headers.get('location')).toBe('https://cashier.echo-grid.uk/cashier');
-    expect((await withSite('same-site')).headers.get('location')).toBe('https://cashier.echo-grid.uk/cashier');
+    const res = await post(same, '/cashier/redeem');
+    expect(res.status).toBe(303);
+    expect(res.headers.get('location')).toBe('https://cashier.echo-grid.uk/cashier/redeem');
+    expect(m.refreshSession).toHaveBeenCalledOnce();
+    for (const bad of ['https://evil.example/x', '//evil.example', '/dashboard', '/cashier/session/refresh'])
+      expect((await post(same, bad)).headers.get('location')).toBe('https://cashier.echo-grid.uk/cashier');
+  });
+
+  it('accepts Sec-Fetch-Site same-origin when no Origin header is sent', async () => {
+    m.refreshSession.mockResolvedValue(true);
+    expect((await post({ 'sec-fetch-site': 'same-origin' })).headers.get('location')).toBe('https://cashier.echo-grid.uk/cashier');
+    expect(m.refreshSession).toHaveBeenCalledOnce();
+  });
+
+  it('a cross-site POST is refused without touching the session, and ends at the stable sign-in', async () => {
+    for (const headers of [{ origin: 'https://evil.example' }, { origin: 'null' }, { 'sec-fetch-site': 'cross-site' }, { 'sec-fetch-site': 'same-site' }, {}]) {
+      const res = await post(headers);
+      expect(res.status, JSON.stringify(headers)).toBe(303);
+      expect(res.headers.get('location')).toBe('https://cashier.echo-grid.uk/cashier/login?reason=session');
+    }
     expect(m.refreshSession).not.toHaveBeenCalled();
-    await withSite('same-origin');
-    await withSite('none');
-    expect(m.refreshSession).toHaveBeenCalledTimes(2);
   });
 
-  it('a session that cannot refresh (revoked, expired, replayed) lands on the sign-in', async () => {
+  it('every failure (revoked, expired, transient) ends at the sign-in that never redirects back', async () => {
     m.refreshSession.mockResolvedValue(false);
-    expect((await call('/cashier/redeem')).headers.get('location')).toBe('https://cashier.echo-grid.uk/cashier/login?reason=session');
+    const res = await post(same, '/cashier/redeem');
+    expect(res.headers.get('location')).toBe('https://cashier.echo-grid.uk/cashier/login?reason=session');
+    expect(res.headers.get('location')).not.toContain('/session/refresh');
+  });
+
+  it('is a 404 off the cashier host, for both methods', async () => {
+    prod('echo-grid.uk');
+    expect((await get()).status).toBe(404);
+    expect((await post(same)).status).toBe(404);
+    expect(m.refreshSession).not.toHaveBeenCalled();
   });
 });

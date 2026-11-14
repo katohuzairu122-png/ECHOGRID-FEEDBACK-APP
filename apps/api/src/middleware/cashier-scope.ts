@@ -1,5 +1,9 @@
+import type { Context } from 'hono';
 import { createMiddleware } from 'hono/factory';
+import type { Bindings } from '../config/env';
+import { verifyCashierAccessToken } from '../auth/jwt';
 import { AppError } from '../lib/errors';
+import type { AuthVariables } from './authenticate';
 
 /**
  * CASHIER-PWA-01 C2: the deny-by-default route allow-list for cashier-scoped tokens.
@@ -99,7 +103,26 @@ export function peekScopeClaims(
  * surface (staff routes, platform routes, internal routes and routes that verify tokens themselves), so a cashier
  * token is refused before any handler or database work, whichever route it is aimed at.
  */
-export const cashierScopeGuard = createMiddleware(async (c, next) => {
+/**
+ * Sets the audit identity (user and cashier binding) from a FULLY verified cashier token, for the audit recorder to use
+ * when the request is refused. Does nothing for a token that does not verify.
+ */
+async function attributeVerifiedCashier(c: Context<{ Bindings: Bindings; Variables: Partial<AuthVariables> }>): Promise<void> {
+  const header = c.req.header('authorization');
+  if (!header?.startsWith('Bearer ')) return;
+  try {
+    const verified = await verifyCashierAccessToken(header.slice('Bearer '.length), c.env.JWT_ACCESS_SECRET);
+    c.set('userId', verified.sub);
+    c.set('cashier', { businessId: verified.bid, branchId: verified.brid ?? null });
+  } catch {
+    // Not a valid cashier token: leave the event unattributed.
+  }
+}
+
+export const cashierScopeGuard = createMiddleware<{
+  Bindings: Bindings;
+  Variables: Partial<AuthVariables>;
+}>(async (c, next) => {
   const claims = peekScopeClaims(c.req.header('authorization'));
   if (claims !== undefined) {
     const apiPath = toApiPath(c.req.path);
@@ -108,6 +131,10 @@ export const cashierScopeGuard = createMiddleware(async (c, next) => {
       apiPath === null ||
       !isCashierRouteAllowed(c.req.method, apiPath)
     ) {
+      // SEC-CASHIER-R1 (F2): attribute the denial to the cashier ONLY when the token verifies (signature, expiry and
+      // every claim). The unverified peek above is used solely to refuse; it is never used as an identity. A forged,
+      // expired or malformed token is therefore recorded as an unattributed security event, not blamed on anyone.
+      await attributeVerifiedCashier(c);
       throw new AppError(
         'This token cannot be used for this request.',
         403,

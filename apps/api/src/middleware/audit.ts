@@ -59,7 +59,8 @@ export const auditTrail = createMiddleware<{
       const { db, close } = await createDb(c.env.HYPERDRIVE);
       try {
         await createRepositories(db).auditLog.record({
-          businessId: c.get('businessId') ?? null,
+          // A refused cashier request carries its verified binding even before tenant resolution ran (F2).
+          businessId: c.get('businessId') ?? c.get('cashier')?.businessId ?? null,
           actorUserId: c.get('userId') ?? null,
           action:
             err.status === 401 ? 'security.authentication_failed' : 'security.authorization_failed',
