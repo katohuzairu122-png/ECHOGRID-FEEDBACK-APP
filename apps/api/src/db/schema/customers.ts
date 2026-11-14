@@ -30,6 +30,10 @@ export const customers = pgTable(
     // (lib/customer-access.ts). 'banned' has no end time.
     status: text('status').notNull().default('active'),
     suspendedUntil: timestamp('suspended_until', { withTimezone: true }),
+    // Limited access: the customer stays 'active' (can sign in and see their own
+    // account) but some features are off until this time. See
+    // lib/customer-limits.ts for the list. NULL or a past time means not limited.
+    limitedUntil: timestamp('limited_until', { withTimezone: true }),
     ...auditColumns,
     ...softDeleteColumns,
   },

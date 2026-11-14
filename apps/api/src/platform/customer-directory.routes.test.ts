@@ -84,6 +84,7 @@ function customerRow(over: Record<string, unknown> = {}) {
     email: 'secret@example.test',
     status: 'active',
     suspendedUntil: null,
+    limitedUntil: null,
     createdAt: new Date('2026-10-01T00:00:00Z'),
     ...over,
   };
@@ -221,7 +222,7 @@ describe('POST /platform/customers/:id/sanctions', () => {
     expect(s.status).toBe(200);
     expect(mocks.setModeration).toHaveBeenLastCalledWith(
       CUSTOMER_ID,
-      expect.objectContaining({ status: 'suspended' }),
+      expect.objectContaining({ status: 'suspended', limitedUntil: null }),
     );
     const b = await call(`/${CUSTOMER_ID}/sanctions`, {
       method: 'POST',
@@ -231,6 +232,7 @@ describe('POST /platform/customers/:id/sanctions', () => {
     expect(mocks.setModeration).toHaveBeenLastCalledWith(CUSTOMER_ID, {
       status: 'banned',
       suspendedUntil: null,
+      limitedUntil: null,
     });
   });
 
@@ -281,6 +283,7 @@ describe('POST /platform/customers/:id/sanctions', () => {
     expect(mocks.setModeration).toHaveBeenLastCalledWith(CUSTOMER_ID, {
       status: 'active',
       suspendedUntil: null,
+      limitedUntil: null,
     });
     mocks.customerFindById.mockResolvedValue(customerRow());
     const bad = await call(`/${CUSTOMER_ID}/sanctions`, {
@@ -308,6 +311,68 @@ describe('POST /platform/customers/:id/sanctions', () => {
         })
       ).status,
     ).toBe(404);
+  });
+});
+
+describe('limited access', () => {
+  const post = (body: unknown) => call(`/${CUSTOMER_ID}/sanctions`, { method: 'POST', body });
+
+  it('limits for a period after a warning and keeps the customer active', async () => {
+    mocks.countWarnings.mockResolvedValue(1);
+    const r = await post({
+      action: 'limit',
+      reason: 'Misused rewards',
+      suspendedUntil: future(14),
+    });
+    expect(r.status).toBe(200);
+    expect(mocks.setModeration).toHaveBeenLastCalledWith(
+      CUSTOMER_ID,
+      expect.objectContaining({ status: 'active', suspendedUntil: null }),
+    );
+    const patch = mocks.setModeration.mock.calls.at(-1)?.[1] as { limitedUntil: Date };
+    expect(patch.limitedUntil.getTime()).toBeGreaterThan(Date.now());
+  });
+
+  it('needs a prior warning, an end date within a year, and a future date', async () => {
+    mocks.countWarnings.mockResolvedValue(0);
+    expect(
+      (await post({ action: 'limit', reason: 'Misused rewards', suspendedUntil: future(14) }))
+        .status,
+    ).toBe(409);
+    mocks.countWarnings.mockResolvedValue(1);
+    expect((await post({ action: 'limit', reason: 'Misused rewards' })).status).toBe(400);
+    expect(
+      (await post({ action: 'limit', reason: 'Misused rewards', suspendedUntil: future(400) }))
+        .status,
+    ).toBe(400);
+    expect(
+      (await post({ action: 'limit', reason: 'Misused rewards', suspendedUntil: future(-2) }))
+        .status,
+    ).toBe(400);
+  });
+
+  it('shows a limited customer as limited and lets an admin lift it', async () => {
+    mocks.customerFindById.mockResolvedValue(
+      customerRow({ limitedUntil: new Date(Date.now() + 86_400_000) }),
+    );
+    const detail = await call(`/${CUSTOMER_ID}`);
+    expect(((await detail.json()) as { data: { status: string } }).data.status).toBe('limited');
+    const lift = await post({ action: 'lift', reason: 'Appeal accepted' });
+    expect(lift.status).toBe(200);
+    expect(mocks.setModeration).toHaveBeenLastCalledWith(CUSTOMER_ID, {
+      status: 'active',
+      suspendedUntil: null,
+      limitedUntil: null,
+    });
+  });
+
+  it('suspending or banning clears a limit', async () => {
+    mocks.countWarnings.mockResolvedValue(1);
+    await post({ action: 'ban', reason: 'Continued fraud' });
+    expect(mocks.setModeration).toHaveBeenLastCalledWith(
+      CUSTOMER_ID,
+      expect.objectContaining({ limitedUntil: null }),
+    );
   });
 });
 

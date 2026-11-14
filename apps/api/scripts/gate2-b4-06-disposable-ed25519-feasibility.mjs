@@ -24,7 +24,7 @@ try{
   assert.equal(identity.db,'echogrid_ci_pg18_b406');
   assert.equal(identity.usr,'echogrid');
   assert.equal(Math.floor(identity.v/10000),18);
-  assert.equal((await owner.query('SELECT count(*)::int n FROM drizzle.__drizzle_migrations')).rows[0].n,70);
+  assert.equal((await owner.query('SELECT count(*)::int n FROM drizzle.__drizzle_migrations')).rows[0].n,71);
   assert.equal((await owner.query("SELECT count(*)::int n FROM pg_available_extensions WHERE name='pgcrypto'")).rows[0].n,1);
   await owner.query('CREATE SCHEMA gate2_b406');
   await owner.query('REVOKE ALL ON SCHEMA gate2_b406 FROM PUBLIC');

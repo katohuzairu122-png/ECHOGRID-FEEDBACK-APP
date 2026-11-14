@@ -36,6 +36,13 @@ new_sqlite_classes = ["PasswordHasherDurableObject"]
 # whether STRIPE_SECRET_KEY is a real key (still a placeholder as of this
 # change -- Stripe setup is paused, see memory).
 ENVIRONMENT = "production"
+# Owner ruling 2026-11-13 (option b): platform support and admin need impersonation to
+# reproduce errors seen by businesses and to help with billing issues. The API
+# gate (platform/impersonation-policy.ts) is default-off, so it is switched on
+# explicitly here, as a reviewed, released setting and not a hand edit in the
+# Cloudflare dashboard. Setting this to anything but "true" turns it off, for
+# new tokens and for tokens already issued.
+PLATFORM_IMPERSONATION_ENABLED = "true"
 # Anthropic model identifier -- non-secret, [vars] not [secrets] so it's
 # swappable without a deploy. claude-sonnet-5 confirmed as the current, real
 # model string via Anthropic's own docs (platform.claude.com/docs, checked
@@ -317,6 +324,7 @@ routes = []
 
 [env.staging.vars]
 ENVIRONMENT = "staging"
+PLATFORM_IMPERSONATION_ENABLED = "true"
 ANTHROPIC_MODEL = "claude-sonnet-5"
 ANTHROPIC_DAILY_SPEND_LIMIT_USD = "1"
 ANTHROPIC_MONTHLY_SPEND_LIMIT_USD = "10"

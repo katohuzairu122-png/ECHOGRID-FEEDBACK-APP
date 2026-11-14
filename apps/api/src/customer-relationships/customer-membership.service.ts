@@ -1,4 +1,5 @@
 import type { Database } from '../db/client';
+import { assertCustomerNotLimited } from '../lib/customer-limits';
 import { createRepositories, type BusinessCustomerMembership, type LoyaltyAccount } from '../repositories';
 import { AppError } from '../lib/errors';
 
@@ -28,6 +29,10 @@ export class CustomerMembershipService {
       }
 
       let membership = await repos.customerMemberships.findByCustomerAndBusiness(input.customerId, input.businessId);
+      // Limited customers keep what they already belong to but cannot join anything new.
+      if (!membership || membership.status !== 'active') {
+        await assertCustomerNotLimited(repos, input.customerId, 'join_business');
+      }
       if (!membership) {
         membership = await repos.customerMemberships.create({
           customerId: input.customerId,

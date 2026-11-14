@@ -12,6 +12,7 @@ const STATUS_VARIANT: Record<
   'success' | 'danger' | 'warning'
 > = {
   active: 'success',
+  limited: 'warning',
   suspended: 'warning',
   banned: 'danger',
 };
@@ -53,6 +54,9 @@ export default async function PlatformCustomerDetailPage({
               {t(`status.${customer.status}`)}
             </Badge>
           </div>
+          {customer.limitedUntil && (
+            <CardDescription>{t('detail.limitedUntil', { date: when(customer.limitedUntil) })}</CardDescription>
+          )}
           {customer.suspendedUntil && (
             <CardDescription>
               {t('detail.until', { date: when(customer.suspendedUntil) })}

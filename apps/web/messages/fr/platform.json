@@ -204,7 +204,8 @@
     "status": {
       "active": "Actif",
       "suspended": "Suspendu",
-      "banned": "Banni"
+      "banned": "Banni",
+      "limited": "Limité"
     },
     "detail": {
       "privacyNote": "Le nom complet, l'e-mail et l'activité ne sont pas affichés.",
@@ -214,7 +215,7 @@
       "warnings": "Avertissements",
       "joined": "Inscrit le",
       "actionTitle": "Agir",
-      "actionDescription": "Une suspension ou un bannissement suit normalement un avertissement. Chaque action est enregistrée avec votre motif.",
+      "actionDescription": "Une limitation ou une suspension suit normalement un avertissement. Un client limité peut se connecter et voir son compte, mais ne peut pas rejoindre d'entreprises ni participer aux enquêtes.",
       "history": "Historique",
       "noHistory": "Aucune action enregistrée.",
       "form": {
@@ -229,8 +230,10 @@
         "skipWarning": "Ignorer l'avertissement (fraude grave uniquement)",
         "submit": "Appliquer",
         "saving": "Enregistrement...",
-        "success": "Terminé."
-      }
+        "success": "Terminé.",
+        "limit": "Limiter certaines fonctions pour une durée"
+      },
+      "limitedUntil": "Limité jusqu'au {date}"
     }
   }
 }

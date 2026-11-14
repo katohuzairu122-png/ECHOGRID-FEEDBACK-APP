@@ -16,9 +16,9 @@ export const customerSanctions = pgTable(
     customerId: uuid('customer_id')
       .notNull()
       .references(() => customers.id, { onDelete: 'restrict' }),
-    action: text('action').notNull(), // warning | suspend | ban | lift
+    action: text('action').notNull(), // warning | limit | suspend | ban | lift
     reason: text('reason').notNull(),
-    // End of a suspension; NULL for warning, ban and lift.
+    // End of a limit or suspension; NULL for warning, ban and lift.
     suspendedUntil: timestamp('suspended_until', { withTimezone: true }),
     actorUserId: uuid('actor_user_id').references(() => users.id, { onDelete: 'set null' }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
@@ -27,7 +27,7 @@ export const customerSanctions = pgTable(
     index('customer_sanctions_customer_idx').on(table.customerId, table.createdAt),
     check(
       'customer_sanctions_action_check',
-      sql`${table.action} IN ('warning', 'suspend', 'ban', 'lift')`,
+      sql`${table.action} IN ('warning', 'limit', 'suspend', 'ban', 'lift')`,
     ),
     check('customer_sanctions_reason_check', sql`length(btrim(${table.reason})) > 0`),
   ],
