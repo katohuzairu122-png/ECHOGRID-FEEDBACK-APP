@@ -16,10 +16,26 @@ test('dialogs in the dark workspace have a dark surface and readable title text'
   await page.getByRole('button', { name: 'Create business' }).click();
   await expect(page.getByRole('heading', { name: 'Business Overview', exact: true })).toBeVisible();
 
+  // Diagnostics: when the dialog does not open, the log shows why (page errors, console errors, visible text).
+  const problems: string[] = [];
+  page.on('pageerror', (e) => problems.push(`pageerror: ${e.message}`));
+  page.on('console', (m) => {
+    if (m.type() === 'error' && !/eval\(\)/.test(m.text())) problems.push(`console: ${m.text().slice(0, 300)}`);
+  });
   await page.goto('/dashboard/branches');
-  await page.getByRole('button', { name: /new branch/i }).click();
   const dialog = page.getByRole('dialog');
-  await expect(dialog).toBeVisible();
+  try {
+    // The button is server-rendered before the page's JavaScript has hydrated, and a click before hydration does
+    // nothing. Retry the click until the dialog appears instead of assuming hydration finished.
+    await expect(async () => {
+      await page.getByRole('button', { name: /new branch/i }).click();
+      await expect(dialog).toBeVisible({ timeout: 1500 });
+    }).toPass({ timeout: 20_000 });
+  } catch (error) {
+    const text = (await page.locator('body').innerText().catch(() => '')).slice(0, 800).replace(/\n/g, ' | ');
+    console.error(`[dialog-theme diagnostics] url=${page.url()} problems=${JSON.stringify(problems)} body=${text}`);
+    throw error;
+  }
   const ratio = await dialog.evaluate((el) => {
     const parse = (c: string) => (c.match(/[\d.]+/g) ?? []).slice(0, 3).map(Number);
     const lum = ([r, g, b]: number[]) => {
