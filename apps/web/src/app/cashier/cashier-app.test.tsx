@@ -32,7 +32,7 @@ vi.mock('@/lib/cashier/auth-api', () => ({ cashierApiFetch: m.me, refreshCashier
 
 import { ApiError } from '@/lib/api-error';
 import CashierLayout from './layout';
-import CashierAppLayout from './(app)/layout';
+import { CashierShell as CashierAppLayout } from '@/components/cashier/cashier-shell';
 import { GET as manifestGet } from './manifest.webmanifest/route';
 import { GET as refreshGet } from './session/refresh/route';
 

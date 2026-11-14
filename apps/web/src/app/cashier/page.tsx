@@ -1,10 +1,11 @@
 import { getTranslations } from 'next-intl/server';
+import { CashierShell } from '@/components/cashier/cashier-shell';
 import { getCashierContext } from '@/lib/cashier/session';
 import { cashierServeAction } from '@/lib/cashier/actions';
 import { StaffQrMenu } from '@/app/dashboard/loyalty/scan/staff-qr-menu';
 
 /** Serve Customers: the cashier app's primary screen. The same lookup, scanning and loyalty servicing as the dashboard, bound to this session's business and branch. */
-export default async function CashierServePage() {
+async function ServeScreen() {
   const ctx = await getCashierContext();
   if (!ctx) return null;
   const t = await getTranslations('loyalty.staff.serve');
@@ -17,5 +18,14 @@ export default async function CashierServePage() {
         serveAction={cashierServeAction}
       />
     </section>
+  );
+}
+
+// The shell gates first (session or redirect); the screen below only renders once a session exists.
+export default function CashierServePage() {
+  return (
+    <CashierShell>
+      <ServeScreen />
+    </CashierShell>
   );
 }

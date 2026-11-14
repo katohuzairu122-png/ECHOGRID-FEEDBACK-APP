@@ -49,8 +49,8 @@ describe('cashier app stays inside the eight-route allow-list', () => {
 
   it('the cashier layout reads only /auth/me through its own client; no cashier code calls anything else', () => {
     const own = [
-      ...calls(read('app/cashier/(app)/layout.tsx'), 'cashierApiFetch'),
-      ...calls(read('app/cashier/(app)/page.tsx'), 'cashierApiFetch'),
+      ...calls(read('components/cashier/cashier-shell.tsx'), 'cashierApiFetch'),
+      ...calls(read('app/cashier/page.tsx'), 'cashierApiFetch'),
     ];
     expect(own).toEqual([{ method: 'GET', path: '/auth/me' }]);
     for (const file of ['lib/cashier/actions.ts', 'lib/cashier/auth-api.ts']) {
