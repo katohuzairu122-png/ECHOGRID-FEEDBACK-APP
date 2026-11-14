@@ -26,6 +26,7 @@ vi.mock('./session', () => ({
   getCashierSelectionTicket: m.ticket,
   setCashierSelectionTicket: m.setTicket,
 }));
+vi.mock('./host-guard', () => ({ requireCashierOrigin: async () => undefined })); // origin rules are tested in host-isolation.test.ts
 vi.mock('../actions/unified-qr', () => ({ staffUnifiedQrAction: m.serve }));
 vi.mock('../actions/loyalty', () => ({ lookupRedemptionAction: m.lookup, confirmRedemptionAction: m.confirm }));
 

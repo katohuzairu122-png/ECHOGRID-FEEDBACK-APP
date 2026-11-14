@@ -31,7 +31,7 @@ export class TrustedBrokerAssertionIssuer {
       let token;
       try { token = await verifyAccessToken(r.authorization.slice(7), this.deps.accessSecret); }
       catch { return deny('AUTHENTICATION_DENIED'); }
-      if (!token.sid || !BROKER_UUID.test(token.sid) || !BROKER_UUID.test(token.sub) || token.impersonatedBy !== undefined ||
+      if (!token.sid || !BROKER_UUID.test(token.sid) || !BROKER_UUID.test(token.sub) || token.impersonatedBy !== undefined || (token as { client?: unknown }).client !== undefined ||
         !Number.isSafeInteger(token.exp) || !Number.isSafeInteger(token.iat) || token.exp <= token.iat) return deny('AUTHENTICATION_DENIED');
       const actorId = token.sub; const sessionId = token.sid;
       return await this.deps.db.transaction(async tx => {

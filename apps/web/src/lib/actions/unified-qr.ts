@@ -6,6 +6,7 @@ import type {
   LookupCustomerResultDto,
 } from '@echo-grid-feedback/shared-types';
 import { apiFetch, ApiError } from '@/lib/api-client';
+import { redemptionCodeSegment } from '@/lib/redemption-code';
 import { getActiveBusiness } from '@/lib/business';
 import { rethrowControlFlow } from '@/lib/rethrow-control-flow';
 import { classifyQrFailure, type StaffQrErrorKind } from '@/lib/qr-failure';
@@ -215,11 +216,8 @@ export async function staffQrTransactionAction(
     if (!result.actions.includes('REDEEM_REWARD') || !['lookup', 'confirm'].includes(operation)) {
       throw new ApiError('Reward redemption is not permitted.', 403);
     }
-    const code = encodeURIComponent(
-      String(form.get('code') ?? '')
-        .trim()
-        .toUpperCase(),
-    );
+    const code = redemptionCodeSegment(String(form.get('code') ?? ''));
+    if (code === null) throw new ApiError('Enter the redemption code exactly as shown.', 422);
     const transaction = await apiFetch<LoyaltyTransactionDto>(
       `/loyalty/redemptions/${code}`,
       scope,

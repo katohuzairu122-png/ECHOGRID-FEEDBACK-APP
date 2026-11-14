@@ -101,7 +101,8 @@ export function peekScopeClaims(
 /**
  * Global guard, mounted on the whole /api/v1 router before any route. It sits in front of EVERY bearer-token
  * surface (staff routes, platform routes, internal routes and routes that verify tokens themselves), so a cashier
- * token is refused before any handler or database work, whichever route it is aimed at.
+ * token is refused before any handler runs, whichever route it is aimed at. (Since SEC-CASHIER-R1 the audit recorder sits in
+ * front of it, so a refusal also writes a security event: one insert, no lookup.)
  */
 /**
  * Sets the audit identity (user and cashier binding) from a FULLY verified cashier token, for the audit recorder to use

@@ -16,6 +16,7 @@ vi.mock('../repositories', () => ({ createRepositories: () => ({}) }));
 vi.mock('./rate-limit', () => ({
   rateLimit: () => async (_c: unknown, next: () => Promise<void>) => next(),
   rateLimitByCustomer: () => async (_c: unknown, next: () => Promise<void>) => next(),
+  cashierAuthRateLimit: () => async (_c: unknown, next: () => Promise<void>) => next(),
 }));
 vi.mock('./audit', () => ({
   auditTrail: async (_c: unknown, next: () => Promise<void>) => next(),

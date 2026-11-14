@@ -33,6 +33,7 @@ vi.mock('../repositories', () => ({
 vi.mock('./rate-limit', () => ({
   rateLimit: () => async (_c: unknown, next: () => Promise<void>) => next(),
   rateLimitByCustomer: () => async (_c: unknown, next: () => Promise<void>) => next(),
+  cashierAuthRateLimit: () => async (_c: unknown, next: () => Promise<void>) => next(),
 }));
 
 const { default: worker } = await import('../index');
@@ -114,14 +115,16 @@ describe('F2: cashier refusals through the real middleware order', () => {
     }
   });
 
-  it('forged and malformed tokens are never attributed, even when they claim a cashier identity', async () => {
+  it('forged and malformed tokens are recorded exactly once and never attributed, even when they claim a cashier identity', async () => {
     const forged = await sign({ sub: USER, type: 'access', client: 'cashier', bid: BIZ_A, sid: SID, iat: now(), exp: now() + 600 }, 'a-different-secret', 'HS256');
     for (const token of [forged, 'not.a.token', 'garbage']) {
       m.record.mockClear();
-      await call('/api/v1/team', token, { 'X-Business-Id': BIZ_A });
+      const res = await call('/api/v1/team', token, { 'X-Business-Id': BIZ_A });
+      expect(res.status === 401 || res.status === 403, token.slice(0, 12)).toBe(true);
       const r = security();
-      if (r.length > 0) expect(r[0]).toMatchObject({ actorUserId: null, businessId: null });
-      expect(r.every((x) => !('client' in (x.metadata ?? {})))).toBe(true);
+      expect(r, token.slice(0, 12)).toHaveLength(1); // a refusal that records nothing would not pass
+      expect(r[0]).toMatchObject({ actorUserId: null, businessId: null });
+      expect(r[0]!.metadata).not.toHaveProperty('client');
     }
   });
 

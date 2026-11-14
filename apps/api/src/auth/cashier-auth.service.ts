@@ -4,6 +4,9 @@ import type { Pbkdf2Worker } from './pbkdf2-worker';
 import { hashToken } from './token-hash';
 import { constantTimeEqualHex } from './crypto-utils';
 import { AuthError, DUMMY_PASSWORD_HASH } from './auth.service';
+
+/** Short, non-reversible fingerprint of the stored password hash: changes whenever the password does. */
+const passwordVersion = async (passwordHash: string) => (await hashToken(passwordHash)).slice(0, 16);
 import {
   CASHIER_REFRESH_TOKEN_TTL_SECONDS,
   signCashierAccessToken,
@@ -111,6 +114,7 @@ export class CashierAuthService {
       user.id,
       this.secrets.JWT_ACCESS_SECRET,
       input.deviceLabel,
+      await passwordVersion(user.passwordHash),
     );
     return { status: 'selection_required', ticket, choices, userId: user.id };
   }
@@ -124,7 +128,7 @@ export class CashierAuthService {
       deviceLabel?: string | undefined;
     } & Meta,
   ): Promise<CashierSession & { userId: string }> {
-    let ticket: { sub: string; deviceLabel?: string };
+    let ticket: Awaited<ReturnType<typeof verifyCashierSelectionTicket>>;
     try {
       ticket = await verifyCashierSelectionTicket(input.ticket, this.secrets.JWT_ACCESS_SECRET);
     } catch {
@@ -133,6 +137,11 @@ export class CashierAuthService {
     const user = await this.repos.users.findById(ticket.sub);
     if (!user || user.status !== 'active')
       throw new AuthError('This account is not active.', 'ACCOUNT_INACTIVE');
+
+    // SEC-CASHIER-R2 F7: a password changed since sign-in voids the ticket.
+    if (ticket.pwv !== null && ticket.pwv !== (await passwordVersion(user.passwordHash))) {
+      throw new AuthError('This sign-in has expired. Sign in again.', 'CASHIER_SELECTION_INVALID');
+    }
 
     const choice = (await this.eligibleChoices(user.id)).find(
       (c) => c.businessId === input.businessId,
@@ -151,6 +160,13 @@ export class CashierAuthService {
     } else if (!choice.wideAccess) {
       throw new AuthError('Choose a branch.', 'CASHIER_SELECTION_INVALID');
     }
+    // SEC-CASHIER-R2 F7: single use. Spent only after every check passes, atomically, so a replay or a concurrent twin loses.
+    const spent = await this.repos.refreshTokens.consumeCashierTicket({
+      jti: ticket.jti,
+      userId: user.id,
+      expiresAt: ticket.expiresAt,
+    });
+    if (!spent) throw new AuthError('This sign-in has already been used. Sign in again.', 'CASHIER_SELECTION_INVALID');
     const session = await this.openSession(
       user.id,
       choice.businessId,

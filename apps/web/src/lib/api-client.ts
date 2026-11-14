@@ -2,6 +2,7 @@ import 'server-only';
 import { getAccessToken } from './session';
 import { getCashierAccessToken } from './cashier/session';
 import { isCashierSurface } from './cashier/surface';
+import { onCashierHost } from './cashier/host-guard';
 import { ApiError } from './api-error';
 
 // Re-exported so the many server-side callers that `import { ApiError } from
@@ -28,6 +29,10 @@ export async function apiFetch<T>(
   options: RequestInit & { businessId?: string; branchId?: string } = {},
 ): Promise<T> {
   const { businessId, branchId, ...init } = options;
+  // SEC-CASHIER-R2 F4: the staff API is not reachable from the cashier-only origin; only a cashier action may call out there.
+  if (!isCashierSurface() && (await onCashierHost())) {
+    throw new ApiError('Not available on this origin.', 404, 'WRONG_ORIGIN');
+  }
   // CASHIER-PWA-01 C4: inside a cashier action the cashier token is sent; everywhere else the staff token, unchanged.
   const accessToken = isCashierSurface() ? await getCashierAccessToken() : await getAccessToken();
   const response = await callApi(path, init, accessToken, businessId, branchId);
