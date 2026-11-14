@@ -1,3 +1,4 @@
+import { keepStaffSurfacesOffCashierHost } from '@/lib/cashier/host-guard';
 import { redirect } from 'next/navigation';
 import { hasSession, isImpersonating } from '@/lib/session';
 import { getTranslations } from 'next-intl/server';
@@ -20,6 +21,7 @@ import { ImpersonationBanner } from './impersonation-banner';
  * impersonating, not on every dashboard page load for every ordinary user.
  */
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
+  await keepStaffSurfacesOffCashierHost();
   if (!(await hasSession())) {
     redirect('/login');
   }

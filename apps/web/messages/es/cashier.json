@@ -1,0 +1,101 @@
+{
+  "brand": "Cajero Echo Grid",
+  "login": {
+    "title": "Inicio de sesión de cajero",
+    "subtitle": "Usa tu cuenta de personal de Echo Grid. Este dispositivo tiene su propia sesión de cajero.",
+    "email": "Correo electrónico",
+    "password": "Contraseña",
+    "deviceLabel": "Nombre del dispositivo (opcional)",
+    "deviceLabelHint": "Por ejemplo, Caja 1. Tu gerente lo ve en la lista de sesiones.",
+    "submit": "Iniciar sesión",
+    "submitting": "Iniciando sesión…",
+    "errors": {
+      "credentials": "El correo o la contraseña no son correctos.",
+      "access": "Esta cuenta no puede usar la app de cajero. Pide acceso a tu gerente.",
+      "expired": "Este inicio de sesión caducó. Inicia sesión de nuevo.",
+      "unavailable": "El inicio de sesión no está disponible ahora. Inténtalo en un momento."
+    },
+    "chooseTitle": "¿Dónde vas a atender?",
+    "chooseHint": "Elige el negocio y la sucursal de este dispositivo.",
+    "business": "Negocio",
+    "branch": "Sucursal",
+    "branchWide": "Todas las sucursales",
+    "continue": "Empezar a atender",
+    "back": "Usar otra cuenta"
+  },
+  "header": {
+    "servingAt": "Atendiendo en",
+    "signedInAs": "Sesión iniciada como {name}",
+    "nav": "Navegación de cajero",
+    "serve": "Atender clientes",
+    "redeem": "Canjear código",
+    "account": "Este dispositivo"
+  },
+  "redeem": {
+    "title": "Canjear un código de recompensa",
+    "subtitle": "Escribe el código que muestra el cliente, revisa para qué es y confirma."
+  },
+  "account": {
+    "title": "Este dispositivo",
+    "business": "Negocio",
+    "branch": "Sucursal",
+    "branchWide": "Todas las sucursales",
+    "device": "Nombre del dispositivo",
+    "noDevice": "Sin nombre",
+    "signOut": "Cerrar sesión en este dispositivo",
+    "signOutHint": "Termina solo esta sesión de cajero. Tus otros dispositivos y el panel del negocio siguen con sesión iniciada.",
+    "install": {
+      "title": "Instalar la app de cajero",
+      "button": "Instalar",
+      "ios": "En iPhone o iPad: toca Compartir y luego Añadir a pantalla de inicio.",
+      "unsupported": "Tu navegador no puede instalar apps. Puedes seguir usando la app en el navegador, o abrirla en Chrome, Edge o Safari para instalarla.",
+      "installed": "La app de cajero está instalada en este dispositivo."
+    }
+  },
+  "offline": {
+    "title": "Sin conexión",
+    "body": "Las búsquedas de clientes, compras y canjes necesitan conexión. Nada se guarda sin conexión. Vuelve a conectarte para continuar."
+  },
+  "error": {
+    "title": "Algo salió mal",
+    "body": "La app de cajero no pudo cargar esta pantalla. Tu sesión está segura. Inténtalo de nuevo.",
+    "retry": "Reintentar"
+  },
+  "dashboard": {
+    "title": "App de cajero",
+    "subtitle": "Una app sencilla para atender clientes en el mostrador desde un móvil o tableta, con su propio inicio de sesión.",
+    "open": "Abrir app de cajero",
+    "unavailable": "La app de cajero aún no está disponible en este entorno. Tu propietario o el administrador de la plataforma te avisará cuando lo esté.",
+    "access": "Tu rol te da acceso a la app de cajero. Inicia sesión allí con tu correo y contraseña habituales.",
+    "noAccess": "Tu rol no incluye atender clientes, por lo que la app de cajero no está disponible para ti.",
+    "installTitle": "Instalarla en un dispositivo",
+    "installIntro": "Abre la app de cajero en el dispositivo del mostrador y luego instálala para que se abra como una app.",
+    "steps": {
+      "android": "Android (Chrome): abre la app, toca el menú y elige Instalar app o Añadir a pantalla de inicio.",
+      "ios": "iPhone y iPad (Safari): abre la app, toca Compartir y luego Añadir a pantalla de inicio.",
+      "desktop": "Ordenador (Chrome o Edge): abre la app y haz clic en el icono de instalación de la barra de direcciones."
+    },
+    "unsupportedNote": "Si tu navegador no puede instalar apps, la app de cajero sigue funcionando en una pestaña normal.",
+    "ownerNote": "Como propietario puedes usar e instalar la app de cajero sin configuración ni aprobación adicional.",
+    "sessions": {
+      "title": "Sesiones de cajero activas",
+      "subtitle": "Dispositivos con sesión iniciada en la app de cajero de este negocio.",
+      "empty": "No hay sesiones de cajero activas.",
+      "user": "Miembro del personal",
+      "branch": "Sucursal",
+      "branchWide": "Todas las sucursales",
+      "device": "Dispositivo",
+      "noDevice": "Sin nombre",
+      "lastActive": "Última actividad",
+      "expires": "Termina",
+      "revoke": "Cerrar sesión",
+      "revokeAll": "Cerrar sesión en todos los dispositivos de cajero",
+      "confirmAll": "¿Cerrar sesión en todos los dispositivos de cajero de este negocio? El personal deberá iniciar sesión de nuevo.",
+      "confirmOne": "¿Cerrar sesión en este dispositivo?",
+      "revoked": "Sesión de cajero cerrada.",
+      "revokedAll": "Se cerró sesión en todos los dispositivos de cajero.",
+      "failed": "No se pudo cerrar la sesión del dispositivo. Inténtalo de nuevo.",
+      "loadFailed": "No se pudieron cargar las sesiones de cajero."
+    }
+  }
+}

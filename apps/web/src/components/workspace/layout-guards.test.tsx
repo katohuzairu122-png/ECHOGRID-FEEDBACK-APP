@@ -9,6 +9,7 @@ import { getCurrentUser } from '@/lib/platform';
 
 const identity = vi.hoisted(() => ({ staff: false, customer: false, role: null as string | null }));
 vi.mock('server-only', () => ({}));
+vi.mock('@/lib/cashier/host-guard', () => ({ keepStaffSurfacesOffCashierHost: async () => undefined }));
 vi.mock('next/navigation', () => ({
   redirect: (path: string) => {
     throw new Error('redirect:' + path);

@@ -19,8 +19,15 @@ const initialState: RedemptionLookupState = {};
  * should see WHAT they're confirming (which reward, how many points)
  * before committing, not confirm blind on a single button press.
  */
-export function RedeemLookupForm() {
-  const [state, formAction, lookupPending] = useActionState(lookupRedemptionAction, initialState);
+export function RedeemLookupForm({
+  lookupAction = lookupRedemptionAction,
+  confirmAction = confirmRedemptionAction,
+}: {
+  /** The cashier app passes wrappers that run the same actions under the cashier credentials. */
+  lookupAction?: typeof lookupRedemptionAction;
+  confirmAction?: typeof confirmRedemptionAction;
+} = {}) {
+  const [state, formAction, lookupPending] = useActionState(lookupAction, initialState);
   const [confirmPending, startTransition] = useTransition();
   const [confirmed, setConfirmed] = useState(false);
   const [confirmError, setConfirmError] = useState<string>();
@@ -32,7 +39,7 @@ export function RedeemLookupForm() {
     setConfirmError(undefined);
     startTransition(async () => {
       try {
-        await confirmRedemptionAction(state.transaction!.redemptionCode!);
+        await confirmAction(state.transaction!.redemptionCode!);
         setConfirmed(true);
       } catch (err) {
         setConfirmError(err instanceof ApiError ? err.message : t('confirmError'));

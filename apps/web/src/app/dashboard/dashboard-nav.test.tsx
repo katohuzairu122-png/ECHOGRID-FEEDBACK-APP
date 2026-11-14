@@ -79,10 +79,11 @@ describe('DashboardNav presentation', () => {
     const sidebar = container.querySelector('aside nav')!;
     const bar = container.querySelector('nav[class*="bottomNav"]')!;
     expect(hrefs(bar)).toEqual(['/dashboard/loyalty/scan']);
-    expect(hrefs(sidebar)).toEqual(['/dashboard/loyalty/scan', '/support']);
+    expect(hrefs(sidebar)).toEqual(['/dashboard/loyalty/scan', '/dashboard/cashier', '/support']);
     await userEvent.setup().click(screen.getByRole('button', { name: 'nav.more' }));
     const sheet = screen.getByRole('dialog');
-    expect(hrefs(sheet)).toEqual(['/support']);
+    // The cashier app entry is a counter tool, not an administrative destination.
+    expect(hrefs(sheet)).toEqual(['/dashboard/cashier', '/support']);
     expect(sheet.querySelectorAll('form')).toHaveLength(1); // sign out stays available
     for (const href of ADMIN) {
       expect(sidebar.querySelector('a[href="' + href + '"]')).not.toBeInTheDocument();
@@ -95,6 +96,7 @@ describe('DashboardNav presentation', () => {
     const { container } = render(await DashboardNav());
     expect(hrefs(container.querySelector('aside nav')!)).toEqual([
       '/dashboard/loyalty/scan',
+      '/dashboard/cashier',
       '/support',
     ]);
   });
@@ -148,6 +150,7 @@ describe('DashboardNav presentation', () => {
       '/dashboard/settings',
       '/dashboard/settings/team',
       '/dashboard/billing',
+      '/dashboard/cashier',
       '/support',
     ]) {
       expect(sidebar.querySelector('a[href="' + href + '"]')).toBeInTheDocument();

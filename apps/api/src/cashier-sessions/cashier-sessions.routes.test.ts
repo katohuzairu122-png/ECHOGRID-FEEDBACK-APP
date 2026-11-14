@@ -78,7 +78,7 @@ async function call(method: string, path: string, token?: string, business: stri
   if (business) headers.set('X-Business-Id', business);
   const res = await app().request(`/api/v1/cashier-sessions${path}`, { method, headers }, env, ctx());
   const text = await res.text();
-  return { status: res.status, body: text ? (JSON.parse(text) as Record<string, any>) : {} };
+  return { status: res.status, body: text ? (JSON.parse(text) as Record<string, unknown>) : {} };
 }
 const web = (user: string) => signAccessToken(user, SECRET, SID);
 
@@ -119,7 +119,7 @@ describe('C6 cashier session management', () => {
     const res = await call('GET', '', await web(OWNER));
     expect(res.status).toBe(200);
     expect(m.list).toHaveBeenCalledWith(BIZ_A, expect.any(Number));
-    expect(res.body.data[0]).toMatchObject({ sessionId: TARGET, deviceLabel: 'Counter 1', branch: null });
+    expect((res.body.data as Record<string, unknown>[])[0]).toMatchObject({ sessionId: TARGET, deviceLabel: 'Counter 1', branch: null });
     // No token hash or raw token ever appears.
     expect(JSON.stringify(res.body)).not.toMatch(/token/i);
   });

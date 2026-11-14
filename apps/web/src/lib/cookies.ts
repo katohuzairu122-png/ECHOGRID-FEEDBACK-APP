@@ -19,3 +19,14 @@ export const IMPERSONATING_COOKIE = 'ff_impersonating';
 /** Non-sensitive UUID identifying the dashboard tenant the user selected. */
 export const ACTIVE_BUSINESS_COOKIE = 'ff_active_business';
 
+
+// CASHIER-PWA-01 C4: the cashier app's OWN session cookies. They never share a name with the staff cookies above, so a
+// staff session and a cashier session can coexist in one browser (and on one origin in development) without either
+// ever being read as the other. In production the cashier app is served from its own origin, so host-only cookies
+// separate them completely as well.
+export const CASHIER_ACCESS_COOKIE = 'ff_cashier_access';
+export const CASHIER_REFRESH_COOKIE = 'ff_cashier_refresh';
+/** Display + routing context chosen at sign-in ({businessId, businessName, branchId, branchName}); never authority: the signed token is. */
+export const CASHIER_CONTEXT_COOKIE = 'ff_cashier_ctx';
+/** The short-lived signed selection ticket between the two steps of a multi-business cashier sign-in. */
+export const CASHIER_SELECT_COOKIE = 'ff_cashier_select';

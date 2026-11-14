@@ -1,6 +1,12 @@
 import type { MetadataRoute } from 'next';
+import { headers } from 'next/headers';
+import { isCashierHost } from '@/lib/cashier/host';
+import { cashierManifest } from '@/lib/cashier/manifest';
 
-export default function manifest(): MetadataRoute.Manifest {
+export default async function manifest(): Promise<MetadataRoute.Manifest> {
+  // CASHIER-PWA-01 C4: on the dedicated cashier origin the app that installs is the cashier app, so the root manifest
+  // URL (which every page links to) answers with the cashier manifest there. Anywhere else it is unchanged.
+  if (isCashierHost((await headers()).get('host'))) return cashierManifest();
   return {
     name: 'Echo Grid',
     short_name: 'Echo Grid',

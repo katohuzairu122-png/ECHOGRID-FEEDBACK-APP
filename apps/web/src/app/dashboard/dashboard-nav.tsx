@@ -12,6 +12,7 @@ import { CASHIER_HOME } from '@/lib/workspace-guard';
 /** Permission each management destination needs to appear. Presentation only: the API enforces each one. */
 const REQUIRED: Record<string, string | undefined> = {
   '/dashboard/loyalty/scan': 'loyalty:serve',
+  '/dashboard/cashier': 'loyalty:serve',
   '/dashboard/feedback': 'feedback:view',
   '/dashboard/loyalty': 'loyalty:accounts:view',
   '/dashboard/analytics': 'analytics:view',
@@ -43,6 +44,7 @@ export async function DashboardNav() {
     { href: '/dashboard/settings', label: t('nav.settings'), icon: 'settings' },
     { href: '/dashboard/settings/team', label: t('nav.team'), icon: 'users' },
     { href: '/dashboard/billing', label: t('nav.billing'), icon: 'shield' },
+    { href: '/dashboard/cashier', label: t('nav.cashierApp'), icon: 'qr' },
     support,
   ];
 
@@ -51,7 +53,7 @@ export async function DashboardNav() {
   // Management: only destinations the effective permissions allow.
   const items: WorkspaceNavItem[] =
     kind === 'cashier'
-      ? [{ href: CASHIER_HOME, label: t('nav.serve'), icon: 'qr' }, support]
+      ? [{ href: CASHIER_HOME, label: t('nav.serve'), icon: 'qr' }, { href: '/dashboard/cashier', label: t('nav.cashierApp'), icon: 'qr' }, support]
       : kind === 'unavailable'
         ? [support]
         : all.filter((item) => {

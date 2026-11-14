@@ -18,7 +18,8 @@
     "logout": "Se déconnecter",
     "customerQr": "QR client",
     "settlements": "Règlement des récompenses orphelines",
-    "serve": "Servir les clients"
+    "serve": "Servir les clients",
+    "cashierApp": "Application de caisse"
   },
   "home": {
     "branchesTitle": "Succursales",

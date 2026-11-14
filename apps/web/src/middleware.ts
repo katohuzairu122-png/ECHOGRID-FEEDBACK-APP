@@ -60,7 +60,11 @@ const METADATA_ASSET_PATHS = [
   '/sw.js',
   '/offline.html',
 ];
+// CASHIER-PWA-01 C4: the cashier app has its own sign-in and its own session cookies (never the staff cookies this
+// middleware checks), so it is not gated on the staff refresh token. Its layout enforces the cashier session itself.
+const CASHIER_APP_PATH = '/cashier';
 const PUBLIC_PATHS = [
+  CASHIER_APP_PATH,
   '/feedback',
   '/loyalty',
   '/invite',
