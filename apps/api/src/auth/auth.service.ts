@@ -21,6 +21,11 @@ const AUTH_ERROR_STATUS = {
   INVALID_REFRESH_TOKEN: 401,
   REFRESH_TOKEN_ROTATED: 409,
   ACCOUNT_INACTIVE: 401,
+  /** Cashier sign-in: the credentials were right but the user may not serve at any business (or the chosen one). */
+  CASHIER_ACCESS_DENIED: 403,
+  /** A live cashier session whose business, branch, role or account no longer allows counter access. */
+  CASHIER_ACCESS_REVOKED: 403,
+  CASHIER_SELECTION_INVALID: 400,
   /** 400, not 401: the caller is not failing to authenticate, they are
    * presenting a token that is expired, already used, or unknown. A 401
    * would invite clients to retry with credentials, which is not the fix. */
@@ -38,7 +43,7 @@ const CONCURRENT_REFRESH_GRACE_MS = 10_000;
 // an account. Verifying against it costs the same PBKDF2 work as checking a
 // real stored password, closing the unknown-email timing oracle. The all-zero
 // derived value is not a real account credential.
-const DUMMY_PASSWORD_HASH =
+export const DUMMY_PASSWORD_HASH =
   'pbkdf2$600000$AAAAAAAAAAAAAAAAAAAAAA==$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=';
 
 type AuthErrorCode = keyof typeof AUTH_ERROR_STATUS;
@@ -175,6 +180,11 @@ export class AuthService {
     }
     const incomingHash = await hashToken(rawRefreshToken);
     if (!constantTimeEqualHex(incomingHash, stored.tokenHash)) {
+      throw new AuthError('Refresh token is invalid or expired.', 'INVALID_REFRESH_TOKEN');
+    }
+    // CASHIER-PWA-01 C3: this endpoint serves ordinary web sessions only. A cashier refresh token is refused here
+    // BEFORE the reuse rule below, so presenting one can neither mint an ordinary token nor revoke anyone's sessions.
+    if (stored.client !== 'web') {
       throw new AuthError('Refresh token is invalid or expired.', 'INVALID_REFRESH_TOKEN');
     }
     if (stored.revokedAt) {
@@ -424,6 +434,8 @@ export class AuthService {
     const payload = await this.verifyRefreshTokenOrThrow(rawRefreshToken).catch(() => null);
     if (!payload) return;
     const stored = await this.repos.refreshTokens.findById(payload.jti);
+    // A cashier token sent to the web logout ends nothing: cashier sessions are closed by the cashier logout.
+    if (stored && stored.client !== 'web') return;
     await this.repos.refreshTokens.revoke(payload.jti);
     // logout ends the whole session, so its access tokens stop authorizing privileged functions immediately
     if (stored?.sessionId) await this.repos.refreshTokens.revokeSession(stored.userId, stored.sessionId);

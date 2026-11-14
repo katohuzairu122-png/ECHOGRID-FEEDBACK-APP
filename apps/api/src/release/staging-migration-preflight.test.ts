@@ -31,14 +31,14 @@ describe('Gate 2 non-authorizing staging preflight', () => {
   it('reproduces independently observed staging drift without SQL writes', () => {
     const r = assessStagingMigrationPreflight(input);
     expect(r).toMatchObject({
-      status: 'BLOCKED', expectedCount: 71, appliedCount: 45,
+      status: 'BLOCKED', expectedCount: 72, appliedCount: 45,
       stagingCertified: false, migrationAuthorized: false,
       deploymentAuthorized: false, onboardingAuthorized: false,
       financialAuthorization: 'NOT_GRANTED',
     });
-    expect(r.pendingTags).toHaveLength(26);
+    expect(r.pendingTags).toHaveLength(27);
     expect(r.pendingTags[0]).toBe('0045_heta01_f1_stripe_evidence');
-    expect(r.pendingTags.at(-1)).toBe('0070_platform_customer_limited_access');
+    expect(r.pendingTags.at(-1)).toBe('0071_cashier_sessions');
     for (const reason of [
       'MIGRATIONS_PENDING', 'NEW_SECURITY_MIGRATIONS_PENDING',
       'DATABASE_VERSION_NOT_CERTIFIED', 'ROLE_PROTECTION_UNVERIFIED',

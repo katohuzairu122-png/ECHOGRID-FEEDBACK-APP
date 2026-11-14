@@ -3,10 +3,13 @@ import type { Bindings } from '../config/env';
 import { createDb } from '../db/client';
 import { createRepositories } from '../repositories';
 import { AuthService } from './auth.service';
+import { CashierAuthService } from './cashier-auth.service';
 import { createDurableObjectPbkdf2Worker } from './pbkdf2-worker';
 import {
   signupSchema,
   loginSchema,
+  cashierLoginSchema,
+  cashierSessionSchema,
   refreshSchema,
   requestPasswordResetSchema,
   resetPasswordSchema,
@@ -19,15 +22,16 @@ import { ok } from '../lib/response';
 import { AppError } from '../lib/errors';
 import { rateLimit } from '../middleware/rate-limit';
 import { authenticate, type AuthVariables } from '../middleware/authenticate';
+import type { AuditVariables } from '../middleware/audit';
 
-export const authRoutes = new Hono<{ Bindings: Bindings; Variables: AuthVariables }>();
+export const authRoutes = new Hono<{ Bindings: Bindings; Variables: AuthVariables & AuditVariables }>();
 
 /**
  * Builds a request-scoped AuthService: a fresh DB connection + repositories
  * for this request only, closed via waitUntil once the handler is done.
  */
 async function withAuthService<T>(
-  c: Context<{ Bindings: Bindings; Variables: AuthVariables }>,
+  c: Context<{ Bindings: Bindings; Variables: AuthVariables & AuditVariables }>,
   fn: (service: AuthService) => Promise<T>,
 ): Promise<T> {
   const { db, close } = await createDb(c.env.HYPERDRIVE);
@@ -50,6 +54,24 @@ async function withAuthService<T>(
       }),
       webBaseUrl: c.env.WEB_BASE_URL,
     },
+  );
+  try {
+    return await fn(service);
+  } finally {
+    c.executionCtx.waitUntil(close());
+  }
+}
+
+/** Request-scoped CashierAuthService (same connection and secrets handling as withAuthService). */
+async function withCashierService<T>(
+  c: Context<{ Bindings: Bindings; Variables: AuthVariables & AuditVariables }>,
+  fn: (service: CashierAuthService) => Promise<T>,
+): Promise<T> {
+  const { db, close } = await createDb(c.env.HYPERDRIVE);
+  const service = new CashierAuthService(
+    createRepositories(db),
+    { JWT_ACCESS_SECRET: c.env.JWT_ACCESS_SECRET, JWT_REFRESH_SECRET: c.env.JWT_REFRESH_SECRET },
+    createDurableObjectPbkdf2Worker(c.env.PASSWORD_HASHER),
   );
   try {
     return await fn(service);
@@ -81,6 +103,71 @@ authRoutes.post('/login', rateLimit('AUTH_RATE_LIMITER'), async (c) => {
     }),
   );
   return ok(c, tokens);
+});
+
+/**
+ * CASHIER-PWA-01 C3: independent cashier sessions. These endpoints take credentials or a cashier refresh token in
+ * the body (like /login and /refresh) and never a bearer token, so they are outside the cashier route allow-list on
+ * purpose: a cashier access token cannot call them. Each records an audit entry attributed to the staff user and
+ * visible in the business's own audit log.
+ */
+authRoutes.post('/cashier/login', rateLimit('AUTH_RATE_LIMITER'), async (c) => {
+  const body = await parseJsonBody(c.req.raw, cashierLoginSchema);
+  const result = await withCashierService(c, (service) =>
+    service.login({
+      ...body,
+      userAgent: c.req.header('user-agent'),
+      ipAddress: c.req.header('cf-connecting-ip'),
+    }),
+  );
+  c.set('userId', result.userId);
+  if (result.status === 'authenticated') {
+    c.set('auditMetadata', {
+      action: 'auth.cashier_login',
+      entityType: 'session',
+      businessId: result.session.businessId,
+      details: { branchId: result.session.branchId, deviceLabel: result.session.deviceLabel },
+    });
+  }
+  const { userId: _userId, ...publicResult } = result;
+  return ok(c, publicResult);
+});
+
+authRoutes.post('/cashier/session', rateLimit('AUTH_RATE_LIMITER'), async (c) => {
+  const body = await parseJsonBody(c.req.raw, cashierSessionSchema);
+  const result = await withCashierService(c, (service) =>
+    service.createSession({
+      ...body,
+      userAgent: c.req.header('user-agent'),
+      ipAddress: c.req.header('cf-connecting-ip'),
+    }),
+  );
+  c.set('userId', result.userId);
+  c.set('auditMetadata', {
+    action: 'auth.cashier_login',
+    entityType: 'session',
+    businessId: result.session.businessId,
+    details: { branchId: result.session.branchId, deviceLabel: result.session.deviceLabel },
+  });
+  const { userId: _userId, ...publicResult } = result;
+  return ok(c, { status: 'authenticated', ...publicResult });
+});
+
+authRoutes.post('/cashier/refresh', async (c) => {
+  const body = await parseJsonBody(c.req.raw, refreshSchema);
+  const result = await withCashierService(c, (service) => service.refresh(body.refreshToken));
+  const { userId: _userId, ...publicResult } = result;
+  return ok(c, publicResult);
+});
+
+authRoutes.post('/cashier/logout', async (c) => {
+  const body = await parseJsonBody(c.req.raw, refreshSchema);
+  const ended = await withCashierService(c, (service) => service.logout(body.refreshToken));
+  if (ended) {
+    c.set('userId', ended.userId);
+    c.set('auditMetadata', { action: 'auth.cashier_logout', entityType: 'session', businessId: ended.businessId });
+  }
+  return c.body(null, 204);
 });
 
 authRoutes.post('/refresh', async (c) => {

@@ -47,7 +47,7 @@ export function assessGate2PostMigration(raw: unknown): Gate2PostMigrationAssess
       typeof e.brokerSignedAssertionVerifiedAtTrustBoundary !== 'boolean' ||
       typeof e.runtimeApplicationSmokePass !== 'boolean') return deny(['INVALID_EVIDENCE']);
   const blockers: string[]=[];
-  const schemaComplete=e.migrationsApplied===71&&e.uniqueMigrationTimestamps===71&&
+  const schemaComplete=e.migrationsApplied===72&&e.uniqueMigrationTimestamps===72&&
     e.rlsEnabled===9&&e.forceRlsEnabled===9&&e.enabledFinancialGuards===6;
   if(!schemaComplete) blockers.push('SCHEMA_OR_GUARD_INCOMPLETE');
   if(e.runtimeBypassRls||e.runtimeDatabaseRole==='neondb_owner') blockers.push('RUNTIME_ROLE_BYPASSES_RLS');

@@ -32,7 +32,7 @@ try {
  )).rows[0];
  fail(info.db==='echogrid_ci_pg18_broker'&&info.username==='echogrid'&&
   Math.floor(info.version/10000)===18,'WRONG_DATABASE');
- fail((await owner.query('SELECT count(*)::int n FROM drizzle.__drizzle_migrations')).rows[0].n===71,'JOURNAL_NOT_REPLAYED');
+ fail((await owner.query('SELECT count(*)::int n FROM drizzle.__drizzle_migrations')).rows[0].n===72,'JOURNAL_NOT_REPLAYED');
 
  for(const [id,suffix] of [[tenantA,'a'],[tenantB,'b']]){
   await owner.query('INSERT INTO public.businesses(id,name,slug) VALUES($1,$2,$3)',
@@ -167,7 +167,7 @@ try {
    ownerControlledKey:true,ownerControlledMembership:true,
    noDirectTableAccess:true,operationBound:true,tenantBound:true,
    signatureTamperDenied:true,replayDenied:true,expiryEnforced:true,
-   clientGucIgnored:true,postgresMajor:18,committedMigrations:71,
+   clientGucIgnored:true,postgresMajor:18,committedMigrations:72,
    runtimeKeyDistribution:'NOT_DESIGNED',
    trustedIssuer:'SIMULATED_IN_DISPOSABLE_CI_ONLY',
    stagingCertification:'BLOCKED',runtimeRoleReady:false,

@@ -15,7 +15,7 @@ R20 counted 37 single-column foreign keys between tenant-owned tables. **Four of
 |---|---|---|---|
 | STRAIGHT | 20 | child and parent `business_id` are both NOT NULL | composite foreign key on `(business_id, fk)` to the parent's `(business_id, id)` |
 | OPTIONAL_FK_SET_NULL | 2 | as above, but the optional reference is cleared when the parent is deleted | composite key with `ON DELETE SET NULL (fk)` (column list, PostgreSQL 15+) |
-| NULLABLE_TENANT_DECISION | 7 | the child or the parent may have no tenant (platform-owned rows) | **owner decision**, see below |
+| NULLABLE_TENANT_DECISION | 8 | the child or the parent may have no tenant (platform-owned rows) | **owner decision**, see below |
 | SELF_REFERENCE | 1 | `community_point_transactions.reversal_of` | composite self-key; also tenant-nullable, so decided with the group above |
 | FINANCIAL_DEFER | 2 | `partner_credit_multiunit_lot_allocations` | **not changed here**: financial table, needs its own reviewed block |
 | GUARDED_BY_TRIGGER | 1 | `signed_evidence_events.evidence_id` | already tenant-checked by the DEV-15 event trigger; a composite key is optional later hardening |
@@ -43,6 +43,7 @@ R20 counted 37 single-column foreign keys between tenant-owned tables. **Four of
 | qr_codes | branches | branch_id | STRAIGHT |
 | qr_scan_events | branches | branch_id | STRAIGHT |
 | qr_scan_events | qr_codes | qr_code_id | STRAIGHT |
+| refresh_tokens | branches | branch_id | NULLABLE_TENANT_DECISION |
 | signed_evidence_events | signed_evidence_records | evidence_id | GUARDED_BY_TRIGGER |
 | survey_campaigns | branches | branch_id | NULLABLE_TENANT_DECISION |
 | survey_campaigns | surveys | survey_id | NULLABLE_TENANT_DECISION |

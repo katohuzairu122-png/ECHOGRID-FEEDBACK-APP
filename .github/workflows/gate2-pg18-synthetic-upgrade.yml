@@ -97,9 +97,9 @@ jobs:
           set -euo pipefail
           git show HEAD:apps/api/drizzle/meta/_journal.json > apps/api/drizzle/meta/_journal.json
           git diff --exit-code -- apps/api/drizzle/meta/_journal.json
-      - name: Apply pending migrations 45 through 70 to disposable PostgreSQL 18
+      - name: Apply pending migrations 45 through 71 to disposable PostgreSQL 18
         run: pnpm --filter @echo-grid-feedback/api db:migrate
-      - name: Verify 71-migration history, forced RLS, and financial-denial guards
+      - name: Verify 72-migration history, forced RLS, and financial-denial guards
         working-directory: apps/api
         run: node scripts/gate2-pg18-prefix-upgrade.mjs verify-full
       - name: Verify synthetic tenant and loyalty rows survived upgrade
