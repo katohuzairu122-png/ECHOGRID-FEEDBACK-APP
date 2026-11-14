@@ -8,6 +8,7 @@ import type {
   LoyaltyTransactionDto,
 } from '@echo-grid-feedback/shared-types';
 import { apiFetch, ApiError } from '@/lib/api-client';
+import { redemptionCodeSegment } from '@/lib/redemption-code';
 import { getActiveBusiness } from '@/lib/business';
 
 export interface LoyaltyFormState {
@@ -372,9 +373,10 @@ export async function lookupRedemptionAction(
   const business = await getActiveBusiness();
   if (!business) return { error: 'No active business.' };
 
-  const code = String(formData.get('code') ?? '').trim().toUpperCase();
+  const segment = redemptionCodeSegment(String(formData.get('code') ?? ''));
+  if (segment === null) return { error: 'Enter the redemption code exactly as shown.' };
   try {
-    const transaction = await apiFetch<LoyaltyTransactionDto>(`/loyalty/redemptions/${encodeURIComponent(code)}`, {
+    const transaction = await apiFetch<LoyaltyTransactionDto>(`/loyalty/redemptions/${segment}`, {
       businessId: business.id,
     });
     return { transaction };
@@ -388,7 +390,9 @@ export async function confirmRedemptionAction(code: string): Promise<LoyaltyTran
   const business = await getActiveBusiness();
   if (!business) throw new Error('No active business.');
 
-  return apiFetch<LoyaltyTransactionDto>(`/loyalty/redemptions/${encodeURIComponent(code)}/confirm`, {
+  const segment = redemptionCodeSegment(code);
+  if (segment === null) throw new Error('Invalid redemption code.');
+  return apiFetch<LoyaltyTransactionDto>(`/loyalty/redemptions/${segment}/confirm`, {
     method: 'POST',
     businessId: business.id,
   });
