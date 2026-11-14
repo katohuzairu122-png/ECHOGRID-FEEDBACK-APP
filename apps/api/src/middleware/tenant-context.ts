@@ -43,7 +43,20 @@ export const resolveTenantContext = createMiddleware<{
   Bindings: Bindings;
   Variables: AuthVariables & TenantVariables;
 }>(async (c, next) => {
-  const businessId = c.req.header('x-business-id');
+  // A cashier-scoped token carries its business (and branch) in signed claims. Those are the proof of context; the
+  // headers may only repeat them. A mismatch is refused, so a header can never move a cashier to another tenant.
+  const bound = c.get('cashier');
+  const headerBusinessId = c.req.header('x-business-id');
+  const headerBranchId = c.req.header('x-branch-id') ?? undefined;
+  if (bound) {
+    if (
+      (headerBusinessId !== undefined && headerBusinessId !== bound.businessId) ||
+      (headerBranchId !== undefined && headerBranchId !== (bound.branchId ?? undefined))
+    ) {
+      throw new AppError('This session is bound to a different business or branch.', 403, 'CASHIER_CONTEXT_MISMATCH');
+    }
+  }
+  const businessId = bound ? bound.businessId : headerBusinessId;
   if (!businessId) {
     throw new AppError('Missing X-Business-Id header.', 400, 'MISSING_BUSINESS_CONTEXT');
   }
@@ -51,7 +64,7 @@ export const resolveTenantContext = createMiddleware<{
     throw new AppError('Invalid X-Business-Id header.', 400, 'INVALID_BUSINESS_CONTEXT');
   }
 
-  const branchId = c.req.header('x-branch-id') ?? undefined;
+  const branchId = bound ? (bound.branchId ?? undefined) : headerBranchId;
   if (branchId !== undefined && !isSafeTenantSelector(branchId)) {
     throw new AppError('Invalid X-Branch-Id header.', 400, 'INVALID_BRANCH_CONTEXT');
   }
