@@ -21,6 +21,8 @@ export function safeNext(requested: string | null | undefined): string {
   }
   if (url.origin !== PLACEHOLDER_ORIGIN) return '/cashier';
   const path = url.pathname;
+  // Repeated slashes are never a legitimate cashier path and are not collapsed consistently by every runtime.
+  if (path.includes('//')) return '/cashier';
   const inApp = path === '/cashier' || path.startsWith('/cashier/');
   const forbidden = path.startsWith('/cashier/session') || path.startsWith('/cashier/login');
   return inApp && !forbidden ? path + url.search : '/cashier';
