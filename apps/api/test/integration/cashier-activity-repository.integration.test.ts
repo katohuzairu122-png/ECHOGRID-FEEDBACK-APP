@@ -84,7 +84,8 @@ describe.skipIf(!process.env.DATABASE_URL)('cashier activity query (integration,
 
   it('keyset pagination is deterministic, complete and duplicate-free across ties and sub-millisecond timestamps', async () => {
     const biz = (await c.query(`insert into businesses (name, slug) values ('P',$1) returning id`, [`p-${randomUUID()}`])).rows[0].id as string;
-    const mk = (n: number) => `${'0'.repeat(8)}-0000-4000-8000-${String(n).padStart(12, '0')}`;
+    const pfx = randomUUID().slice(0, 8); // fresh ids per run (re-runnable), same prefix so their relative order is fixed
+    const mk = (n: number) => `${pfx}-0000-4000-8000-${String(n).padStart(12, '0')}`;
     // Five rows sharing one millisecond (different microseconds) and three more at other times.
     const base = '2026-03-01T10:00:00.123';
     const inserted: string[] = [];

@@ -66,4 +66,18 @@ describe('C8 PWA: offline presentation', () => {
     });
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
+
+  it('clears even when the browser never delivers the online event', () => {
+    vi.useFakeTimers();
+    const set = (v: boolean) => Object.defineProperty(window.navigator, 'onLine', { configurable: true, value: v });
+    set(false);
+    render(<OfflineBanner title="OFFLINE" body="x" />);
+    expect(screen.getByRole('alert')).toBeInTheDocument();
+    set(true);
+    act(() => {
+      vi.advanceTimersByTime(2100);
+    });
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    vi.useRealTimers();
+  });
 });
