@@ -106,3 +106,32 @@ CASHIER_APP_URL = "https://echo-grid-feedback-cashier-staging.katohuzairu122.wor
 [env.cashier-staging.assets]
 directory = ".open-next/assets"
 binding = "ASSETS"
+
+# =============================================================================
+# CASHIER PWA, PRODUCTION (CASHIER-PWA-DEPLOY-01, release PR). A dedicated Worker built from the SAME OpenNext build as
+# the production web Worker; only runtime configuration differs. Deployed ONLY by .github/workflows/
+# deploy-cashier-production.yml (protected `production` environment).
+#
+# DOMAIN BINDING IS DELIBERATELY NOT HERE. `routes` stays empty and `workers_dev` is false, so this Worker is not
+# reachable anywhere until the OWNER attaches cashier.echo-grid.uk (Cloudflare dashboard -> Worker -> Settings ->
+# Domains & Routes -> Add -> Custom domain). Until then CASHIER_HOST would not match any request host, so /cashier is a
+# 404 even if the Worker were reached. Attaching the domain is the owner's explicit DNS action, never a deploy side
+# effect. The production WEB Worker above has no CASHIER_HOST and no CASHIER_APP_URL: the dashboard's "Open Cashier App"
+# link is switched on afterwards by a separate one-line change, once the cashier Worker has been verified.
+# =============================================================================
+[env.cashier]
+name = "echo-grid-feedback-cashier"
+workers_dev = false
+routes = []
+
+[env.cashier.vars]
+API_BASE_URL = "https://echo-grid-feedback-api.katohuzairu122.workers.dev"
+APP_URL = "https://cashier.echo-grid.uk"
+NODE_ENV = "production"
+NEXT_PRIVATE_MINIMAL_MODE = "1"
+CASHIER_HOST = "cashier.echo-grid.uk"
+CASHIER_APP_URL = "https://cashier.echo-grid.uk"
+
+[env.cashier.assets]
+directory = ".open-next/assets"
+binding = "ASSETS"
