@@ -6,6 +6,8 @@ import type { BusinessDto } from '@echo-grid-feedback/shared-types';
 import { apiFetch, ApiError } from './api-client';
 import { ACTIVE_BUSINESS_COOKIE } from './cookies';
 import { selectActiveBusiness } from './business-selection';
+import { isCashierSurface } from './cashier/surface';
+import { getCashierContext } from './cashier/session';
 
 /** Shared by both exports below so the actual fetch is defined once. */
 export const getBusinesses = cache(async (): Promise<BusinessDto[]> => {
@@ -24,6 +26,13 @@ export const getBusinesses = cache(async (): Promise<BusinessDto[]> => {
  * original inline fetch-and-pick-first logic.
  */
 export async function getActiveBusiness(): Promise<BusinessDto | null> {
+  // CASHIER-PWA-01 C4: a cashier session is bound to exactly one business at sign-in. Its cashier token may not call
+  // the business list, so the bound business comes from the sign-in context; the API re-validates it against the
+  // signed token on every request (a mismatching X-Business-Id is refused), so this value grants nothing by itself.
+  if (isCashierSurface()) {
+    const ctx = await getCashierContext();
+    return ctx ? ({ id: ctx.businessId, name: ctx.businessName ?? '' } as BusinessDto) : null;
+  }
   let businesses: BusinessDto[];
   try {
     businesses = await getBusinesses();

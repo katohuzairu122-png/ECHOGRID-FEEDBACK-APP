@@ -1,0 +1,101 @@
+{
+  "brand": "Echo Grid Cashier",
+  "login": {
+    "title": "Cashier sign-in",
+    "subtitle": "Use your Echo Grid staff account. This device gets its own cashier session.",
+    "email": "Email",
+    "password": "Password",
+    "deviceLabel": "Device name (optional)",
+    "deviceLabelHint": "For example, Counter 1. Your manager sees it in the session list.",
+    "submit": "Sign in",
+    "submitting": "Signing in…",
+    "errors": {
+      "credentials": "That email or password is not correct.",
+      "access": "This account cannot use the cashier app. Ask your manager for access.",
+      "expired": "This sign-in expired. Please sign in again.",
+      "unavailable": "Sign-in is not available right now. Try again in a moment."
+    },
+    "chooseTitle": "Where are you serving?",
+    "chooseHint": "Choose the business and branch for this device.",
+    "business": "Business",
+    "branch": "Branch",
+    "branchWide": "All branches",
+    "continue": "Start serving",
+    "back": "Use a different account"
+  },
+  "header": {
+    "servingAt": "Serving at",
+    "signedInAs": "Signed in as {name}",
+    "nav": "Cashier navigation",
+    "serve": "Serve customers",
+    "redeem": "Redeem code",
+    "account": "This device"
+  },
+  "redeem": {
+    "title": "Redeem a reward code",
+    "subtitle": "Type the code the customer shows, check what it is for, then confirm."
+  },
+  "account": {
+    "title": "This device",
+    "business": "Business",
+    "branch": "Branch",
+    "branchWide": "All branches",
+    "device": "Device name",
+    "noDevice": "Not named",
+    "signOut": "Sign out of this device",
+    "signOutHint": "Ends only this cashier session. Your other devices and the business dashboard stay signed in.",
+    "install": {
+      "title": "Install the cashier app",
+      "button": "Install",
+      "ios": "On iPhone or iPad: tap Share, then Add to Home Screen.",
+      "unsupported": "Your browser cannot install apps. You can keep using the cashier app in the browser, or open it in Chrome, Edge or Safari to install it.",
+      "installed": "The cashier app is installed on this device."
+    }
+  },
+  "offline": {
+    "title": "You're offline",
+    "body": "Customer lookups, purchases and redemptions need a connection. Nothing is saved offline. Reconnect to continue."
+  },
+  "error": {
+    "title": "Something went wrong",
+    "body": "The cashier app could not load this screen. Your session is safe. Try again.",
+    "retry": "Try again"
+  },
+  "dashboard": {
+    "title": "Cashier app",
+    "subtitle": "A focused counter app for serving customers on a phone or tablet, with its own sign-in.",
+    "open": "Open Cashier App",
+    "unavailable": "The cashier app is not available yet for this environment. Your owner or platform administrator will let you know when it is.",
+    "access": "Your role gives you access to the cashier app. Sign in there with your normal staff email and password.",
+    "noAccess": "Your role does not include serving customers, so the cashier app is not available to you.",
+    "installTitle": "Install it on a device",
+    "installIntro": "Open the cashier app on the counter device, then install it so it opens like an app.",
+    "steps": {
+      "android": "Android (Chrome): open the cashier app, then tap the menu and choose Install app or Add to Home screen.",
+      "ios": "iPhone and iPad (Safari): open the cashier app, tap Share, then Add to Home Screen.",
+      "desktop": "Computer (Chrome or Edge): open the cashier app and click the install icon in the address bar."
+    },
+    "unsupportedNote": "If your browser cannot install apps, the cashier app still works in a normal browser tab.",
+    "ownerNote": "As an owner you can use and install the cashier app without any extra setup or approval.",
+    "sessions": {
+      "title": "Active cashier sessions",
+      "subtitle": "Devices currently signed in to the cashier app for this business.",
+      "empty": "No cashier sessions are active.",
+      "user": "Staff member",
+      "branch": "Branch",
+      "branchWide": "All branches",
+      "device": "Device",
+      "noDevice": "Not named",
+      "lastActive": "Last active",
+      "expires": "Ends",
+      "revoke": "Sign out",
+      "revokeAll": "Sign out all cashier devices",
+      "confirmAll": "Sign out every cashier device for this business? Staff will need to sign in again.",
+      "confirmOne": "Sign this device out?",
+      "revoked": "Cashier session signed out.",
+      "revokedAll": "All cashier devices signed out.",
+      "failed": "Could not sign the device out. Try again.",
+      "loadFailed": "Could not load cashier sessions."
+    }
+  }
+}

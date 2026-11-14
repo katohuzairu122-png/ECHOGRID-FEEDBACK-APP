@@ -16,6 +16,7 @@ const mocks = vi.hoisted(() => ({
   business: vi.fn(),
   branch: vi.fn(),
   permissions: vi.fn(),
+  live: vi.fn(),
   reached: vi.fn(),
   close: vi.fn(async () => undefined),
 }));
@@ -28,6 +29,7 @@ vi.mock('../repositories', () => ({
     businesses: { findById: mocks.business },
     branches: { findById: mocks.branch },
     permissions: { findEffectiveKeys: mocks.permissions },
+    refreshTokens: { isSessionLive: mocks.live },
   })),
 }));
 vi.mock('./rate-limit', () => ({
@@ -136,6 +138,7 @@ const SERVE = ['loyalty:serve', 'business:view', 'branches:view'];
 const MANAGEMENT = [...SERVE, 'billing:view', 'team:view', 'loyalty:view', 'rewards:manage'];
 
 beforeEach(() => {
+  mocks.live.mockReset().mockResolvedValue(true);
   vi.clearAllMocks();
   mocks.users.mockImplementation(async (id: string) => ({
     id,
@@ -326,6 +329,15 @@ describe('3-4. business and branch binding', () => {
     // Branch-scoped staff with a business-wide binding: a branch is required.
     const noBranch = await call({ ...route, token: await cashierToken(BRANCH_STAFF, BIZ_A) });
     expect(noBranch.body.code).toBe('BRANCH_CONTEXT_REQUIRED');
+  });
+
+  it('C6: a revoked or expired cashier session loses access on the very next request', async () => {
+    mocks.live.mockResolvedValueOnce(false);
+    const res = await call({ ...route, token: await cashierToken(CASHIER, BIZ_A) });
+    expect(res.status).toBe(401);
+    expect(res.body.code).toBe('UNAUTHENTICATED');
+    expect(mocks.reached).not.toHaveBeenCalled();
+    expect(mocks.live).toHaveBeenCalledWith(CASHIER, expect.any(String), expect.any(Number));
   });
 
   it('refuses inactive users, removed memberships and suspended businesses', async () => {

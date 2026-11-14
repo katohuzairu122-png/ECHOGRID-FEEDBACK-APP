@@ -1,3 +1,4 @@
+import { keepStaffSurfacesOffCashierHost } from '@/lib/cashier/host-guard';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
@@ -25,6 +26,7 @@ import { PlatformNav } from './platform-nav';
  *      correct, deliberate rejection it is.
  */
 export default async function PlatformLayout({ children }: { children: React.ReactNode }) {
+  await keepStaffSurfacesOffCashierHost();
   if (!(await hasSession())) {
     redirect('/login');
   }

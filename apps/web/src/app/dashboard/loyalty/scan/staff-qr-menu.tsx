@@ -8,10 +8,13 @@ import { Button, Input, Label } from '@/components/ui';
 
 export function StaffQrMenu({
   contexts,
+  serveAction = staffUnifiedQrAction,
 }: {
   contexts: { branchId: string | null; branchName: string | null }[];
+  /** The cashier app passes its own wrapper, which runs the same action under the cashier credentials. */
+  serveAction?: typeof staffUnifiedQrAction;
 }) {
-  const [state, action, pending] = useActionState(staffUnifiedQrAction, {});
+  const [state, action, pending] = useActionState(serveAction, {});
   const t = useTranslations('loyalty.staff.serve');
   const formRef = useRef<HTMLFormElement>(null);
   const tokenRef = useRef<HTMLInputElement>(null);

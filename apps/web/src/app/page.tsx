@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { keepStaffSurfacesOffCashierHost } from '@/lib/cashier/host-guard';
 import Image from 'next/image';
 import { getTranslations } from 'next-intl/server';
 import { redirect } from 'next/navigation';
@@ -22,6 +23,7 @@ const INDUSTRY_ICONS = ['store', 'bag', 'fitness', 'bed', 'scissors', 'medical']
 const LEGAL_LINKS = ['support', 'privacy', 'terms', 'refunds', 'cookies'] as const;
 
 export default async function RootPage() {
+  await keepStaffSurfacesOffCashierHost();
   if (await hasSession()) redirect('/dashboard');
   const t = await getTranslations('landing.marketing');
   const copy: PreviewCopy = {

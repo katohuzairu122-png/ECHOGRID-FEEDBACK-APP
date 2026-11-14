@@ -36,7 +36,14 @@ export interface CashierChoice {
 export interface CashierSession {
   accessToken: string;
   refreshToken: string;
-  session: { businessId: string; branchId: string | null; deviceLabel: string | null };
+  session: {
+    businessId: string;
+    branchId: string | null;
+    deviceLabel: string | null;
+    /** Display names for the cashier app header (it may not call any route beyond its allow-list to learn them). */
+    businessName: string | null;
+    branchName: string | null;
+  };
 }
 
 export type CashierLoginResult =
@@ -218,6 +225,7 @@ export class CashierAuthService {
         businessId: stored.businessId,
         branchId: stored.branchId,
         deviceLabel: stored.deviceLabel,
+        ...(await this.names(stored.businessId, stored.branchId)),
       },
       userId: stored.userId,
     };
@@ -315,8 +323,19 @@ export class CashierAuthService {
     return {
       accessToken: t.accessToken,
       refreshToken: t.refreshToken,
-      session: { businessId, branchId, deviceLabel: deviceLabel ?? null },
+      session: {
+        businessId,
+        branchId,
+        deviceLabel: deviceLabel ?? null,
+        ...(await this.names(businessId, branchId)),
+      },
     };
+  }
+
+  private async names(businessId: string, branchId: string | null) {
+    const business = await this.repos.businesses.findById(businessId);
+    const branch = branchId ? await this.repos.branches.findById(branchId, businessId) : undefined;
+    return { businessName: business?.name ?? null, branchName: branch?.name ?? null };
   }
 
   private async issue(

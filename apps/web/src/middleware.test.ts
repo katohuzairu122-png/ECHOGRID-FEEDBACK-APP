@@ -127,3 +127,17 @@ describe('middleware — protected session refresh', () => {
     expect(response.cookies.get(REFRESH_TOKEN_COOKIE)?.value).toBe('');
   });
 });
+
+describe('middleware — cashier app (CASHIER-PWA-01 C4)', () => {
+  it.each(['/cashier', '/cashier/login', '/cashier/redeem', '/cashier/manifest.webmanifest', '/cashier/session/refresh'])(
+    'does not gate %s on the staff session (the cashier layout enforces its own session)',
+    async (path) => {
+      expect(redirectTarget(await middleware(request(path)))).toBeNull();
+    },
+  );
+
+  it('a staff session does not change that, and the staff-only dashboard stays gated', async () => {
+    expect(redirectTarget(await middleware(request('/cashier', { signedIn: true })))).toBeNull();
+    expect(redirectTarget(await middleware(request('/dashboard')))).toBe('/login');
+  });
+});

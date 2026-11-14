@@ -1,0 +1,101 @@
+{
+  "brand": "Caissier Echo Grid",
+  "login": {
+    "title": "Connexion caissier",
+    "subtitle": "Utilisez votre compte employé Echo Grid. Cet appareil obtient sa propre session de caisse.",
+    "email": "E-mail",
+    "password": "Mot de passe",
+    "deviceLabel": "Nom de l'appareil (facultatif)",
+    "deviceLabelHint": "Par exemple, Caisse 1. Votre responsable le voit dans la liste des sessions.",
+    "submit": "Se connecter",
+    "submitting": "Connexion…",
+    "errors": {
+      "credentials": "Cet e-mail ou ce mot de passe est incorrect.",
+      "access": "Ce compte ne peut pas utiliser l'application de caisse. Demandez l'accès à votre responsable.",
+      "expired": "Cette connexion a expiré. Reconnectez-vous.",
+      "unavailable": "La connexion est indisponible pour le moment. Réessayez dans un instant."
+    },
+    "chooseTitle": "Où servez-vous ?",
+    "chooseHint": "Choisissez l'entreprise et la succursale de cet appareil.",
+    "business": "Entreprise",
+    "branch": "Succursale",
+    "branchWide": "Toutes les succursales",
+    "continue": "Commencer à servir",
+    "back": "Utiliser un autre compte"
+  },
+  "header": {
+    "servingAt": "Service chez",
+    "signedInAs": "Connecté en tant que {name}",
+    "nav": "Navigation caissier",
+    "serve": "Servir les clients",
+    "redeem": "Valider un code",
+    "account": "Cet appareil"
+  },
+  "redeem": {
+    "title": "Valider un code de récompense",
+    "subtitle": "Saisissez le code présenté par le client, vérifiez à quoi il sert, puis confirmez."
+  },
+  "account": {
+    "title": "Cet appareil",
+    "business": "Entreprise",
+    "branch": "Succursale",
+    "branchWide": "Toutes les succursales",
+    "device": "Nom de l'appareil",
+    "noDevice": "Sans nom",
+    "signOut": "Se déconnecter de cet appareil",
+    "signOutHint": "Met fin uniquement à cette session de caisse. Vos autres appareils et le tableau de bord restent connectés.",
+    "install": {
+      "title": "Installer l'application de caisse",
+      "button": "Installer",
+      "ios": "Sur iPhone ou iPad : touchez Partager, puis Sur l'écran d'accueil.",
+      "unsupported": "Votre navigateur ne peut pas installer d'applications. Vous pouvez continuer dans le navigateur, ou ouvrir l'application dans Chrome, Edge ou Safari pour l'installer.",
+      "installed": "L'application de caisse est installée sur cet appareil."
+    }
+  },
+  "offline": {
+    "title": "Vous êtes hors ligne",
+    "body": "Les recherches de clients, achats et validations nécessitent une connexion. Rien n'est enregistré hors ligne. Reconnectez-vous pour continuer."
+  },
+  "error": {
+    "title": "Un problème est survenu",
+    "body": "L'application de caisse n'a pas pu charger cet écran. Votre session est en sécurité. Réessayez.",
+    "retry": "Réessayer"
+  },
+  "dashboard": {
+    "title": "Application de caisse",
+    "subtitle": "Une application simple pour servir les clients au comptoir sur téléphone ou tablette, avec sa propre connexion.",
+    "open": "Ouvrir l'application de caisse",
+    "unavailable": "L'application de caisse n'est pas encore disponible dans cet environnement. Votre propriétaire ou l'administrateur de la plateforme vous préviendra.",
+    "access": "Votre rôle vous donne accès à l'application de caisse. Connectez-vous-y avec votre e-mail et mot de passe habituels.",
+    "noAccess": "Votre rôle n'inclut pas le service aux clients ; l'application de caisse n'est donc pas disponible pour vous.",
+    "installTitle": "L'installer sur un appareil",
+    "installIntro": "Ouvrez l'application de caisse sur l'appareil du comptoir, puis installez-la pour qu'elle s'ouvre comme une application.",
+    "steps": {
+      "android": "Android (Chrome) : ouvrez l'application, touchez le menu, puis Installer l'application ou Ajouter à l'écran d'accueil.",
+      "ios": "iPhone et iPad (Safari) : ouvrez l'application, touchez Partager, puis Sur l'écran d'accueil.",
+      "desktop": "Ordinateur (Chrome ou Edge) : ouvrez l'application et cliquez sur l'icône d'installation dans la barre d'adresse."
+    },
+    "unsupportedNote": "Si votre navigateur ne peut pas installer d'applications, l'application de caisse fonctionne quand même dans un onglet normal.",
+    "ownerNote": "En tant que propriétaire, vous pouvez utiliser et installer l'application de caisse sans configuration ni approbation supplémentaire.",
+    "sessions": {
+      "title": "Sessions de caisse actives",
+      "subtitle": "Appareils actuellement connectés à l'application de caisse pour cette entreprise.",
+      "empty": "Aucune session de caisse active.",
+      "user": "Employé",
+      "branch": "Succursale",
+      "branchWide": "Toutes les succursales",
+      "device": "Appareil",
+      "noDevice": "Sans nom",
+      "lastActive": "Dernière activité",
+      "expires": "Fin",
+      "revoke": "Déconnecter",
+      "revokeAll": "Déconnecter tous les appareils de caisse",
+      "confirmAll": "Déconnecter tous les appareils de caisse de cette entreprise ? Le personnel devra se reconnecter.",
+      "confirmOne": "Déconnecter cet appareil ?",
+      "revoked": "Session de caisse déconnectée.",
+      "revokedAll": "Tous les appareils de caisse sont déconnectés.",
+      "failed": "Impossible de déconnecter l'appareil. Réessayez.",
+      "loadFailed": "Impossible de charger les sessions de caisse."
+    }
+  }
+}
