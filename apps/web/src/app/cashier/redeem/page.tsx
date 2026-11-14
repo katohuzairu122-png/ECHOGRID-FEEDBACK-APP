@@ -1,8 +1,9 @@
 import { getTranslations } from 'next-intl/server';
+import { CashierShell } from '@/components/cashier/cashier-shell';
 import { RedeemLookupForm } from '@/app/dashboard/loyalty/redeem/redeem-lookup-form';
 import { cashierConfirmRedemptionAction, cashierLookupRedemptionAction } from '@/lib/cashier/actions';
 
-export default async function CashierRedeemPage() {
+async function RedeemScreen() {
   const t = await getTranslations('cashier.redeem');
   return (
     <section className="space-y-4">
@@ -15,5 +16,13 @@ export default async function CashierRedeemPage() {
         confirmAction={cashierConfirmRedemptionAction}
       />
     </section>
+  );
+}
+
+export default function CashierRedeemPage() {
+  return (
+    <CashierShell>
+      <RedeemScreen />
+    </CashierShell>
   );
 }

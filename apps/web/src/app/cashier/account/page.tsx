@@ -1,10 +1,11 @@
 import { getTranslations } from 'next-intl/server';
+import { CashierShell } from '@/components/cashier/cashier-shell';
 import { getCashierContext } from '@/lib/cashier/session';
 import { cashierLogoutAction } from '@/lib/cashier/actions';
 import { PwaInstallButton } from '@/components/pwa-install-button';
 import { Button } from '@/components/ui';
 
-export default async function CashierAccountPage() {
+async function AccountScreen() {
   const ctx = await getCashierContext();
   const t = await getTranslations('cashier.account');
   if (!ctx) return null;
@@ -35,5 +36,13 @@ export default async function CashierAccountPage() {
         <p className="text-sm text-neutral-600">{t('signOutHint')}</p>
       </form>
     </section>
+  );
+}
+
+export default function CashierAccountPage() {
+  return (
+    <CashierShell>
+      <AccountScreen />
+    </CashierShell>
   );
 }
