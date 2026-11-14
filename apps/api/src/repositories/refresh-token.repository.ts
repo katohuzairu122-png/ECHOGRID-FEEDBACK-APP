@@ -12,6 +12,28 @@ export class RefreshTokenRepository extends BaseRepository {
     return row;
   }
 
+  /**
+   * SEC-CASHIER-R2 F7: atomically spends a cashier selection ticket. The ticket's jti becomes the primary key of a
+   * tombstone row (client 'web' with a marker hash no token can equal, born revoked, session-less, so it is never a live session and no
+   * session list or liveness check can see it; the client CHECK allows only web/cashier, so no migration is needed). The insert succeeds for exactly one caller; a replay or a concurrent twin conflicts
+   * on the key and gets false. The row expires with the ticket and is swept like any expired token row.
+   */
+  async consumeCashierTicket(input: { jti: string; userId: string; expiresAt: Date }): Promise<boolean> {
+    const rows = await this.db
+      .insert(refreshTokens)
+      .values({
+        id: input.jti,
+        userId: input.userId,
+        tokenHash: 'cashier-selection-ticket',
+        expiresAt: input.expiresAt,
+        revokedAt: new Date(),
+        client: 'web',
+      })
+      .onConflictDoNothing()
+      .returning({ id: refreshTokens.id });
+    return rows.length === 1;
+  }
+
   async findById(id: string): Promise<RefreshToken | undefined> {
     return this.db.query.refreshTokens.findFirst({ where: eq(refreshTokens.id, id) });
   }

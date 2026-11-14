@@ -94,6 +94,15 @@ function world() {
         return row;
       },
       findById: async (id: string) => tokens.get(id),
+      consumeCashierTicket: async (i: { jti: string; userId: string; expiresAt: Date }) => {
+        if (tokens.has(i.jti)) return false;
+        tokens.set(i.jti, {
+          id: i.jti, userId: i.userId, tokenHash: 't', sessionId: null, issuedAt: new Date(), expiresAt: i.expiresAt,
+          revokedAt: new Date(), replacedByTokenId: null, userAgent: null, ipAddress: null, client: 'web',
+          businessId: null, branchId: null, deviceLabel: null,
+        });
+        return true;
+      },
       rotate: async (id: string, next: string) => {
         const row = tokens.get(id);
         if (!row || row.revokedAt) return false;
@@ -255,12 +264,46 @@ describe('sign-in', () => {
       branchId: BR_A2,
     });
     expect(done.session).toMatchObject({ businessId: BIZ_A, branchId: BR_A2 });
-    // A business-wide owner may also choose no branch.
+    // A business-wide owner may also choose no branch (with a fresh sign-in: a ticket is single-use).
+    const second = await cashierService(w).login({ email: u.email, password: u.password });
+    if (second.status !== 'selection_required') throw new Error('unreachable');
     const nobranch = await cashierService(w).createSession({
-      ticket: first.ticket,
+      ticket: second.ticket,
       businessId: BIZ_A,
     });
     expect(nobranch.session.branchId).toBeNull();
+  });
+
+  it('SEC-CASHIER-R2 F7: a selection ticket is single-use, including against a concurrent twin', async () => {
+    const u = await w.addUser('once');
+    w.grants.push({ userId: u.id, businessId: BIZ_A, branchId: null, role: 'Owner' });
+    const first = await cashierService(w).login({ email: u.email, password: u.password });
+    if (first.status !== 'selection_required') throw new Error('expected selection');
+    const attempt = () => cashierService(w).createSession({ ticket: first.ticket, businessId: BIZ_A, branchId: BR_A1 });
+    const results = await Promise.allSettled([attempt(), attempt()]);
+    expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
+    const lost = results.find((r) => r.status === 'rejected') as PromiseRejectedResult;
+    expect(lost.reason).toMatchObject({ code: 'CASHIER_SELECTION_INVALID' });
+    await expect(attempt()).rejects.toMatchObject({ code: 'CASHIER_SELECTION_INVALID' });
+    // Exactly one live cashier session; the spent ticket is a revoked tombstone, never a session.
+    expect([...w.tokens.values()].filter((t) => t.client === 'cashier' && !t.revokedAt)).toHaveLength(1);
+  });
+
+  it('SEC-CASHIER-R2 F7: a ticket is void after the password changes, and a refused attempt does not spend it', async () => {
+    const u = await w.addUser('pwchange');
+    w.grants.push({ userId: u.id, businessId: BIZ_A, branchId: null, role: 'Owner' });
+    const first = await cashierService(w).login({ email: u.email, password: u.password });
+    if (first.status !== 'selection_required') throw new Error('expected selection');
+    // A bad choice is refused before the ticket is spent...
+    await expect(
+      cashierService(w).createSession({ ticket: first.ticket, businessId: BIZ_B }),
+    ).rejects.toMatchObject({ code: 'CASHIER_ACCESS_DENIED' });
+    // ...then the password changes (a different stored hash) and the ticket no longer works.
+    w.users.get(u.id)!.passwordHash = 'changed-hash';
+    await expect(
+      cashierService(w).createSession({ ticket: first.ticket, businessId: BIZ_A, branchId: BR_A1 }),
+    ).rejects.toMatchObject({ code: 'CASHIER_SELECTION_INVALID' });
+    expect([...w.tokens.values()].filter((t) => t.client === 'cashier')).toHaveLength(0);
   });
 
   it('refuses a selection for a business or branch the user cannot serve, and a branch-scoped user choosing no branch', async () => {

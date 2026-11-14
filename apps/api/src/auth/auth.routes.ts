@@ -130,6 +130,15 @@ authRoutes.post('/cashier/login', cashierAuthRateLimit('login'), async (c) => {
       businessId: result.session.businessId,
       details: { branchId: result.session.branchId, deviceLabel: result.session.deviceLabel },
     });
+  } else {
+    // SEC-CASHIER-R2 F9: the first step of a two-step sign-in is recorded too. Business-scoped only when every choice is one business.
+    const businesses = new Set(result.choices.map((choice) => choice.businessId));
+    c.set('auditMetadata', {
+      action: 'auth.cashier_selection_required',
+      entityType: 'session',
+      ...(businesses.size === 1 ? { businessId: [...businesses][0]! } : {}),
+      details: { choices: result.choices.length },
+    });
   }
   const { userId: _userId, ...publicResult } = result;
   return ok(c, publicResult);

@@ -123,7 +123,7 @@ describe('cashier auth routes', () => {
       data: Record<string, unknown>;
     };
     expect(body.data).toEqual({ status: 'selection_required', ticket: 't', choices: [] });
-    expect(audit).toBeUndefined();
+    expect(audit).toMatchObject({ action: 'auth.cashier_selection_required' });
   });
 
   it('maps service errors to their statuses', async () => {
