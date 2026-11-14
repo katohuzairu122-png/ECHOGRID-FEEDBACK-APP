@@ -96,6 +96,65 @@
       "revokedAll": "Tous les appareils de caisse sont déconnectés.",
       "failed": "Impossible de déconnecter l'appareil. Réessayez.",
       "loadFailed": "Impossible de charger les sessions de caisse."
+    },
+    "activity": {
+      "title": "Activité de caisse",
+      "subtitle": "Ce qui s'est passé au comptoir : recherches, vérifications de QR, points, validations et sessions d'appareils.",
+      "back": "Retour à l'application de caisse",
+      "open": "Voir l'activité de caisse",
+      "filters": {
+        "category": "Activité",
+        "branch": "Succursale",
+        "allBranches": "Toutes les succursales",
+        "all": "Toute l'activité",
+        "apply": "Appliquer les filtres"
+      },
+      "categories": {
+        "customer_lookup": "Recherches de clients",
+        "qr_verification": "Vérification de QR",
+        "points_issued": "Points attribués",
+        "redemption_attempt": "Tentatives de validation",
+        "redemption_success": "Validations réussies",
+        "redemption_failure": "Validations échouées",
+        "session": "Sessions d'appareils",
+        "security": "Événements de sécurité"
+      },
+      "columns": {
+        "when": "Quand",
+        "what": "Activité",
+        "who": "Employé",
+        "branch": "Succursale",
+        "outcome": "Résultat",
+        "reference": "Référence"
+      },
+      "outcome": {
+        "success": "Réussi",
+        "failure": "Échec"
+      },
+      "actions": {
+        "loyalty.customer_lookup": "Client trouvé par téléphone",
+        "loyalty.customer_lookup_miss": "Recherche par téléphone sans membre",
+        "cashier.qr_verified": "QR client vérifié",
+        "cashier.qr_rejected": "QR client refusé",
+        "loyalty.purchase_recorded": "Achat enregistré, points attribués",
+        "loyalty.purchase_recorded_via_lookup": "Achat enregistré après recherche par téléphone",
+        "cashier.redemption_lookup": "Code de récompense vérifié",
+        "loyalty.redemption_confirmed": "Validation confirmée",
+        "cashier.redemption_rejected": "Validation refusée",
+        "cashier_session.revoked": "Appareil de caisse déconnecté par un responsable",
+        "cashier_session.revoked_all": "Tous les appareils de caisse déconnectés",
+        "auth.cashier_login": "Caissier connecté",
+        "auth.cashier_logout": "Caissier déconnecté",
+        "security.authentication_failed": "Connexion refusée",
+        "security.authorization_failed": "Action refusée"
+      },
+      "businessWide": "Toutes les succursales",
+      "empty": "Aucune activité de caisse ne correspond à ces filtres.",
+      "older": "Afficher l'activité plus ancienne",
+      "loadFailed": "Impossible de charger l'activité de caisse.",
+      "noAccess": "Votre rôle ne permet pas de voir l'activité de caisse. Demandez au propriétaire ou à un administrateur.",
+      "branchRequired": "Choisissez une succursale pour voir son activité.",
+      "correlation": "ID de référence"
     }
   }
 }

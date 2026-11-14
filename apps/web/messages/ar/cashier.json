@@ -96,6 +96,65 @@
       "revokedAll": "تم تسجيل خروج كل أجهزة الصندوق.",
       "failed": "تعذّر تسجيل خروج الجهاز. حاول مرة أخرى.",
       "loadFailed": "تعذّر تحميل جلسات الصندوق."
+    },
+    "activity": {
+      "title": "نشاط الصندوق",
+      "subtitle": "ما حدث عند الصندوق: البحث والتحقق من رموز QR والنقاط والاستبدالات وجلسات الأجهزة.",
+      "back": "العودة إلى تطبيق الصندوق",
+      "open": "عرض نشاط الصندوق",
+      "filters": {
+        "category": "النشاط",
+        "branch": "الفرع",
+        "allBranches": "كل الفروع",
+        "all": "كل النشاط",
+        "apply": "تطبيق التصفية"
+      },
+      "categories": {
+        "customer_lookup": "البحث عن العملاء",
+        "qr_verification": "التحقق من QR",
+        "points_issued": "النقاط الممنوحة",
+        "redemption_attempt": "محاولات الاستبدال",
+        "redemption_success": "استبدالات ناجحة",
+        "redemption_failure": "استبدالات فاشلة",
+        "session": "جلسات الأجهزة",
+        "security": "أحداث الأمان"
+      },
+      "columns": {
+        "when": "الوقت",
+        "what": "النشاط",
+        "who": "الموظف",
+        "branch": "الفرع",
+        "outcome": "النتيجة",
+        "reference": "المرجع"
+      },
+      "outcome": {
+        "success": "نجح",
+        "failure": "فشل"
+      },
+      "actions": {
+        "loyalty.customer_lookup": "تم العثور على العميل بالهاتف",
+        "loyalty.customer_lookup_miss": "البحث بالهاتف لم يجد عضوًا",
+        "cashier.qr_verified": "تم التحقق من QR العميل",
+        "cashier.qr_rejected": "تم رفض QR العميل",
+        "loyalty.purchase_recorded": "تم تسجيل الشراء ومنح النقاط",
+        "loyalty.purchase_recorded_via_lookup": "تم تسجيل الشراء بعد البحث بالهاتف",
+        "cashier.redemption_lookup": "تم فحص رمز الاستبدال",
+        "loyalty.redemption_confirmed": "تم تأكيد الاستبدال",
+        "cashier.redemption_rejected": "تم رفض الاستبدال",
+        "cashier_session.revoked": "أنهى المدير جلسة جهاز الصندوق",
+        "cashier_session.revoked_all": "تم إنهاء جلسات كل أجهزة الصندوق",
+        "auth.cashier_login": "سجّل أمين الصندوق الدخول",
+        "auth.cashier_logout": "سجّل أمين الصندوق الخروج",
+        "security.authentication_failed": "تم رفض تسجيل الدخول",
+        "security.authorization_failed": "تم رفض الإجراء"
+      },
+      "businessWide": "كل الفروع",
+      "empty": "لا يوجد نشاط صندوق مطابق لهذه التصفية.",
+      "older": "عرض نشاط أقدم",
+      "loadFailed": "تعذّر تحميل نشاط الصندوق.",
+      "noAccess": "دورك لا يتيح عرض نشاط الصندوق. اطلب ذلك من المالك أو أحد المسؤولين.",
+      "branchRequired": "اختر فرعًا لعرض نشاطه.",
+      "correlation": "معرّف المرجع"
     }
   }
 }

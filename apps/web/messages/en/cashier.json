@@ -96,6 +96,65 @@
       "revokedAll": "All cashier devices signed out.",
       "failed": "Could not sign the device out. Try again.",
       "loadFailed": "Could not load cashier sessions."
+    },
+    "activity": {
+      "title": "Cashier activity",
+      "subtitle": "What happened at the counter: lookups, QR checks, points, redemptions and device sessions.",
+      "back": "Back to Cashier app",
+      "open": "View cashier activity",
+      "filters": {
+        "category": "Activity",
+        "branch": "Branch",
+        "allBranches": "All branches",
+        "all": "All activity",
+        "apply": "Apply filters"
+      },
+      "categories": {
+        "customer_lookup": "Customer lookups",
+        "qr_verification": "QR verification",
+        "points_issued": "Points issued",
+        "redemption_attempt": "Redemption attempts",
+        "redemption_success": "Successful redemptions",
+        "redemption_failure": "Failed redemptions",
+        "session": "Device sessions",
+        "security": "Security events"
+      },
+      "columns": {
+        "when": "When",
+        "what": "Activity",
+        "who": "Staff member",
+        "branch": "Branch",
+        "outcome": "Outcome",
+        "reference": "Reference"
+      },
+      "outcome": {
+        "success": "Success",
+        "failure": "Failed"
+      },
+      "actions": {
+        "loyalty.customer_lookup": "Customer found by phone",
+        "loyalty.customer_lookup_miss": "Phone lookup found no member",
+        "cashier.qr_verified": "Customer QR verified",
+        "cashier.qr_rejected": "Customer QR rejected",
+        "loyalty.purchase_recorded": "Purchase recorded, points issued",
+        "loyalty.purchase_recorded_via_lookup": "Purchase recorded after phone lookup",
+        "cashier.redemption_lookup": "Redemption code checked",
+        "loyalty.redemption_confirmed": "Redemption confirmed",
+        "cashier.redemption_rejected": "Redemption rejected",
+        "cashier_session.revoked": "Cashier device signed out by manager",
+        "cashier_session.revoked_all": "All cashier devices signed out",
+        "auth.cashier_login": "Cashier signed in",
+        "auth.cashier_logout": "Cashier signed out",
+        "security.authentication_failed": "Sign-in refused",
+        "security.authorization_failed": "Action refused"
+      },
+      "businessWide": "All branches",
+      "empty": "No cashier activity matches these filters.",
+      "older": "Show older activity",
+      "loadFailed": "Could not load cashier activity.",
+      "noAccess": "Your role cannot view cashier activity. Ask the business owner or an administrator.",
+      "branchRequired": "Choose a branch to view its activity.",
+      "correlation": "Reference ID"
     }
   }
 }

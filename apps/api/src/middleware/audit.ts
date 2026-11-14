@@ -5,6 +5,8 @@ import type { TenantVariables } from './tenant-context';
 import { createDb } from '../db/client';
 import { createRepositories } from '../repositories';
 import { AppError } from '../lib/errors';
+import { cashierRequestAudit } from '../cashier-activity/categories';
+import { toApiPath } from './cashier-scope';
 
 export type AuditVariables = {
   /** Set only after a domain service has committed its semantic audit row
@@ -67,6 +69,10 @@ export const auditTrail = createMiddleware<{
             method: c.req.method,
             path: new URL(c.req.url).pathname,
             errorCode: err.code,
+            // CASHIER-PWA-01 C7: a refusal of a verified cashier token is cashier security history.
+            ...(c.get('cashier')
+              ? { client: 'cashier', branchId: c.get('cashier')?.branchId ?? null, outcome: 'failure' }
+              : {}),
           },
           ipAddress: c.req.header('cf-connecting-ip') ?? null,
           userAgent: c.req.header('user-agent') ?? null,
@@ -76,6 +82,40 @@ export const auditTrail = createMiddleware<{
       }
     } catch (auditErr) {
       console.error('Failed to write security audit log entry:', auditErr);
+    }
+  };
+
+  const recordCashierRequest = async (row: { action: string; entityType: string }, status: number) => {
+    try {
+      const cashier = c.get('cashier');
+      const { db, close } = await createDb(c.env.HYPERDRIVE);
+      try {
+        await createRepositories(db).auditLog.record({
+          businessId: cashier?.businessId ?? null,
+          actorUserId: c.get('userId') ?? null,
+          action: row.action,
+          entityType: row.entityType,
+          entityId: null,
+          metadata: {
+            client: 'cashier',
+            branchId: cashier?.branchId ?? null,
+            outcome: status >= 400 ? 'failure' : 'success',
+            ...(status >= 400
+              ? {
+                  httpStatus: status,
+                  ...(c.error instanceof AppError ? { errorCode: c.error.code } : {}),
+                }
+              : {}),
+            requestId: c.req.header('cf-ray') ?? null,
+          },
+          ipAddress: c.req.header('cf-connecting-ip') ?? null,
+          userAgent: c.req.header('user-agent') ?? null,
+        });
+      } finally {
+        c.executionCtx.waitUntil(close());
+      }
+    } catch (auditErr) {
+      console.error('Failed to write cashier audit log entry:', auditErr);
     }
   };
 
@@ -96,6 +136,20 @@ export const auditTrail = createMiddleware<{
     return;
   }
 
+  // CASHIER-PWA-01 C7: cashier counter requests that would otherwise leave no row (QR verification, redemption
+  // lookups, rejected redemptions) are recorded here, for a verified cashier token only. 401/403 refusals were
+  // already recorded above as security events.
+  const cashier = c.get('cashier');
+  if (cashier && c.get('userId')) {
+    const apiPath = toApiPath(new URL(c.req.url).pathname);
+    const status = c.error instanceof AppError ? c.error.status : c.res.status;
+    const special = apiPath ? cashierRequestAudit(c.req.method, apiPath, status) : null;
+    if (special) {
+      await recordCashierRequest(special, status);
+      return;
+    }
+  }
+
   if (!MUTATING_METHODS.has(c.req.method)) return;
   if (c.res.status < 200 || c.res.status >= 300) return;
 
@@ -111,12 +165,22 @@ export const auditTrail = createMiddleware<{
     // auditMetadata. This is the accountability guarantee the whole feature
     // depends on, so it can't be something an individual route forgets.
     const impersonatedBy = c.get('impersonatedBy');
-    const details = impersonatedBy
+    const baseDetails = impersonatedBy
       ? {
           ...(meta?.details && typeof meta.details === 'object' ? meta.details : {}),
           impersonatedBy,
         }
       : (meta?.details ?? null);
+    // CASHIER-PWA-01 C7: mark rows produced by a cashier token so the activity history can select them.
+    const details = c.get('cashier')
+      ? {
+          ...(baseDetails && typeof baseDetails === 'object' ? baseDetails : {}),
+          client: 'cashier',
+          branchId: c.get('cashier')?.branchId ?? null,
+          outcome: 'success',
+          requestId: c.req.header('cf-ray') ?? null,
+        }
+      : baseDetails;
 
     const { db, close } = await createDb(c.env.HYPERDRIVE);
     try {

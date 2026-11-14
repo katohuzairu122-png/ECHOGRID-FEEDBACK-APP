@@ -141,6 +141,18 @@ describe('CustomerLookupService.lookup', () => {
     }
   });
 
+  it('C7: marks hit and miss rows as cashier activity (with the branch) only for a cashier-scoped request', async () => {
+    const hit = build();
+    await hit.service.lookup({ ...args, cashier: { branchId: 'branch-1' } });
+    const miss = build({ customer: null });
+    await failure(miss.service.lookup({ ...args, cashier: { branchId: null } }));
+    expect(hit.audit[0]!.metadata).toMatchObject({ client: 'cashier', branchId: 'branch-1' });
+    expect(miss.audit[0]!.metadata).toMatchObject({ client: 'cashier', branchId: null });
+    const plain = build();
+    await plain.service.lookup(args);
+    expect(plain.audit[0]!.metadata).not.toHaveProperty('client');
+  });
+
   it('gives an identical response for an unknown number, a non-member, a suspended customer and a member without an account', async () => {
     const cases = [
       build({ customer: null }), // unknown number

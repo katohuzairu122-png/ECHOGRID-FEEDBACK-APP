@@ -1,5 +1,5 @@
 import 'server-only';
-import { API_BASE_URL, parseEnvelope } from '../api-client';
+import { API_BASE_URL, parseEnvelope, ApiError } from '../api-client';
 import {
   clearCashierSession,
   getCashierContext,
@@ -31,11 +31,15 @@ export async function postCashierAuth<T>(path: string, body: unknown): Promise<T
   return parseEnvelope<T>(response);
 }
 
+/** Refusals that mean this session is over for good. Anything else (network, 5xx, rate limit, a concurrent rotation) is transient. */
+const DEFINITIVE_REFRESH_FAILURES = new Set(['INVALID_REFRESH_TOKEN', 'CASHIER_ACCESS_REVOKED', 'ACCOUNT_INACTIVE']);
+
 /**
  * Rotates the cashier refresh token and stores the new pair. ONLY call this where cookies can be written (a server
  * action or a route handler): rotating without persisting the new token would strand the session and trip replay
- * protection. Returns false, with the cashier cookies cleared, when the session can no longer be refreshed (revoked,
- * expired, access removed, replayed).
+ * protection. Returns false when it cannot refresh. The cashier cookies are cleared ONLY for a definitive refusal
+ * (revoked, expired, access removed, replayed): a network blip, a 5xx or a concurrent rotation by another request
+ * leaves them in place, so a flaky counter connection or two racing requests never sign a live session out.
  */
 export async function refreshCashierSession(): Promise<boolean> {
   const refreshToken = await getCashierRefreshToken();
@@ -44,8 +48,10 @@ export async function refreshCashierSession(): Promise<boolean> {
     const next = await postCashierAuth<CashierSessionPayload>('refresh', { refreshToken });
     await setCashierSession(next);
     return true;
-  } catch {
-    await clearCashierSession();
+  } catch (err) {
+    if (err instanceof ApiError && err.code && DEFINITIVE_REFRESH_FAILURES.has(err.code)) {
+      await clearCashierSession();
+    }
     return false;
   }
 }

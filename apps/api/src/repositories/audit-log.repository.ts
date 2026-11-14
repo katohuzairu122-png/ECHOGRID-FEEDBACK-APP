@@ -1,5 +1,6 @@
-import { eq, and, gte, lte, count } from 'drizzle-orm';
-import { auditLog } from '../db/schema';
+import { eq, and, or, gte, lte, lt, inArray, count, sql, desc, type SQL } from 'drizzle-orm';
+import { auditLog, users } from '../db/schema';
+import { MARKED_ACTIONS, SESSION_ACTIONS, type ActivityFilter } from '../cashier-activity/categories';
 import { BaseRepository } from './base.repository';
 
 export type AuditLogEntry = typeof auditLog.$inferSelect;
@@ -138,5 +139,68 @@ export class AuditLogRepository extends BaseRepository {
       actorEmail: actor?.email ?? null,
       actorFullName: actor?.fullName ?? null,
     }));
+  }
+
+  /**
+   * CASHIER-PWA-01 C7: one page of cashier activity for exactly one business. A read-only view over existing rows (no new
+   * persistence). `branchIds` null means business-wide scope; otherwise only rows stamped with one of those branches are
+   * visible, so rows with no branch (business-level actions) stay business-wide only. Deterministic keyset order:
+   * created_at DESC, id DESC. Fetches limit + 1 rows so the caller can tell whether another page exists.
+   */
+  async listCashierActivity(input: {
+    businessId: string;
+    branchIds: string[] | null;
+    branchId?: string | undefined;
+    actorUserId?: string | undefined;
+    selection?: ActivityFilter[] | undefined;
+    from?: Date | undefined;
+    to?: Date | undefined;
+    before?: { createdAt: Date; id: string } | undefined;
+    limit: number;
+  }): Promise<(AuditLogEntry & { actorFullName: string | null })[]> {
+    const marker = sql`${auditLog.metadata} ->> 'client' = 'cashier'`;
+    const actionIn = (actions: readonly string[]) => inArray(auditLog.action, [...actions]);
+    const conditions: (SQL | undefined)[] = [
+      eq(auditLog.businessId, input.businessId),
+      or(actionIn(SESSION_ACTIONS), and(actionIn(MARKED_ACTIONS), marker)),
+    ];
+    if (input.selection) {
+      conditions.push(
+        or(
+          ...input.selection.map((f) =>
+            f.outcome
+              ? and(actionIn(f.actions), sql`${auditLog.metadata} ->> 'outcome' = ${f.outcome}`)
+              : actionIn(f.actions),
+          ),
+        ),
+      );
+    }
+    const rowBranch = sql`${auditLog.metadata} ->> 'branchId'`;
+    if (input.branchIds) {
+      conditions.push(input.branchIds.length > 0 ? sql`${rowBranch} IN (${sql.join(input.branchIds.map((b) => sql`${b}`), sql`, `)})` : sql`false`);
+    }
+    if (input.branchId) conditions.push(sql`${rowBranch} = ${input.branchId}`);
+    if (input.actorUserId) conditions.push(eq(auditLog.actorUserId, input.actorUserId));
+    if (input.from) conditions.push(gte(auditLog.createdAt, input.from));
+    if (input.to) conditions.push(lte(auditLog.createdAt, input.to));
+    // Timestamps are microsecond in the database but millisecond in JavaScript cursors, so the keyset is taken on the
+    // millisecond-truncated value on both sides: a page boundary can neither skip nor repeat a row.
+    const ms = sql`date_trunc('milliseconds', ${auditLog.createdAt})`;
+    if (input.before) {
+      conditions.push(
+        or(
+          sql`${ms} < ${input.before.createdAt.toISOString()}::timestamptz`,
+          and(sql`${ms} = ${input.before.createdAt.toISOString()}::timestamptz`, lt(auditLog.id, input.before.id)),
+        ),
+      );
+    }
+    const rows = await this.db
+      .select({ entry: auditLog, actorFullName: users.fullName })
+      .from(auditLog)
+      .leftJoin(users, eq(users.id, auditLog.actorUserId))
+      .where(and(...conditions))
+      .orderBy(sql`${ms} desc`, desc(auditLog.id))
+      .limit(input.limit + 1);
+    return rows.map((r) => ({ ...r.entry, actorFullName: r.actorFullName }));
   }
 }

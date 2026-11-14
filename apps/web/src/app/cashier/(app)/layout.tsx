@@ -20,7 +20,8 @@ export default async function CashierAppLayout({ children }: { children: React.R
   if (!(await getCashierRefreshToken())) redirect('/cashier/login');
   if (!(await getCashierAccessToken())) redirect('/cashier/session/refresh');
   const ctx = await getCashierContext();
-  if (!ctx) redirect('/cashier/login');
+  // No usable context cookie: the refresh handler re-issues it from the session (and signs a dead session out).
+  if (!ctx) redirect('/cashier/session/refresh');
 
   let userName: string | null = null;
   try {
