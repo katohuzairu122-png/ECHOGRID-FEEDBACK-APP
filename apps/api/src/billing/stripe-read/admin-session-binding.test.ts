@@ -26,7 +26,7 @@ function world() {
       async touchLastLogin() { /* not needed */ },
     },
     refreshTokens: {
-      async create(i: NewRefreshToken): Promise<RefreshToken> { const r = { id: i.id as string, userId: i.userId, tokenHash: i.tokenHash, sessionId: i.sessionId ?? null, issuedAt: new Date(), expiresAt: i.expiresAt, revokedAt: null, replacedByTokenId: null, userAgent: null, ipAddress: null } as RefreshToken; rows.set(r.id, r); return r; },
+      async create(i: NewRefreshToken): Promise<RefreshToken> { const r = { id: i.id as string, userId: i.userId, tokenHash: i.tokenHash, sessionId: i.sessionId ?? null, issuedAt: new Date(), expiresAt: i.expiresAt, revokedAt: null, replacedByTokenId: null, userAgent: null, ipAddress: null, client: i.client ?? 'web', businessId: null, branchId: null, deviceLabel: null } as RefreshToken; rows.set(r.id, r); return r; },
       async findById(id: string) { return rows.get(id); },
       async rotate(id: string, by: string) { const r = rows.get(id); if (!r || r.revokedAt) return false; r.revokedAt = new Date(); r.replacedByTokenId = by; return true; },
       async revoke(id: string) { const r = rows.get(id); if (r) r.revokedAt = new Date(); },

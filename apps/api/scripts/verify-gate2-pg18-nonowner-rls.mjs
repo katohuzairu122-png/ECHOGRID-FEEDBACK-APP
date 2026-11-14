@@ -26,7 +26,7 @@ try {
   if (info.db !== 'echogrid_ci_pg18_security' || info.role !== 'echogrid' ||
       Math.floor(info.version / 10000) !== 18) throw new Error('GATE2_R5_DATABASE_MISMATCH');
   const migrations = await read(admin, 'SELECT id FROM drizzle.__drizzle_migrations');
-  if (migrations.length !== 71) throw new Error('GATE2_R5_MIGRATIONS_MISSING');
+  if (migrations.length !== 72) throw new Error('GATE2_R5_MIGRATIONS_MISSING');
 
   // The login is created ONLY in the disposable container, and never gets
   // the owner, superuser, BYPASSRLS, DDL or financial lifecycle role.

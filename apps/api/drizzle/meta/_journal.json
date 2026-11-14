@@ -498,6 +498,13 @@
       "when": 1794622580135,
       "tag": "0070_platform_customer_limited_access",
       "breakpoints": true
+    },
+    {
+      "idx": 71,
+      "version": "7",
+      "when": 1794637265568,
+      "tag": "0071_cashier_sessions",
+      "breakpoints": true
     }
   ]
 }

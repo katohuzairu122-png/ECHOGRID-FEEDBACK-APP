@@ -51,6 +51,10 @@ function now(): number {
 }
 
 export const CASHIER_CLIENT = 'cashier' as const;
+/** Cashier sessions are shorter-lived than web sessions: a counter device that is not used for this long signs out. */
+export const CASHIER_REFRESH_TOKEN_TTL_SECONDS = 12 * 60 * 60;
+/** How long a business-selection ticket (issued after a correct password when the user has several choices) lasts. */
+export const CASHIER_SELECTION_TICKET_TTL_SECONDS = 5 * 60;
 const ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export const SESSION_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
@@ -98,9 +102,10 @@ export async function signRefreshToken(
   userId: string,
   tokenId: string,
   secret: string,
+  ttlSeconds: number = REFRESH_TOKEN_TTL_SECONDS,
 ): Promise<{ token: string; expiresAt: Date }> {
   const iat = now();
-  const exp = iat + REFRESH_TOKEN_TTL_SECONDS;
+  const exp = iat + ttlSeconds;
   const payload: RefreshTokenPayload = { sub: userId, jti: tokenId, type: 'refresh', iat, exp };
   const token = await sign(payload, secret, 'HS256');
   return { token, expiresAt: new Date(exp * 1000) };
@@ -186,4 +191,27 @@ export async function verifyRefreshToken(
   const payload = (await verify(token, secret, 'HS256')) as RefreshTokenPayload;
   if (payload.type !== 'refresh') throw new Error('Not a refresh token');
   return payload;
+}
+
+/**
+ * A short-lived proof that THIS user just entered a correct password in the cashier login, used only to finish
+ * choosing a business and branch without re-sending the password. Its `type` is not `access`, so it can never verify
+ * as an access token, and it is useless anywhere except the cashier session endpoint.
+ */
+export async function signCashierSelectionTicket(userId: string, secret: string, deviceLabel?: string): Promise<string> {
+  const iat = now();
+  return sign(
+    { sub: userId, type: 'cashier_select', ...(deviceLabel ? { dl: deviceLabel } : {}), iat, exp: iat + CASHIER_SELECTION_TICKET_TTL_SECONDS },
+    secret,
+    'HS256',
+  );
+}
+
+export async function verifyCashierSelectionTicket(
+  token: string,
+  secret: string,
+): Promise<{ sub: string; deviceLabel?: string }> {
+  const payload = (await verify(token, secret, 'HS256')) as { sub?: unknown; type?: unknown; dl?: unknown };
+  if (payload.type !== 'cashier_select' || typeof payload.sub !== 'string') throw new Error('Not a selection ticket');
+  return { sub: payload.sub, ...(typeof payload.dl === 'string' ? { deviceLabel: payload.dl } : {}) };
 }

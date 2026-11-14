@@ -53,7 +53,7 @@ jobs:
           test "$(PGPASSWORD=echogrid psql -h localhost -U echogrid -d echogrid_ci_pg18_security -Atc "SELECT current_setting('server_version_num')::int / 10000")" = 18
       - name: Verify migration journal
         run: pnpm --filter @echo-grid-feedback/api db:check
-      - name: Replay all 71 migrations on disposable PostgreSQL 18
+      - name: Replay all 72 migrations on disposable PostgreSQL 18
         run: pnpm --filter @echo-grid-feedback/api db:migrate
       - name: Verify effective nonowner grants and tenant RLS
         working-directory: apps/api

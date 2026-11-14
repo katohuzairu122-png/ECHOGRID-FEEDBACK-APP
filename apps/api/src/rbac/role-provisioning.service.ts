@@ -31,7 +31,7 @@ import type { Repositories } from '../repositories';
 export const DEFAULT_ROLE_NAMES = ['Owner', 'Admin', 'Manager', 'Staff'] as const;
 export type DefaultRoleName = (typeof DEFAULT_ROLE_NAMES)[number];
 
-const DEFAULT_ROLES: Record<DefaultRoleName, string[]> = {
+export const DEFAULT_ROLES: Record<DefaultRoleName, string[]> = {
   Owner: [
     'team:invite',
     'team:remove',

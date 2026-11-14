@@ -26,6 +26,23 @@ export const loginSchema = z.object({
   password: z.string().min(1),
 });
 
+const deviceLabelSchema = z.string().trim().min(1).max(80).optional();
+
+/** Cashier sign-in (CASHIER-PWA-01 C3). The same credentials as the web login, plus an optional device name. */
+export const cashierLoginSchema = z.object({
+  email: z.email().trim().toLowerCase(),
+  password: z.string().min(1),
+  deviceLabel: deviceLabelSchema,
+});
+
+/** Finishes a cashier sign-in when the user has more than one place to serve. */
+export const cashierSessionSchema = z.object({
+  ticket: z.string().min(1).max(4096),
+  businessId: z.uuid(),
+  branchId: z.uuid().optional(),
+  deviceLabel: deviceLabelSchema,
+});
+
 export const refreshSchema = z.object({
   refreshToken: z.string().min(1),
 });

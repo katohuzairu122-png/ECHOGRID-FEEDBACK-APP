@@ -86,6 +86,10 @@ function createFakeRepos() {
           replacedByTokenId: null,
           userAgent: input.userAgent ?? null,
           ipAddress: input.ipAddress ?? null,
+          client: input.client ?? 'web',
+          businessId: input.businessId ?? null,
+          branchId: input.branchId ?? null,
+          deviceLabel: input.deviceLabel ?? null,
         };
         refreshTokens.set(row.id, row);
         return row;
