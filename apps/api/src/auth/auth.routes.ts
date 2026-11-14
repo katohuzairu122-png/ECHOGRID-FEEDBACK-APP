@@ -165,7 +165,7 @@ authRoutes.post('/cashier/logout', async (c) => {
   const ended = await withCashierService(c, (service) => service.logout(body.refreshToken));
   if (ended) {
     c.set('userId', ended.userId);
-    c.set('auditMetadata', { action: 'auth.cashier_logout', entityType: 'session', businessId: ended.businessId });
+    c.set('auditMetadata', { action: 'auth.cashier_logout', entityType: 'session', businessId: ended.businessId, details: { branchId: ended.branchId } });
   }
   return c.body(null, 204);
 });

@@ -13,6 +13,7 @@ import { rateLimit } from './middleware/rate-limit';
 import { auditTrail } from './middleware/audit';
 import { authRoutes } from './auth/auth.routes';
 import { cashierSessionRoutes } from './cashier-sessions/cashier-sessions.routes';
+import { cashierActivityRoutes } from './cashier-activity/cashier-activity.routes';
 import { businessRoutes } from './businesses/business.routes';
 import { businessCategoryRoutes } from './businesses/business-category.routes';
 import { teamRoutes } from './team/team.routes';
@@ -147,6 +148,7 @@ api.use('*', auditTrail);
 
 api.route('/auth', authRoutes);
 api.route('/cashier-sessions', cashierSessionRoutes);
+api.route('/cashier-activity', cashierActivityRoutes);
 api.route('/businesses', businessRoutes);
 api.route('/business-categories', businessCategoryRoutes);
 api.route('/team', teamRoutes);

@@ -84,6 +84,8 @@ export class CustomerLookupService {
     staffUserId: string;
     ipAddress?: string | null;
     userAgent?: string | null;
+    /** Set when the request came from a cashier-scoped token (CASHIER-PWA-01 C7): marks the audit rows as cashier activity. */
+    cashier?: { branchId: string | null } | undefined;
   }): Promise<LookupCustomerResultDto> {
     const since = new Date(this.clock() - LOOKUP_MISS_WINDOW_MS);
     const misses = await this.repos.auditLog.countSince({
@@ -101,6 +103,7 @@ export class CustomerLookupService {
     }
 
     const phoneHash = await phoneAuditHash(input.phone, this.secrets.QR_TOKEN_SECRET);
+    const cashierMark = input.cashier ? { client: 'cashier', branchId: input.cashier.branchId } : {};
     const customer = await this.repos.customers.findByPhone(input.phone);
     const membership =
       customer && customer.status === 'active'
@@ -118,7 +121,7 @@ export class CustomerLookupService {
         action: LOOKUP_AUDIT_MISS,
         entityType: 'customer_lookup',
         entityId: null,
-        metadata: { phoneHash },
+        metadata: { phoneHash, ...cashierMark },
         ipAddress: input.ipAddress ?? null,
         userAgent: input.userAgent ?? null,
       });
@@ -131,7 +134,7 @@ export class CustomerLookupService {
       action: LOOKUP_AUDIT_HIT,
       entityType: 'customer_lookup',
       entityId: customer.id,
-      metadata: { phoneHash },
+      metadata: { phoneHash, ...cashierMark },
       ipAddress: input.ipAddress ?? null,
       userAgent: input.userAgent ?? null,
     });

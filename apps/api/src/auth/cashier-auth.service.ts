@@ -232,7 +232,9 @@ export class CashierAuthService {
   }
 
   /** Ends only the cashier session the token belongs to. A web token, or anything unrecognised, does nothing. */
-  async logout(rawRefreshToken: string): Promise<{ userId: string; businessId: string } | null> {
+  async logout(
+    rawRefreshToken: string,
+  ): Promise<{ userId: string; businessId: string; branchId: string | null } | null> {
     const payload = await this.verifyRefresh(rawRefreshToken).catch(() => null);
     if (!payload) return null;
     const stored = await this.repos.refreshTokens.findById(payload.jti);
@@ -240,7 +242,7 @@ export class CashierAuthService {
       return null;
     await this.repos.refreshTokens.revoke(stored.id);
     await this.repos.refreshTokens.revokeSession(stored.userId, stored.sessionId);
-    return { userId: stored.userId, businessId: stored.businessId };
+    return { userId: stored.userId, businessId: stored.businessId, branchId: stored.branchId };
   }
 
   /** Every business and branch where this user currently holds the cashier permission. */

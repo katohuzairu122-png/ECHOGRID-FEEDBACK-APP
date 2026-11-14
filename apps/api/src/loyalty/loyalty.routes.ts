@@ -216,6 +216,7 @@ loyaltyRoutes.post('/actions/lookup-customer', requirePermission('loyalty:serve'
       staffUserId: c.get('userId'),
       ipAddress: c.req.header('cf-connecting-ip') ?? null,
       userAgent: c.req.header('user-agent') ?? null,
+      cashier: c.get('cashier') ? { branchId: c.get('cashier')?.branchId ?? null } : undefined,
     });
     // The service wrote the audit row itself (hits and misses), so the generic request audit is skipped.
     c.set('auditAlreadyRecorded', true);
