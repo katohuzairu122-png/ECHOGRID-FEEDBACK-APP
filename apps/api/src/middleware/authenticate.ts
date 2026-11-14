@@ -45,6 +45,15 @@ export const authenticate = createMiddleware<{ Bindings: Bindings; Variables: Au
       throw new AppError('Invalid or expired access token.', 401, 'UNAUTHENTICATED');
     }
 
+    // SEC-CASHIER-R1 (F2): the token's signature, expiry and claims have just been verified, so its user and
+    // business/branch binding are trustworthy for ATTRIBUTION. Record them now, before any refusal below (route not
+    // allowed, revoked session, inactive user, context mismatch later on), so those refusals reach the security audit
+    // with the right actor and business. This grants nothing: authorization still runs in full.
+    if (payload.client === 'cashier' && payload.bid) {
+      c.set('userId', payload.sub);
+      c.set('cashier', { businessId: payload.bid, branchId: payload.brid ?? null });
+    }
+
     // A cashier-scoped token is accepted only on the explicit allow-list. The global guard has already applied the same
     // rule; checking again here keeps authenticate safe even if it is ever mounted without the guard.
     if (payload.client === 'cashier') {

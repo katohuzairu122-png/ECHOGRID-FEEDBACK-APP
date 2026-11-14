@@ -7,6 +7,7 @@ import { resolveTenantContext, type TenantVariables } from '../middleware/tenant
 import { ok } from '../lib/response';
 import { AppError } from '../lib/errors';
 import { CASHIER_CATEGORIES, categorize, filterFor, safeReference, type CashierCategory } from './categories';
+import { resolveActivityScope } from './scope';
 
 type Env = { Bindings: Bindings; Variables: AuthVariables & TenantVariables };
 
@@ -53,10 +54,6 @@ export function decodeCursor(cursor: string): { createdAt: Date; id: string } {
 }
 
 cashierActivityRoutes.get('/', authenticate, resolveTenantContext, async (c) => {
-  const permissions = c.get('permissions');
-  if (!permissions.has('audit:view') && !permissions.has('loyalty:accounts:view')) {
-    throw new AppError('Missing required permission to view cashier activity.', 403, 'PERMISSION_DENIED');
-  }
   const businessId = c.get('businessId');
   const q = new URL(c.req.url).searchParams;
 
@@ -75,9 +72,18 @@ cashierActivityRoutes.get('/', authenticate, resolveTenantContext, async (c) => 
   const { db, close } = await createDb(c.env.HYPERDRIVE);
   try {
     const repos = createRepositories(db);
-    const grants = await repos.userBusinessRoles.listForUserAtBusiness(c.get('userId'), businessId);
-    const wide = grants.some((g) => g.branchId === null);
-    const branchIds = wide ? null : grants.flatMap((g) => (g.branchId ? [g.branchId] : []));
+    // F1: visibility is decided per branch from effective permissions, never from "any role at that branch".
+    const scope = await resolveActivityScope(repos, c.get('userId'), businessId);
+    if (!scope.all && scope.branchIds.length === 0) {
+      throw new AppError('Missing required permission to view cashier activity.', 403, 'PERMISSION_DENIED');
+    }
+    const branchIds = scope.all ? null : scope.branchIds;
+    // The branch the caller is acting for (X-Branch-Id) must itself be one they may read: a header for a branch where
+    // they only hold a non-viewing role cannot be used to borrow visibility granted elsewhere.
+    const actingBranch = c.get('branchId');
+    if (branchIds && actingBranch && !branchIds.includes(actingBranch)) {
+      throw new AppError('You do not have access to this branch.', 403, 'BRANCH_ACCESS_DENIED');
+    }
     if (branchFilter && branchIds && !branchIds.includes(branchFilter)) {
       throw new AppError('You do not have access to this branch.', 403, 'BRANCH_ACCESS_DENIED');
     }
