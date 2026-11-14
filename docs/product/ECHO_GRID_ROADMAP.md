@@ -83,6 +83,10 @@ Step 1, in-app unread indicators, is **done and in production** (#399): count ba
 
 Done: cashier form cleanup and one-field lookup; watermark; quicker customer feedback form (rating plus optional chips, one comment box) (#401); feedback inbox filters as dropdowns (#402, one choice per category and urgency). Not started: the signup page has no Echo Grid background watermark (owner screenshot, 2026-11-13); simplify the business-side form builder (Form name, Key, Question, Type, Required) for quick setup; the branch dropdown on the feedback inbox still drops the other filters when changed.
 
+### L. PLATFORM-CUSTOMERS-01 (development only, draft PR)
+
+Platform "Customers" list and moderation per the 2026-11-13 D3 amendment (see ACCESS_MODEL_01_DESIGN.md section 3a): masked list, find by id or full phone, warn/suspend (timed)/ban/lift, all audited, admin-only actions, suspended or banned customers lose access to every business. Built on a draft PR; **migration `0069` is not applied, nothing is deployed**. Not included: revealing personal details (needs MFA and a reason), export, and a "limited access" intermediate state (the owner mentioned misuse of limited access; its exact meaning is still to be defined).
+
 ### K. Access model, privileged-access security and Web stability (designed, not built)
 
 Documents (merged): `docs/architecture/builds/ACCESS-MODEL/ACCESS_MODEL_01_DESIGN.md` (three audiences, two places each, chooser after any authentication, separate customer and staff identity domains, owner-ratified decisions D1 to D6, recorded 2026-11-13), `ACCESS_SEC_01_ASSESSMENT.md` (platform administrator security) and `WEB_1102_INCIDENT_REPORT.md`. The decisions D1 to D6 are **proposed and not yet ratified by the owner**. Also see `docs/PLATFORM-CONSOLE-GUIDE.md`.

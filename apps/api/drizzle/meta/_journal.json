@@ -484,6 +484,13 @@
       "when": 1794498300052,
       "tag": "0068_customer_auth_sessions",
       "breakpoints": true
+    },
+    {
+      "idx": 69,
+      "version": "7",
+      "when": 1794605924675,
+      "tag": "0069_platform_customer_sanctions",
+      "breakpoints": true
     }
   ]
 }

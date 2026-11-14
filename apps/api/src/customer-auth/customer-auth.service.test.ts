@@ -27,6 +27,7 @@ function createFakeRepos() {
           phoneVerifiedAt: (input.phoneVerifiedAt as Date | undefined) ?? null,
           preferredLocale: null,
           status: input.status ?? 'active',
+          suspendedUntil: null,
           createdAt: new Date(),
           createdBy: input.createdBy ?? null,
           updatedAt: new Date(),

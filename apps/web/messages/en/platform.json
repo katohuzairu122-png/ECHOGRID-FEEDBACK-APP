@@ -13,7 +13,8 @@
     },
     "menu": "Admin navigation",
     "more": "More",
-    "close": "Close"
+    "close": "Close",
+    "customers": "Customers"
   },
   "accessDenied": {
     "title": "Platform admin access required",
@@ -181,6 +182,55 @@
       "saving": "Saving…",
       "create": "Create plan",
       "saveChanges": "Save changes"
+    }
+  },
+  "customers": {
+    "title": "Customers",
+    "privacyNote": "Customers are shown as present, with a masked phone number. Names, emails and activity are not shown here.",
+    "searchLabel": "Find a customer",
+    "searchPlaceholder": "Customer id or full phone (+965...)",
+    "searchHint": "Search by customer id or a full phone number starting with +.",
+    "statusLabel": "Status",
+    "anyStatus": "Any status",
+    "withoutBusiness": "Not in any business",
+    "apply": "Apply",
+    "listTitle": "Registered customers",
+    "listDescription": "Open a customer to warn, suspend, ban or lift a restriction.",
+    "empty": "No customers match.",
+    "businessesCount": "{count, plural, one {# business} other {# businesses}}",
+    "newer": "Newer",
+    "older": "Older",
+    "back": "Back to customers",
+    "status": {
+      "active": "Active",
+      "suspended": "Suspended",
+      "banned": "Banned"
+    },
+    "detail": {
+      "privacyNote": "Full name, email and activity are not shown.",
+      "summary": "Customer",
+      "until": "Suspended until {date}",
+      "businesses": "Businesses",
+      "warnings": "Warnings",
+      "joined": "Joined",
+      "actionTitle": "Take action",
+      "actionDescription": "A suspension or ban normally follows a warning. Every action is recorded with your reason.",
+      "history": "History",
+      "noHistory": "No actions recorded.",
+      "form": {
+        "actionLabel": "Action",
+        "warning": "Warning",
+        "suspend": "Suspend for a period",
+        "ban": "Ban",
+        "lift": "Lift restriction",
+        "daysLabel": "Days (1 to 365)",
+        "reasonLabel": "Reason (required)",
+        "reasonPlaceholder": "What happened and why this action",
+        "skipWarning": "Skip the warning step (severe fraud only)",
+        "submit": "Apply",
+        "saving": "Saving...",
+        "success": "Done."
+      }
     }
   }
 }

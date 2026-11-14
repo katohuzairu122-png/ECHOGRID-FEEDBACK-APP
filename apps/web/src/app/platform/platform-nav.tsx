@@ -17,6 +17,7 @@ export async function PlatformNav({ role }: { role: PlatformRole }) {
       items={[
         { href: '/platform', label: t('brand'), icon: 'shield' },
         { href: '/platform/businesses', label: t('directory'), icon: 'store' },
+        ...(role === 'billing' ? [] : [{ href: '/platform/customers', label: t('customers'), icon: 'users' as const }]),
         { href: '/platform/audit-log', label: t('auditLog'), icon: 'chart' },
         { href: '/platform/billing', label: t('billing'), icon: 'settings' },
         { href: '/dashboard', label: t('backToDashboard'), icon: 'arrow' },

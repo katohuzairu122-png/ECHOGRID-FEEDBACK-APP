@@ -1,7 +1,7 @@
 /**
  * Gate 2 B4-11 — restricted nonowner broker database role with ONE fixed, use-time-authorized operation (branch read).
  *
- * Disposable CI only, on the REAL schema (69 migrations replayed). No Drizzle migration, no Neon/Hyperdrive/Cloudflare resource, no deployment. The broker service itself (which verifies the B4-03/B4-09 signed
+ * Disposable CI only, on the REAL schema (70 migrations replayed). No Drizzle migration, no Neon/Hyperdrive/Cloudflare resource, no deployment. The broker service itself (which verifies the B4-03/B4-09 signed
  * evidence before connecting as this login) does not exist yet; this proves what the DATABASE side must enforce on its own. See docs/architecture/builds/SPLIT-08/GATE2_B4_11_RESTRICTED_BROKER_DATABASE_ROLE.md.
  */
 import pg from 'pg';
@@ -37,7 +37,7 @@ try {
   await owner.connect();
   const info = (await q("SELECT current_database() db,current_user usr,current_setting('server_version_num')::int v"))[0];
   check(info.db === 'echogrid_ci_pg18_b411' && info.usr === 'echogrid' && Math.floor(info.v / 10000) === 18, 'DATABASE_IDENTITY');
-  check((await q('SELECT count(*)::int n FROM drizzle.__drizzle_migrations'))[0].n === 69, 'MIGRATION_COUNT');
+  check((await q('SELECT count(*)::int n FROM drizzle.__drizzle_migrations'))[0].n === 70, 'MIGRATION_COUNT');
 
   // ---- fixtures on the real tables (synthetic) ----
   await q("INSERT INTO public.permissions(key,description,category) VALUES ('branches:view','b411','b411'),('feedback:view','b411','b411') ON CONFLICT (key) DO NOTHING");

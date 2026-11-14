@@ -49,7 +49,7 @@ try {
   if (info.db !== EXPECTED_DB || info.role !== EXPECTED_USER || Math.floor(info.version / 10000) !== 18) fail('WRONG_DATABASE_OR_VERSION');
 
   const applied = (await db.query('SELECT created_at::text AS created_at FROM drizzle.__drizzle_migrations ORDER BY id')).rows;
-  if (entries.length !== 69 || applied.length !== entries.length ||
+  if (entries.length !== 70 || applied.length !== entries.length ||
       applied.some((row, index) => row.created_at !== String(entries[index].when))) fail('JOURNAL_MISMATCH');
 
   const guards = (await db.query(

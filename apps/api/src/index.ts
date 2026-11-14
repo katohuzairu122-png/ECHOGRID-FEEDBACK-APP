@@ -28,6 +28,7 @@ import { loyaltyCustomerRoutes } from './loyalty/loyalty-customer.routes';
 import { analyticsRoutes } from './analytics/analytics.routes';
 import { notificationsRoutes } from './notifications/notifications.routes';
 import { platformBusinessRoutes } from './platform/business-directory.routes';
+import { platformCustomerRoutes } from './platform/customer-directory.routes';
 import { platformAuditLogRoutes } from './platform/audit-log.routes';
 import { platformBillingPlansRoutes } from './platform/billing-plans.routes';
 import { platformBillingSubscriptionsRoutes } from './platform/billing-subscriptions.routes';
@@ -185,6 +186,7 @@ api.route('/partner-credits/consent', partnerConsentRoutes);
 // matching the loyalty/loyalty-customer split's precedent of separate route
 // files per concern within the same feature.
 api.route('/platform/businesses', platformBusinessRoutes);
+api.route('/platform/customers', platformCustomerRoutes);
 api.route('/platform/audit-log', platformAuditLogRoutes);
 // Billing Block 10 -- two files, one prefix each, same split precedent as
 // businesses/audit-log above.

@@ -25,12 +25,16 @@ export const customers = pgTable(
     phoneVerifiedAt: timestamp('phone_verified_at', { withTimezone: true }),
     // Saved UI language (customer + public surfaces). NULL = no explicit choice.
     preferredLocale: text('preferred_locale'),
+    // 'active' | 'suspended' | 'banned'. A suspension may carry an end time
+    // (suspendedUntil); after it passes the customer is treated as active again
+    // (lib/customer-access.ts). 'banned' has no end time.
     status: text('status').notNull().default('active'),
+    suspendedUntil: timestamp('suspended_until', { withTimezone: true }),
     ...auditColumns,
     ...softDeleteColumns,
   },
   (table) => [
-    check('customers_status_check', sql`${table.status} IN ('active', 'suspended')`),
+    check('customers_status_check', sql`${table.status} IN ('active', 'suspended', 'banned')`),
     check(
       'customers_preferred_locale_check',
       sql`${table.preferredLocale} IS NULL OR ${table.preferredLocale} IN ('en', 'es', 'fr', 'ar')`,

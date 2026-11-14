@@ -1,5 +1,5 @@
 /**
- * Gate 2 R3 — synthetic 45-to-69 migration upgrade on a disposable PG18
+ * Gate 2 R3 — synthetic 45-to-70 migration upgrade on a disposable PG18
  * GitHub Actions service container. No Neon resources or customer data.
  *
  * Commands: prepare | verify-prefix | verify-full
@@ -23,7 +23,7 @@ const journalPath = resolve(root, 'drizzle/meta/_journal.json');
 const journal = JSON.parse(readFileSync(journalPath, 'utf8'));
 if (journal.version !== '7' || journal.dialect !== 'postgresql' ||
     !Array.isArray(journal.entries) ||
-    ![45, 69].includes(journal.entries.length) ||
+    ![45, 70].includes(journal.entries.length) ||
     journal.entries.some((e, i) => e.idx !== i ||
       !e.tag.startsWith(String(i).padStart(4, '0') + '_') ||
       !Number.isSafeInteger(e.when))) throw new Error('GATE2_JOURNAL_INVALID');
@@ -32,10 +32,10 @@ const expectedFromGit = JSON.parse((await import('node:child_process')).execFile
   'git', ['show', 'HEAD:apps/api/drizzle/meta/_journal.json'],
   { cwd: root, encoding: 'utf8' },
 ));
-if (expectedFromGit.entries.length !== 69 ||
+if (expectedFromGit.entries.length !== 70 ||
     expectedFromGit.entries[44].tag !== '0044_split07_multiunit_inert_conservation' ||
     expectedFromGit.entries[45].tag !== '0045_heta01_f1_stripe_evidence' ||
-    expectedFromGit.entries[68].tag !== '0068_customer_auth_sessions') {
+    expectedFromGit.entries[69].tag !== '0069_platform_customer_sanctions') {
   throw new Error('GATE2_FULL_JOURNAL_UNEXPECTED');
 }
 const expected = expectedFromGit.entries;
@@ -43,12 +43,12 @@ if (journal.entries.some((e, i) => e.tag !== expected[i].tag || e.when !== expec
   throw new Error('GATE2_JOURNAL_TAMPERED');
 
 if (command === 'prepare') {
-  if (journal.entries.length !== 69) throw new Error('GATE2_ALREADY_TRUNCATED');
+  if (journal.entries.length !== 70) throw new Error('GATE2_ALREADY_TRUNCATED');
   writeFileSync(journalPath, JSON.stringify({ ...journal, entries: journal.entries.slice(0, 45) }, null, 2) + '\n');
   console.log('GATE2 synthetic 45-entry journal prepared locally; repository and Neon databases unchanged');
 } else {
   if ((command === 'verify-prefix' && journal.entries.length !== 45) ||
-      (command === 'verify-full' && journal.entries.length !== 69)) throw new Error('GATE2_WRONG_PHASE');
+      (command === 'verify-full' && journal.entries.length !== 70)) throw new Error('GATE2_WRONG_PHASE');
   const client = new pg.Client({ connectionString: expectedUrl });
   try {
     await client.connect();
@@ -60,7 +60,7 @@ if (command === 'prepare') {
     const rows = (await client.query(
       'SELECT created_at::text AS created_at FROM drizzle.__drizzle_migrations ORDER BY id',
     )).rows;
-    const count = command === 'verify-prefix' ? 45 : 69;
+    const count = command === 'verify-prefix' ? 45 : 70;
     if (rows.length !== count || rows.some((r, i) => r.created_at !== String(expected[i].when)))
       throw new Error('GATE2_APPLIED_MIGRATIONS_MISMATCH');
 
