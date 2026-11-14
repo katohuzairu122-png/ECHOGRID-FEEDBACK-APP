@@ -35,12 +35,13 @@ export function SanctionForm({ customerId }: { customerId: string }) {
           required
         >
           <option value="warning">{t('warning')}</option>
+          <option value="limit">{t('limit')}</option>
           <option value="suspend">{t('suspend')}</option>
           <option value="ban">{t('ban')}</option>
           <option value="lift">{t('lift')}</option>
         </Select>
       </div>
-      {action === 'suspend' && (
+      {(action === 'suspend' || action === 'limit') && (
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="days">{t('daysLabel')}</Label>
           <Input id="days" name="days" type="number" min={1} max={365} step={1} required />
@@ -57,7 +58,7 @@ export function SanctionForm({ customerId }: { customerId: string }) {
           placeholder={t('reasonPlaceholder')}
         />
       </div>
-      {(action === 'suspend' || action === 'ban') && (
+      {(action === 'limit' || action === 'suspend' || action === 'ban') && (
         <label className="flex items-start gap-2 text-sm">
           <input type="checkbox" name="skipWarning" className="mt-1" />
           <span>{t('skipWarning')}</span>

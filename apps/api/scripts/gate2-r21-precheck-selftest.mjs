@@ -29,7 +29,7 @@ try {
   await owner.connect();
   const info = (await owner.query("SELECT current_database() db,current_user username,current_setting('server_version_num')::int version")).rows[0];
   check(info.db === 'echogrid_ci_pg18_r21' && info.username === 'echogrid' && Math.floor(info.version / 10000) === 18, 'DATABASE_IDENTITY');
-  check((await owner.query('SELECT count(*)::int n FROM drizzle.__drizzle_migrations')).rows[0].n === 70, 'MIGRATION_COUNT');
+  check((await owner.query('SELECT count(*)::int n FROM drizzle.__drizzle_migrations')).rows[0].n === 71, 'MIGRATION_COUNT');
 
   // ---- fixtures: two tenants, one platform-owned survey campaign (no tenant) ----
   await owner.query('BEGIN');

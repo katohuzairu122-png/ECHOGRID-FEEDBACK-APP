@@ -204,7 +204,8 @@
     "status": {
       "active": "Activo",
       "suspended": "Suspendido",
-      "banned": "Vetado"
+      "banned": "Vetado",
+      "limited": "Limitado"
     },
     "detail": {
       "privacyNote": "No se muestran el nombre completo, el correo ni la actividad.",
@@ -214,7 +215,7 @@
       "warnings": "Advertencias",
       "joined": "Registro",
       "actionTitle": "Tomar medidas",
-      "actionDescription": "Una suspensión o veto normalmente sigue a una advertencia. Cada acción queda registrada con su motivo.",
+      "actionDescription": "Una limitación o suspensión normalmente sigue a una advertencia. Un cliente limitado puede iniciar sesión y ver su cuenta, pero no puede unirse a negocios ni participar en encuestas.",
       "history": "Historial",
       "noHistory": "No hay acciones registradas.",
       "form": {
@@ -229,8 +230,10 @@
         "skipWarning": "Omitir la advertencia (solo fraude grave)",
         "submit": "Aplicar",
         "saving": "Guardando...",
-        "success": "Hecho."
-      }
+        "success": "Hecho.",
+        "limit": "Limitar algunas funciones por un periodo"
+      },
+      "limitedUntil": "Limitado hasta {date}"
     }
   }
 }

@@ -1,4 +1,4 @@
-import { eq, and, sql, desc, lte } from 'drizzle-orm';
+import { eq, and, sql, desc, lte, gt } from 'drizzle-orm';
 import { customers, customerSanctions, businessCustomerMemberships } from '../db/schema';
 import { BaseRepository } from './base.repository';
 
@@ -68,7 +68,7 @@ export class CustomerRepository extends BaseRepository {
   async listForPlatform(input: {
     id?: string | undefined;
     phone?: string | undefined;
-    status?: 'active' | 'suspended' | 'banned' | undefined;
+    status?: 'active' | 'limited' | 'suspended' | 'banned' | undefined;
     withoutBusiness?: boolean | undefined;
     limit: number;
     offset: number;
@@ -77,7 +77,11 @@ export class CustomerRepository extends BaseRepository {
     const conditions = [eq(customers.isDeleted, false)];
     if (input.id) conditions.push(eq(customers.id, input.id));
     if (input.phone) conditions.push(eq(customers.phone, input.phone));
-    if (input.status) conditions.push(eq(customers.status, input.status));
+    if (input.status === 'limited') {
+      conditions.push(eq(customers.status, 'active'), gt(customers.limitedUntil, new Date()));
+    } else if (input.status) {
+      conditions.push(eq(customers.status, input.status));
+    }
     if (input.withoutBusiness) conditions.push(sql`${businessCount} = 0`);
     const rows = await this.db
       .select({ customer: customers, businessCount })
@@ -99,11 +103,11 @@ export class CustomerRepository extends BaseRepository {
 
   async setModeration(
     id: string,
-    patch: { status: 'active' | 'suspended' | 'banned'; suspendedUntil: Date | null },
+    patch: { status: 'active' | 'suspended' | 'banned'; suspendedUntil: Date | null; limitedUntil: Date | null },
   ): Promise<Customer | undefined> {
     const [row] = await this.db
       .update(customers)
-      .set({ status: patch.status, suspendedUntil: patch.suspendedUntil })
+      .set({ status: patch.status, suspendedUntil: patch.suspendedUntil, limitedUntil: patch.limitedUntil })
       .where(and(eq(customers.id, id), eq(customers.isDeleted, false)))
       .returning();
     return row;

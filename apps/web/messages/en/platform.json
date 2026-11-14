@@ -204,7 +204,8 @@
     "status": {
       "active": "Active",
       "suspended": "Suspended",
-      "banned": "Banned"
+      "banned": "Banned",
+      "limited": "Limited"
     },
     "detail": {
       "privacyNote": "Full name, email and activity are not shown.",
@@ -214,7 +215,7 @@
       "warnings": "Warnings",
       "joined": "Joined",
       "actionTitle": "Take action",
-      "actionDescription": "A suspension or ban normally follows a warning. Every action is recorded with your reason.",
+      "actionDescription": "A limit or suspension normally follows a warning. Limited customers can sign in and see their account but cannot join businesses or take part in surveys.",
       "history": "History",
       "noHistory": "No actions recorded.",
       "form": {
@@ -229,8 +230,10 @@
         "skipWarning": "Skip the warning step (severe fraud only)",
         "submit": "Apply",
         "saving": "Saving...",
-        "success": "Done."
-      }
+        "success": "Done.",
+        "limit": "Limit some features for a period"
+      },
+      "limitedUntil": "Limited until {date}"
     }
   }
 }

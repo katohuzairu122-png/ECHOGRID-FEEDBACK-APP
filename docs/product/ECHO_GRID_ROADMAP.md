@@ -83,9 +83,9 @@ Step 1, in-app unread indicators, is **done and in production** (#399): count ba
 
 Done: cashier form cleanup and one-field lookup; watermark; quicker customer feedback form (rating plus optional chips, one comment box) (#401); feedback inbox filters as dropdowns (#402, one choice per category and urgency). Not started: the signup page has no Echo Grid background watermark (owner screenshot, 2026-11-13); simplify the business-side form builder (Form name, Key, Question, Type, Required) for quick setup; the branch dropdown on the feedback inbox still drops the other filters when changed.
 
-### L. PLATFORM-CUSTOMERS-01 (development only, draft PR)
+### L. PLATFORM-CUSTOMERS-01 (merged in #413) and follow-up
 
-Platform "Customers" list and moderation per the 2026-11-13 D3 amendment (see ACCESS_MODEL_01_DESIGN.md section 3a): masked list, find by id or full phone, warn/suspend (timed)/ban/lift, all audited, admin-only actions, suspended or banned customers lose access to every business. Built on a draft PR; **migration `0069` is not applied, nothing is deployed**. Not included: revealing personal details (needs MFA and a reason), export, and a "limited access" intermediate state (the owner mentioned misuse of limited access; its exact meaning is still to be defined).
+Platform "Customers" list and moderation per the 2026-11-13 D3 amendment (see ACCESS_MODEL_01_DESIGN.md section 3a): masked list, find by id or full phone, warn, limit, suspend (timed), ban and lift, all audited, admin-only actions, suspended or banned customers lose access to every business. **Follow-up (draft PR, development only):** limited-access state (migration `0070`, enforced when joining a business and taking part in surveys) and the impersonation setting (`PLATFORM_IMPERSONATION_ENABLED = "true"`, owner option b). **Migrations `0069` and `0070` are not applied and nothing is deployed.** Not included: revealing personal details (needs MFA and a reason), export, and enforcement of limits on loyalty feedback rewards, Community Points redemption and the Community feed (those flows are not wired).
 
 ### K. Access model, privileged-access security and Web stability (designed, not built)
 

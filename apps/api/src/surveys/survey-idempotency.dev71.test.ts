@@ -18,6 +18,8 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('../repositories', () => ({
   createRepositories: () => ({
+    // Limited-access guard: these tests use customers who are not limited.
+    customers: { findById: async () => ({ limitedUntil: null }) },
     surveys: {
       findCampaignById: mocks.findCampaign,
       findById: mocks.findSurvey,

@@ -28,6 +28,7 @@ function createFakeRepos() {
           preferredLocale: null,
           status: input.status ?? 'active',
           suspendedUntil: null,
+          limitedUntil: null,
           createdAt: new Date(),
           createdBy: input.createdBy ?? null,
           updatedAt: new Date(),

@@ -45,7 +45,7 @@ try {
   assert(identity.db === 'echogrid_ci_pg18_tenant_rls' && identity.username === 'echogrid' &&
     Math.floor(identity.v / 10000) === 18, 'DATABASE_IDENTITY');
   const migrations = (await owner.query('SELECT count(*)::int AS n FROM drizzle.__drizzle_migrations')).rows[0].n;
-  assert(migrations === 70, 'INCOMPLETE_MIGRATIONS');
+  assert(migrations === 71, 'INCOMPLETE_MIGRATIONS');
 
   for(const [table] of tables) {
     const meta=(await owner.query(`
@@ -178,7 +178,7 @@ try {
       policyExercise:'PASS',
       stagingCertification:'BLOCKED',
       reason:'UNTRUSTED_CUSTOM_GUC_CAN_BE_SPOOFED_BY_DATABASE_LOGIN',
-      postgresMajor:18,migrations:70,tablesChecked:tables.length,
+      postgresMajor:18,migrations:71,tablesChecked:tables.length,
       tenantAVisiblePerTable:1,tenantBVisiblePerTable:1,
       missingTenantVisiblePerTable:0,transactionReset:'PASS',
       unauthorizedTenantSelectionPossible:true,

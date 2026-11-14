@@ -12,7 +12,7 @@ export interface CustomerSanctionState {
 const MAX_DAYS = 365;
 
 /**
- * Warn, suspend (for a number of days), ban or lift. The server enforces the
+ * Warn, limit or suspend (for a number of days), ban or lift. The server enforces the
  * real rules (admin only, a warning before a suspension or ban, the maximum
  * period); this only builds the request.
  */
@@ -27,13 +27,13 @@ export async function applyCustomerSanctionAction(
   const skipWarning = formData.get('skipWarning') === 'on';
 
   const body: Record<string, unknown> = { action, reason };
-  if (action === 'suspend') {
+  if (action === 'suspend' || action === 'limit') {
     if (!Number.isInteger(days) || days < 1 || days > MAX_DAYS) {
       return { error: `Enter a whole number of days between 1 and ${MAX_DAYS}.` };
     }
     body.suspendedUntil = new Date(Date.now() + days * 86_400_000).toISOString();
   }
-  if (skipWarning && (action === 'suspend' || action === 'ban')) body.skipWarning = true;
+  if (skipWarning && (action === 'limit' || action === 'suspend' || action === 'ban')) body.skipWarning = true;
 
   try {
     await apiFetch<PlatformCustomerDetailDto>(`/platform/customers/${customerId}/sanctions`, {

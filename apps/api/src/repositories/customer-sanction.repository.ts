@@ -3,7 +3,7 @@ import { customerSanctions } from '../db/schema';
 import { BaseRepository } from './base.repository';
 
 export type CustomerSanction = typeof customerSanctions.$inferSelect;
-export type CustomerSanctionAction = 'warning' | 'suspend' | 'ban' | 'lift';
+export type CustomerSanctionAction = 'warning' | 'limit' | 'suspend' | 'ban' | 'lift';
 
 /** Append-only. There is deliberately no update or delete. */
 export class CustomerSanctionRepository extends BaseRepository {

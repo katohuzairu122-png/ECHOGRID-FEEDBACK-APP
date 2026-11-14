@@ -18,6 +18,7 @@ import {
   type SurveyQuestion,
 } from '../repositories';
 import { AppError } from '../lib/errors';
+import { assertCustomerNotLimited } from '../lib/customer-limits';
 
 type ParticipationStartResult = {
   participation: SurveyParticipation;
@@ -236,6 +237,7 @@ export class SurveyParticipationService {
   ): Promise<ParticipationStartResult> {
     return this.db.transaction(async (tx) => {
       const repos = createRepositories(tx);
+      await assertCustomerNotLimited(repos, customerId, 'surveys');
       const campaign = await this.requireStartableCampaign(repos, campaignId);
       const existing = await repos.surveyParticipations.findByCampaignIdempotencyKey(
         campaign.id,
@@ -338,6 +340,7 @@ export class SurveyParticipationService {
 
     return this.db.transaction(async (tx) => {
       const repos = createRepositories(tx);
+      await assertCustomerNotLimited(repos, customerId, 'surveys');
       const campaign = await this.requireStartableCampaign(repos, campaignId);
 
       await tx.execute(

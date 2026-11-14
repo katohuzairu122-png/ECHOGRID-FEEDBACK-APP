@@ -16,6 +16,7 @@ import { parseJsonBody } from '../lib/validate';
 import { ok } from '../lib/response';
 import { AppError } from '../lib/errors';
 import { maskPhone } from '../lib/mask';
+import { isCustomerLimited } from '../lib/customer-limits';
 
 type Env = {
   Bindings: Bindings;
@@ -37,16 +38,18 @@ platformCustomerRoutes.use('*', authenticate);
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const E164_RE = /^\+[1-9]\d{7,14}$/;
-const STATUSES = ['active', 'suspended', 'banned'] as const;
+const STATUSES = ['active', 'limited', 'suspended', 'banned'] as const;
 type CustomerStatus = (typeof STATUSES)[number];
 const MAX_PAGE = 50;
 
 function toDto(customer: Customer, businessCount: number): PlatformCustomerDto {
+  const limited = customer.status === 'active' && isCustomerLimited(customer);
   return {
     id: customer.id,
     maskedPhone: maskPhone(customer.phone),
-    status: customer.status as CustomerStatus,
+    status: limited ? 'limited' : (customer.status as CustomerStatus),
     suspendedUntil: customer.suspendedUntil ? customer.suspendedUntil.toISOString() : null,
+    limitedUntil: limited && customer.limitedUntil ? customer.limitedUntil.toISOString() : null,
     businessCount,
     joinedAt: customer.createdAt.toISOString(),
   };
@@ -167,19 +170,19 @@ platformCustomerRoutes.post('/:id/sanctions', requirePlatformRole(['admin']), as
   const body = await parseJsonBody(c.req.raw, applyCustomerSanctionSchema);
 
   let until: Date | null = null;
-  if (body.action === 'suspend') {
+  if (body.action === 'suspend' || body.action === 'limit') {
     until = new Date(body.suspendedUntil as string);
     const now = Date.now();
     if (until.getTime() <= now) {
       throw new AppError(
-        'The suspension end date must be in the future.',
+        'The end date must be in the future.',
         400,
         'INVALID_SUSPENSION_END',
       );
     }
     if (until.getTime() > now + MAX_CUSTOMER_SUSPENSION_DAYS * 86_400_000) {
       throw new AppError(
-        `A suspension can last at most ${MAX_CUSTOMER_SUSPENSION_DAYS} days. Use a ban for longer.`,
+        `A limit or suspension can last at most ${MAX_CUSTOMER_SUSPENSION_DAYS} days. Use a ban for longer.`,
         400,
         'INVALID_SUSPENSION_END',
       );
@@ -193,10 +196,13 @@ platformCustomerRoutes.post('/:id/sanctions', requirePlatformRole(['admin']), as
       const customer = await repos.customers.findById(id);
       if (!customer) throw new AppError('Customer not found.', 404, 'CUSTOMER_NOT_FOUND');
 
-      if (body.action === 'lift' && customer.status === 'active') {
+      if (body.action === 'lift' && customer.status === 'active' && !isCustomerLimited(customer)) {
         throw new AppError('This customer is not restricted.', 409, 'CUSTOMER_NOT_RESTRICTED');
       }
-      if ((body.action === 'suspend' || body.action === 'ban') && !body.skipWarning) {
+      if (
+        (body.action === 'limit' || body.action === 'suspend' || body.action === 'ban') &&
+        !body.skipWarning
+      ) {
         if ((await repos.customerSanctions.countWarnings(id)) === 0) {
           throw new AppError(
             'Record a warning first, or set skipWarning with a reason for severe fraud.',
@@ -207,20 +213,14 @@ platformCustomerRoutes.post('/:id/sanctions', requirePlatformRole(['admin']), as
       }
 
       let updated: Customer = customer;
-      if (body.action === 'suspend') {
-        updated =
-          (await repos.customers.setModeration(id, {
-            status: 'suspended',
-            suspendedUntil: until,
-          })) ?? customer;
-      } else if (body.action === 'ban') {
-        updated =
-          (await repos.customers.setModeration(id, { status: 'banned', suspendedUntil: null })) ??
-          customer;
-      } else if (body.action === 'lift') {
-        updated =
-          (await repos.customers.setModeration(id, { status: 'active', suspendedUntil: null })) ??
-          customer;
+      const patchFor = {
+        limit: { status: 'active', suspendedUntil: null, limitedUntil: until },
+        suspend: { status: 'suspended', suspendedUntil: until, limitedUntil: null },
+        ban: { status: 'banned', suspendedUntil: null, limitedUntil: null },
+        lift: { status: 'active', suspendedUntil: null, limitedUntil: null },
+      } as const;
+      if (body.action !== 'warning') {
+        updated = (await repos.customers.setModeration(id, patchFor[body.action])) ?? customer;
       }
 
       const entry = await repos.customerSanctions.record({

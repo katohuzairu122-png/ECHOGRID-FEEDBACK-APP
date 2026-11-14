@@ -236,15 +236,16 @@ export type PlatformMrrSummaryDto = z.infer<typeof platformMrrSummarySchema>;
  * The list shows that a customer exists with a masked identifier; it never
  * returns the full name, email, full phone or any activity.
  */
-export const platformCustomerStatusSchema = z.enum(['active', 'suspended', 'banned']);
+export const platformCustomerStatusSchema = z.enum(['active', 'limited', 'suspended', 'banned']);
 
-export const customerSanctionActionSchema = z.enum(['warning', 'suspend', 'ban', 'lift']);
+export const customerSanctionActionSchema = z.enum(['warning', 'limit', 'suspend', 'ban', 'lift']);
 
 export const platformCustomerSchema = z.object({
   id: z.uuid(),
   maskedPhone: z.string(),
   status: platformCustomerStatusSchema,
   suspendedUntil: z.string().nullable(),
+  limitedUntil: z.string().nullable(),
   businessCount: z.number().int().nonnegative(),
   joinedAt: z.string(),
 });
@@ -268,28 +269,29 @@ export const platformCustomerDetailSchema = platformCustomerSchema.extend({
 
 export type PlatformCustomerDetailDto = z.infer<typeof platformCustomerDetailSchema>;
 
-/** Longest suspension a platform admin can set in one action. */
+/** Longest limit or suspension a platform admin can set in one action. */
 export const MAX_CUSTOMER_SUSPENSION_DAYS = 365;
 
 export const applyCustomerSanctionSchema = z
   .object({
     action: customerSanctionActionSchema,
     reason: z.string().trim().min(5).max(500),
-    // Required for 'suspend' (a suspension always has an end), forbidden otherwise.
+    // Required for 'limit' and 'suspend' (they always have an end), forbidden otherwise.
     suspendedUntil: z.iso.datetime().optional(),
     // Lets an admin suspend or ban without a prior warning for severe fraud.
     // The reason is mandatory either way and the flag is recorded in the audit log.
     skipWarning: z.boolean().optional(),
   })
   .superRefine((value, ctx) => {
-    if (value.action === 'suspend' && !value.suspendedUntil) {
-      ctx.addIssue({ code: 'custom', path: ['suspendedUntil'], message: 'A suspension needs an end date.' });
+    const timed = value.action === 'suspend' || value.action === 'limit';
+    if (timed && !value.suspendedUntil) {
+      ctx.addIssue({ code: 'custom', path: ['suspendedUntil'], message: 'A limit or suspension needs an end date.' });
     }
-    if (value.action !== 'suspend' && value.suspendedUntil) {
-      ctx.addIssue({ code: 'custom', path: ['suspendedUntil'], message: 'Only a suspension has an end date.' });
+    if (!timed && value.suspendedUntil) {
+      ctx.addIssue({ code: 'custom', path: ['suspendedUntil'], message: 'Only a limit or suspension has an end date.' });
     }
     if (value.skipWarning && (value.action === 'warning' || value.action === 'lift')) {
-      ctx.addIssue({ code: 'custom', path: ['skipWarning'], message: 'skipWarning applies to suspend or ban only.' });
+      ctx.addIssue({ code: 'custom', path: ['skipWarning'], message: 'skipWarning applies to limit, suspend or ban only.' });
     }
   });
 

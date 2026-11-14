@@ -41,6 +41,7 @@ function customer(status: Customer['status'] = 'active'): Customer {
     preferredLocale: null,
     status,
     suspendedUntil: null,
+    limitedUntil: null,
     createdAt: new Date(),
     createdBy: null,
     updatedAt: new Date(),

@@ -18,6 +18,7 @@ import {
 const PAGE_SIZE = 25;
 const STATUS_VARIANT: Record<PlatformCustomerDto['status'], 'success' | 'danger' | 'warning'> = {
   active: 'success',
+  limited: 'warning',
   suspended: 'warning',
   banned: 'danger',
 };
@@ -91,6 +92,7 @@ export default async function PlatformCustomersPage({ searchParams }: PageProps)
           <Select id="status" name="status" defaultValue={status ?? ''}>
             <option value="">{t('anyStatus')}</option>
             <option value="active">{t('status.active')}</option>
+            <option value="limited">{t('status.limited')}</option>
             <option value="suspended">{t('status.suspended')}</option>
             <option value="banned">{t('status.banned')}</option>
           </Select>
