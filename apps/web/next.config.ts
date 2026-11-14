@@ -25,6 +25,19 @@ const nextConfig: NextConfig = {
           { key: 'X-Frame-Options', value: 'DENY' },
         ],
       },
+      // The staff QR scanner (components/qr-camera-scanner.tsx) is the only camera user. The site-wide policy above
+      // denies the camera everywhere, which made "Scan" fail with "The camera could not be opened" on a phone
+      // (found by CASHIER-PWA-DEPLOY-01 device verification). These routes alone allow THIS origin's own pages to
+      // ask for the camera (the browser still prompts); embedded third-party frames stay denied (and framing is
+      // already forbidden), microphone and geolocation stay denied. A later matching header overrides an earlier one.
+      {
+        source: '/cashier/:path*',
+        headers: [{ key: 'Permissions-Policy', value: 'camera=(self), microphone=(), geolocation=()' }],
+      },
+      {
+        source: '/dashboard/loyalty/scan',
+        headers: [{ key: 'Permissions-Policy', value: 'camera=(self), microphone=(), geolocation=()' }],
+      },
     ];
   },
 };
