@@ -159,6 +159,10 @@ What this changes in the reconciliation above:
 - Questions E1, E2 and E4 to E9 are not recorded as answered.
 - Production and staging state of `0073`, and of `0069` to `0072` in production, remains **unverified**.
 
+#### G.3 Post-baseline: S3 email link (#457) and R1 remediation (2026-11-15)
+
+PR #457 (link a verified email to existing phone-only customers) merged at 17:59Z as `f1c04de`, after `bcd6c02`. It is development-only and unmounted. An independent read-only review raised seven findings; CUSTOMER-AUTH-01D-4b-S3-R1 remediates them in a follow-up pull request (hashing outside the transaction, bounded password guesses, internal OTP-retired reason, row-count check, tests). **Owner decision E10 approved 2026-11-15:** for a customer with a linked verified email, email is the routine login and phone OTP must not authenticate; the verified phone stays associated and may be one recovery factor, but phone possession alone must never reset a password, replace the email credential, issue a session or remove a factor. Recovery is a separate, unauthorized future block, **CUSTOMER-AUTH-01D-4b-S4 Secure Account Recovery** (proposed scope, gates and open decisions in `CUSTOMER_AUTH_S3_EMAIL_LINK.md` sections 7 and 8; not implemented). Repository inspection found one conflict in dormant code: the pre-existing `recoverPassword` (01D-4a) is phone-proof-only and has no caller; it must be disabled or replaced before any route can reach it. Activation prerequisites remain in the S3 document. No activation is authorized.
+
 ### H. WEB-PUSH-01 (future feature, design only)
 
 Phone/desktop push notifications for new messages (WhatsApp-style), after the in-app unread indicators (PR #399). Design: `docs/architecture/builds/WEB-PUSH/WEB_PUSH_01_DESIGN.md`. Needs owner answers WP-1 to WP-6, a migration, owner-held VAPID keys, a sender on Workers, service-worker handlers and a staging device test. **Not built, not scheduled; each block needs its own authorization.**
