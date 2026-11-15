@@ -119,12 +119,20 @@ async function digest(value: string): Promise<string> {
 }
 
 type CashierAuthKind = 'login' | 'session' | 'refresh' | 'logout';
+/** H3: the staff recovery and account endpoints that share the attributed throttle. */
+type StaffAuthKind = 'signup' | 'reset-request' | 'reset-confirm' | 'password-change';
+type AuthKind = CashierAuthKind | StaffAuthKind;
 
-/** What the request is "about", hashed: the account for a login, the ticket or token otherwise. Never the raw secret. */
-async function subjectOf(kind: CashierAuthKind, body: unknown): Promise<string> {
+/**
+ * What the request is "about", hashed: the account for a login/signup/reset request, the ticket, reset token or refresh token
+ * otherwise, and the authenticated user id for a password change. Never the raw secret.
+ */
+async function subjectOf(kind: AuthKind, body: unknown, userId?: string): Promise<string> {
+  if (kind === 'password-change') return userId ? digest(`user:${userId}`) : 'none';
   const record = body !== null && typeof body === 'object' ? (body as Record<string, unknown>) : {};
-  const raw = kind === 'login' ? record.email : kind === 'session' ? record.ticket : record.refreshToken;
-  return typeof raw === 'string' && raw.length > 0 ? digest(kind === 'login' ? raw.trim().toLowerCase() : raw) : 'none';
+  const byEmail = kind === 'login' || kind === 'signup' || kind === 'reset-request';
+  const raw = byEmail ? record.email : kind === 'session' ? record.ticket : kind === 'reset-confirm' ? record.token : record.refreshToken;
+  return typeof raw === 'string' && raw.length > 0 ? digest(byEmail ? raw.trim().toLowerCase() : raw) : 'none';
 }
 
 /** Cashier auth bodies are a few hundred bytes; anything larger is refused before it is buffered or parsed. */
@@ -187,8 +195,8 @@ type AuthScope = 'cashier' | 'staff';
  * value, clock skew beyond 60 s past / 5 s future, missing client address) are treated as direct callers and share the web
  * Worker's egress bucket. Roll out the secret to the web Worker FIRST, then the API; rollback is removing it from the API.
  */
-function attributedAuthRateLimit(scope: AuthScope, kind: CashierAuthKind, legacyStrict: boolean) {
-  return createMiddleware<{ Bindings: Bindings }>(async (c, next) => {
+function attributedAuthRateLimit(scope: AuthScope, kind: AuthKind, legacyStrict: boolean) {
+  return createMiddleware<{ Bindings: Bindings; Variables: { userId?: string } }>(async (c, next) => {
     const declared = c.req.header('content-length');
     if (declared !== undefined && Number(declared) > CASHIER_AUTH_MAX_BODY_BYTES) {
       throw new AppError('Request body too large.', 400, 'PAYLOAD_TOO_LARGE');
@@ -203,7 +211,7 @@ function attributedAuthRateLimit(scope: AuthScope, kind: CashierAuthKind, legacy
     } catch {
       // Not JSON: the handler's own validation answers it. It still counts against the "none" subject below.
     }
-    const subject = await subjectOf(kind, body);
+    const subject = await subjectOf(kind, body, c.get('userId'));
     const rawConnecting = c.req.header('cf-connecting-ip') ?? 'unknown';
     const connecting = rateLimitSource(rawConnecting);
     const prefix = `${scope}:${kind}`;
@@ -248,3 +256,14 @@ export function cashierAuthRateLimit(kind: CashierAuthKind) {
 export function staffLoginRateLimit() {
   return attributedAuthRateLimit('staff', 'login', true);
 }
+
+/**
+ * H3: signup, password-reset request, password-reset confirm and password change use the same attributed builder as staff login
+ * (secret unset = the previous per-IP bucket plus the floor; secret set = per-source buckets, no account-wide strict bucket).
+ * Password change must be mounted AFTER `authenticate`: its subject is the authenticated user id, so one user's attempts (or a
+ * stolen token's) never spend another user's budget. Keys are `staff:<kind>:...`, disjoint from login and cashier keys.
+ */
+export const signupRateLimit = () => attributedAuthRateLimit('staff', 'signup', true);
+export const passwordResetRequestRateLimit = () => attributedAuthRateLimit('staff', 'reset-request', true);
+export const passwordResetConfirmRateLimit = () => attributedAuthRateLimit('staff', 'reset-confirm', true);
+export const passwordChangeRateLimit = () => attributedAuthRateLimit('staff', 'password-change', true);

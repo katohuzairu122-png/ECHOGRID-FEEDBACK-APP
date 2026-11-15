@@ -1,4 +1,5 @@
-import { eq, and, gt, isNull } from 'drizzle-orm';
+import { eq, and, gt, isNull, sql } from 'drizzle-orm';
+import type { Database } from '../db/client';
 import { passwordResetTokens } from '../db/schema';
 import { BaseRepository } from './base.repository';
 
@@ -75,6 +76,66 @@ export class PasswordResetTokenRepository extends BaseRepository {
       .where(
         and(
           eq(passwordResetTokens.userId, userId),
+          isNull(passwordResetTokens.consumedAt),
+          isNull(passwordResetTokens.invalidatedAt),
+        ),
+      );
+  }
+
+  /**
+   * H3-5: issues a new reset token for a user UNLESS an outstanding (unused, uncancelled, unexpired) one was created within the
+   * last `windowSeconds`; then it returns null and changes nothing, so the earlier link stays valid and no email is due.
+   *
+   * Atomic without a schema change: one transaction takes a per-user transaction-scoped advisory lock first, so concurrent
+   * requests for the same user are serialised and each re-reads the other's committed row (READ COMMITTED takes a fresh snapshot
+   * per statement). A bare "insert where not exists" would let two simultaneous requests both pass. The older outstanding
+   * tokens are invalidated and the new one inserted in the same transaction, so there is never a moment with two live links
+   * or none. The lock key is derived from the user id only; it exposes nothing and holds no row.
+   */
+  async issueUnlessRecent(
+    input: NewPasswordResetToken,
+    windowSeconds: number,
+  ): Promise<PasswordResetToken | null> {
+    return (this.db as Database).transaction(async (tx) => {
+      await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${'password_reset_request:' + input.userId}, 0))`);
+      const recent = await tx
+        .select({ id: passwordResetTokens.id })
+        .from(passwordResetTokens)
+        .where(
+          and(
+            eq(passwordResetTokens.userId, input.userId),
+            isNull(passwordResetTokens.consumedAt),
+            isNull(passwordResetTokens.invalidatedAt),
+            gt(passwordResetTokens.expiresAt, sql`now()`),
+            gt(passwordResetTokens.createdAt, sql`now() - make_interval(secs => ${windowSeconds})`),
+          ),
+        )
+        .limit(1);
+      if (recent.length > 0) return null;
+      await tx
+        .update(passwordResetTokens)
+        .set({ invalidatedAt: new Date() })
+        .where(
+          and(
+            eq(passwordResetTokens.userId, input.userId),
+            isNull(passwordResetTokens.consumedAt),
+            isNull(passwordResetTokens.invalidatedAt),
+          ),
+        );
+      const [row] = await tx.insert(passwordResetTokens).values(input).returning();
+      if (!row) throw new Error('Insert returned no row');
+      return row;
+    });
+  }
+
+  /** Cancels one token (used when its email could not be sent, so a retry is not suppressed by a link nobody received). */
+  async invalidateById(id: string): Promise<void> {
+    await this.db
+      .update(passwordResetTokens)
+      .set({ invalidatedAt: new Date() })
+      .where(
+        and(
+          eq(passwordResetTokens.id, id),
           isNull(passwordResetTokens.consumedAt),
           isNull(passwordResetTokens.invalidatedAt),
         ),

@@ -73,6 +73,27 @@ describe('loginAction', () => {
     vi.clearAllMocks();
     vi.stubGlobal('fetch', vi.fn());
   });
+  it('H3-1: password-reset request and confirm forward the signed client attribution; nothing extra when there is none', async () => {
+    vi.mocked(fetch).mockResolvedValue(new Response(null, { status: 202 }));
+    const reqForm = new FormData();
+    reqForm.set('email', 'a@example.test');
+    attributionMock.mockResolvedValueOnce({ 'x-echo-client': 'v1.signed.value' });
+    await requestPasswordResetAction({}, reqForm);
+    const first = vi.mocked(fetch).mock.calls[0]!;
+    expect(String(first[0])).toContain('/auth/password-reset/request');
+    expect(new Headers((first[1] as RequestInit).headers).get('x-echo-client')).toBe('v1.signed.value');
+    vi.mocked(fetch).mockClear();
+    const confirm = new FormData();
+    confirm.set('token', 't'.repeat(64));
+    confirm.set('newPassword', 'brand-new-password-1');
+    confirm.set('confirmPassword', 'brand-new-password-1');
+    attributionMock.mockResolvedValueOnce({ 'x-echo-client': 'v1.signed.value' });
+    await resetPasswordAction({}, confirm);
+    expect(new Headers((vi.mocked(fetch).mock.calls[0]![1] as RequestInit).headers).get('x-echo-client')).toBe('v1.signed.value');
+    vi.mocked(fetch).mockClear();
+    await requestPasswordResetAction({}, reqForm);
+    expect(new Headers((vi.mocked(fetch).mock.calls[0]![1] as RequestInit).headers).get('x-echo-client')).toBeNull();
+  });
   it('STG-SEC-02B: staff login and signup forward the signed client attribution to the API; nothing extra when there is none', async () => {
     vi.mocked(fetch).mockResolvedValue(new Response(JSON.stringify({ success: true, data: { accessToken: 'a', refreshToken: 'r' } })));
     attributionMock.mockResolvedValueOnce({ 'x-echo-client': 'v1.signed.value' });
