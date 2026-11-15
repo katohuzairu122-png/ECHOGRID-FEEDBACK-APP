@@ -15,7 +15,7 @@ vi.mock('../repositories', () => ({
   createRepositories: vi.fn(() => ({ customers: { findById: mocks.findById } })),
 }));
 
-const { customerAuthenticate } = await import('./customer-authenticate');
+const { createCustomerAuthenticate, customerAuthenticate } = await import('./customer-authenticate');
 const { signCustomerAccessToken } = await import('../customer-auth/customer-jwt');
 const { errorHandler } = await import('../lib/error-handler');
 
@@ -96,3 +96,26 @@ describe('customerAuthenticate account-state enforcement', () => {
   });
 });
 
+
+describe('compatible customer authentication', () => {
+  it('routes by token family and never tries legacy after a rotating denial', async () => {
+    const session = vi.fn(async () => null);
+    const legacy = vi.fn(async () => ({ assurance: 'legacy' as const, customerId: CUSTOMER_ID }));
+    const compatible = new Hono<{ Bindings: Bindings }>();
+    compatible.get('/', createCustomerAuthenticate({
+      authenticateSessionToken: session, authenticateLegacyToken: legacy,
+    }), (c) => c.json({ customerId: c.get('customerId') }));
+    compatible.onError(errorHandler);
+    const { signCustomerSessionAccessToken } = await import('../customer-auth/session-tokens');
+    const rotatingToken = await signCustomerSessionAccessToken(CUSTOMER_ID, CUSTOMER_ID, 'synthetic-session-secret');
+    const send = (token: string) => compatible.request('/', {
+      headers: { Authorization: `Bearer ${token}` },
+    }, env);
+    expect((await send(rotatingToken)).status).toBe(401);
+    expect(session).toHaveBeenCalledExactlyOnceWith(rotatingToken);
+    expect(legacy).not.toHaveBeenCalled();
+    expect((await send('invalid')).status).toBe(401);
+    expect(legacy).not.toHaveBeenCalled();
+    expect((await send(await signCustomerAccessToken(CUSTOMER_ID, JWT_SECRET))).status).toBe(200);
+  });
+});
