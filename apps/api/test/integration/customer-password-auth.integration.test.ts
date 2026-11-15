@@ -133,14 +133,14 @@ describe.skipIf(!process.env.DATABASE_URL)('customer password auth (integration)
       const customer = await customerByPhone(phone);
       expect(customer).toBeDefined();
       await q(
-        'UPDATE customer_credentials SET login_email=$1, login_email_verified_at=NULL WHERE customer_id=$2',
-        [email, customer!.id],
+        'UPDATE customer_credentials SET login_email=NULL, login_email_verified_at=NULL WHERE customer_id=$1',
+        [customer!.id],
       );
       expect(await a.auth.loginWithVerifiedEmailPassword({ email, password: GOOD }))
         .toEqual({ ok: false, kind: 'invalid' });
       await q(
-        'UPDATE customer_credentials SET login_email_verified_at=$1 WHERE customer_id=$2',
-        [new Date(clockMs), customer!.id],
+        'UPDATE customer_credentials SET login_email=$1, login_email_verified_at=$2 WHERE customer_id=$3',
+        [email, new Date(clockMs), customer!.id],
       );
       expect(await a.auth.loginWithVerifiedEmailPassword({ email, password: 'wrong password' }))
         .toEqual({ ok: false, kind: 'invalid' });
