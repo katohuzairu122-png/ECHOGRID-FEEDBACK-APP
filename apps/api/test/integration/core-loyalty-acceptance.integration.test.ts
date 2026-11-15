@@ -296,7 +296,7 @@ describe.skipIf(!databaseUrl)('Core loyalty acceptance (real HTTP and disposable
     });
     const name = 'core_acceptance_' + run.replaceAll('-', '');
     await dbClient.query(
-      `CREATE FUNCTION ${name}() RETURNS trigger LANGUAGE plpgsql AS $ BEGIN RAISE EXCEPTION 'synthetic ledger insert failure'; END; $`,
+      `CREATE FUNCTION ${name}() RETURNS trigger LANGUAGE plpgsql AS $body$ BEGIN RAISE EXCEPTION 'synthetic ledger insert failure'; END; $body$`,
     );
     try {
       await dbClient.query(
