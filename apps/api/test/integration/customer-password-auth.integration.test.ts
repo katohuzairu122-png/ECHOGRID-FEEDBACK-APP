@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll, afterEach, vi } from 'vitest';
 import { Client } from 'pg';
+import { createCustomerSessionLifecycleRoutes } from '../../src/customer-auth/customer-session-lifecycle.routes';
 import { createCustomerLanguageRoutes } from '../../src/customer-language/customer-language.routes';
 import { createCustomerAuthenticate } from '../../src/middleware/customer-authenticate';
 import type { Bindings } from '../../src/config/env';
@@ -223,12 +224,18 @@ describe.skipIf(!process.env.DATABASE_URL)('customer password auth (integration)
     expect(permitted.status).toBe(200);
     expect(await permitted.json()).toMatchObject({ data: { locale: 'ar' } });
     expect((await read(access + 'tampered')).status).toBe(401);
-    const rotated = await a.sessions.refresh(refresh);
-    if (!rotated.ok) throw new Error('Expected refresh rotation');
-    expect(rotated.session.refreshCredential).not.toBe(refresh);
-    expect(await a.sessions.revokeSession({ customerId: customer.id, sessionId: rotated.session.sessionId })).toBe(true);
-    expect((await read(rotated.session.accessToken)).status).toBe(401);
-    expect((await a.sessions.refresh(rotated.session.refreshCredential)).ok).toBe(false);
+    const lifecycle = createCustomerSessionLifecycleRoutes(a.sessions);
+    const post = (path: string, token: string) => lifecycle.request(path, {
+      method: 'POST', headers: { Authorization: `Bearer ${token}` },
+    });
+    const rotatedResponse = await post('/refresh', refresh);
+    expect(rotatedResponse.status).toBe(200);
+    const rotated = await rotatedResponse.json() as { accessToken: string; refreshCredential: string };
+    expect(rotated.refreshCredential).not.toBe(refresh);
+    expect((await read(rotated.accessToken)).status).toBe(200);
+    expect((await post('/logout', rotated.accessToken)).status).toBe(204);
+    expect((await read(rotated.accessToken)).status).toBe(401);
+    expect((await post('/refresh', rotated.refreshCredential)).status).toBe(401);
   });
 
   describe('phone proof', () => {

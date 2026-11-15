@@ -17,6 +17,7 @@ vi.mock('next/headers', () => ({
 }));
 
 import { clearCompatibleCustomerSession, getCompatibleCustomerCredentials, setRotatingCustomerSession } from './customer-session';
+import { createCustomerSessionBff } from './customer-session-bff';
 import { CUSTOMER_TOKEN_COOKIE } from './customer-cookies';
 
 const opts = { secure: true, httpOnly: true, sameSite: 'lax', path: '/' };
@@ -48,5 +49,37 @@ describe('rotating customer cookie transport', () => {
     await clearCompatibleCustomerSession();
     expect(set).toHaveBeenCalledWith(access, '', { ...opts, maxAge: 0 });
     expect(set).toHaveBeenCalledWith(refresh, '', { ...opts, maxAge: 0 });
+  });
+
+  it('rejects cross-origin mutations and refreshes without returning credentials to the browser', async () => {
+    const origin = 'https://customers.example.test';
+    const fresh = {
+      accessToken: 'fresh-access',
+      refreshCredential: 'b'.repeat(43),
+      accessExpiresAt: '2026-12-01T00:15:00Z',
+      refreshExpiresAt: '2026-12-02T00:00:00Z',
+    };
+    const api = vi.fn()
+      .mockResolvedValueOnce(Response.json(fresh))
+      .mockResolvedValueOnce(new Response(null, { status: 204 }));
+    const bff = createCustomerSessionBff({ origin, callApi: api });
+    const request = (value: string) => new Request(origin, { method: 'POST', headers: { Origin: value } });
+    values.set(refresh, 'a'.repeat(43));
+
+    expect((await bff(request('https://other.example.test'), 'refresh')).status).toBe(403);
+    expect(api).not.toHaveBeenCalled();
+    const refreshed = await bff(request(origin), 'refresh');
+    expect(refreshed.status).toBe(204);
+    expect(await refreshed.text()).toBe('');
+    expect(api).toHaveBeenCalledWith('/refresh', expect.objectContaining({
+      headers: { Authorization: 'Bearer ' + 'a'.repeat(43) },
+    }));
+    expect(values.get(access)).toBe(fresh.accessToken);
+    expect((await bff(request(origin), 'logout')).status).toBe(204);
+    expect(api).toHaveBeenCalledWith('/logout', expect.objectContaining({
+      headers: { Authorization: 'Bearer fresh-access' },
+    }));
+    expect(values.get(access)).toBe('');
+    expect(values.get(refresh)).toBe('');
   });
 });
