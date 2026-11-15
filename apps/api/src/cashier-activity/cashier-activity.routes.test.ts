@@ -283,7 +283,17 @@ describe('SEC-CASHIER-R1 F1: visibility is decided per branch from effective per
     m.list.mockResolvedValue([]);
     await get(`?limit=1&cursor=${cursor}`, t, BIZ_A, BR1);
     expect(m.list).toHaveBeenLastCalledWith(expect.objectContaining({ branchIds: [BR1], before: expect.objectContaining({ id: ROW }) }));
-    // A tampered cursor cannot widen the scope: it only selects the position, never the branches.
     expect(scopeOf().branchIds).toEqual([BR1]);
+  });
+
+  it('a hand-made cursor only chooses a position: it cannot widen or change the branch scope', async () => {
+    const t = await web(MIX_MA_SB);
+    const forged = btoa(`2026-01-01T00:00:00.000Z|${ROW}|${BR2}`).replace(/=+$/, ''); // extra field naming branch B
+    const res = await get(`?cursor=${forged}`, t, BIZ_A, BR1);
+    expect(res.status).toBe(200); // the decoder ignores the extra field: only the position is taken
+    expect(scopeOf().branchIds).toEqual([BR1]);
+    m.list.mockClear();
+    expect((await get('?cursor=%00%00', t, BIZ_A, BR1)).status).toBe(400);
+    expect(m.list).not.toHaveBeenCalled();
   });
 });
