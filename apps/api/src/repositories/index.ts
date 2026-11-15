@@ -25,6 +25,7 @@ import { ConsentGrantRepository } from './consent-grant.repository';
 import { CustomerActionAuthorizationRepository } from './customer-action-authorization.repository';
 import { OtpCodeRepository } from './otp-code.repository';
 import { CustomerCredentialRepository } from './customer-credential.repository';
+import { CustomerAuthChallengeRepository } from './customer-auth-challenge.repository';
 import { CustomerSessionRepository } from './customer-session.repository';
 import { CustomerRefreshTokenRepository } from './customer-refresh-token.repository';
 import { CustomerAuthEventRepository } from './customer-auth-event.repository';
@@ -56,6 +57,7 @@ import { OrphanSettlementEventRepository } from './orphan-settlement-event.repos
 
 export * from './business.repository';
 export * from './customer-sanction.repository';
+export * from './customer-auth-challenge.repository';
 export * from './business-category.repository';
 export * from './branch.repository';
 export * from './user.repository';
@@ -137,6 +139,7 @@ export function createRepositories(db: Db) {
     customerActionAuthorizations: new CustomerActionAuthorizationRepository(db),
     otpCodes: new OtpCodeRepository(db),
     customerCredentials: new CustomerCredentialRepository(db),
+    customerAuthChallenges: new CustomerAuthChallengeRepository(db),
     customerSessions: new CustomerSessionRepository(db),
     customerRefreshTokens: new CustomerRefreshTokenRepository(db),
     customerAuthEvents: new CustomerAuthEventRepository(db),

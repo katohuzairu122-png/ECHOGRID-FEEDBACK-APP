@@ -176,7 +176,7 @@ export class NotificationService {
     if (recipient.customerId) {
       const customer = await this.repos.customers.findById(recipient.customerId);
       if (!customer || customer.status !== 'active') return {};
-      return { email: customer.email ?? undefined, phone: customer.phone };
+      return { email: customer.email ?? undefined, phone: customer.phone ?? undefined };
     }
     return {};
   }

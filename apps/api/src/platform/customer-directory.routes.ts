@@ -46,7 +46,7 @@ function toDto(customer: Customer, businessCount: number): PlatformCustomerDto {
   const limited = customer.status === 'active' && isCustomerLimited(customer);
   return {
     id: customer.id,
-    maskedPhone: maskPhone(customer.phone),
+    maskedPhone: customer.phone ? maskPhone(customer.phone) : 'Not provided',
     status: limited ? 'limited' : (customer.status as CustomerStatus),
     suspendedUntil: customer.suspendedUntil ? customer.suspendedUntil.toISOString() : null,
     limitedUntil: limited && customer.limitedUntil ? customer.limitedUntil.toISOString() : null,
