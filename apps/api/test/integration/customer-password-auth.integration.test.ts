@@ -1,5 +1,13 @@
 import { describe, it, expect, beforeAll, afterAll, afterEach, vi } from 'vitest';
 import { Client } from 'pg';
+import { createCustomerSessionLifecycleRoutes } from '../../src/customer-auth/customer-session-lifecycle.routes';
+import { createCustomerLanguageRoutes } from '../../src/customer-language/customer-language.routes';
+import { createCustomerAuthenticate } from '../../src/middleware/customer-authenticate';
+import type { Bindings } from '../../src/config/env';
+import { AppError } from '../../src/lib/errors';
+import { createIsolatedCustomerEmailAuthRoutes } from '../../src/customer-auth/customer-email-auth.routes';
+import { createCustomerEmailTrustedSource } from '../../src/customer-auth/customer-email-trusted-source';
+import { signClientAttribution } from '../../src/lib/client-attribution';
 import { sign } from 'hono/jwt';
 import { buildDb } from '../../src/db/client';
 import { createDirectPbkdf2Worker, type Pbkdf2Worker } from '../../src/auth/pbkdf2-worker';
@@ -122,6 +130,112 @@ describe.skipIf(!process.env.DATABASE_URL)('customer password auth (integration)
       expect(mk({ phoneProofMaxAgeSeconds: 0 })).toThrow();
       expect(mk({})).not.toThrow();
     });
+  });
+
+  describe('verified email password sign-in (S2, domain only)', () => {
+    it('requires a verified credential email and rejects unknown or incorrect passwords', async () => {
+      const phone = PHONE(91);
+      const email = `s2-${RUN}-91@example.test`;
+      const registered = await a.auth.registerWithPassword(proof(phone), GOOD);
+      expect(registered.ok).toBe(true);
+      const customer = await customerByPhone(phone);
+      expect(customer).toBeDefined();
+      await q(
+        'UPDATE customer_credentials SET login_email=NULL, login_email_verified_at=NULL WHERE customer_id=$1',
+        [customer!.id],
+      );
+      expect(await a.auth.loginWithVerifiedEmailPassword({ email, password: GOOD }))
+        .toEqual({ ok: false, kind: 'invalid' });
+      await q(
+        'UPDATE customer_credentials SET login_email=$1, login_email_verified_at=$2 WHERE customer_id=$3',
+        [email, new Date(clockMs), customer!.id],
+      );
+      expect(await a.auth.loginWithVerifiedEmailPassword({ email, password: 'wrong password' }))
+        .toEqual({ ok: false, kind: 'invalid' });
+      expect(await a.auth.loginWithVerifiedEmailPassword({ email: email.toUpperCase(), password: GOOD }))
+        .toMatchObject({ ok: true });
+      expect(await a.auth.loginWithVerifiedEmailPassword({ email: 'missing-' + email, password: GOOD }))
+        .toEqual({ ok: false, kind: 'invalid' });
+    });
+  });
+
+  it('issues a real customer session through isolated email HTTP and rejects it after revocation', async () => {
+    const phone = PHONE(92);
+    const email = `s2-http-${RUN}@example.test`;
+    expect((await a.auth.registerWithPassword(proof(phone), GOOD)).ok).toBe(true);
+    const customer = await customerByPhone(phone);
+    if (!customer) throw new Error('Missing synthetic identity');
+    await q(
+      'UPDATE customer_credentials SET login_email=$1, login_email_verified_at=$2 WHERE customer_id=$3',
+      [email, new Date(clockMs), customer.id],
+    );
+    const sourceSecret = 'synthetic-attribution-key';
+    const routes = createIsolatedCustomerEmailAuthRoutes({
+      resolveTrustedSource: createCustomerEmailTrustedSource({
+        attributionSecret: sourceSecret,
+        sourceKeySecret: SESSION_SECRET,
+        now: () => clockMs,
+      }),
+      keyForIdentifier: async () => 'synthetic-identifier',
+      limit: async () => true,
+      requestProof: async () => {},
+      completeRegistration: async () => ({ ok: false, kind: 'invalid' }),
+      login: (input) => a.auth.loginWithVerifiedEmailPassword(input),
+      // Test-only client transport until the rotating-session Web contract is approved.
+      transportSession(session) {
+        const headers = new Headers();
+        headers.append('Set-Cookie', `__Host-test-access=${session.accessToken}; Path=/; Secure; HttpOnly; SameSite=Strict`);
+        headers.append('Set-Cookie', `__Host-test-refresh=${session.refreshCredential}; Path=/; Secure; HttpOnly; SameSite=Strict`);
+        return new Response(null, { status: 204, headers });
+      },
+    });
+    const signature = await signClientAttribution(sourceSecret, { ip: '192.0.2.10', userAgent: '' }, clockMs);
+    const login = (password: string) => routes.request('/email/login', {
+      method: 'POST', headers: { 'Content-Type': 'application/json', 'x-echo-client': signature },
+      body: JSON.stringify({ email, password }),
+    });
+    expect((await login('incorrect password')).headers.has('set-cookie')).toBe(false);
+    const response = await login(GOOD);
+    expect(response.status).toBe(204);
+    // This integration suite runs in Node. Workers' Headers type omits this accessor.
+    const headers = response.headers as Headers & { getSetCookie(): string[] };
+    const cookies = headers.getSetCookie();
+    expect(cookies.every((cookie) => cookie.includes('Secure; HttpOnly; SameSite=Strict'))).toBe(true);
+    const access = cookies[0]?.match(/^__Host-test-access=([^;]+)/)?.[1];
+    const refresh = cookies[1]?.match(/^__Host-test-refresh=([^;]+)/)?.[1];
+    if (!access || !refresh) throw new Error('Expected both customer credentials');
+
+    const languageRoutes = createCustomerLanguageRoutes(
+      createCustomerAuthenticate(a.sessions),
+      async () => ({ db: buildDb(client), close: async () => {} }),
+    ).onError((error, c) => {
+      if (error instanceof AppError && error.status === 401) return c.body(null, 401);
+      throw error;
+    });
+    const environment = {
+      PUBLIC_RATE_LIMITER: { limit: async () => ({ success: true }) },
+    } as unknown as Bindings;
+    const context = { waitUntil: () => {}, passThroughOnException: () => {}, props: {} };
+    await q("UPDATE customers SET preferred_locale='ar' WHERE id=$1", [customer.id]);
+    const read = (token: string) => languageRoutes.request(
+      '/', { headers: { Authorization: `Bearer ${token}` } }, environment, context,
+    );
+    const permitted = await read(access);
+    expect(permitted.status).toBe(200);
+    expect(await permitted.json()).toMatchObject({ data: { locale: 'ar' } });
+    expect((await read(access + 'tampered')).status).toBe(401);
+    const lifecycle = createCustomerSessionLifecycleRoutes(a.sessions);
+    const post = (path: string, token: string) => lifecycle.request(path, {
+      method: 'POST', headers: { Authorization: `Bearer ${token}` },
+    });
+    const rotatedResponse = await post('/refresh', refresh);
+    expect(rotatedResponse.status).toBe(200);
+    const rotated = await rotatedResponse.json() as { accessToken: string; refreshCredential: string };
+    expect(rotated.refreshCredential).not.toBe(refresh);
+    expect((await read(rotated.accessToken)).status).toBe(200);
+    expect((await post('/logout', rotated.accessToken)).status).toBe(204);
+    expect((await read(rotated.accessToken)).status).toBe(401);
+    expect((await post('/refresh', rotated.refreshCredential)).status).toBe(401);
   });
 
   describe('phone proof', () => {

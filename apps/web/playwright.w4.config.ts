@@ -15,6 +15,10 @@ export default defineConfig({
   reporter: [['list'], ['html', { open: 'never' }]],
   use: { ...base.use, trace: 'on', screenshot: 'only-on-failure' },
   webServer: [
+    ...(process.env.CI === 'true' ? [{
+      command: 'pnpm --filter @echo-grid-feedback/api exec tsx scripts/customer-session-browser-fixture.ts',
+      url: 'http://127.0.0.1:8792/health', reuseExistingServer: false, timeout: 60_000,
+    }] : []),
     { ...api, reuseExistingServer: false, timeout: 60_000 },
     { command: 'node w4-acceptance/local-proxy.mjs', url: 'http://127.0.0.1:8788/health', reuseExistingServer: false },
     {

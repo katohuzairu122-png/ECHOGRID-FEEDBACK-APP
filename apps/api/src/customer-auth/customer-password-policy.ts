@@ -113,7 +113,7 @@ function isRun(value: string): boolean {
 
 export function checkPasswordPolicy(
   password: unknown,
-  context: { phone: string },
+  context: { phone: string | null },
   config: PasswordPolicyConfig,
 ): PasswordPolicyResult {
   if (!Number.isInteger(config.minLength) || config.minLength <= 0) {
@@ -130,7 +130,7 @@ export function checkPasswordPolicy(
   if (length > maxLength) violations.push('too_long');
   if (CONTROL.test(normalized)) violations.push('control_characters');
 
-  const phoneDigits = context.phone.replace(/\D/g, '');
+  const phoneDigits = (context.phone ?? '').replace(/\D/g, '');
   const passwordDigits = normalized.replace(/\D/g, '');
   if (phoneDigits.length >= 7 && passwordDigits.includes(phoneDigits.slice(-7)))
     violations.push('contains_phone');
