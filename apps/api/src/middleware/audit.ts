@@ -7,6 +7,7 @@ import { createRepositories } from '../repositories';
 import { AppError } from '../lib/errors';
 import { cashierRequestAudit } from '../cashier-activity/categories';
 import { toApiPath } from './cashier-scope';
+import { resolveClient } from '../lib/client-attribution';
 
 export type AuditVariables = {
   /** Set only after a domain service has committed its semantic audit row
@@ -54,8 +55,21 @@ export const auditTrail = createMiddleware<{
   Bindings: Bindings;
   Variables: Partial<AuthVariables> & Partial<TenantVariables> & AuditVariables;
 }>(async (c, next) => {
+  // SEC-CASHIER-POST-R2 C1: the web app reaches this Worker Worker-to-Worker, so cf-connecting-ip / user-agent describe the
+  // web Worker. When the web Worker forwarded a SIGNED client attribution (see lib/client-attribution.ts) the audit row
+  // records the real client instead; an unsigned, forged or stale header is ignored and the edge values are kept.
+  // Forensic only: never used for authorization or throttling here.
+  const forensicClient = async () => {
+    const client = await resolveClient(c.req.raw.headers, c.env.CLIENT_ATTRIBUTION_SECRET);
+    return {
+      ipAddress: client.ip ?? null,
+      userAgent: client.userAgent ?? null,
+      signed: client.trusted,
+    };
+  };
   const recordSecurityFailure = async (err: AppError) => {
     try {
+      const client = await forensicClient();
       const { db, close } = await createDb(c.env.HYPERDRIVE);
       try {
         await createRepositories(db).auditLog.record({
@@ -72,11 +86,11 @@ export const auditTrail = createMiddleware<{
             errorCode: err.code,
             // CASHIER-PWA-01 C7: a refusal of a verified cashier token is cashier security history.
             ...(c.get('cashier')
-              ? { client: 'cashier', branchId: c.get('cashier')?.branchId ?? null, outcome: 'failure' }
+              ? { client: 'cashier', branchId: c.get('cashier')?.branchId ?? null, outcome: 'failure', ...(client.signed ? { ipSource: 'signed' } : {}) }
               : {}),
           },
-          ipAddress: c.req.header('cf-connecting-ip') ?? null,
-          userAgent: c.req.header('user-agent') ?? null,
+          ipAddress: client.ipAddress,
+          userAgent: client.userAgent,
         });
       } finally {
         c.executionCtx.waitUntil(close());
@@ -88,6 +102,7 @@ export const auditTrail = createMiddleware<{
 
   const recordCashierRequest = async (row: { action: string; entityType: string }, status: number) => {
     try {
+      const client = await forensicClient();
       const cashier = c.get('cashier');
       const { db, close } = await createDb(c.env.HYPERDRIVE);
       try {
@@ -108,9 +123,10 @@ export const auditTrail = createMiddleware<{
                 }
               : {}),
             requestId: c.req.header('cf-ray') ?? null,
+            ...(client.signed ? { ipSource: 'signed' } : {}),
           },
-          ipAddress: c.req.header('cf-connecting-ip') ?? null,
-          userAgent: c.req.header('user-agent') ?? null,
+          ipAddress: client.ipAddress,
+          userAgent: client.userAgent,
         });
       } finally {
         c.executionCtx.waitUntil(close());
@@ -159,6 +175,7 @@ export const auditTrail = createMiddleware<{
   if (c.get('auditAlreadyRecorded')) return;
 
   try {
+    const client = await forensicClient();
     const meta = c.get('auditMetadata');
     // Platform Admin Console Block 4: unconditional, not opt-in per route --
     // if a request happened under impersonation, every entry it produces
@@ -180,6 +197,7 @@ export const auditTrail = createMiddleware<{
           branchId: c.get('cashier')?.branchId ?? null,
           outcome: 'success',
           requestId: c.req.header('cf-ray') ?? null,
+          ...(client.signed ? { ipSource: 'signed' } : {}),
         }
       : baseDetails;
 
@@ -193,8 +211,8 @@ export const auditTrail = createMiddleware<{
         entityType: meta?.entityType ?? 'unknown',
         entityId: meta?.entityId ?? null,
         metadata: details,
-        ipAddress: c.req.header('cf-connecting-ip') ?? null,
-        userAgent: c.req.header('user-agent') ?? null,
+        ipAddress: client.ipAddress,
+        userAgent: client.userAgent,
       });
     } finally {
       c.executionCtx.waitUntil(close());

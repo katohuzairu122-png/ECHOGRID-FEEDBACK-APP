@@ -3,6 +3,7 @@ import { getAccessToken } from './session';
 import { getCashierAccessToken } from './cashier/session';
 import { isCashierSurface } from './cashier/surface';
 import { onCashierHost } from './cashier/host-guard';
+import { clientAttributionHeaders } from './cashier/client-attribution';
 import { ApiError } from './api-error';
 
 // Re-exported so the many server-side callers that `import { ApiError } from
@@ -35,7 +36,9 @@ export async function apiFetch<T>(
   }
   // CASHIER-PWA-01 C4: inside a cashier action the cashier token is sent; everywhere else the staff token, unchanged.
   const accessToken = isCashierSurface() ? await getCashierAccessToken() : await getAccessToken();
-  const response = await callApi(path, init, accessToken, businessId, branchId);
+  // SEC-CASHIER-POST-R2 C1: cashier calls carry the signed real client so the API's audit rows name the person's device, not this Worker.
+  const attribution = isCashierSurface() ? await clientAttributionHeaders() : {};
+  const response = await callApi(path, init, accessToken, businessId, branchId, attribution);
   return parseEnvelope<T>(response);
 }
 
@@ -45,8 +48,10 @@ async function callApi(
   accessToken: string | undefined,
   businessId?: string,
   branchId?: string,
+  extraHeaders: Record<string, string> = {},
 ): Promise<Response> {
   const headers = new Headers(init.headers);
+  for (const [name, value] of Object.entries(extraHeaders)) headers.set(name, value);
   if (accessToken) headers.set('Authorization', `Bearer ${accessToken}`);
   if (businessId) headers.set('X-Business-Id', businessId);
   if (branchId) headers.set('X-Branch-Id', branchId);
