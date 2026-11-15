@@ -8,6 +8,7 @@ on:
       - '.github/workflows/w4-browser-acceptance.yml'
       - 'apps/web/playwright.w4.config.ts'
       - 'apps/web/w4-acceptance/**'
+      - 'apps/api/scripts/customer-session-browser-fixture.ts'
       - 'apps/web/src/components/workspace/**'
       - 'apps/web/src/app/signup/**'
       - 'apps/web/src/app/dashboard/feedback/**'
@@ -59,6 +60,10 @@ jobs:
       - run: pnpm --filter @echo-grid-feedback/api db:seed
       - run: cp apps/api/.dev.vars.example apps/api/.dev.vars
       - run: pnpm --filter @echo-grid-feedback/api build
+      - name: Copy disposable rotating-session BFF fixture
+        run: |
+          mkdir -p apps/web/src/app/api/customer-auth/r2-fixture
+          cp apps/web/w4-acceptance/r2-fixture-route.ts.txt apps/web/src/app/api/customer-auth/r2-fixture/route.ts
       - run: pnpm --filter @echo-grid-feedback/web build
       - run: pnpm --filter @echo-grid-feedback/web exec playwright install --with-deps chromium
       - run: pnpm --filter @echo-grid-feedback/web exec playwright test --config playwright.w4.config.ts

@@ -1,6 +1,10 @@
 import { describe, it, expect, beforeAll, afterAll, afterEach, vi } from 'vitest';
 import { Client } from 'pg';
-import { Hono } from 'hono';
+import { createCustomerSessionLifecycleRoutes } from '../../src/customer-auth/customer-session-lifecycle.routes';
+import { createCustomerLanguageRoutes } from '../../src/customer-language/customer-language.routes';
+import { createCustomerAuthenticate } from '../../src/middleware/customer-authenticate';
+import type { Bindings } from '../../src/config/env';
+import { AppError } from '../../src/lib/errors';
 import { createIsolatedCustomerEmailAuthRoutes } from '../../src/customer-auth/customer-email-auth.routes';
 import { createCustomerEmailTrustedSource } from '../../src/customer-auth/customer-email-trusted-source';
 import { signClientAttribution } from '../../src/lib/client-attribution';
@@ -201,19 +205,37 @@ describe.skipIf(!process.env.DATABASE_URL)('customer password auth (integration)
     const refresh = cookies[1]?.match(/^__Host-test-refresh=([^;]+)/)?.[1];
     if (!access || !refresh) throw new Error('Expected both customer credentials');
 
-    const protectedTestPath = new Hono().get('/', async (c) => {
-      const token = c.req.header('authorization')?.replace(/^Bearer /, '') ?? '';
-      const identity = await a.sessions.authenticateSessionToken(token);
-      return identity ? c.json({ customerId: identity.customerId }) : c.body(null, 401);
+    const languageRoutes = createCustomerLanguageRoutes(
+      createCustomerAuthenticate(a.sessions),
+      async () => ({ db: buildDb(client), close: async () => {} }),
+    ).onError((error, c) => {
+      if (error instanceof AppError && error.status === 401) return c.body(null, 401);
+      throw error;
     });
-    const read = (token: string) => protectedTestPath.request('/', { headers: { Authorization: `Bearer ${token}` } });
-    expect(await (await read(access)).json()).toEqual({ customerId: customer.id });
-    const rotated = await a.sessions.refresh(refresh);
-    if (!rotated.ok) throw new Error('Expected refresh rotation');
-    expect(rotated.session.refreshCredential).not.toBe(refresh);
-    expect(await a.sessions.revokeSession({ customerId: customer.id, sessionId: rotated.session.sessionId })).toBe(true);
-    expect((await read(rotated.session.accessToken)).status).toBe(401);
-    expect((await a.sessions.refresh(rotated.session.refreshCredential)).ok).toBe(false);
+    const environment = {
+      PUBLIC_RATE_LIMITER: { limit: async () => ({ success: true }) },
+    } as unknown as Bindings;
+    const context = { waitUntil: () => {}, passThroughOnException: () => {}, props: {} };
+    await q("UPDATE customers SET preferred_locale='ar' WHERE id=$1", [customer.id]);
+    const read = (token: string) => languageRoutes.request(
+      '/', { headers: { Authorization: `Bearer ${token}` } }, environment, context,
+    );
+    const permitted = await read(access);
+    expect(permitted.status).toBe(200);
+    expect(await permitted.json()).toMatchObject({ data: { locale: 'ar' } });
+    expect((await read(access + 'tampered')).status).toBe(401);
+    const lifecycle = createCustomerSessionLifecycleRoutes(a.sessions);
+    const post = (path: string, token: string) => lifecycle.request(path, {
+      method: 'POST', headers: { Authorization: `Bearer ${token}` },
+    });
+    const rotatedResponse = await post('/refresh', refresh);
+    expect(rotatedResponse.status).toBe(200);
+    const rotated = await rotatedResponse.json() as { accessToken: string; refreshCredential: string };
+    expect(rotated.refreshCredential).not.toBe(refresh);
+    expect((await read(rotated.accessToken)).status).toBe(200);
+    expect((await post('/logout', rotated.accessToken)).status).toBe(204);
+    expect((await read(rotated.accessToken)).status).toBe(401);
+    expect((await post('/refresh', rotated.refreshCredential)).status).toBe(401);
   });
 
   describe('phone proof', () => {

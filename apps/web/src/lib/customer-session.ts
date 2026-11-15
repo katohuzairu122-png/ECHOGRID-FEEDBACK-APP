@@ -66,3 +66,48 @@ export async function clearPendingCustomerPhone(): Promise<void> {
   const store = await cookies();
   store.delete(CUSTOMER_PENDING_PHONE_COOKIE);
 }
+
+const ROTATING_ACCESS_COOKIE = '__Host-ff_customer_access';
+const ROTATING_REFRESH_COOKIE = '__Host-ff_customer_refresh';
+const rotatingCookieOptions = { httpOnly: true, secure: true, sameSite: 'lax', path: '/' } as const;
+
+export type RotatingCustomerCredentials = {
+  accessToken: string;
+  refreshCredential: string;
+  accessExpiresAt: Date;
+  refreshExpiresAt: Date;
+};
+
+/** Server-only transport for the dormant rotating-session BFF. */
+export async function setRotatingCustomerSession(credentials: RotatingCustomerCredentials): Promise<void> {
+  const store = await cookies();
+  // Remove the legacy cookie at the transition so an expired pair cannot fall back to it.
+  store.delete(CUSTOMER_TOKEN_COOKIE);
+  store.set(ROTATING_ACCESS_COOKIE, credentials.accessToken, {
+    ...rotatingCookieOptions, expires: credentials.accessExpiresAt,
+  });
+  store.set(ROTATING_REFRESH_COOKIE, credentials.refreshCredential, {
+    ...rotatingCookieOptions, expires: credentials.refreshExpiresAt,
+  });
+}
+
+export async function getCompatibleCustomerCredentials() {
+  const store = await cookies();
+  if (store.has(ROTATING_ACCESS_COOKIE) || store.has(ROTATING_REFRESH_COOKIE)) {
+    return {
+      kind: 'rotating' as const,
+      accessToken: store.get(ROTATING_ACCESS_COOKIE)?.value,
+      refreshCredential: store.get(ROTATING_REFRESH_COOKIE)?.value,
+    };
+  }
+  return { kind: 'legacy' as const, accessToken: store.get(CUSTOMER_TOKEN_COOKIE)?.value };
+}
+
+/** Clear only after the session owner has completed any required server revocation. */
+export async function clearCompatibleCustomerSession(): Promise<void> {
+  const store = await cookies();
+  for (const name of [ROTATING_ACCESS_COOKIE, ROTATING_REFRESH_COOKIE]) {
+    store.set(name, '', { ...rotatingCookieOptions, maxAge: 0 });
+  }
+  store.delete(CUSTOMER_TOKEN_COOKIE);
+}
