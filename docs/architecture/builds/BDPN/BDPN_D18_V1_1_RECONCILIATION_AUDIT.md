@@ -24,8 +24,9 @@ notification, entitlement, deployment or merge.** Companion: `BDPN_D18_V1_1_AMEN
    settlement and Stripe evidence. No document or code defines an entitlement authority (see conflict C-6).
 5. **No customer interest/follow/wishlist concept exists**, and no business-facing aggregated notification exists.
 6. **Promotions, the Network feed and survey discovery by customers do not exist.** They are DESIGN ONLY or PARTIAL as listed below.
-7. **The owner's decision 1 conflicts with a locked BDPN decision (D-24)**, and decision 6/7 conflict with BDPN-01C/01D binding
-   non-effects. These are flagged, not silently superseded (section 4).
+7. **Fifteen conflicts with locked decisions and documents are flagged (C-1 to C-15)**, including the owner's decision 1 vs D-24, decisions
+   5-7 vs the BDPN-01C/01D non-effects, and the **Split 01 invariant that joining requires authorized business context** (C-10). None is
+   silently superseded (section 4).
 
 ## 2. Capability classification
 
@@ -52,19 +53,19 @@ notification, entitlement, deployment or merge.** Companion: `BDPN_D18_V1_1_AMEN
 | Business QR resolution | IMPLEMENTED | `api/qr/qr-code.service.ts:75-103`; public `GET /qr/:token` `api/qr/qr.routes.ts:49-94`. |
 | QR join / enroll | IMPLEMENTED | `POST /customer-memberships/join` `api/customer-relationships/customer-membership.routes.ts:48-68`; service `customer-membership.service.ts:23-91`; alias `POST /loyalty/me/join` `api/loyalty/loyalty-customer.routes.ts:99-120`. Web calls `/customer-memberships/join` (`web/lib/actions/loyalty-customer.ts:18`). |
 | Join request schema | IMPLEMENTED | `packages/shared-types/src/customer-relationships.ts:22-26` (`qrToken`, `consentVersion`, optional `idempotencyKey`). |
-| `customers`, `business_customer_memberships`, `loyalty_accounts`, `consent_grants` tables | IMPLEMENTED | `api/db/schema/customers.ts:17-47`; `business-customer-memberships.ts:65-91` (unique customer+business `:83`); `loyalty-accounts.ts:115-143`; `consent-grants.ts:161-199`. |
+| `customers`, `business_customer_memberships`, `loyalty_accounts`, `consent_grants` tables | IMPLEMENTED | `api/db/schema/customers.ts:17-47`; `business-customer-memberships.ts:18-44` (unique customer+business index `:36`); `loyalty-accounts.ts:24-52`; `consent-grants.ts:18-56` (the idempotency-key unique index at `:46` is **global**, not per customer). |
 | Membership `onboarding_source` | IMPLEMENTED (free text) | `business-customer-memberships.ts:30` `text('onboarding_source')`; migration `0034` line 11. A new source value needs **no** migration. |
 | Eligibility: business active | IMPLEMENTED | `customer-membership.service.ts:26-29` (409 `BUSINESS_NOT_AVAILABLE`). |
 | Eligibility: customer not limited | IMPLEMENTED | `customer-membership.service.ts:33-35` via `api/lib/customer-limits.ts:26-41` (403 `CUSTOMER_LIMITED`). |
 | Eligibility: customer status active | PARTIAL (upstream) | `api/middleware/customer-authenticate.ts:39-42` (401). |
 | Eligibility: loyalty program enabled | NOT PRESENT | `api/db/schema/loyalty-settings.ts:20-40` has no enabled flag. |
-| Eligibility: branch context | NOT PRESENT | QR carries `branchId` (`qr-code.service.ts:98`); join uses only `businessId` (`customer-membership.routes.ts:59`). |
+| Eligibility: branch context | NOT PRESENT (not enforced; recoverable) | QR carries `branchId` (`qr-code.service.ts:98`); join uses only `businessId` (`customer-membership.routes.ts:59`). The branch is not stored on the membership or consent, but `onboarding_reference` holds the QR id, from which the branch is recoverable through `qr_codes`. |
 | Customer leave a business membership | NOT PRESENT | `left` status and `reactivate` exist (`customer-membership.service.ts:44-53`); no leave endpoint. (`/community/me/leave` is Community Points, `api/community/community-customer.routes.ts:95`.) |
 | Customer interest / follow / wishlist | NOT PRESENT | No schema, migration, route or web code. Membership status `pending` exists in the enum but no code creates it. |
 | Customer OTP auth + 90-day JWT | IMPLEMENTED | `api/customer-auth/customer-auth.routes.ts:60,70`; `customer-jwt.ts:24`; `middleware/customer-authenticate.ts:20-49`. |
 | Password auth domain + sessions | PARTIAL (service only) | `api/customer-auth/customer-password-auth.service.ts`, `customer-session.service.ts`; no HTTP routes, nothing mounted in `api/index.ts`. |
 | `login_email` columns (0072) | IMPLEMENTED (schema only) | `drizzle/0072_customer_verified_login_email.sql`; `api/db/schema/customer-credentials.ts:34-37,59-63`. |
-| Check-in requires membership | IMPLEMENTED | `api/loyalty/loyalty-account.service.ts:98-121` (409 `MEMBERSHIP_REQUIRED`); Split 01 removed silent auto-enrollment (`:84-85`). |
+| Check-in requires membership | IMPLEMENTED | `api/loyalty/loyalty-account.service.ts:101-108` (409 `MEMBERSHIP_REQUIRED`). A code comment at `:84-85` still mentions auto-enrollment; the check itself is the evidence. |
 | Legacy `LoyaltyAccountService.enroll` | PARTIAL (legacy) | `loyalty-account.service.ts:39-72`; no non-test caller found. |
 | Customer QR (cashier service) | IMPLEMENTED | `GET /loyalty/me/customer-qr` `loyalty-customer.routes.ts:59`; `loyalty/loyalty-action-resolver.ts:160-161` emits `JOIN_LOYALTY`. |
 
@@ -75,14 +76,14 @@ CA-08 (consent language, notice and versioning). Their status after the amendmen
 
 | Capability | Class | Evidence |
 | --- | --- | --- |
-| Plan tables, seeds, approved catalog | IMPLEMENTED | `api/db/schema/subscription-plans.ts:23-78`; `api/billing/subscription-catalog.ts:3-75`; seed `api/db/seed/subscription-plans.seed.ts`; `features` is an open jsonb (`subscription-plans.ts:52`). Plans: `free`, `starter`, `growth`, `business`, `enterprise`. Feature keys: `monthlyResponses`, `aiSummaries`, `customBranding` (plus `maxBranches`, `maxUsers` columns). |
+| Plan tables, seeds, approved catalog | IMPLEMENTED | `api/db/schema/subscription-plans.ts:20-78`; `api/billing/subscription-catalog.ts:3-75`; seed `api/db/seed/subscription-plans.seed.ts` (keeps its own copy of the plan list); `features` is an open jsonb (`subscription-plans.ts:53`). Plans: `free`, `starter`, `growth`, `business`, `enterprise`. Feature keys: `monthlyResponses`, `aiSummaries`, `customBranding` (plus `maxBranches`, `maxUsers` columns). |
 | Business subscription status mirror | IMPLEMENTED | `api/db/schema/business-subscriptions.ts:31-75` (Stripe is the system of record; webhook-synced mirror). |
 | Response-allowance entitlement | IMPLEMENTED | Postgres trigger `echo_grid_apply_response_allowance()` in `drizzle/0030_response_allowance_queue.sql:14-65`. |
 | Team-seat limit | IMPLEMENTED | `api/team/team.routes.ts:38-46`. |
 | Branch limit | PARTIAL | Column only; `api/branches/branch.service.test.ts:133` asserts it is not consulted. |
 | `aiSummaries`, `customBranding` enforcement | PARTIAL | Seeded; no enforcement in `apps/api/src`. `apps/web` was not searched. |
-| Generic entitlement evaluator (`requireEntitlement`/`hasFeature`) | NOT PRESENT | `api/middleware/` holds only authenticate, require-permission, require-platform-role, require-business-wide-access, tenant-context, cashier-scope, rate-limit, customer-authenticate, audit. |
-| Status-aware gating, grace period | NOT PRESENT | Nothing branches on subscription status except a platform admin list filter. |
+| Generic entitlement evaluator (`requireEntitlement`/`hasFeature`) | NOT PRESENT | `api/middleware/` holds only authenticate, require-permission, require-platform-role, require-business-wide-access, tenant-context, tenant-authorization-context, cashier-scope, rate-limit, customer-authenticate, audit. |
+| Status-aware gating, grace period | PARTIAL / NOT PRESENT | Status is branched on in two places only: the benefit-terminal application requires `active` (`api/billing/benefit-terminal-application.service.ts:105-107`) and trial expiry filters on `trialing` (`transitionAllExpiredCardlessTrials`), plus a platform admin list filter. There is no feature gating by status and no grace period. |
 | Downgrade behaviour | PARTIAL | `api/billing/subscription-lifecycle.service.ts:13-21` only moves expired card-less trials to Free. |
 | Per-business opt-in/feature-flag settings | NOT PRESENT | Existing settings tables are notification and loyalty numeric settings only. |
 | Entitlement for remote enrollment / promotions / discovery / surveys / community | NOT PRESENT | No plan key, flag or check. D-24 (discovery plan gating) is design only and undecided. |
@@ -90,7 +91,7 @@ CA-08 (consent language, notice and versioning). Their status after the amendmen
 
 Financial constraints an entitlement check must respect (quoted from the repository):
 - `BDPN_01_OWNER_DECISION_RECORD.md` D-24 constraint: "an entitlement check may **read** the business's current plan, but must not change billing, Stripe or subscription state."
-- `SPLIT-07/HETA_01G_...GATE.md:20`: "No actor may bypass the existing 0041/0042/0044 financial write denials."
+- `SPLIT-07/HETA_01G_INDEPENDENT_ARCHITECTURE_SECURITY_ECONOMIC_ACCEPTANCE_GATE.md:20`: "No actor may bypass the existing 0041/0042/0044 financial write denials."
 - `SPLIT-08/GATE2_R20_TENANT_REFERENCE_AND_TRIGGER_FINDINGS.md:90`: financial guard triggers are not to be converted to definer rights without their own reviewed block.
 - `api/partner-credits/provider-subscription-event.reconciler.ts:49`: do not turn business-controlled metadata into entitlement authority.
 
@@ -100,8 +101,8 @@ Financial constraints an entitlement check must respect (quoted from the reposit
 | --- | --- | --- |
 | Customer Community nav item and read-only hub | IMPLEMENTED | `web/app/loyalty/dashboard/layout.tsx:43`; `web/app/loyalty/dashboard/community/page.tsx`; `community-hub-view.tsx`; `web/lib/community-hub.ts`. |
 | Community Points membership/points API | IMPLEMENTED | `api/index.ts:186-187`; `api/community/community-customer.routes.ts:61,71,95`; `community-point-customer.routes.ts:100,109`. |
-| Network Feed (`/community/feed`) | DESIGN ONLY | `NETWORK/NETWORK_00_CONTENT_MODEL_AND_ACCESS.md:9-12` ("a proposal, not an approved route"). |
-| "Discover businesses" hub entry card | DESIGN ONLY | `BDPN_01D_...:60-100` (shown only when the API reports discovery enabled). |
+| Network Feed (`/community/feed`) | DESIGN ONLY | `NETWORK/NETWORK_00_CONTENT_MODEL_AND_ACCESS.md:8-12` (route `/loyalty/dashboard/community/feed`, "a proposal, not an approved route"). |
+| "Discover businesses" hub entry card | DESIGN ONLY | `BDPN_01D_...` section 2 (lines 24-34) (shown only when the API reports discovery enabled). |
 | Split 05 boundaries | IMPLEMENTED (code) / locked (doc) | `api/db/schema/community-points.ts:62-231`; doc `SPLIT-05/ECHO_GRID_SPLIT_05_COMMUNITY_POINTS_v1.0.md:29,31,33,124,125,170`: membership never silently created; Community Points never merged with business loyalty; stop-and-report on conflict. |
 | NotificationService (`notify`, `notifyBusinessStaff`) | IMPLEMENTED | `api/notifications/notification.service.ts:39,54,120`. |
 | Event types | IMPLEMENTED | `packages/shared-types/src/notifications.ts`: 9 events; staff set of 5, customer set of 4. |
@@ -141,12 +142,30 @@ Financial constraints an entitlement check must respect (quoted from the reposit
 | C-6 | "Split 08 subscription and entitlement authority" is not a repository concept | `docs/architecture/builds/SPLIT-08/` | Proposes a new, read-only entitlement evaluator over the existing subscription mirror; a documentation owner must decide where it is specified. |
 | C-7 | The QR join has no program-enabled or branch check; remote enrollment needs a definition of "loyalty program available" | `customer-membership.service.ts` | OD-6. The existing QR path is **not** changed by this amendment. |
 | C-8 | `NETWORK` docs require a published BDPN profile for business posts; owner decision 9 adds a promotional entitlement | `NETWORK_00_CONTENT_MODEL_AND_ACCESS.md` N-06 | Both are required; the amendment states the combined predicate. |
-| C-9 | CA-08 (consent language, notice, versioning) is still open for the remote path | `CUSTOMER_AUTH_01_REQUIREMENTS_AND_ROADMAP.md` section 9 | The amendment specifies a notice contract; the wording and legal review stay open (OD-9). |
+| C-9 | CA-08 (consent language, notice, versioning) is still open for the remote path | `CUSTOMER_AUTH_01_REQUIREMENTS_AND_ROADMAP.md` section 9 | The amendment specifies a notice contract; the wording and legal review stay open (OD-9). The QR path still hard-codes `consentVersion: 'v1'` (`web/lib/actions/loyalty-customer.ts:20`), so CA-08 covers both paths. |
+| C-10 | **Split 01 hard invariant 4 and Split 03 section 4**: "Joining requires authorized business context plus explicit `JOIN_LOYALTY` consent"; the physical branch QR "remains the canonical Business QR context". Remote join is handle-only enrollment | `SPLIT-01/ECHO_GRID_SPLIT_01_IDENTITY_CUSTOMER_RELATIONSHIP_v1.0.md:47`; `web/lib/actions/loyalty-customer.ts:14-15` ("Split 01 deliberately rejects arbitrary businessId-only enrollment") | **Open owner ruling (OD-17):** does a published profile + entitlement + explicit opt-in constitute "authorized business context"? Until ruled, this amendment does **not** claim Split 01/03 are unaffected. |
+| C-11 | BDPN-01C: every `/discovery` endpoint is "`GET` and read-only. None writes any row" (section 3) and the response DTO is a closed allow-list excluding customer, loyalty, plan and entitlement information (section 4) | `BDPN_01C_DISCOVERY_API_DESIGN.md:48` and section 4 | The design adds POST/PUT/DELETE and an `enrollment` object. Amended text is stated in the amendment (section 3). |
+| C-12 | BDPN-01D section 5 "Loyalty: no loyalty read" and D-17 "logs never pair a customer with a handle": `myStatus` needs a membership read per item; interest rows, `GET /discovery/me/interests` and join audit rows pair a customer with a handle. BDPN-01E T-14's "row counts of every customer-linked table unchanged" test also needs rewording | `BDPN_01D...` section 5; `BDPN_01E...` T-14 | Amended text and a revised test statement are in the amendment (sections 3 and 9). |
+| C-13 | NETWORK feed isolation ("no direct join to loyalty, memberships, consent"; "never reads loyalty, points, feedback, survey or messaging tables") vs a promoted survey whose audience is evaluated at read time; NETWORK already designs `network_follows` (count-only to the business) so `customer_enrollment_interests` is a **second, parallel customer-to-business relation**; NETWORK-05 defers subscription gates to a later commercial phase and BDPN v1.0 places paid monetization at BDPN-05; the BDPN v1.0 lock says Mode A has "no automatic business loyalty enrollment ... outbound SMS/email or direct merchant access to customers" | `NETWORK/NETWORK_00_CONTENT_MODEL_AND_ACCESS.md:11,53,137`; `architecture/decisions/ECHO_GRID_BUSINESS_DISCOVERY_PROMOTION_NETWORK_V1.md:50,59` | Flagged. OD-25 asks whether interest should reuse the NETWORK follow design, and OD-26 whether plan-gated promotions may precede NETWORK-05/BDPN-05. |
+| C-14 | D-19 and BDPN-01E M1 say BDPN ships "as one new migration"; this design adds tables and constraint changes in separate blocks | `BDPN_01_OWNER_DECISION_RECORD.md` D-19; `BDPN_01E...` M1; `NETWORK:142` | OD-24 decides whether M1 is amended or extra migrations are accepted. |
+| C-15 | CUSTOMER-AUTH-01 roadmap describes customers who "request enrollment" and says it "must not bypass ... program terms"; the design implements instant join with no program-terms element | `CUSTOMER_AUTH_01_REQUIREMENTS_AND_ROADMAP.md:46` | Flagged; the notice contract (OD-9) is where program terms would appear. |
 
 ## 5. What the audit could not establish (UNKNOWN)
 
 - Whether `apps/web` uses `aiSummaries` / `customBranding` flags.
-- What the global `auditTrail` middleware records for customer routes (request-level audit may apply to the join).
 - Authentication of `/customer-language` (not inspected).
 - Production state of any migration or feature switch (this audit reads the repository only).
 - Whether staging or production plan rows match the repository catalog.
+
+## 6. Audit coverage of customer actions (established by review, was UNKNOWN)
+
+`api/middleware/audit.ts:173-174` returns early when there is no staff `userId`. Therefore **successful customer mutations, including
+today's QR join, write no audit row**. Only 401/403 refusals are recorded, with a null actor. Rows written with a `businessId` appear in
+that business's own audit log, so a refusal row for a non-member would be visible to the business. `audit_log.actor_user_id` references
+`users` only (`api/db/schema/audit-log.ts:18`), so customer-attributed rows need a convention or a new column (OD-22).
+
+## 7. Review record
+
+An independent review by a separate model session (not the author) returned **APPROVE WITH CHANGES** (findings H1-H8, M1-M7 and low-severity
+citation errors). The substantive corrections are applied in this version; the dispositions are in section 15 of the amendment document.
+The review was not performed by a human; the owner may require one.
