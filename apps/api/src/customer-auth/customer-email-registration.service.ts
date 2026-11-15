@@ -29,7 +29,7 @@ export async function completeEmailRegistration(input: {
   if (
     !email ||
     typeof input.passwordHash !== 'string' ||
-    !input.passwordHash.startsWith('pbkdf2:') ||
+    !/^pbkdf2\\$[1-9][0-9]*\\$[^$]+\\$[^$]+$/.test(input.passwordHash) ||
     !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(input.challengeId)
   ) return invalid;
   const [subjectDigest, proofDigest] = await Promise.all([
