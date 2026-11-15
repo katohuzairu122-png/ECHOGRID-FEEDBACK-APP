@@ -48,6 +48,13 @@ export function generateResetToken(): string {
     .join('');
 }
 
+/**
+ * H3-5 (owner ruling D1): a second reset request for the same account within this window is answered exactly like the first
+ * (202) but sends no email and leaves the earlier link valid. It bounds the mail one address can receive and stops a caller
+ * repeatedly invalidating a victim's outstanding link, without ever refusing a request (no account-keyed lockout).
+ */
+export const PASSWORD_RESET_REQUEST_SUPPRESSION_SECONDS = 120;
+
 export function resetTokenExpiresAt(): Date {
   return new Date(Date.now() + PASSWORD_RESET_EXPIRY_MINUTES * 60_000);
 }

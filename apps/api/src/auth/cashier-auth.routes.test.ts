@@ -21,6 +21,10 @@ vi.mock('../middleware/rate-limit', () => ({
   rateLimit: () => async (_c: unknown, next: () => Promise<void>) => next(),
   rateLimitByCustomer: () => async (_c: unknown, next: () => Promise<void>) => next(),
   staffLoginRateLimit: () => async (_c: unknown, next: () => Promise<void>) => next(),
+  signupRateLimit: () => async (_c: unknown, next: () => Promise<void>) => next(),
+  passwordResetRequestRateLimit: () => async (_c: unknown, next: () => Promise<void>) => next(),
+  passwordResetConfirmRateLimit: () => async (_c: unknown, next: () => Promise<void>) => next(),
+  passwordChangeRateLimit: () => async (_c: unknown, next: () => Promise<void>) => next(),
   cashierAuthRateLimit: (kind: string) => {
     mocks.limiterKinds.push(kind);
     return async (_c: unknown, next: () => Promise<void>) => next();

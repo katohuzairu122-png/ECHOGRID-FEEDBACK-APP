@@ -36,6 +36,10 @@ vi.mock('./middleware/rate-limit', () => ({
   globalApiRateLimit: () => async (_c: unknown, next: () => Promise<void>) => next(),
   rateLimitByCustomer: () => async (_c: unknown, next: () => Promise<void>) => next(),
   staffLoginRateLimit: () => async (_c: unknown, next: () => Promise<void>) => next(),
+  signupRateLimit: () => async (_c: unknown, next: () => Promise<void>) => next(),
+  passwordResetRequestRateLimit: () => async (_c: unknown, next: () => Promise<void>) => next(),
+  passwordResetConfirmRateLimit: () => async (_c: unknown, next: () => Promise<void>) => next(),
+  passwordChangeRateLimit: () => async (_c: unknown, next: () => Promise<void>) => next(),
   cashierAuthRateLimit: () => async (_c: unknown, next: () => Promise<void>) => next(),
 }));
 vi.mock('./middleware/audit', () => ({ auditTrail: async (_c: unknown, next: () => Promise<void>) => next() }));

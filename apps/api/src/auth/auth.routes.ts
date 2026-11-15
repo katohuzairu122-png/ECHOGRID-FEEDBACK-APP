@@ -20,7 +20,14 @@ import { createAccountSecurityEmailService } from '../notifications/email.servic
 import { parseJsonBody } from '../lib/validate';
 import { ok } from '../lib/response';
 import { AppError } from '../lib/errors';
-import { cashierAuthRateLimit, rateLimit, staffLoginRateLimit } from '../middleware/rate-limit';
+import {
+  cashierAuthRateLimit,
+  passwordChangeRateLimit,
+  passwordResetConfirmRateLimit,
+  passwordResetRequestRateLimit,
+  signupRateLimit,
+  staffLoginRateLimit,
+} from '../middleware/rate-limit';
 import { resolveClient } from '../lib/client-attribution';
 import { authenticate, type AuthVariables } from '../middleware/authenticate';
 import type { AuditVariables } from '../middleware/audit';
@@ -88,7 +95,7 @@ async function withCashierService<T>(
 // (now an AppError) flows to the global handler, both land in the same
 // response envelope automatically.
 
-authRoutes.post('/signup', rateLimit('AUTH_RATE_LIMITER'), async (c) => {
+authRoutes.post('/signup', signupRateLimit(), async (c) => {
   const body = await parseJsonBody(c.req.raw, signupSchema);
   const tokens = await withAuthService(c, (service) => service.signup(body));
   return ok(c, tokens, 201);
@@ -213,7 +220,7 @@ authRoutes.post('/logout', async (c) => {
  * an attacker knows, and it burns the platform's Resend quota doing it --
  * the same "this request costs real money" logic behind OTP_RATE_LIMITER.
  */
-authRoutes.post('/password-reset/request', rateLimit('AUTH_RATE_LIMITER'), async (c) => {
+authRoutes.post('/password-reset/request', passwordResetRequestRateLimit(), async (c) => {
   const body = await parseJsonBody(c.req.raw, requestPasswordResetSchema);
   await withAuthService(c, (service) =>
     service.requestPasswordReset({
@@ -239,7 +246,7 @@ authRoutes.post('/password-reset/request', rateLimit('AUTH_RATE_LIMITER'), async
  * session to whoever redeemed the link without ever proving they can pass
  * the login they just enabled.
  */
-authRoutes.post('/password-reset/confirm', rateLimit('AUTH_RATE_LIMITER'), async (c) => {
+authRoutes.post('/password-reset/confirm', passwordResetConfirmRateLimit(), async (c) => {
   const body = await parseJsonBody(c.req.raw, resetPasswordSchema);
   await withAuthService(c, (service) =>
     service.resetPassword({ token: body.token, newPassword: body.newPassword }),
@@ -284,7 +291,7 @@ authRoutes.patch('/me', authenticate, async (c) => {
  * because a password may be compromised is worthless if the compromised
  * session survives it.
  */
-authRoutes.post('/password/change', authenticate, rateLimit('AUTH_RATE_LIMITER'), async (c) => {
+authRoutes.post('/password/change', authenticate, passwordChangeRateLimit(), async (c) => {
   const body = await parseJsonBody(c.req.raw, changePasswordSchema);
   await withAuthService(c, (service) =>
     service.changePassword({

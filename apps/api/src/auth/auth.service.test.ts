@@ -154,6 +154,33 @@ function createFakeRepos() {
         row.consumedAt = new Date();
         return true;
       },
+      // Mirrors the repository's issueUnlessRecent: suppress when an outstanding token was created inside the window,
+      // otherwise cancel older outstanding tokens and insert (the real one is atomic under a per-user advisory lock).
+      async issueUnlessRecent(input: NewPasswordResetToken, windowSeconds: number) {
+        const now = Date.now();
+        for (const r of passwordResetTokens.values()) {
+          if (r.userId === input.userId && !r.consumedAt && !r.invalidatedAt && r.expiresAt.getTime() > now && now - r.createdAt.getTime() < windowSeconds * 1000) return null;
+        }
+        for (const r of passwordResetTokens.values()) {
+          if (r.userId === input.userId && !r.consumedAt && !r.invalidatedAt) r.invalidatedAt = new Date();
+        }
+        const row: PasswordResetToken = {
+          id: (input.id as string) ?? crypto.randomUUID(),
+          userId: input.userId,
+          tokenHash: input.tokenHash,
+          expiresAt: input.expiresAt,
+          consumedAt: null,
+          invalidatedAt: null,
+          requestedIp: input.requestedIp ?? null,
+          createdAt: new Date(),
+        };
+        passwordResetTokens.set(row.id, row);
+        return row;
+      },
+      async invalidateById(id: string) {
+        const r = passwordResetTokens.get(id);
+        if (r && !r.consumedAt && !r.invalidatedAt) r.invalidatedAt = new Date();
+      },
       async invalidateAllForUser(userId: string) {
         for (const row of passwordResetTokens.values()) {
           if (row.userId === userId && !row.consumedAt && !row.invalidatedAt) {
@@ -446,13 +473,70 @@ describe('AuthService', () => {
     expect(email.sent).toHaveLength(0);
   });
 
-  it('requesting a second reset invalidates the first link', async () => {
+  it('H3-5: a second request inside the 120 s window is suppressed: same outcome, no email, the first link still works', async () => {
     const first = await signupAndRequestReset('twice@example.com');
-    await service.requestPasswordReset({ email: 'twice@example.com' });
+    email.sent.length = 0;
+    await expect(service.requestPasswordReset({ email: 'twice@example.com' })).resolves.toBeUndefined();
+    expect(email.sent).toHaveLength(0);
+    expect([...repos._rawResetTokens.values()]).toHaveLength(1);
+    await expect(
+      service.resetPassword({ token: first.rawToken, newPassword: 'brand-new-password-1' }),
+    ).resolves.toBeUndefined();
+  });
 
+  it('H3-5: after the window a new request issues a fresh link and invalidates the first', async () => {
+    const first = await signupAndRequestReset('later@example.com');
+    for (const r of repos._rawResetTokens.values()) r.createdAt = new Date(Date.now() - 121_000);
+    email.sent.length = 0;
+    await service.requestPasswordReset({ email: 'later@example.com' });
+    expect(email.sent).toHaveLength(1);
     await expect(
       service.resetPassword({ token: first.rawToken, newPassword: 'brand-new-password-1' }),
     ).rejects.toMatchObject({ code: 'INVALID_RESET_TOKEN' });
+  });
+
+  it('H3-5: a used or cancelled token does not suppress a new request; an expired one neither', async () => {
+    const used = await signupAndRequestReset('used@example.com');
+    await service.resetPassword({ token: used.rawToken, newPassword: 'brand-new-password-1' });
+    email.sent.length = 0;
+    await service.requestPasswordReset({ email: 'used@example.com' });
+    expect(email.sent).toHaveLength(1);
+    for (const r of repos._rawResetTokens.values()) r.expiresAt = new Date(Date.now() - 1000);
+    email.sent.length = 0;
+    await service.requestPasswordReset({ email: 'used@example.com' });
+    expect(email.sent).toHaveLength(1);
+  });
+
+  it('H3-5: suppression is per account: another account is unaffected', async () => {
+    await signupAndRequestReset('one@example.com');
+    await signupAndRequestReset('two@example.com');
+    expect(email.sent).toHaveLength(1);
+    expect([...repos._rawResetTokens.values()]).toHaveLength(2);
+  });
+
+  it('H3-5: concurrent requests for one account send exactly one email', async () => {
+    await service.signup({ email: 'race@example.com', password: 'original-password-1', fullName: 'R' });
+    email.sent.length = 0;
+    await Promise.all(Array.from({ length: 8 }, () => service.requestPasswordReset({ email: 'race@example.com' })));
+    expect(email.sent).toHaveLength(1);
+  });
+
+  it('H3-5: a failed email send cancels the new token so an immediate retry is NOT suppressed', async () => {
+    await service.signup({ email: 'fail@example.com', password: 'original-password-1', fullName: 'F' });
+    email.sent.length = 0;
+    const realSend = email.service.send;
+    email.service.send = async () => { throw new Error('provider down'); };
+    await expect(service.requestPasswordReset({ email: 'fail@example.com' })).rejects.toThrow('provider down');
+    email.service.send = realSend;
+    await service.requestPasswordReset({ email: 'fail@example.com' });
+    expect(email.sent).toHaveLength(1);
+  });
+
+  it('H3-5: the suppressed and the sent outcomes are indistinguishable to the caller (returns undefined either way)', async () => {
+    const sent = await service.signup({ email: 'same@example.com', password: 'original-password-1', fullName: 'S' }).then(() => service.requestPasswordReset({ email: 'same@example.com' }));
+    const suppressed = await service.requestPasswordReset({ email: 'same@example.com' });
+    expect(sent).toBeUndefined();
+    expect(suppressed).toBeUndefined();
   });
 
   it('resetPassword sets the new password and rejects the old one', async () => {

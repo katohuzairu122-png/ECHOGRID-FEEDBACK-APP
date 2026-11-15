@@ -121,9 +121,10 @@ async function callEmptyBodyAuthEndpoint(
   path: string,
   body: Record<string, string>,
 ): Promise<{ error?: string }> {
+  // H3-1: the recovery calls carry the signed real client too, so the API throttles per source instead of per web Worker.
   const response = await fetch(`${API_BASE_URL}/api/v1/auth/${path}`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...(await clientAttributionHeaders()) },
     body: JSON.stringify(body),
   });
 

@@ -7,7 +7,12 @@ import { hashToken } from './token-hash';
 import { constantTimeEqualHex } from './crypto-utils';
 import type { EmailService } from '../notifications/email.service';
 import { renderPasswordResetEmail, renderPasswordChangedEmail } from './auth-emails';
-import { generateResetToken, resetTokenExpiresAt, buildResetLink } from './password-reset';
+import {
+  generateResetToken,
+  resetTokenExpiresAt,
+  buildResetLink,
+  PASSWORD_RESET_REQUEST_SUPPRESSION_SECONDS,
+} from './password-reset';
 import {
   signAccessToken,
   signRefreshToken,
@@ -252,10 +257,10 @@ export class AuthService {
    * email. Letting a suspended user restore access via the recovery flow
    * would route around the deactivation entirely.
    *
-   * Any outstanding token for the user is invalidated first, so requesting a
-   * second link immediately kills the first -- a user who requests twice
-   * (common when the first email is slow) should not leave two live account-
-   * takeover credentials sitting in an inbox.
+   * A request made after the 120-second suppression window invalidates every
+   * older outstanding token as it issues the new one, so two live account-
+   * takeover credentials never sit in an inbox. A request INSIDE the window is
+   * suppressed instead (H3-5): same 202, no email, the earlier link stays valid.
    */
   async requestPasswordReset(input: RequestPasswordResetInput): Promise<void> {
     const deps = this.requirePasswordResetDeps();
@@ -265,18 +270,22 @@ export class AuthService {
     // the one place in this service where "not found" is not an error.
     if (!user || user.status !== 'active') return;
 
-    await this.repos.passwordResetTokens.invalidateAllForUser(user.id);
-
     const rawToken = generateResetToken();
-    await this.repos.passwordResetTokens.create({
-      userId: user.id,
-      // SHA-256, not PBKDF2 -- the token is 256 bits of entropy, so there is
-      // no offline dictionary attack to slow down. Same reasoning as
-      // refresh-token storage; see token-hash.ts.
-      tokenHash: await hashToken(rawToken),
-      expiresAt: resetTokenExpiresAt(),
-      requestedIp: input.ipAddress ?? null,
-    });
+    // H3-5: atomic "issue unless one was issued in the last 120 s". Suppressed = same silent return as an unknown account:
+    // the caller's 202 is identical, the earlier link stays valid, no second email is sent.
+    const issued = await this.repos.passwordResetTokens.issueUnlessRecent(
+      {
+        userId: user.id,
+        // SHA-256, not PBKDF2 -- the token is 256 bits of entropy, so there is
+        // no offline dictionary attack to slow down. Same reasoning as
+        // refresh-token storage; see token-hash.ts.
+        tokenHash: await hashToken(rawToken),
+        expiresAt: resetTokenExpiresAt(),
+        requestedIp: input.ipAddress ?? null,
+      },
+      PASSWORD_RESET_REQUEST_SUPPRESSION_SECONDS,
+    );
+    if (!issued) return;
 
     const { subject, html } = renderPasswordResetEmail(
       user.fullName,
@@ -284,9 +293,14 @@ export class AuthService {
     );
     // Awaited, not fire-and-forget: a delivery failure must surface as a 5xx
     // so the user retries, rather than a cheerful 202 followed by an email
-    // that never arrives and a support ticket nobody can diagnose. The token
-    // row is left in place on failure -- it simply expires unused.
-    await deps.email.send({ to: user.email, subject, html });
+    // that never arrives and a support ticket nobody can diagnose. On failure the
+    // new token is cancelled (H3-5): otherwise the 120-second suppression would swallow the retry for a link nobody received.
+    try {
+      await deps.email.send({ to: user.email, subject, html });
+    } catch (err) {
+      await this.repos.passwordResetTokens.invalidateById(issued.id).catch(() => undefined);
+      throw err;
+    }
   }
 
   /**

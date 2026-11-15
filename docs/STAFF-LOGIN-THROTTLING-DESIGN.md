@@ -130,3 +130,27 @@ and the shared per-IP bucket (follow-up block if wanted).
 - **Residual risk:** many distinct sources (about 30+ IPv4 hosts or /64 prefixes) can exhaust the per-account floor (300/min) and block
   that account for the rest of the minute; a per-account lock was rejected as a cheaper lever (section 3, option C). An attribution
   header is not bound to a path and can be replayed for 60 s by anyone who captures it server-side (review L1, not changed).
+
+## 10. H3: signup, password-reset request/confirm and password change (implementation)
+
+Scope: the four endpoints that still shared the single per-IP `AUTH_RATE_LIMITER` bucket (W5). No schema, migration, secret or infrastructure change.
+
+- **Throttle.** All four use the same builder as staff login (`attributedAuthRateLimit`, keys `staff:signup:`, `staff:reset-request:`, `staff:reset-confirm:`,
+  `staff:password-change:`). Secret unset: the previous per-IP bucket on the raw address, plus the 300/min floor and the 8 KiB body cap (the same additions
+  login received). Secret set: signed requests get a per-subject+source bucket and a per-source bucket (IPv6 as /64); unsigned requests get a per-address
+  bucket only. **No strict account-wide bucket exists**, so no set of other sources can lock an account out. Subjects: hashed email (signup, reset request),
+  hashed token (reset confirm), hashed authenticated user id (password change, mounted after `authenticate`).
+- **Web.** The password-reset request and confirm server actions now send the signed attribution (signup and, via `apiFetch`, password change already did).
+- **D1 reset-email suppression (120 s).** `PasswordResetTokenRepository.issueUnlessRecent` runs one transaction: per-user `pg_advisory_xact_lock`, then "is there an
+  unused, uncancelled, unexpired token created in the last 120 s?". If yes it returns null: the service answers the same 202, sends no email and leaves the earlier link
+  valid. If no, it cancels older outstanding tokens and inserts the new one in the same transaction. The lock is what makes it race-safe: with it removed, the
+  8-connection integration test issues several tokens (verified by mutation). Uses the existing `created_at` column. A failed email send cancels the new token
+  (`invalidateById`) so an immediate retry is not suppressed for a link nobody received (this slightly changes the old "token row left in place" behaviour).
+  The response is identical for unknown, suppressed and sent cases. Residual: the suppressed branch does less work, so response time could in principle reveal that a
+  recent request existed for an existing account (body and status do not).
+- **D2.** Attribution feeds only rate-limit keys and audit/session metadata. A test asserts password change is refused (401) with a valid signed header but no token, before any
+  limiter is touched, and that the user id comes from the token only.
+- **Documented limits.** Users on one source share that source's strict budget (10/min per endpoint). A botnet of many sources can still exhaust the per-subject floor
+  (300/min). The existing test "requesting a second reset invalidates the first link" was replaced: inside the window the first link now stays valid (owner ruling D1).
+- **Rollout.** Same as section 5: secret on the web Worker first, then the API; removing it from the API restores the previous behaviour for these endpoints, except the
+  suppression window, which is independent of the secret.
