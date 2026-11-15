@@ -46,7 +46,10 @@ export function createIsolatedCustomerEmailLinkRoutes(config: {
     if (!identity) return response(401);
     const dto = emailRegistrationCompleteSchema.safeParse(await c.req.json().catch(() => null));
     if (!dto.success) return response(400);
-    if (!await config.limiter.resolveTrustedSource(c.req.raw)) return response(503);
+    // Completion verifies an existing password or hashes the first one. It
+    // shares the approved password-work budget with verified email login.
+    const decision = await limitEmailAuthRequest(config.limiter, c.req.raw, 'login', dto.data.email);
+    if (decision !== 'allowed') return response(decision === 'limited' ? 429 : 503);
     return response(await config.link.complete(identity, dto.data) ? 204 : 401);
   });
   return router;

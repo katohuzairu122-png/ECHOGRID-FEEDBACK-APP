@@ -309,11 +309,12 @@ describe.skipIf(!process.env.DATABASE_URL)('customer password auth (integration)
         hmacSecret: 'synthetic-email-linking-hmac-with-enough-entropy',
         passwordPolicy: { minLength: 10 }, deliver, now: () => new Date(clockMs),
       });
+      const limit = vi.fn(async () => true);
       const routes = createIsolatedCustomerEmailLinkRoutes({
         sessions: a.sessions, link, limiter: {
           resolveTrustedSource: async () => 'trusted-test-source',
           keyForIdentifier: async () => 'opaque-test-identifier',
-          limit: async () => true,
+          limit,
         },
       });
       const post = (path: string, body: unknown, token = otp.session.accessToken) => routes.request(
@@ -330,6 +331,8 @@ describe.skipIf(!process.env.DATABASE_URL)('customer password auth (integration)
       const message = deliver.mock.calls[0]?.[0];
       if (!message) throw new Error('Expected a synthetic proof');
       const input = { email, challengeId: message.challengeId, proof: message.proof, password: GOOD };
+      limit.mockResolvedValueOnce(false);
+      expect((await post('complete', input)).status).toBe(429);
       expect((await post('complete', { ...input, proof: 'wrong-proof' })).status).toBe(401);
       expect((await post('complete', { ...input, password: 'short' })).status).toBe(401);
       expect(await a.sessions.authenticateSessionToken(otp.session.accessToken)).not.toBeNull();
