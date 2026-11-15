@@ -46,7 +46,15 @@ describe.skipIf(!process.env.DATABASE_URL)('CUSTOMER-AUTH-01D-4b-S1 disposable P
     const id = await repo.create({ purpose: 'email_registration', subjectDigest, proofDigest, now, expiresAt: new Date(now.getTime() + 15 * 60_000) });
     const input = { id, customerId: null, purpose: 'email_registration' as const, subjectDigest, proofDigest, now };
     expect(await repo.consume({ ...input, purpose: 'email_recovery' })).toBe(false);
-    const results = await Promise.all([repo.consume(input), repo.consume(input)]);
+    const secondClient = new Client({ connectionString: process.env.DATABASE_URL });
+    await secondClient.connect();
+    let results: boolean[];
+    try {
+      const secondRepo = new CustomerAuthChallengeRepository(buildDb(secondClient));
+      results = await Promise.all([repo.consume(input), secondRepo.consume(input)]);
+    } finally {
+      await secondClient.end();
+    }
     expect(results.filter(Boolean)).toHaveLength(1);
     expect(await repo.consume(input)).toBe(false);
   });
