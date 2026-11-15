@@ -23,6 +23,10 @@ export const CUSTOMER_AUTH_EVENT_TYPES = [
   'rate_limited',
   'legacy_token_used',
   'kill_switch_changed',
+  'recovery_code_issued',
+  'recovery_code_redeemed',
+  'recovery_code_failed',
+  'recovery_code_revoked',
 ] as const;
 export type CustomerAuthEventType = (typeof CUSTOMER_AUTH_EVENT_TYPES)[number];
 
@@ -59,7 +63,7 @@ export const customerAuthEvents = pgTable(
     index('customer_auth_events_type_created_idx').on(table.eventType, table.createdAt),
     check(
       'customer_auth_events_event_type_check',
-      sql`${table.eventType} IN ('otp_requested', 'otp_verified', 'otp_failed', 'registration_completed', 'password_set', 'password_changed', 'password_login_succeeded', 'password_login_failed', 'recovery_started', 'recovery_completed', 'recovery_failed', 'session_created', 'session_refreshed', 'session_revoked', 'session_replay_detected', 'step_up_passed', 'step_up_failed', 'rate_limited', 'legacy_token_used', 'kill_switch_changed')`,
+      sql`${table.eventType} IN ('otp_requested', 'otp_verified', 'otp_failed', 'registration_completed', 'password_set', 'password_changed', 'password_login_succeeded', 'password_login_failed', 'recovery_started', 'recovery_completed', 'recovery_failed', 'session_created', 'session_refreshed', 'session_revoked', 'session_replay_detected', 'step_up_passed', 'step_up_failed', 'rate_limited', 'legacy_token_used', 'kill_switch_changed', 'recovery_code_issued', 'recovery_code_redeemed', 'recovery_code_failed', 'recovery_code_revoked')`,
     ),
     check(
       'customer_auth_events_outcome_check',
