@@ -3,7 +3,7 @@ import { Client } from 'pg';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { sign } from 'hono/jwt';
 import { buildDb } from '../../src/db/client';
-import { signAccessToken, signImpersonationToken } from '../../src/auth/jwt';
+import { signAccessToken, signCashierAccessToken, signImpersonationToken } from '../../src/auth/jwt';
 import { TrustedBrokerAssertionIssuer } from '../../src/auth/trusted-broker-issuer';
 import { brokerHex, verifyBrokerAssertionSignature } from '../../src/auth/broker-assertion.contract';
 
@@ -60,6 +60,13 @@ describe('B4-03 real authentication and transactional issuer foundation', () => 
     const jwt = kind === 'missing' ? await signAccessToken(f.actor,secret) : kind === 'impersonated' ? (await signImpersonationToken(f.actor,randomUUID(),secret)).token :
       await sign({ sub:f.actor,sid:kind==='substituted'?randomUUID():f.session,type:kind==='customer'?'customer_access':kind==='unsupported'?'service':'access',iat:t-100,exp:kind==='expired'?t-1:t+60 },secret,'HS256');
     expect(await f.issuer.issue({...f.request,authorization:`Bearer ${jwt}`})).toMatchObject({ok:false,reason:'AUTHENTICATION_DENIED'});
+  });
+  it('SEC-CASHIER-POST-R2 C2: refuses a genuine cashier-scoped token of a fully authorized actor on a live session, without touching the database', async () => {
+    const f = await fixture();
+    const cashierToken = await signCashierAccessToken(f.actor, secret, { sessionId: f.session, businessId: f.business, branchId: f.branch });
+    expect(await f.issuer.issue({ ...f.request, authorization: `Bearer ${cashierToken}` })).toMatchObject({ ok: false, reason: 'AUTHENTICATION_DENIED' });
+    // Control: the SAME actor, session, business and branch with an ordinary access token is issued, so the refusal is the cashier claim alone.
+    expect(await f.issuer.issue(f.request)).toMatchObject({ ok: true });
   });
   it.each(['revoked','expired','foreign','suspended','deleted','inactive_business','missing_membership','missing_permission','foreign_branch','revoked_key'] as const)('rejects persisted %s', async kind => {
     const f = await fixture();
