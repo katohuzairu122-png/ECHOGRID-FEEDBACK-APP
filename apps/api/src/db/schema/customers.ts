@@ -5,20 +5,19 @@ import { auditColumns, softDeleteColumns } from './_shared';
 /**
  * A GLOBAL customer identity, mirroring how `users` (staff) is global and
  * `user_business_roles` carries the business-scoped part -- the same split
- * applies here: `customers` is the phone-verified identity, one row per
- * phone number across the WHOLE platform, and `loyalty_accounts` (below)
+ * applies here: `customers` is a global identity, one row per
+ * customer across the WHOLE platform, and `loyalty_accounts` (below)
  * is the per-business membership. A returning customer scanning a QR code
- * at a completely different business never re-verifies their phone.
+ * at a completely different business retains the same identity.
  *
- * Never a `users` row -- customers have no staff-style login, dashboard
- * access, or RBAC. Identity is established once via SMS OTP
- * (`customer-auth/`), not a password.
+ * Never a `users` row. Customers may have a verified phone or verified
+ * email credential; staff authentication and RBAC remain separate.
  */
 export const customers = pgTable(
   'customers',
   {
     id: uuid('id').primaryKey().defaultRandom(),
-    phone: text('phone').notNull().unique(), // E.164, e.g. +15551234567
+    phone: text('phone').unique(), // Nullable for email-first identity; populated E.164 values remain globally unique.
     fullName: text('full_name'),
     email: text('email'),
     birthday: date('birthday'), // month/day matter most (birthday rewards); full date stored, year optional in the UI
