@@ -18165,7 +18165,8 @@
           "name": "attempts",
           "type": "integer",
           "primaryKey": false,
-          "notNull": true
+          "notNull": true,
+          "default": 0
         },
         "max_attempts": {
           "name": "max_attempts",
