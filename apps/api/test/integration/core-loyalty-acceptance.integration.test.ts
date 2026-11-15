@@ -240,7 +240,7 @@ describe.skipIf(!databaseUrl)('Core loyalty acceptance (real HTTP and disposable
     const redeemPath = `/loyalty/me/accounts/${businessA}/redeem`;
     const voucher = await repos.loyaltyRewards.create({
       businessId: businessA, name: 'Fixture voucher', type: 'voucher', rewardValue: '5.00',
-      cooldownSeconds: 3600, branchId: branchA1, pointsCost: 0,
+      cooldownSeconds: 3600, branchId: branchA1, pointsCost: 1,
     });
     const reward = await repos.loyaltyRewards.create({
       businessId: businessA, name: 'Fixture points reward', pointsCost: 10, cooldownSeconds: 3600,
@@ -285,11 +285,14 @@ describe.skipIf(!databaseUrl)('Core loyalty acceptance (real HTTP and disposable
   });
 
   it('rolls back purchase and reward mutations when the transaction ledger insert fails', async () => {
+    expect((await request(owner, `/loyalty/accounts/${accountA}/purchase`, {
+      purchaseAmount: 5, idempotencyKey: `rollback-fixture-${run}`,
+    })).status).toBe(200);
     const reward = await repos.loyaltyRewards.create({
       businessId: businessA, name: 'Rollback points reward', pointsCost: 1,
     });
     const voucher = await repos.loyaltyRewards.create({
-      businessId: businessA, name: 'Rollback voucher', type: 'voucher', rewardValue: '1.00', pointsCost: 0,
+      businessId: businessA, name: 'Rollback voucher', type: 'voucher', rewardValue: '1.00', pointsCost: 1,
     });
     const name = 'core_acceptance_' + run.replaceAll('-', '');
     await dbClient.query(
