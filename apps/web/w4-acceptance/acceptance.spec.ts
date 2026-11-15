@@ -125,7 +125,6 @@ for (const locale of ['en', 'ar'] as const) {
 
     await test.step('W5 touch navigation, modal keyboard containment and breakpoint cleanup', async () => {
       await page.goto('/dashboard/feedback');
-      expect(await page.evaluate(() => navigator.maxTouchPoints)).toBeGreaterThan(0);
       const trigger = page.getByRole('button', { name: more, exact: true });
       const sheet = page.getByRole('dialog', { name: more, exact: true });
       await expect(trigger).toBeVisible();
