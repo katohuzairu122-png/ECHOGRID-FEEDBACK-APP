@@ -129,6 +129,30 @@
   "notFound": {
     "title": "This link isn't valid",
     "description": "This feedback code may have expired or been replaced. Please ask a staff member for a current code, or try scanning again."
+  },
+  "formBuilder": {
+    "name": "Form name",
+    "questionNumber": "Question {number}",
+    "question": "Question text",
+    "settings": "Question settings",
+    "key": "Question key",
+    "type": "Answer type",
+    "required": "Required",
+    "options": "Options (comma separated)",
+    "remove": "Remove question {number}",
+    "invalid": "Check the form name and question settings. Question keys must be valid and unique, and choice questions need options.",
+    "add": "Add question",
+    "publishing": "Publishing…",
+    "publishVersion": "Publish new version",
+    "publish": "Publish form",
+    "types": {
+      "text": "Short text",
+      "textarea": "Long text",
+      "rating": "Rating",
+      "single_choice": "Single choice",
+      "multi_choice": "Multiple choice",
+      "boolean": "Yes or no"
+    }
   }
 }
 
