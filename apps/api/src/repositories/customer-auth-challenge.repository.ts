@@ -62,11 +62,20 @@ export class CustomerAuthChallengeRepository extends BaseRepository {
   }
 
   /** Count failed proof attempts without allowing attempts after expiry/consumption. */
-  async recordFailedAttempt(input: { id: string; now: Date }): Promise<boolean> {
+  async recordFailedAttempt(input: {
+    id: string;
+    now: Date;
+    scope?: { purpose: CustomerAuthChallengePurpose; subjectDigest: string };
+  }): Promise<boolean> {
+    const scope = input.scope;
     const rows = await this.db.update(customerAuthChallenges)
       .set({ attempts: sql`${customerAuthChallenges.attempts} + 1` })
       .where(and(
         eq(customerAuthChallenges.id, input.id),
+        scope ? and(
+          eq(customerAuthChallenges.purpose, scope.purpose),
+          eq(customerAuthChallenges.subjectDigest, scope.subjectDigest),
+        ) : undefined,
         isNull(customerAuthChallenges.consumedAt),
         gt(customerAuthChallenges.expiresAt, input.now),
         lt(customerAuthChallenges.attempts, customerAuthChallenges.maxAttempts),
