@@ -1,4 +1,4 @@
-import { Hono } from 'hono';
+import { Hono, type Context } from 'hono';
 import { z } from 'zod';
 import type { Bindings } from '../config/env';
 
@@ -29,7 +29,7 @@ export const emailPasswordLoginSchema = z.object({
 }).strict();
 
 /** Deliberate fail-closed contract until the S2 domain and delivery dependencies exist. */
-const notAvailable = (c: Parameters<Parameters<typeof customerEmailAuthRoutes.post>[1]>[0]) =>
+const notAvailable = (c: Context<{ Bindings: Bindings }>) =>
   c.json({ error: 'Not Found' }, 404);
 
 customerEmailAuthRoutes.post('/email/register/request', notAvailable);
