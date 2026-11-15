@@ -6,6 +6,8 @@ import authEn from '../messages/en/auth.json';
 import authAr from '../messages/ar/auth.json';
 import dashboardEn from '../messages/en/dashboard.json';
 import dashboardAr from '../messages/ar/dashboard.json';
+import branchesEn from '../messages/en/branches.json';
+import branchesAr from '../messages/ar/branches.json';
 import feedbackEn from '../messages/en/feedback.json';
 import feedbackAr from '../messages/ar/feedback.json';
 import loyaltyEn from '../messages/en/loyalty.json';
@@ -42,6 +44,10 @@ function syntheticCustomerToken(id: string) {
   return `${payload}.${createHmac('sha256', key).update(payload).digest('base64url')}`;
 }
 
+// Chromium's touch emulation exercises tap and pointer behavior in the same
+// browser that runs the keyboard assertions. It is not physical-device coverage.
+test.use({ hasTouch: true });
+
 test.beforeEach(async ({ browser, page }, info) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await info.attach('browser', { body: browser.version(), contentType: 'text/plain' });
@@ -50,9 +56,12 @@ test.beforeEach(async ({ browser, page }, info) => {
 for (const locale of ['en', 'ar'] as const) {
   const rtl = locale === 'ar';
   const auth = (rtl ? authAr : authEn).signup;
-  const dashboard = (rtl ? dashboardAr : dashboardEn).createBusiness;
+  const dashboardMessages = rtl ? dashboardAr : dashboardEn;
+  const dashboard = dashboardMessages.createBusiness;
+  const branches = rtl ? branchesAr : branchesEn;
   const feedback = rtl ? feedbackAr : feedbackEn;
   const messages = (rtl ? loyaltyAr : loyaltyEn).customer.messages;
+  const { more, close } = dashboardMessages.nav;
 
   test(`${locale} signup, form setup, and Feedback Inbox history`, async ({ page, context }) => {
     const slug = 'w4-' + randomUUID();
@@ -114,6 +123,72 @@ for (const locale of ['en', 'ar'] as const) {
       await expect(page.getByRole('heading', { name: /زيارة W4 Form.*v1/ })).toBeVisible();
     });
 
+    await test.step('W5 touch navigation, modal keyboard containment and breakpoint cleanup', async () => {
+      await page.goto('/dashboard/feedback');
+      const trigger = page.getByRole('button', { name: more, exact: true });
+      const sheet = page.getByRole('dialog', { name: more, exact: true });
+      await expect(trigger).toBeVisible();
+      await expect(async () => {
+        await trigger.tap();
+        await expect(sheet).toBeVisible({ timeout: 1_500 });
+      }).toPass({ timeout: 12_000 });
+      await expect(trigger).toHaveAttribute('aria-expanded', 'true');
+      await expect(sheet).toHaveAttribute('aria-modal', 'true');
+      await expect.poll(() => sheet.evaluate((node) => node.contains(document.activeElement))).toBe(true);
+      await expect(page.locator('body')).toHaveCSS('overflow', 'hidden');
+
+      const dismiss = sheet.getByRole('button', { name: close, exact: true });
+      await dismiss.focus();
+      await page.keyboard.press('Shift+Tab');
+      expect(await sheet.evaluate((node) => node.contains(document.activeElement))).toBe(true);
+      await expect(dismiss).not.toBeFocused();
+      await page.keyboard.press('Tab');
+      await expect(dismiss).toBeFocused();
+      await page.keyboard.press('Escape');
+      await expect(sheet).toHaveCount(0);
+      await expect(trigger).toBeFocused();
+      await expect(trigger).toHaveAttribute('aria-expanded', 'false');
+      await expect(page.locator('body')).not.toHaveCSS('overflow', 'hidden');
+
+      await trigger.tap();
+      await expect(sheet).toBeVisible();
+      await page.setViewportSize({ width: 1200, height: 844 });
+      await expect(sheet).toHaveCount(0);
+      await expect(trigger).toBeHidden();
+      await expect(page.locator('body')).not.toHaveCSS('overflow', 'hidden');
+      await page.setViewportSize({ width: 390, height: 844 });
+      await expect(trigger).toBeVisible();
+      await expect(trigger).toHaveAttribute('aria-expanded', 'false');
+
+      await trigger.tap();
+      await expect(sheet).toBeVisible();
+      const link = sheet.locator('nav a[href]').first();
+      const target = await link.getAttribute('href');
+      expect(target).toMatch(/^\/dashboard/);
+      await link.tap();
+      await expect.poll(() => new URL(page.url()).pathname).toBe(target);
+      await expect(sheet).toHaveCount(0);
+    });
+
+    await test.step('W5 touch form dialog and keyboard focus restoration', async () => {
+      await page.goto('/dashboard/branches');
+      const trigger = page.getByRole('button', { name: branches.newButton, exact: true });
+      const dialog = page.getByRole('dialog', { name: branches.form.titleNew, exact: true });
+      await expect(async () => {
+        await trigger.tap();
+        await expect(dialog).toBeVisible({ timeout: 1_500 });
+      }).toPass({ timeout: 12_000 });
+      const name = dialog.getByLabel(branches.form.nameLabel, { exact: true });
+      await name.tap();
+      await name.fill('فرع W5 North');
+      await page.keyboard.press('Tab');
+      await expect(dialog.getByLabel(branches.form.slugLabel, { exact: true })).toBeFocused();
+      await expect.poll(() => dialog.evaluate((node) => getComputedStyle(node).direction)).toBe(rtl ? 'rtl' : 'ltr');
+      await page.keyboard.press('Escape');
+      await expect(dialog).toBeHidden();
+      await expect(trigger).toBeFocused();
+    });
+
     await test.step('F4 filters, committed history, pagination and results', async () => {
       await page.goto('/dashboard/feedback');
       const branch = page.getByRole('combobox', { name: feedback.staff.filterAriaLabel });
@@ -158,6 +233,23 @@ for (const locale of ['en', 'ar'] as const) {
       await expect(page).toHaveURL(/\/dashboard\/feedback$/);
       await expect(page.getByRole('article')).toHaveCount(20);
     });
+
+    await test.step('W5 keyboard filters and touch pagination after scrolling', async () => {
+      const urgency = page.getByRole('combobox', { name: feedback.staff.urgencyFilterLabel, exact: true });
+      await urgency.focus();
+      await urgency.press('ArrowDown');
+      await expect(page).toHaveURL(/urgency=P0_CRITICAL/);
+      await expect(urgency).toHaveValue('P0_CRITICAL');
+      await expect(page.getByRole('heading', { name: feedback.staff.noResultsTitle })).toBeVisible();
+      await page.getByRole('button', { name: feedback.staff.clearFilters, exact: true }).first().tap();
+      await expect(page).toHaveURL(/\/dashboard\/feedback$/);
+      const older = page.getByRole('link', { name: feedback.staff.older });
+      await older.scrollIntoViewIfNeeded();
+      expect(await page.evaluate(() => window.scrollY)).toBeGreaterThan(0);
+      await older.tap();
+      await expect(page).toHaveURL(/offset=20/);
+      await expect(page.getByRole('article')).toHaveCount(1);
+    });
   });
 
   test(`${locale} customer Messages recovery and keyboard retry`, async ({ page, context }) => {
@@ -183,6 +275,7 @@ for (const locale of ['en', 'ar'] as const) {
       await expect(failureNotice).toBeVisible();
       await viewportEvidence(page, 'messages-retry');
       const retry = page.getByRole('button', { name: messages.retry, exact: true });
+      await page.keyboard.press('Tab');
       await retry.focus();
       await expect(retry).toBeFocused();
       await expect.soft(retry).not.toHaveCSS('box-shadow', 'none');
@@ -191,6 +284,17 @@ for (const locale of ['en', 'ar'] as const) {
       await expect(page.getByText('Synthetic W4 رسالة')).toBeVisible();
       await expect(failureNotice).toHaveCount(0);
       await viewportEvidence(page, 'messages-recovered');
+
+      await test.step('W5 touch retry after a second synthetic interruption', async () => {
+        writeFileSync(faultFile, '');
+        await page.reload();
+        await expect(failureNotice).toBeVisible();
+        await expect(page.getByText('Synthetic W4 رسالة')).toHaveCount(0);
+        rmSync(faultFile, { force: true });
+        await retry.tap();
+        await expect(page.getByText('Synthetic W4 رسالة')).toBeVisible();
+        await expect(failureNotice).toHaveCount(0);
+      });
     } finally {
       rmSync(faultFile, { force: true });
     }

@@ -2,6 +2,24 @@ name: W4 browser acceptance
 on:
   push:
     branches: [verify/w4-browser-acceptance]
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/w4-browser-acceptance.yml'
+      - 'apps/web/playwright.w4.config.ts'
+      - 'apps/web/w4-acceptance/**'
+      - 'apps/web/src/components/workspace/**'
+      - 'apps/web/src/app/signup/**'
+      - 'apps/web/src/app/dashboard/feedback/**'
+      - 'apps/web/src/app/dashboard/branches/**'
+      - 'apps/web/src/components/ui/dialog.tsx'
+      - 'apps/web/src/app/loyalty/dashboard/*/messages/**'
+      - 'apps/web/messages/*/feedback.json'
+      - 'apps/web/messages/*/loyalty.json'
+      - 'apps/web/messages/*/common.json'
+      - 'apps/web/messages/*/auth.json'
+      - 'apps/web/messages/*/branches.json'
+      - 'apps/web/messages/*/dashboard.json'
 permissions:
   contents: read
 jobs:
@@ -24,6 +42,8 @@ jobs:
       CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE: postgresql://echogrid:echogrid@localhost:5432/echogrid_w4_test
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - name: Record exact revision
         run: git rev-parse HEAD
       - uses: pnpm/action-setup@v4

@@ -18,7 +18,9 @@ export default defineConfig({
     { ...api, reuseExistingServer: false, timeout: 60_000 },
     { command: 'node w4-acceptance/local-proxy.mjs', url: 'http://127.0.0.1:8788/health', reuseExistingServer: false },
     {
-      command: 'pnpm dev',
+      // Exercise the built Web surface so the Next.js development overlay
+      // cannot intercept taps on bottom navigation in either direction.
+      command: 'pnpm exec next start',
       url: 'http://localhost:3000',
       env: { API_BASE_URL: 'http://127.0.0.1:8788' },
       reuseExistingServer: false,
