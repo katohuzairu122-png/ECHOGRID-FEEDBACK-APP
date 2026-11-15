@@ -1,0 +1,103 @@
+name: Deploy production Cashier Worker
+
+# Manual, owner-approved release of the dedicated cashier Worker ONLY (echo-grid-feedback-cashier). It never touches the API
+# Worker, the web Worker, any database, any migration, or any DNS/domain binding. Run it AFTER the production migrations
+# 0069-0071 have been applied through migrate-production.yml and the API has been released (see
+# docs/CASHIER-PRODUCTION-RELEASE.md). The domain cashier.echo-grid.uk is attached by the owner in the Cloudflare
+# dashboard, not by this workflow.
+
+on:
+  workflow_dispatch:
+    inputs:
+      expected_commit:
+        description: Exact reviewed current main SHA
+        required: true
+        type: string
+      confirmation:
+        description: Type DEPLOY_PRODUCTION_CASHIER
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-release
+  cancel-in-progress: false
+
+jobs:
+  authorize:
+    runs-on: ubuntu-latest
+    outputs:
+      commit: ${{ steps.bind.outputs.commit }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - name: Bind exact reviewed main
+        id: bind
+        shell: bash
+        env:
+          EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+          CONFIRMATION: ${{ inputs.confirmation }}
+          DISPATCH_REF: ${{ github.ref }}
+          RUN_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          [[ "$EXPECTED_COMMIT" =~ ^[0-9a-f]{40}$ ]]
+          test "$CONFIRMATION" = "DEPLOY_PRODUCTION_CASHIER"
+          test "$DISPATCH_REF" = "refs/heads/main"
+          CURRENT_MAIN="$(git rev-parse HEAD)"
+          test "$CURRENT_MAIN" = "$EXPECTED_COMMIT"
+          test "$RUN_SHA" = "$EXPECTED_COMMIT"
+          echo "commit=$EXPECTED_COMMIT" >> "$GITHUB_OUTPUT"
+
+  verify:
+    needs: authorize
+    uses: ./.github/workflows/ci-cd.yml
+
+  deploy-cashier:
+    needs: [authorize, verify]
+    if: needs.verify.result == 'success'
+    environment: production
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.authorize.outputs.commit }}
+      - name: Reject stale main after environment approval
+        env:
+          AUTHORIZED: ${{ needs.authorize.outputs.commit }}
+        run: |
+          test "$(git rev-parse HEAD)" = "$AUTHORIZED"
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$AUTHORIZED"
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.9.0
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Refuse a configuration that could bind a domain or reach the web Worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          section="$(sed -n '/^\[env\.cashier\]/,$p' apps/web/wrangler.toml | tr -d '\r')"
+          grep -q '^name = "echo-grid-feedback-cashier"$' <<<"$section"
+          grep -q '^workers_dev = false$' <<<"$section"
+          grep -q '^routes = \[\]$' <<<"$section"
+          grep -q '^CASHIER_HOST = "cashier.echo-grid.uk"$' <<<"$section"
+      - name: Build the web application (OpenNext)
+        working-directory: apps/web
+        run: pnpm exec opennextjs-cloudflare build
+        env:
+          NEXT_TELEMETRY_DISABLED: '1'
+      - name: Deploy the cashier Worker (no domain binding, no migration)
+        working-directory: apps/web
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: pnpm exec opennextjs-cloudflare deploy --env cashier

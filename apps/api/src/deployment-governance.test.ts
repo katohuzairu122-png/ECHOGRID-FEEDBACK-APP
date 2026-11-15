@@ -25,7 +25,8 @@ const onBlock = (n: string) => /^on:\n((?:[ ].*\n|\n)*)/m.exec(code(n))![1]!;
 
 const RELEASE = 'deploy-production.yml';
 const WEB_ONLY = 'deploy-web-only.yml';
-const DEPLOYERS = [RELEASE, 'deploy-staging.yml', WEB_ONLY];
+const CASHIER_PROD = 'deploy-cashier-production.yml';
+const DEPLOYERS = [RELEASE, 'deploy-staging.yml', WEB_ONLY, CASHIER_PROD];
 
 describe('B3 production deployment governance (static workflow checks)', () => {
   it('1-2. pull-request and main-push CI contains no deploy step, no Cloudflare credential and no secret reference', () => {
@@ -158,6 +159,37 @@ describe('B3 production deployment governance (static workflow checks)', () => {
     expect(cashier).toContain('routes = []'); // no custom domain: the production hostname is not bound here
     expect(toml.slice(0, toml.indexOf('[env.staging]'))).not.toMatch(/CASHIER_HOST/); // production config has no cashier host
     expect(toml).not.toMatch(/routes\s*=\s*\[[^\]]*cashier\.echo-grid\.uk/);
+  });
+
+  it('CASHIER-PWA-DEPLOY-01: the production cashier release is manual, gated, cashier-only and binds no domain', () => {
+    const s = code(CASHIER_PROD);
+    expect(onBlock(CASHIER_PROD)).toMatch(/^ {2}workflow_dispatch:/m);
+    expect(onBlock(CASHIER_PROD)).not.toMatch(/push:|pull_request|schedule:/);
+    expect(s).toContain('DEPLOY_PRODUCTION_CASHIER');
+    expect(job(CASHIER_PROD, 'verify')).toContain('uses: ./.github/workflows/ci-cd.yml');
+    const deploy = job(CASHIER_PROD, 'deploy-cashier');
+    expect(deploy).toMatch(/^ {4}environment: production$/m); // the human approval gate
+    expect(deploy).toMatch(/needs: \[authorize, verify\]/);
+    expect(deploy).toMatch(/if: needs\.verify\.result == 'success'/);
+    expect(deploy).toContain('opennextjs-cloudflare deploy --env cashier');
+    // Cashier Worker only: no API/web deploy, no migration, no domain or DNS operation, no staging target.
+    for (const forbidden of [/wrangler-action/, /--env staging/, /--env cashier-staging/, /migrate/i, /db:migrate/, /custom[-_ ]?domain/i, /dns/i, /PRODUCTION_DATABASE_URL/, /deploy --env production/]) expect(s, String(forbidden)).not.toMatch(forbidden);
+    expect(s).toContain('git ls-remote origin refs/heads/main'); // stale-main rejection after approval
+    expect(code(RELEASE)).not.toMatch(/cashier/);
+    expect(code(WEB_ONLY)).not.toMatch(/cashier/);
+  });
+
+  it('CASHIER-PWA-DEPLOY-01: the production cashier Worker config cannot bind a domain, and production web has no cashier host', () => {
+    const toml = readFileSync(resolve(dir, '../../apps/web/wrangler.toml'), 'utf8').replace(/\r\n/g, '\n');
+    const section = toml.slice(toml.indexOf('[env.cashier]'));
+    expect(section).toContain('name = "echo-grid-feedback-cashier"');
+    expect(section).toContain('workers_dev = false');
+    expect(section).toContain('routes = []'); // the domain is attached by the owner, never by a deploy
+    expect(section).toContain('CASHIER_HOST = "cashier.echo-grid.uk"');
+    // Sequencing rule: the production WEB Worker (top-level config) gets CASHIER_APP_URL only after the cashier Worker is verified.
+    const productionWeb = toml.slice(0, toml.indexOf('[env.staging]'));
+    expect(productionWeb).not.toMatch(/CASHIER_(HOST|APP_URL)/);
+    expect(toml).not.toMatch(/^routes\s*=.*cashier\.echo-grid\.uk/m);
   });
 
   it('12. both certification workflows remain manual-only', () => {
