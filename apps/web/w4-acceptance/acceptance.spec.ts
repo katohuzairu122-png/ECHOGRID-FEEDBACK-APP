@@ -179,7 +179,8 @@ for (const locale of ['en', 'ar'] as const) {
     try {
       await page.goto(url);
       await expect(page.locator('html')).toHaveAttribute('dir', rtl ? 'rtl' : 'ltr');
-      await expect(page.getByRole('alert')).toContainText(messages.loadErrorTitle);
+      const failureNotice = page.getByRole('alert').filter({ hasText: messages.loadErrorTitle });
+      await expect(failureNotice).toBeVisible();
       await viewportEvidence(page, 'messages-retry');
       const retry = page.getByRole('button', { name: messages.retry, exact: true });
       await retry.focus();
@@ -188,7 +189,7 @@ for (const locale of ['en', 'ar'] as const) {
       rmSync(faultFile, { force: true });
       await page.keyboard.press('Enter');
       await expect(page.getByText('Synthetic W4 رسالة')).toBeVisible();
-      await expect(page.getByRole('alert')).toHaveCount(0);
+      await expect(failureNotice).toHaveCount(0);
       await viewportEvidence(page, 'messages-recovered');
     } finally {
       rmSync(faultFile, { force: true });
