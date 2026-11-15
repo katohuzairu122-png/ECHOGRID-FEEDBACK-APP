@@ -61,8 +61,9 @@ describe('S3 stays unreachable from the deployed Worker until activation', () =>
     expect(referencing(/new CustomerSessionService\(/)).toEqual([]);
   });
 
-  it('only the session service and credential repository touch the 0072 login state read', () => {
+  it('only the session service, password service (E10 guard) and credential repository touch the 0072 login state read', () => {
     expect(referencing(/findLegacyLoginState/)).toEqual([
+      'src/customer-auth/customer-password-auth.service.ts',
       'src/customer-auth/customer-session.service.ts',
       'src/repositories/customer-credential.repository.ts',
     ]);
