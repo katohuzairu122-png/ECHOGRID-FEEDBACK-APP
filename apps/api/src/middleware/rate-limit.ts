@@ -1,7 +1,7 @@
 import { createMiddleware } from 'hono/factory';
 import type { Bindings } from '../config/env';
 import { AppError } from '../lib/errors';
-import { resolveClient } from '../lib/client-attribution';
+import { rateLimitSource, resolveClient } from '../lib/client-attribution';
 import type { CustomerAuthVariables } from './customer-authenticate';
 
 /**
@@ -169,12 +169,13 @@ function attributedAuthRateLimit(scope: AuthScope, kind: CashierAuthKind, legacy
       // Not JSON: the handler's own validation answers it. It still counts against the "none" subject below.
     }
     const subject = await subjectOf(kind, body);
-    const connecting = c.req.header('cf-connecting-ip') ?? 'unknown';
+    const rawConnecting = c.req.header('cf-connecting-ip') ?? 'unknown';
+    const connecting = rateLimitSource(rawConnecting);
     const prefix = `${scope}:${kind}`;
     const checks: { limiter: RateLimit; key: string }[] = [];
     if (!c.env.CLIENT_ATTRIBUTION_SECRET) {
       // Previous behaviour, unchanged.
-      if (legacyStrict) checks.push({ limiter: c.env.AUTH_RATE_LIMITER, key: connecting });
+      if (legacyStrict) checks.push({ limiter: c.env.AUTH_RATE_LIMITER, key: rawConnecting });
     } else {
       const client = await resolveClient(
         c.req.raw.headers,
@@ -183,15 +184,15 @@ function attributedAuthRateLimit(scope: AuthScope, kind: CashierAuthKind, legacy
         c.env.CLIENT_ATTRIBUTION_SECRET_PREVIOUS,
       );
       if (client.trusted) {
+        const source = rateLimitSource(client.ip);
         checks.push(
-          { limiter: c.env.AUTH_RATE_LIMITER, key: `${prefix}:subject:${subject}:ip:${client.ip}` },
-          { limiter: c.env.AUTH_RATE_LIMITER, key: `${prefix}:source:${client.ip}` },
+          { limiter: c.env.AUTH_RATE_LIMITER, key: `${prefix}:subject:${subject}:ip:${source}` },
+          { limiter: c.env.AUTH_RATE_LIMITER, key: `${prefix}:source:${source}` },
         );
       } else {
-        checks.push(
-          { limiter: c.env.AUTH_RATE_LIMITER, key: `${prefix}:direct:${connecting}` },
-          { limiter: c.env.AUTH_RATE_LIMITER, key: `${prefix}:subject:${subject}:direct` },
-        );
+        // No account-keyed strict bucket here (review M1): it was global across addresses, so one remote caller could hold a
+        // named account at 429. Direct callers are bounded per address (/64 for IPv6) and by the per-account floor below.
+        checks.push({ limiter: c.env.AUTH_RATE_LIMITER, key: `${prefix}:direct:${connecting}` });
       }
     }
     checks.push({ limiter: c.env.API_RATE_LIMITER, key: `${prefix}:subject:${subject}` });

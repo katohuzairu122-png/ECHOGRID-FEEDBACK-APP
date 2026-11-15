@@ -142,9 +142,10 @@ describe('cashierAuthRateLimit request bounds', () => {
     expect(res.status).toBe(400);
     expect(pulled).toBeLessThan(20);
   });
-  it('unsigned callers for one account share ONE direct bucket across addresses (the :direct key must not include the IP)', async () => {
+  it('unsigned callers have NO account-keyed strict bucket: one address cannot lock a named account for others (review M1)', async () => {
     const call = app({ AUTH_RATE_LIMITER: limiter(10), API_RATE_LIMITER: limiter(300), CLIENT_ATTRIBUTION_SECRET: SECRET });
-    for (let i = 0; i < 10; i++) expect(await status(call('/login', { email: 'same@x.test' }, ip(`192.0.2.${i + 1}`)))).toBe(200);
-    expect(await status(call('/login', { email: 'same@x.test' }, ip('192.0.2.200')))).toBe(429);
+    for (let i = 0; i < 12; i++) await status(call('/login', { email: 'same@x.test' }, ip('192.0.2.99')));
+    expect(await status(call('/login', { email: 'same@x.test' }, ip('192.0.2.200')))).toBe(200);
   });
+
 });
