@@ -95,6 +95,36 @@ async function subjectOf(kind: CashierAuthKind, body: unknown): Promise<string> 
 /** Cashier auth bodies are a few hundred bytes; anything larger is refused before it is buffered or parsed. */
 const CASHIER_AUTH_MAX_BODY_BYTES = 8 * 1024;
 
+/** Reads at most `maxBytes` of the body as text; null when it is larger. An unreadable body reads as empty. */
+async function readBounded(request: Request, maxBytes: number): Promise<string | null> {
+  const reader = request.body?.getReader();
+  if (!reader) return '';
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > maxBytes) {
+        // Not awaited: on a cloned (tee'd) body the cancel promise settles only when BOTH branches are cancelled.
+        void reader.cancel().catch(() => undefined);
+        return null;
+      }
+      chunks.push(value);
+    }
+  } catch {
+    return '';
+  }
+  const all = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    all.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return new TextDecoder().decode(all);
+}
+
 /**
  * SEC-CASHIER-R2 F6: throttling for the four cashier authentication endpoints (staff login is unchanged).
  *
@@ -118,8 +148,10 @@ export function cashierAuthRateLimit(kind: CashierAuthKind) {
     if (declared !== undefined && Number(declared) > CASHIER_AUTH_MAX_BODY_BYTES) {
       throw new AppError('Request body too large.', 400, 'PAYLOAD_TOO_LARGE');
     }
-    const text = await c.req.raw.clone().text().catch(() => '');
-    if (text.length > CASHIER_AUTH_MAX_BODY_BYTES) throw new AppError('Request body too large.', 400, 'PAYLOAD_TOO_LARGE');
+    // Bounded read: stop pulling the body the moment it passes the cap, so an oversized chunked body (no
+    // content-length) is never fully buffered here.
+    const text = await readBounded(c.req.raw.clone(), CASHIER_AUTH_MAX_BODY_BYTES);
+    if (text === null) throw new AppError('Request body too large.', 400, 'PAYLOAD_TOO_LARGE');
     let body: unknown = null;
     try {
       body = JSON.parse(text);

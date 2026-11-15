@@ -119,4 +119,32 @@ describe('cashierAuthRateLimit request bounds', () => {
     const res = await a.request('/login', { method: 'POST', body: 'not json', headers: ip('192.0.2.1') }, { AUTH_RATE_LIMITER: limiter(10), API_RATE_LIMITER: limiter(300) });
     expect(res.status).toBe(200);
   });
+  it('refuses on a declared content-length over the cap even when the body itself is small (precheck)', async () => {
+    const a = new Hono();
+    a.onError(errorHandler as never);
+    a.post('/login', cashierAuthRateLimit('login'), (c) => c.json({ ok: true }));
+    const res = await a.request('/login', { method: 'POST', body: '{}', headers: { ...ip('192.0.2.1'), 'content-length': '99999' } }, { AUTH_RATE_LIMITER: limiter(10), API_RATE_LIMITER: limiter(300) });
+    expect(res.status).toBe(400);
+  });
+  it('stops reading a chunked body with no content-length once it passes the cap', async () => {
+    const a = new Hono();
+    a.onError(errorHandler as never);
+    a.post('/login', cashierAuthRateLimit('login'), (c) => c.json({ ok: true }));
+    let pulled = 0;
+    const stream = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        pulled += 1;
+        controller.enqueue(new TextEncoder().encode('x'.repeat(4096)));
+        if (pulled > 1000) controller.close();
+      },
+    });
+    const res = await a.request(new Request('http://x/login', { method: 'POST', body: stream, headers: ip('192.0.2.1'), duplex: 'half' } as RequestInit), undefined, { AUTH_RATE_LIMITER: limiter(10), API_RATE_LIMITER: limiter(300) });
+    expect(res.status).toBe(400);
+    expect(pulled).toBeLessThan(20);
+  });
+  it('unsigned callers for one account share ONE direct bucket across addresses (the :direct key must not include the IP)', async () => {
+    const call = app({ AUTH_RATE_LIMITER: limiter(10), API_RATE_LIMITER: limiter(300), CLIENT_ATTRIBUTION_SECRET: SECRET });
+    for (let i = 0; i < 10; i++) expect(await status(call('/login', { email: 'same@x.test' }, ip(`192.0.2.${i + 1}`)))).toBe(200);
+    expect(await status(call('/login', { email: 'same@x.test' }, ip('192.0.2.200')))).toBe(429);
+  });
 });
