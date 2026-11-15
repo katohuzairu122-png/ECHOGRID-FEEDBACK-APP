@@ -125,7 +125,7 @@ describe.skipIf(!process.env.DATABASE_URL)('customer password auth (integration)
   });
 
   describe('verified email password sign-in (S2, domain only)', () => {
-    it('requires credential-level email verification, not merely a matching address', async () => {
+    it('requires a verified credential email and rejects unknown or incorrect passwords', async () => {
       const phone = PHONE(91);
       const email = `s2-${RUN}-91@example.test`;
       const registered = await a.auth.registerWithPassword(proof(phone), GOOD);
