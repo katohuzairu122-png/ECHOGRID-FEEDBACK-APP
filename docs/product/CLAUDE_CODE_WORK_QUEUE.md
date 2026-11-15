@@ -2,7 +2,7 @@
 
 Status: LIVE WORK LIST (documentation only). Owner: the repository owner assigns; Claude Code keeps this file current.
 Companion roadmaps: `docs/product/ECHO_GRID_ROADMAP.md` (product), `docs/product/CHATGPT_WORK_INDEPENDENT_USABILITY_ROADMAP.md` (ChatGPT Work, WORK-UX-01).
-Last updated: 2026-11-15 (DOCS-RECON-01), reconciled to main `eae88c702d682dec7bf4d32bf9918bc7a3f6dc7e`. Evidence is GitHub pull-request, workflow-run and repository state only. **Nothing in this file is a security certification.**
+Last updated: 2026-11-15 (DOCS-RECON-01), reconciled to main `eae88c702d682dec7bf4d32bf9918bc7a3f6dc7e` and re-checked against `bcd6c02f4f1faea1e2b877b4ecb395d5f456b64b` at 17:44Z (section 2b). Evidence is GitHub pull-request, workflow-run and repository state only. **Nothing in this file is a security certification.**
 
 ## 1. Priority rule (owner instruction, 2026-11-15)
 
@@ -53,6 +53,10 @@ Results **reported** by the earlier session and the owner, and **not independent
 invalid-attribution fallback; cashier login and role restrictions; F7 single-use selection tickets; concurrent ticket-spend protection; synthetic staging fixtures cleaned up.
 These are not repeated without a specific reason. Until the STG-SEC-04/05 reports are committed to an authoritative repository location (the owner chooses it), they remain **external completion evidence**.
 
+### 2b. Post-baseline changes (`eae88c7` to `bcd6c02`)
+
+Main advanced by three customer-auth merges after the baseline above: #454 (14:26Z), #455 (16:35Z), #456 (17:21Z). Main CI succeeded on each (runs 43724406700, 43736314871, 43740669655). They are development-only and dormant (roadmap 2.G.2). **No staging deploy newer than run 43713775674 (`eae88c7`) appears in the workflow runs, so staging is not recorded as running them.** Migration `0073` is not recorded as applied anywhere. They do not change the security gates in 2a.
+
 ## 3. Awaiting the owner (nothing here starts without an answer)
 
 | Item | Needs |
@@ -65,7 +69,7 @@ These are not repeated without a specific reason. Until the STG-SEC-04/05 report
 | REWARD-02A, Features 04-06 | Owner authorization |
 | Attribution secret on the web Worker, the cashier Worker and the API | Owner action; cannot be set or verified by Claude Code (the staging deploy itself is done, run 43713775674) |
 | Where the STG-SEC-04/05 completion reports are kept | Owner names an authoritative repository location, or confirms they stay external |
-| **CUSTOMER-AUTH-EMAIL-01** (owner ruling 2026-11-15: email-first customer authentication) | A **separate development block must be authorized**. The ruling is recorded, but no route, schema change, migration, secret or deployment is authorized. See roadmap section 2.G.1 for the reconciliation and the owner questions E1 to E9 |
+| **CUSTOMER-AUTH-EMAIL-01** (owner ruling 2026-11-15: email-first customer authentication) | **Activation** (mounting routes, enabling rotating cookies, binding namespaces, applying migration `0073`, any deployment) needs separate authorization. Development PRs #454, #455 and #456 are merged and dormant (roadmap 2.G.2). Owner questions E1 to E9 remain; E3 is partly answered in code by #454 and needs the owner's recorded decision |
 | PLATFORM-IDENTITY-01 | Not authorized |
 | Financial activation | NO-GO |
 
@@ -76,7 +80,7 @@ These are not repeated without a specific reason. Until the STG-SEC-04/05 report
 | 1 | Human independent review of the cashier F6/F7 code and the throttle and reset code (#439, #445, #447, #452) before any production use | 2026-11-15 | STG-SEC-02 reports | Owner decision whether a human reviews; all reviews so far are model reviews |
 | 2 | Authenticated staging validation of cashier flows, audit attribution (C1) and the staff password-change and reset flows | 2026-11-15 | STG-SEC-02 reports | Staging is deployed at `eae88c7` (run 43713775674). Still needs the attribution-secret confirmation, a staging test sign-in or authorization for synthetic data, and owner direction on which gates to run in which session |
 | 3 | Optional hardening raised by the reviews, each needing owner approval: bind the attribution header to a path or scope (L1), constant-time reset-request response (timing), lock_timeout for the reset lock | 2026-11-15 | #439 review, H3 validation | Residual risks, not defects |
-| 4 | **CUSTOMER-AUTH-EMAIL-01 design block** (documentation): turn the roadmap 2.G.1 reconciliation into a reviewed design, answer E1 to E9, and plan migrations and routes | 2026-11-15 | Owner ruling (email-first approved) | Needs explicit authorization of the block. Depends on a working production email path (roadmap 2.E, unexplained non-delivery) and on owner decisions. No implementation |
+| 4 | **CUSTOMER-AUTH-EMAIL-01 owner review and activation gates**: answer E1 to E9, record the decision behind #454, review the dormant S1, S2 and S2-R2 work (#454 to #456) against `CUSTOMER_AUTH_S2_R2_READINESS.md`, and decide activation | 2026-11-15 | Owner ruling (email-first approved) | Needs explicit authorization for each activation step. Depends on a working production email path (roadmap 2.E, unexplained non-delivery) and on owner decisions. Not started by Claude Code |
 | 5 | Record where the STG-SEC-04/05 completion reports live (owner decision) | 2026-11-15 | DOCS-RECON-01 | Documentation only once the owner answers |
 
 New items from the owner are appended here.
@@ -95,6 +99,8 @@ R1/R2/R2b cashier security (#429-#431, #430); C1 audit attribution (#434); C2 br
 C4 migration governance (#437); staging smoke fix (#438); staff login throttling option A (#439); BDPN D-18 v1.1 audit and amendment (#441); work queue (#444); throttle review fixes (#445);
 BDPN D-18 v1.1 G0 decision reconciliation, documentation only, decisions still pending (#446); H2 global API limiter (#447); H3 auth throttle coverage and reset suppression (#452);
 staging migration 0072 and deploys at `ed420f78`, `58e8b98b`, `c895edb2`.
+
+Added after the `eae88c7` baseline (merged 2026-11-15, development-only, dormant): customer-auth S1 nullable phone and challenge storage (#454, migration `0073`), S2 email HTTP contract (#455), S2-R2 rotating session transport (#456).
 
 Added by DOCS-RECON-01 (2026-11-15): WORK-UX-01 W1 (#448), W3 (#449), W4 baseline (#450) and W5 (#451); H3 (#452); work queue updates (#444, #453); BDPN D-18 v1.1 G0 reconciliation docs (#446);
 staging deploy of `eae88c7` (run 43713775674); customer email-login storage foundation (#432, migration 0072, not wired); CUSTOMER-AUTH-01 01A to 01D-5 merged and not wired (roadmap 2.G).
