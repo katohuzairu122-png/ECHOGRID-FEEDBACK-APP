@@ -44,3 +44,8 @@ Within G2, entitlement + consent contracts precede remote mutation. Within G3, p
 
 ## Completion report per group
 Main SHA; branch/head; PR link/status; file inventory; design decisions; tests/CI exact head; security/tenant/privacy checks; staging scope and evidence; unresolved blockers; no unapproved merge/deploy. Stop after each independently verified group.
+
+## G0 status note (2026-11-15)
+G0 owner-decision reconciliation is recorded in `BDPN_D18_V11_G0_DECISION_RECONCILIATION.md` (register status, Tier 1 proposed rulings pending owner approval, conflict status, approval
+checklist). Sequencing: G0 -> E0 -> B2; B3/B4 only when their decisions are resolved; B5 stays blocked until OD-17 and its consent, security and prerequisite gates are approved; B6/B7 are
+separately gated. Nothing is approved by that note.
