@@ -6,6 +6,7 @@
  * No Drizzle migrations, Neon SQL, Hyperdrive config or runtime app grants.
  */
 import pg from 'pg';
+import { MIGRATION_COUNT } from './lib/migration-journal.mjs';
 
 const DB_URL='postgresql://echogrid:echogrid@localhost:5432/echogrid_ci_pg18_principal';
 if(process.env.GITHUB_ACTIONS!=='true' ||
@@ -36,7 +37,7 @@ try {
   "SELECT current_database() db,current_user username,current_setting('server_version_num')::int version"
  )).rows[0];
  check(info.db==='echogrid_ci_pg18_principal'&&info.username==='echogrid'&&Math.floor(info.version/10000)===18,'DATABASE_IDENTITY');
- check((await owner.query('SELECT count(*)::int n FROM drizzle.__drizzle_migrations')).rows[0].n===73,'MIGRATION_COUNT');
+ check((await owner.query('SELECT count(*)::int n FROM drizzle.__drizzle_migrations')).rows[0].n===MIGRATION_COUNT,'MIGRATION_COUNT');
 
  for(const {name} of tables){
   const flags=(await owner.query('SELECT relrowsecurity,relforcerowsecurity FROM pg_class WHERE oid=$1::regclass',['public.'+name])).rows[0];

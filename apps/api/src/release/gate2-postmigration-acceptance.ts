@@ -28,9 +28,14 @@ export interface Gate2PostMigrationAssessment {
   readonly blockers: readonly string[];
 }
 
-export function assessGate2PostMigration(raw: unknown): Gate2PostMigrationAssessment {
+/**
+ * `expectedMigrations` is the repository journal length, supplied by the caller (MIGRATION-GOV-01: no hard-coded count lives
+ * here, so adding a migration never requires editing this file). A missing or non-positive count denies, never guesses.
+ */
+export function assessGate2PostMigration(raw: unknown, expectedMigrations: number): Gate2PostMigrationAssessment {
   const deny=(blockers: readonly string[]): Gate2PostMigrationAssessment =>
     Object.freeze({ schemaComplete:false,releaseCertified:false,deploymentAuthorized:false,financialActivationAuthorized:false,blockers });
+  if (!Number.isSafeInteger(expectedMigrations) || expectedMigrations <= 0) return deny(['EXPECTED_MIGRATION_COUNT_INVALID']);
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return deny(['INVALID_EVIDENCE']);
   const e=raw as Partial<Gate2PostMigrationEvidence>;
   if ((e.environment !== 'staging' && e.environment !== 'production') ||
@@ -47,7 +52,7 @@ export function assessGate2PostMigration(raw: unknown): Gate2PostMigrationAssess
       typeof e.brokerSignedAssertionVerifiedAtTrustBoundary !== 'boolean' ||
       typeof e.runtimeApplicationSmokePass !== 'boolean') return deny(['INVALID_EVIDENCE']);
   const blockers: string[]=[];
-  const schemaComplete=e.migrationsApplied===73&&e.uniqueMigrationTimestamps===73&&
+  const schemaComplete=e.migrationsApplied===expectedMigrations&&e.uniqueMigrationTimestamps===expectedMigrations&&
     e.rlsEnabled===9&&e.forceRlsEnabled===9&&e.enabledFinancialGuards===6;
   if(!schemaComplete) blockers.push('SCHEMA_OR_GUARD_INCOMPLETE');
   if(e.runtimeBypassRls||e.runtimeDatabaseRole==='neondb_owner') blockers.push('RUNTIME_ROLE_BYPASSES_RLS');

@@ -5,6 +5,7 @@
  * database RLS and application role semantics remain unresolved.
  */
 import pg from 'pg';
+import { MIGRATION_COUNT } from './lib/migration-journal.mjs';
 
 const EXPECTED_URL = 'postgresql://echogrid:echogrid@localhost:5432/echogrid_ci_pg18_role_contract';
 if (process.env.GITHUB_ACTIONS !== 'true' ||
@@ -27,7 +28,7 @@ try {
   const applied = (await owner.query(
     'SELECT count(*)::int AS count FROM drizzle.__drizzle_migrations',
   )).rows[0];
-  assert(applied.count === 73, 'MIGRATIONS_NOT_REPLAYED');
+  assert(applied.count === MIGRATION_COUNT, 'MIGRATIONS_NOT_REPLAYED');
 
   await owner.query(`CREATE ROLE ${candidateName} LOGIN INHERIT NOSUPERUSER
     NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS
