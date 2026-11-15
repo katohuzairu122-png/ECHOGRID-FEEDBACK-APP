@@ -1,3 +1,4 @@
+import type { PasswordLoginResult } from './customer-password-auth.service';
 import { describe, expect, it, vi } from 'vitest';
 import {
   createIsolatedCustomerEmailAuthRoutes,
@@ -25,7 +26,7 @@ function setup() {
   const limit = vi.fn(async (_input: { key: string; limit: number; windowSeconds: number }) => true);
   const requestProof = vi.fn(async (_email: string) => {});
   const completeRegistration = vi.fn(async () => ({ ok: true, customerId: 'internal-id' }) as const);
-  const login = vi.fn(async () => ({ ok: false, kind: 'invalid' }) as const);
+  const login = vi.fn(async (): Promise<PasswordLoginResult> => ({ ok: false, kind: 'invalid' }));
   const transportSession = vi.fn(() => new Response(null, { status: 204 }));
   const routes = createIsolatedCustomerEmailAuthRoutes({
     resolveTrustedSource, limit, requestProof, completeRegistration, login, transportSession,
@@ -71,6 +72,22 @@ describe('isolated customer email HTTP', () => {
     expect((await routes.request(post('login', loginInput))).status).toBe(503);
     expect(completeRegistration).not.toHaveBeenCalled();
     expect(login).not.toHaveBeenCalled();
+  });
+
+  it('hands successful login to customer session transport with no credential fields in the response body', async () => {
+    const { routes, login, transportSession } = setup();
+    const now = new Date();
+    const session = {
+      customerId: 'synthetic-customer', sessionId: 'synthetic-session',
+      accessToken: 'synthetic-access', accessExpiresAt: now,
+      refreshCredential: 'synthetic-refresh', refreshExpiresAt: now,
+      sessionAbsoluteExpiresAt: now,
+    };
+    login.mockResolvedValueOnce({ ok: true, session });
+    const response = await routes.request(post('login', loginInput));
+    expect(response.status).toBe(204);
+    expect(await response.text()).toBe('');
+    expect(transportSession).toHaveBeenCalledExactlyOnceWith(session);
   });
 
   it('returns no customer ID from completion and no session from invalid login', async () => {
