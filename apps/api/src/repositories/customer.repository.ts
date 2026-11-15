@@ -19,6 +19,12 @@ export class CustomerRepository extends BaseRepository {
     return row ? this.liftIfSuspensionEnded(row) : row;
   }
 
+  async findByIdForUpdate(id: string): Promise<Customer | undefined> {
+    const [row] = await this.db.select().from(customers)
+      .where(and(eq(customers.id, id), eq(customers.isDeleted, false))).for('update');
+    return row ? this.liftIfSuspensionEnded(row) : row;
+  }
+
   async findByPhone(phone: string): Promise<Customer | undefined> {
     const row = await this.db.query.customers.findFirst({
       where: and(eq(customers.phone, phone), eq(customers.isDeleted, false)),

@@ -65,7 +65,7 @@ export class CustomerAuthChallengeRepository extends BaseRepository {
   async recordFailedAttempt(input: {
     id: string;
     now: Date;
-    scope?: { purpose: CustomerAuthChallengePurpose; subjectDigest: string };
+    scope?: { purpose: CustomerAuthChallengePurpose; subjectDigest: string; customerId?: string };
   }): Promise<boolean> {
     const scope = input.scope;
     const rows = await this.db.update(customerAuthChallenges)
@@ -75,6 +75,7 @@ export class CustomerAuthChallengeRepository extends BaseRepository {
         scope ? and(
           eq(customerAuthChallenges.purpose, scope.purpose),
           eq(customerAuthChallenges.subjectDigest, scope.subjectDigest),
+          scope.customerId ? eq(customerAuthChallenges.customerId, scope.customerId) : undefined,
         ) : undefined,
         isNull(customerAuthChallenges.consumedAt),
         gt(customerAuthChallenges.expiresAt, input.now),
