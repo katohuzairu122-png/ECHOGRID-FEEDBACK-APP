@@ -1,0 +1,34 @@
+import { createCustomerSessionBff } from '@/lib/customer-session-bff';
+import { getCompatibleCustomerCredentials, setRotatingCustomerSession } from '@/lib/customer-session';
+
+const origin = 'http://localhost:3000';
+const callApi = (path: string, init: RequestInit) => fetch('http://127.0.0.1:8792' + path, init);
+const bff = createCustomerSessionBff({ origin, callApi });
+
+export async function POST(request: Request) {
+  if (process.env.CI !== 'true' || request.headers.get('origin') !== origin) {
+    return new Response(null, { status: 403 });
+  }
+  const operation = new URL(request.url).searchParams.get('operation');
+  if (operation === 'refresh' || operation === 'logout') return bff(request, operation);
+  if (operation !== 'login') return new Response(null, { status: 404 });
+  const result = await callApi('/login', { method: 'POST', cache: 'no-store' });
+  if (!result.ok) return new Response(null, { status: result.status });
+  const session = await result.json();
+  await setRotatingCustomerSession({
+    accessToken: session.accessToken,
+    refreshCredential: session.refreshCredential,
+    accessExpiresAt: new Date(session.accessExpiresAt),
+    refreshExpiresAt: new Date(session.refreshExpiresAt),
+  });
+  return new Response(null, { status: 204 });
+}
+
+export async function GET() {
+  if (process.env.CI !== 'true') return new Response(null, { status: 404 });
+  const credentials = await getCompatibleCustomerCredentials();
+  if (!credentials.accessToken) return new Response(null, { status: 401 });
+  return callApi('/customer-language', {
+    cache: 'no-store', headers: { Authorization: `Bearer ${credentials.accessToken}` },
+  });
+}
