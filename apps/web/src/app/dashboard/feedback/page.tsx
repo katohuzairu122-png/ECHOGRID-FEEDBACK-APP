@@ -6,6 +6,7 @@ import { getActiveBusiness } from '@/lib/business';
 import { getCurrentUser } from '@/lib/platform';
 import { apiFetch, ApiError } from '@/lib/api-client';
 import { BranchFilter } from './branch-filter';
+import { feedbackFilterHref } from './feedback-filter-query';
 import { FeedbackFilters } from './feedback-filters';
 import { FeedbackInboxList } from './feedback-inbox-list';
 import { buttonVariants } from '@/components/ui';
@@ -59,6 +60,10 @@ export default async function FeedbackPage({ searchParams }: FeedbackPageProps) 
   category.forEach((c) => feedbackQuery.append('category', c));
   urgency.forEach((u) => feedbackQuery.append('urgency', u));
 
+  const urlQuery = new URLSearchParams(feedbackQuery);
+  urlQuery.delete('limit');
+  const filterQuery = urlQuery.toString();
+
   let loaded:
     { branches: BranchDto[]; page: { items: FeedbackDto[]; hasMore: boolean } } | undefined;
   let failure: 'forbidden' | 'unavailable' | undefined;
@@ -92,7 +97,9 @@ export default async function FeedbackPage({ searchParams }: FeedbackPageProps) 
         >
           {t('manageForms')}
         </Link>
-        {loaded && <BranchFilter branches={loaded.branches} selectedBranchId={branchId} />}
+        {loaded && (
+          <BranchFilter branches={loaded.branches} selectedBranchId={branchId} filterQuery={filterQuery} />
+        )}
       </div>
     </header>
   );
@@ -125,19 +132,8 @@ export default async function FeedbackPage({ searchParams }: FeedbackPageProps) 
   );
   const branchNames = new Map(branches.map((b) => [b.id, b.name]));
 
-  // Carried into FeedbackFilters so changing a dropdown or submitting the
-  // search never silently drops the branch scope; the view, category,
-  // urgency and search are passed separately and offset always resets.
-  const baseParams: Record<string, string> = {};
-  if (branchId) baseParams.branchId = branchId;
-  if (search) baseParams.search = search;
-
-  const pageHref = (nextOffset: number) => {
-    const p = new URLSearchParams(feedbackQuery);
-    p.delete('limit');
-    p.set('offset', String(nextOffset));
-    return `/dashboard/feedback?${p}`;
-  };
+  const pageHref = (nextOffset: number) =>
+    feedbackFilterHref(filterQuery, { offset: String(nextOffset) });
 
   return (
     <div className={styles.page}>
@@ -145,11 +141,12 @@ export default async function FeedbackPage({ searchParams }: FeedbackPageProps) 
 
       <section className={styles.toolbar} aria-label={t('filtersLabel')}>
         <FeedbackFilters
+          key={search ?? ''}
           search={search}
           savedView={savedView}
           category={category}
           urgency={urgency}
-          baseParams={baseParams}
+          filterQuery={filterQuery}
         />
       </section>
 

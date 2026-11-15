@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { renderWithIntl } from '@/test-utils';
 import type { FeedbackDto } from '@echo-grid-feedback/shared-types';
 import { FeedbackInboxList } from './feedback-inbox-list';
+import { feedbackFilterHref } from './feedback-filter-query';
 import { FeedbackFilters } from './feedback-filters';
 import { BranchFilter } from './branch-filter';
 
@@ -58,7 +59,7 @@ function item(overrides: Partial<FeedbackDto> = {}): FeedbackDto {
 }
 const branches = new Map([['br-1', 'Main St']]);
 
-describe('Feedback Inbox visual alignment (presentation only)', () => {
+describe('Feedback Inbox presentation and navigation', () => {
   beforeEach(() => push.mockClear());
 
   it('keeps urgency, sentiment, rating and workflow status as distinct, labelled fields', () => {
@@ -119,7 +120,7 @@ describe('Feedback Inbox visual alignment (presentation only)', () => {
         savedView="critical_now"
         category={[]}
         urgency={[]}
-        baseParams={{ branchId: 'br-1' }}
+        filterQuery="branchId=br-1&offset=40&savedView=critical_now"
       />,
     );
     expect(screen.getByRole('search', { name: 'Search and filters' })).toBeInTheDocument();
@@ -134,14 +135,28 @@ describe('Feedback Inbox visual alignment (presentation only)', () => {
     const cleared = new URL(push.mock.calls[1]![0] as string, 'http://x');
     expect(cleared.searchParams.has('search')).toBe(false);
     expect(cleared.searchParams.get('branchId')).toBe('br-1');
+    expect(screen.getByLabelText('Search comments')).toHaveValue('');
   });
 
-  it('branch filter has a visible label and navigates by branch id', async () => {
+  it('branch filter preserves search, view, categories and urgency and resets pagination', async () => {
     const user = userEvent.setup();
-    renderWithIntl(<BranchFilter branches={[{ id: 'br-1', name: 'Main St' } as never]} />);
+    renderWithIntl(
+      <BranchFilter
+        branches={[{ id: 'br-1', name: 'Main St' } as never]}
+        filterQuery="search=too+late%26cold&savedView=critical_now&category=cleanliness&category=service_quality&urgency=P1_HIGH&offset=40"
+      />,
+    );
     expect(screen.getByText('Branch')).toBeInTheDocument();
     await user.selectOptions(screen.getByRole('combobox', { name: 'Filter by branch' }), 'br-1');
-    expect(push).toHaveBeenCalledWith('/dashboard/feedback?branchId=br-1');
+    const href = push.mock.lastCall?.[0] as string;
+    const url = new URL(href, 'http://x');
+    expect(url.pathname).toBe('/dashboard/feedback');
+    expect(url.searchParams.get('branchId')).toBe('br-1');
+    expect(url.searchParams.get('search')).toBe('too late&cold');
+    expect(url.searchParams.get('savedView')).toBe('critical_now');
+    expect(url.searchParams.getAll('category')).toEqual(['cleanliness', 'service_quality']);
+    expect(url.searchParams.get('urgency')).toBe('P1_HIGH');
+    expect(url.searchParams.has('offset')).toBe(false);
   });
 
   it('view, category and urgency are single-choice dropdowns that apply on change and keep the other filters', async () => {
@@ -152,7 +167,7 @@ describe('Feedback Inbox visual alignment (presentation only)', () => {
         savedView="critical_now"
         category={[]}
         urgency={['P1_HIGH']}
-        baseParams={{ branchId: 'br-1' }}
+        filterQuery="branchId=br-1&offset=40&savedView=critical_now&search=late&urgency=P1_HIGH"
       />,
     );
     for (const name of ['View', 'Category', 'Urgency']) {
@@ -180,7 +195,7 @@ describe('Feedback Inbox visual alignment (presentation only)', () => {
         savedView="critical_now"
         category={['service_quality']}
         urgency={[]}
-        baseParams={{ branchId: 'br-1' }}
+        filterQuery="branchId=br-1&offset=40&savedView=critical_now&category=service_quality"
       />,
     );
     await user.selectOptions(screen.getByRole('combobox', { name: 'View' }), '');
@@ -190,14 +205,44 @@ describe('Feedback Inbox visual alignment (presentation only)', () => {
     expect(url.searchParams.get('branchId')).toBe('br-1');
   });
 
-  it('shows the first value of an old multi-value link and replaces it with one choice', async () => {
+  it('preserves every category when changing urgency and replaces only an edited category', async () => {
     const user = userEvent.setup();
     renderWithIntl(
-      <FeedbackFilters category={['service_quality', 'cleanliness']} urgency={[]} baseParams={{}} />,
+      <FeedbackFilters
+        category={['service_quality', 'cleanliness']}
+        urgency={[]}
+        filterQuery="branchId=br-1&category=service_quality&category=cleanliness&offset=40"
+      />,
     );
     expect(screen.getByRole('combobox', { name: 'Category' })).toHaveValue('service_quality');
     await user.selectOptions(screen.getByRole('combobox', { name: 'Urgency' }), 'P1_HIGH');
     const url = new URL(push.mock.calls.at(-1)![0] as string, 'http://x');
-    expect(url.searchParams.getAll('category')).toEqual(['service_quality']);
+    expect(url.searchParams.getAll('category')).toEqual(['service_quality', 'cleanliness']);
+    expect(url.searchParams.get('branchId')).toBe('br-1');
+    expect(url.searchParams.get('urgency')).toBe('P1_HIGH');
+    expect(url.searchParams.has('offset')).toBe(false);
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Category' }), 'cleanliness');
+    const changed = new URL(push.mock.lastCall?.[0] as string, 'http://x');
+    expect(changed.searchParams.getAll('category')).toEqual(['cleanliness']);
+  });
+
+  it('clears the branch without clearing other filters', async () => {
+    const user = userEvent.setup();
+    renderWithIntl(
+      <BranchFilter
+        branches={[{ id: 'br-1', name: 'Main St' } as never]}
+        selectedBranchId="br-1"
+        filterQuery="branchId=br-1&category=cleanliness&urgency=P1_HIGH&offset=20"
+      />,
+    );
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Filter by branch' }), '');
+    expect(push).toHaveBeenCalledWith('/dashboard/feedback?category=cleanliness&urgency=P1_HIGH');
+  });
+
+  it('keeps all active filters in pagination links', () => {
+    const query = 'branchId=br-1&category=cleanliness&category=service_quality&urgency=P1_HIGH';
+    expect(feedbackFilterHref(query + '&offset=20', { offset: '40' })).toBe(
+      '/dashboard/feedback?' + query + '&offset=40',
+    );
   });
 });
