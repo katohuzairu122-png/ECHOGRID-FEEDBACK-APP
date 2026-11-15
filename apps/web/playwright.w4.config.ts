@@ -8,7 +8,8 @@ if (!['localhost', '127.0.0.1'].includes(database.hostname) || database.pathname
 
 const servers = Array.isArray(base.webServer) ? base.webServer : [];
 const api = servers[0]!;
-export default defineConfig(base, {
+export default defineConfig({
+  ...base,
   testDir: './w4-acceptance',
   timeout: 120_000,
   reporter: [['list'], ['html', { open: 'never' }]],
