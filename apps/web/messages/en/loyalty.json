@@ -269,7 +269,12 @@
       "emptyDescription": "When staff sends you a message, it will show up here.",
       "replyPlaceholder": "Type a reply…",
       "sending": "Sending…",
-      "send": "Send"
+      "send": "Send",
+      "loadErrorTitle": "Could not load messages",
+      "loadUnavailable": "Messages are temporarily unavailable. Try again to reload this conversation.",
+      "loadRateLimited": "Too many requests. Please wait up to a minute before retrying.",
+      "retry": "Retry",
+      "retryPending": "Retrying…"
     },
     "community": {
       "eyebrow": "Echo Grid Community",
