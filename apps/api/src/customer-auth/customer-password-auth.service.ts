@@ -373,6 +373,75 @@ export class CustomerPasswordAuthService {
     return { ok: true, session: established.session };
   }
 
+  /**
+   * S2 email/password domain path. Only the verified login_email on the
+   * credential is authoritative; customers.email is an unverified profile field.
+   * Not exposed by HTTP until independent rate limits and session wiring pass.
+   */
+  async loginWithVerifiedEmailPassword(input: {
+    email: string;
+    password: string;
+    deviceLabel?: string | null;
+    sourceHint?: string | null;
+  }): Promise<PasswordLoginResult> {
+    const invalid = { ok: false, kind: 'invalid' } as const;
+    if (typeof input.email !== 'string' || input.email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(input.email.trim())) return invalid;
+    if (
+      typeof input.password !== 'string' ||
+      input.password.length === 0 ||
+      !isHashableLength(input.password, this.maxLength)
+    ) {
+      return invalid;
+    }
+    const now = this.clock();
+    const r = this.repos();
+
+    const normalizedEmail = input.email.trim().toLowerCase();
+    const credential = await r.credentials.findByLoginEmail(normalizedEmail);
+    const customer = credential ? await r.customers.findById(credential.customerId) : undefined;
+    const storedHash = credential?.passwordHash ?? (await this.dummy());
+    const matches = await this.hasher.verify(normalizePassword(input.password), storedHash);
+
+    if (!customer || !credential) return invalid;
+    if (!matches) {
+      await this.bestEffort(r.events, {
+        customerId: customer.id,
+        eventType: 'password_login_failed',
+        outcome: 'failure',
+        reasonCode: 'bad_password',
+        now,
+      });
+      return invalid;
+    }
+    if (!customerMayHaveSession({ status: customer.status, isDeleted: false })) {
+      await this.bestEffort(r.events, {
+        customerId: customer.id,
+        eventType: 'password_login_failed',
+        outcome: 'blocked',
+        reasonCode: 'customer_inactive',
+        now,
+      });
+      return invalid;
+    }
+
+    const established = await this.sessions.establishSession({
+      customerId: customer.id,
+      authMethod: 'password' satisfies CustomerSessionAuthMethod,
+      ...(input.deviceLabel !== undefined ? { deviceLabel: input.deviceLabel } : {}),
+      ...(input.sourceHint !== undefined ? { sourceHint: input.sourceHint } : {}),
+    });
+    if (!established.ok) return invalid;
+    await r.credentials.markVerified(customer.id, now);
+    await this.bestEffort(r.events, {
+      customerId: customer.id,
+      sessionId: established.session.sessionId,
+      eventType: 'password_login_succeeded',
+      outcome: 'success',
+      now,
+    });
+    return { ok: true, session: established.session };
+  }
+
   /** First password from inside a live session that has a fresh step-up. */
   async enrollPassword(input: {
     customerId: string;
