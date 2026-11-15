@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { FEEDBACK_CATEGORIES, URGENCY_LEVELS } from '@echo-grid-feedback/shared-types';
 import { Button } from '@/components/ui';
+import { feedbackFilterHref } from './feedback-filter-query';
 import styles from './feedback-inbox.module.css';
 
 /** Saved views, in the order the old tab row showed them. */
@@ -26,9 +27,7 @@ interface FeedbackFiltersProps {
   savedView?: string | undefined;
   category: string[];
   urgency: string[];
-  /** Every other active param (branchId, etc.) to preserve on change -- this
-   * form only ever touches search, view, category and urgency. */
-  baseParams: Record<string, string>;
+  filterQuery: string;
 }
 
 const SELECT_CLASS =
@@ -42,15 +41,15 @@ const SELECT_CLASS =
  * filtered inbox is still a shareable, bookmarkable Server Component fetch.
  *
  * The server accepts several categories/urgencies. This control picks one; an
- * old bookmark with several shows the first and is replaced by a single choice
- * on the next change.
+ * bookmark with several shows the first and retains all values until that
+ * particular filter is changed.
  */
 export function FeedbackFilters({
   search,
   savedView,
   category,
   urgency,
-  baseParams,
+  filterQuery,
 }: FeedbackFiltersProps) {
   const router = useRouter();
   const t = useTranslations('feedback.staff');
@@ -58,21 +57,7 @@ export function FeedbackFilters({
   const [searchInput, setSearchInput] = useState(search ?? '');
 
   const go = (next: { savedView?: string; category?: string; urgency?: string }) => {
-    const params = new URLSearchParams(baseParams);
-    params.delete('offset'); // a new filter always starts back at page 1
-    params.delete('search');
-    params.delete('savedView');
-    params.delete('category');
-    params.delete('urgency');
-    if (searchInput) params.set('search', searchInput);
-    const view = next.savedView ?? savedView ?? '';
-    const cat = next.category ?? category[0] ?? '';
-    const urg = next.urgency ?? urgency[0] ?? '';
-    if (view) params.set('savedView', view);
-    if (cat) params.set('category', cat);
-    if (urg) params.set('urgency', urg);
-    const qs = params.toString();
-    router.push(qs ? `/dashboard/feedback?${qs}` : '/dashboard/feedback');
+    router.push(feedbackFilterHref(filterQuery, { ...next, search: searchInput }));
   };
 
   const handleSubmit = (e: FormEvent) => {
@@ -81,14 +66,10 @@ export function FeedbackFilters({
   };
 
   const handleClear = () => {
-    const params = new URLSearchParams(baseParams);
-    params.delete('offset');
-    params.delete('search');
-    params.delete('savedView');
-    params.delete('category');
-    params.delete('urgency');
-    const qs = params.toString();
-    router.push(qs ? `/dashboard/feedback?${qs}` : '/dashboard/feedback');
+    setSearchInput('');
+    router.push(
+      feedbackFilterHref(filterQuery, { search: '', savedView: '', category: '', urgency: '' }),
+    );
   };
 
   return (

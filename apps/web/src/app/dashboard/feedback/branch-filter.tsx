@@ -5,11 +5,13 @@ import { useTranslations } from 'next-intl';
 import { useId } from 'react';
 import type { BranchDto } from '@echo-grid-feedback/shared-types';
 import { Select } from '@/components/ui';
+import { feedbackFilterHref } from './feedback-filter-query';
 import styles from './feedback-inbox.module.css';
 
 interface BranchFilterProps {
   branches: BranchDto[];
   selectedBranchId?: string | undefined;
+  filterQuery: string;
 }
 
 /**
@@ -20,7 +22,7 @@ interface BranchFilterProps {
  * source of truth, not client state, so the filtered view stays a plain
  * Server Component fetch, shareable and bookmarkable.
  */
-export function BranchFilter({ branches, selectedBranchId }: BranchFilterProps) {
+export function BranchFilter({ branches, selectedBranchId, filterQuery }: BranchFilterProps) {
   const router = useRouter();
   // i18n & Multi-Currency Block 5.
   const t = useTranslations('feedback.staff');
@@ -33,14 +35,9 @@ export function BranchFilter({ branches, selectedBranchId }: BranchFilterProps) 
       <Select
         id={id}
         value={selectedBranchId ?? ''}
-        onChange={(e) => {
-          const value = e.target.value;
-          router.push(
-            value
-              ? `/dashboard/feedback?branchId=${encodeURIComponent(value)}`
-              : '/dashboard/feedback',
-          );
-        }}
+        onChange={(e) =>
+          router.push(feedbackFilterHref(filterQuery, { branchId: e.target.value }))
+        }
         aria-label={t('filterAriaLabel')}
         className="min-h-11 w-auto min-w-48 rounded-xl"
       >
