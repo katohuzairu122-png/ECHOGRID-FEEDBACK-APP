@@ -3,7 +3,7 @@ import { updateCustomerLanguageSchema } from '@echo-grid-feedback/shared-types';
 import type { Bindings } from '../config/env';
 import { createDb } from '../db/client';
 import { createRepositories } from '../repositories';
-import { customerAuthenticate, type CustomerAuthVariables } from '../middleware/customer-authenticate';
+import { customerAuthenticate as defaultCustomerAuthenticate, type CustomerAuthVariables } from '../middleware/customer-authenticate';
 import { rateLimitByCustomer } from '../middleware/rate-limit';
 import { parseJsonBody } from '../lib/validate';
 import { ok } from '../lib/response';
@@ -16,11 +16,11 @@ type Env = { Bindings: Bindings; Variables: CustomerAuthVariables };
  * read or written (customerId comes from the verified JWT, never the request).
  */
 export function createCustomerLanguageRoutes(
-  authenticate = customerAuthenticate,
+  customerAuthenticate = defaultCustomerAuthenticate,
   openDatabase = createDb,
 ) {
   const customerLanguageRoutes = new Hono<Env>();
-  customerLanguageRoutes.use('*', authenticate, rateLimitByCustomer());
+  customerLanguageRoutes.use('*', customerAuthenticate, rateLimitByCustomer());
 
   customerLanguageRoutes.get('/', async (c) => {
     const { db, close } = await openDatabase(c.env.HYPERDRIVE);
