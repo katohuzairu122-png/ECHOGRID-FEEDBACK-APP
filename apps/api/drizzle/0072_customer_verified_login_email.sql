@@ -1,0 +1,4 @@
+ALTER TABLE "customer_credentials" ADD COLUMN "login_email" text;--> statement-breakpoint
+ALTER TABLE "customer_credentials" ADD COLUMN "login_email_verified_at" timestamp with time zone;--> statement-breakpoint
+CREATE UNIQUE INDEX "customer_credentials_login_email_uidx" ON "customer_credentials" USING btree ("login_email");--> statement-breakpoint
+ALTER TABLE "customer_credentials" ADD CONSTRAINT "customer_credentials_verified_login_email_check" CHECK (("customer_credentials"."login_email" IS NULL AND "customer_credentials"."login_email_verified_at" IS NULL) OR ("customer_credentials"."login_email" IS NOT NULL AND "customer_credentials"."login_email_verified_at" IS NOT NULL AND "customer_credentials"."login_email" <> '' AND "customer_credentials"."login_email" = lower(btrim("customer_credentials"."login_email"))));

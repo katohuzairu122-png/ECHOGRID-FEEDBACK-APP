@@ -25,7 +25,7 @@ describe.skipIf(!process.env.DATABASE_URL)('customer auth storage (integration)'
   let repos2: ReturnType<typeof createRepositories>;
 
   const RUN = Date.now().toString().slice(-8);
-  const PHONES = [`+1555${RUN}1`, `+1555${RUN}2`, `+1555${RUN}3`, `+1555${RUN}4`, `+1555${RUN}5`];
+  const PHONES = [`+1555${RUN}1`, `+1555${RUN}2`, `+1555${RUN}3`, `+1555${RUN}4`, `+1555${RUN}5`, `+1555${RUN}6`, `+1555${RUN}7`];
   const HOUR = 60 * 60 * 1000;
   const DAY = 24 * HOUR;
   const NOW = () => new Date();
@@ -117,6 +117,38 @@ describe.skipIf(!process.env.DATABASE_URL)('customer auth storage (integration)'
       expect(flagged).toEqual(
         ['customer_credentials.password_hash', 'customer_auth_events.reason_code'].sort(),
       );
+    });
+  });
+
+  describe('verified login email', () => {
+    it('keeps one normalized login email across customers without using profile email', async () => {
+      const first = await newCustomer(5);
+      const second = await newCustomer(6);
+      const now = NOW();
+      const email = `customer-${RUN}@example.test`;
+
+      await repos.customers.updateProfile(first.id, { email });
+      expect(await repos.customerCredentials.findByLoginEmail(email)).toBeUndefined();
+      const credential = (customerId: string, address: string) => ({
+        customerId,
+        now,
+        passwordHash: 'test-only-hash',
+        verifiedLoginEmail: { address, verifiedAt: now },
+      });
+
+      expect(await repos.customerCredentials.create(credential(first.id, ` ${email.toUpperCase()} `))).toBe(true);
+      expect(await repos2.customerCredentials.create(credential(second.id, email))).toBe(false);
+      expect(await repos.customerCredentials.findByLoginEmail(email.toUpperCase())).toMatchObject({
+        customerId: first.id,
+        loginEmail: email,
+        loginEmailVerifiedAt: now,
+      });
+      expect(await repos.customerCredentials.findByCustomerId(second.id)).toBeUndefined();
+
+      await expect(client.query(
+        'UPDATE customer_credentials SET login_email_verified_at = NULL WHERE customer_id = $1',
+        [first.id],
+      )).rejects.toMatchObject({ code: '23514' });
     });
   });
 

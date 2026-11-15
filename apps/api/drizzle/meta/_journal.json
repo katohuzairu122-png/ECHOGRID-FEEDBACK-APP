@@ -505,6 +505,13 @@
       "when": 1794637265568,
       "tag": "0071_cashier_sessions",
       "breakpoints": true
+    },
+    {
+      "idx": 72,
+      "version": "7",
+      "when": 1794717463388,
+      "tag": "0072_customer_verified_login_email",
+      "breakpoints": true
     }
   ]
 }
