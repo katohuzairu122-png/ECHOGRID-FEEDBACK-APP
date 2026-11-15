@@ -159,6 +159,10 @@ What this changes in the reconciliation above:
 - Questions E1, E2 and E4 to E9 are not recorded as answered.
 - Production and staging state of `0073`, and of `0069` to `0072` in production, remains **unverified**.
 
+#### G.3 Post-baseline: S3 email link (#457) and R1 remediation (2026-11-15)
+
+PR #457 (link a verified email to existing phone-only customers) merged at 17:59Z as `f1c04de`, after `bcd6c02`. It is development-only and unmounted. An independent read-only review raised seven findings; CUSTOMER-AUTH-01D-4b-S3-R1 remediates them in a follow-up pull request (hashing outside the transaction, bounded password guesses, internal OTP-retired reason, row-count check, tests). Open owner question **E10**: after linking, phone OTP is refused, so there is no phone-based recovery unless a separate recovery flow is built. Activation prerequisites, including "migrations `0072`/`0073` verified before dependent routes are enabled", are in `docs/architecture/builds/CUSTOMER-AUTH/CUSTOMER_AUTH_S3_EMAIL_LINK.md`. No activation is authorized.
+
 ### H. WEB-PUSH-01 (future feature, design only)
 
 Phone/desktop push notifications for new messages (WhatsApp-style), after the in-app unread indicators (PR #399). Design: `docs/architecture/builds/WEB-PUSH/WEB_PUSH_01_DESIGN.md`. Needs owner answers WP-1 to WP-6, a migration, owner-held VAPID keys, a sender on Workers, service-worker handlers and a staging device test. **Not built, not scheduled; each block needs its own authorization.**

@@ -99,7 +99,7 @@ export type IssuedSession = {
 };
 
 export type EstablishSessionResult =
-  { ok: true; session: IssuedSession } | { ok: false; reason: 'customer_inactive' };
+  { ok: true; session: IssuedSession } | { ok: false; reason: 'customer_inactive' | 'otp_retired' };
 
 export type RefreshResult =
   | { ok: true; session: IssuedSession }
@@ -199,7 +199,9 @@ export class CustomerSessionService {
       }
       if (input.authMethod === 'otp' &&
           (await stores.credentials.findLegacyLoginState(input.customerId))?.hasVerifiedEmail) {
-        return { ok: false, reason: 'customer_inactive' } as const;
+        // Phone OTP is retired for customers who linked a verified email. Internal
+        // reason only: callers must keep one generic failure toward the client.
+        return { ok: false, reason: 'otp_retired' } as const;
       }
       const { absoluteExpiresAt, idleExpiresAt } = computeSessionExpiries(now, {
         absoluteSeconds: this.config.absoluteTtlSeconds,
