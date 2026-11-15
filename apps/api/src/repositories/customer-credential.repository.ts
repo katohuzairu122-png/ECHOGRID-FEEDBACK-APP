@@ -31,6 +31,13 @@ export class CustomerCredentialRepository extends BaseRepository {
    */
   async findLegacyTokenCutoff(
     customerId: string,
+  ): Promise<{ legacyTokensInvalidBefore: Date | null } | undefined> {
+    const state = await this.findLegacyLoginState(customerId);
+    return state ? { legacyTokensInvalidBefore: state.legacyTokensInvalidBefore } : undefined;
+  }
+
+  async findLegacyLoginState(
+    customerId: string,
   ): Promise<{ legacyTokensInvalidBefore: Date | null; hasVerifiedEmail: boolean } | undefined> {
     const rows = await this.db
       .select({

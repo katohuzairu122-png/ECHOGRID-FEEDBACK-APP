@@ -198,7 +198,7 @@ export class CustomerSessionService {
         return { ok: false, reason: 'customer_inactive' } as const;
       }
       if (input.authMethod === 'otp' &&
-          (await stores.credentials.findLegacyTokenCutoff(input.customerId))?.hasVerifiedEmail) {
+          (await stores.credentials.findLegacyLoginState(input.customerId))?.hasVerifiedEmail) {
         return { ok: false, reason: 'customer_inactive' } as const;
       }
       const { absoluteExpiresAt, idleExpiresAt } = computeSessionExpiries(now, {
@@ -415,7 +415,7 @@ export class CustomerSessionService {
     if (!customer || !customerMayHaveSession({ status: customer.status, isDeleted: false }))
       return null;
 
-    const credential = await new CustomerCredentialRepository(this.db).findLegacyTokenCutoff(
+    const credential = await new CustomerCredentialRepository(this.db).findLegacyLoginState(
       customer.id,
     );
     if (credential && (credential.hasVerifiedEmail || credential.legacyTokensInvalidBefore === null)) return null;
