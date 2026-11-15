@@ -11,6 +11,7 @@ import { createIsolatedCustomerEmailAuthRoutes } from '../../src/customer-auth/c
 import { createCustomerEmailTrustedSource } from '../../src/customer-auth/customer-email-trusted-source';
 import { signClientAttribution } from '../../src/lib/client-attribution';
 import { sign } from 'hono/jwt';
+import { signAccessToken } from '../../src/auth/jwt';
 import { buildDb } from '../../src/db/client';
 import { createDirectPbkdf2Worker, type Pbkdf2Worker } from '../../src/auth/pbkdf2-worker';
 import { CustomerRepository } from '../../src/repositories/customer.repository';
@@ -804,6 +805,130 @@ describe.skipIf(!process.env.DATABASE_URL)('customer password auth (integration)
           (e) => e.eventType === 'password_login_failed' && e.reasonCode === 'bad_password',
         ),
       ).toBe(true);
+    });
+  });
+
+  describe('E10 recovery guard (phone proof alone never recovers an email-linked customer)', () => {
+    const EMAIL = (tag: string) => `e10-${tag}-${RUN}@example.test`;
+    /** Phone-only customer with a password, then a REAL link of a verified email. */
+    const linkedCustomer = async (phone: string, tag: string, connection: Client = client) => {
+      expect((await a.auth.registerWithPassword(proof(phone), GOOD)).ok).toBe(true);
+      const otp = await a.auth.signInWithVerifiedPhone(proof(phone));
+      if (!otp.ok) throw new Error('Expected synthetic OTP session');
+      const owner = { customerId: otp.customerId, sessionId: otp.session.sessionId };
+      const messages: Array<{ recipient: string; challengeId: string; proof: string }> = [];
+      const link = createCustomerEmailLinkService({
+        db: buildDb(connection), hasher: createDirectPbkdf2Worker(),
+        hmacSecret: 'synthetic-email-linking-hmac-with-enough-entropy',
+        passwordPolicy: { minLength: 10 }, now: () => new Date(clockMs),
+        deliver: async (m) => { messages.push(m); },
+      });
+      const email = EMAIL(tag);
+      await link.requestProof(owner, email);
+      const [m] = messages;
+      if (!m) throw new Error('Expected proof');
+      expect(await link.complete(owner, { email, challengeId: m.challengeId, proof: m.proof, password: GOOD })).toBe(true);
+      return { customerId: owner.customerId, email };
+    };
+    const credentialRow = async (customerId: string) => (await q<{ password_hash: string; login_email: string | null }>(
+      'SELECT password_hash, login_email FROM customer_credentials WHERE customer_id=$1', [customerId]))[0];
+    const recoverySessions = async (customerId: string) => (await q<{ n: number }>(
+      `SELECT count(*)::int AS n FROM customer_sessions WHERE customer_id=$1 AND auth_method='recovery'`, [customerId]))[0]?.n;
+
+    it('rejects phone proof alone: nothing changes, no recovery session, live email session kept, loyalty intact', async () => {
+      const phone = PHONE(60);
+      const { customerId, email } = await linkedCustomer(phone, 'reject');
+      const live = await a.auth.loginWithVerifiedEmailPassword({ email, password: GOOD });
+      if (!live.ok) throw new Error('Expected email session');
+      const [business] = await q<{ id: string }>(
+        `INSERT INTO businesses (name, slug) VALUES ($1, $2) RETURNING id`, [`E10 ${RUN}`, `e10-${RUN}`]);
+      try {
+        await q(`INSERT INTO loyalty_accounts (customer_id, business_id, points) VALUES ($1, $2, 42)`, [customerId, business!.id]);
+        const before = await credentialRow(customerId);
+        const customerBefore = await q('SELECT * FROM customers WHERE id=$1', [customerId]);
+
+        expect(await a.auth.recoverPassword(proof(phone), GOOD2)).toEqual({ ok: false, reason: 'customer_inactive' });
+
+        expect(await credentialRow(customerId)).toEqual(before);
+        expect(await q('SELECT * FROM customers WHERE id=$1', [customerId])).toEqual(customerBefore);
+        expect(await recoverySessions(customerId)).toBe(0);
+        expect(await a.sessions.authenticateSessionToken(live.session.accessToken)).not.toBeNull();
+        expect((await q<{ points: number }>('SELECT points FROM loyalty_accounts WHERE customer_id=$1', [customerId]))[0]?.points).toBe(42);
+        expect(await a.auth.loginWithVerifiedEmailPassword({ email, password: GOOD })).toMatchObject({ ok: true });
+        expect(await a.auth.loginWithVerifiedEmailPassword({ email, password: GOOD2 })).toMatchObject({ ok: false });
+        expect((await q<{ n: number }>(
+          `SELECT count(*)::int AS n FROM customer_auth_events WHERE customer_id=$1 AND event_type='recovery_failed' AND reason_code='phone_only_recovery_not_permitted'`,
+          [customerId]))[0]?.n).toBe(1);
+      } finally {
+        await q('DELETE FROM businesses WHERE id=$1', [business!.id]);
+      }
+    });
+
+    it('gives the same generic failure whatever password is supplied, and repeated attempts never succeed', async () => {
+      const phone = PHONE(61);
+      const { customerId } = await linkedCustomer(phone, 'repeat');
+      const before = await credentialRow(customerId);
+      const weak = await a.auth.recoverPassword(proof(phone), 'short');
+      const strong = await a.auth.recoverPassword(proof(phone), GOOD2);
+      expect(weak).toEqual(strong);
+      expect(strong).toEqual({ ok: false, reason: 'customer_inactive' });
+      for (let i = 0; i < 6; i += 1) {
+        expect((await a.auth.recoverPassword(proof(phone), `${GOOD2} ${i}`)).ok).toBe(false);
+      }
+      expect(await credentialRow(customerId)).toEqual(before);
+      expect(await recoverySessions(customerId)).toBe(0);
+    });
+
+    it('holds when the session service is invoked directly (no HTTP, no recoverPassword)', async () => {
+      const { customerId } = await linkedCustomer(PHONE(62), 'direct');
+      const before = await credentialRow(customerId);
+      const real = createDirectPbkdf2Worker();
+      expect(await a.sessions.completeRecovery({ customerId, passwordHash: await real.hash(GOOD2, 1000) }))
+        .toEqual({ ok: false, reason: 'recovery_not_permitted' });
+      expect(await credentialRow(customerId)).toEqual(before);
+      expect(await recoverySessions(customerId)).toBe(0);
+    });
+
+    it('cannot be bypassed by racing a link against recovery: never both linked and password-replaced', async () => {
+      for (let i = 0; i < 6; i += 1) {
+        const phone = PHONE(63) + i;
+        expect((await a.auth.registerWithPassword(proof(phone), GOOD)).ok).toBe(true);
+        const otp = await a.auth.signInWithVerifiedPhone(proof(phone));
+        if (!otp.ok) throw new Error('Expected synthetic OTP session');
+        const owner = { customerId: otp.customerId, sessionId: otp.session.sessionId };
+        const original = (await credentialRow(owner.customerId))!.password_hash;
+        const messages: Array<{ recipient: string; challengeId: string; proof: string }> = [];
+        const link = createCustomerEmailLinkService({
+          db: buildDb(client), hasher: createDirectPbkdf2Worker(),
+          hmacSecret: 'synthetic-email-linking-hmac-with-enough-entropy',
+          passwordPolicy: { minLength: 10 }, now: () => new Date(clockMs),
+          deliver: async (m) => { messages.push(m); },
+        });
+        const email = EMAIL(`race${i}`);
+        await link.requestProof(owner, email);
+        const [m] = messages;
+        if (!m) throw new Error('Expected proof');
+        await Promise.all([
+          link.complete(owner, { email, challengeId: m.challengeId, proof: m.proof, password: GOOD }),
+          b.auth.recoverPassword(proof(phone), GOOD2),
+        ]);
+        const row = (await credentialRow(owner.customerId))!;
+        if (row.login_email) expect(row.password_hash).toBe(original);
+      }
+    });
+
+    it('preserves approved phone-only recovery for a customer WITHOUT a linked email', async () => {
+      const phone = PHONE(69);
+      expect((await a.auth.registerWithPassword(proof(phone), GOOD)).ok).toBe(true);
+      const r = await a.auth.recoverPassword(proof(phone), GOOD2);
+      expect(r.ok).toBe(true);
+      expect((await a.auth.loginWithPassword({ phone, password: GOOD2 })).ok).toBe(true);
+    });
+
+    it('a staff access token cannot act as a customer session', async () => {
+      const staff = await signAccessToken('3f2b8c1e-5a4d-4e6f-9b7a-1c2d3e4f5a6b', LEGACY_SECRET, '8a1e2d3c-4b5a-4c6d-8e7f-9a0b1c2d3e4f');
+      expect(await a.sessions.authenticateSessionToken(staff)).toBeNull();
+      expect(await a.sessions.authenticateLegacyToken(staff)).toBeNull();
     });
   });
 

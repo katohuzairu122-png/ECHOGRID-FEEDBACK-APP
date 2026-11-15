@@ -37,7 +37,7 @@ At this commit the deployed Worker cannot reach those columns: the legacy `custo
 1. Migrations `0072` and `0073` verified applied in the target environment by a read-only check **before** any code that reads `login_email_verified_at` is deployed or any route is mounted.
 2. The compatible verifier is composed so a linked customer cannot use the legacy default middleware: `customerAuthenticate()` without the rotating service accepts a legacy JWT without consulting the verified-email state.
 3. Rate-limit bindings and budgets approved (01D-5), including a per-customer dimension for link completion.
-4. E10 recorded (section 7). No routine phone-OTP login for linked customers, and the pre-existing phone-only `recoverPassword` / `completeRecovery` (01D-4a) disabled or gated per E10-B before any route that could reach them is mounted (section 7.3).
+4. E10 recorded (section 7). No routine phone-OTP login for linked customers, and the pre-existing phone-only `recoverPassword` / `completeRecovery` (01D-4a) gated per E10-B (enforced by RECOVERY-GUARD-01, section 7.3); S4 still required for any recovery route.
 5. Exact-head hosted CI and PG18 pass on the activation change; separate owner authorization for the deploy.
 
 ## 6. Limits
@@ -65,11 +65,15 @@ Recorded as an approved architecture decision. **It authorizes no implementation
 | E10-A: OTP cannot authenticate a linked customer | **Complies in the rotating session composition.** `establishSession` refuses `otp` for a customer with a verified login email (internal reason `otp_retired`, generic outward failure), `authenticateLegacyToken` rejects them, and the link transaction revokes all sessions and advances the legacy cutoff. Integration tests cover each. |
 | E10-A: email login continuity | Covered by the existing integration test (email login succeeds after linking, same customer id) |
 | E10-A: deployed legacy OTP router and legacy middleware | **Not enforced there by design; unmounted/unchanged.** Mounting the compatible verifier is an activation gate (section 5, item 2) |
-| E10-B: phone alone cannot reset/replace/open a session | **CONFLICT in dormant code.** `CustomerPasswordAuthService.recoverPassword` (01D-4a) accepts a fresh verified-phone proof, replaces the password through `completeRecovery`, and opens a `recovery` session. For an email-linked customer that is a phone-only takeover and violates E10-B. It has **no caller outside tests** and no route, so nothing is exposed today. **Not modified in this block** (instruction: report before changing behavior). |
+| E10-B: phone alone cannot reset/replace/open a session | **Enforced at the service boundary by CUSTOMER-AUTH-RECOVERY-GUARD-01** (see 7.3). Before that change the dormant `CustomerPasswordAuthService.recoverPassword` (01D-4a) would have let a fresh verified-phone proof replace the password and open a `recovery` session for an email-linked customer. It had no caller outside tests and no route |
 
-### 7.3 Required before any mounting
+### 7.3 Recovery guard (CUSTOMER-AUTH-RECOVERY-GUARD-01, development only)
 
-`recoverPassword` / `completeRecovery` must be removed, disabled for customers with a verified login email, or replaced by the S4 flow before any route that can reach them exists. A static test now pins that they have no non-test callers.
+- `CustomerSessionService.completeRecovery` is the authoritative boundary. In its transaction it locks the customer row (the same lock the email link takes first), reads whether a verified login email exists, and if so returns `recovery_not_permitted` **before** any credential write, session revocation or recovery session. It records a `recovery_failed` audit event (`phone_only_recovery_not_permitted`) that commits with the refusal. No schema change: `recovery_failed` is an existing event type.
+- `recoverPassword` performs a cheap early check before password policy and before any PBKDF2 work, so the outcome never depends on the supplied password. The outward result is the same generic `customer_inactive` used for suspended customers; no new outward reason exists.
+- **Compatibility.** Phone-only recovery for customers **without** a verified login email is unchanged (existing tests still pass). Whether that legacy flow remains approved is an S4 decision; it is not mounted.
+- **Limit.** The guard stops takeover; it cannot make the outcome indistinguishable from success for an unlinked customer, because phone-only recovery succeeds for them. Enumeration resistance is an S4 requirement.
+- The deferred behavior stays: no recovery endpoint, route, credential or factor exists. A static test pins that `recoverPassword` has no non-test caller.
 
 ## 8. S4 (proposed, NOT AUTHORIZED, NOT IMPLEMENTED): CUSTOMER-AUTH-01D-4b-S4 Secure Account Recovery
 
@@ -92,3 +96,4 @@ Recorded as an approved architecture decision. **It authorizes no implementation
 | Date | Change |
 | --- | --- |
 | 2026-11-15 | S3 / R1 disposition; E10 recorded; S4 scoped as proposed |
+| 2026-11-15 | RECOVERY-GUARD-01: E10-B enforced in the session and password services |
