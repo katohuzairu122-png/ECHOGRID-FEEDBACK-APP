@@ -126,7 +126,11 @@ jobs:
           curl --fail --silent --show-error --retry 5 --retry-all-errors --output /dev/null "$CASHIER/cashier/login"
           curl --fail --silent --show-error --retry 5 --retry-all-errors "$CASHIER/manifest.webmanifest" | grep -q '"Echo Grid Cashier"'
           test "$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' "$WEB/cashier/login")" = "404"
+          # Staff surfaces are never served on the cashier origin. /login, /signup and /forgot-password redirect to
+          # /cashier in one hop; /dashboard and /platform first pass the staff middleware's own /login redirect
+          # (unauthenticated), so a single-hop check was wrong for them. Follow the redirects and assert the FINAL
+          # page is the cashier sign-in, served by the cashier host.
           for route in /login /signup /forgot-password /dashboard /platform; do
-            target="$(curl --silent --show-error --output /dev/null --write-out '%{redirect_url}' "$CASHIER$route")"
-            test "$target" = "$CASHIER/cashier"
+            final="$(curl --silent --show-error --location --max-redirs 5 --output /dev/null --write-out '%{url_effective} %{http_code}' "$CASHIER$route")"
+            test "$final" = "$CASHIER/cashier/login 200"
           done
