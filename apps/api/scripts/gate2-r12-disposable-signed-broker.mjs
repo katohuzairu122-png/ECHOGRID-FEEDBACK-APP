@@ -5,6 +5,7 @@
  */
 import { createHmac, randomBytes, randomUUID } from 'node:crypto';
 import pg from 'pg';
+import { MIGRATION_COUNT } from './lib/migration-journal.mjs';
 
 const DB_URL = 'postgresql://echogrid:echogrid@localhost:5432/echogrid_ci_pg18_broker';
 if (process.env.GITHUB_ACTIONS !== 'true' ||
@@ -32,7 +33,7 @@ try {
  )).rows[0];
  fail(info.db==='echogrid_ci_pg18_broker'&&info.username==='echogrid'&&
   Math.floor(info.version/10000)===18,'WRONG_DATABASE');
- fail((await owner.query('SELECT count(*)::int n FROM drizzle.__drizzle_migrations')).rows[0].n===73,'JOURNAL_NOT_REPLAYED');
+ fail((await owner.query('SELECT count(*)::int n FROM drizzle.__drizzle_migrations')).rows[0].n===MIGRATION_COUNT,'JOURNAL_NOT_REPLAYED');
 
  for(const [id,suffix] of [[tenantA,'a'],[tenantB,'b']]){
   await owner.query('INSERT INTO public.businesses(id,name,slug) VALUES($1,$2,$3)',
@@ -167,7 +168,7 @@ try {
    ownerControlledKey:true,ownerControlledMembership:true,
    noDirectTableAccess:true,operationBound:true,tenantBound:true,
    signatureTamperDenied:true,replayDenied:true,expiryEnforced:true,
-   clientGucIgnored:true,postgresMajor:18,committedMigrations:73,
+   clientGucIgnored:true,postgresMajor:18,committedMigrations:MIGRATION_COUNT,
    runtimeKeyDistribution:'NOT_DESIGNED',
    trustedIssuer:'SIMULATED_IN_DISPOSABLE_CI_ONLY',
    stagingCertification:'BLOCKED',runtimeRoleReady:false,

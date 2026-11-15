@@ -7,6 +7,9 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath, URL } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import pg from 'pg';
+import {
+  MIGRATION_COUNT, LAST_MIGRATION_TAG, PREFIX_COUNT, PREFIX_LAST_TAG, PREFIX_FIRST_PENDING_TAG,
+} from './lib/migration-journal.mjs';
 
 const hostAllowlist = new Set([
   'ep-sparkling-hall-au6p04ch.c-10.us-east-1.aws.neon.tech',
@@ -31,10 +34,10 @@ const options = new Set(['sslmode', 'channel_binding']);
 if ([...parsed.searchParams.keys()].some(k => !options.has(k))) fail('URL_OPTIONS_DENIED');
 const journal = JSON.parse(readFileSync(resolve(root,'drizzle/meta/_journal.json'),'utf8'));
 if (journal.version !== '7' || journal.dialect !== 'postgresql' ||
-    journal.entries.length !== 73 ||
-    journal.entries[44].tag !== '0044_split07_multiunit_inert_conservation' ||
-    journal.entries[45].tag !== '0045_heta01_f1_stripe_evidence' ||
-    journal.entries[72].tag !== '0072_customer_verified_login_email') {
+    journal.entries.length !== MIGRATION_COUNT ||
+    journal.entries[PREFIX_COUNT - 1].tag !== PREFIX_LAST_TAG ||
+    journal.entries[PREFIX_COUNT].tag !== PREFIX_FIRST_PENDING_TAG ||
+    journal.entries[MIGRATION_COUNT - 1].tag !== LAST_MIGRATION_TAG) {
   fail('REPOSITORY_JOURNAL_DENIED');
 }
 const client = new pg.Client({

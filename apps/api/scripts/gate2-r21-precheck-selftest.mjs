@@ -9,6 +9,7 @@ import pg from 'pg';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { SPEC, runPrecheck } from './gate2-tenant-reference-precheck.mjs';
+import { MIGRATION_COUNT } from './lib/migration-journal.mjs';
 
 const DB_URL = 'postgresql://echogrid:echogrid@localhost:5432/echogrid_ci_pg18_r21';
 if (process.env.GITHUB_ACTIONS !== 'true' || process.env.GATE2_R21_DISPOSABLE !== 'I_ACKNOWLEDGE_DISPOSABLE_PG18' || process.env.DATABASE_URL !== DB_URL) throw Error('GATE2_R21_NON_DISPOSABLE_TARGET_DENIED');
@@ -29,7 +30,7 @@ try {
   await owner.connect();
   const info = (await owner.query("SELECT current_database() db,current_user username,current_setting('server_version_num')::int version")).rows[0];
   check(info.db === 'echogrid_ci_pg18_r21' && info.username === 'echogrid' && Math.floor(info.version / 10000) === 18, 'DATABASE_IDENTITY');
-  check((await owner.query('SELECT count(*)::int n FROM drizzle.__drizzle_migrations')).rows[0].n === 73, 'MIGRATION_COUNT');
+  check((await owner.query('SELECT count(*)::int n FROM drizzle.__drizzle_migrations')).rows[0].n === MIGRATION_COUNT, 'MIGRATION_COUNT');
 
   // ---- fixtures: two tenants, one platform-owned survey campaign (no tenant) ----
   await owner.query('BEGIN');

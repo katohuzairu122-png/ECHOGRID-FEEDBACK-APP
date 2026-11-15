@@ -1,8 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { assessGate2PostMigration, type Gate2PostMigrationEvidence } from './gate2-postmigration-acceptance';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { assessGate2PostMigration as assess, type Gate2PostMigrationEvidence } from './gate2-postmigration-acceptance';
+
+// The expected count is the committed journal's length: no hard-coded number to edit when a migration is added.
+const EXPECTED = (JSON.parse(readFileSync(resolve(__dirname, '../../drizzle/meta/_journal.json'), 'utf8')).entries as unknown[]).length;
+const assessGate2PostMigration = (raw: unknown, expected: number = EXPECTED) => assess(raw, expected);
 
 const observed=():Gate2PostMigrationEvidence=>({
-  environment:'production', migrationsApplied:73,uniqueMigrationTimestamps:73,
+  environment:'production', migrationsApplied:EXPECTED,uniqueMigrationTimestamps:EXPECTED,
   rlsEnabled:9,forceRlsEnabled:9,enabledFinancialGuards:6,
   runtimeDatabaseRole:'neondb_owner',runtimeBypassRls:true,
   credentialExclusiveToRestrictedBroker:false,
@@ -43,5 +49,15 @@ describe('Gate 2 post-migration evidence does not authorize runtime cutover',()=
       schemaComplete:false,releaseCertified:false,deploymentAuthorized:false,
       financialActivationAuthorized:false,blockers:['INVALID_EVIDENCE'],
     });
+  });
+});
+
+describe('MIGRATION-GOV-01 expected migration count', () => {
+  it('denies when the caller supplies no valid expected count, and when applied differs from the supplied count', () => {
+    for (const bad of [0, -1, 1.5, Number.NaN, undefined as unknown as number]) {
+      expect(assess({ ...observed() }, bad).blockers).toEqual(['EXPECTED_MIGRATION_COUNT_INVALID']);
+    }
+    expect(assessGate2PostMigration({ ...observed(), migrationsApplied: EXPECTED - 1 }).blockers).toContain('SCHEMA_OR_GUARD_INCOMPLETE');
+    expect(assessGate2PostMigration({ ...observed(), uniqueMigrationTimestamps: EXPECTED + 1 }).blockers).toContain('SCHEMA_OR_GUARD_INCOMPLETE');
   });
 });

@@ -7,6 +7,7 @@ import { createHmac, randomBytes, randomUUID } from 'node:crypto';
 import { setTimeout } from 'node:timers';
 import pg from 'pg';
 import { URL as NodeURL } from 'node:url';
+import { MIGRATION_COUNT } from './lib/migration-journal.mjs';
 const URL='postgresql://echogrid:echogrid@localhost:5432/echogrid_ci_pg18_b3_broker';
 if(process.env.GITHUB_ACTIONS!=='true' ||
  process.env.GATE2_B3_DISPOSABLE!=='I_ACKNOWLEDGE_DISPOSABLE_PG18' ||
@@ -43,7 +44,7 @@ try{
  assert.equal(identity.db,'echogrid_ci_pg18_b3_broker');
  assert.equal(identity.usr,'echogrid');
  assert.equal(Math.floor(identity.version/10000),18);
- assert.equal((await owner.query('SELECT count(*)::int n FROM drizzle.__drizzle_migrations')).rows[0].n,73);
+ assert.equal((await owner.query('SELECT count(*)::int n FROM drizzle.__drizzle_migrations')).rows[0].n,MIGRATION_COUNT);
  await owner.query('CREATE EXTENSION IF NOT EXISTS pgcrypto');
  await owner.query('CREATE SCHEMA gate2_b3');
  await owner.query('REVOKE ALL ON SCHEMA gate2_b3 FROM PUBLIC');

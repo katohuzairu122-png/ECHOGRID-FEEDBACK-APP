@@ -3,6 +3,7 @@
  * Only CI service-container databases and explicit test identifiers.
  */
 import pg from 'pg';
+import { MIGRATION_COUNT, PREFIX_COUNT } from './lib/migration-journal.mjs';
 const action = process.argv[2];
 if (!['seed', 'verify-prefix', 'verify'].includes(action)) throw new Error('GATE2_R4_ACTION_DENIED');
 const target = process.env.DATABASE_URL;
@@ -43,12 +44,12 @@ try {
   const migrationCount = Number((await db.query(
     'SELECT count(*)::int AS count FROM drizzle.__drizzle_migrations',
   )).rows[0]?.count);
-  const expectedMigrationCount = action === 'verify' ? 73 : 45;
+  const expectedMigrationCount = action === 'verify' ? MIGRATION_COUNT : PREFIX_COUNT;
   if (migrationCount !== expectedMigrationCount) throw new Error('GATE2_R4_MIGRATION_PHASE_MISMATCH');
   const migrations = (await db.query(
     'SELECT created_at::text AS created_at FROM drizzle.__drizzle_migrations ORDER BY id',
   )).rows;
-  const expectedCount = action === 'verify' ? 73 : 45;
+  const expectedCount = action === 'verify' ? MIGRATION_COUNT : PREFIX_COUNT;
   if (migrations.length !== expectedCount) throw new Error('GATE2_R4_MIGRATION_COUNT_MISMATCH');
   if (action === 'seed') {
     await db.query('BEGIN');

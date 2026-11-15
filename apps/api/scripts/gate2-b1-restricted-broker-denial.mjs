@@ -5,6 +5,7 @@
  */
 import assert from 'node:assert/strict';
 import pg from 'pg';
+import { MIGRATION_COUNT } from './lib/migration-journal.mjs';
 
 const DATABASE_URL='postgresql://echogrid:echogrid@localhost:5432/echogrid_ci_pg18_b1_broker';
 if(process.env.GITHUB_ACTIONS!=='true' ||
@@ -24,7 +25,7 @@ try{
  const info=(await owner.query("SELECT current_database() db,current_user actor,current_setting('server_version_num')::int version")).rows[0];
  fail(info.db==='echogrid_ci_pg18_b1_broker'&&info.actor==='echogrid'&&Math.floor(info.version/10000)===18,'DATABASE_IDENTITY');
  const history=(await owner.query('SELECT count(*)::int n FROM drizzle.__drizzle_migrations')).rows[0];
- fail(history.n===73,'MIGRATIONS_NOT_REPLAYED');
+ fail(history.n===MIGRATION_COUNT,'MIGRATIONS_NOT_REPLAYED');
 
  await owner.query('CREATE SCHEMA gate2_b1');
  await owner.query('REVOKE ALL ON SCHEMA gate2_b1 FROM PUBLIC');
@@ -110,7 +111,7 @@ try{
   ].join(' '))).rows[0].n;
   fail(executable===0,'UNEXPECTED_EXISTING_DEFINER_EXECUTE');
   console.log(JSON.stringify({gate:'GATE2_B1_RESTRICTED_LOGIN',status:'PASS',postgresMajor:18,
-   appliedMigrations:73,publicTablesChecked:inventory.length,restrictedLogin:true,
+   appliedMigrations:MIGRATION_COUNT,publicTablesChecked:inventory.length,restrictedLogin:true,
    directSqlDenied:true,roleEscalationDenied:true,objectCreationDenied:true,
    credentialScope:'DISPOSABLE_GITHUB_ACTIONS_ONLY',brokerFunction:'SYNTHETIC_FIXED_READ_ONLY',
    userIdentityVerification:'NOT_IMPLEMENTED',tenantAuthorization:'NOT_IMPLEMENTED',

@@ -1,7 +1,7 @@
 /**
  * Gate 2 B4-11 — restricted nonowner broker database role with ONE fixed, use-time-authorized operation (branch read).
  *
- * Disposable CI only, on the REAL schema (73 migrations replayed). No Drizzle migration, no Neon/Hyperdrive/Cloudflare resource, no deployment. The broker service itself (which verifies the B4-03/B4-09 signed
+ * Disposable CI only, on the REAL schema (all committed migrations replayed). No Drizzle migration, no Neon/Hyperdrive/Cloudflare resource, no deployment. The broker service itself (which verifies the B4-03/B4-09 signed
  * evidence before connecting as this login) does not exist yet; this proves what the DATABASE side must enforce on its own. See docs/architecture/builds/SPLIT-08/GATE2_B4_11_RESTRICTED_BROKER_DATABASE_ROLE.md.
  */
 import pg from 'pg';
@@ -9,6 +9,7 @@ import { randomUUID, randomBytes } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { setTimeout as delay } from 'node:timers/promises';
+import { MIGRATION_COUNT } from './lib/migration-journal.mjs';
 
 const DB_URL = 'postgresql://echogrid:echogrid@localhost:5432/echogrid_ci_pg18_b411';
 if (process.env.GITHUB_ACTIONS !== 'true' || process.env.GATE2_B411_DISPOSABLE !== 'I_ACKNOWLEDGE_DISPOSABLE_PG18' || process.env.DATABASE_URL !== DB_URL) throw Error('GATE2_B411_NON_DISPOSABLE_TARGET_DENIED');
@@ -37,7 +38,7 @@ try {
   await owner.connect();
   const info = (await q("SELECT current_database() db,current_user usr,current_setting('server_version_num')::int v"))[0];
   check(info.db === 'echogrid_ci_pg18_b411' && info.usr === 'echogrid' && Math.floor(info.v / 10000) === 18, 'DATABASE_IDENTITY');
-  check((await q('SELECT count(*)::int n FROM drizzle.__drizzle_migrations'))[0].n === 73, 'MIGRATION_COUNT');
+  check((await q('SELECT count(*)::int n FROM drizzle.__drizzle_migrations'))[0].n === MIGRATION_COUNT, 'MIGRATION_COUNT');
 
   // ---- fixtures on the real tables (synthetic) ----
   await q("INSERT INTO public.permissions(key,description,category) VALUES ('branches:view','b411','b411'),('feedback:view','b411','b411') ON CONFLICT (key) DO NOTHING");

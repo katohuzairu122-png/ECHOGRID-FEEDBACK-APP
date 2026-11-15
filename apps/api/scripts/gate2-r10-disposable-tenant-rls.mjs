@@ -5,6 +5,7 @@
  * this is NOT an approved tenant context mechanism or a staging migration.
  */
 import pg from 'pg';
+import { MIGRATION_COUNT } from './lib/migration-journal.mjs';
 
 const DB_URL = 'postgresql://echogrid:echogrid@localhost:5432/echogrid_ci_pg18_tenant_rls';
 if (process.env.GITHUB_ACTIONS !== 'true' ||
@@ -45,7 +46,7 @@ try {
   assert(identity.db === 'echogrid_ci_pg18_tenant_rls' && identity.username === 'echogrid' &&
     Math.floor(identity.v / 10000) === 18, 'DATABASE_IDENTITY');
   const migrations = (await owner.query('SELECT count(*)::int AS n FROM drizzle.__drizzle_migrations')).rows[0].n;
-  assert(migrations === 73, 'INCOMPLETE_MIGRATIONS');
+  assert(migrations === MIGRATION_COUNT, 'INCOMPLETE_MIGRATIONS');
 
   for(const [table] of tables) {
     const meta=(await owner.query(`
@@ -178,7 +179,7 @@ try {
       policyExercise:'PASS',
       stagingCertification:'BLOCKED',
       reason:'UNTRUSTED_CUSTOM_GUC_CAN_BE_SPOOFED_BY_DATABASE_LOGIN',
-      postgresMajor:18,migrations:73,tablesChecked:tables.length,
+      postgresMajor:18,migrations:MIGRATION_COUNT,tablesChecked:tables.length,
       tenantAVisiblePerTable:1,tenantBVisiblePerTable:1,
       missingTenantVisiblePerTable:0,transactionReset:'PASS',
       unauthorizedTenantSelectionPossible:true,

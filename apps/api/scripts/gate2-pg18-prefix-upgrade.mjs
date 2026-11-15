@@ -1,5 +1,5 @@
 /**
- * Gate 2 R3 — synthetic 45-to-73 migration upgrade on a disposable PG18
+ * Gate 2 R3 — synthetic prefix-to-full migration upgrade (counts come from scripts/lib/migration-journal.mjs) on a disposable PG18
  * GitHub Actions service container. No Neon resources or customer data.
  *
  * Commands: prepare | verify-prefix | verify-full
@@ -9,6 +9,9 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import pg from 'pg';
+import {
+  MIGRATION_COUNT, LAST_MIGRATION_TAG, PREFIX_COUNT, PREFIX_LAST_TAG, PREFIX_FIRST_PENDING_TAG,
+} from './lib/migration-journal.mjs';
 
 const command = process.argv[2];
 if (!['prepare', 'verify-prefix', 'verify-full'].includes(command)) throw new Error('GATE2_COMMAND_INVALID');
@@ -23,7 +26,7 @@ const journalPath = resolve(root, 'drizzle/meta/_journal.json');
 const journal = JSON.parse(readFileSync(journalPath, 'utf8'));
 if (journal.version !== '7' || journal.dialect !== 'postgresql' ||
     !Array.isArray(journal.entries) ||
-    ![45, 73].includes(journal.entries.length) ||
+    ![PREFIX_COUNT, MIGRATION_COUNT].includes(journal.entries.length) ||
     journal.entries.some((e, i) => e.idx !== i ||
       !e.tag.startsWith(String(i).padStart(4, '0') + '_') ||
       !Number.isSafeInteger(e.when))) throw new Error('GATE2_JOURNAL_INVALID');
@@ -32,10 +35,10 @@ const expectedFromGit = JSON.parse((await import('node:child_process')).execFile
   'git', ['show', 'HEAD:apps/api/drizzle/meta/_journal.json'],
   { cwd: root, encoding: 'utf8' },
 ));
-if (expectedFromGit.entries.length !== 73 ||
-    expectedFromGit.entries[44].tag !== '0044_split07_multiunit_inert_conservation' ||
-    expectedFromGit.entries[45].tag !== '0045_heta01_f1_stripe_evidence' ||
-    expectedFromGit.entries[72].tag !== '0072_customer_verified_login_email') {
+if (expectedFromGit.entries.length !== MIGRATION_COUNT ||
+    expectedFromGit.entries[PREFIX_COUNT - 1].tag !== PREFIX_LAST_TAG ||
+    expectedFromGit.entries[PREFIX_COUNT].tag !== PREFIX_FIRST_PENDING_TAG ||
+    expectedFromGit.entries[MIGRATION_COUNT - 1].tag !== LAST_MIGRATION_TAG) {
   throw new Error('GATE2_FULL_JOURNAL_UNEXPECTED');
 }
 const expected = expectedFromGit.entries;
@@ -43,12 +46,12 @@ if (journal.entries.some((e, i) => e.tag !== expected[i].tag || e.when !== expec
   throw new Error('GATE2_JOURNAL_TAMPERED');
 
 if (command === 'prepare') {
-  if (journal.entries.length !== 73) throw new Error('GATE2_ALREADY_TRUNCATED');
-  writeFileSync(journalPath, JSON.stringify({ ...journal, entries: journal.entries.slice(0, 45) }, null, 2) + '\n');
+  if (journal.entries.length !== MIGRATION_COUNT) throw new Error('GATE2_ALREADY_TRUNCATED');
+  writeFileSync(journalPath, JSON.stringify({ ...journal, entries: journal.entries.slice(0, PREFIX_COUNT) }, null, 2) + '\n');
   console.log('GATE2 synthetic 45-entry journal prepared locally; repository and Neon databases unchanged');
 } else {
-  if ((command === 'verify-prefix' && journal.entries.length !== 45) ||
-      (command === 'verify-full' && journal.entries.length !== 73)) throw new Error('GATE2_WRONG_PHASE');
+  if ((command === 'verify-prefix' && journal.entries.length !== PREFIX_COUNT) ||
+      (command === 'verify-full' && journal.entries.length !== MIGRATION_COUNT)) throw new Error('GATE2_WRONG_PHASE');
   const client = new pg.Client({ connectionString: expectedUrl });
   try {
     await client.connect();
@@ -60,7 +63,7 @@ if (command === 'prepare') {
     const rows = (await client.query(
       'SELECT created_at::text AS created_at FROM drizzle.__drizzle_migrations ORDER BY id',
     )).rows;
-    const count = command === 'verify-prefix' ? 45 : 73;
+    const count = command === 'verify-prefix' ? PREFIX_COUNT : MIGRATION_COUNT;
     if (rows.length !== count || rows.some((r, i) => r.created_at !== String(expected[i].when)))
       throw new Error('GATE2_APPLIED_MIGRATIONS_MISMATCH');
 

@@ -6,6 +6,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import pg from 'pg';
+import { MIGRATION_COUNT } from './lib/migration-journal.mjs';
 
 const EXPECTED_DB = 'echogrid_ci_pg18';
 const EXPECTED_USER = 'echogrid';
@@ -49,7 +50,7 @@ try {
   if (info.db !== EXPECTED_DB || info.role !== EXPECTED_USER || Math.floor(info.version / 10000) !== 18) fail('WRONG_DATABASE_OR_VERSION');
 
   const applied = (await db.query('SELECT created_at::text AS created_at FROM drizzle.__drizzle_migrations ORDER BY id')).rows;
-  if (entries.length !== 73 || applied.length !== entries.length ||
+  if (entries.length !== MIGRATION_COUNT || applied.length !== entries.length ||
       applied.some((row, index) => row.created_at !== String(entries[index].when))) fail('JOURNAL_MISMATCH');
 
   const guards = (await db.query(
