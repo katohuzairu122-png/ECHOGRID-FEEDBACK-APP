@@ -16,6 +16,12 @@ export class CustomerCredentialRepository extends BaseRepository {
     });
   }
 
+  async findByLoginEmail(email: string): Promise<CustomerCredential | undefined> {
+    return this.db.query.customerCredentials.findFirst({
+      where: eq(customerCredentials.loginEmail, email.trim().toLowerCase()),
+    });
+  }
+
   /**
    * Narrow legacy-token verification read. Unlike findByCustomerId, this does
    * not expose the password hash to the request authentication middleware.
@@ -44,18 +50,26 @@ export class CustomerCredentialRepository extends BaseRepository {
   }
 
   /**
-   * First-time creation. Idempotent and race-safe: when a credential already
-   * exists the insert does nothing and returns false, so two devices enrolling
-   * at once produce exactly one credential and never an error (01C section 8).
+   * First-time creation. Idempotent and race-safe: when a credential already exists
+   * or the verified login email belongs to another credential, the insert
+   * does nothing and returns false. Callers must establish email ownership
+   * before supplying verifiedLoginEmail.
    * Changing an existing password is `change`, which the caller must gate on
    * the current password or a fresh step-up.
    */
-  async create(input: { customerId: string; passwordHash: string; now: Date }): Promise<boolean> {
+  async create(input: {
+    customerId: string;
+    passwordHash: string;
+    now: Date;
+    verifiedLoginEmail?: { address: string; verifiedAt: Date };
+  }): Promise<boolean> {
     const rows = await this.db
       .insert(customerCredentials)
       .values({
         customerId: input.customerId,
         passwordHash: input.passwordHash,
+        loginEmail: input.verifiedLoginEmail?.address.trim().toLowerCase() ?? null,
+        loginEmailVerifiedAt: input.verifiedLoginEmail?.verifiedAt ?? null,
         passwordSetAt: input.now,
         passwordChangedAt: input.now,
         // A newly enrolled password must retire previously issued legacy JWTs.
@@ -64,7 +78,7 @@ export class CustomerCredentialRepository extends BaseRepository {
         createdAt: input.now,
         updatedAt: input.now,
       })
-      .onConflictDoNothing({ target: customerCredentials.customerId })
+      .onConflictDoNothing()
       .returning({ customerId: customerCredentials.customerId });
     return rows.length > 0;
   }
