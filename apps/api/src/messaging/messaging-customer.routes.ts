@@ -106,7 +106,7 @@ messagingCustomerRoutes.post('/conversations/:businessId/messages', async (c) =>
           {
             eventType: 'message_reply_received',
             businessName: business.name,
-            customerLabel: customer.fullName ?? customer.phone,
+            customerLabel: customer.fullName ?? customer.phone ?? 'Customer',
             preview: body.body.slice(0, 100),
           },
           'messages:view',
