@@ -1,5 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll, afterEach, vi } from 'vitest';
 import { Client } from 'pg';
+import { createCustomerEmailLinkService } from '../../src/customer-auth/customer-email-link.service';
+import { createIsolatedCustomerEmailLinkRoutes } from '../../src/customer-auth/customer-email-link.routes';
 import { createCustomerSessionLifecycleRoutes } from '../../src/customer-auth/customer-session-lifecycle.routes';
 import { createCustomerLanguageRoutes } from '../../src/customer-language/customer-language.routes';
 import { createCustomerAuthenticate } from '../../src/middleware/customer-authenticate';
@@ -236,6 +238,119 @@ describe.skipIf(!process.env.DATABASE_URL)('customer password auth (integration)
     expect((await post('/logout', rotated.accessToken)).status).toBe(204);
     expect((await read(rotated.accessToken)).status).toBe(401);
     expect((await post('/refresh', rotated.refreshCredential)).status).toBe(401);
+  });
+
+  describe('verified email linking', () => {
+    it('binds proofs to the owner and rolls back a concurrent losing claim', async () => {
+      const first = await a.auth.signInWithVerifiedPhone(proof(PHONE(95)));
+      const second = await b.auth.signInWithVerifiedPhone(proof(PHONE(96)));
+      if (!first.ok || !second.ok) throw new Error('Expected synthetic OTP sessions');
+      const firstOwner = { customerId: first.customerId, sessionId: first.session.sessionId };
+      const secondOwner = { customerId: second.customerId, sessionId: second.session.sessionId };
+      const email = `link-race-${RUN}@example.test`;
+      const create = (connection: Client) => {
+        const messages: Array<{ recipient: string; challengeId: string; proof: string }> = [];
+        const link = createCustomerEmailLinkService({
+          db: buildDb(connection), hasher: countingHasher(),
+          hmacSecret: 'synthetic-email-linking-hmac-with-enough-entropy',
+          passwordPolicy: { minLength: 10 }, now: () => new Date(clockMs),
+          deliver: async (message) => { messages.push(message); },
+        });
+        return { link, messages };
+      };
+      const left = create(client);
+      const right = create(client2);
+      await left.link.requestProof(firstOwner, email);
+      await right.link.requestProof(secondOwner, email.toUpperCase());
+      const [l] = left.messages;
+      const [r] = right.messages;
+      if (!l || !r) throw new Error('Expected separate owner-bound proofs');
+      const input = (message: typeof l) => ({
+        email, challengeId: message.challengeId, proof: message.proof, password: GOOD,
+      });
+      expect(await left.link.complete(secondOwner, input(l))).toBe(false);
+      expect((await q<{ attempts: number }>(
+        'SELECT attempts FROM customer_auth_challenges WHERE id=$1', [l.challengeId],
+      ))[0]?.attempts).toBe(0);
+
+      const oldClock = clockMs;
+      clockMs += 601_000;
+      expect(await left.link.complete(firstOwner, input(l))).toBe(false);
+      clockMs = oldClock;
+
+      const outcomes = await Promise.all([
+        left.link.complete(firstOwner, input(l)), right.link.complete(secondOwner, input(r)),
+      ]);
+      expect(outcomes.filter(Boolean)).toHaveLength(1);
+      const loser = outcomes[0] ? second : first;
+      const losingProof = outcomes[0] ? r : l;
+      expect((await q<{ consumed_at: Date | null }>(
+        'SELECT consumed_at FROM customer_auth_challenges WHERE id=$1', [losingProof.challengeId],
+      ))[0]?.consumed_at).toBeNull();
+      expect(await a.sessions.authenticateSessionToken(loser.session.accessToken)).not.toBeNull();
+      expect(await q('SELECT customer_id FROM customer_credentials WHERE login_email=$1', [email]))
+        .toHaveLength(1);
+    });
+
+    it.each([false, true])('links the same identity and retires OTP with existing password=%s', async (hasPassword) => {
+      const phone = PHONE(hasPassword ? 94 : 93);
+      const email = `link-${hasPassword}-${RUN}@example.test`;
+      if (hasPassword) expect((await a.auth.registerWithPassword(proof(phone), GOOD)).ok).toBe(true);
+      const otp = await a.auth.signInWithVerifiedPhone(proof(phone));
+      if (!otp.ok) throw new Error('Expected synthetic OTP session');
+      const owner = { customerId: otp.customerId, sessionId: otp.session.sessionId };
+      const before = await q<{ password_hash: string }>(
+        'SELECT password_hash FROM customer_credentials WHERE customer_id=$1', [owner.customerId],
+      );
+      const legacy = await legacyToken(owner.customerId, Math.floor(clockMs / 1000));
+      const deliver = vi.fn(async (_message: { recipient: string; challengeId: string; proof: string }) => {});
+      const link = createCustomerEmailLinkService({
+        db: buildDb(client), hasher: countingHasher(),
+        hmacSecret: 'synthetic-email-linking-hmac-with-enough-entropy',
+        passwordPolicy: { minLength: 10 }, deliver, now: () => new Date(clockMs),
+      });
+      const limit = vi.fn(async () => true);
+      const routes = createIsolatedCustomerEmailLinkRoutes({
+        sessions: a.sessions, link, limiter: {
+          resolveTrustedSource: async () => 'trusted-test-source',
+          keyForIdentifier: async () => 'opaque-test-identifier',
+          limit,
+        },
+      });
+      const post = (path: string, body: unknown, token = otp.session.accessToken) => routes.request(
+        `/email/link/${path}`, {
+          method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        },
+      );
+      expect((await post('request', { email }, legacy)).status).toBe(401);
+      expect((await post('request', { email, customerId: owner.customerId })).status).toBe(400);
+      expect((await post('request', { email })).status).toBe(202);
+      expect((await post('request', { email })).status).toBe(202);
+      expect(deliver).toHaveBeenCalledTimes(1);
+      const message = deliver.mock.calls[0]?.[0];
+      if (!message) throw new Error('Expected a synthetic proof');
+      const input = { email, challengeId: message.challengeId, proof: message.proof, password: GOOD };
+      limit.mockResolvedValueOnce(false);
+      expect((await post('complete', input)).status).toBe(429);
+      expect((await post('complete', { ...input, proof: 'wrong-proof' })).status).toBe(401);
+      expect((await post('complete', { ...input, password: 'short' })).status).toBe(401);
+      expect(await a.sessions.authenticateSessionToken(otp.session.accessToken)).not.toBeNull();
+      expect((await post('complete', input)).status).toBe(204);
+      const after = await q<{ password_hash: string; login_email: string }>(
+        'SELECT password_hash, login_email FROM customer_credentials WHERE customer_id=$1', [owner.customerId],
+      );
+      expect(after[0]?.login_email).toBe(email);
+      if (hasPassword) expect(after[0]?.password_hash).toBe(before[0]?.password_hash);
+      expect((await customerByPhone(phone))?.id).toBe(owner.customerId);
+      expect(await a.sessions.authenticateLegacyToken(legacy)).toBeNull();
+      expect(await a.sessions.authenticateSessionToken(otp.session.accessToken)).toBeNull();
+      expect((await a.sessions.refresh(otp.session.refreshCredential)).ok).toBe(false);
+      expect((await a.auth.signInWithVerifiedPhone(proof(phone))).ok).toBe(false);
+      expect(await a.auth.loginWithVerifiedEmailPassword({ email, password: GOOD }))
+        .toMatchObject({ ok: true, session: { customerId: owner.customerId } });
+      expect((await post('complete', input)).status).toBe(401);
+    });
   });
 
   describe('phone proof', () => {

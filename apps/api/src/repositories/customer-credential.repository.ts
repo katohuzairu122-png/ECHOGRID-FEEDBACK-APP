@@ -32,8 +32,18 @@ export class CustomerCredentialRepository extends BaseRepository {
   async findLegacyTokenCutoff(
     customerId: string,
   ): Promise<{ legacyTokensInvalidBefore: Date | null } | undefined> {
+    const state = await this.findLegacyLoginState(customerId);
+    return state ? { legacyTokensInvalidBefore: state.legacyTokensInvalidBefore } : undefined;
+  }
+
+  async findLegacyLoginState(
+    customerId: string,
+  ): Promise<{ legacyTokensInvalidBefore: Date | null; hasVerifiedEmail: boolean } | undefined> {
     const rows = await this.db
-      .select({ legacyTokensInvalidBefore: customerCredentials.legacyTokensInvalidBefore })
+      .select({
+        legacyTokensInvalidBefore: customerCredentials.legacyTokensInvalidBefore,
+        hasVerifiedEmail: sql<boolean>`${customerCredentials.loginEmailVerifiedAt} IS NOT NULL`,
+      })
       .from(customerCredentials)
       .where(eq(customerCredentials.customerId, customerId))
       .limit(1);

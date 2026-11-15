@@ -191,8 +191,14 @@ export class CustomerSessionService {
   }): Promise<EstablishSessionResult> {
     const now = this.clock();
     return this.inTransaction(async (stores) => {
-      const customer = await stores.customers.findById(input.customerId);
+      const customer = input.authMethod === 'otp'
+        ? await stores.customers.findByIdForUpdate(input.customerId)
+        : await stores.customers.findById(input.customerId);
       if (!customer || !customerMayHaveSession({ status: customer.status, isDeleted: false })) {
+        return { ok: false, reason: 'customer_inactive' } as const;
+      }
+      if (input.authMethod === 'otp' &&
+          (await stores.credentials.findLegacyLoginState(input.customerId))?.hasVerifiedEmail) {
         return { ok: false, reason: 'customer_inactive' } as const;
       }
       const { absoluteExpiresAt, idleExpiresAt } = computeSessionExpiries(now, {
@@ -409,10 +415,10 @@ export class CustomerSessionService {
     if (!customer || !customerMayHaveSession({ status: customer.status, isDeleted: false }))
       return null;
 
-    const credential = await new CustomerCredentialRepository(this.db).findLegacyTokenCutoff(
+    const credential = await new CustomerCredentialRepository(this.db).findLegacyLoginState(
       customer.id,
     );
-    if (credential && credential.legacyTokensInvalidBefore === null) return null;
+    if (credential && (credential.hasVerifiedEmail || credential.legacyTokensInvalidBefore === null)) return null;
     const decision = evaluateLegacyToken({
       iatSeconds: payload.iat,
       legacyAccepted: true,

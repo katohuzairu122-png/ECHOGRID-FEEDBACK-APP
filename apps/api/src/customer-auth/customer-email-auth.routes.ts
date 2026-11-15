@@ -46,8 +46,8 @@ for (const path of Object.values(paths)) {
   customerEmailAuthRoutes.post(path, (c) => c.json({ error: 'Not Found' }, 404));
 }
 
-async function limitRequest(
-  dependencies: IsolatedEmailAuthDependencies,
+export async function limitEmailAuthRequest(
+  dependencies: Pick<IsolatedEmailAuthDependencies, 'resolveTrustedSource' | 'keyForIdentifier' | 'limit'>,
   request: Request,
   surface: Surface,
   address: string,
@@ -93,7 +93,7 @@ export function createIsolatedCustomerEmailAuthRoutes(dependencies: IsolatedEmai
   routes.post(paths.request, async (c) => {
     const dto = emailRegistrationRequestSchema.safeParse(await c.req.json().catch(() => null));
     if (!dto.success) return badRequest();
-    const decision = await limitRequest(dependencies, c.req.raw, 'delivery', dto.data.email);
+    const decision = await limitEmailAuthRequest(dependencies, c.req.raw, 'delivery', dto.data.email);
     if (decision !== 'allowed') return deny(decision);
     // Delivery errors and suppressions share the same response.
     await dependencies.requestProof(dto.data.email).catch(() => undefined);
@@ -109,7 +109,7 @@ export function createIsolatedCustomerEmailAuthRoutes(dependencies: IsolatedEmai
   routes.post(paths.login, async (c) => {
     const dto = emailPasswordLoginSchema.safeParse(await c.req.json().catch(() => null));
     if (!dto.success) return badRequest();
-    const decision = await limitRequest(dependencies, c.req.raw, 'login', dto.data.email);
+    const decision = await limitEmailAuthRequest(dependencies, c.req.raw, 'login', dto.data.email);
     if (decision !== 'allowed') return deny(decision);
     const result = await dependencies.login(dto.data);
     return result.ok ? dependencies.transportSession(result.session) : invalid();
