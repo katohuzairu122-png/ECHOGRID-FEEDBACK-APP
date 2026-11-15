@@ -46,10 +46,9 @@ test('rotating customer session traverses Web, API and disposable PostgreSQL', a
   expect(await read()).toEqual({ status: 401, locale: null });
 
   if (!previousAccess || !priorRefresh) throw new Error('Missing synthetic credentials');
-  await context.addCookies([
-    { name: access, value: previousAccess, url: 'http://localhost:3000', secure: true, httpOnly: true },
-    { name: refresh, value: priorRefresh, url: 'http://localhost:3000', secure: true, httpOnly: true },
-  ]);
-  expect(await read()).toEqual({ status: 401, locale: null });
-  expect(await post('refresh')).toBe(401);
+  const cookie = `${access}=${previousAccess}; ${refresh}=${priorRefresh}`;
+  expect((await context.request.get(path, { headers: { Cookie: cookie } })).status()).toBe(401);
+  expect((await context.request.post(`${path}?operation=refresh`, {
+    headers: { Cookie: cookie, Origin: 'http://localhost:3000' },
+  })).status()).toBe(401);
 });
