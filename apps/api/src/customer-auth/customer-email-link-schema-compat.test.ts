@@ -73,4 +73,9 @@ describe('S3 stays unreachable from the deployed Worker until activation', () =>
     const middleware = read('src/middleware/customer-authenticate.ts');
     expect(middleware).toContain('export const customerAuthenticate = createCustomerAuthenticate();');
   });
+
+  it('E10: the phone-proof-only recovery methods have no non-test caller (not activated)', () => {
+    expect(referencing(/\.recoverPassword\(/)).toEqual([]);
+    expect(referencing(/\.completeRecovery\(/)).toEqual(['src/customer-auth/customer-password-auth.service.ts']);
+  });
 });

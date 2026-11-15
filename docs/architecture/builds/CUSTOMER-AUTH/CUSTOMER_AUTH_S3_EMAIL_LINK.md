@@ -17,7 +17,7 @@ Introduced by PR #457 (merged 2026-11-15, `f1c04de`). Remediated by CUSTOMER-AUT
 | F2 wrong existing-password guesses not bounded | Medium | Fixed. A wrong existing password spends the proof's attempt budget (max 5); live `email_link` proofs per customer are capped at 3 |
 | F3 deploy ordering of migration `0072` | Medium | Verified: nothing deployed reaches the `0072` columns (section 4). Pinned by a static test and an activation gate |
 | F4 misleading `customer_inactive` for retired OTP | Low | Fixed internally (`otp_retired`). Callers still return one generic failure |
-| F5 no phone-based recovery after linking | Low, product | **Owner decision, not changed.** Recorded as open question E10 |
+| F5 no phone-based recovery after linking | Low, product | **Resolved by owner decision E10 (section 7).** No code change in S3; recovery is the separate block S4 |
 | F6 unchecked row count on credential update | Low | Fixed. Exactly one row required, otherwise rollback |
 | F7 missing tests and docs | Low | Tests added (suspended customer, password-method session, concurrent claim with passwords); this document and roadmap/queue rows added |
 
@@ -37,9 +37,58 @@ At this commit the deployed Worker cannot reach those columns: the legacy `custo
 1. Migrations `0072` and `0073` verified applied in the target environment by a read-only check **before** any code that reads `login_email_verified_at` is deployed or any route is mounted.
 2. The compatible verifier is composed so a linked customer cannot use the legacy default middleware: `customerAuthenticate()` without the rotating service accepts a legacy JWT without consulting the verified-email state.
 3. Rate-limit bindings and budgets approved (01D-5), including a per-customer dimension for link completion.
-4. Owner decision on F5 / E10 (recovery after link).
+4. E10 recorded (section 7). No routine phone-OTP login for linked customers, and the pre-existing phone-only `recoverPassword` / `completeRecovery` (01D-4a) disabled or gated per E10-B before any route that could reach them is mounted (section 7.3).
 5. Exact-head hosted CI and PG18 pass on the activation change; separate owner authorization for the deploy.
 
 ## 6. Limits
 
 Local verification used PostgreSQL 16; hosted CI uses PG18. Real Cloudflare limiter behaviour is not measured. Nothing here is a security certification.
+
+## 7. Owner decision E10: routine login and account recovery after email linking (APPROVED 2026-11-15)
+
+Recorded as an approved architecture decision. **It authorizes no implementation.** Recovery is not built, mounted or enabled.
+
+### 7.1 Policy
+
+**E10-A, routine authentication.** For a customer who has linked a verified email login credential: email-based authentication is the routine login path; phone OTP must not independently authenticate that customer; the customer id, the verified phone association, loyalty memberships, balances and history are unchanged.
+
+**E10-B, recovery.** The verified phone may be one recovery factor. Phone possession alone must **not** authorize a password reset, email-credential replacement, session issuance, account takeover or removal of an existing authentication factor. Recovery requires additional independent ownership evidence.
+
+**E10-C, recovery protection (requirements on the future implementation).** SIM-swap and number-reassignment risk; challenge expiry; single-use proof consumption; rate limiting; attempt exhaustion; recovery-factor independence; generic responses; recovery audit events; session revocation after success; notification through previously verified channels; handling of email unavailable, phone unavailable and both unavailable. No fallback may silently weaken existing authentication.
+
+**E10-D, continuity.** Global customer id, memberships, business-specific balances, reward ownership, history, Community Points separation and customer authorization boundaries are preserved. Recovery restores access to the **existing** identity and never creates or merges accounts.
+
+### 7.2 Verified state against E10 (repository inspection at PR #459 head)
+
+| Requirement | State |
+| --- | --- |
+| E10-A: OTP cannot authenticate a linked customer | **Complies in the rotating session composition.** `establishSession` refuses `otp` for a customer with a verified login email (internal reason `otp_retired`, generic outward failure), `authenticateLegacyToken` rejects them, and the link transaction revokes all sessions and advances the legacy cutoff. Integration tests cover each. |
+| E10-A: email login continuity | Covered by the existing integration test (email login succeeds after linking, same customer id) |
+| E10-A: deployed legacy OTP router and legacy middleware | **Not enforced there by design; unmounted/unchanged.** Mounting the compatible verifier is an activation gate (section 5, item 2) |
+| E10-B: phone alone cannot reset/replace/open a session | **CONFLICT in dormant code.** `CustomerPasswordAuthService.recoverPassword` (01D-4a) accepts a fresh verified-phone proof, replaces the password through `completeRecovery`, and opens a `recovery` session. For an email-linked customer that is a phone-only takeover and violates E10-B. It has **no caller outside tests** and no route, so nothing is exposed today. **Not modified in this block** (instruction: report before changing behavior). |
+
+### 7.3 Required before any mounting
+
+`recoverPassword` / `completeRecovery` must be removed, disabled for customers with a verified login email, or replaced by the S4 flow before any route that can reach them exists. A static test now pins that they have no non-test callers.
+
+## 8. S4 (proposed, NOT AUTHORIZED, NOT IMPLEMENTED): CUSTOMER-AUTH-01D-4b-S4 Secure Account Recovery
+
+**Scope (proposed).** A recovery flow for an email-linked customer that treats the verified phone as one factor among at least two independent factors; purpose-bound single-use digest-only challenges; per-surface fail-closed rate limits; generic responses; audit events; revocation of all sessions on success; notification to previously verified channels; reuse of the existing customer id only.
+
+**Dependencies.** S3 and R1 merged; migrations `0072` and `0073` verified applied; 01D-5 rate-limit budgets approved; an approved mail and SMS delivery path; resolution of `recoverPassword` (section 7.3).
+
+**Security gates.** No session or credential change on phone possession alone; replay, expiry and exhaustion tests; concurrency tests on PG18; SIM-swap mitigation (recovery cool-down and notification window); no account enumeration; hosted CI on the exact head; owner review. Nothing is a security certification.
+
+**Unresolved decisions (owner).**
+1. What the second independent factor is (for example the linked email, a recovery code issued at link time, or support-assisted verification) and what happens when only one factor remains.
+2. Cool-down length and who is notified after a phone-initiated recovery.
+3. Recovery when email is unavailable, when phone is unavailable and when both are.
+4. Whether recovery may change the login email, or only the password.
+5. Handling of a recycled phone number that is still recorded as verified.
+6. Treatment of customers whose phone is not verified.
+
+## 9. Changelog
+
+| Date | Change |
+| --- | --- |
+| 2026-11-15 | S3 / R1 disposition; E10 recorded; S4 scoped as proposed |
