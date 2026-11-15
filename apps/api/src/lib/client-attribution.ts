@@ -30,9 +30,29 @@ async function hmac(secret: string, message: string): Promise<Uint8Array> {
 }
 
 /** Plausible IPv4 or IPv6 text; rejects anything that could carry delimiters or markup into a rate-limit key. */
-const IPV4 = /^(?:\d{1,3}\.){3}\d{1,3}$/;
+const IPV4 = /^(?:(?:25[0-5]|2[0-4]\d|1?\d{1,2})\.){3}(?:25[0-5]|2[0-4]\d|1?\d{1,2})$/;
 const IPV6 = /^[0-9a-f:]{2,45}$/i;
 export const isPlausibleIp = (value: string) => value.length <= 45 && (IPV4.test(value) || (value.includes(':') && IPV6.test(value)));
+
+/**
+ * The rate-limit key for an address (review H1). An IPv6 client controls at least the low 64 bits of its address, so keying on
+ * the full text would hand one host unlimited "sources". IPv6 is therefore keyed by its /64 prefix in canonical lower-case form
+ * (`2001:DB8::1` and `2001:db8:0:0::1` are one key); IPv4 is keyed as is. Anything that is not a plausible address maps to one
+ * shared bucket rather than to a caller-chosen string.
+ */
+export function rateLimitSource(ip: string | undefined | null): string {
+  if (!ip || !isPlausibleIp(ip)) return 'unknown';
+  if (!ip.includes(':')) return ip;
+  const halves = ip.split('::');
+  if (halves.length > 2) return 'unknown';
+  const head = halves[0] ? halves[0].split(':') : [];
+  const tail = halves.length === 2 && halves[1] ? halves[1].split(':') : [];
+  const missing = 8 - head.length - tail.length;
+  if (halves.length === 1 ? missing !== 0 : missing < 1) return 'unknown';
+  const groups = [...head, ...Array<string>(halves.length === 2 ? missing : 0).fill('0'), ...tail];
+  if (groups.length !== 8 || groups.some((g) => !/^[0-9a-f]{1,4}$/i.test(g))) return 'unknown';
+  return `${groups.slice(0, 4).map((g) => parseInt(g, 16).toString(16)).join(':')}::/64`;
+}
 
 export async function signClientAttribution(secret: string, client: ClientAttribution, nowMs: number): Promise<string> {
   const payload = b64url(encoder.encode(JSON.stringify({ ip: client.ip, ua: client.userAgent.slice(0, MAX_UA), ts: nowMs })));

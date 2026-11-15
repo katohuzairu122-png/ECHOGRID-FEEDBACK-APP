@@ -248,3 +248,32 @@ describe('resolveClient rotation semantics (unit)', () => {
     expect((await resolveClient(await headerFor(OLD), '', Date.now(), OLD)).trusted).toBe(false);
   });
 });
+
+describe('review H1/M1 — IPv6 aggregation and no direct account lockout', () => {
+  it('rateLimitSource keys IPv6 by canonical /64 and IPv4 as is', async () => {
+    const { rateLimitSource } = await import('../lib/client-attribution');
+    expect(rateLimitSource('2001:DB8:1:1::7')).toBe('2001:db8:1:1::/64');
+    expect(rateLimitSource('2001:db8:1:1:aaaa:bbbb:cccc:dddd')).toBe('2001:db8:1:1::/64');
+    expect(rateLimitSource('2001:db8:0:0::1')).toBe(rateLimitSource('2001:DB8::1'));
+    expect(rateLimitSource('::')).toBe('0:0:0:0::/64');
+    expect(rateLimitSource('203.0.113.9')).toBe('203.0.113.9');
+    for (const bad of ['999.1.1.1', ':::::::', '1:2:3:4:5:6:7:8:9', '1::2::3', 'x', '', undefined]) expect(rateLimitSource(bad)).toBe('unknown');
+  });
+  it('one IPv6 host rotating within its /64 stays inside ONE signed source bucket (10/min)', async () => {
+    const { login } = rig();
+    let ok = 0;
+    for (let i = 0; i < 40; i++) if ((await statusOf(login('victim@example.test', await signed(`2001:db8:1:1::${i.toString(16)}`)))) === 200) ok++;
+    expect(ok).toBe(10);
+  });
+  it('rotating IPv6 within a /64 does not dodge the direct per-address bucket either', async () => {
+    const { login } = rig();
+    let ok = 0;
+    for (let i = 0; i < 40; i++) if ((await statusOf(login(`u${i}@example.test`, edge(`2001:db8:2:2::${i.toString(16)}`)))) === 200) ok++;
+    expect(ok).toBe(10);
+  });
+  it('a direct caller can no longer lock a named account for the web user (M1, hazard state included)', async () => {
+    const { login } = rig();
+    for (let i = 0; i < 60; i++) await login('victim@example.test', edge('192.0.2.99'));
+    expect(await statusOf(login('victim@example.test', await signed('203.0.113.7')))).toBe(200);
+  });
+});

@@ -112,5 +112,15 @@ and the shared per-IP bucket (follow-up block if wanted).
 - **Known hazard (pinned by a test):** with the secret on the API but the web Worker not signing (mismatch, skew over 60 s past /
   5 s future, missing client address) every web sign-in falls into the shared direct bucket (10/min). Watch for `staff:login:direct:` keys
   with the web egress address after enabling.
-- **Residual risk:** a botnet of roughly 30+ distinct sources can exhaust the per-account floor (300/min) and block that account for the
-  rest of the minute; a per-account lock was rejected as a cheaper lever (section 3, option C).
+- **Independent review (2026-11-15) and fixes:** (H1) signed/direct keys now use the canonical IPv6 /64 (`rateLimitSource`), because
+  one IPv6 host could otherwise rotate addresses and pass 300 attempts a minute against one account; (M1) the account-keyed
+  "direct" strict bucket was removed: it was global across addresses, so one remote caller could hold a named account at 429 (direct
+  callers are now bounded per address and by the floor). Corrections to earlier text: "identical to before" holds only relative to
+  post-#439 main (the floor, the 8 KiB cap answering before any limiter, and 400 `PAYLOAD_TOO_LARGE` are new); the 29 tests prove the
+  middleware in isolation, not the deployed stack.
+- **Open (H2, needs staging evidence):** `api.use('*', rateLimit('API_RATE_LIMITER'))` in `index.ts` is keyed by raw `cf-connecting-ip`.
+  If web-to-API calls arrive from one egress address, every web user shares that 300/min bucket regardless of this work. Not
+  changed here; confirm on staging which address the API sees before deciding whether to make the global limiter attribution-aware.
+- **Residual risk:** many distinct sources (about 30+ IPv4 hosts or /64 prefixes) can exhaust the per-account floor (300/min) and block
+  that account for the rest of the minute; a per-account lock was rejected as a cheaper lever (section 3, option C). An attribution
+  header is not bound to a path and can be replayed for 60 s by anyone who captures it server-side (review L1, not changed).
