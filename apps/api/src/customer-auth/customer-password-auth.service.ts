@@ -399,10 +399,12 @@ export class CustomerPasswordAuthService {
     const normalizedEmail = input.email.trim().toLowerCase();
     const credential = await r.credentials.findByLoginEmail(normalizedEmail);
     const customer = credential ? await r.customers.findById(credential.customerId) : undefined;
+    // A populated email is not sufficient: the credential must record verified ownership.
+    // Still perform a real or dummy password check before generic rejection.
     const storedHash = credential?.passwordHash ?? (await this.dummy());
     const matches = await this.hasher.verify(normalizePassword(input.password), storedHash);
 
-    if (!customer || !credential) return invalid;
+    if (!customer || !credential || !credential.loginEmailVerifiedAt) return invalid;
     if (!matches) {
       await this.bestEffort(r.events, {
         customerId: customer.id,
