@@ -19,7 +19,7 @@ export function normalizeLoginEmail(value: unknown): string | null {
   if (
     normalized.length === 0 ||
     normalized.length > MAX_EMAIL_LENGTH ||
-    !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(normalized)
+    !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized)
   ) return null;
   return normalized;
 }
@@ -48,7 +48,7 @@ export async function customerChallengeDigest(input: {
     'raw', encoder.encode(input.secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign'],
   );
   const message = encoder.encode(
-    `echo-grid/customer-auth-challenge/v1/\\0${input.purpose}/${input.field}/\\0${input.value}`,
+    `echo-grid/customer-auth-challenge/v1/\0${input.purpose}/${input.field}/\0${input.value}`,
   );
   const digest = await crypto.subtle.sign('HMAC', key, message);
   return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, '0')).join('');
