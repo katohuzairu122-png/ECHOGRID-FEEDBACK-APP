@@ -128,7 +128,7 @@ export class CustomerPasswordAuthService {
     return age >= 0 && age <= this.config.phoneProofMaxAgeSeconds * 1000;
   }
 
-  private policy(password: unknown, phone: string) {
+  private policy(password: unknown, phone: string | null) {
     return checkPasswordPolicy(
       password,
       { phone },
