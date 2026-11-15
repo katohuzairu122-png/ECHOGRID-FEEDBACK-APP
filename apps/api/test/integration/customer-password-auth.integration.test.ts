@@ -193,7 +193,9 @@ describe.skipIf(!process.env.DATABASE_URL)('customer password auth (integration)
     expect((await login('incorrect password')).headers.has('set-cookie')).toBe(false);
     const response = await login(GOOD);
     expect(response.status).toBe(204);
-    const cookies = response.headers.getSetCookie();
+    // This integration suite runs in Node. Workers' Headers type omits this accessor.
+    const headers = response.headers as Headers & { getSetCookie(): string[] };
+    const cookies = headers.getSetCookie();
     expect(cookies.every((cookie) => cookie.includes('Secure; HttpOnly; SameSite=Strict'))).toBe(true);
     const access = cookies[0]?.match(/^__Host-test-access=([^;]+)/)?.[1];
     const refresh = cookies[1]?.match(/^__Host-test-refresh=([^;]+)/)?.[1];
