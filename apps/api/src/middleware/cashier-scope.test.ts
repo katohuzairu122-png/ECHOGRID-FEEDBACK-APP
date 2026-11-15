@@ -15,6 +15,7 @@ vi.mock('../db/client', () => ({
 vi.mock('../repositories', () => ({ createRepositories: () => ({}) }));
 vi.mock('./rate-limit', () => ({
   rateLimit: () => async (_c: unknown, next: () => Promise<void>) => next(),
+  globalApiRateLimit: () => async (_c: unknown, next: () => Promise<void>) => next(),
   rateLimitByCustomer: () => async (_c: unknown, next: () => Promise<void>) => next(),
   staffLoginRateLimit: () => async (_c: unknown, next: () => Promise<void>) => next(),
   cashierAuthRateLimit: () => async (_c: unknown, next: () => Promise<void>) => next(),

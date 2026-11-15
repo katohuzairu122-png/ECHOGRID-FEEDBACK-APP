@@ -9,7 +9,7 @@ import { handleDeadLetterBatch } from './queue/dead-letter-consumer';
 import { describeQueueFailure } from './queue/queue-failure-metadata';
 import { errorHandler } from './lib/error-handler';
 import { parseAllowedOrigins } from './lib/allowed-origins';
-import { rateLimit } from './middleware/rate-limit';
+import { globalApiRateLimit } from './middleware/rate-limit';
 import { auditTrail } from './middleware/audit';
 import { authRoutes } from './auth/auth.routes';
 import { cashierSessionRoutes } from './cashier-sessions/cashier-sessions.routes';
@@ -140,7 +140,7 @@ api.use(
     allowMethods: ['GET', 'POST', 'PATCH', 'DELETE'],
   }),
 );
-api.use('*', rateLimit('API_RATE_LIMITER'));
+api.use('*', globalApiRateLimit());
 // CASHIER-PWA-01 C2: refuse a cashier-scoped token on every route that is not on the explicit allow-list, before any
 // handler runs. Mounted on the whole router so routes added later are denied by default.
 // SEC-CASHIER-R1 (F2): the audit middleware is mounted BEFORE the guard, so a refusal thrown by the guard (and by

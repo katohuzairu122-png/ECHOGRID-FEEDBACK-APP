@@ -30,3 +30,16 @@ export async function clientAttributionHeaders(): Promise<Record<string, string>
   if (!ip) return {};
   return { 'x-echo-client': await signClientAttribution(secret, { ip, userAgent: h.get('user-agent') ?? '' }, Date.now()) };
 }
+
+/**
+ * H2: the same signed attribution for ANY server-side call to the API (staff, customer, anonymous), so the API's global per-source
+ * floor can tell people apart instead of seeing this Worker's single egress address. Never throws: outside a request scope, or without
+ * an address, it returns no header and the API falls back to its legacy per-address key.
+ */
+export async function signedAttributionHeadersSafe(): Promise<Record<string, string>> {
+  try {
+    return await clientAttributionHeaders();
+  } catch {
+    return {};
+  }
+}

@@ -3,7 +3,7 @@ import { getAccessToken } from './session';
 import { getCashierAccessToken } from './cashier/session';
 import { isCashierSurface } from './cashier/surface';
 import { onCashierHost } from './cashier/host-guard';
-import { clientAttributionHeaders } from './cashier/client-attribution';
+import { signedAttributionHeadersSafe } from './cashier/client-attribution';
 import { ApiError } from './api-error';
 
 // Re-exported so the many server-side callers that `import { ApiError } from
@@ -36,8 +36,9 @@ export async function apiFetch<T>(
   }
   // CASHIER-PWA-01 C4: inside a cashier action the cashier token is sent; everywhere else the staff token, unchanged.
   const accessToken = isCashierSurface() ? await getCashierAccessToken() : await getAccessToken();
-  // SEC-CASHIER-POST-R2 C1: cashier calls carry the signed real client so the API's audit rows name the person's device, not this Worker.
-  const attribution = isCashierSurface() ? await clientAttributionHeaders() : {};
+  // SEC-CASHIER-POST-R2 C1 / H2: every call carries the signed real client (when the secret is configured), so the API's audit rows
+  // and its global per-source floor name the person's device, not this Worker's shared egress address.
+  const attribution = await signedAttributionHeadersSafe();
   const response = await callApi(path, init, accessToken, businessId, branchId, attribution);
   return parseEnvelope<T>(response);
 }

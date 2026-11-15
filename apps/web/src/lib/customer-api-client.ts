@@ -1,6 +1,7 @@
 import 'server-only';
 import { redirect } from 'next/navigation';
 import { API_BASE_URL, ApiError, parseEnvelope } from './api-client';
+import { signedAttributionHeadersSafe } from './cashier/client-attribution';
 import { getCustomerToken } from './customer-session';
 
 export const CUSTOMER_LOGIN_PATH = '/loyalty/login';
@@ -52,6 +53,7 @@ export async function customerApiFetch<T>(
 
   const headers = new Headers(init.headers);
   headers.set('Authorization', `Bearer ${token}`);
+  for (const [name, value] of Object.entries(await signedAttributionHeadersSafe())) headers.set(name, value);
   if (init.body && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json');
 
   const response = await fetch(`${API_BASE_URL}/api/v1${path}`, { ...init, headers });
