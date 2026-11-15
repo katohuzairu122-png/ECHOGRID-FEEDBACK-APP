@@ -124,6 +124,33 @@ describe.skipIf(!process.env.DATABASE_URL)('customer password auth (integration)
     });
   });
 
+  describe('verified email password sign-in (S2, domain only)', () => {
+    it('requires credential-level email verification, not merely a matching address', async () => {
+      const phone = PHONE(91);
+      const email = `s2-${RUN}-91@example.test`;
+      const registered = await a.auth.registerWithPassword(proof(phone), GOOD);
+      expect(registered.ok).toBe(true);
+      const customer = await customerByPhone(phone);
+      expect(customer).toBeDefined();
+      await q(
+        'UPDATE customer_credentials SET login_email=$1, login_email_verified_at=NULL WHERE customer_id=$2',
+        [email, customer!.id],
+      );
+      expect(await a.auth.loginWithVerifiedEmailPassword({ email, password: GOOD }))
+        .toEqual({ ok: false, kind: 'invalid' });
+      await q(
+        'UPDATE customer_credentials SET login_email_verified_at=$1 WHERE customer_id=$2',
+        [new Date(clockMs), customer!.id],
+      );
+      expect(await a.auth.loginWithVerifiedEmailPassword({ email, password: 'wrong password' }))
+        .toEqual({ ok: false, kind: 'invalid' });
+      expect(await a.auth.loginWithVerifiedEmailPassword({ email: email.toUpperCase(), password: GOOD }))
+        .toMatchObject({ ok: true });
+      expect(await a.auth.loginWithVerifiedEmailPassword({ email: 'missing-' + email, password: GOOD }))
+        .toEqual({ ok: false, kind: 'invalid' });
+    });
+  });
+
   describe('phone proof', () => {
     it('refuses a stale, a future-dated and a malformed proof in every flow, and creates nothing', async () => {
       const bad = [
