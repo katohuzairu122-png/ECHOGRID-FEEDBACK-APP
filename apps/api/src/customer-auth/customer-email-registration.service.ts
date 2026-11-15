@@ -28,8 +28,11 @@ export async function completeEmailRegistration(input: {
   const email = normalizeLoginEmail(input.email);
   if (
     !email ||
+    typeof input.proof !== 'string' ||
+    input.proof.length < 6 ||
+    input.proof.length > 256 ||
     typeof input.passwordHash !== 'string' ||
-    !/^pbkdf2\\$[1-9][0-9]*\\$[^$]+\\$[^$]+$/.test(input.passwordHash) ||
+    !/^pbkdf2\$[1-9][0-9]*\$[^$]+\$[^$]+$/.test(input.passwordHash) ||
     !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(input.challengeId)
   ) return invalid;
   const [subjectDigest, proofDigest] = await Promise.all([
@@ -50,7 +53,14 @@ export async function completeEmailRegistration(input: {
         proofDigest,
         now: input.now,
       });
-      if (!consumed) return invalid;
+      if (!consumed) {
+        await challenges.recordFailedAttempt({
+          id: input.challengeId,
+          now: input.now,
+          scope: { purpose: 'email_registration', subjectDigest },
+        });
+        return invalid;
+      }
       const [customer] = await tx.insert(customers).values({
         phone: null,
         phoneVerifiedAt: null,
