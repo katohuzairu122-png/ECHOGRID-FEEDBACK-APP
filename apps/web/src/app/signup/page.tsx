@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import { signupAction, type AuthActionState } from '@/lib/actions/auth';
 import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Input, Label } from '@/components/ui';
-import { Logo } from '@/components/brand';
+import { Logo, LogoMark } from '@/components/brand';
 import { safeInternalPath } from '@/lib/safe-redirect';
 
 const initialState: AuthActionState = {};
@@ -22,7 +22,10 @@ export default function SignupPage() {
   const t = useTranslations('auth.signup');
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center gap-8 bg-neutral-50 p-8">
+    <main className="relative isolate flex min-h-screen flex-col items-center justify-center gap-8 overflow-hidden bg-neutral-50 px-4 py-8 sm:px-8">
+      <div aria-hidden="true" className="pointer-events-none absolute inset-0 -z-10 grid place-items-center overflow-hidden text-brand-700 opacity-[0.06] forced-colors:hidden print:hidden">
+        <LogoMark monochrome size={720} className="h-auto w-[115vw] max-w-[45rem]" />
+      </div>
       <Logo variant="full" iconSize={40} />
       <Card className="w-full max-w-sm">
         <CardHeader>

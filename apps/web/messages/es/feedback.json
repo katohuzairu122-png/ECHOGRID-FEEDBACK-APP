@@ -129,6 +129,30 @@
   "notFound": {
     "title": "Este enlace no es válido",
     "description": "Este código de comentarios puede haber caducado o haber sido reemplazado. Pide a un miembro del personal un código actual, o intenta escanear de nuevo."
+  },
+  "formBuilder": {
+    "name": "Nombre del formulario",
+    "questionNumber": "Pregunta {number}",
+    "question": "Texto de la pregunta",
+    "settings": "Ajustes de la pregunta",
+    "key": "Clave de la pregunta",
+    "type": "Tipo de respuesta",
+    "required": "Obligatoria",
+    "options": "Opciones (separadas por comas)",
+    "remove": "Eliminar pregunta {number}",
+    "invalid": "Revisa el nombre del formulario y los ajustes. Las claves deben ser válidas y únicas, y las preguntas de selección necesitan opciones.",
+    "add": "Añadir pregunta",
+    "publishing": "Publicando…",
+    "publishVersion": "Publicar nueva versión",
+    "publish": "Publicar formulario",
+    "types": {
+      "text": "Texto corto",
+      "textarea": "Texto largo",
+      "rating": "Puntuación",
+      "single_choice": "Selección única",
+      "multi_choice": "Selección múltiple",
+      "boolean": "Sí o no"
+    }
   }
 }
 

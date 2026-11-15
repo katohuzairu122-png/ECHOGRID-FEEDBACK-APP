@@ -129,6 +129,30 @@
   "notFound": {
     "title": "Ce lien n'est pas valide",
     "description": "Ce code d'avis a peut-être expiré ou été remplacé. Demandez un code actuel à un membre du personnel, ou essayez de scanner à nouveau."
+  },
+  "formBuilder": {
+    "name": "Nom du formulaire",
+    "questionNumber": "Question {number}",
+    "question": "Texte de la question",
+    "settings": "Paramètres de la question",
+    "key": "Clé de la question",
+    "type": "Type de réponse",
+    "required": "Obligatoire",
+    "options": "Options (séparées par des virgules)",
+    "remove": "Supprimer la question {number}",
+    "invalid": "Vérifiez le nom et les paramètres. Les clés doivent être valides et uniques, et les questions à choix doivent avoir des options.",
+    "add": "Ajouter une question",
+    "publishing": "Publication…",
+    "publishVersion": "Publier une nouvelle version",
+    "publish": "Publier le formulaire",
+    "types": {
+      "text": "Texte court",
+      "textarea": "Texte long",
+      "rating": "Note",
+      "single_choice": "Choix unique",
+      "multi_choice": "Choix multiples",
+      "boolean": "Oui ou non"
+    }
   }
 }
 
