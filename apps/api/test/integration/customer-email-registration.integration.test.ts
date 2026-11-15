@@ -4,11 +4,13 @@ import { buildDb } from '../../src/db/client';
 import { CustomerAuthChallengeRepository } from '../../src/repositories/customer-auth-challenge.repository';
 import { customerChallengeDigest } from '../../src/customer-auth/customer-email-challenge-digest';
 import { completeEmailRegistration } from '../../src/customer-auth/customer-email-registration.service';
+import { createEmailRegistrationService, type RegistrationProofDelivery } from '../../src/customer-auth/customer-email-auth.service';
 import { pbkdf2Hash } from '../../src/auth/password';
 
 describe.skipIf(!process.env.DATABASE_URL)('S2 email registration transaction (Postgres)', () => {
   const secret = 'integration-only-hmac-key-with-more-than-thirty-two-bytes';
   const email = `s2-tx-${Date.now()}@example.test`;
+  const deliveredAddress = `delivery-${email}`;
   let client: Client;
   const challengeIds: string[] = [];
   beforeAll(async () => {
@@ -16,7 +18,7 @@ describe.skipIf(!process.env.DATABASE_URL)('S2 email registration transaction (P
     await client.connect();
   });
   afterAll(async () => {
-    await client.query('DELETE FROM customers WHERE id IN (SELECT customer_id FROM customer_credentials WHERE login_email=$1)', [email]);
+    await client.query('DELETE FROM customers WHERE id IN (SELECT customer_id FROM customer_credentials WHERE login_email = ANY($1::text[]))', [[email, deliveredAddress]]);
     await client.query('DELETE FROM customer_auth_challenges WHERE id = ANY($1::uuid[])', [challengeIds]);
     await client.end();
   });
@@ -79,5 +81,37 @@ describe.skipIf(!process.env.DATABASE_URL)('S2 email registration transaction (P
     }
     expect(await completeEmailRegistration(input)).toEqual(invalid);
     expect(await readChallenge()).toEqual({ attempts: 5, consumed_at: null });
+  });
+
+  it('issues a digest-only challenge, suppresses resends and completes with the delivered proof', async () => {
+    const db = buildDb(client);
+    const timestamp = new Date();
+    const messages: Array<Parameters<RegistrationProofDelivery>[0]> = [];
+    const registration = createEmailRegistrationService({
+      db, hmacSecret: secret, now: () => timestamp,
+      passwordPolicy: { minLength: 12 },
+      hasher: {
+        hash: (password) => pbkdf2Hash(password, 1000),
+        verify: async () => false,
+      },
+      deliver: async (message) => { messages.push(message); },
+    });
+    await registration.requestProof(deliveredAddress);
+    await registration.requestProof(deliveredAddress);
+    expect(messages).toHaveLength(1);
+    const [message] = messages;
+    if (!message) throw new Error('Expected a synthetic delivery');
+    challengeIds.push(message.challengeId);
+    const { rows } = await client.query(
+      'SELECT subject_digest, proof_digest, expires_at FROM customer_auth_challenges WHERE id = $1',
+      [message.challengeId],
+    );
+    expect(rows[0].subject_digest).not.toBe(message.recipient);
+    expect(rows[0].proof_digest).not.toBe(message.proof);
+    expect(rows[0].expires_at.getTime() - timestamp.getTime()).toBe(900_000);
+    expect((await registration.completeRegistration({
+      email: message.recipient, challengeId: message.challengeId, proof: message.proof,
+      password: 'a strong synthetic password',
+    })).ok).toBe(true);
   });
 });

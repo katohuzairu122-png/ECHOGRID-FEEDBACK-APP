@@ -21,7 +21,7 @@ export async function completeEmailRegistration(input: {
   challengeId: string;
   email: string;
   proof: string;
-  passwordHash: string;
+  passwordHash: string | (() => Promise<string>);
   now: Date;
 }): Promise<EmailRegistrationResult> {
   const invalid = { ok: false, kind: 'invalid' } as const;
@@ -31,8 +31,6 @@ export async function completeEmailRegistration(input: {
     typeof input.proof !== 'string' ||
     input.proof.length < 6 ||
     input.proof.length > 256 ||
-    typeof input.passwordHash !== 'string' ||
-    !/^pbkdf2\$[1-9][0-9]*\$[^$]+\$[^$]+$/.test(input.passwordHash) ||
     !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(input.challengeId)
   ) return invalid;
   const [subjectDigest, proofDigest] = await Promise.all([
@@ -61,6 +59,12 @@ export async function completeEmailRegistration(input: {
         });
         return invalid;
       }
+      const passwordHash = typeof input.passwordHash === 'function'
+        ? await input.passwordHash()
+        : input.passwordHash;
+      if (!/^pbkdf2\$[1-9][0-9]*\$[^$]+\$[^$]+$/.test(passwordHash)) {
+        throw new Error('Invalid password hash');
+      }
       const [customer] = await tx.insert(customers).values({
         phone: null,
         phoneVerifiedAt: null,
@@ -71,7 +75,7 @@ export async function completeEmailRegistration(input: {
       const credentials = new CustomerCredentialRepository(tx);
       const created = await credentials.create({
         customerId: customer.id,
-        passwordHash: input.passwordHash,
+        passwordHash,
         now: input.now,
         verifiedLoginEmail: { address: email, verifiedAt: input.now },
       });
