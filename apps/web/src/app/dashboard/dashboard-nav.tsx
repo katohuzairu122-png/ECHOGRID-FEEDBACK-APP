@@ -33,7 +33,7 @@ export async function DashboardNav() {
 
   const all: WorkspaceNavItem[] = [
     { href: '/dashboard', label: t('overview.title'), icon: 'store' },
-    { href: '/dashboard/loyalty/scan', label: t('nav.serve'), icon: 'qr' },
+    { href: '/dashboard/loyalty/scan', label: t('nav.serve'), icon: 'qr', hardNavigation: true },
     { href: '/dashboard/feedback', label: t('nav.feedback'), icon: 'chat' },
     { href: '/dashboard/loyalty', label: t('nav.loyalty'), icon: 'star' },
     { href: '/dashboard/analytics', label: t('nav.analytics'), icon: 'chart' },
@@ -53,7 +53,7 @@ export async function DashboardNav() {
   // Management: only destinations the effective permissions allow.
   const items: WorkspaceNavItem[] =
     kind === 'cashier'
-      ? [{ href: CASHIER_HOME, label: t('nav.serve'), icon: 'qr' }, { href: '/dashboard/cashier', label: t('nav.cashierApp'), icon: 'qr' }, support]
+      ? [{ href: CASHIER_HOME, label: t('nav.serve'), icon: 'qr', hardNavigation: true }, { href: '/dashboard/cashier', label: t('nav.cashierApp'), icon: 'qr' }, support]
       : kind === 'unavailable'
         ? [support]
         : all.filter((item) => {

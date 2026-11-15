@@ -1,5 +1,6 @@
 import 'server-only';
 import { cookies } from 'next/headers';
+import { refuseOnCashierHost } from './cashier/host-guard';
 import {
   ACCESS_TOKEN_COOKIE,
   REFRESH_TOKEN_COOKIE,
@@ -28,6 +29,8 @@ export interface AuthTokens {
  * works (browsers silently drop `secure` cookies set over non-HTTPS).
  */
 export async function setSession(tokens: AuthTokens): Promise<void> {
+  // SEC-CASHIER-R2 F4: no staff session is ever created on the cashier-only origin.
+  await refuseOnCashierHost();
   const store = await cookies();
   const secure = process.env.NODE_ENV === 'production';
 
@@ -116,6 +119,7 @@ export async function clearSession(): Promise<void> {
  * refresh token under an impersonated UI.
  */
 export async function startImpersonation(tokens: { accessToken: string; expiresAt: Date }): Promise<void> {
+  await refuseOnCashierHost();
   const store = await cookies();
   const secure = process.env.NODE_ENV === 'production';
   const maxAge = Math.max(1, Math.floor((tokens.expiresAt.getTime() - Date.now()) / 1000));

@@ -31,6 +31,7 @@ export const ACTION = {
   sessionRevoked: 'cashier_session.revoked',
   sessionRevokedAll: 'cashier_session.revoked_all',
   cashierLogin: 'auth.cashier_login',
+  cashierSelectionRequired: 'auth.cashier_selection_required',
   cashierLogout: 'auth.cashier_logout',
   authFailed: 'security.authentication_failed',
   authzFailed: 'security.authorization_failed',
@@ -41,6 +42,7 @@ export const SESSION_ACTIONS: readonly string[] = [
   ACTION.sessionRevoked,
   ACTION.sessionRevokedAll,
   ACTION.cashierLogin,
+  ACTION.cashierSelectionRequired,
   ACTION.cashierLogout,
 ];
 
@@ -144,6 +146,9 @@ export function cashierRequestAudit(
     return { action: failed ? ACTION.qrRejected : ACTION.qrVerified, entityType: 'qr_verification' };
   if (method === 'GET' && /^\/loyalty\/redemptions\/[^/]+$/.test(apiPath))
     return { action: ACTION.redemptionLookup, entityType: 'redemption' };
+  // SEC-CASHIER-R2 F9: a rejected purchase (invalid amount, inactive account, ...) is accountable too; successes keep the handler's own row.
+  if (failed && method === 'POST' && (apiPath === '/loyalty/actions/lookup-purchase' || /^\/loyalty\/accounts\/[^/]+\/purchase$/.test(apiPath)))
+    return { action: apiPath === '/loyalty/actions/lookup-purchase' ? ACTION.purchaseViaLookup : ACTION.purchase, entityType: 'loyalty_transaction' };
   if (failed && method === 'POST' && /^\/loyalty\/redemptions\/[^/]+\/confirm$/.test(apiPath))
     return { action: ACTION.redemptionRejected, entityType: 'redemption' };
   return null;

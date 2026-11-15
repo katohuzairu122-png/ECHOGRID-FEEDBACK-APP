@@ -33,6 +33,7 @@ vi.mock('../repositories', () => ({
 vi.mock('./rate-limit', () => ({
   rateLimit: () => async (_c: unknown, next: () => Promise<void>) => next(),
   rateLimitByCustomer: () => async (_c: unknown, next: () => Promise<void>) => next(),
+  cashierAuthRateLimit: () => async (_c: unknown, next: () => Promise<void>) => next(),
 }));
 
 const { default: worker } = await import('../index');

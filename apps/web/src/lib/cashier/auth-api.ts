@@ -1,4 +1,5 @@
 import 'server-only';
+import { clientAttributionHeaders } from './client-attribution';
 import { API_BASE_URL, parseEnvelope, ApiError } from '../api-client';
 import {
   clearCashierSession,
@@ -24,7 +25,7 @@ export type CashierLoginResponse =
 export async function postCashierAuth<T>(path: string, body: unknown): Promise<T> {
   const response = await fetch(`${API_BASE_URL}/api/v1/auth/cashier/${path}`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...(await clientAttributionHeaders()) },
     body: JSON.stringify(body),
     cache: 'no-store',
   });

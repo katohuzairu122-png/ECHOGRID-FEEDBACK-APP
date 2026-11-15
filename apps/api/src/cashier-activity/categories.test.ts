@@ -58,3 +58,12 @@ describe('rows produced for cashier requests that would otherwise leave none', (
     expect(cashierRequestAudit('GET', '/auth/me', 200)).toBeNull();
   });
 });
+
+describe('SEC-CASHIER-R2 F9 audit coverage', () => {
+  it('records rejected purchases (both routes) as failures in points_issued, and the selection step as a session row', () => {
+    expect(cashierRequestAudit('POST', '/loyalty/accounts/x/purchase', 422)?.action).toBe(ACTION.purchase);
+    expect(cashierRequestAudit('POST', '/loyalty/actions/lookup-purchase', 409)?.action).toBe(ACTION.purchaseViaLookup);
+    expect(categorize(ACTION.purchase, marked({ outcome: 'failure' }))).toEqual({ categories: ['points_issued'], outcome: 'failure' });
+    expect(categorize(ACTION.cashierSelectionRequired, null)?.categories).toEqual(['session']);
+  });
+});

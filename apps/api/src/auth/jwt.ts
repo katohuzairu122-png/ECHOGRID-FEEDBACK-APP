@@ -198,10 +198,25 @@ export async function verifyRefreshToken(
  * choosing a business and branch without re-sending the password. Its `type` is not `access`, so it can never verify
  * as an access token, and it is useless anywhere except the cashier session endpoint.
  */
-export async function signCashierSelectionTicket(userId: string, secret: string, deviceLabel?: string): Promise<string> {
+export async function signCashierSelectionTicket(
+  userId: string,
+  secret: string,
+  deviceLabel?: string,
+  /** SEC-CASHIER-R2 F7: fingerprint of the credential at sign-in; a password change before use voids the ticket. */
+  passwordVersion?: string,
+): Promise<string> {
   const iat = now();
   return sign(
-    { sub: userId, type: 'cashier_select', ...(deviceLabel ? { dl: deviceLabel } : {}), iat, exp: iat + CASHIER_SELECTION_TICKET_TTL_SECONDS },
+    {
+      sub: userId,
+      type: 'cashier_select',
+      // SEC-CASHIER-R2 F7: single-use identity; consumed atomically when the ticket is exchanged for a session.
+      jti: crypto.randomUUID(),
+      ...(passwordVersion ? { pwv: passwordVersion } : {}),
+      ...(deviceLabel ? { dl: deviceLabel } : {}),
+      iat,
+      exp: iat + CASHIER_SELECTION_TICKET_TTL_SECONDS,
+    },
     secret,
     'HS256',
   );
@@ -210,8 +225,23 @@ export async function signCashierSelectionTicket(userId: string, secret: string,
 export async function verifyCashierSelectionTicket(
   token: string,
   secret: string,
-): Promise<{ sub: string; deviceLabel?: string }> {
-  const payload = (await verify(token, secret, 'HS256')) as { sub?: unknown; type?: unknown; dl?: unknown };
+): Promise<{ sub: string; jti: string; pwv: string | null; expiresAt: Date; deviceLabel?: string }> {
+  const payload = (await verify(token, secret, 'HS256')) as {
+    sub?: unknown;
+    type?: unknown;
+    dl?: unknown;
+    jti?: unknown;
+    pwv?: unknown;
+    exp?: unknown;
+  };
   if (payload.type !== 'cashier_select' || typeof payload.sub !== 'string') throw new Error('Not a selection ticket');
-  return { sub: payload.sub, ...(typeof payload.dl === 'string' ? { deviceLabel: payload.dl } : {}) };
+  // A ticket with no jti cannot be made single-use, so it is refused (they live five minutes).
+  if (typeof payload.jti !== 'string' || typeof payload.exp !== 'number') throw new Error('Selection ticket has no identity');
+  return {
+    sub: payload.sub,
+    jti: payload.jti,
+    pwv: typeof payload.pwv === 'string' ? payload.pwv : null,
+    expiresAt: new Date(payload.exp * 1000),
+    ...(typeof payload.dl === 'string' ? { deviceLabel: payload.dl } : {}),
+  };
 }

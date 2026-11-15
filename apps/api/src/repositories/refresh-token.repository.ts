@@ -1,4 +1,4 @@
-import { eq, and, isNull, gt, desc } from 'drizzle-orm';
+import { eq, and, isNull, gt, lt, desc } from 'drizzle-orm';
 import { refreshTokens, users, branches } from '../db/schema';
 import { BaseRepository } from './base.repository';
 
@@ -10,6 +10,39 @@ export class RefreshTokenRepository extends BaseRepository {
     const [row] = await this.db.insert(refreshTokens).values(input).returning();
     if (!row) throw new Error('Insert returned no row');
     return row;
+  }
+
+  /**
+   * SEC-CASHIER-R2 F7: atomically spends a cashier selection ticket. The ticket's jti becomes the primary key of a
+   * tombstone row (client 'web' with a marker hash no token can equal, born revoked, session-less, so it is never a live session and no
+   * session list or liveness check can see it; the client CHECK allows only web/cashier, so no migration is needed). The insert succeeds for exactly one caller; a replay or a concurrent twin conflicts
+   * on the key and gets false. The row expires with the ticket; the next spend by the same user deletes their expired tombstones.
+   */
+  async consumeCashierTicket(input: { jti: string; userId: string; expiresAt: Date }): Promise<boolean> {
+    // Housekeeping: this user's spent-ticket tombstones that have expired are meaningless (the ticket is past its
+    // expiry and would be refused anyway), so remove them here. Nothing else sweeps refresh_tokens.
+    await this.db
+      .delete(refreshTokens)
+      .where(
+        and(
+          eq(refreshTokens.userId, input.userId),
+          eq(refreshTokens.tokenHash, 'cashier-selection-ticket'),
+          lt(refreshTokens.expiresAt, new Date()),
+        ),
+      );
+    const rows = await this.db
+      .insert(refreshTokens)
+      .values({
+        id: input.jti,
+        userId: input.userId,
+        tokenHash: 'cashier-selection-ticket',
+        expiresAt: input.expiresAt,
+        revokedAt: new Date(),
+        client: 'web',
+      })
+      .onConflictDoNothing()
+      .returning({ id: refreshTokens.id });
+    return rows.length === 1;
   }
 
   async findById(id: string): Promise<RefreshToken | undefined> {

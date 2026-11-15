@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation';
 import { setSession, getRefreshTokenForLogout, clearSession } from '@/lib/session';
 import { API_BASE_URL, apiFetch, ApiError } from '@/lib/api-client';
 import { safeInternalPath } from '@/lib/safe-redirect';
+import { refuseOnCashierHost } from '@/lib/cashier/host-guard';
 
 export interface AuthActionState {
   error?: string;
@@ -62,6 +63,8 @@ export async function loginAction(
   _prevState: AuthActionState,
   formData: FormData,
 ): Promise<AuthActionState> {
+  // SEC-CASHIER-R2b: never reaches the API from the cashier-only origin (404 before any API call).
+  await refuseOnCashierHost();
   const email = String(formData.get('email') ?? '');
   const password = String(formData.get('password') ?? '');
   const requestedNext = String(formData.get('next') ?? '/dashboard');
@@ -82,6 +85,8 @@ export async function signupAction(
   _prevState: AuthActionState,
   formData: FormData,
 ): Promise<AuthActionState> {
+  // SEC-CASHIER-R2b: never reaches the API from the cashier-only origin (404 before any API call).
+  await refuseOnCashierHost();
   const email = String(formData.get('email') ?? '');
   const password = String(formData.get('password') ?? '');
   const fullName = String(formData.get('fullName') ?? '');
@@ -150,6 +155,8 @@ export async function requestPasswordResetAction(
   _prevState: PasswordResetActionState,
   formData: FormData,
 ): Promise<PasswordResetActionState> {
+  // SEC-CASHIER-R2b: never reaches the API from the cashier-only origin (404 before any API call).
+  await refuseOnCashierHost();
   const email = String(formData.get('email') ?? '');
 
   const result = await callEmptyBodyAuthEndpoint('password-reset/request', {
@@ -173,6 +180,8 @@ export async function resetPasswordAction(
   _prevState: PasswordResetActionState,
   formData: FormData,
 ): Promise<PasswordResetActionState> {
+  // SEC-CASHIER-R2b: never reaches the API from the cashier-only origin (404 before any API call).
+  await refuseOnCashierHost();
   const token = String(formData.get('token') ?? '');
   const newPassword = String(formData.get('newPassword') ?? '');
   const confirmPassword = String(formData.get('confirmPassword') ?? '');
@@ -284,6 +293,7 @@ export async function changePasswordAction(
  * the cookie on failure so the same logout action can safely be retried.
  */
 export async function logoutAction(): Promise<void> {
+  await refuseOnCashierHost();
   const refreshToken = await getRefreshTokenForLogout();
 
   if (refreshToken) {

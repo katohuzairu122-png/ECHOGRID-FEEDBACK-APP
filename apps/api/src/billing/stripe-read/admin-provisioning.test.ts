@@ -4,7 +4,7 @@ import { generateKeyPairSync, randomUUID, sign as nodeSign } from 'node:crypto';
 import { readdirSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { sign as honoSign } from 'hono/jwt';
-import { signAccessToken, signImpersonationToken } from '../../auth/jwt';
+import { signAccessToken, signCashierAccessToken, signImpersonationToken } from '../../auth/jwt';
 import {
   authenticateAdminSession, requireFreshAdmin, isTrustedAdminContext, AdminAuthorityError, createWorkloadAuthority, gateForWorkload, isTrustedWorkloadIdentity, createCredentialCustody, CredentialCustodyError,
   createSigningCustody, SigningCustodyError, createObservationVerifier, createTrustedStripeRuntime, createStripeGetTransport, checkRead, MappingRegistry, captureProof, createInMemoryProofStore, applyProof, ScriptedReadTransport,
@@ -126,6 +126,9 @@ describe('1-10. administrator session authentication', () => {
     expect(await authenticateAdminSession(target.deps, bearer(imp.token))).toEqual({ ok: false, reason: 'IMPERSONATED_SESSION' });
     const impAdmin = await signImpersonationToken(admin.userId, admin.userId, SECRET);
     expect(await authenticateAdminSession(admin.deps, bearer(impAdmin.token))).toEqual({ ok: false, reason: 'IMPERSONATED_SESSION' });
+    // SEC-CASHIER-R2 F9: a cashier-scoped token of a real platform administrator is still not administrative authority.
+    const cashierTok = await signCashierAccessToken(admin.userId, SECRET, { sessionId: randomUUID(), businessId: randomUUID() });
+    expect(await authenticateAdminSession(admin.deps, bearer(cashierTok))).toEqual({ ok: false, reason: 'INVALID_TOKEN' });
   });
 
   it('10. any verification failure fails closed: repository errors, a malformed row, a missing or weak secret, a broken clock', async () => {

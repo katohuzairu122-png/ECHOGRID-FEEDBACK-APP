@@ -59,6 +59,8 @@ export async function authenticateAdminSession(deps: AdminSessionDeps, authoriza
     catch (e) { return deny((e as { name?: string })?.name === 'JwtTokenExpired' ? 'SESSION_EXPIRED' : 'INVALID_TOKEN'); }
     const nowMs = deps.clock();
     if (!Number.isSafeInteger(nowMs) || typeof payload.exp !== 'number' || payload.exp * 1000 <= nowMs) return deny('SESSION_EXPIRED');
+    // SEC-CASHIER-R2 F9: a cashier-scoped token is a limited credential for one business; it is never administrative authority, whatever account it was issued to.
+    if (payload.client !== undefined) return deny('INVALID_TOKEN');
     if (payload.impersonatedBy !== undefined) return deny('IMPERSONATED_SESSION'); // impersonation is a tenant-support tool, never administrative authority
     if (typeof payload.sub !== 'string' || !UUID.test(payload.sub)) return deny('INVALID_TOKEN');
     // LEGACY POLICY: a token without a signed session binding never carries administrative authority (it would be session-independent). The claim is trusted only because the token signature covers it.
