@@ -105,8 +105,11 @@ export class CustomerLookupService {
     const phoneHash = await phoneAuditHash(input.phone, this.secrets.QR_TOKEN_SECRET);
     const cashierMark = input.cashier ? { client: 'cashier', branchId: input.cashier.branchId } : {};
     const customer = await this.repos.customers.findByPhone(input.phone);
+    // A phone number that was never verified proves nothing about whoever holds
+    // it, so it cannot select a member for a cashier. Same generic miss as an
+    // unknown number, and it counts toward the miss throttle.
     const membership =
-      customer && customer.status === 'active'
+      customer && customer.status === 'active' && customer.phoneVerifiedAt
         ? await this.repos.customerMemberships.findActive(customer.id, input.businessId)
         : undefined;
     const account =
