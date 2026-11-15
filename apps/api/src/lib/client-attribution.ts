@@ -75,12 +75,23 @@ export interface ResolvedClient {
   trusted: boolean;
 }
 
+/**
+ * `previousSecret` supports rotation (STG-SEC-02B): while both are set, a header signed with EITHER verifies, so the secret can
+ * be changed on the API first (new value as current, old value as previous) without invalidating requests the web Worker still
+ * signs with the old value. A previous secret is honoured ONLY while a current secret is configured: with no current secret
+ * the feature is off and nothing is trusted, whatever else is set.
+ */
 export async function resolveClient(
   headers: { get(name: string): string | null },
   secret: string | undefined,
   nowMs: number = Date.now(),
+  previousSecret?: string | undefined,
 ): Promise<ResolvedClient> {
-  const signed = await verifyClientAttribution(secret, headers.get(CLIENT_ATTRIBUTION_HEADER), nowMs);
+  const header = headers.get(CLIENT_ATTRIBUTION_HEADER);
+  let signed = await verifyClientAttribution(secret, header, nowMs);
+  if (!signed && secret && previousSecret && previousSecret !== secret) {
+    signed = await verifyClientAttribution(previousSecret, header, nowMs);
+  }
   if (signed) return { ip: signed.ip, userAgent: signed.userAgent, trusted: true };
   return { ip: headers.get('cf-connecting-ip') ?? undefined, userAgent: headers.get('user-agent') ?? undefined, trusted: false };
 }

@@ -60,7 +60,7 @@ export const auditTrail = createMiddleware<{
   // records the real client instead; an unsigned, forged or stale header is ignored and the edge values are kept.
   // Forensic only: never used for authorization or throttling here.
   const forensicClient = async () => {
-    const client = await resolveClient(c.req.raw.headers, c.env.CLIENT_ATTRIBUTION_SECRET);
+    const client = await resolveClient(c.req.raw.headers, c.env.CLIENT_ATTRIBUTION_SECRET, Date.now(), c.env.CLIENT_ATTRIBUTION_SECRET_PREVIOUS);
     return {
       ipAddress: client.ip ?? null,
       userAgent: client.userAgent ?? null,

@@ -232,6 +232,11 @@ export interface Bindings {
    * `x-echo-client` (see lib/client-attribution.ts). Unset = the header is never trusted and the cashier auth throttles keep their previous per-IP behaviour.
    */
   CLIENT_ATTRIBUTION_SECRET?: string | undefined;
+  /**
+   * STG-SEC-02B (optional): the PREVIOUS attribution secret during a rotation. Honoured only while CLIENT_ATTRIBUTION_SECRET is
+   * set; a header signed with either value verifies. Remove it once the web Worker signs with the new value.
+   */
+  CLIENT_ATTRIBUTION_SECRET_PREVIOUS?: string | undefined;
   AUTH_RATE_LIMITER: RateLimit;
   API_RATE_LIMITER: RateLimit;
   PUBLIC_RATE_LIMITER: RateLimit;

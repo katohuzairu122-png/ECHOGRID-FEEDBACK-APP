@@ -11,7 +11,7 @@ import type { Bindings } from '../config/env';
  * Uses the REAL `rateLimit` middleware and the REAL staff login route; only the account service, database and password
  * hasher are replaced. The limiter binding is a counting fake with the production settings (AUTH_RATE_LIMITER: 10 / 60 s).
  */
-const m = vi.hoisted(() => ({ login: vi.fn(), keys: [] as string[] }));
+const m = vi.hoisted(() => ({ login: vi.fn(), keys: [] as string[], floorKeys: [] as string[] }));
 vi.mock('../db/client', () => ({ createDb: vi.fn(async () => ({ db: {}, close: async () => undefined })) }));
 vi.mock('../repositories', () => ({ createRepositories: () => ({}) }));
 vi.mock('./pbkdf2-worker', () => ({ createDurableObjectPbkdf2Worker: () => ({}) }));
@@ -25,12 +25,12 @@ const { errorHandler } = await import('../lib/error-handler');
 const { AuthError } = await import('./auth.service');
 
 const LIMIT = 10;
-function limiter(limit: number) {
+function limiter(limit: number, record: string[] = m.keys) {
   const hits = new Map<string, number>();
   return {
     hits,
     limit: async ({ key }: { key: string }) => {
-      m.keys.push(key);
+      record.push(key);
       const n = (hits.get(key) ?? 0) + 1;
       hits.set(key, n);
       return { success: n <= limit };
@@ -39,7 +39,7 @@ function limiter(limit: number) {
 }
 function rig() {
   const auth = limiter(LIMIT);
-  const api = limiter(300);
+  const api = limiter(300, m.floorKeys); // STG-SEC-02B: the per-account FLOOR (generous API limiter) is recorded separately
   const env = { JWT_ACCESS_SECRET: 'a', JWT_REFRESH_SECRET: 'r', HYPERDRIVE: { connectionString: 'x' }, AUTH_RATE_LIMITER: auth, API_RATE_LIMITER: api } as unknown as Bindings;
   const a = new Hono<{ Bindings: Bindings }>();
   a.route('/api/v1/auth', authRoutes);
@@ -54,6 +54,7 @@ const WEB_EGRESS = ip('198.51.100.250');
 beforeEach(() => {
   vi.clearAllMocks();
   m.keys.length = 0;
+  m.floorKeys.length = 0;
   m.login.mockResolvedValue({ accessToken: 'a', refreshToken: 'r' });
 });
 
@@ -141,6 +142,7 @@ describe('staff login throttle — invariants a redesign must keep', () => {
   it('the limiter key never contains the email or password (nothing secret is written to the rate-limit store)', async () => {
     const { login } = rig();
     await login('secret-person@example.test', ip('192.0.2.6'), 'hunter2-very-secret');
-    expect(m.keys.join('|')).not.toMatch(/secret-person|hunter2/);
+    expect([...m.keys, ...m.floorKeys].join('|')).not.toMatch(/secret-person|hunter2/);
+    expect(m.floorKeys.every((k) => /^staff:login:subject:[0-9a-f]{32}$/.test(k))).toBe(true); // hashed, never the raw email
   });
 });

@@ -7,6 +7,7 @@ const {
   apiFetchMock,
   setSessionMock,
   refuseOnCashierHostMock,
+  attributionMock,
 } = vi.hoisted(() => ({
   getRefreshTokenForLogoutMock: vi.fn(),
   clearSessionMock: vi.fn(),
@@ -14,6 +15,7 @@ const {
   apiFetchMock: vi.fn(),
   setSessionMock: vi.fn(),
   refuseOnCashierHostMock: vi.fn(),
+  attributionMock: vi.fn(async () => ({}) as Record<string, string>),
 }));
 
 vi.mock('@/lib/session', () => ({
@@ -23,6 +25,7 @@ vi.mock('@/lib/session', () => ({
 }));
 
 vi.mock('@/lib/cashier/host-guard', () => ({ refuseOnCashierHost: refuseOnCashierHostMock }));
+vi.mock('@/lib/cashier/client-attribution', () => ({ clientAttributionHeaders: attributionMock }));
 
 vi.mock('next/navigation', () => ({
   redirect: redirectMock,
@@ -69,6 +72,15 @@ describe('loginAction', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.stubGlobal('fetch', vi.fn());
+  });
+  it('STG-SEC-02B: staff login and signup forward the signed client attribution to the API; nothing extra when there is none', async () => {
+    vi.mocked(fetch).mockResolvedValue(new Response(JSON.stringify({ success: true, data: { accessToken: 'a', refreshToken: 'r' } })));
+    attributionMock.mockResolvedValueOnce({ 'x-echo-client': 'v1.signed.value' });
+    await loginAction({}, credentials('/dashboard'));
+    expect(new Headers((vi.mocked(fetch).mock.calls[0]![1] as RequestInit).headers).get('x-echo-client')).toBe('v1.signed.value');
+    vi.mocked(fetch).mockClear();
+    await loginAction({}, credentials('/dashboard'));
+    expect(new Headers((vi.mocked(fetch).mock.calls[0]![1] as RequestInit).headers).get('x-echo-client')).toBeNull();
   });
   it('SEC-CASHIER-R2b: staff login, signup, password reset and logout never call the API from the cashier origin', async () => {
     refuseOnCashierHostMock.mockRejectedValue(new Error('NEXT_NOT_FOUND'));
