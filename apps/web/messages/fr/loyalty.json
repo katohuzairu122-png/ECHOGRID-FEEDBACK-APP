@@ -269,7 +269,12 @@
       "emptyDescription": "Lorsque le personnel vous enverra un message, il apparaîtra ici.",
       "replyPlaceholder": "Écrivez une réponse…",
       "sending": "Envoi…",
-      "send": "Envoyer"
+      "send": "Envoyer",
+      "loadErrorTitle": "Impossible de charger les messages",
+      "loadUnavailable": "Les messages sont temporairement indisponibles. Réessayez pour recharger la conversation.",
+      "loadRateLimited": "Trop de requêtes. Patientez jusqu’à une minute avant de réessayer.",
+      "retry": "Réessayer",
+      "retryPending": "Nouvelle tentative…"
     },
     "community": {
       "eyebrow": "Communauté Echo Grid",
