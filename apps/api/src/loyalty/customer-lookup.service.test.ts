@@ -37,7 +37,7 @@ function build(o: Overrides = {}) {
   const customer =
     o.customer === null
       ? undefined
-      : { id: CUSTOMER, phone: PHONE, status: 'active', fullName: 'Amina Okafor', email: 'amina@example.com', ...o.customer };
+      : { id: CUSTOMER, phone: PHONE, status: 'active', phoneVerifiedAt: new Date(NOW - 86_400_000), fullName: 'Amina Okafor', email: 'amina@example.com', ...o.customer };
   const account =
     o.account === null ? undefined : { id: ACCOUNT, customerId: CUSTOMER, status: 'active', points: 120, ...o.account };
   const repos = {
@@ -158,6 +158,7 @@ describe('CustomerLookupService.lookup', () => {
       build({ customer: null }), // unknown number
       build({ membership: null }), // customer exists but is not a member of this business
       build({ customer: { status: 'suspended' } }),
+      build({ customer: { phoneVerifiedAt: null } }), // active member whose phone was never verified
       build({ account: null }), // membership row but no loyalty account
     ];
     const errors = await Promise.all(cases.map((c) => failure(c.service.lookup(args))));
@@ -167,6 +168,22 @@ describe('CustomerLookupService.lookup', () => {
       expect(err.code).toBe('MEMBER_NOT_FOUND');
       expect(err.message).toBe(errors[0]!.message);
     }
+  });
+
+  it('refuses an active member whose phone was never verified, records a miss and issues no token', async () => {
+    const { service, audit, repos } = build({ customer: { phoneVerifiedAt: null } });
+    const err = await failure(service.lookup(args));
+    expect(err.status).toBe(404);
+    expect(err.code).toBe('MEMBER_NOT_FOUND');
+    expect(audit).toHaveLength(1);
+    expect(audit[0]).toMatchObject({ action: LOOKUP_AUDIT_MISS });
+    expect(repos.customerMemberships.findActive).not.toHaveBeenCalled();
+    expect(repos.loyaltyAccounts.findByCustomerAndBusiness).not.toHaveBeenCalled();
+  });
+
+  it('still serves a verified member (verification is the only added requirement)', async () => {
+    const { service } = build({ customer: { phoneVerifiedAt: new Date(NOW) } });
+    expect((await service.lookup(args)).actions).toContain('VALIDATE_PURCHASE');
   });
 
   it('treats a member of a different business as a miss', async () => {
