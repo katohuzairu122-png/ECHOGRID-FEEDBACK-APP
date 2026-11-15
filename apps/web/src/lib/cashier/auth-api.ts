@@ -69,7 +69,7 @@ export async function ensureCashierAccess(): Promise<boolean> {
  */
 export async function cashierApiFetch<T>(path: string): Promise<T> {
   const [token, ctx] = await Promise.all([getCashierAccessToken(), getCashierContext()]);
-  const headers = new Headers();
+  const headers = new Headers(await clientAttributionHeaders());
   if (token) headers.set('Authorization', `Bearer ${token}`);
   if (ctx) {
     headers.set('X-Business-Id', ctx.businessId);
