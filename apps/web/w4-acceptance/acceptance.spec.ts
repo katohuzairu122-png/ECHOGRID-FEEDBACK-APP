@@ -2,7 +2,6 @@ import { execFileSync } from 'node:child_process';
 import { createHmac, randomUUID } from 'node:crypto';
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { expect, test, type Page } from '@playwright/test';
-import { collapseDevelopmentBadge } from '../e2e/helpers/development-chrome';
 import authEn from '../messages/en/auth.json';
 import authAr from '../messages/ar/auth.json';
 import dashboardEn from '../messages/en/dashboard.json';
@@ -51,7 +50,6 @@ test.use({ hasTouch: true });
 
 test.beforeEach(async ({ browser, page }, info) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  await collapseDevelopmentBadge(page);
   await info.attach('browser', { body: browser.version(), contentType: 'text/plain' });
 });
 
@@ -277,6 +275,7 @@ for (const locale of ['en', 'ar'] as const) {
       await expect(failureNotice).toBeVisible();
       await viewportEvidence(page, 'messages-retry');
       const retry = page.getByRole('button', { name: messages.retry, exact: true });
+      await page.keyboard.press('Tab');
       await retry.focus();
       await expect(retry).toBeFocused();
       await expect.soft(retry).not.toHaveCSS('box-shadow', 'none');
