@@ -91,9 +91,28 @@ Recorded as an approved architecture decision. **It authorizes no implementation
 5. Handling of a recycled phone number that is still recorded as verified.
 6. Treatment of customers whose phone is not verified.
 
+## 8a. Owner rulings on S4 (approved 2026-11-15; supersede the open questions above)
+
+D1 two independent recovery factors; D2 a 24-hour hold for high-risk recovery with notifications and secure cancellation; D3 lost email = verified phone + recovery code, lost phone = verified email + recovery code, both lost = no self-service; D4 password recovery only; D5 phone possession alone is insufficient; D6 an unverified phone is never a valid recovery factor. **The hold, cancellation and notification workflows (D2) are mandatory prerequisites for activating any recovery and are NOT part of S4-01.**
+
+## 8b. S4-01 Recovery code foundation (development only, unmounted, migration not executed anywhere real)
+
+**What exists.** `customer-recovery-code.ts` (pure primitives), `customer-recovery-code.service.ts` (`issue`, `revoke`, `redeem`), schema `customer-recovery-codes.ts` and migration `0074_customer_recovery_codes`. No route, UI, recovery session, password reset, credential change or contact change. A static test fails if anything outside the service imports it or `index.ts` mentions it.
+
+**Generation and storage.** 28 Crockford-base32 characters = 140 bits from the platform CSPRNG, shown as 7 groups of 4, 8 codes per set. Only a keyed HMAC-SHA-256 verifier (bound to the customer id and a purpose label, via a dedicated secret that S4-02 must add as its own binding) is stored; plaintext exists once, in the `issue` return value, and is never logged, emailed or texted.
+
+**Schema.** `customer_recovery_code_sets` (one ACTIVE set per customer by a partial unique index; revocation metadata; failed-attempt budget) and `customer_recovery_codes` (unique (set, position) with position 1..8 bounds a set; unique (customer, verifier); consumption timestamp). Event types `recovery_code_issued|redeemed|failed|revoked` added to the audit CHECK; no new metadata keys.
+
+**Issuance / rotation / revocation.** Requires a live `password`-method session (an email-and-password login, never `otp` or `recovery`) with fresh step-up, of an active customer holding a verified login email. Rotation revokes the previous set and inserts the new one in one transaction under the customer row lock; any failure rolls back and leaves the previous set valid.
+
+**Redemption.** Locks the customer's active set row (serializes redemptions and rotations), consumes the matching unconsumed code with a conditional UPDATE, and spends a budget of 5 failures per 15-minute window (further attempts are refused without extra audit rows). One generic failure outward (`{ ok: false }`); the audit trail distinguishes `invalid_code`, `code_replayed`, `code_revoked` and `attempts_exhausted`. **Redeeming proves possession only; it never authorizes a password change.** E10 is unchanged and tested alongside.
+
+**Residual risks / S4-02 requirements.** Route-level rate limiting (a dedicated limiter surface) and a dedicated HMAC secret binding are still required; the attempt budget can be exhausted by someone who already holds the other recovery factor, which delays but cannot bypass recovery; codes are shown once, so a customer who loses them must rotate while signed in; D2's hold, cancellation and notifications, and the combination of factors, are not implemented. Migration `0074` has been run only against disposable PostgreSQL.
+
 ## 9. Changelog
 
 | Date | Change |
 | --- | --- |
 | 2026-11-15 | S3 / R1 disposition; E10 recorded; S4 scoped as proposed |
 | 2026-11-15 | RECOVERY-GUARD-01: E10-B enforced in the session and password services |
+| 2026-11-15 | S4 rulings D1-D6 recorded; S4-01 recovery code foundation (draft, unmounted) |
