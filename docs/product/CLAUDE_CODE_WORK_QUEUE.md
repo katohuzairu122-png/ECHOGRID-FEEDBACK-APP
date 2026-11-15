@@ -2,7 +2,7 @@
 
 Status: LIVE WORK LIST (documentation only). Owner: the repository owner assigns; Claude Code keeps this file current.
 Companion roadmaps: `docs/product/ECHO_GRID_ROADMAP.md` (product), `docs/product/CHATGPT_WORK_INDEPENDENT_USABILITY_ROADMAP.md` (ChatGPT Work, WORK-UX-01).
-Last updated: 2026-11-15, main `ef967a64949aed314ef5817fd8702a0c0203ac36`.
+Last updated: 2026-11-15, main `fa1df2c2a383491d15500287412786f606b29d92`.
 
 ## 1. Priority rule (owner instruction, 2026-11-15)
 
@@ -17,19 +17,20 @@ Last updated: 2026-11-15, main `ef967a64949aed314ef5817fd8702a0c0203ac36`.
 
 ## 2. Current development
 
-**STG-SEC-02 — staff login throttling (option A) and staging verification.** Code is merged and deployed to staging (#439, main
-`c895edb2`, deploy run 43691373947).
+**STG-SEC-02 — authentication throttling (login, recovery, signup, password change, global floor) and staging verification.** All code is merged
+to main; none of #445, #447 or #452 is deployed to staging (staging is still on `c895edb2`).
 
 | Step | State |
 | --- | --- |
-| Option A implemented and tested (29 adversarial tests, mutation-checked) | Done (#439) |
-| Staging deployed at the merged commit | Done |
-| Unauthenticated staging checks (body cap, forged/garbage attribution header, contract unchanged) | Done, passed |
-| Independent security review of #439 | Started 2026-11-15 (see the completion report; findings become fixes in this item) |
+| Staff login throttling option A (#439) | Done, deployed to staging |
+| Review fixes: IPv6 /64 keys, no global direct account bucket, design doc corrected (#445) | Done, merged, NOT deployed |
+| H2: attribution-aware global API limiter; web signs every server-side API call (#447) | Done, merged, NOT deployed |
+| H3: signup, reset request/confirm and password change throttles; 120 s silent reset-email suppression (#452) | Done, merged, NOT deployed |
+| Staging deploy of current main | **Waiting on the owner** (explicit authorization) |
 | Provision `CLIENT_ATTRIBUTION_SECRET` on the web Worker, the cashier Worker, then the API | **Waiting on the owner** (cannot be set by Claude Code) |
-| Staging verification of independent throttling, concurrent users, invalid attribution, account abuse, cashier regression | **Blocked** on the secret and a stable network |
+| Staging verification: which `cf-connecting-ip` the API sees for web calls, independent throttling, concurrent users, invalid attribution, account abuse, reset suppression, cashier regression | **Blocked** on the deploy and the secret |
 
-Exit condition: the review findings are fixed or accepted, the secret is set, and the staging checks pass or are reported with evidence.
+Exit condition: the secret is set, staging is deployed at the merged main, and the staging checks pass or are reported with evidence.
 
 ## 3. Awaiting the owner (nothing here starts without an answer)
 
@@ -41,6 +42,7 @@ Exit condition: the review findings are fixed or accepted, the secret is set, an
 | Allowed-hosts additions (earlier decision) | Owner decision whether to remove them |
 | Manager session-revoke permission; dashboard-serving activity coverage | Owner decisions |
 | REWARD-02A, Features 04-06 | Owner authorization |
+| Staging deploy of current main (workflow_dispatch on main, expected commit + confirmation) and the attribution secret | Explicit authorization; secret set by the owner |
 | PLATFORM-IDENTITY-01 | Not authorized |
 | Financial activation | NO-GO |
 
@@ -48,10 +50,9 @@ Exit condition: the review findings are fixed or accepted, the secret is set, an
 
 | # | Item | Added | Source | Notes |
 | --- | --- | --- | --- | --- |
-| 1 | Extend the signed-attribution throttle to signup, password-reset request/confirm and password change (they still share the per-IP bucket) | 2026-11-15 | STG-SEC-02 report | Needs owner go-ahead; same pattern and rollout order as #439 |
-| 2 | Human independent review of the cashier F6/F7 code and #439 before any production use | 2026-11-15 | STG-SEC-02 report | Owner decision whether a human reviews |
-| 3 | Authenticated staging validation of cashier flows and the audit attribution (C1) | 2026-11-15 | STG-SEC-02 report | Needs the secret, a staging test sign-in or authorization for synthetic data |
-| 4 | Fixes from the #439 independent review | 2026-11-15 | review in progress | Becomes item 2 of section 2 when findings are in |
+| 1 | Human independent review of the cashier F6/F7 code and the throttle and reset code (#439, #445, #447, #452) before any production use | 2026-11-15 | STG-SEC-02 reports | Owner decision whether a human reviews; all reviews so far are model reviews |
+| 2 | Authenticated staging validation of cashier flows, audit attribution (C1) and the staff password-change and reset flows | 2026-11-15 | STG-SEC-02 reports | Needs the staging deploy, the secret, and a staging test sign-in or authorization for synthetic data |
+| 3 | Optional hardening raised by the reviews, each needing owner approval: bind the attribution header to a path or scope (L1), constant-time reset-request response (timing), lock_timeout for the reset lock | 2026-11-15 | #439 review, H3 validation | Residual risks, not defects |
 
 New items from the owner are appended here.
 
@@ -66,5 +67,6 @@ New items from the owner are appended here.
 ## 6. Recently completed (for context)
 
 R1/R2/R2b cashier security (#429-#431, #430); C1 audit attribution (#434); C2 broker tests (#435); C3 staff login design (#436);
-C4 migration governance (#437); staging smoke fix (#438); staff login throttling option A (#439); BDPN D-18 v1.1 audit and amendment (#441);
+C4 migration governance (#437); staging smoke fix (#438); staff login throttling option A (#439); BDPN D-18 v1.1 audit and amendment (#441); work queue (#444); throttle review fixes (#445);
+BDPN D-18 v1.1 G0 decision reconciliation, documentation only, decisions still pending (#446); H2 global API limiter (#447); H3 auth throttle coverage and reset suppression (#452);
 staging migration 0072 and deploys at `ed420f78`, `58e8b98b`, `c895edb2`.
