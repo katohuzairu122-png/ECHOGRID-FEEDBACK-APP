@@ -1,17 +1,23 @@
 import 'server-only';
-import { z } from 'zod';
 import {
   clearCompatibleCustomerSession,
   getCompatibleCustomerCredentials,
   setRotatingCustomerSession,
+  type RotatingCustomerCredentials,
 } from './customer-session';
 
-const refreshedCredentials = z.object({
-  accessToken: z.string().min(1),
-  refreshCredential: z.string().regex(/^[A-Za-z0-9_-]{43}$/),
-  accessExpiresAt: z.iso.datetime().transform((value) => new Date(value)),
-  refreshExpiresAt: z.iso.datetime().transform((value) => new Date(value)),
-}).strict();
+function readRefreshResponse(payload: unknown): RotatingCustomerCredentials | null {
+  if (!payload || typeof payload !== 'object') return null;
+  const { accessToken, refreshCredential, accessExpiresAt, refreshExpiresAt } =
+    payload as Record<string, unknown>;
+  if (typeof accessToken !== 'string' || !accessToken ||
+      typeof refreshCredential !== 'string' || !/^[A-Za-z0-9_-]{43}$/.test(refreshCredential) ||
+      typeof accessExpiresAt !== 'string' || typeof refreshExpiresAt !== 'string') return null;
+  const accessExpiry = new Date(accessExpiresAt);
+  const refreshExpiry = new Date(refreshExpiresAt);
+  if (!Number.isFinite(accessExpiry.getTime()) || !Number.isFinite(refreshExpiry.getTime())) return null;
+  return { accessToken, refreshCredential, accessExpiresAt: accessExpiry, refreshExpiresAt: refreshExpiry };
+}
 
 /** Development composition. The expected origin and API transport come from server configuration. */
 export function createCustomerSessionBff(options: {
@@ -40,10 +46,10 @@ export function createCustomerSessionBff(options: {
         const reply = await send('/refresh', credentials.refreshCredential);
         if (reply.status === 401 || reply.status === 409) return status(reply.status);
         if (!reply.ok) return status(503);
-        const parsed = refreshedCredentials.safeParse(await reply.json());
-        if (!parsed.success) return status(503);
-        await setRotatingCustomerSession(parsed.data);
-        accessToken = parsed.data.accessToken;
+        const rotated = readRefreshResponse(await reply.json());
+        if (!rotated) return status(503);
+        await setRotatingCustomerSession(rotated);
+        accessToken = rotated.accessToken;
       }
 
       if (operation === 'logout' && accessToken) {
