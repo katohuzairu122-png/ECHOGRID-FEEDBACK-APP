@@ -5,6 +5,7 @@ import { setSession, getRefreshTokenForLogout, clearSession } from '@/lib/sessio
 import { API_BASE_URL, apiFetch, ApiError } from '@/lib/api-client';
 import { safeInternalPath } from '@/lib/safe-redirect';
 import { refuseOnCashierHost } from '@/lib/cashier/host-guard';
+import { clientAttributionHeaders } from '@/lib/cashier/client-attribution';
 
 export interface AuthActionState {
   error?: string;
@@ -42,7 +43,7 @@ async function callAuthEndpoint(
 ): Promise<AuthActionState> {
   const response = await fetch(`${API_BASE_URL}/api/v1/auth/${path}`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...(await clientAttributionHeaders()) },
     body: JSON.stringify(body),
   });
   const result = (await response.json()) as {

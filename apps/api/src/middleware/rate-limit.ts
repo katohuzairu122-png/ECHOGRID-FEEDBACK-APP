@@ -125,24 +125,34 @@ async function readBounded(request: Request, maxBytes: number): Promise<string |
   return new TextDecoder().decode(all);
 }
 
+type AuthScope = 'cashier' | 'staff';
+
 /**
- * SEC-CASHIER-R2 F6: throttling for the four cashier authentication endpoints (staff login is unchanged).
+ * The shared throttle behind the cashier auth endpoints (SEC-CASHIER-R2 F6) and the staff login (STG-SEC-02B, design option A in
+ * docs/STAFF-LOGIN-THROTTLING-DESIGN.md).
  *
  * The web app reaches this API Worker to Worker, so every web sign-in shares the web Worker's egress address: a single
- * per-IP bucket (the previous behaviour) locks ALL cashiers out after ten sign-ins a minute. Whether the real client can be
- * told apart depends on `CLIENT_ATTRIBUTION_SECRET` (see lib/client-attribution.ts):
+ * per-IP bucket (the previous behaviour) locks ALL users out after ten sign-ins a minute, and lets one person lock everyone
+ * out. Whether the real client can be told apart depends on `CLIENT_ATTRIBUTION_SECRET` (lib/client-attribution.ts):
  *
- *  - NOT configured (the shipped state): behaviour is exactly the previous one. Login and session exchange use the
- *    strict per-IP bucket; no source can be distinguished, so no new account-keyed strict bucket is created (it would let
- *    anyone lock a named cashier out). Only an account/token-keyed floor on the generous API limiter is added.
- *  - Configured: the web Worker signs the real client address on every call, so an UNSIGNED request is by definition a
- *    direct caller and gets the strict per-IP bucket plus a strict account bucket of its own ("shared"). Signed requests
- *    get a strict per-account-and-source bucket and a strict per-source bucket, which never touch the unsigned buckets.
+ *  - NOT configured (the shipped state): behaviour is exactly the previous one. Where the endpoint was throttled
+ *    (`legacyStrict`) the strict per-IP bucket on the raw `cf-connecting-ip` key is kept unchanged. No source can be
+ *    distinguished, so no new account-keyed STRICT bucket is created (it would let anyone lock a named account out). Only an
+ *    account/token-keyed floor on the generous API limiter is added.
+ *  - Configured: the web Worker signs the real client address, so an UNSIGNED request is by definition a direct caller and gets
+ *    the strict per-IP bucket plus a strict account bucket of its own ("direct"). Signed requests get a strict
+ *    per-account-and-source bucket and a strict per-source bucket, which never touch the unsigned buckets, so a direct attacker
+ *    cannot spend a signed user's budget and one signed person cannot spend another's.
  *
- * In both modes the account (or ticket/token) hash has a floor on the API limiter (300/min) that caps distributed
- * guessing. No header a request sends can pick a bucket: the address is trusted only with a valid signature.
+ * In both modes the account (or ticket/token) hash has a floor on the API limiter (300/min) that caps distributed guessing.
+ * No header a request sends can pick a bucket: the address is trusted only with a valid signature (current secret, or the
+ * previous one during a rotation). The account is only ever hashed into a key, never stored raw.
+ *
+ * Residual risk (documented, not removable here): with the secret configured, web requests that fail to verify (mismatched
+ * value, clock skew beyond 60 s past / 5 s future, missing client address) are treated as direct callers and share the web
+ * Worker's egress bucket. Roll out the secret to the web Worker FIRST, then the API; rollback is removing it from the API.
  */
-export function cashierAuthRateLimit(kind: CashierAuthKind) {
+function attributedAuthRateLimit(scope: AuthScope, kind: CashierAuthKind, legacyStrict: boolean) {
   return createMiddleware<{ Bindings: Bindings }>(async (c, next) => {
     const declared = c.req.header('content-length');
     if (declared !== undefined && Number(declared) > CASHIER_AUTH_MAX_BODY_BYTES) {
@@ -160,29 +170,45 @@ export function cashierAuthRateLimit(kind: CashierAuthKind) {
     }
     const subject = await subjectOf(kind, body);
     const connecting = c.req.header('cf-connecting-ip') ?? 'unknown';
+    const prefix = `${scope}:${kind}`;
     const checks: { limiter: RateLimit; key: string }[] = [];
     if (!c.env.CLIENT_ATTRIBUTION_SECRET) {
-      // Previous behaviour, unchanged: strict per-IP on the two sign-in endpoints (refresh and logout had none).
-      if (kind === 'login' || kind === 'session') checks.push({ limiter: c.env.AUTH_RATE_LIMITER, key: connecting });
+      // Previous behaviour, unchanged.
+      if (legacyStrict) checks.push({ limiter: c.env.AUTH_RATE_LIMITER, key: connecting });
     } else {
-      const client = await resolveClient(c.req.raw.headers, c.env.CLIENT_ATTRIBUTION_SECRET);
+      const client = await resolveClient(
+        c.req.raw.headers,
+        c.env.CLIENT_ATTRIBUTION_SECRET,
+        Date.now(),
+        c.env.CLIENT_ATTRIBUTION_SECRET_PREVIOUS,
+      );
       if (client.trusted) {
         checks.push(
-          { limiter: c.env.AUTH_RATE_LIMITER, key: `cashier:${kind}:subject:${subject}:ip:${client.ip}` },
-          { limiter: c.env.AUTH_RATE_LIMITER, key: `cashier:${kind}:source:${client.ip}` },
+          { limiter: c.env.AUTH_RATE_LIMITER, key: `${prefix}:subject:${subject}:ip:${client.ip}` },
+          { limiter: c.env.AUTH_RATE_LIMITER, key: `${prefix}:source:${client.ip}` },
         );
       } else {
         checks.push(
-          { limiter: c.env.AUTH_RATE_LIMITER, key: `cashier:${kind}:direct:${connecting}` },
-          { limiter: c.env.AUTH_RATE_LIMITER, key: `cashier:${kind}:subject:${subject}:direct` },
+          { limiter: c.env.AUTH_RATE_LIMITER, key: `${prefix}:direct:${connecting}` },
+          { limiter: c.env.AUTH_RATE_LIMITER, key: `${prefix}:subject:${subject}:direct` },
         );
       }
     }
-    checks.push({ limiter: c.env.API_RATE_LIMITER, key: `cashier:${kind}:subject:${subject}` });
+    checks.push({ limiter: c.env.API_RATE_LIMITER, key: `${prefix}:subject:${subject}` });
     for (const { limiter, key } of checks) {
       const { success } = await limiter.limit({ key });
       if (!success) throw new AppError('Too many requests. Please try again shortly.', 429, 'RATE_LIMITED');
     }
     await next();
   });
+}
+
+/** SEC-CASHIER-R2 F6: the four cashier authentication endpoints (strict per-IP legacy bucket on login and session only). */
+export function cashierAuthRateLimit(kind: CashierAuthKind) {
+  return attributedAuthRateLimit('cashier', kind, kind === 'login' || kind === 'session');
+}
+
+/** STG-SEC-02B: staff `POST /auth/login` (design option A). Other staff auth endpoints keep `rateLimit('AUTH_RATE_LIMITER')`. */
+export function staffLoginRateLimit() {
+  return attributedAuthRateLimit('staff', 'login', true);
 }

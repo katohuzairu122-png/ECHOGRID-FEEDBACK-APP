@@ -1,6 +1,6 @@
 # Staff login throttling — design (SEC-CASHIER-POST-R2 C3)
 
-Status: **DESIGN ONLY. No behaviour change.** Companion tests:
+Status: **Option A implemented (STG-SEC-02B), see section 9.** The text below is the original design; sections 1-8 describe the pre-implementation state. Companion tests:
 `apps/api/src/auth/staff-login-throttle.adversarial.test.ts` (characterizes today's behaviour, including its weaknesses).
 
 ## 1. Today
@@ -86,3 +86,31 @@ egress; a documented rollback is removing the secret from the API (restores toda
 ## 8. Explicitly out of scope here
 
 No change to `auth.routes.ts`, `rate-limit.ts`, Worker configuration, secrets, or the database.
+
+## 9. Implementation (STG-SEC-02B)
+
+Scope: `POST /auth/login` only. Signup, password-reset request/confirm and password change keep `rateLimit('AUTH_RATE_LIMITER')`
+and the shared per-IP bucket (follow-up block if wanted).
+
+- `middleware/rate-limit.ts`: one shared builder (`attributedAuthRateLimit`) now backs both the cashier endpoints (keys unchanged,
+  `cashier:...`) and `staffLoginRateLimit()` (keys `staff:login:...`). The two key spaces never overlap.
+- **Secret unset (today):** identical to before for login: strict per-IP bucket on the raw `cf-connecting-ip` key (shared with the other
+  staff auth endpoints, as before). Added only: a 300/min floor keyed by the hashed email on `API_RATE_LIMITER`, and an 8 KiB body cap.
+  The characterization suite (`staff-login-throttle.adversarial.test.ts`) still passes unchanged in this mode; its KNOWN WEAKNESS cases
+  remain true until the secret is set.
+- **Secret set:** the web Worker signs the real client address on staff login/signup calls (`apps/web/src/lib/actions/auth.ts`).
+  Signed: strict per-account+source and per-source buckets. Unsigned (direct callers): strict per-address and per-account "direct"
+  buckets that signed traffic never touches. Floor unchanged. Fixes W1-W3 for the web path; `staff-login-throttle.option-a.test.ts`
+  (29 tests) proves it, including concurrency (jittered atomic limiter), distributed guessing against a lowered floor, spoofed /
+  stale / future / tampered / wrong-secret headers, email normalization, and the unchanged login response contract.
+- **Session rows** record the signed client IP and user agent when attributed (the edge values otherwise).
+- **Rotation:** optional `CLIENT_ATTRIBUTION_SECRET_PREVIOUS` on the API. While both are set a header signed with either verifies; a
+  previous secret alone enables nothing. Procedure: (1) API: set `CLIENT_ATTRIBUTION_SECRET_PREVIOUS` = old value and
+  `CLIENT_ATTRIBUTION_SECRET` = new value; (2) web Worker: set the new value; (3) after one minute remove `..._PREVIOUS` from the API.
+  First-time provisioning: web Worker first, then the API. Rollback at any point: remove `CLIENT_ATTRIBUTION_SECRET` from the API
+  (restores today's behaviour exactly).
+- **Known hazard (pinned by a test):** with the secret on the API but the web Worker not signing (mismatch, skew over 60 s past /
+  5 s future, missing client address) every web sign-in falls into the shared direct bucket (10/min). Watch for `staff:login:direct:` keys
+  with the web egress address after enabling.
+- **Residual risk:** a botnet of roughly 30+ distinct sources can exhaust the per-account floor (300/min) and block that account for the
+  rest of the minute; a per-account lock was rejected as a cheaper lever (section 3, option C).

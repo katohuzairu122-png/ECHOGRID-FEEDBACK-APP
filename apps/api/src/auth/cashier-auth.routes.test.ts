@@ -20,6 +20,7 @@ vi.mock('./pbkdf2-worker', () => ({ createDurableObjectPbkdf2Worker: () => ({}) 
 vi.mock('../middleware/rate-limit', () => ({
   rateLimit: () => async (_c: unknown, next: () => Promise<void>) => next(),
   rateLimitByCustomer: () => async (_c: unknown, next: () => Promise<void>) => next(),
+  staffLoginRateLimit: () => async (_c: unknown, next: () => Promise<void>) => next(),
   cashierAuthRateLimit: (kind: string) => {
     mocks.limiterKinds.push(kind);
     return async (_c: unknown, next: () => Promise<void>) => next();

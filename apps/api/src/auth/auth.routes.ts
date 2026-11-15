@@ -20,7 +20,7 @@ import { createAccountSecurityEmailService } from '../notifications/email.servic
 import { parseJsonBody } from '../lib/validate';
 import { ok } from '../lib/response';
 import { AppError } from '../lib/errors';
-import { cashierAuthRateLimit, rateLimit } from '../middleware/rate-limit';
+import { cashierAuthRateLimit, rateLimit, staffLoginRateLimit } from '../middleware/rate-limit';
 import { resolveClient } from '../lib/client-attribution';
 import { authenticate, type AuthVariables } from '../middleware/authenticate';
 import type { AuditVariables } from '../middleware/audit';
@@ -94,13 +94,21 @@ authRoutes.post('/signup', rateLimit('AUTH_RATE_LIMITER'), async (c) => {
   return ok(c, tokens, 201);
 });
 
-authRoutes.post('/login', rateLimit('AUTH_RATE_LIMITER'), async (c) => {
+authRoutes.post('/login', staffLoginRateLimit(), async (c) => {
   const body = await parseJsonBody(c.req.raw, loginSchema);
+  // STG-SEC-02B: the signed real client (when the web Worker forwarded one) is what the session row records; otherwise the
+  // edge values, exactly as before.
+  const client = await resolveClient(
+    c.req.raw.headers,
+    c.env.CLIENT_ATTRIBUTION_SECRET,
+    Date.now(),
+    c.env.CLIENT_ATTRIBUTION_SECRET_PREVIOUS,
+  );
   const tokens = await withAuthService(c, (service) =>
     service.login({
       ...body,
-      userAgent: c.req.header('user-agent'),
-      ipAddress: c.req.header('cf-connecting-ip'),
+      userAgent: client.userAgent,
+      ipAddress: client.ip,
     }),
   );
   return ok(c, tokens);
@@ -114,7 +122,7 @@ authRoutes.post('/login', rateLimit('AUTH_RATE_LIMITER'), async (c) => {
  */
 authRoutes.post('/cashier/login', cashierAuthRateLimit('login'), async (c) => {
   const body = await parseJsonBody(c.req.raw, cashierLoginSchema);
-  const client = await resolveClient(c.req.raw.headers, c.env.CLIENT_ATTRIBUTION_SECRET);
+  const client = await resolveClient(c.req.raw.headers, c.env.CLIENT_ATTRIBUTION_SECRET, Date.now(), c.env.CLIENT_ATTRIBUTION_SECRET_PREVIOUS);
   const result = await withCashierService(c, (service) =>
     service.login({
       ...body,
@@ -146,7 +154,7 @@ authRoutes.post('/cashier/login', cashierAuthRateLimit('login'), async (c) => {
 
 authRoutes.post('/cashier/session', cashierAuthRateLimit('session'), async (c) => {
   const body = await parseJsonBody(c.req.raw, cashierSessionSchema);
-  const client = await resolveClient(c.req.raw.headers, c.env.CLIENT_ATTRIBUTION_SECRET);
+  const client = await resolveClient(c.req.raw.headers, c.env.CLIENT_ATTRIBUTION_SECRET, Date.now(), c.env.CLIENT_ATTRIBUTION_SECRET_PREVIOUS);
   const result = await withCashierService(c, (service) =>
     service.createSession({
       ...body,

@@ -2,7 +2,7 @@ import 'server-only';
 import { headers } from 'next/headers';
 
 /**
- * SEC-CASHIER-R2 F6: forwards the real client address and user agent to the API, HMAC-signed, so the API can rate-limit
+ * SEC-CASHIER-R2 F6 / STG-SEC-02B: forwards the real client address and user agent to the API, HMAC-signed, so the API can rate-limit
  * per person instead of per web Worker. Mirrors apps/api/src/lib/client-attribution.ts (same format). Inert when
  * CLIENT_ATTRIBUTION_SECRET is not configured: no header is sent and the API behaves as before.
  */
