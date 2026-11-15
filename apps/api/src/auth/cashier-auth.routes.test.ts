@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   createSession: vi.fn(),
   refresh: vi.fn(),
   logout: vi.fn(),
+  limiterKinds: [] as string[],
 }));
 
 vi.mock('../db/client', () => ({
@@ -19,7 +20,10 @@ vi.mock('./pbkdf2-worker', () => ({ createDurableObjectPbkdf2Worker: () => ({}) 
 vi.mock('../middleware/rate-limit', () => ({
   rateLimit: () => async (_c: unknown, next: () => Promise<void>) => next(),
   rateLimitByCustomer: () => async (_c: unknown, next: () => Promise<void>) => next(),
-  cashierAuthRateLimit: () => async (_c: unknown, next: () => Promise<void>) => next(),
+  cashierAuthRateLimit: (kind: string) => {
+    mocks.limiterKinds.push(kind);
+    return async (_c: unknown, next: () => Promise<void>) => next();
+  },
 }));
 vi.mock('./cashier-auth.service', () => ({
   CashierAuthService: class {
@@ -110,6 +114,10 @@ describe('cashier auth routes', () => {
       expect.objectContaining({ email: 'a@b.test', deviceLabel: 'Counter 1', userAgent: 'UA' }),
     );
     expect(audit).toMatchObject({ action: 'auth.cashier_login', businessId: BIZ });
+  });
+
+  it('SEC-CASHIER-R2b: every cashier auth route mounts its own throttle', () => {
+    expect([...mocks.limiterKinds].sort()).toEqual(['login', 'logout', 'refresh', 'session']);
   });
 
   it('login returns a selection step without tokens', async () => {

@@ -6,7 +6,7 @@
  * signed (HMAC-SHA256) with a secret that only the two Workers hold, and stamped with a time. This API trusts the
  * header ONLY when its signature verifies and it is fresh. An unsigned, wrongly signed, tampered or stale header is
  * ignored, so a direct caller of the API cannot choose its own address. Without the secret configured on this Worker,
- * the header is never trusted (the feature is inert and behaviour is unchanged).
+ * the header is never trusted, and the cashier auth throttles keep their previous per-IP behaviour.
  *
  * Format: `v1.<base64url(JSON {ip, ua, ts})>.<base64url(HMAC-SHA256(secret, "v1." + payload))>`
  */

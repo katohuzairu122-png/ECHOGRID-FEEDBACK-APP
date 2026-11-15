@@ -92,38 +92,61 @@ async function subjectOf(kind: CashierAuthKind, body: unknown): Promise<string> 
   return typeof raw === 'string' && raw.length > 0 ? digest(kind === 'login' ? raw.trim().toLowerCase() : raw) : 'none';
 }
 
+/** Cashier auth bodies are a few hundred bytes; anything larger is refused before it is buffered or parsed. */
+const CASHIER_AUTH_MAX_BODY_BYTES = 8 * 1024;
+
 /**
  * SEC-CASHIER-R2 F6: throttling for the four cashier authentication endpoints (staff login is unchanged).
  *
- * The web app reaches this API Worker to Worker, so every web sign-in used to share the single per-IP bucket of the web
- * Worker: ten cashier sign-ins a minute for ALL staff, or a lockout. Three buckets replace it, each with a key a caller
- * cannot choose:
- *  1. per account (or ticket / token) AND source, on the strict AUTH limiter: caps guessing one account from one source.
- *     The source is the signed client address when the web Worker forwarded one, otherwise "shared" (the web Worker).
- *  2. per account across all sources, on the API limiter (300/min): caps distributed guessing against one account
- *     without letting one attacker lock a victim out at the strict 10/min rate.
- *  3. per source across accounts, on the strict AUTH limiter, ONLY for a signed client address: caps credential
- *     stuffing from one person. Without a signed address there is no way to tell clients apart, so no shared bucket is
- *     created (it would be the global lockout this replaces).
- * A request's own headers cannot pick a bucket: the address is trusted only with a valid signature (see
- * lib/client-attribution.ts). Replaying one refresh token or ticket is limited by (1) and (2) because they are keyed by it.
+ * The web app reaches this API Worker to Worker, so every web sign-in shares the web Worker's egress address: a single
+ * per-IP bucket (the previous behaviour) locks ALL cashiers out after ten sign-ins a minute. Whether the real client can be
+ * told apart depends on `CLIENT_ATTRIBUTION_SECRET` (see lib/client-attribution.ts):
+ *
+ *  - NOT configured (the shipped state): behaviour is exactly the previous one. Login and session exchange use the
+ *    strict per-IP bucket; no source can be distinguished, so no new account-keyed strict bucket is created (it would let
+ *    anyone lock a named cashier out). Only an account/token-keyed floor on the generous API limiter is added.
+ *  - Configured: the web Worker signs the real client address on every call, so an UNSIGNED request is by definition a
+ *    direct caller and gets the strict per-IP bucket plus a strict account bucket of its own ("shared"). Signed requests
+ *    get a strict per-account-and-source bucket and a strict per-source bucket, which never touch the unsigned buckets.
+ *
+ * In both modes the account (or ticket/token) hash has a floor on the API limiter (300/min) that caps distributed
+ * guessing. No header a request sends can pick a bucket: the address is trusted only with a valid signature.
  */
 export function cashierAuthRateLimit(kind: CashierAuthKind) {
   return createMiddleware<{ Bindings: Bindings }>(async (c, next) => {
+    const declared = c.req.header('content-length');
+    if (declared !== undefined && Number(declared) > CASHIER_AUTH_MAX_BODY_BYTES) {
+      throw new AppError('Request body too large.', 400, 'PAYLOAD_TOO_LARGE');
+    }
+    const text = await c.req.raw.clone().text().catch(() => '');
+    if (text.length > CASHIER_AUTH_MAX_BODY_BYTES) throw new AppError('Request body too large.', 400, 'PAYLOAD_TOO_LARGE');
     let body: unknown = null;
     try {
-      body = await c.req.raw.clone().json();
+      body = JSON.parse(text);
     } catch {
       // Not JSON: the handler's own validation answers it. It still counts against the "none" subject below.
     }
     const subject = await subjectOf(kind, body);
-    const client = await resolveClient(c.req.raw.headers, c.env.CLIENT_ATTRIBUTION_SECRET);
-    const source = client.trusted ? `ip:${client.ip}` : 'shared';
-    const checks: { limiter: RateLimit; key: string }[] = [
-      { limiter: c.env.AUTH_RATE_LIMITER, key: `cashier:${kind}:subject:${subject}:${source}` },
-      { limiter: c.env.API_RATE_LIMITER, key: `cashier:${kind}:subject:${subject}` },
-    ];
-    if (client.trusted) checks.push({ limiter: c.env.AUTH_RATE_LIMITER, key: `cashier:${kind}:source:${client.ip}` });
+    const connecting = c.req.header('cf-connecting-ip') ?? 'unknown';
+    const checks: { limiter: RateLimit; key: string }[] = [];
+    if (!c.env.CLIENT_ATTRIBUTION_SECRET) {
+      // Previous behaviour, unchanged: strict per-IP on the two sign-in endpoints (refresh and logout had none).
+      if (kind === 'login' || kind === 'session') checks.push({ limiter: c.env.AUTH_RATE_LIMITER, key: connecting });
+    } else {
+      const client = await resolveClient(c.req.raw.headers, c.env.CLIENT_ATTRIBUTION_SECRET);
+      if (client.trusted) {
+        checks.push(
+          { limiter: c.env.AUTH_RATE_LIMITER, key: `cashier:${kind}:subject:${subject}:ip:${client.ip}` },
+          { limiter: c.env.AUTH_RATE_LIMITER, key: `cashier:${kind}:source:${client.ip}` },
+        );
+      } else {
+        checks.push(
+          { limiter: c.env.AUTH_RATE_LIMITER, key: `cashier:${kind}:direct:${connecting}` },
+          { limiter: c.env.AUTH_RATE_LIMITER, key: `cashier:${kind}:subject:${subject}:direct` },
+        );
+      }
+    }
+    checks.push({ limiter: c.env.API_RATE_LIMITER, key: `cashier:${kind}:subject:${subject}` });
     for (const { limiter, key } of checks) {
       const { success } = await limiter.limit({ key });
       if (!success) throw new AppError('Too many requests. Please try again shortly.', 429, 'RATE_LIMITED');

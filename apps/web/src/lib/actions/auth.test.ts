@@ -6,12 +6,14 @@ const {
   redirectMock,
   apiFetchMock,
   setSessionMock,
+  refuseOnCashierHostMock,
 } = vi.hoisted(() => ({
   getRefreshTokenForLogoutMock: vi.fn(),
   clearSessionMock: vi.fn(),
   redirectMock: vi.fn(),
   apiFetchMock: vi.fn(),
   setSessionMock: vi.fn(),
+  refuseOnCashierHostMock: vi.fn(),
 }));
 
 vi.mock('@/lib/session', () => ({
@@ -19,6 +21,8 @@ vi.mock('@/lib/session', () => ({
   clearSession: clearSessionMock,
   setSession: setSessionMock,
 }));
+
+vi.mock('@/lib/cashier/host-guard', () => ({ refuseOnCashierHost: refuseOnCashierHostMock }));
 
 vi.mock('next/navigation', () => ({
   redirect: redirectMock,
@@ -65,6 +69,19 @@ describe('loginAction', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.stubGlobal('fetch', vi.fn());
+  });
+  it('SEC-CASHIER-R2b: staff login, signup, password reset and logout never call the API from the cashier origin', async () => {
+    refuseOnCashierHostMock.mockRejectedValue(new Error('NEXT_NOT_FOUND'));
+    await expect(loginAction({}, credentials('/dashboard'))).rejects.toThrow('NEXT_NOT_FOUND');
+    const form = new FormData();
+    form.set('email', 'user@example.com');
+    form.set('password', 'test-password');
+    await expect(signupAction({}, form)).rejects.toThrow('NEXT_NOT_FOUND');
+    await expect(requestPasswordResetAction({}, form)).rejects.toThrow('NEXT_NOT_FOUND');
+    await expect(resetPasswordAction({}, form)).rejects.toThrow('NEXT_NOT_FOUND');
+    await expect(logoutAction()).rejects.toThrow('NEXT_NOT_FOUND');
+    expect(fetch).not.toHaveBeenCalled();
+    refuseOnCashierHostMock.mockReset();
   });
   it('uses the existing API, stores the session and preserves an internal redirect', async () => {
     const tokens = { accessToken: 'access-token', refreshToken: 'refresh-token' };

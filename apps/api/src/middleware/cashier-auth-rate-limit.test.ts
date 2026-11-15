@@ -42,43 +42,81 @@ describe('client attribution', () => {
   });
 });
 
-describe('cashierAuthRateLimit (F6)', () => {
-  it('one account from one source is capped, but other accounts sharing the web egress are not locked out', async () => {
-    const env = { AUTH_RATE_LIMITER: limiter(10), API_RATE_LIMITER: limiter(300) };
-    const call = app(env);
-    for (let i = 0; i < 10; i++) expect(await status(call('/login', { email: 'a@x.test' }))).toBe(200);
-    expect(await status(call('/login', { email: 'a@x.test' }))).toBe(429);
-    for (let i = 0; i < 10; i++) expect(await status(call('/login', { email: `u${i}@x.test` }))).toBe(200);
+const ip = (addr: string) => ({ 'cf-connecting-ip': addr });
+const signed = async (addr: string) => ({
+  ...ip('198.51.100.250'), // the web Worker's egress
+  'x-echo-client': await signClientAttribution(SECRET, { ip: addr, userAgent: 'u' }, Date.now()),
+});
+
+describe('cashierAuthRateLimit without CLIENT_ATTRIBUTION_SECRET (shipped state: previous behaviour)', () => {
+  const rig = () => app({ AUTH_RATE_LIMITER: limiter(10), API_RATE_LIMITER: limiter(300) });
+  it('keeps the strict per-IP bucket on login and rotating emails does not escape it', async () => {
+    const call = rig();
+    for (let i = 0; i < 10; i++) expect(await status(call('/login', { email: `u${i}@x.test` }, ip('192.0.2.1')))).toBe(200);
+    expect(await status(call('/login', { email: 'new@x.test' }, ip('192.0.2.1')))).toBe(429);
+    expect(await status(call('/login', { email: 'new@x.test' }, ip('192.0.2.2')))).toBe(200);
   });
-  it('a spoofed attribution header cannot pick a bucket or dodge the account limit', async () => {
-    const env = { AUTH_RATE_LIMITER: limiter(10), API_RATE_LIMITER: limiter(300), CLIENT_ATTRIBUTION_SECRET: SECRET };
-    const call = app(env);
-    for (let i = 0; i < 10; i++) await call('/login', { email: 'a@x.test' }, { 'x-echo-client': `v1.x.${i}` });
-    expect(await status(call('/login', { email: 'a@x.test' }, { 'x-echo-client': 'v1.y.z' }))).toBe(429);
+  it('cannot lock a named cashier out from another address (no strict account bucket exists)', async () => {
+    const call = rig();
+    for (let i = 0; i < 12; i++) await call('/login', { email: 'victim@x.test' }, ip(`192.0.2.${10 + i}`));
+    expect(await status(call('/login', { email: 'victim@x.test' }, ip('192.0.2.99')))).toBe(200);
   });
-  it('signed sources get independent per-account buckets and a per-source credential-stuffing cap', async () => {
-    const env = { AUTH_RATE_LIMITER: limiter(10), API_RATE_LIMITER: limiter(300), CLIENT_ATTRIBUTION_SECRET: SECRET };
-    const call = app(env);
-    const hdr = async (ip: string) => ({ 'x-echo-client': await signClientAttribution(SECRET, { ip, userAgent: 'u' }, Date.now()) });
-    for (let i = 0; i < 10; i++) expect(await status(call('/login', { email: `s${i}@x.test` }, await hdr('203.0.113.1')))).toBe(200);
-    expect(await status(call('/login', { email: 'fresh@x.test' }, await hdr('203.0.113.1')))).toBe(429);
-    expect(await status(call('/login', { email: 'fresh@x.test' }, await hdr('203.0.113.2')))).toBe(200);
+  it('a forged attribution header changes nothing', async () => {
+    const call = rig();
+    for (let i = 0; i < 10; i++) await call('/login', { email: 'a@x.test' }, { ...ip('192.0.2.1'), 'x-echo-client': `v1.x.${i}` });
+    expect(await status(call('/login', { email: 'a@x.test' }, { ...ip('192.0.2.1'), 'x-echo-client': 'v1.y.z' }))).toBe(429);
+  });
+  it('refresh replay of one token is bounded by the account/token floor; other tokens are not', async () => {
+    const call = app({ AUTH_RATE_LIMITER: limiter(10), API_RATE_LIMITER: limiter(5) });
+    for (let i = 0; i < 5; i++) expect(await status(call('/refresh', { refreshToken: 'tok' }, ip('192.0.2.1')))).toBe(200);
+    expect(await status(call('/refresh', { refreshToken: 'tok' }, ip('192.0.2.1')))).toBe(429);
+    expect(await status(call('/refresh', { refreshToken: 'tok2' }, ip('192.0.2.1')))).toBe(200);
+  });
+});
+
+describe('cashierAuthRateLimit with CLIENT_ATTRIBUTION_SECRET configured', () => {
+  const rig = (api = 300) => app({ AUTH_RATE_LIMITER: limiter(10), API_RATE_LIMITER: limiter(api), CLIENT_ATTRIBUTION_SECRET: SECRET });
+  it('signed clients behind one web egress do not lock each other out; each source and account is capped separately', async () => {
+    const call = rig();
+    for (let i = 0; i < 10; i++) expect(await status(call('/login', { email: `s${i}@x.test` }, await signed('203.0.113.1')))).toBe(200);
+    expect(await status(call('/login', { email: 'fresh@x.test' }, await signed('203.0.113.1')))).toBe(429); // per-source cap
+    expect(await status(call('/login', { email: 'fresh@x.test' }, await signed('203.0.113.2')))).toBe(200); // another person, same egress
+    for (let i = 0; i < 10; i++) await call('/login', { email: 'a@x.test' }, await signed('203.0.113.3'));
+    expect(await status(call('/login', { email: 'a@x.test' }, await signed('203.0.113.3')))).toBe(429); // one account, one source
+  });
+  it('unsigned (direct) callers get the strict per-IP bucket, so rotating emails cannot exceed 10/min per IP', async () => {
+    const call = rig();
+    for (let i = 0; i < 10; i++) expect(await status(call('/login', { email: `u${i}@x.test` }, ip('192.0.2.1')))).toBe(200);
+    expect(await status(call('/login', { email: 'new@x.test' }, ip('192.0.2.1')))).toBe(429);
+  });
+  it('a direct attacker exhausting a victim\'s unsigned bucket does not block that victim\'s signed sign-in', async () => {
+    const call = rig();
+    for (let i = 0; i < 12; i++) await call('/login', { email: 'victim@x.test' }, ip(`192.0.2.${10 + i}`));
+    expect(await status(call('/login', { email: 'victim@x.test' }, await signed('203.0.113.9')))).toBe(200);
+  });
+  it('a forged or stale header is treated as direct, never as a signed source', async () => {
+    const call = rig();
+    for (let i = 0; i < 10; i++) await call('/login', { email: `f${i}@x.test` }, { ...ip('192.0.2.5'), 'x-echo-client': `v1.x.${i}` });
+    expect(await status(call('/login', { email: 'f@x.test' }, { ...ip('192.0.2.5'), 'x-echo-client': 'v1.y.z' }))).toBe(429);
   });
   it('distributed guessing of one account is capped by the account-wide floor', async () => {
-    const env = { AUTH_RATE_LIMITER: limiter(10), API_RATE_LIMITER: limiter(5), CLIENT_ATTRIBUTION_SECRET: SECRET };
-    const call = app(env);
+    const call = rig(5);
     let blocked = 0;
-    for (let i = 0; i < 8; i++) {
-      const h = { 'x-echo-client': await signClientAttribution(SECRET, { ip: `203.0.113.${i + 1}`, userAgent: 'u' }, Date.now()) };
-      if ((await status(call('/login', { email: 'victim@x.test' }, h))) === 429) blocked++;
-    }
+    for (let i = 0; i < 8; i++) if ((await status(call('/login', { email: 'victim@x.test' }, await signed(`203.0.113.${i + 1}`)))) === 429) blocked++;
     expect(blocked).toBe(3);
   });
-  it('repeated refresh-token replay is limited per token; distinct tokens are not', async () => {
-    const env = { AUTH_RATE_LIMITER: limiter(10), API_RATE_LIMITER: limiter(300) };
-    const call = app(env);
-    for (let i = 0; i < 10; i++) await call('/refresh', { refreshToken: 'tok' });
-    expect(await status(call('/refresh', { refreshToken: 'tok' }))).toBe(429);
-    expect(await status(call('/refresh', { refreshToken: 'tok2' }))).toBe(200);
+});
+
+describe('cashierAuthRateLimit request bounds', () => {
+  const call = () => app({ AUTH_RATE_LIMITER: limiter(10), API_RATE_LIMITER: limiter(300) });
+  it('refuses an oversized body (400 PAYLOAD_TOO_LARGE) before parsing it', async () => {
+    expect(await status(call()('/login', { email: 'a@x.test', pad: 'x'.repeat(9000) }, ip('192.0.2.1')))).toBe(400);
+  });
+  it('still lets a non-JSON body through to the handler validation', async () => {
+    const a = new Hono();
+    a.onError(errorHandler as never);
+    a.post('/login', cashierAuthRateLimit('login'), (c) => c.json({ ok: true }));
+    const res = await a.request('/login', { method: 'POST', body: 'not json', headers: ip('192.0.2.1') }, { AUTH_RATE_LIMITER: limiter(10), API_RATE_LIMITER: limiter(300) });
+    expect(res.status).toBe(200);
   });
 });

@@ -361,6 +361,8 @@ describe('sign-in', () => {
         'another-secret',
         'HS256',
       ),
+      // Correctly signed and unexpired but with no jti: it cannot be made single-use, so it is refused (F7).
+      await sign({ sub: u.id, type: 'cashier_select', iat: now, exp: now + 300 }, SECRETS.JWT_ACCESS_SECRET, 'HS256'),
       await signAccessToken(u.id, SECRETS.JWT_ACCESS_SECRET),
       'garbage',
     ];

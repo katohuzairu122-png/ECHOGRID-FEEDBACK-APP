@@ -229,7 +229,7 @@ export interface Bindings {
    * provisioned via CLI. */
   /**
    * SEC-CASHIER-R2 F6 (optional): secret shared ONLY with the web Worker to sign the real client address it forwards in
-   * `x-echo-client` (see lib/client-attribution.ts). Unset = the header is never trusted and behaviour is unchanged.
+   * `x-echo-client` (see lib/client-attribution.ts). Unset = the header is never trusted and the cashier auth throttles keep their previous per-IP behaviour.
    */
   CLIENT_ATTRIBUTION_SECRET?: string | undefined;
   AUTH_RATE_LIMITER: RateLimit;

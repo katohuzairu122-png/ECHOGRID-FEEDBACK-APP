@@ -49,4 +49,19 @@ describe.skipIf(!process.env.DATABASE_URL)('cashier selection ticket consumption
     expect(row.revoked_at).not.toBeNull();
     expect(row.session_id).toBeNull();
   });
+
+  it('a later spend deletes this user\'s expired tombstones but keeps live ones and other users\'', async () => {
+    const other = (await c.query(`insert into users (email, password_hash, full_name) values ($1,'x','Other') returning id`, [`o-${randomUUID()}@example.test`])).rows[0].id;
+    const old = randomUUID();
+    const live = randomUUID();
+    const foreign = randomUUID();
+    await repos.refreshTokens.consumeCashierTicket({ jti: old, userId, expiresAt: new Date(Date.now() + 300_000) });
+    await c.query(`update refresh_tokens set expires_at = now() - interval '1 minute' where id=$1`, [old]);
+    await repos.refreshTokens.consumeCashierTicket({ jti: foreign, userId: other, expiresAt: new Date(Date.now() - 60_000) });
+    await repos.refreshTokens.consumeCashierTicket({ jti: live, userId, expiresAt: new Date(Date.now() + 300_000) });
+    const ids = (await c.query(`select id from refresh_tokens where id = any($1)`, [[old, live, foreign]])).rows.map((r) => r.id);
+    expect(ids).toContain(live);
+    expect(ids).toContain(foreign);
+    expect(ids).not.toContain(old);
+  });
 });
