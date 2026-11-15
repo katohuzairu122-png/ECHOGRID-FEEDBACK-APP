@@ -1,5 +1,6 @@
 import 'server-only';
 import { API_BASE_URL, parseEnvelope } from './api-client';
+import { signedAttributionHeadersSafe } from './cashier/client-attribution';
 
 /**
  * The anonymous counterpart to apiFetch() (lib/api-client.ts) -- no cookies,
@@ -15,6 +16,7 @@ import { API_BASE_URL, parseEnvelope } from './api-client';
  */
 export async function publicApiFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
   const headers = new Headers(init.headers);
+  for (const [name, value] of Object.entries(await signedAttributionHeadersSafe())) headers.set(name, value);
   if (init.body && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json');
 
   const response = await fetch(`${API_BASE_URL}/api/v1${path}`, { ...init, headers });

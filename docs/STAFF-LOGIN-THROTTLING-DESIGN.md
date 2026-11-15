@@ -118,9 +118,15 @@ and the shared per-IP bucket (follow-up block if wanted).
   callers are now bounded per address and by the floor). Corrections to earlier text: "identical to before" holds only relative to
   post-#439 main (the floor, the 8 KiB cap answering before any limiter, and 400 `PAYLOAD_TOO_LARGE` are new); the 29 tests prove the
   middleware in isolation, not the deployed stack.
-- **Open (H2, needs staging evidence):** `api.use('*', rateLimit('API_RATE_LIMITER'))` in `index.ts` is keyed by raw `cf-connecting-ip`.
-  If web-to-API calls arrive from one egress address, every web user shares that 300/min bucket regardless of this work. Not
-  changed here; confirm on staging which address the API sees before deciding whether to make the global limiter attribution-aware.
+- **H2 (global API floor), addressed in a separate change:** `api.use('*', globalApiRateLimit())` replaces the raw-address
+  `rateLimit('API_RATE_LIMITER')` in `index.ts`. Secret unset: identical to before. Secret set and a VALID signed attribution: key
+  `src:<client address, IPv6 as /64>`, so web users stop sharing one 300/min bucket. Unsigned, forged, stale or wrong-secret requests keep
+  the legacy raw-address key (never worse than before; a web Worker that fails to sign only keeps today's shared-egress behaviour for that
+  traffic). The web app now signs EVERY server-side API call (staff, customer, anonymous) via `signedAttributionHeadersSafe()`; this
+  reverses the earlier "staff calls are never signed" choice, which also means staff audit rows record the signed client address once
+  the secret is set. Not signed (still legacy shared-egress key): the middleware token refresh, the logout call, customer-language calls,
+  `optional-qr-actions` and the cashier read helper (`cashier/auth-api.ts` line 78). Not verified: which `cf-connecting-ip` the API sees
+  for web-to-API calls on Cloudflare; needs a staging check once the secret is set.
 - **Residual risk:** many distinct sources (about 30+ IPv4 hosts or /64 prefixes) can exhaust the per-account floor (300/min) and block
   that account for the rest of the minute; a per-account lock was rejected as a cheaper lever (section 3, option C). An attribution
   header is not bound to a path and can be replayed for 60 s by anyone who captures it server-side (review L1, not changed).

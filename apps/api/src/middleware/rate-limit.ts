@@ -78,6 +78,41 @@ export function rateLimitByCustomer() {
   );
 }
 
+/**
+ * H2 (independent review of #439): the global API floor (300/min, mounted on every route) was keyed by the raw `cf-connecting-ip`. The
+ * web app reaches this Worker Worker to Worker, so all web users shared that single bucket: one busy or hostile source could spend
+ * the whole floor and 429 everyone, whatever the per-endpoint limiters did.
+ *
+ *  - `CLIENT_ATTRIBUTION_SECRET` NOT configured: exactly `rateLimit('API_RATE_LIMITER')` (raw `cf-connecting-ip`, else `unknown`).
+ *  - Configured and the request carries a VALID signed attribution (current or previous secret, 60 s past / 5 s future): key
+ *    `src:<client address>`, the real client's address (IPv6 collapsed to its /64, see `rateLimitSource`). Only the secret holder can
+ *    produce the header, so a caller cannot choose this bucket; a forged, stale, tampered or wrong-secret header is simply not
+ *    trusted and falls through to the next case.
+ *  - Configured but the request is unsigned or invalid: the legacy raw-address key, unchanged. This is never worse than before, so a
+ *    web Worker that fails to sign (mismatch, skew, missing address) only keeps today's shared-egress behaviour for that traffic.
+ *
+ * The `src:` prefix cannot collide with a legacy key (those are addresses or `unknown`) or with the account/ticket keys of the
+ * attributed auth limiter. The limit itself is unchanged: nothing is loosened for any single source.
+ */
+export function globalApiRateLimit() {
+  return createMiddleware<{ Bindings: Bindings }>(async (c, next) => {
+    const legacy = c.req.header('cf-connecting-ip') ?? 'unknown';
+    let key = legacy;
+    if (c.env.CLIENT_ATTRIBUTION_SECRET) {
+      const client = await resolveClient(
+        c.req.raw.headers,
+        c.env.CLIENT_ATTRIBUTION_SECRET,
+        Date.now(),
+        c.env.CLIENT_ATTRIBUTION_SECRET_PREVIOUS,
+      );
+      if (client.trusted) key = `src:${rateLimitSource(client.ip)}`;
+    }
+    const { success } = await c.env.API_RATE_LIMITER.limit({ key });
+    if (!success) throw new AppError('Too many requests. Please try again shortly.', 429, 'RATE_LIMITED');
+    await next();
+  });
+}
+
 const hex = (bytes: ArrayBuffer) => [...new Uint8Array(bytes)].map((b) => b.toString(16).padStart(2, '0')).join('');
 async function digest(value: string): Promise<string> {
   return hex(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value))).slice(0, 32);

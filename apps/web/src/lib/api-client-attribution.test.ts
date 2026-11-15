@@ -10,7 +10,7 @@ vi.mock('./cashier/host-guard', () => ({ onCashierHost: vi.fn(async () => false)
 import { apiFetch } from './api-client';
 import { runInCashierSurface } from './cashier/surface';
 
-/** SEC-CASHIER-POST-R2 C1: cashier API calls carry the signed real client; staff calls never do. */
+/** SEC-CASHIER-POST-R2 C1 + H2: every API call carries the signed real client (staff calls too, so the API's global per-source floor and audit see the person, not the web Worker). */
 describe('apiFetch client attribution', () => {
   const calls: Headers[] = [];
   beforeEach(() => {
@@ -32,7 +32,13 @@ describe('apiFetch client attribution', () => {
     expect(calls[0]!.get('x-echo-client')).toMatch(/^v1\.[\w-]+\.[\w-]+$/);
     expect(calls[0]!.get('Authorization')).toBe('Bearer cashier-token');
   });
-  it('never signs a staff call', async () => {
+  it('signs a staff call too (H2: reverses the earlier "staff calls never signed" choice, deliberately)', async () => {
+    await apiFetch('/branches');
+    expect(calls[0]!.get('x-echo-client')).toMatch(/^v1\.[\w-]+\.[\w-]+$/);
+    expect(calls[0]!.get('Authorization')).toBe('Bearer staff-token');
+  });
+  it('sends no attribution on a staff call when the secret is not configured', async () => {
+    delete process.env.CLIENT_ATTRIBUTION_SECRET;
     await apiFetch('/branches');
     expect(calls[0]!.get('x-echo-client')).toBeNull();
   });
