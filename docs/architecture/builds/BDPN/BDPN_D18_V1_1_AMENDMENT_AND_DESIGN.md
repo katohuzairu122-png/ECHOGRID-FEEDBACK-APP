@@ -9,6 +9,9 @@ owner's approval (section 14).
   `BDPN_D18_V1_1_RECONCILIATION_AUDIT.md` (classification and file-level evidence).
 - Baseline: `origin/main` @ `c895edb2507f969387ce1f7cb27679bb003beff9`; latest migration `0072`.
 - Version: D-18 **v1.1** (v1.0 = "informational join text only; no join button").
+- Relationship to the owner policy lock merged in #440 (`BDPN_D18_V11_OWNER_POLICY_LOCK.md`, `..._GROUPED_DEVELOPMENT_PLAN.md`,
+  `..._CONTRACTS_AND_ACCEPTANCE.md`): those documents state the owner's product direction and a group plan; this document is their **Group 0
+  deliverable** (D18-G0A/B/C) and reconciles them with the repository. See section 2A.
 - Rule followed: the locked architecture is preserved. Where an owner decision conflicts with a locked decision, the conflict is
   listed in the audit (C-1 to C-15) and in the owner decision register (section 13), and is **not** silently superseded.
 
@@ -42,6 +45,52 @@ owner's approval (section 14).
   membership. Splits 06 to 08: no financial write, billing, Stripe, Partner Credit or settlement change.
 - Existing memberships, points, rewards, consent history and survey participation are never altered by entitlement changes.
 
+## 2A. Relationship to the owner policy lock (#440) and reconciliation
+
+The owner policy lock (merged in #440 on the same baseline) is **owner product direction locked for design; the architecture amendment still
+needs review; runtime is not authorized**. It does not override D-18, CA-06/07/08 or any locked decision. This document is the amendment
+and reconciliation it asks for, and does not change anything the lock states.
+
+**Adopted from the lock.**
+- Capability labels `business.discovery`, `loyalty.remote_enrollment`, `community.promotion`. They are design labels (the lock says so). The
+  existing catalog uses camelCase jsonb keys (`monthlyResponses`, `aiSummaries`, `customBranding`), so the stored key spelling is OD-5.
+  `business.discovery` is **not** a plan entitlement: it is eligibility for neutral publication after platform approval, independent of plan.
+- The three customer-facing states **already a member / remote-eligible / visit-and-scan**, and the message for a business without remote join:
+  "Visit this business and scan its QR code to join". The UI never claims an online membership was created.
+- A dedicated `enrollment-options` read for one business (section 5.1), which keeps the BDPN-01C list/detail DTOs closed (reconciles C-11, C-12).
+- Remote join discloses the business's current program terms and obtains explicit **versioned** consent (answers the "program terms" part of C-15).
+- The acceptance tests A1-A12 are the acceptance baseline for every block; the threat table (section 9) adds the cases they do not name
+  (races on opt-out/downgrade, global idempotency key, audit visibility, messaging reach, presence-free survey eligibility, differencing).
+- Remote join must not bypass purchase evidence and never awards points by itself (answers OD-12).
+
+**Differences and how this document reconciles them.**
+
+| ID | Owner lock | This document | Reconciliation |
+| --- | --- | --- | --- |
+| R-1 | Endpoints under `/community/businesses/...` | BDPN-01C designs `/discovery/...` | Path namespace is OD-27. The behaviour and DTOs are the same; names in section 8 follow BDPN-01C until decided |
+| R-2 | `POST .../enrollment-interest` only | Express (`PUT`) and withdraw (`DELETE`) | Withdrawal is added so a customer can undo; if the owner prefers a single `POST`, withdrawal still needs an endpoint |
+| R-3 | Interest report minimum "proposed >=5 distinct customers in 7 days"; daily digest "to decide" | K floor on every figure, non-overlapping weekly windows, bucketing, weekly digest, no conversions (review findings H5) | The lock's 5 is adopted as the proposed value of K; daily digest and sliding 7-day windows are not adopted because they enable differencing. OD-8 records the choice |
+| R-4 | Groups G1-G4 run in parallel after G0 | Blocks have dependencies (section 11) | See the mapping below: G3 depends on the G2A evaluator, and G1 carries the BDPN-01 prerequisites |
+| R-5 | `business.discovery` listed beside the two plan entitlements | Discoverability is not plan-gated | `business.discovery` is a platform-approval state; it is never added to plan features (OD-5) |
+| R-6 | Lock does not mention D-24 | Decision 1 conflicts with D-24 (C-1) | The lock does not remove the need for the formal D-24 amendment (OD-1) |
+| R-7 | Lock leaves Split 08 reconciliation to the amendment | No entitlement authority exists in Split 08 (C-6) | OD-14 |
+| R-8 | Lock does not address Split 01 invariant 4, audit, messaging, notification CHECK constraints | Conflicts C-10 to C-14 | Open decisions OD-17, OD-21, OD-22, OD-24 |
+
+**Decisions the lock answers or narrows.** OD-12: answered (no automatic points; no bypass of purchase evidence). OD-9: structure answered (versioned
+consent plus disclosure of current terms), wording and legal review still open. OD-1: owner decision reaffirmed, formal D-24 amendment still pending.
+OD-2: **not** answered ("do not invent plan names or prices"). OD-8: a value is proposed for K.
+
+**Mapping of this document's blocks to the lock's groups.**
+
+| Lock group | This document | Note |
+| --- | --- | --- |
+| G0 (G0A/B/C) | **G0**: this document and the audit | Needs independent review and explicit owner approval |
+| G1 Universal discovery | **P** (BDPN-01 schema, moderation, discovery API, UI) | Carries the existing gates D-16 (content policy) and D-19 (migration backlog); the lock does not name them |
+| G2 Remote enrollment | **E0, B2, B5** | G2A is E0+B2; G2B/G2C is B5. Needs OD-17 (Split 01) first |
+| G3 Interest and demand | **B3, B4** | G3 cannot run in parallel with G2: the options and interest contracts need the entitlement evaluator (G2A) |
+| G4 Community promotion | **B6, B7** | Also needs OD-26 (phasing vs NETWORK-05/BDPN-05) |
+| G5 Integrated staging validation | **C** | Integrated, owner-merged main only |
+
 ## 3. The D-18 v1.1 amendment (proposed text)
 
 > **D-18 v1.1 — Join and interest affordances in discovery.** Discovery may present at most one of two explicit, customer-initiated
@@ -65,10 +114,11 @@ owner's approval (section 14).
 
 > **Exact amended texts (so that nothing is superseded silently).**
 > - BDPN-01C section 3: "All are `GET` and read-only" becomes "The list, detail, category and status endpoints are `GET` and read-only. The
->   enrollment and interest endpoints (section 8.2) are the only writes under `/discovery`."
-> - BDPN-01C section 4: the closed allow-list gains exactly one object, `enrollment { mode, myStatus }`, and nothing else about the business's
->   plan, entitlement or settings.
-> - BDPN-01D section 5: "Loyalty: no loyalty read" becomes "no loyalty read except the caller's own membership status for `myStatus`".
+>   join and interest endpoints (section 8.2) are the only writes under the discovery namespace."
+> - BDPN-01C section 4: the list, detail and category DTOs are **unchanged** (no enrollment, plan or entitlement field). A separate
+>   `enrollment-options` read (section 5.1) carries the caller's own state for one business.
+> - BDPN-01D section 5: "Loyalty: no loyalty read" becomes "no loyalty read on list and detail; the `enrollment-options`, join and interest
+>   endpoints read the caller's own membership status only".
 > - D-17 / 01C/01D log rule: "logs never pair a customer with a handle" becomes "request logs never do; the interest row and the join audit
 >   record necessarily do, are not exposed to businesses, and are covered by the retention in OD-7".
 > - BDPN-01E T-14: "row counts of every customer-linked table unchanged" is limited to **browsing** requests; the two explicit actions are
@@ -83,24 +133,24 @@ Predicates (proposal; all evaluated server-side, at request time, in the query, 
 
 - `discoverable(b)` = business `active` and not deleted ∧ published approved profile revision ∧ default-locale translation present
   (`BDPN_01A` section 6 **without** the plan term).
-- `entitledRemote(b)` = subscription status accepted by OD-3 ∧ `plan.features.remoteEnrollment === true` (absent = false).
+- `entitledRemote(b)` = subscription status accepted by OD-3 ∧ entitlement `loyalty.remote_enrollment` (stored as a plan feature, key spelling OD-5) being exactly true (absent = false).
 - `optedIn(b)` = `business_enrollment_settings.remote_enrollment_enabled = true`.
 - `programReady(b)` = definition pending (OD-6).
 - "Participating" in owner decision 1 is not defined by the existing predicate; this document reads it as `discoverable(b)` and asks the owner
   to confirm (OD-18).
-- `entitledPromo(b)` = subscription status accepted by OD-3 ∧ `plan.features.promotions === true`.
+- `entitledPromo(b)` = subscription status accepted by OD-3 ∧ entitlement `community.promotion` (stored as a plan feature, key spelling OD-5) being exactly true.
 
 | State of the business | Discoverable | QR enrollment | Customer sees | Business guidance |
 | --- | --- | --- | --- | --- |
 | Not active, deleted, suspended, unpublished, withdrawn, or no approved revision | No | Existing rules (unchanged) | Nothing; same "not found" as any unknown handle | None from this feature |
-| Discoverable, **not** `entitledRemote` (any plan) | **Yes** | Yes | QR wording + **Express interest** | **Upgrade guidance** (owner decision 8) |
-| Discoverable, `entitledRemote`, **not** `optedIn` | **Yes** | Yes | QR wording + **Express interest** | **Enablement guidance** |
-| Discoverable, `entitledRemote`, `optedIn`, **not** `programReady` | **Yes** | Yes | QR wording + **Express interest** | Program-setup guidance |
-| Discoverable, `entitledRemote`, `optedIn`, `programReady` | **Yes** | Yes | **Join** + QR wording | None |
-| Entitlement lapses (downgrade, cancellation, non-payment per OD-3/OD-4) | **Yes** | Yes | Join disappears at the next read; **Express interest** returns | Upgrade guidance |
+| Discoverable, **not** `entitledRemote` (any plan) | **Yes** | Yes | "Visit this business and scan its QR code to join" + **Express interest** | **Upgrade guidance** (owner decision 8) |
+| Discoverable, `entitledRemote`, **not** `optedIn` | **Yes** | Yes | "Visit this business and scan its QR code to join" + **Express interest** | **Enablement guidance** |
+| Discoverable, `entitledRemote`, `optedIn`, **not** `programReady` | **Yes** | Yes | "Visit this business and scan its QR code to join" + **Express interest** | Program-setup guidance |
+| Discoverable, `entitledRemote`, `optedIn`, `programReady` | **Yes** | Yes | **Join** (and the QR wording) | None |
+| Entitlement lapses (downgrade, cancellation, non-payment per OD-3/OD-4) | **Yes** | Yes | Join disappears at the next read; the visit-and-scan message and **Express interest** return | Upgrade guidance |
 | Customer is already an active member | Yes | n/a | "You are a member" (own data only); no Join or Interest | None |
 
-Independence (owner decision 4): `entitledRemote` and `entitledPromo` are separate keys. Every combination of the two is valid:
+Independence (owner decision 4): `entitledRemote` and `entitledPromo` are separate entitlements. Every combination of the two is valid:
 
 | `entitledRemote` | `entitledPromo` | Effect |
 | --- | --- | --- |
@@ -118,8 +168,8 @@ persists and (b) the business must re-confirm after any lapse; the proposal is (
 from the read-only evaluator. The setting endpoint is denied for cashier-scoped tokens and impersonation and requires business-wide access
 (same precedent as other business-wide settings).
 
-**Visible state change (OD-20).** `mode = JOIN` tells every customer that the business holds a paid entitlement and has opted in, and a JOIN to
-INTEREST flip tells them it lapsed. This is an accepted disclosure to be confirmed by the owner. To avoid broadcasting a payment hiccup, a
+**Visible state change (OD-20).** `mode = REMOTE_JOIN` tells every customer that the business holds a paid entitlement and has opted in, and a REMOTE_JOIN to
+VISIT_AND_SCAN flip tells them it lapsed. This is an accepted disclosure to be confirmed by the owner. To avoid broadcasting a payment hiccup, a
 grace window or hysteresis for `past_due` is proposed (OD-3); `cancel_at_period_end` stays entitled until the period ends.
 
 ## 5. Customer discovery and enrollment interaction contracts
@@ -127,24 +177,30 @@ grace window or hysteresis for `past_due` is proposed (OD-3); `cancel_at_period_
 All customer endpoints sit behind the existing customer session, the discovery activation flag (default off), the per-**customer**
 rate limiter (not the shared-IP limiter, see section 9 T-15) and `private, no-store`.
 
-### 5.1 What discovery responses add (proposal)
+### 5.1 Enrollment options for one business (proposal)
 
-Each list item and the detail response gains one closed object. It carries no plan, entitlement or opt-in names:
+List and detail DTOs stay exactly as BDPN-01C closes them. A separate read, called only when the customer opens a business's detail page,
+returns the caller's own options for that business:
 
 ```json
-{ "enrollment": { "mode": "JOIN" | "INTEREST", "myStatus": "NONE" | "MEMBER" | "INTERESTED" } }
+{ "options": { "mode": "ALREADY_MEMBER" | "REMOTE_JOIN" | "VISIT_AND_SCAN" | "UNAVAILABLE", "canExpressInterest": boolean, "interested": boolean } }
 ```
 
-`mode` is derived by the server from section 4. The customer is never told *why* a business is `INTEREST`, but `mode` itself discloses the
-business's entitlement state (OD-20). `myStatus` is the caller's own state only and needs one membership read per list page, batched, with no
-other loyalty data (amended 01D section 5). `myStatus` values: `NONE`, `MEMBER`, `INTERESTED`, and `UNAVAILABLE` (the customer's membership is
-`suspended`, `business_exited`, `closed` or `pending`): in that state neither Join nor Interest is shown and the page shows a neutral message.
+| `mode` | Meaning | Customer sees |
+| --- | --- | --- |
+| `ALREADY_MEMBER` | The caller has an active membership | "You are a member" and the existing card (own data only) |
+| `REMOTE_JOIN` | Section 4: discoverable, entitled, opted in, program ready, customer eligible | **Join** |
+| `VISIT_AND_SCAN` | Remote join is not available | "Visit this business and scan its QR code to join" and, if `canExpressInterest`, **I'm interested** |
+| `UNAVAILABLE` | The caller's membership is `suspended`, `business_exited`, `closed` or `pending` | A neutral message; neither Join nor Interest |
+
+The mode is derived by the server from section 4 and never from client input. The customer is never told *why* a business is `VISIT_AND_SCAN`,
+but the mode itself discloses the business's entitlement state (OD-20). The read needs only the caller's own membership and interest rows.
 
 ### 5.2 Join (remote enrollment) contract
 
 | Step | Contract |
 | --- | --- |
-| Entry | Detail page shows a **Join** control only when `mode = JOIN` and `myStatus = NONE`. |
+| Entry | The detail page shows **Join** only when the options read returns `mode = REMOTE_JOIN`. |
 | Notice | Before the request the customer sees the versioned enrollment notice (`noticeId`, `noticeVersion`, rendered text) for this path (CA-08, OD-9). The notice states that joining creates a loyalty membership with this business and what the business receives. It is **not** a promotional-consent prompt; promotional consent is never bundled. |
 | Request | One explicit confirm sends `{ noticeId, noticeVersion, idempotencyKey }` for the profile handle. |
 | Server checks (one transaction) | Discovery on; handle resolves to a `discoverable` business; `entitledRemote` ∧ `optedIn` ∧ `programReady` **re-evaluated now under row locks** (a share lock on the settings and subscription rows); customer active and not limited (`assertCustomerNotLimited('join_business')`); per-customer daily remote-join cap enforced **in the database** under a per-customer advisory lock (the Cloudflare limiter supports only 10 s / 60 s periods and a count-then-insert would race); then the membership service logic (reactivate a `left` membership; otherwise create; loyalty-account consistency). A concurrent duplicate join hits the membership unique index and the handler returns the existing membership. |
@@ -163,7 +219,7 @@ remote-joined members are non-messageable until the customer initiates contact (
 | --- | --- |
 | Effect | Records at most one **active** interest per (customer, business). Creates no membership, loyalty account, consent grant, points, contact permission, or customer-visible notification. |
 | Request | `PUT` to express, `DELETE` to withdraw. The customer first sees a short notice: "The business is told only how many customers are interested, never who." |
-| Server checks | Discovery on; handle resolves to a `discoverable` business; `mode = INTEREST` at this moment; customer active and not limited; per-customer active-interest cap and re-submit cooldown (OD-7). |
+| Server checks | Discovery on; handle resolves to a `discoverable` business; `mode = VISIT_AND_SCAN` and `canExpressInterest` at this moment; customer active and not limited; per-customer active-interest cap and re-submit cooldown (OD-7). |
 | Customer view | `GET` of the customer's own interests (their data only). |
 | Conversion | If the customer later joins the same business (QR or remote), the interest is marked converted; it then stops counting toward "interested" totals. |
 | Expiry | Interest expires after a fixed period (OD-7) so counts reflect current demand. |
@@ -171,7 +227,7 @@ remote-joined members are non-messageable until the customer initiates contact (
 
 ### 5.4 UI states (additions to `BDPN_01D` section 4)
 
-Card and detail: `Join` (mode JOIN), `I'm interested` / `Interest recorded · Withdraw` (mode INTEREST), `You are a member`, plus
+Detail page: `Join` (`REMOTE_JOIN`), the visit-and-scan message with `I'm interested` / `Interest recorded · Withdraw` (`VISIT_AND_SCAN`), `You are a member` (`ALREADY_MEMBER`), the neutral message (`UNAVAILABLE`), plus
 loading, 401 (redirect to customer login), 429/5xx ("could not be completed right now"), and 404 (the existing single not-found screen).
 All copy lives in the existing four-language namespace (`en, fr, es, ar`, RTL-safe), reviewed like the rest of discovery.
 
@@ -206,7 +262,7 @@ Scope (owner decision 9): promotional posts, discounts and survey discovery. Sep
 
 | Aspect | Design |
 | --- | --- |
-| Entitlement | `plan.features.promotions === true` and an accepted subscription status (OD-3), evaluated at read time. No entitlement ⇒ promotional content is not shown, never deleted. |
+| Entitlement | entitlement `community.promotion` (stored as a plan feature, key spelling OD-5) being exactly true and an accepted subscription status (OD-3), evaluated at read time. No entitlement ⇒ promotional content is not shown, never deleted. |
 | Prerequisite | A **published, approved discovery profile** (`NETWORK_00_CONTENT_MODEL_AND_ACCESS.md` N-06). Both the profile and the promotional entitlement are required (conflict C-8). |
 | Content classes (v1) | `business_post` only, as the NETWORK documents define; `sponsored`, customer posts and B2B listings remain out of scope. |
 | Discounts | A discount in a post is **display text only**. It cannot create or change a price, voucher, reward, credit, points or invoice, cannot be machine-redeemed, and cannot reference loyalty rewards. Offer terms must be in the text (NETWORK moderation rule). |
@@ -223,7 +279,7 @@ Scope (owner decision 9): promotional posts, discounts and survey discovery. Sep
 A single pure function over the existing subscription mirror and plan row; no schema change:
 
 ```
-entitlementsFor(businessId) -> { remoteEnrollment: boolean, promotions: boolean }
+entitlementsFor(businessId) -> { 'loyalty.remote_enrollment': boolean, 'community.promotion': boolean }
   reads business_subscriptions.status and subscription_plans.features (jsonb)
   true only when status is in the accepted set (OD-3) AND the feature key is exactly true
   never writes; never calls Stripe; never changes subscription state; absent key = false
@@ -243,6 +299,7 @@ decision (OD-2); `features` is open jsonb, so no migration is needed, but `subsc
 
 | Proposal | Request | Responses |
 | --- | --- | --- |
+| `GET /discovery/businesses/{profileId}/enrollment-options` | none | `200 { options }` (section 5.1); `404` for any non-discoverable handle |
 | `POST /discovery/businesses/{profileId}/enrollment` | `{ noticeId, noticeVersion, idempotencyKey }` | `201/200` membership summary (own data); `404 NOT_AVAILABLE`; `409 MODE_CHANGED`; `403 CUSTOMER_LIMITED`; `429` |
 | `PUT /discovery/businesses/{profileId}/interest` | none | `204`; `404`; `409 MODE_CHANGED` (carries the current `mode`; the same single code is used by the enrollment endpoint instead of two separate oracle codes); `403`; `429` |
 | `DELETE /discovery/businesses/{profileId}/interest` | none | `204` (idempotent) |
@@ -265,7 +322,7 @@ by default, consistent with D-02 (OD-8).
 | --- | --- | --- |
 | `business_enrollment_settings` | `business_id` (pk, fk), `remote_enrollment_enabled boolean not null default false`, `updated_by`, `updated_at` | One row per business; default off |
 | `customer_enrollment_interests` | `id`, `customer_id` (fk, cascade), `business_id` (fk), `status` (`active`/`withdrawn`/`converted`/`expired`), `created_at`, `withdrawn_at`, `converted_membership_id` (nullable) | Partial unique index on `(customer_id, business_id)` where `status = 'active'`; index on `(business_id, created_at)`; never read row-wise by business routes |
-| Plan features | `remoteEnrollment`, `promotions` (booleans in the existing jsonb) | No migration; catalog change is OD-2 |
+| Plan features | `loyalty.remote_enrollment`, `community.promotion` (booleans in the existing jsonb; spelling per OD-5) | No migration; catalog change is OD-2 |
 | Membership | `onboarding_source = 'remote_discovery'`; `onboarding_reference` = internal profile id | The column is free `text` (migration `0034`); **no migration** for the new value |
 | Consent grant | `purpose = 'join_loyalty'`, `consentVersion = noticeVersion`, metadata `{ onboardingSource, noticeId, noticeVersion, membershipId }` | Existing table and idempotency rules |
 | Notification | staff event `enrollment_interest_digest`; counts only; per-business-per-week idempotency (new; the service has none today) | Added to the staff event set; needs the CHECK-constraint changes in section 10 |
@@ -276,7 +333,7 @@ by default, consistent with D-02 (OD-8).
 | --- | --- | --- |
 | T-1 | **Enrollment bombing**: a script remote-joins a customer to many businesses, or many fake customers join one business | OTP-verified customer required; one membership per customer-business (existing unique index); per-customer remote-join cap enforced **in the database** under an advisory lock (a count-then-insert would let parallel requests exceed it) plus the per-customer rate limit; limited/suspended customers blocked; remote joins counted separately so abuse is visible |
 | T-2 | **Entitlement bypass or race** (join after downgrade; opt-in toggled mid-request) | `entitledRemote`, `optedIn`, `programReady` re-evaluated in the join transaction **with share locks on the settings and subscription rows** (READ COMMITTED alone lets a concurrent opt-out or downgrade interleave); client-supplied flags ignored; the server derives `mode`; a concurrent duplicate join returns the existing membership |
-| T-3 | **Plan/tier and payment-state leak** through discovery | **Not fully prevented.** `mode` itself discloses that a business holds the entitlement and opted in, and a JOIN to INTEREST flip signals a lapse or non-payment to every customer, including competitors. Mitigations: no plan or setting names, one `MODE_CHANGED` code instead of two oracle codes, uniform `404`, a `past_due` grace window; the residual disclosure is an owner decision (OD-20) |
+| T-3 | **Plan/tier and payment-state leak** through discovery | **Not fully prevented.** `mode` itself discloses that a business holds the entitlement and opted in, and a REMOTE_JOIN to VISIT_AND_SCAN flip signals a lapse or non-payment to every customer, including competitors. Mitigations: no plan or setting names, one `MODE_CHANGED` code instead of two oracle codes, uniform `404`, a `past_due` grace window; the residual disclosure is an owner decision (OD-20) |
 | T-4 | **Identity inference** from small counts, differencing or conversions | K applies to every figure; whole-week non-overlapping windows; buckets; **no conversion figure** (the business already holds member join times); no per-customer rows to businesses; no export. Residual: colluding or staff-created accounts can defeat any K (T-19) |
 | T-5 | **Cross-tenant read** of interest data | Business reads only via the tenant-scoped aggregate; customers read only their own interests; no customer-keyed business endpoint |
 | T-6 | **IDOR** through identifiers | Opaque handle only (D-10); the server resolves handle to business; clients never pass a business id |
@@ -351,7 +408,7 @@ Dependencies are acyclic; B5 is last among the enrollment blocks. B6 also depend
 | ID | Decision needed | Why it matters |
 | --- | --- | --- |
 | OD-1 | Confirm D-24 is replaced for discoverability (no plan gating of visibility) | Conflict C-1; changes the locked D-24 and `BDPN_01A` section 6 |
-| OD-2 | Which plans include `remoteEnrollment` and which include `promotions`; whether bundled | Economic; edits the approved catalog |
+| OD-2 | Which plans include `loyalty.remote_enrollment` and which include `community.promotion`; whether bundled (the lock allows bundling but forbids inventing plan names or prices) | Economic; edits the approved catalog |
 | OD-3 | Which subscription statuses count as entitled (`active`, `trialing`; `past_due` grace?) | Nothing in code branches on status today |
 | OD-4 | Behaviour on downgrade/cancel: confirm Join disappears, members stay, interest retained, promotions hidden not deleted | Owner decision 10 vs entitlement loss |
 | OD-5 | Names of the two feature keys and the permission keys | Contract stability |
@@ -376,6 +433,8 @@ Dependencies are acyclic; B5 is last among the enrollment blocks. B6 also depend
 | OD-24 | Amend the "single BDPN migration" rule (D-19, 01E M1) or accept additional migrations | Conflict C-14 |
 | OD-25 | Reuse the NETWORK `network_follows` design for interest instead of a new relation | Avoids two parallel customer-to-business relations (C-13) |
 | OD-26 | May plan-gated promotions precede NETWORK-05 and BDPN-05 as scheduled | Phasing conflict (C-13) |
+| OD-27 | Path namespace for the new endpoints: `/discovery/...` (BDPN-01C) or `/community/businesses/...` (owner lock) | R-1; names in section 8 follow BDPN-01C until decided |
+| OD-28 | Confirm the lock's proposed threshold of 5 distinct customers as K, a weekly (not daily) digest and non-overlapping windows | R-3; differencing risk (T-4) |
 
 ## 14. Review and approval gate
 
