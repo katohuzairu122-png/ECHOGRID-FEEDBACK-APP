@@ -30,6 +30,7 @@ export * from './customer-action-authorizations';
 export * from './otp-codes';
 export * from './otp-request-cooldowns';
 export * from './customer-credentials';
+export * from './customer-auth-challenges';
 export * from './customer-sessions';
 export * from './customer-refresh-tokens';
 export * from './customer-auth-events';
