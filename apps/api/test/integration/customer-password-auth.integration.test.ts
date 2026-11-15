@@ -241,6 +241,57 @@ describe.skipIf(!process.env.DATABASE_URL)('customer password auth (integration)
   });
 
   describe('verified email linking', () => {
+    it('binds proofs to the owner and rolls back a concurrent losing claim', async () => {
+      const first = await a.auth.signInWithVerifiedPhone(proof(PHONE(95)));
+      const second = await b.auth.signInWithVerifiedPhone(proof(PHONE(96)));
+      if (!first.ok || !second.ok) throw new Error('Expected synthetic OTP sessions');
+      const firstOwner = { customerId: first.customerId, sessionId: first.session.sessionId };
+      const secondOwner = { customerId: second.customerId, sessionId: second.session.sessionId };
+      const email = `link-race-${RUN}@example.test`;
+      const create = (connection: Client) => {
+        const messages: Array<{ recipient: string; challengeId: string; proof: string }> = [];
+        const link = createCustomerEmailLinkService({
+          db: buildDb(connection), hasher: countingHasher(),
+          hmacSecret: 'synthetic-email-linking-hmac-with-enough-entropy',
+          passwordPolicy: { minLength: 10 }, now: () => new Date(clockMs),
+          deliver: async (message) => { messages.push(message); },
+        });
+        return { link, messages };
+      };
+      const left = create(client);
+      const right = create(client2);
+      await left.link.requestProof(firstOwner, email);
+      await right.link.requestProof(secondOwner, email.toUpperCase());
+      const [l] = left.messages;
+      const [r] = right.messages;
+      if (!l || !r) throw new Error('Expected separate owner-bound proofs');
+      const input = (message: typeof l) => ({
+        email, challengeId: message.challengeId, proof: message.proof, password: GOOD,
+      });
+      expect(await left.link.complete(secondOwner, input(l))).toBe(false);
+      expect((await q<{ attempts: number }>(
+        'SELECT attempts FROM customer_auth_challenges WHERE id=$1', [l.challengeId],
+      ))[0]?.attempts).toBe(0);
+
+      const oldClock = clockMs;
+      clockMs += 601_000;
+      expect(await left.link.complete(firstOwner, input(l))).toBe(false);
+      clockMs = oldClock;
+
+      const outcomes = await Promise.all([
+        left.link.complete(firstOwner, input(l)), right.link.complete(secondOwner, input(r)),
+      ]);
+      expect(outcomes.filter(Boolean)).toHaveLength(1);
+      const loser = outcomes[0] ? second : first;
+      const losingProof = outcomes[0] ? r : l;
+      expect((await q<{ consumed_at: Date | null }>(
+        'SELECT consumed_at FROM customer_auth_challenges WHERE id=$1', [losingProof.challengeId],
+      ))[0]?.consumed_at).toBeNull();
+      expect(await a.sessions.authenticateSessionToken(loser.session.accessToken)).not.toBeNull();
+      expect(await q('SELECT customer_id FROM customer_credentials WHERE login_email=$1', [email]))
+        .toHaveLength(1);
+    });
+
     it.each([false, true])('links the same identity and retires OTP with existing password=%s', async (hasPassword) => {
       const phone = PHONE(hasPassword ? 94 : 93);
       const email = `link-${hasPassword}-${RUN}@example.test`;
