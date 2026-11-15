@@ -50,6 +50,22 @@ describe('DEV-56 manual staging/migration workflow trust boundaries', () => {
     expect(stage).not.toContain('PRODUCTION_DATABASE_URL');
   });
 
+  it('binds the staging release to the dispatch SHA and verifies staging migration state before deploy', () => {
+    const stage = workflow('deploy-staging.yml');
+    expect(stage).toContain('test "$DISPATCH_REF" = "refs/heads/main"');
+    expect(stage).toContain('test "$RUN_SHA" = "$EXPECTED_COMMIT"');
+    expect(stage).toContain('DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}');
+    expect(stage).not.toContain('db:migrate');
+    expect(stage.match(/opennextjs-cloudflare build/g)).toHaveLength(1);
+    const build = stage.indexOf('opennextjs-cloudflare build');
+    const schema = stage.indexOf('db:verify:production');
+    const freshness = stage.indexOf('git ls-remote origin refs/heads/main');
+    expect(build).toBeGreaterThan(0);
+    expect(schema).toBeGreaterThan(build);
+    expect(freshness).toBeGreaterThan(schema);
+    expect(stage.indexOf('command: deploy --env staging')).toBeGreaterThan(freshness);
+  });
+
   it.each([
     ['migrate-staging.yml', 'staging', 'STAGING_DATABASE_URL'],
     ['migrate-production.yml', 'production', 'PRODUCTION_DATABASE_URL'],

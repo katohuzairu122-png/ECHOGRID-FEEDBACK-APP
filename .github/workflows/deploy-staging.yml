@@ -34,6 +34,8 @@ jobs:
         shell: bash
         env:
           EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+          DISPATCH_REF: ${{ github.ref }}
+          RUN_SHA: ${{ github.sha }}
           CONFIRMATION: ${{ inputs.confirmation }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -41,6 +43,8 @@ jobs:
           set -euo pipefail
           [[ "$EXPECTED_COMMIT" =~ ^[0-9a-f]{40}$ ]]
           test "$CONFIRMATION" = "DEPLOY_STAGING"
+          test "$DISPATCH_REF" = "refs/heads/main"
+          test "$RUN_SHA" = "$EXPECTED_COMMIT"
           test "$(git rev-parse HEAD)" = "$EXPECTED_COMMIT"
           : "${CLOUDFLARE_API_TOKEN:?Configure CLOUDFLARE_API_TOKEN}"
           : "${CLOUDFLARE_ACCOUNT_ID:?Configure CLOUDFLARE_ACCOUNT_ID}"
@@ -61,8 +65,23 @@ jobs:
       - name: Build API
         run: pnpm --filter @echo-grid-feedback/api build
 
-      - name: Build web
-        run: pnpm --filter @echo-grid-feedback/web build
+      - name: Build web and cashier once (OpenNext)
+        working-directory: apps/web
+        run: pnpm exec opennextjs-cloudflare build
+
+      - name: Verify staging migration state (read only)
+        env:
+          DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
+        run: pnpm --filter @echo-grid-feedback/api db:verify:production
+
+      - name: Reject superseded staging build
+        shell: bash
+        env:
+          EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+        run: |
+          set -euo pipefail
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$EXPECTED_COMMIT"
+          echo "Staging release commit: $EXPECTED_COMMIT" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Deploy API to staging
         uses: cloudflare/wrangler-action@v3
@@ -77,7 +96,7 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: pnpm exec opennextjs-cloudflare build && pnpm exec opennextjs-cloudflare deploy --env staging
+        run: pnpm exec opennextjs-cloudflare deploy --env staging
 
       # CASHIER-PWA-DEPLOY-01: the dedicated staging cashier Worker, deployed from the SAME build artifact the web step just
       # produced (no rebuild). Staging only; production Workers, domains and databases are not touched.
@@ -106,4 +125,8 @@ jobs:
           WEB=https://echo-grid-feedback-web-staging.katohuzairu122.workers.dev
           curl --fail --silent --show-error --retry 5 --retry-all-errors --output /dev/null "$CASHIER/cashier/login"
           curl --fail --silent --show-error --retry 5 --retry-all-errors "$CASHIER/manifest.webmanifest" | grep -q '"Echo Grid Cashier"'
-          test "$(curl --silent --output /dev/null --write-out '%{http_code}' "$WEB/cashier/login")" = "404"
+          test "$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' "$WEB/cashier/login")" = "404"
+          for route in /login /signup /forgot-password /dashboard /platform; do
+            target="$(curl --silent --show-error --output /dev/null --write-out '%{redirect_url}' "$CASHIER$route")"
+            test "$target" = "$CASHIER/cashier"
+          done
