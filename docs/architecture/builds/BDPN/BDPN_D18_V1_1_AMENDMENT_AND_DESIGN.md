@@ -405,6 +405,8 @@ Dependencies are acyclic; B5 is last among the enrollment blocks. B6 also depend
 
 ## 13. Owner decision register
 
+> Current status per decision (PROPOSED / ADDRESSED BY LOCK / OPEN), block mapping and assessment flags: `BDPN_D18_V11_G0_DECISION_RECONCILIATION.md`. The table below is unchanged.
+
 | ID | Decision needed | Why it matters |
 | --- | --- | --- |
 | OD-1 | Confirm D-24 is replaced for discoverability (no plan gating of visibility) | Conflict C-1; changes the locked D-24 and `BDPN_01A` section 6 |
