@@ -60,11 +60,13 @@ export async function completeEmailRegistrationAction(_prev: EmailAuthState, for
   const email = text(formData, 'email').toLowerCase();
   const password = String(formData.get('password') ?? '');
   const [challengeId = '', proof = ''] = text(formData, 'challenge').split('.');
+  // Optional, stored by the API as an UNVERIFIED claim; it gates nothing until the phone-verification flow proves it.
+  const phone = text(formData, 'phone');
   const next = safeInternalPath(String(formData.get('next') ?? '/loyalty/dashboard'), '/loyalty/dashboard');
   if (!EMAIL.test(email) || !challengeId || !proof || password.length === 0) return { error: 'invalid_input' };
   try {
     const reply = await callCustomerAuthApi('/customer-auth/email/register/complete', {
-      body: { email, challengeId, proof, password },
+      body: { email, challengeId, proof, password, ...(phone ? { phone } : {}) },
     });
     if (reply.status !== 201) return { error: codeFor(reply.status, { 401: 'invalid_proof' }) };
     const failure = await signIn(email, password);

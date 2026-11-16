@@ -90,3 +90,32 @@ registered.
 
 **Still to do before activation:** stage 4 (phone capture at registration, OTP attach), the idle-limit and step-up values,
 the Durable Object namespace and secrets, the cutoff readiness query, and a staging run of the sign-up and sign-in screens.
+
+## Stage 4 (S5-04 / CUSTOMER-PHONE-01): phone capture, OTP attach, verified-phone prompts
+**What a phone number is.** A number typed at sign-up is a *claim*, stored UNVERIFIED (`phone_verified_at` null). It proves nothing,
+gates nothing, and finds nobody until the customer proves it. Verified status is stored separately and read server-side only.
+
+**API** (signed-in customer only, `/loyalty/me/phone`; the customer comes from the session, never the request):
+`GET /` (masked number + verified flag), `POST /request`, `POST /verify`. E.164 normalization (`lib/phone.ts`) accepts typed forms
+(spaces, dashes, brackets, a leading `00`) and never guesses a country. A proven number becomes the customer's verified phone
+through `claimVerifiedPhone`: first to verify owns it (database-enforced), a number verified elsewhere is refused (`PHONE_TAKEN`),
+and unverified claims by others are released without touching their accounts.
+
+**Provider abstraction, no live send.** `PhoneProofPort` has a local implementation (OTP rows + the SMS service's non-production
+transport: development, tests, staging) and a Twilio Verify implementation (production only, the same choice the phone sign-in
+already makes). Nothing in this change sends an SMS by itself, and no provider credential is assumed.
+
+**Abuse controls** (OTP layer: 10-minute expiry, 5 attempts per code, single use, 60-second per-number cooldown; plus a per-number
+rate-limit budget and the per-customer limiter). Added: at most 5 codes requested and 10 failed checks per customer per day
+(`PHONE_ATTACH_LIMITED`; starting estimates for the owner to tune). Every request, success, failure and block is recorded in the
+customer auth audit trail with reason codes `phone_attach_*`; no number or code is ever stored there.
+
+**Number change.** Replacing an already verified number is refused (`PHONE_CHANGE_NOT_SUPPORTED`) until the step-up policy is
+decided: swapping the verified number of an account is exactly what step-up exists to protect.
+
+**Web.** `/loyalty/dashboard/phone` (translated in en, fr, es, ar). Joining an additional business without a verified phone now shows
+a "verify my phone" prompt that returns the customer to the QR page afterwards. An optional phone field on the sign-up confirmation
+screen is sent as an unverified claim.
+
+**Not in this change.** Community join has no web screen yet (the server gate exists); a dashboard banner for unverified customers;
+changing a verified number; an owner-facing abuse dashboard.

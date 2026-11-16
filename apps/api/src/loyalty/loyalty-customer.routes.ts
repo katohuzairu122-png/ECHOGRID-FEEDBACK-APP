@@ -13,6 +13,7 @@ import { createDb, type Database } from '../db/client';
 import { createRepositories } from '../repositories';
 import { customerAuthenticate, type CustomerAuthVariables } from '../middleware/customer-authenticate';
 import { rateLimitByCustomer } from '../middleware/rate-limit';
+import { customerPhoneRoutes } from '../customer-auth/customer-phone.routes';
 import { parseJsonBody } from '../lib/validate';
 import { ok } from '../lib/response';
 import { AppError } from '../lib/errors';
@@ -46,6 +47,9 @@ type Env = { Bindings: Bindings; Variables: CustomerAuthVariables };
 export const loyaltyCustomerRoutes = new Hono<Env>();
 
 loyaltyCustomerRoutes.use('*', customerAuthenticate, rateLimitByCustomer());
+
+// Phone verification for the signed-in customer (CUSTOMER-PHONE-01 stage 4): /loyalty/me/phone/*
+loyaltyCustomerRoutes.route('/phone', customerPhoneRoutes);
 
 async function withDb<T>(c: Context<Env>, fn: (db: Database) => Promise<T>): Promise<T> {
   const { db, close } = await createDb(c.env.HYPERDRIVE);
