@@ -35,6 +35,7 @@ export * from './customer-sessions';
 export * from './customer-refresh-tokens';
 export * from './customer-auth-events';
 export * from './customer-recovery-codes';
+export * from './customer-recovery-attempts';
 export * from './loyalty-tiers';
 export * from './loyalty-rewards';
 export * from './loyalty-accounts';

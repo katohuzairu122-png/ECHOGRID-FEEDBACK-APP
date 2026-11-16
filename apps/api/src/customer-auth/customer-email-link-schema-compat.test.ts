@@ -81,10 +81,24 @@ describe('S3 stays unreachable from the deployed Worker until activation', () =>
   });
 
   it('S4-01: the recovery-code service is internal only (no non-test importer, no entry point reference)', () => {
-    expect(referencing(/customer-recovery-code\.service/)).toEqual([]);
+    // The S4-02 orchestrator is the only importer, and it is itself unreachable (next test).
+    expect(referencing(/customer-recovery-code\.service/)).toEqual([
+      'src/customer-auth/customer-recovery-attempt.service.ts',
+    ]);
     expect(referencing(/createCustomerRecoveryCodeService/)).toEqual([
       'src/customer-auth/customer-recovery-code.service.ts',
     ]);
     expect(read('src/index.ts')).not.toMatch(/recovery-code|RecoveryCode/);
+  });
+
+  it('S4-02: the recovery orchestrator and its config are internal only (no non-test importer, no entry point reference)', () => {
+    expect(referencing(/from ['"][^'"]*customer-recovery-attempt\.service['"]/)).toEqual([]);
+    expect(referencing(/createCustomerRecoveryService/)).toEqual([
+      'src/customer-auth/customer-recovery-attempt.service.ts',
+    ]);
+    expect(referencing(/from ['"][^'"]*customer-recovery-config['"]/)).toEqual([
+      'src/customer-auth/customer-recovery-attempt.service.ts',
+    ]);
+    expect(read('src/index.ts')).not.toMatch(/recovery-attempt|RecoveryService|customer-recovery/);
   });
 });

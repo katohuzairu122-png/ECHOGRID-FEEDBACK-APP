@@ -268,6 +268,13 @@ export interface Bindings {
   CUSTOMER_AUTH_RL_PASSWORD_RECOVERY_SOURCE?: RateLimit;
   CUSTOMER_AUTH_RL_SESSION_REFRESH_SOURCE?: RateLimit;
   CUSTOMER_AUTH_RL_PASSWORD_CHANGE_CUSTOMER?: RateLimit;
+  /**
+   * CUSTOMER-AUTH-S4: DEDICATED HMAC secret for recovery codes and recovery cancel
+   * tokens. Optional and NOT in wrangler.toml's required list: it is set per
+   * environment with `wrangler secret put` only at activation. The recovery
+   * services refuse to start without it (customer-auth/customer-recovery-config.ts).
+   */
+  CUSTOMER_RECOVERY_HMAC_SECRET?: string;
   /** Guards POST /loyalty/actions/lookup-customer (cashier phone lookup). Keyed by business and staff user so one
    * cashier cannot exhaust another's budget; deliberately small because every call probes the member list. */
   LOOKUP_RATE_LIMITER: RateLimit;

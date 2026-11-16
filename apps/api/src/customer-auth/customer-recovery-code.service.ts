@@ -43,6 +43,71 @@ export type RevokeRecoveryCodesResult =
 /** Outward shape is deliberately a bare boolean: one generic failure. */
 export type RedeemRecoveryCodeResult = { ok: true } | { ok: false };
 
+/** Single-use redemption inside the CALLER's transaction. Failures are returned (and commit), never thrown. */
+export async function redeemInTransactionImpl(
+  tx: Transaction,
+  customerId: string,
+  verifier: string,
+  now: Date,
+): Promise<RedeemRecoveryCodeResult> {
+  const events = new CustomerAuthEventRepository(tx);
+  const [customer] = await tx.select().from(customers).where(eq(customers.id, customerId));
+  if (!customer || !customerMayHaveSession(customer)) return { ok: false } as const;
+
+  // The set row lock serializes redemptions and rotations for this customer.
+  const [set] = await tx.select().from(customerRecoveryCodeSets).where(and(
+    eq(customerRecoveryCodeSets.customerId, customerId), isNull(customerRecoveryCodeSets.revokedAt),
+  )).for('update');
+  if (!set) return { ok: false } as const;
+
+  const windowActive = set.attemptsWindowStartedAt !== null &&
+    now.getTime() - set.attemptsWindowStartedAt.getTime() < ATTEMPT_WINDOW_MS;
+  const failed = windowActive ? set.failedAttempts : 0;
+  // Already exhausted: refuse without touching codes and without writing more audit rows.
+  if (failed >= CUSTOMER_RECOVERY_CODE_MAX_FAILED_ATTEMPTS) return { ok: false } as const;
+
+  const consumed = await tx.update(customerRecoveryCodes)
+    .set({ consumedAt: now })
+    .where(and(
+      eq(customerRecoveryCodes.setId, set.id),
+      eq(customerRecoveryCodes.customerId, customerId),
+      eq(customerRecoveryCodes.verifier, verifier),
+      isNull(customerRecoveryCodes.consumedAt),
+    )).returning({ id: customerRecoveryCodes.id });
+
+  if (consumed.length === 1) {
+    await tx.update(customerRecoveryCodeSets)
+      .set({ failedAttempts: 0, attemptsWindowStartedAt: null })
+      .where(eq(customerRecoveryCodeSets.id, set.id));
+    await events.append({
+      customerId: customerId, eventType: 'recovery_code_redeemed', outcome: 'success',
+      reasonCode: 'code_redeemed', now,
+    });
+    return { ok: true } as const;
+  }
+
+  // Failure: spend budget and record WHY internally. These writes commit (a return, not a throw).
+  const [known] = await tx.select({
+    consumedAt: customerRecoveryCodes.consumedAt, revokedAt: customerRecoveryCodeSets.revokedAt,
+  }).from(customerRecoveryCodes)
+    .innerJoin(customerRecoveryCodeSets, eq(customerRecoveryCodes.setId, customerRecoveryCodeSets.id))
+    .where(and(eq(customerRecoveryCodes.customerId, customerId), eq(customerRecoveryCodes.verifier, verifier)));
+  const reason = known?.consumedAt ? 'code_replayed' : known?.revokedAt ? 'code_revoked' : 'invalid_code';
+  const nextFailed = failed + 1;
+  await tx.update(customerRecoveryCodeSets).set({
+    failedAttempts: nextFailed,
+    attemptsWindowStartedAt: windowActive ? set.attemptsWindowStartedAt : now,
+  }).where(eq(customerRecoveryCodeSets.id, set.id));
+  const exhausted = nextFailed >= CUSTOMER_RECOVERY_CODE_MAX_FAILED_ATTEMPTS;
+  await events.append({
+    customerId: customerId, eventType: 'recovery_code_failed',
+    outcome: exhausted ? 'blocked' : 'failure',
+    reasonCode: exhausted ? 'attempts_exhausted' : reason, metadata: { attempt: nextFailed }, now,
+  });
+  return { ok: false } as const;
+}
+
+
 export function createCustomerRecoveryCodeService(config: {
   db: Database;
   hmacSecret: string;
@@ -85,6 +150,13 @@ export function createCustomerRecoveryCodeService(config: {
       .where(and(eq(customerRecoveryCodeSets.customerId, customerId), isNull(customerRecoveryCodeSets.revokedAt)))
       .returning({ id: customerRecoveryCodeSets.id });
     return revoked.length > 0;
+  }
+
+  async function verifierFor(customerId: string, code: unknown): Promise<string> {
+    const canonical = normalizeRecoveryCode(code);
+    return canonical
+      ? recoveryCodeVerifier({ secret: config.hmacSecret, customerId, code: canonical })
+      : RECOVERY_CODE_NEVER_MATCHES;
   }
 
   return {
@@ -144,70 +216,25 @@ export function createCustomerRecoveryCodeService(config: {
      */
     async redeem(input: { customerId: string; code: unknown }): Promise<RedeemRecoveryCodeResult> {
       if (!isUuid(input.customerId)) return { ok: false };
-      const canonical = normalizeRecoveryCode(input.code);
-      const verifier = canonical
-        ? await recoveryCodeVerifier({ secret: config.hmacSecret, customerId: input.customerId, code: canonical })
-        : RECOVERY_CODE_NEVER_MATCHES;
-      return config.db.transaction(async (tx) => {
-        const now = clock();
-        const events = new CustomerAuthEventRepository(tx);
-        const [customer] = await tx.select().from(customers).where(eq(customers.id, input.customerId));
-        if (!customer || !customerMayHaveSession(customer)) return { ok: false } as const;
-
-        // The set row lock serializes redemptions and rotations for this customer.
-        const [set] = await tx.select().from(customerRecoveryCodeSets).where(and(
-          eq(customerRecoveryCodeSets.customerId, input.customerId), isNull(customerRecoveryCodeSets.revokedAt),
-        )).for('update');
-        if (!set) return { ok: false } as const;
-
-        const windowActive = set.attemptsWindowStartedAt !== null &&
-          now.getTime() - set.attemptsWindowStartedAt.getTime() < ATTEMPT_WINDOW_MS;
-        const failed = windowActive ? set.failedAttempts : 0;
-        // Already exhausted: refuse without touching codes and without writing more audit rows.
-        if (failed >= CUSTOMER_RECOVERY_CODE_MAX_FAILED_ATTEMPTS) return { ok: false } as const;
-
-        const consumed = await tx.update(customerRecoveryCodes)
-          .set({ consumedAt: now })
-          .where(and(
-            eq(customerRecoveryCodes.setId, set.id),
-            eq(customerRecoveryCodes.customerId, input.customerId),
-            eq(customerRecoveryCodes.verifier, verifier),
-            isNull(customerRecoveryCodes.consumedAt),
-          )).returning({ id: customerRecoveryCodes.id });
-
-        if (consumed.length === 1) {
-          await tx.update(customerRecoveryCodeSets)
-            .set({ failedAttempts: 0, attemptsWindowStartedAt: null })
-            .where(eq(customerRecoveryCodeSets.id, set.id));
-          await events.append({
-            customerId: input.customerId, eventType: 'recovery_code_redeemed', outcome: 'success',
-            reasonCode: 'code_redeemed', now,
-          });
-          return { ok: true } as const;
-        }
-
-        // Failure: spend budget and record WHY internally. These writes commit (a return, not a throw).
-        const [known] = await tx.select({
-          consumedAt: customerRecoveryCodes.consumedAt, revokedAt: customerRecoveryCodeSets.revokedAt,
-        }).from(customerRecoveryCodes)
-          .innerJoin(customerRecoveryCodeSets, eq(customerRecoveryCodes.setId, customerRecoveryCodeSets.id))
-          .where(and(eq(customerRecoveryCodes.customerId, input.customerId), eq(customerRecoveryCodes.verifier, verifier)));
-        const reason = known?.consumedAt ? 'code_replayed' : known?.revokedAt ? 'code_revoked' : 'invalid_code';
-        const nextFailed = failed + 1;
-        await tx.update(customerRecoveryCodeSets).set({
-          failedAttempts: nextFailed,
-          attemptsWindowStartedAt: windowActive ? set.attemptsWindowStartedAt : now,
-        }).where(eq(customerRecoveryCodeSets.id, set.id));
-        const exhausted = nextFailed >= CUSTOMER_RECOVERY_CODE_MAX_FAILED_ATTEMPTS;
-        await events.append({
-          customerId: input.customerId, eventType: 'recovery_code_failed',
-          outcome: exhausted ? 'blocked' : 'failure',
-          reasonCode: exhausted ? 'attempts_exhausted' : reason, metadata: { attempt: nextFailed }, now,
-        });
-        return { ok: false } as const;
-      });
+      const verifier = await verifierFor(input.customerId, input.code);
+      return config.db.transaction((tx) => redeemInTransactionImpl(tx, input.customerId, verifier, clock()));
     },
   };
 }
 
 export type CustomerRecoveryCodeService = ReturnType<typeof createCustomerRecoveryCodeService>;
+
+/**
+ * For the recovery orchestrator (S4-02): redeem inside ITS transaction so a code
+ * is consumed if and only if the factor is recorded on the attempt.
+ */
+export function createRecoveryCodeRedeemer(config: { hmacSecret: string }) {
+  return async (tx: Transaction, input: { customerId: string; code: unknown; now: Date }): Promise<RedeemRecoveryCodeResult> => {
+    if (!isUuid(input.customerId)) return { ok: false };
+    const canonical = normalizeRecoveryCode(input.code);
+    const verifier = canonical
+      ? await recoveryCodeVerifier({ secret: config.hmacSecret, customerId: input.customerId, code: canonical })
+      : RECOVERY_CODE_NEVER_MATCHES;
+    return redeemInTransactionImpl(tx, input.customerId, verifier, input.now);
+  };
+}

@@ -61,6 +61,8 @@ Main advanced by three customer-auth merges after the baseline above: #454 (14:2
 
 **S4-01 recovery code foundation** (owner-authorized 2026-11-15; rulings D1-D6 approved): development only and unmounted, in a draft PR with migration `0074` (not executed anywhere real). S4-02 (recovery flow, D2 hold, notifications, rate limits) needs separate authorization. See `docs/architecture/builds/CUSTOMER-AUTH/CUSTOMER_AUTH_S3_EMAIL_LINK.md` sections 8a and 8b.
 
+**S4-02 recovery orchestration** (owner-authorized 2026-11-16, after S4-01 merged as `6978e05`): development only and unmounted, in a draft PR with migration `0075` (not executed anywhere real). Owner decisions to confirm: the high-risk definition, the recent-phone window (7 days) and the per-surface rate-limit budgets. S4-03 (routes, adapters, activation) needs separate authorization. See `docs/architecture/builds/CUSTOMER-AUTH/CUSTOMER_AUTH_S3_EMAIL_LINK.md` section 8c.
+
 ## 3. Awaiting the owner (nothing here starts without an answer)
 
 | Item | Needs |
