@@ -7,19 +7,24 @@ import {
 import { readRefreshResponse } from './customer-session-bff';
 import { callCustomerAuthApi } from './customer-email-auth-client';
 
-export type RefreshOutcome = 'refreshed' | 'invalid' | 'unavailable';
+/**
+ * `conflict`: another request (a second tab, a double submit) rotated the credential a moment ago. The API treats that as
+ * retryable and revokes nothing, and the winner's response has already updated the shared cookies, so the session is KEPT.
+ */
+export type RefreshOutcome = 'refreshed' | 'conflict' | 'invalid' | 'unavailable';
 
 /**
  * Renews a rotating customer session from its refresh cookie and stores the new pair. Must run where cookies can be written
- * (a route handler or Server Action), never during a Server Component render. A refused or replayed credential clears the
- * session so the customer signs in again; a transient failure keeps it so a retry can still succeed.
+ * (a route handler or Server Action), never during a Server Component render. A refused or replayed credential (401) clears the
+ * session so the customer signs in again; a concurrent-refresh conflict (409) or a transient failure keeps it.
  */
 export async function refreshRotatingCustomerSession(): Promise<RefreshOutcome> {
   try {
     const credentials = await getCompatibleCustomerCredentials();
     if (credentials.kind !== 'rotating' || !credentials.refreshCredential) return 'invalid';
     const reply = await callCustomerAuthApi('/customer-session/refresh', { bearer: credentials.refreshCredential });
-    if (reply.status === 401 || reply.status === 409) {
+    if (reply.status === 409) return 'conflict';
+    if (reply.status === 401) {
       await clearCompatibleCustomerSession();
       return 'invalid';
     }

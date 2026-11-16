@@ -23,6 +23,12 @@ describe('GET /loyalty/session/refresh', () => {
     expect(location(r).pathname).toBe('/loyalty/dashboard/wallet');
     expect(h.mark).toHaveBeenCalledTimes(1);
   });
+  it('a concurrent-refresh conflict returns to the page (the winner already set the cookies) and marks the refresh to bound retries', async () => {
+    h.refresh.mockResolvedValue('conflict');
+    const r = await GET(req('?next=%2Floyalty%2Fdashboard%2Fwallet', { 'sec-fetch-site': 'same-origin' }));
+    expect(location(r).pathname).toBe('/loyalty/dashboard/wallet');
+    expect(h.mark).toHaveBeenCalledTimes(1);
+  });
   it('an invalid or unavailable refresh goes to sign-in carrying next, and marks nothing', async () => {
     for (const outcome of ['invalid', 'unavailable']) {
       h.refresh.mockResolvedValue(outcome);

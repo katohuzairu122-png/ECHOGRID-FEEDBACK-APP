@@ -19,7 +19,9 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
   if (request.headers.get('sec-fetch-site') === 'cross-site') return to(login);
   const outcome = await refreshRotatingCustomerSession();
-  if (outcome !== 'refreshed') return to(login);
+  if (outcome !== 'refreshed' && outcome !== 'conflict') return to(login);
+  // A conflict means a concurrent request already rotated the pair and set the shared cookies, so return to the page. The
+  // marker bounds this to one extra attempt: if that page still gets a 401 the customer goes to sign-in, never a loop.
   await markCustomerRefreshed();
   return to(next);
 }

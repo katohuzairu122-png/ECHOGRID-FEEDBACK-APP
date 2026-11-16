@@ -73,15 +73,21 @@ describe('refreshRotatingCustomerSession', () => {
     expect(h.values.get(ACCESS)).toBe('new-access');
     expect(h.values.get(REFRESH)).toBe(fresh.refreshCredential);
   });
-  it('a refused or replayed credential (401, 409) clears the session', async () => {
-    for (const status of [401, 409]) {
-      h.values.set(REFRESH, RT);
-      h.values.set(ACCESS, 'old');
-      h.api.mockResolvedValue({ status, body: null });
-      expect(await refreshRotatingCustomerSession()).toBe('invalid');
-      expect(h.values.get(REFRESH)).toBe('');
-      expect(h.values.get(ACCESS)).toBe('');
-    }
+  it('a refused or replayed credential (401) clears the session', async () => {
+    h.values.set(REFRESH, RT);
+    h.values.set(ACCESS, 'old');
+    h.api.mockResolvedValue({ status: 401, body: null });
+    expect(await refreshRotatingCustomerSession()).toBe('invalid');
+    expect(h.values.get(REFRESH)).toBe('');
+    expect(h.values.get(ACCESS)).toBe('');
+  });
+  it('a concurrent-refresh conflict (409) KEEPS the session: the API revokes nothing, so a second tab must not sign the customer out', async () => {
+    h.values.set(REFRESH, RT);
+    h.values.set(ACCESS, 'old');
+    h.api.mockResolvedValue({ status: 409, body: null });
+    expect(await refreshRotatingCustomerSession()).toBe('conflict');
+    expect(h.values.get(REFRESH)).toBe(RT);
+    expect(h.values.get(ACCESS)).toBe('old');
   });
   it('a transient failure or malformed reply keeps the cookies so a retry can succeed', async () => {
     h.values.set(REFRESH, RT);
