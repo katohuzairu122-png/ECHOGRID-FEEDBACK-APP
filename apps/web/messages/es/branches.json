@@ -22,7 +22,16 @@
     "cancel": "Cancelar",
     "saving": "Guardando…",
     "saveChanges": "Guardar cambios",
-    "create": "Crear sucursal"
+    "create": "Crear sucursal",
+    "errors": {
+      "slugTaken": "Esa dirección web ya la usa otra sede. Pruebe con un nombre ligeramente distinto.",
+      "slugUnavailable": "No pudimos crear una dirección web para ese nombre. Pruebe con un nombre ligeramente distinto.",
+      "invalidInput": "Revise los datos de la sede e inténtelo de nuevo.",
+      "tooManyRequests": "Demasiados intentos. Espere un minuto e inténtelo de nuevo.",
+      "forbidden": "No tiene permiso para gestionar sedes.",
+      "generic": "No pudimos guardar esta sede, así que no se cambió nada. Inténtelo de nuevo."
+    },
+    "slugFixedHint": "La dirección web se crea automáticamente y no cambia."
   },
   "delete": {
     "button": "Eliminar",

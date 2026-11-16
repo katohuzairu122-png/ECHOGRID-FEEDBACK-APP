@@ -1,6 +1,5 @@
 export interface BranchMutationInput {
   name: string;
-  slug: string;
   addressLine1?: string | undefined;
   addressLine2?: string | undefined;
   city?: string | undefined;
@@ -11,6 +10,9 @@ export interface BranchMutationInput {
 }
 
 /**
+ * The URL name (slug) is never read from the form: the server generates it on create and an established one is never
+ * changed from this form (ONBOARDING-UX-01).
+ *
  * Empty-string form fields become `undefined` rather than `""` -- the
  * shared Zod schemas (createBranchSchema/updateBranchSchema) mark these
  * optional, and sending "" instead of omitting the key would fail their
@@ -32,7 +34,6 @@ export function readBranchForm(formData: FormData): BranchMutationInput {
 
   return {
     name: String(formData.get('name') ?? ''),
-    slug: String(formData.get('slug') ?? ''),
     addressLine1: optional('addressLine1'),
     addressLine2: optional('addressLine2'),
     city: optional('city'),

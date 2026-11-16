@@ -3,7 +3,9 @@
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import type { BusinessDto } from '@echo-grid-feedback/shared-types';
+import { getTranslations } from 'next-intl/server';
 import { apiFetch, ApiError } from '@/lib/api-client';
+import { onboardingErrorKey } from '@/lib/onboarding-errors';
 import { getActiveBusiness, getBusinesses } from '@/lib/business';
 import { cookies } from 'next/headers';
 import { ACTIVE_BUSINESS_COOKIE } from '@/lib/cookies';
@@ -22,16 +24,16 @@ export async function createBusinessAction(
   formData: FormData,
 ): Promise<CreateBusinessState> {
   const name = String(formData.get('name') ?? '');
-  const slug = String(formData.get('slug') ?? '');
 
   try {
+    // No slug is sent: the server generates the URL name and handles duplicates and retries (ONBOARDING-UX-01).
     await apiFetch<CreateBusinessResult>('/businesses', {
       method: 'POST',
-      body: JSON.stringify({ name, slug }),
+      body: JSON.stringify({ name }),
     });
   } catch (err) {
-    if (err instanceof ApiError) return { error: err.message };
-    return { error: 'Something went wrong. Please try again.' };
+    const t = await getTranslations('dashboard.createBusiness.errors');
+    return { error: t(onboardingErrorKey(err)) };
   }
 
   // Without this, /dashboard renders from Next's cached Server Component

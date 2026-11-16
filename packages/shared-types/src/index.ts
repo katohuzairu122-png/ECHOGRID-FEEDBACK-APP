@@ -9,6 +9,7 @@
  * shared request/response contracts here instead.
  */
 export * from './common';
+export * from './slug';
 export * from './i18n';
 export * from './branches';
 export * from './business-categories';

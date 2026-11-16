@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { slugSchema } from './common';
+import { canonicalSlugSchema } from './slug';
 import { localeSchema } from './i18n';
 import { businessCategoryKeySchema } from './business-categories';
 
@@ -11,7 +11,8 @@ import { businessCategoryKeySchema } from './business-categories';
  */
 export const createBusinessSchema = z.object({
   name: z.string().trim().min(1).max(200),
-  slug: slugSchema,
+  /** Optional: when omitted the server generates it from the name (ONBOARDING-UX-01). */
+  slug: canonicalSlugSchema.optional(),
   categoryKey: businessCategoryKeySchema.optional(),
 });
 

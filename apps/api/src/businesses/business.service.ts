@@ -3,11 +3,16 @@ import { createRepositories, type Business } from '../repositories';
 import { RoleProvisioningService } from '../rbac/role-provisioning.service';
 import { SubscriptionProvisioningService } from '../billing/subscription-provisioning.service';
 import { AppError } from '../lib/errors';
+import { allocateSlug, CREATION_REPLAY_WINDOW_SECONDS } from '../lib/slug-allocation';
 import type { CreateBusinessInput, UpdateBusinessInput } from '@echo-grid-feedback/shared-types';
 
 export interface CreateBusinessResult {
   businessId: string;
   ownerRoleId: string;
+  /** The URL name that was stored (generated from the name when the caller sent none). */
+  slug: string;
+  /** True when this call was a retry of a creation that had already succeeded: the existing business is returned. */
+  replayed: boolean;
 }
 
 /**
@@ -28,9 +33,20 @@ export class BusinessService {
     return this.db.transaction(async (tx) => {
       const repos = createRepositories(tx);
 
-      const existing = await repos.businesses.findBySlug(input.slug);
-      if (existing) {
-        throw new AppError(`Slug "${input.slug}" is already taken.`, 409, 'SLUG_TAKEN');
+      // Retry / double-submit protection: concurrent creations of the same name by the same owner are serialized, and a
+      // repeat within the replay window returns the business that already exists instead of creating a second one.
+      await repos.businesses.lockCreation(ownerId, input.name);
+      const replay = await repos.businesses.findRecentByOwnerAndName(
+        ownerId,
+        input.name,
+        CREATION_REPLAY_WINDOW_SECONDS,
+      );
+      if (replay) {
+        const grants = await repos.userBusinessRoles.listForUserAtBusiness(ownerId, replay.id);
+        const ownerGrant = grants.find((grant) => grant.branchId === null);
+        if (ownerGrant) {
+          return { businessId: replay.id, ownerRoleId: ownerGrant.roleId, slug: replay.slug, replayed: true };
+        }
       }
 
       const category = input.categoryKey
@@ -40,12 +56,29 @@ export class BusinessService {
         throw new AppError('Business category is invalid or inactive.', 422, 'INVALID_BUSINESS_CATEGORY');
       }
 
-      const business = await repos.businesses.create({
+      const newBusiness = (slug: string) => ({
         name: input.name,
-        slug: input.slug,
+        slug,
         ...(category ? { categoryId: category.id } : {}),
         createdBy: ownerId,
       });
+      let business: Business;
+      if (input.slug) {
+        // An explicit slug is honoured exactly or refused with a way forward; it is never silently renamed.
+        const created = await repos.businesses.createIfSlugFree(newBusiness(input.slug));
+        if (!created) {
+          throw new AppError(
+            `The URL name "${input.slug}" is already taken. Leave it empty to have one generated, or choose another.`,
+            409,
+            'SLUG_TAKEN',
+          );
+        }
+        business = created;
+      } else {
+        business = (await allocateSlug(input.name, 'business', (slug) =>
+          repos.businesses.createIfSlugFree(newBusiness(slug)),
+        )).value;
+      }
 
       const roleProvisioning = new RoleProvisioningService(repos);
       const roleIds = await roleProvisioning.seedDefaultRoles(business.id, ownerId);
@@ -70,7 +103,7 @@ export class BusinessService {
       const subscriptionProvisioning = new SubscriptionProvisioningService(repos);
       await subscriptionProvisioning.provisionTrial(business.id, ownerId);
 
-      return { businessId: business.id, ownerRoleId };
+      return { businessId: business.id, ownerRoleId, slug: business.slug, replayed: false };
     });
   }
 

@@ -1,4 +1,4 @@
-import { eq, and, or, ilike } from 'drizzle-orm';
+import { eq, and, or, ilike, sql } from 'drizzle-orm';
 import { businesses } from '../db/schema';
 import { BaseRepository } from './base.repository';
 import type { Patch } from '../lib/types';
@@ -60,6 +60,44 @@ export class BusinessRepository extends BaseRepository {
       offset,
       orderBy: (b, { desc }) => [desc(b.createdAt)],
     });
+  }
+
+  /**
+   * ONBOARDING-UX-01: conflict-safe insert. Returns undefined when the slug is already taken (by ANY row, including a
+   * soft-deleted one, because the unique index covers them) instead of raising a constraint error, so a concurrent
+   * duplicate moves on to the next candidate and never aborts the surrounding transaction.
+   */
+  async createIfSlugFree(input: NewBusiness): Promise<Business | undefined> {
+    const [row] = await this.db
+      .insert(businesses)
+      .values(input)
+      .onConflictDoNothing({ target: businesses.slug })
+      .returning();
+    return row;
+  }
+
+  /** Serializes concurrent creations of the same name by the same owner (retry / double submit protection). */
+  async lockCreation(ownerId: string, name: string): Promise<void> {
+    await this.db.execute(
+      sql`SELECT pg_advisory_xact_lock(hashtextextended(${`business:${ownerId}:${name.trim().toLowerCase()}`}, 0))`,
+    );
+  }
+
+  /** The same owner's business of the same name created within the replay window, if any. */
+  async findRecentByOwnerAndName(ownerId: string, name: string, windowSeconds: number): Promise<Business | undefined> {
+    const [row] = await this.db
+      .select()
+      .from(businesses)
+      .where(
+        and(
+          eq(businesses.createdBy, ownerId),
+          eq(businesses.isDeleted, false),
+          sql`lower(${businesses.name}) = ${name.trim().toLowerCase()}`,
+          sql`${businesses.createdAt} > now() - make_interval(secs => ${windowSeconds})`,
+        ),
+      )
+      .limit(1);
+    return row;
   }
 
   async create(input: NewBusiness): Promise<Business> {
