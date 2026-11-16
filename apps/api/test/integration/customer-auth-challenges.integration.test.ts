@@ -32,11 +32,21 @@ describe.skipIf(!process.env.DATABASE_URL)('CUSTOMER-AUTH-01D-4b-S1 disposable P
     ids.push(a!.id, b!.id);
   });
 
-  it('keeps populated phone numbers globally unique', async () => {
+  it('keeps VERIFIED phone numbers globally unique (migration 0079: verified-only uniqueness)', async () => {
     const phone = '+1555' + String(Math.floor(Math.random() * 1e7)).padStart(7, '0');
-    const [a] = await db.insert(customers).values({ phone }).returning();
+    const phoneVerifiedAt = new Date();
+    const [a] = await db.insert(customers).values({ phone, phoneVerifiedAt }).returning();
     ids.push(a!.id);
-    await expect(db.insert(customers).values({ phone })).rejects.toThrow();
+    await expect(db.insert(customers).values({ phone, phoneVerifiedAt })).rejects.toThrow();
+  });
+
+  it('lets UNVERIFIED claims on a number repeat, while a verified owner stays unique', async () => {
+    const phone = '+1555' + String(Math.floor(Math.random() * 1e7)).padStart(7, '0');
+    const [x] = await db.insert(customers).values({ phone }).returning();
+    const [y] = await db.insert(customers).values({ phone }).returning();
+    const [owner] = await db.insert(customers).values({ phone, phoneVerifiedAt: new Date() }).returning();
+    ids.push(x!.id, y!.id, owner!.id);
+    await expect(db.insert(customers).values({ phone, phoneVerifiedAt: new Date() })).rejects.toThrow();
   });
 
   it('consumes a proof once under concurrent requests and rejects replay and wrong purpose', async () => {
