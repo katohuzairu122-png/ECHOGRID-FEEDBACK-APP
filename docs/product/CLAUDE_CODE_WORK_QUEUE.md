@@ -2,7 +2,7 @@
 
 Status: LIVE WORK LIST (documentation only). Owner: the repository owner assigns; Claude Code keeps this file current.
 Companion roadmaps: `docs/product/ECHO_GRID_ROADMAP.md` (product), `docs/product/CHATGPT_WORK_INDEPENDENT_USABILITY_ROADMAP.md` (ChatGPT Work, WORK-UX-01).
-Last updated: 2026-11-15 (DOCS-RECON-01), reconciled to main `eae88c702d682dec7bf4d32bf9918bc7a3f6dc7e` and re-checked against `bcd6c02f4f1faea1e2b877b4ecb395d5f456b64b` at 17:44Z (section 2b). Evidence is GitHub pull-request, workflow-run and repository state only. **Nothing in this file is a security certification.**
+Last updated: 2026-11-16 (DOCS-RECON-02), reconciled to main `5adb65a07db9fbeffa68bc4731a0fa65a92180d5`. Section 2c below governs where it differs from the older sections. Evidence is GitHub pull-request, workflow-run and repository state only. **Nothing in this file is a security certification.**
 
 ## 1. Priority rule (owner instruction, 2026-11-15)
 
@@ -59,11 +59,22 @@ Main advanced by three customer-auth merges after the baseline above: #454 (14:2
 
 **S3 email link (#457, merged 17:59Z as `f1c04de`)** is development-only and unmounted. Its seven review findings are remediated in follow-up PR #459 (draft). **Owner decision E10 (2026-11-15):** no routine phone-OTP login after email linking; phone is a possible recovery factor but never sufficient alone. Recovery is the unauthorized future block **CUSTOMER-AUTH-01D-4b-S4**. The dormant phone-proof-only `recoverPassword` conflict is closed at the service boundary by RECOVERY-GUARD-01 (development only, open draft PR until merged); S4 remains unauthorized. See `docs/architecture/builds/CUSTOMER-AUTH/CUSTOMER_AUTH_S3_EMAIL_LINK.md` sections 7 and 8.
 
-**S4-01 recovery code foundation** (owner-authorized 2026-11-15; rulings D1-D6 approved): development only and unmounted, in a draft PR with migration `0074` (not executed anywhere real). S4-02 (recovery flow, D2 hold, notifications, rate limits) needs separate authorization. See `docs/architecture/builds/CUSTOMER-AUTH/CUSTOMER_AUTH_S3_EMAIL_LINK.md` sections 8a and 8b.
+**S4-01 recovery code foundation (#463, `6978e05`) - MERGED** (development only; migration `0074`; applied on staging per the 2026-11-16 migrate run 43811468745).
 
-**S4-02 recovery orchestration** (owner-authorized 2026-11-16, after S4-01 merged as `6978e05`): development only and unmounted, in a draft PR with migration `0075` (not executed anywhere real). Owner decisions to confirm: the high-risk definition, the recent-phone window (7 days) and the per-surface rate-limit budgets. S4-03 (routes, adapters, activation) needs separate authorization. See `docs/architecture/builds/CUSTOMER-AUTH/CUSTOMER_AUTH_S3_EMAIL_LINK.md` section 8c.
+**S4-02 recovery orchestration (#464) and S4-02-R1 (#466) - MERGED** (internal services; migration `0075`; applied on staging).
 
-**S4-03 recovery integration** (owner-authorized 2026-11-16): development only, in a draft PR; gated routes (disabled by default), purpose-bound phone OTP (migration `0076`, not executed anywhere real), delivery adapters over the existing email, SMS and Verify services. Activation prerequisites and open owner decisions: `docs/architecture/builds/CUSTOMER-AUTH/CUSTOMER_AUTH_S3_EMAIL_LINK.md` section 8e. Next authorized priorities after merge: COMMUNITY-01, then BDPN-IMPLEMENTATION-01 (separate assignments, not started).
+**S4-03 recovery integration (#468, `1da6010`) - MERGED, DISABLED.** Gated routes (404 unless `CUSTOMER_RECOVERY_ENABLED` is exactly `true`), purpose-bound phone OTP (migration `0076`, applied on staging), delivery adapters. Activation prerequisites and open decisions: roadmap section 0 and `CUSTOMER_AUTH_S3_EMAIL_LINK.md` sections 8c to 8e.
+
+### 2c. Merged since `bcd6c02` and current state (2026-11-16, main `5adb65a`)
+
+| Block | PR / commit | State |
+| --- | --- | --- |
+| COMMUNITY-01 (Community sections, read-only Feed foundation) | #470, `f37263f` | Merged; main CI success; Feed section hidden while the Network flag is off |
+| QR-REMEDIATION-01 (cashier camera repair; fresh-page-load entry to camera pages) | #471, #472 (`341e15a`) | Merged; main CI success. **Real-device scan still open** (section 3) |
+| S4-03 forged-signature test determinism | #473 | Merged |
+| NETWORK-01 (official post publishing, migration `0077`, flag off) | #474, `df224db` | Merged; main CI success; owner confirmations open (see its design record) |
+| BDPN prerequisite matrix; cashier authorization audit | #475 | Merged (documentation). Audit found **no demonstrated cashier defect**; three observations for the owner |
+| Staging migrations through `0077` and deploy of `5adb65a` | runs 43811468745, 43811889673 | `success`; dispatched by `holmesgrey1`; unauthenticated smoke done 2026-11-16 06:35Z; **authenticated verification not done** |
 
 ## 3. Awaiting the owner (nothing here starts without an answer)
 
@@ -79,6 +90,12 @@ Main advanced by three customer-auth merges after the baseline above: #454 (14:2
 | Where the STG-SEC-04/05 completion reports are kept | Owner names an authoritative repository location, or confirms they stay external |
 | **CUSTOMER-AUTH-EMAIL-01** (owner ruling 2026-11-15: email-first customer authentication) | **Activation** (mounting routes, enabling rotating cookies, binding namespaces, applying migration `0073`, any deployment) needs separate authorization. Development PRs #454, #455 and #456 are merged and dormant (roadmap 2.G.2). Owner questions E1 to E9 remain; E3 is partly answered in code by #454 and needs the owner's recorded decision |
 | PLATFORM-IDENTITY-01 | Not authorized |
+| Customer recovery activation decisions | High-risk definition; 7-day recent-phone window; per-surface and phone-OTP budgets; cancellation versus recovery codes; CA-05 minimum password length; Durable Object namespace ownership; web recovery pages (unbuilt) |
+| NETWORK-01 confirmations | Author plus **two** approvers (stricter than N-09); 2,000 characters, 30-day expiry, one pinned official post; post content policy and two named reviewers before any enablement; separate authorization to turn the flag on anywhere |
+| BDPN profile foundation | OD-1 / D-24 (plan-gated discovery), OD-14 (entitlement specification), OD-24 versus D-19 (one migration or per block), D-16 (content policy). Prerequisite matrix: `builds/BDPN/BDPN_PREREQUISITE_MATRIX_2026-11-16.md` |
+| Verified-phone attachment for email-first customers (and mounting email sign-up) | Owner go for a design block; found 2026-11-16 (phone verification after email sign-up makes a second customer) |
+| Cashier authorization fixes | A written reproduction of the case the owner has in mind (audit: `builds/CASHIER/CASHIER_AUTHORIZATION_AUDIT_2026-11-16.md`) |
+| Production release of the code on main | Explicit production authorization after authenticated staging verification; no production migration or deploy workflow has run since 2026-11-13 (runs 43420468101 and 43484634770), so `0069`-`0077` are not applied through the workflow |
 | Financial activation | NO-GO |
 
 ## 4. Next, in order (queued; not started)
@@ -90,6 +107,11 @@ Main advanced by three customer-auth merges after the baseline above: #454 (14:2
 | 3 | Optional hardening raised by the reviews, each needing owner approval: bind the attribution header to a path or scope (L1), constant-time reset-request response (timing), lock_timeout for the reset lock | 2026-11-15 | #439 review, H3 validation | Residual risks, not defects |
 | 4 | **CUSTOMER-AUTH-EMAIL-01 owner review and activation gates**: answer E1 to E9, record the decision behind #454, review the dormant S1, S2 and S2-R2 work (#454 to #456) against `CUSTOMER_AUTH_S2_R2_READINESS.md`, and decide activation | 2026-11-15 | Owner ruling (email-first approved) | Needs explicit authorization for each activation step. Depends on a working production email path (roadmap 2.E, unexplained non-delivery) and on owner decisions. Not started by Claude Code |
 | 5 | Record where the STG-SEC-04/05 completion reports live (owner decision) | 2026-11-15 | DOCS-RECON-01 | Documentation only once the owner answers |
+| 6 | **Authenticated staging verification of `5adb65a`** (customer sign-in, Community without a Feed link, cashier scanner camera, database counts: 78 migrations, empty `network_*`, 6 network triggers, log review) | 2026-11-16 | Owner request | Unauthenticated smoke is recorded in roadmap section 0; the rest needs a tester with credentials. Gates any production decision |
+| 7 | Verified-phone attachment and email sign-up (flagged) | 2026-11-16 | Synthetic sign-up finding | Needs the owner go (section 3) |
+| 8 | Recovery web pages and BFF | 2026-11-16 | S4-03 activation prerequisites | Needs the recovery decisions (section 3) |
+| 9 | NETWORK moderation UI, then NETWORK-02 (follows, feed read model) | 2026-11-16 | NETWORK-00 phasing | Needs the NETWORK-01 confirmations; business posts need BDPN |
+| 10 | BDPN profile foundation | 2026-11-16 | BDPN prerequisite matrix | Needs the BDPN decisions (section 3) |
 
 New items from the owner are appended here.
 
@@ -112,3 +134,5 @@ Added after the `eae88c7` baseline (merged 2026-11-15, development-only, dormant
 
 Added by DOCS-RECON-01 (2026-11-15): WORK-UX-01 W1 (#448), W3 (#449), W4 baseline (#450) and W5 (#451); H3 (#452); work queue updates (#444, #453); BDPN D-18 v1.1 G0 reconciliation docs (#446);
 staging deploy of `eae88c7` (run 43713775674); customer email-login storage foundation (#432, migration 0072, not wired); CUSTOMER-AUTH-01 01A to 01D-5 merged and not wired (roadmap 2.G).
+
+Added 2026-11-16 (DOCS-RECON-02): CUSTOMER-AUTH S4-01 to S4-03 (#463, #464, #466, #468, recovery merged and disabled); Gate 2 #465, #467, #469; COMMUNITY-01 (#470); QR-REMEDIATION-01 (#471, #472); #473; NETWORK-01 (#474); BDPN matrix and cashier audit (#475); staging migrations through 0077 and deploy of `5adb65a`.
