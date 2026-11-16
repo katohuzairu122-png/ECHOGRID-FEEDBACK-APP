@@ -54,4 +54,4 @@ jobs:
         run: pnpm --filter @echo-grid-feedback/api db:migrate
       - name: Exercise the restricted broker role on the replayed real schema
         working-directory: apps/api
-        run: node scripts/gate2-b4-11-disposable-restricted-broker-role.mjs
+        run: node --import tsx scripts/gate2-b4-11-disposable-restricted-broker-role.mjs

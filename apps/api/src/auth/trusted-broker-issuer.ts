@@ -5,9 +5,9 @@ import { AuthorizationService } from '../rbac/authorization.service';
 import { assertBusinessIsUsable } from '../rbac/business-access';
 import { verifyAccessToken } from './jwt';
 import { BROKER_AUDIENCE, BROKER_ISSUER, BROKER_WORKLOAD, BROKER_UUID, brokerAssertionMessage, brokerHex,
-  validBrokerKey, verifyBrokerAssertionSignature, type BrokerAssertion, type BrokerAssertionClaims, type BrokerKeySource } from './broker-assertion.contract';
+  BROKER_OPERATIONS, isBrokerOperation, type BrokerOperation, validBrokerKey, verifyBrokerAssertionSignature, type BrokerAssertion, type BrokerAssertionClaims, type BrokerKeySource } from './broker-assertion.contract';
 
-export interface BrokerIssueRequest { readonly authorization: string; readonly businessId: string; readonly branchId: string; readonly operation: 'branches:read' }
+export interface BrokerIssueRequest { readonly authorization: string; readonly businessId: string; readonly branchId: string; readonly operation: BrokerOperation }
 export type BrokerIssueResult = Readonly<{ ok: true; assertion: BrokerAssertion; brokerAuthorization: 'NOT_GRANTED' }> |
   Readonly<{ ok: false; reason: 'REQUEST_INVALID' | 'AUTHENTICATION_DENIED' | 'AUTHORIZATION_DENIED' | 'ISSUER_UNAVAILABLE'; brokerAuthorization: 'NOT_GRANTED' }>;
 const deny = (reason: Extract<BrokerIssueResult, { ok: false }>['reason']): BrokerIssueResult => ({ ok: false, reason, brokerAuthorization: 'NOT_GRANTED' });
@@ -25,9 +25,10 @@ export class TrustedBrokerAssertionIssuer {
   async issue(request: BrokerIssueRequest): Promise<BrokerIssueResult> {
     try {
       if (!request || typeof request !== 'object' || Array.isArray(request) || Object.keys(request).sort().join(',') !== 'authorization,branchId,businessId,operation' ||
-        request.operation !== 'branches:read' || typeof request.businessId !== 'string' || typeof request.branchId !== 'string' || !BROKER_UUID.test(request.businessId) || !BROKER_UUID.test(request.branchId) ||
+        !isBrokerOperation(request.operation) || typeof request.businessId !== 'string' || typeof request.branchId !== 'string' || !BROKER_UUID.test(request.businessId) || !BROKER_UUID.test(request.branchId) ||
         typeof request.authorization !== 'string' || !/^Bearer \S{1,4096}$/.test(request.authorization)) return deny('REQUEST_INVALID');
       const r = Object.freeze({ ...request });
+      const permission = BROKER_OPERATIONS[r.operation];
       let token;
       try { token = await verifyAccessToken(r.authorization.slice(7), this.deps.accessSecret); }
       catch { return deny('AUTHENTICATION_DENIED'); }
@@ -57,13 +58,13 @@ export class TrustedBrokerAssertionIssuer {
           join role_permissions rp on rp.role_id=r.id join permissions p on p.id=rp.permission_id
           where g.user_id=${actorId}::uuid and g.business_id=${r.businessId}::uuid and r.business_id=g.business_id
           and (g.branch_id is null or g.branch_id=${r.branchId}::uuid) and g.deleted_at is null and not r.is_deleted
-          and p.key='branches:view' order by g.id for share of g,r,rp,p`);
-        if (grant.rows.length === 0 || !(await authz.getEffectivePermissions(actorId, r.businessId, r.branchId)).has('branches:view')) return deny('AUTHORIZATION_DENIED');
+          and p.key=${permission} order by g.id for share of g,r,rp,p`);
+        if (grant.rows.length === 0 || !(await authz.getEffectivePermissions(actorId, r.businessId, r.branchId)).has(permission)) return deny('AUTHORIZATION_DENIED');
         const key = await this.deps.keys(); t = await now(tx);
         if (!validBrokerKey(key, t) || key.keyId !== this.deps.signer.keyId) return deny('ISSUER_UNAVAILABLE');
         const claims: BrokerAssertionClaims = Object.freeze({ version: 'B4-03/1', algorithm: 'Ed25519', environment: 'development',
           issuer: BROKER_ISSUER, audience: BROKER_AUDIENCE, workloadId: BROKER_WORKLOAD, keyId: key.keyId, keyVersion: key.version,
-          actorType: 'staff', actorId, sessionId, businessId: r.businessId, branchId: r.branchId, operation: 'branches:read', permission: 'branches:view',
+          actorType: 'staff', actorId, sessionId, businessId: r.businessId, branchId: r.branchId, operation: r.operation, permission,
           requestId: crypto.randomUUID(), nonce: crypto.randomUUID(), issuedAt: t, expiresAt: Math.min(t + 60, token.exp, key.notAfter), authorizationVersion: null });
         const assertion = Object.freeze({ claims, signature: brokerHex(await this.deps.signer.sign(brokerAssertionMessage(claims))) });
         t = await now(tx);
