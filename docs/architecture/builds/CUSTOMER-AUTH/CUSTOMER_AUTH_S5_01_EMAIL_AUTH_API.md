@@ -81,7 +81,10 @@ registered.
   `/loyalty/session/refresh` (a route handler, because cookies cannot be written while a page renders), which rotates the pair and
   returns the customer to where they were. A one-minute `ff_customer_refreshed` cookie stops a refresh/401 redirect loop. The
   handler refuses `Sec-Fetch-Site: cross-site` and only follows same-origin `next` paths.
-- A refused or replayed refresh credential clears the session and sends the customer to sign in; a transient failure keeps it.
+- A refused or replayed refresh credential (401) clears the session and sends the customer to sign in. A concurrent-refresh
+  conflict (409, for example two tabs refreshing at once) keeps the session: the API revokes nothing, the winning request already
+  set the shared cookies, and the refresh route returns to the page once (the marker cookie bounds it, so a page that still gets a
+  401 goes to sign-in and never loops). A transient failure keeps the session too.
 - Logout revokes the session server-side (best effort) and ALWAYS clears every customer credential cookie on that device.
   Legacy-only customers sign out exactly as before.
 
