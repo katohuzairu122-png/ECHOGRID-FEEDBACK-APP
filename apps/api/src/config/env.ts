@@ -294,6 +294,19 @@ export interface Bindings {
    * recovery operation that needs a limiter is denied.
    */
   CUSTOMER_AUTH_RATE_LIMIT?: DurableObjectNamespace;
+  /**
+   * CUSTOMER-AUTH-S5-01 (email registration and login, OFF unless exactly "true"). Every one of these is supplied by the
+   * environment; none has a default and none is created by the code (see customer-auth/customer-email-auth.config.ts).
+   * Session lifetimes are the owner decision CA-02, the password minimum CA-05.
+   */
+  CUSTOMER_EMAIL_AUTH_ENABLED?: string;
+  CUSTOMER_EMAIL_AUTH_HMAC_SECRET?: string;
+  CUSTOMER_SESSION_SIGNING_SECRET?: string;
+  CUSTOMER_SESSION_ACCESS_TTL_SECONDS?: string;
+  CUSTOMER_SESSION_REFRESH_TTL_SECONDS?: string;
+  CUSTOMER_SESSION_ABSOLUTE_TTL_SECONDS?: string;
+  CUSTOMER_SESSION_IDLE_TTL_SECONDS?: string;
+  CUSTOMER_STEP_UP_WINDOW_SECONDS?: string;
   /** Guards POST /loyalty/actions/lookup-customer (cashier phone lookup). Keyed by business and staff user so one
    * cashier cannot exhaust another's budget; deliberately small because every call probes the member list. */
   LOOKUP_RATE_LIMITER: RateLimit;
