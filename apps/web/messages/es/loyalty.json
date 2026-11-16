@@ -209,6 +209,7 @@
       },
       "lookup": {
         "identified": "Identificado por teléfono",
+        "phoneUnverifiedNotice": "Teléfono no verificado. Confirme el nombre del cliente con él antes de continuar.",
         "purchaseHeading": "Validar la compra y otorgar progreso de fidelidad",
         "amount": "Importe de la compra",
         "confirmPurchase": "Confirmar compra verificada",

@@ -2,6 +2,7 @@ import type { Database } from '../db/client';
 import { assertCustomerNotLimited } from '../lib/customer-limits';
 import { createRepositories, type BusinessCustomerMembership, type LoyaltyAccount } from '../repositories';
 import { AppError } from '../lib/errors';
+import { assertVerifiedPhone } from '../lib/customer-verification';
 
 export interface JoinCustomerMembershipInput {
   customerId: string;
@@ -32,6 +33,12 @@ export class CustomerMembershipService {
       // Limited customers keep what they already belong to but cannot join anything new.
       if (!membership || membership.status !== 'active') {
         await assertCustomerNotLimited(repos, input.customerId, 'join_business');
+        // The first business is open to everyone. Joining an ADDITIONAL business needs a verified phone; the check
+        // is against any other membership row (left ones included) so leaving and re-joining cannot bypass it.
+        const existing = await repos.customerMemberships.listForCustomer(input.customerId);
+        if (existing.some((m) => m.businessId !== input.businessId)) {
+          await assertVerifiedPhone(repos, input.customerId, 'join_additional_business');
+        }
       }
       if (!membership) {
         membership = await repos.customerMemberships.create({

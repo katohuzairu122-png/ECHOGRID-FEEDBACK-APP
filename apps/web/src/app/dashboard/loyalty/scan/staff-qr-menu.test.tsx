@@ -70,6 +70,7 @@ describe('StaffQrMenu (cashier Serve customers)', () => {
         lookupToken: 'lookup.token.value',
         displayName: 'Amina',
         phoneMasked: '+•••••••4567',
+        phoneVerified: true,
         membershipStatus: 'active',
         actions: ['VIEW_ALLOWED_MEMBERSHIP_STATE'],
       },
@@ -126,6 +127,7 @@ describe('StaffQrMenu (cashier Serve customers)', () => {
         lookupToken: 'lookup.token.value',
         displayName: 'Amina',
         phoneMasked: '+•••••••4567',
+        phoneVerified: true,
         membershipStatus: 'active',
         actions: ['VIEW_ALLOWED_MEMBERSHIP_STATE', 'VALIDATE_PURCHASE', 'GRANT_LOYALTY_PROGRESS'],
       },
@@ -146,6 +148,33 @@ describe('StaffQrMenu (cashier Serve customers)', () => {
     expect(card.textContent).not.toContain('lookup.token.value');
   });
 
+  it('warns the cashier to confirm the name when the customer’s phone was never verified (and not when it was)', async () => {
+    const result = (phoneVerified: boolean) => ({
+      businessId: 'business',
+      purchaseRequestKey: 'key-123456',
+      lookup: {
+        lookupToken: 'lookup.token.value',
+        displayName: 'Amina',
+        phoneMasked: '+•••••••4567',
+        phoneVerified,
+        membershipStatus: 'active' as const,
+        actions: ['VIEW_ALLOWED_MEMBERSHIP_STATE', 'VALIDATE_PURCHASE', 'GRANT_LOYALTY_PROGRESS'] as const,
+      },
+    });
+    vi.mocked(staffUnifiedQrAction).mockResolvedValue(result(false) as never);
+    const { unmount } = render(<StaffQrMenu contexts={[{ branchId: null, branchName: null }]} />);
+    const user = userEvent.setup();
+    await user.type(screen.getByLabelText(/Find customer/i, { selector: 'input' }), '+15551234567{Enter}');
+    expect(await screen.findByText(/Phone not verified/)).toBeInTheDocument();
+    unmount();
+
+    vi.mocked(staffUnifiedQrAction).mockResolvedValue(result(true) as never);
+    render(<StaffQrMenu contexts={[{ branchId: null, branchName: null }]} />);
+    await user.type(screen.getByLabelText(/Find customer/i, { selector: 'input' }), '+15551234567{Enter}');
+    expect(await screen.findByText('Amina')).toBeInTheDocument();
+    expect(screen.queryByText(/Phone not verified/)).toBeNull();
+  });
+
   it('offers no purchase for a membership that cannot take one', async () => {
     vi.mocked(staffUnifiedQrAction).mockResolvedValue({
       businessId: 'business',
@@ -153,6 +182,7 @@ describe('StaffQrMenu (cashier Serve customers)', () => {
         lookupToken: 'lookup.token.value',
         displayName: 'Member',
         phoneMasked: '+•••••••4567',
+        phoneVerified: true,
         membershipStatus: 'active',
         actions: ['VIEW_ALLOWED_MEMBERSHIP_STATE'],
       },
