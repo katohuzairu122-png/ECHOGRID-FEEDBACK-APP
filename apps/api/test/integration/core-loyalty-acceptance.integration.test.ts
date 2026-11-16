@@ -317,7 +317,25 @@ describe.skipIf(!databaseUrl)('Core loyalty acceptance (real HTTP and disposable
     }
   });
 
-  it('refuses an active member whose phone has never been verified', async () => {
-    await expectDenied(() => request(cashier, '/loyalty/actions/lookup-customer', { phone: unverifiedPhone }), 404);
+  it('finds an active member whose phone was never verified (reverses #462), flagged, masked and with no redemption', async () => {
+    const found = await request<{
+      phoneVerified: boolean;
+      phoneMasked: string;
+      actions: string[];
+      lookupToken: string;
+    }>(cashier, '/loyalty/actions/lookup-customer', { phone: unverifiedPhone });
+    expect(found.status).toBe(200);
+    expect(found.data?.phoneVerified).toBe(false);
+    expect(found.data?.actions).not.toContain('REDEEM_REWARD');
+    expect(found.data?.phoneMasked).not.toContain(unverifiedPhone);
+    expect(JSON.stringify(found.data)).not.toContain(unverifiedPhone);
+    // Still scoped to this business's own members: a number that belongs to no member here is a generic miss.
+    await expectDenied(() => request(cashier, '/loyalty/actions/lookup-customer', { phone: outsiderPhone }), 404);
+  });
+
+  it('reports a verified member as verified', async () => {
+    const found = await request<{ phoneVerified: boolean }>(cashier, '/loyalty/actions/lookup-customer', { phone: verifiedPhone });
+    expect(found.status).toBe(200);
+    expect(found.data?.phoneVerified).toBe(true);
   });
 });

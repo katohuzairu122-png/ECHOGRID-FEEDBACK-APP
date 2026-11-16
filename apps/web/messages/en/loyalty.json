@@ -209,6 +209,7 @@
       },
       "lookup": {
         "identified": "Identified by phone",
+        "phoneUnverifiedNotice": "Phone not verified. Confirm the customer’s name with them before you continue.",
         "purchaseHeading": "Validate purchase and grant loyalty progress",
         "amount": "Purchase amount",
         "confirmPurchase": "Confirm verified purchase",

@@ -48,6 +48,7 @@ const lookupResult = {
   lookupToken: 'lookup.token.value',
   displayName: 'Amina',
   phoneMasked: '+•••••••4567',
+  phoneVerified: true,
   membershipStatus: 'active',
   actions: ['VIEW_ALLOWED_MEMBERSHIP_STATE', 'VALIDATE_PURCHASE', 'GRANT_LOYALTY_PROGRESS'],
 };
