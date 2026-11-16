@@ -45,6 +45,22 @@ function createFakeBranchRepo() {
       const limit = options.limit ?? all.length;
       return all.slice(offset, offset + limit);
     },
+    // ONBOARDING-UX-01 repository methods, same observable behaviour as BranchRepository (the real SQL is covered by
+    // test/integration/onboarding-slug.integration.test.ts).
+    async lockCreation(): Promise<void> {},
+    async findRecentByName(businessId: string, name: string, createdBy: string): Promise<Branch | undefined> {
+      return [...branches.values()].find(
+        (b) =>
+          b.businessId === businessId &&
+          !b.isDeleted &&
+          b.createdBy === createdBy &&
+          b.name.trim().toLowerCase() === name.trim().toLowerCase(),
+      );
+    },
+    async createIfSlugFree(input: NewBranch): Promise<Branch | undefined> {
+      const taken = [...branches.values()].some((b) => b.businessId === input.businessId && b.slug === input.slug);
+      return taken ? undefined : this.create(input);
+    },
     async create(input: NewBranch): Promise<Branch> {
       const branch: Branch = {
         id: (input.id as string) ?? crypto.randomUUID(),

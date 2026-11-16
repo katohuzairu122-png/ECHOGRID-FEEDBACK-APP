@@ -33,10 +33,16 @@
     "title": "Crea tu negocio",
     "description": "Has iniciado sesión pero aún no perteneces a ningún negocio. Crea uno para continuar.",
     "nameLabel": "Nombre del negocio",
-    "slugLabel": "Slug de URL",
-    "slugHint": "Solo letras minúsculas, números y guiones.",
     "submit": "Crear negocio",
-    "submitPending": "Creando…"
+    "submitPending": "Creando…",
+    "errors": {
+      "slugTaken": "Esa dirección web ya está en uso. Pruebe con un nombre de negocio ligeramente distinto.",
+      "slugUnavailable": "No pudimos crear una dirección web para ese nombre. Pruebe con un nombre ligeramente distinto.",
+      "invalidInput": "Introduzca un nombre de negocio (de 1 a 200 caracteres).",
+      "tooManyRequests": "Demasiados intentos. Espere un minuto e inténtelo de nuevo.",
+      "forbidden": "No tiene permiso para crear un negocio aquí.",
+      "generic": "No pudimos crear su negocio, así que no se guardó nada. Inténtelo de nuevo."
+    }
   },
   "settings": {
     "title": "Configuración",

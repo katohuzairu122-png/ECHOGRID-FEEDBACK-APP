@@ -11,25 +11,29 @@ function formDataFrom(fields: Record<string, string>): FormData {
 
 describe('readBranchForm', () => {
   it('reads required fields as-is', () => {
-    const result = readBranchForm(formDataFrom({ name: 'Main Branch', slug: 'main' }));
+    const result = readBranchForm(formDataFrom({ name: 'Main Branch' }));
     expect(result.name).toBe('Main Branch');
-    expect(result.slug).toBe('main');
+    expect('slug' in result).toBe(false);
+  });
+
+  it('never sends a slug, even if a stale form still posts one', () => {
+    expect('slug' in readBranchForm(formDataFrom({ name: 'Main', slug: 'sneaky-slug' }))).toBe(false);
   });
 
   it('treats a missing optional field as undefined, not an empty string', () => {
-    const result = readBranchForm(formDataFrom({ name: 'Main', slug: 'main' }));
+    const result = readBranchForm(formDataFrom({ name: 'Main' }));
     expect(result.city).toBeUndefined();
     expect(result.countryCode).toBeUndefined();
   });
 
   it('treats a whitespace-only optional field as undefined', () => {
-    const result = readBranchForm(formDataFrom({ name: 'Main', slug: 'main', city: '   ' }));
+    const result = readBranchForm(formDataFrom({ name: 'Main', city: '   ' }));
     expect(result.city).toBeUndefined();
   });
 
   it('keeps a genuinely filled-in optional field', () => {
     const result = readBranchForm(
-      formDataFrom({ name: 'Main', slug: 'main', city: 'Austin', countryCode: 'US' }),
+      formDataFrom({ name: 'Main', city: 'Austin', countryCode: 'US' }),
     );
     expect(result.city).toBe('Austin');
     expect(result.countryCode).toBe('US');
@@ -38,6 +42,6 @@ describe('readBranchForm', () => {
   it('defaults required fields to an empty string rather than throwing when absent -- server-side Zod validation is what actually rejects them', () => {
     const result = readBranchForm(formDataFrom({}));
     expect(result.name).toBe('');
-    expect(result.slug).toBe('');
+    expect('slug' in result).toBe(false);
   });
 });

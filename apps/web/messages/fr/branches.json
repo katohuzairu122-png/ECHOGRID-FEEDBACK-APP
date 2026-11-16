@@ -22,7 +22,16 @@
     "cancel": "Annuler",
     "saving": "Enregistrement…",
     "saveChanges": "Enregistrer les modifications",
-    "create": "Créer la succursale"
+    "create": "Créer la succursale",
+    "errors": {
+      "slugTaken": "Cette adresse web est déjà utilisée par un autre site. Essayez un nom légèrement différent.",
+      "slugUnavailable": "Nous n’avons pas pu créer d’adresse web pour ce nom. Essayez un nom légèrement différent.",
+      "invalidInput": "Vérifiez les informations du site puis réessayez.",
+      "tooManyRequests": "Trop de tentatives. Patientez une minute puis réessayez.",
+      "forbidden": "Vous n’avez pas l’autorisation de gérer les sites.",
+      "generic": "Nous n’avons pas pu enregistrer ce site : rien n’a été modifié. Veuillez réessayer."
+    },
+    "slugFixedHint": "L’adresse web est créée automatiquement et ne change pas."
   },
   "delete": {
     "button": "Supprimer",

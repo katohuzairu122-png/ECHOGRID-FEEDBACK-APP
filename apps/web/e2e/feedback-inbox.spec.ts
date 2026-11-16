@@ -11,7 +11,6 @@ test('Feedback Inbox: honest empty state, keyboard access and responsive layout'
   await page.getByLabel(/I agree to the Terms of Service/).check();
   await page.getByRole('button', { name: 'Create account' }).click();
   await page.getByLabel('Business name').fill(`Inbox ${unique}`);
-  await page.getByLabel('URL slug').fill(`inbox-ui-${unique}`);
   await page.getByRole('button', { name: 'Create business' }).click();
   await expect(page.getByRole('heading', { name: 'Business Overview', exact: true })).toBeVisible();
 

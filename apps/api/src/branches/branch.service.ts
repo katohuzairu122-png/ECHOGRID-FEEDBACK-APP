@@ -1,6 +1,7 @@
 import type { Repositories } from '../repositories';
 import type { Branch, NewBranch } from '../repositories/branch.repository';
 import { AppError } from '../lib/errors';
+import { allocateSlug, CREATION_REPLAY_WINDOW_SECONDS } from '../lib/slug-allocation';
 import type { CreateBranchInput, UpdateBranchInput } from '@echo-grid-feedback/shared-types';
 
 /**
@@ -38,20 +39,32 @@ export class BranchService {
     input: CreateBranchInput,
     createdBy: string,
   ): Promise<Branch> {
-    const existing = await this.repos.branches.findBySlug(businessId, input.slug);
-    if (existing) {
-      throw new AppError(
-        `Slug "${input.slug}" is already taken at this business.`,
-        409,
-        'SLUG_TAKEN',
-      );
-    }
-
-    return this.repos.branches.create({
-      ...input,
+    // The route runs this inside one transaction, so the advisory lock below holds until the branch is committed:
+    // concurrent creations of the same name are serialized and a retry gets the branch that already exists.
+    await this.repos.branches.lockCreation(businessId, input.name);
+    const replay = await this.repos.branches.findRecentByName(
       businessId,
+      input.name,
       createdBy,
-    } satisfies NewBranch);
+      CREATION_REPLAY_WINDOW_SECONDS,
+    );
+    if (replay) return replay;
+
+    const { slug: requestedSlug, ...rest } = input;
+    const newBranch = (slug: string) => ({ ...rest, slug, businessId, createdBy }) satisfies NewBranch;
+    if (requestedSlug) {
+      // An explicit slug is honoured exactly or refused with a way forward; it is never silently renamed.
+      const created = await this.repos.branches.createIfSlugFree(newBranch(requestedSlug));
+      if (!created) {
+        throw new AppError(
+          `The URL name "${requestedSlug}" is already used by another location of this business. Leave it empty to have one generated, or choose another.`,
+          409,
+          'SLUG_TAKEN',
+        );
+      }
+      return created;
+    }
+    return (await allocateSlug(input.name, 'branch', (slug) => this.repos.branches.createIfSlugFree(newBranch(slug)))).value;
   }
 
   async updateBranch(

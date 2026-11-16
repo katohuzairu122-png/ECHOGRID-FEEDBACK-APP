@@ -55,10 +55,14 @@ describe('BranchFormDialog', () => {
 
     expect(screen.getByLabelText('Name')).toHaveValue('');
     await user.type(screen.getByLabelText('Name'), 'New Branch');
-    await user.type(screen.getByLabelText('URL slug'), 'new-branch');
+    // ONBOARDING-UX-01: nobody types a technical URL name; the server generates it.
+    expect(screen.queryByLabelText('URL slug')).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Create branch' }));
 
     await waitFor(() => expect(createBranchAction).toHaveBeenCalled());
+    const submitted = vi.mocked(createBranchAction).mock.calls[0]![1] as FormData;
+    expect(submitted.get('name')).toBe('New Branch');
+    expect(submitted.has('slug')).toBe(false);
     expect(updateBranchAction).not.toHaveBeenCalled();
   });
 
@@ -69,7 +73,9 @@ describe('BranchFormDialog', () => {
     await user.click(screen.getByRole('button', { name: 'Edit' }));
 
     expect(screen.getByLabelText('Name')).toHaveValue('Downtown');
-    expect(screen.getByLabelText('URL slug')).toHaveValue('downtown');
+    // The established URL name is shown as fixed text, never as an editable field (it is never silently renamed).
+    expect(screen.queryByLabelText('URL slug')).not.toBeInTheDocument();
+    expect(screen.getByText('/downtown')).toBeInTheDocument();
     expect(screen.getByLabelText('City')).toHaveValue('Austin');
     expect(screen.getByLabelText('State/Province')).toHaveValue('TX');
     expect(screen.getByLabelText('Country code')).toHaveValue('US');
@@ -91,16 +97,15 @@ describe('BranchFormDialog', () => {
   it('shows the error message returned by the action instead of closing', async () => {
     const user = userEvent.setup();
     vi.mocked(createBranchAction).mockResolvedValue({
-      error: 'Slug "new-branch" is already taken at this business.',
+      error: 'That web address is already used by another location. Please try a slightly different name.',
     });
 
     renderWithIntl(<BranchFormDialog trigger={<button>+ New branch</button>} />);
     await user.click(screen.getByRole('button', { name: '+ New branch' }));
     await user.type(screen.getByLabelText('Name'), 'New Branch');
-    await user.type(screen.getByLabelText('URL slug'), 'new-branch');
     await user.click(screen.getByRole('button', { name: 'Create branch' }));
 
-    expect(await screen.findByRole('alert')).toHaveTextContent('already taken');
+    expect(await screen.findByRole('alert')).toHaveTextContent('already used by another location');
     // The form (and its typed values) must still be visible -- an error
     // should never silently close the dialog and lose the user's input.
     expect(screen.getByLabelText('Name')).toHaveValue('New Branch');

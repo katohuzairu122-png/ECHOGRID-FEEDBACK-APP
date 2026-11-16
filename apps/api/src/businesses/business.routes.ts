@@ -117,7 +117,7 @@ businessRoutes.post('/', authenticate, async (c) => {
       action: 'business.created',
       entityType: 'business',
       entityId: result.businessId,
-      details: { name: body.name, slug: body.slug },
+      details: { name: body.name, slug: result.slug, replayed: result.replayed },
     });
 
     return ok(c, result, 201);

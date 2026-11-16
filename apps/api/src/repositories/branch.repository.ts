@@ -56,6 +56,41 @@ export class BranchRepository extends BaseRepository {
     });
   }
 
+  /** ONBOARDING-UX-01: conflict-safe insert; undefined when this business already has a branch with that slug. */
+  async createIfSlugFree(input: NewBranch): Promise<Branch | undefined> {
+    const [row] = await this.db
+      .insert(branches)
+      .values(input)
+      .onConflictDoNothing({ target: [branches.businessId, branches.slug] })
+      .returning();
+    return row;
+  }
+
+  /** Serializes concurrent creations of the same branch name in one business (retry / double submit protection). */
+  async lockCreation(businessId: string, name: string): Promise<void> {
+    await this.db.execute(
+      sql`SELECT pg_advisory_xact_lock(hashtextextended(${`branch:${businessId}:${name.trim().toLowerCase()}`}, 0))`,
+    );
+  }
+
+  /** A branch of the same name created in this business within the replay window by the same user, if any. */
+  async findRecentByName(businessId: string, name: string, createdBy: string, windowSeconds: number): Promise<Branch | undefined> {
+    const [row] = await this.db
+      .select()
+      .from(branches)
+      .where(
+        and(
+          eq(branches.businessId, businessId),
+          eq(branches.isDeleted, false),
+          eq(branches.createdBy, createdBy),
+          sql`lower(${branches.name}) = ${name.trim().toLowerCase()}`,
+          sql`${branches.createdAt} > now() - make_interval(secs => ${windowSeconds})`,
+        ),
+      )
+      .limit(1);
+    return row;
+  }
+
   async create(input: NewBranch): Promise<Branch> {
     const [row] = await this.db.insert(branches).values(input).returning();
     if (!row) throw new Error('Insert returned no row');

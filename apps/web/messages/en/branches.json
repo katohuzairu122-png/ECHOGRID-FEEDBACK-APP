@@ -22,7 +22,16 @@
     "cancel": "Cancel",
     "saving": "Saving…",
     "saveChanges": "Save changes",
-    "create": "Create branch"
+    "create": "Create branch",
+    "errors": {
+      "slugTaken": "That web address is already used by another location. Please try a slightly different name.",
+      "slugUnavailable": "We could not create a web address for that name. Please try a slightly different name.",
+      "invalidInput": "Please check the location details and try again.",
+      "tooManyRequests": "Too many attempts. Please wait a minute and try again.",
+      "forbidden": "You do not have permission to manage locations.",
+      "generic": "We could not save this location, so nothing was changed. Please try again."
+    },
+    "slugFixedHint": "The web address is created automatically and does not change."
   },
   "delete": {
     "button": "Delete",

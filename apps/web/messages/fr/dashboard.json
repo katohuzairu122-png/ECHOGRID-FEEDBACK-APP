@@ -33,10 +33,16 @@
     "title": "Créez votre entreprise",
     "description": "Vous êtes connecté, mais vous n'appartenez encore à aucune entreprise. Créez-en une pour continuer.",
     "nameLabel": "Nom de l'entreprise",
-    "slugLabel": "Slug d'URL",
-    "slugHint": "Lettres minuscules, chiffres et tirets uniquement.",
     "submit": "Créer l'entreprise",
-    "submitPending": "Création…"
+    "submitPending": "Création…",
+    "errors": {
+      "slugTaken": "Cette adresse web est déjà utilisée. Essayez un nom d’entreprise légèrement différent.",
+      "slugUnavailable": "Nous n’avons pas pu créer d’adresse web pour ce nom. Essayez un nom légèrement différent.",
+      "invalidInput": "Saisissez un nom d’entreprise (1 à 200 caractères).",
+      "tooManyRequests": "Trop de tentatives. Patientez une minute puis réessayez.",
+      "forbidden": "Vous n’avez pas l’autorisation de créer une entreprise ici.",
+      "generic": "Nous n’avons pas pu créer votre entreprise : rien n’a été enregistré. Veuillez réessayer."
+    }
   },
   "settings": {
     "title": "Paramètres",

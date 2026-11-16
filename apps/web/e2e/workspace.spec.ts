@@ -12,7 +12,6 @@ test('Business Overview uses empty API data honestly and keeps navigation respon
   await page.getByLabel(/I agree to the Terms of Service/).check();
   await page.getByRole('button', { name: 'Create account' }).click();
   await page.getByLabel('Business name').fill(`Workspace ${unique}`);
-  await page.getByLabel('URL slug').fill(`workspace-${unique}`);
   await page.getByRole('button', { name: 'Create business' }).click();
   await expect(page.getByRole('heading', { name: 'Business Overview', exact: true })).toBeVisible();
   await expect(page.getByText('No feedback to display yet.', { exact: true })).toBeVisible();
