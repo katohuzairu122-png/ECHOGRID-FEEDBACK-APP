@@ -57,6 +57,10 @@ These are not repeated without a specific reason. Until the STG-SEC-04/05 report
 
 Main advanced by three customer-auth merges after the baseline above: #454 (14:26Z), #455 (16:35Z), #456 (17:21Z). Main CI succeeded on each (runs 43724406700, 43736314871, 43740669655). They are development-only and dormant (roadmap 2.G.2). **No staging deploy newer than run 43713775674 (`eae88c7`) appears in the workflow runs, so staging is not recorded as running them.** Migration `0073` is not recorded as applied anywhere. They do not change the security gates in 2a.
 
+**S3 email link (#457, merged 17:59Z as `f1c04de`)** is development-only and unmounted. Its seven review findings are remediated in follow-up PR #459 (draft). **Owner decision E10 (2026-11-15):** no routine phone-OTP login after email linking; phone is a possible recovery factor but never sufficient alone. Recovery is the unauthorized future block **CUSTOMER-AUTH-01D-4b-S4**. The dormant phone-proof-only `recoverPassword` conflict is closed at the service boundary by RECOVERY-GUARD-01 (development only, open draft PR until merged); S4 remains unauthorized. See `docs/architecture/builds/CUSTOMER-AUTH/CUSTOMER_AUTH_S3_EMAIL_LINK.md` sections 7 and 8.
+
+**S4-01 recovery code foundation** (owner-authorized 2026-11-15; rulings D1-D6 approved): development only and unmounted, in a draft PR with migration `0074` (not executed anywhere real). S4-02 (recovery flow, D2 hold, notifications, rate limits) needs separate authorization. See `docs/architecture/builds/CUSTOMER-AUTH/CUSTOMER_AUTH_S3_EMAIL_LINK.md` sections 8a and 8b.
+
 ## 3. Awaiting the owner (nothing here starts without an answer)
 
 | Item | Needs |

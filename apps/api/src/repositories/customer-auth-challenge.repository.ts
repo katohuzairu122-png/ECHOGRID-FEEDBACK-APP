@@ -61,6 +61,56 @@ export class CustomerAuthChallengeRepository extends BaseRepository {
     return rows.length === 1;
   }
 
+  /**
+   * Non-consuming read with the same predicates as `consume`. Lets a caller do
+   * expensive work only for a proof that is currently usable. Advisory: `consume`
+   * stays the only authoritative, single-use check.
+   */
+  async isUsable(input: {
+    id: string;
+    customerId: string | null;
+    purpose: CustomerAuthChallengePurpose;
+    subjectDigest: string;
+    proofDigest: string;
+    now: Date;
+  }): Promise<boolean> {
+    const owner = input.customerId === null
+      ? isNull(customerAuthChallenges.customerId)
+      : eq(customerAuthChallenges.customerId, input.customerId);
+    const rows = await this.db.select({ id: customerAuthChallenges.id })
+      .from(customerAuthChallenges)
+      .where(and(
+        eq(customerAuthChallenges.id, input.id),
+        owner,
+        eq(customerAuthChallenges.purpose, input.purpose),
+        eq(customerAuthChallenges.subjectDigest, input.subjectDigest),
+        eq(customerAuthChallenges.proofDigest, input.proofDigest),
+        isNull(customerAuthChallenges.consumedAt),
+        gt(customerAuthChallenges.expiresAt, input.now),
+        lt(customerAuthChallenges.attempts, customerAuthChallenges.maxAttempts),
+      ))
+      .limit(1);
+    return rows.length === 1;
+  }
+
+  /** Unconsumed, unexpired, not attempt-exhausted challenges of one owner and purpose. */
+  async countLive(input: {
+    customerId: string;
+    purpose: CustomerAuthChallengePurpose;
+    now: Date;
+  }): Promise<number> {
+    const [row] = await this.db.select({ n: sql<number>`count(*)::int` })
+      .from(customerAuthChallenges)
+      .where(and(
+        eq(customerAuthChallenges.customerId, input.customerId),
+        eq(customerAuthChallenges.purpose, input.purpose),
+        isNull(customerAuthChallenges.consumedAt),
+        gt(customerAuthChallenges.expiresAt, input.now),
+        lt(customerAuthChallenges.attempts, customerAuthChallenges.maxAttempts),
+      ));
+    return row?.n ?? 0;
+  }
+
   /** Count failed proof attempts without allowing attempts after expiry/consumption. */
   async recordFailedAttempt(input: {
     id: string;

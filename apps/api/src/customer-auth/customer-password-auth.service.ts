@@ -266,9 +266,26 @@ export class CustomerPasswordAuthService {
   ): Promise<PasswordSetupResult> {
     const now = this.clock();
     if (!this.proofIsFresh(proof, now)) return { ok: false, reason: 'proof_invalid' };
+    const r = this.repos();
+
+    // E10-B guard, cheap early check: phone possession alone never recovers a
+    // customer who linked a verified email. Runs before the password policy so
+    // the outcome does not depend on the supplied password, and before any
+    // hashing. The authoritative, race-safe check is in completeRecovery.
+    const existing = await r.customers.findByPhone(proof.phone);
+    if (existing && (await r.credentials.findLegacyLoginState(existing.id))?.hasVerifiedEmail) {
+      await this.bestEffort(r.events, {
+        customerId: existing.id,
+        eventType: 'recovery_failed',
+        outcome: 'failure',
+        reasonCode: 'phone_only_recovery_not_permitted',
+        now,
+      });
+      return { ok: false, reason: 'customer_inactive' };
+    }
+
     const policy = this.policy(newPassword, proof.phone);
     if (!policy.ok) return { ok: false, reason: 'policy', violations: policy.violations };
-    const r = this.repos();
 
     const found = await r.customers.createIfAbsent({
       phone: proof.phone,

@@ -99,7 +99,7 @@ export type IssuedSession = {
 };
 
 export type EstablishSessionResult =
-  { ok: true; session: IssuedSession } | { ok: false; reason: 'customer_inactive' };
+  { ok: true; session: IssuedSession } | { ok: false; reason: 'customer_inactive' | 'otp_retired' };
 
 export type RefreshResult =
   | { ok: true; session: IssuedSession }
@@ -199,7 +199,9 @@ export class CustomerSessionService {
       }
       if (input.authMethod === 'otp' &&
           (await stores.credentials.findLegacyLoginState(input.customerId))?.hasVerifiedEmail) {
-        return { ok: false, reason: 'customer_inactive' } as const;
+        // Phone OTP is retired for customers who linked a verified email. Internal
+        // reason only: callers must keep one generic failure toward the client.
+        return { ok: false, reason: 'otp_retired' } as const;
       }
       const { absoluteExpiresAt, idleExpiresAt } = computeSessionExpiries(now, {
         absoluteSeconds: this.config.absoluteTtlSeconds,
@@ -576,12 +578,33 @@ export class CustomerSessionService {
   async completeRecovery(input: {
     customerId: string;
     passwordHash: string;
-  }): Promise<{ ok: true; revoked: number } | { ok: false; reason: 'customer_inactive' }> {
+  }): Promise<
+    | { ok: true; revoked: number }
+    | { ok: false; reason: 'customer_inactive' | 'recovery_not_permitted' }
+  > {
     const now = this.clock();
     return this.inTransaction(async (tx) => {
-      const customer = await tx.customers.findById(input.customerId);
+      // Row lock: serializes against a concurrent email link, which takes the
+      // same lock first, so the check below cannot go stale before the write.
+      const customer = await tx.customers.findByIdForUpdate(input.customerId);
       if (!customer || !customerMayHaveSession({ status: customer.status, isDeleted: false })) {
         return { ok: false, reason: 'customer_inactive' } as const;
+      }
+      // E10-B: a customer who linked a verified email login credential cannot
+      // be recovered by phone possession alone. Enforced here, at the service
+      // boundary, so it holds however this method is reached. Fails closed
+      // before any credential, session or revocation change. The audit row
+      // commits (this is a return, not a throw).
+      const login = await tx.credentials.findLegacyLoginState(input.customerId);
+      if (login?.hasVerifiedEmail) {
+        await tx.events.append({
+          customerId: input.customerId,
+          eventType: 'recovery_failed',
+          outcome: 'failure',
+          reasonCode: 'phone_only_recovery_not_permitted',
+          now,
+        });
+        return { ok: false, reason: 'recovery_not_permitted' } as const;
       }
       const created = await tx.credentials.create({
         customerId: input.customerId,

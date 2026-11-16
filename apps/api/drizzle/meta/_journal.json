@@ -519,6 +519,13 @@
       "when": 1794740000000,
       "tag": "0073_customer_phone_free_challenges",
       "breakpoints": true
+    },
+    {
+      "idx": 74,
+      "version": "7",
+      "when": 1794770936590,
+      "tag": "0074_customer_recovery_codes",
+      "breakpoints": true
     }
   ]
 }
