@@ -73,9 +73,10 @@ describe('approved owner decisions in the staging templates', () => {
     expect(apiStaging.CUSTOMER_SESSION_REFRESH_TTL_SECONDS).toBe('2592000');
     expect(Number(apiStaging.CUSTOMER_SESSION_ACCESS_TTL_SECONDS)).toBeLessThan(Number(apiStaging.CUSTOMER_SESSION_REFRESH_TTL_SECONDS));
   });
-  it('the two OPEN owner decisions are not silently filled in (update this test when the owner decides)', () => {
-    expect(apiStaging).not.toHaveProperty('CUSTOMER_SESSION_IDLE_TTL_SECONDS');
-    expect(apiStaging).not.toHaveProperty('CUSTOMER_STEP_UP_WINDOW_SECONDS');
+  it('the idle limit (30 minutes) and step-up window (5 minutes) match the approved decisions and stay coherent', () => {
+    expect(apiStaging.CUSTOMER_SESSION_IDLE_TTL_SECONDS).toBe('1800');
+    expect(apiStaging.CUSTOMER_STEP_UP_WINDOW_SECONDS).toBe('300');
+    expect(Number(apiStaging.CUSTOMER_SESSION_IDLE_TTL_SECONDS)).toBeLessThanOrEqual(Number(apiStaging.CUSTOMER_SESSION_ABSOLUTE_TTL_SECONDS));
   });
 });
 
