@@ -5,7 +5,7 @@
  * evidence before connecting as this login) does not exist yet; this proves what the DATABASE side must enforce on its own. See docs/architecture/builds/SPLIT-08/GATE2_B4_11_RESTRICTED_BROKER_DATABASE_ROLE.md.
  */
 import pg from 'pg';
-import { randomUUID, randomBytes } from 'node:crypto';
+import { randomUUID, randomBytes, webcrypto } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { setTimeout as delay } from 'node:timers/promises';
@@ -268,11 +268,11 @@ try {
     const { ConfirmedPurchaseCountService } = await import('../src/loyalty/confirmed-purchase-count.service.ts');
     const seconds = () => Math.floor(Date.now()/1000);
     const makeKey = async keyId => {
-      const pair = await crypto.subtle.generateKey('Ed25519', true, ['sign','verify']);
+      const pair = await webcrypto.subtle.generateKey('Ed25519', true, ['sign','verify']);
       return {
-        verifier: { keyId, version: 1, publicKeyHex: brokerHex(new Uint8Array(await crypto.subtle.exportKey('raw', pair.publicKey))),
+        verifier: { keyId, version: 1, publicKeyHex: brokerHex(new Uint8Array(await webcrypto.subtle.exportKey('raw', pair.publicKey))),
           state: 'ACTIVE', notBefore: seconds()-10, notAfter: seconds()+600 },
-        sign: async message => new Uint8Array(await crypto.subtle.sign('Ed25519', pair.privateKey, message)),
+        sign: async message => new Uint8Array(await webcrypto.subtle.sign('Ed25519', pair.privateKey, message)),
       };
     };
     const assertion = await makeKey('loyalty-issuer-ci');
