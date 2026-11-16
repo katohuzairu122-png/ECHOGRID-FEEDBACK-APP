@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { z } from 'zod';
+import { logEmailAuthUnavailable } from './customer-email-auth.diagnostics';
 import type { IssuedSession } from './customer-session.service';
 import type { PasswordLoginResult } from './customer-password-auth.service';
 import type { EmailRegistrationResult } from './customer-email-registration.service';
@@ -56,7 +57,10 @@ export async function limitEmailAuthRequest(
 ): Promise<'allowed' | 'limited' | 'unavailable'> {
   try {
     const source = await dependencies.resolveTrustedSource(request);
-    if (!source) return 'unavailable';
+    if (!source) {
+      logEmailAuthUnavailable('untrusted_source', { surface });
+      return 'unavailable';
+    }
     const identifier = await dependencies.keyForIdentifier(address);
     const windowSeconds = surface === 'delivery' ? 3600 : 900;
     const [sourceAllowed, identifierAllowed] = await Promise.all([
@@ -72,7 +76,8 @@ export async function limitEmailAuthRequest(
       }),
     ]);
     return sourceAllowed && identifierAllowed ? 'allowed' : 'limited';
-  } catch {
+  } catch (error) {
+    logEmailAuthUnavailable('limiter_error', { surface, error });
     return 'unavailable';
   }
 }
@@ -91,7 +96,10 @@ export function createIsolatedCustomerEmailAuthRoutes(dependencies: IsolatedEmai
     maxSize: 8192,
     onError: () => Response.json({ error: 'Invalid request' }, { status: 413 }),
   }));
-  routes.onError(() => unavailable());
+  routes.onError((error) => {
+    logEmailAuthUnavailable('unhandled_error', { surface: 'runtime', error });
+    return unavailable();
+  });
   routes.post(paths.request, async (c) => {
     const dto = emailRegistrationRequestSchema.safeParse(await c.req.json().catch(() => null));
     if (!dto.success) return badRequest();
@@ -104,7 +112,10 @@ export function createIsolatedCustomerEmailAuthRoutes(dependencies: IsolatedEmai
   routes.post(paths.complete, async (c) => {
     const dto = emailRegistrationCompleteSchema.safeParse(await c.req.json().catch(() => null));
     if (!dto.success) return badRequest();
-    if (!await dependencies.resolveTrustedSource(c.req.raw)) return unavailable();
+    if (!await dependencies.resolveTrustedSource(c.req.raw)) {
+      logEmailAuthUnavailable('untrusted_source', { surface: 'complete' });
+      return unavailable();
+    }
     const result = await dependencies.completeRegistration(dto.data);
     return result.ok ? c.json({ registered: true }, 201) : invalid();
   });
