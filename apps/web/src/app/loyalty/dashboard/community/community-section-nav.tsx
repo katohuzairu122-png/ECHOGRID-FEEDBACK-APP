@@ -13,10 +13,13 @@ export const COMMUNITY_FEED_PATH = `${COMMUNITY_BASE_PATH}/feed`;
  * real routes, so deep links, history and keyboard navigation work without client state; the current section
  * is exposed with aria-current. Presentation only: authorization stays in the layout and the API.
  */
-export function CommunitySectionNav() {
+export function CommunitySectionNav({ showFeed }: { showFeed: boolean }) {
   const t = useTranslations('loyalty.customer.community.sections');
   const pathname = usePathname();
   const onFeed = pathname === COMMUNITY_FEED_PATH || pathname.startsWith(`${COMMUNITY_FEED_PATH}/`);
+  // The Feed section exists only while the Network flag is on; otherwise Community is just Points & Membership and
+  // no section control is rendered at all.
+  if (!showFeed) return null;
   const sections = [
     { href: COMMUNITY_BASE_PATH, label: t('points'), current: !onFeed },
     { href: COMMUNITY_FEED_PATH, label: t('feed'), current: onFeed },

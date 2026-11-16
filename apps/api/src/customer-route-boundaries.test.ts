@@ -74,18 +74,22 @@ describe('mounted customer and staff route boundaries', () => {
     expect(mocks.findUser).not.toHaveBeenCalled();
   });
 
-  it('mounts the Community feed foundation behind customer authentication, empty by default and read-only', async () => {
+  it('mounts the Network customer surface behind customer authentication, disabled by default and read-only', async () => {
     const anonymous = await worker.fetch(new Request('https://api.test/api/v1/network/feed'), env, ctx);
     expect(anonymous.status).toBe(401);
-    const staffOnly = await worker.fetch(new Request('https://api.test/api/v1/network/feed', {
+    const bad = await worker.fetch(new Request('https://api.test/api/v1/network/feed', {
       headers: { Authorization: 'Bearer not-a-customer-token' },
     }), env, ctx);
-    expect(staffOnly.status).toBe(401);
+    expect(bad.status).toBe(401);
     const token = await signCustomerAccessToken(customerId, env.CUSTOMER_JWT_SECRET);
     const headers = { Authorization: `Bearer ${token}` };
-    const response = await worker.fetch(new Request('https://api.test/api/v1/network/feed', { headers }), env, ctx);
-    expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({ success: true, data: { items: [], nextCursor: null } });
+    // Flag unset: the feed is a generic 404 and the status endpoint says disabled.
+    expect((await worker.fetch(new Request('https://api.test/api/v1/network/feed', { headers }), env, ctx)).status).toBe(404);
+    const status = await worker.fetch(new Request('https://api.test/api/v1/network/status', { headers }), env, ctx);
+    expect(await status.json()).toEqual({ success: true, data: { enabled: false } });
+    // Any value other than exactly "true" keeps it off.
+    const loose = await worker.fetch(new Request('https://api.test/api/v1/network/feed', { headers }), { ...env, NETWORK_FEED_ENABLED: 'TRUE' } as Bindings, ctx);
+    expect(loose.status).toBe(404);
     const write = await worker.fetch(new Request('https://api.test/api/v1/network/feed', { method: 'POST', headers }), env, ctx);
     expect(write.status).toBe(404);
     expect(mocks.findUser).not.toHaveBeenCalled();
