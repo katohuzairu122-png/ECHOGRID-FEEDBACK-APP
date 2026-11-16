@@ -57,8 +57,17 @@ describe('S3 stays unreachable from the deployed Worker until activation', () =>
     ]);
   });
 
-  it('nothing outside the customer-auth session layer constructs the rotating session service', () => {
-    expect(referencing(/new CustomerSessionService\(/)).toEqual([]);
+  it('S5-01: the rotating session service is constructed ONLY by the flag-gated email-auth composition, mounted once', () => {
+    // Activation was approved (Option A) but stays behind CUSTOMER_EMAIL_AUTH_ENABLED: exactly one non-test constructor.
+    expect(referencing(/new CustomerSessionService\(/)).toEqual(['src/customer-auth/customer-email-auth.composition.ts']);
+    const composition = read('src/customer-auth/customer-email-auth.composition.ts');
+    expect(composition).toMatch(/isEnabled: \(c\) => isCustomerEmailAuthEnabled\(c\.env as Bindings\)/);
+    expect(read('src/customer-auth/customer-email-auth.config.ts')).toMatch(/CUSTOMER_EMAIL_AUTH_ENABLED === 'true'/);
+    const index = read('src/index.ts');
+    expect(index.match(/customerEmailAuthComposition/g)?.length).toBe(2); // import + mount
+    expect(index).toMatch(/api\.route\('\/customer-auth', customerEmailAuthComposition\);/);
+    // Nothing here changes how existing customers authenticate: the legacy middleware default is untouched.
+    expect(read('src/middleware/customer-authenticate.ts')).toContain('export const customerAuthenticate = createCustomerAuthenticate();');
   });
 
   it('only the session service, password service (E10 guard) and credential repository touch the 0072 login state read', () => {

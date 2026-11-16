@@ -24,6 +24,7 @@ import { feedbackRoutes } from './feedback/feedback.routes';
 import { feedbackFormRoutes } from './feedback/feedback-form.routes';
 import { customerAuthRoutes } from './customer-auth/customer-auth.routes';
 import { customerRecoveryRoutes } from './customer-auth/customer-recovery.composition';
+import { customerEmailAuthComposition } from './customer-auth/customer-email-auth.composition';
 import { customerMembershipRoutes } from './customer-relationships/customer-membership.routes';
 import { customerLanguageRoutes } from './customer-language/customer-language.routes';
 import { consentRoutes } from './consent/consent.routes';
@@ -78,6 +79,9 @@ import { runStripeEvidenceHeartbeat } from './billing/stripe-evidence';
 // wrangler to find them (see wrangler.toml's durable_objects.bindings /
 // migrations entries, and auth/password-hasher.do.ts's own doc comment).
 export { PasswordHasherDurableObject } from './auth/password-hasher.do';
+// The email-auth rate limiter's Durable Object class. Exporting it binds nothing: a namespace binding is infrastructure
+// the owner provisions at activation review (customer-auth/CUSTOMER_AUTH_S2_R2_READINESS.md).
+export { CustomerEmailRateLimit } from './customer-auth/customer-email-rate-limit';
 
 /**
  * Root Hono application for the Echo Grid Feedback CEP API.
@@ -167,6 +171,9 @@ api.route('/qr', qrRoutes);
 api.route('/feedback', feedbackRoutes);
 api.route('/feedback-forms', feedbackFormRoutes);
 api.route('/customer-auth', customerAuthRoutes);
+// S5-01: email registration and login. DISABLED BY DEFAULT: every /customer-auth/email/* path is a generic 404 unless
+// CUSTOMER_EMAIL_AUTH_ENABLED is exactly "true"; when on, any missing setting answers 503 (no defaults, no fallback).
+api.route('/customer-auth', customerEmailAuthComposition);
 // S4-03: account recovery. DISABLED BY DEFAULT: every path is a generic 404 unless CUSTOMER_RECOVERY_ENABLED is exactly "true".
 api.route('/customer-recovery', customerRecoveryRoutes);
 api.route('/customer-memberships', customerMembershipRoutes);
