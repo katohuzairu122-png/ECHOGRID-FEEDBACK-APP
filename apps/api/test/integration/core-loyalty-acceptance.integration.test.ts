@@ -20,7 +20,7 @@ const databaseUrl = process.env.DATABASE_URL;
 if (databaseUrl) {
   const target = new URL(databaseUrl);
   if (!['localhost', '127.0.0.1'].includes(target.hostname) ||
-      !['/echogrid_test', '/echogrid_core_loyalty_test'].includes(target.pathname)) {
+      !['/echogrid_test', '/echogrid_ci_pg18', '/echogrid_core_loyalty_test'].includes(target.pathname)) {
     throw new Error('Core loyalty acceptance requires a disposable loopback PostgreSQL test database.');
   }
 }
