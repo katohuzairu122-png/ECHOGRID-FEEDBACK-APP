@@ -1,0 +1,77 @@
+import { describe, expect, it } from 'vitest';
+import { screen, within } from '@testing-library/react';
+import { renderWithIntl } from '@/test-utils';
+import type { CommunityFeedItem } from '@/lib/community-feed-types';
+import { CommunityFeedView } from './community-feed-view';
+
+const item = (over: Partial<CommunityFeedItem> = {}): CommunityFeedItem => ({
+  handle: 'abcdefghijklmnopqrstuv',
+  contentClass: 'official',
+  businessName: null,
+  body: 'Welcome to the Community.',
+  linkUrl: 'https://echogrid.example/news',
+  contentLocale: 'en',
+  publishedAt: '2026-11-16T10:00:00.000Z',
+  ...over,
+});
+
+describe('CommunityFeedView', () => {
+  it('shows an honest empty state, never fabricated activity', () => {
+    renderWithIntl(<CommunityFeedView result={{ status: 'ready', data: { items: [], nextCursor: null } }} />);
+    expect(screen.getByRole('heading', { level: 1, name: 'Community feed' })).toBeInTheDocument();
+    expect(screen.getByText('Nothing to show yet')).toBeInTheDocument();
+    expect(screen.queryByRole('article')).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Load more' })).not.toBeInTheDocument();
+  });
+
+  it('renders accessible cards with a real time element and an https link only', () => {
+    renderWithIntl(
+      <CommunityFeedView
+        result={{
+          status: 'ready',
+          data: {
+            items: [item(), item({ handle: 'bbbbbbbbbbbbbbbbbbbbbb', contentClass: 'business_post', businessName: 'The Daily Grind', linkUrl: 'javascript:alert(1)', body: 'Fresh bread' })],
+            nextCursor: null,
+          },
+        }}
+      />,
+    );
+    const list = screen.getByRole('list', { name: 'Community feed updates' });
+    const cards = within(list).getAllByRole('article');
+    expect(cards).toHaveLength(2);
+    expect(within(cards[0]!).getByText('Echo Grid')).toBeInTheDocument();
+    expect(within(cards[0]!).getByRole('link', { name: 'Open link' })).toHaveAttribute('href', 'https://echogrid.example/news');
+    expect(cards[0]!.querySelector('time')).toHaveAttribute('datetime', '2026-11-16T10:00:00.000Z');
+    expect(within(cards[1]!).getByText('The Daily Grind')).toBeInTheDocument();
+    expect(within(cards[1]!).queryByRole('link')).not.toBeInTheDocument();
+  });
+
+  it('offers cursor paging only when the API returned a next cursor, URL-encoded', () => {
+    renderWithIntl(<CommunityFeedView result={{ status: 'ready', data: { items: [item()], nextCursor: 'next_1' } }} />);
+    expect(screen.getByRole('link', { name: 'Load more' })).toHaveAttribute(
+      'href',
+      '/loyalty/dashboard/community/feed?cursor=next_1',
+    );
+  });
+
+  it('reports a load failure as an error with retry, never as an empty feed', () => {
+    renderWithIntl(<CommunityFeedView result={{ status: 'unavailable' }} />);
+    expect(screen.getByRole('status')).toHaveTextContent('The feed could not be loaded right now.');
+    expect(screen.queryByText('Nothing to show yet')).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Try again' })).toHaveAttribute('href', '/loyalty/dashboard/community/feed');
+  });
+
+  it('retry preserves the page cursor', () => {
+    renderWithIntl(<CommunityFeedView result={{ status: 'unavailable' }} cursor="page_2" />);
+    expect(screen.getByRole('link', { name: 'Try again' })).toHaveAttribute(
+      'href',
+      '/loyalty/dashboard/community/feed?cursor=page_2',
+    );
+  });
+
+  it('reports forbidden without a retry action', () => {
+    renderWithIntl(<CommunityFeedView result={{ status: 'forbidden' }} />);
+    expect(screen.getByRole('status')).toHaveTextContent('not available with your current access');
+    expect(screen.queryByRole('link', { name: 'Try again' })).not.toBeInTheDocument();
+  });
+});

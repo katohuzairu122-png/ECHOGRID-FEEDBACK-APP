@@ -36,3 +36,6 @@ Auth: `customerAuthenticate` (customer JWT, active customer) + `PUBLIC_RATE_LIMI
 - **Locale:** customers have no language preference in the current architecture; customer pages without a staff session render in the default locale (English). The translations (en/fr/es/ar) exist and were verified with a staff-session harness only. Selecting a customer locale needs a separate decision.
 - Join/Leave and any consent flow are intentionally absent (separate consent-reviewed step).
 - No ledger total count exists, so "Older" appears whenever a full page is returned.
+
+## Update — COMMUNITY-01
+The hub is now the **Points & Membership** section of Community; a **Feed** section lives at `/loyalty/dashboard/community/feed`. See `docs/architecture/builds/COMMUNITY/COMMUNITY_01_TAB_AND_FEED_FOUNDATION.md`. The "Locale" limitation above is superseded by the saved customer language and global next-intl resolution.

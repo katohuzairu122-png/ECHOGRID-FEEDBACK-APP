@@ -345,7 +345,30 @@
         "pointsTitle": "Acerca de los Puntos de la Comunidad",
         "pointsBody": "Los Puntos de la Comunidad se llevan en su propio registro. Esta página solo muestra su saldo e historial; no puede crear, gastar ni cambiar puntos."
       },
-      "retry": "Reintentar"
+      "retry": "Reintentar",
+      "sections": {
+        "label": "Secciones de la Comunidad",
+        "points": "Puntos y membresía",
+        "feed": "Novedades"
+      },
+      "feed": {
+        "eyebrow": "Comunidad Echo Grid",
+        "title": "Novedades de la Comunidad",
+        "description": "Novedades compartidas con los clientes de Echo Grid.",
+        "empty": {
+          "title": "Todavía no hay nada que mostrar",
+          "body": "No se han publicado novedades de la Comunidad para ti. Cuando las haya, aparecerán aquí."
+        },
+        "error": "No se pudo cargar el contenido en este momento.",
+        "forbidden": "Las novedades no están disponibles con tu acceso actual.",
+        "retry": "Reintentar",
+        "loadMore": "Cargar más",
+        "official": "Echo Grid",
+        "business": "Novedad de un negocio",
+        "openLink": "Abrir enlace",
+        "publishedOn": "Publicado el {date}",
+        "listLabel": "Novedades de la Comunidad"
+      }
     },
     "surveys": {
       "title": "Encuestas",

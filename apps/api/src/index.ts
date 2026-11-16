@@ -51,6 +51,7 @@ import { fraudSignalRoutes } from './fraud/fraud-signal.routes';
 import { surveyRoutes } from './surveys/survey.routes';
 import { surveyCustomerRoutes } from './surveys/survey-customer.routes';
 import { communityCustomerRoutes } from './community/community-customer.routes';
+import { communityFeedRoutes } from './community/community-feed.routes';
 import { communityPointCustomerRoutes } from './community/community-point-customer.routes';
 import { orphanCustomerRoutes } from './orphan-settlement/orphan-customer.routes';
 import { orphanSettlementCustomerRoutes } from './orphan-settlement/orphan-settlement-customer.routes';
@@ -187,6 +188,8 @@ api.route('/fraud-signals', fraudSignalRoutes);
 // run staff authentication for /surveys/me/* just like the loyalty customer/staff split.
 api.route('/surveys/me', surveyCustomerRoutes);
 api.route('/community/me', communityCustomerRoutes);
+// COMMUNITY-01: read-only, customer-authenticated feed foundation. Empty source only (no approved publication policy).
+api.route('/network/feed', communityFeedRoutes);
 api.route('/community-points/me', communityPointCustomerRoutes);
 api.route('/orphan-claims/me', orphanCustomerRoutes);
 api.route('/orphan-settlements', orphanSettlementCustomerRoutes);

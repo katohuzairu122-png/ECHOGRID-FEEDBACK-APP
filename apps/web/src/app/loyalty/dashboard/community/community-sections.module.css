@@ -1,0 +1,124 @@
+/* Community sections + feed (COMMUNITY-01). Shared workspace tokens only (--ws-*, --ws-c-*). */
+.frame {
+  display: grid;
+  gap: 20px;
+  min-width: 0;
+}
+.sectionNav ul {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.sectionLink {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 18px;
+  border-radius: 999px;
+  border: 1px solid var(--ws-border);
+  color: var(--ws-text-muted);
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+}
+.sectionLink:hover {
+  color: var(--ws-text);
+}
+.sectionLink:focus-visible {
+  outline: 2px solid var(--ws-c-mint);
+  outline-offset: 2px;
+}
+.sectionLink[aria-current='page'] {
+  color: var(--ws-text);
+  background: color-mix(in srgb, var(--ws-c-mint) 16%, var(--ws-surface));
+  border-color: color-mix(in srgb, var(--ws-c-mint) 55%, var(--ws-border));
+}
+.feed {
+  display: grid;
+  gap: 18px;
+  min-width: 0;
+}
+.feedList {
+  display: grid;
+  gap: 14px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.card {
+  display: grid;
+  gap: 10px;
+  padding: 18px 20px;
+  border-radius: 16px;
+  border: 1px solid var(--ws-border);
+  background: var(--ws-surface);
+  min-width: 0;
+}
+.cardMeta {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+  font-size: 12px;
+  color: var(--ws-text-muted);
+}
+.badge {
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-weight: 600;
+  background: color-mix(in srgb, var(--ws-c-violet) 20%, var(--ws-surface));
+}
+.badge[data-class='official'] {
+  background: color-mix(in srgb, var(--ws-c-mint) 22%, var(--ws-surface));
+}
+.cardBody {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 1.7;
+  font-size: 14px;
+  margin: 0;
+}
+.cardLink {
+  color: var(--ws-accent-text);
+  font-size: 13px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.state {
+  padding: 28px 22px;
+  border-radius: 16px;
+  border: 1px dashed var(--ws-border);
+  text-align: center;
+  display: grid;
+  gap: 8px;
+  justify-items: center;
+}
+.state h2 {
+  font-size: 16px;
+  margin: 0;
+}
+.state p {
+  color: var(--ws-text-muted);
+  font-size: 13px;
+  line-height: 1.7;
+  margin: 0;
+}
+.action {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 18px;
+  border-radius: 999px;
+  border: 1px solid var(--ws-border);
+  color: var(--ws-text);
+  font-weight: 600;
+  font-size: 14px;
+  text-decoration: none;
+}
+.action:focus-visible {
+  outline: 2px solid var(--ws-c-mint);
+  outline-offset: 2px;
+}
