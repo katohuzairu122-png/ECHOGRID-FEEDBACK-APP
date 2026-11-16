@@ -22,10 +22,10 @@ const customerId = '11111111-1111-4111-8111-111111111111';
 const env = { CUSTOMER_JWT_SECRET: 'customer-test-secret' } as Bindings;
 const ctx = { waitUntil: vi.fn(), passThroughOnException: vi.fn() } as unknown as ExecutionContext;
 
-function appWith(source: FeedSource) {
+function appWith(source: FeedSource, enabled = true) {
   const app = new Hono<{ Bindings: Bindings }>();
   app.onError(errorHandler);
-  app.route('/network/feed', createCommunityFeedRoutes({ source }));
+  app.route('/network', createCommunityFeedRoutes({ isEnabled: () => enabled, openSource: async () => ({ source }) }));
   return app;
 }
 
@@ -65,14 +65,31 @@ describe('GET /network/feed (COMMUNITY-01 foundation)', () => {
     expect(listVisible).not.toHaveBeenCalled();
   });
 
-  it('the mounted default source is empty: no fabricated activity', async () => {
+  it('the mounted instance is disabled by default: feed is a generic 404 and status says disabled', async () => {
     const app = new Hono<{ Bindings: Bindings }>();
     app.onError(errorHandler);
-    app.route('/network/feed', communityFeedRoutes);
-    const response = await get(app);
-    expect(response.status).toBe(200);
-    expect(response.headers.get('cache-control')).toBe('private, no-store');
-    expect(await response.json()).toEqual({ success: true, data: { items: [], nextCursor: null } });
+    app.route('/network', communityFeedRoutes);
+    expect((await get(app)).status).toBe(404);
+    const status = await app.fetch(new Request('https://api.test/network/status', {
+      headers: { Authorization: `Bearer ${await signCustomerAccessToken(customerId, env.CUSTOMER_JWT_SECRET)}` },
+    }), env, ctx);
+    expect(status.status).toBe(200);
+    expect(await status.json()).toEqual({ success: true, data: { enabled: false } });
+  });
+
+  it('with the flag off the feed never touches the source, whatever the query', async () => {
+    const listVisible = vi.fn();
+    expect((await get(appWith({ listVisible }, false), '?limit=5')).status).toBe(404);
+    expect(listVisible).not.toHaveBeenCalled();
+  });
+
+  it('reports enabled status to an authenticated customer only', async () => {
+    const app = appWith({ listVisible: vi.fn() });
+    const anonymous = await app.fetch(new Request('https://api.test/network/status'), env, ctx);
+    expect(anonymous.status).toBe(401);
+    const token = await signCustomerAccessToken(customerId, env.CUSTOMER_JWT_SECRET);
+    const ok = await app.fetch(new Request('https://api.test/network/status', { headers: { Authorization: `Bearer ${token}` } }), env, ctx);
+    expect(await ok.json()).toEqual({ success: true, data: { enabled: true } });
   });
 
   it('passes only the session customer id, the validated limit and cursor to the source', async () => {

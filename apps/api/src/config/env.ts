@@ -281,6 +281,8 @@ export interface Bindings {
    * per environment only at an authorized activation.
    */
   CUSTOMER_RECOVERY_ENABLED?: string;
+  /** NETWORK-01: Network Feed feature flag. Disabled unless exactly "true". Not set in wrangler.toml. */
+  NETWORK_FEED_ENABLED?: string;
   /**
    * Recovery completion needs the customer password minimum length. The owner decision (CA-05) is not recorded, so there
    * is no default: a missing or non-integer value keeps recovery unavailable (503).
