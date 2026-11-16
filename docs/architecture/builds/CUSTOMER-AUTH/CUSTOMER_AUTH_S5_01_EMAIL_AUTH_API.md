@@ -30,9 +30,9 @@ design: rotating sessions, no reuse of the legacy 90-day token path).
 ## Owner decisions
 - **CA-02 (session lifetimes), partly APPROVED 2026-11-16:** access token 15 minutes (`900`), absolute session lifetime 30 days
   (`2592000`), refresh credential rotating with a 30-day lifetime (`CUSTOMER_SESSION_REFRESH_TTL_SECONDS=2592000`, equal to the
-  absolute limit as the proposal states). **Still open and needed before activation:** the idle limit
-  (`CUSTOMER_SESSION_IDLE_TTL_SECONDS`, must be <= absolute) and the step-up "recent verification" window
-  (`CUSTOMER_STEP_UP_WINDOW_SECONDS`). The code has no default for either.
+  absolute limit as the proposal states). **Also APPROVED 2026-11-16:** idle limit 30 minutes
+  (`CUSTOMER_SESSION_IDLE_TTL_SECONDS=1800`, <= absolute) and step-up "recent verification" window 5 minutes
+  (`CUSTOMER_STEP_UP_WINDOW_SECONDS=300`). Configuration only; the code still has no default for either.
 - **CA-05 (password minimum length), APPROVED (final):** 8 characters, set as `CUSTOMER_PASSWORD_MIN_LENGTH=8` (supersedes the
   proposed 12). Configuration only: no code default, missing value still fails closed. Applies to customer creation, recovery and
   password change; staff policies unchanged. See `docs/runbooks/CUSTOMER_EMAIL_AUTH_STAGING.md`.

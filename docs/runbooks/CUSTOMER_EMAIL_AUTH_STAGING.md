@@ -9,8 +9,9 @@ environment. Every step below needs separate owner authorization; this document 
 - Configuration-driven on both Workers; no code default. A missing or invalid value fails closed (503 on the API; the web
   form simply omits the hint and the API still enforces). Existing passwords are not invalidated. Maximum stays 128.
 - Approved lifetimes: access 900 s, refresh 2592000 s, absolute 2592000 s.
-- **Still undecided (blocks activation, deliberately absent from config):** `CUSTOMER_SESSION_IDLE_TTL_SECONDS`,
-  `CUSTOMER_STEP_UP_WINDOW_SECONDS`.
+- Idle limit 30 minutes (`CUSTOMER_SESSION_IDLE_TTL_SECONDS=1800`) and step-up window 5 minutes
+  (`CUSTOMER_STEP_UP_WINDOW_SECONDS=300`), approved 2026-11-16. Set in the staging templates; the flag stays `"false"` until the
+  secrets exist and activation is separately authorized.
 
 ## Required order (do not reorder)
 **Staging schema verification -> authorized migration -> code deployment -> feature activation -> acceptance testing**

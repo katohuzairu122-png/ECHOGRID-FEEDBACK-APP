@@ -341,9 +341,9 @@ CUSTOMER_PASSWORD_MIN_LENGTH = "8"
 CUSTOMER_SESSION_ACCESS_TTL_SECONDS = "900"
 CUSTOMER_SESSION_REFRESH_TTL_SECONDS = "2592000"
 CUSTOMER_SESSION_ABSOLUTE_TTL_SECONDS = "2592000"
-# OWNER DECISIONS PENDING. Deliberately NOT set: without them the feature stays unavailable even if the flag is turned on.
-# CUSTOMER_SESSION_IDLE_TTL_SECONDS = "<owner decision; must be <= the absolute lifetime>"
-# CUSTOMER_STEP_UP_WINDOW_SECONDS = "<owner decision>"
+# Owner decisions CA-02 (approved 2026-11-16): idle limit 30 minutes (must stay <= the absolute lifetime), step-up window 5 minutes.
+CUSTOMER_SESSION_IDLE_TTL_SECONDS = "1800"
+CUSTOMER_STEP_UP_WINDOW_SECONDS = "300"
 
 [env.staging.secrets]
 required = [
