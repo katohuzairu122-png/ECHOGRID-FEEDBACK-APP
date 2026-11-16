@@ -446,6 +446,38 @@
       "unavailableBody": "Es algo temporal y tus membresías no han cambiado. Inténtalo de nuevo en un momento.",
       "retry": "Reintentar",
       "newMessages": "{count, plural, one {# mensaje nuevo} other {# mensajes nuevos}}"
+    },
+    "emailAuth": {
+      "signInTitle": "Iniciar sesión con correo",
+      "signInDescription": "Usa el correo y la contraseña que creaste.",
+      "emailLabel": "Correo electrónico",
+      "passwordLabel": "Contraseña",
+      "signInButton": "Iniciar sesión",
+      "signingIn": "Iniciando sesión…",
+      "usePhoneInstead": "Iniciar sesión con el número de teléfono",
+      "createAccountLink": "¿Eres nuevo? Crea una cuenta con tu correo",
+      "signUpTitle": "Crea tu cuenta",
+      "signUpDescription": "Ingresa tu correo. Te enviaremos un enlace para confirmarlo.",
+      "sendLink": "Enviar enlace de confirmación",
+      "sending": "Enviando…",
+      "sentTitle": "Revisa tu correo",
+      "sentDescription": "Si esta dirección puede usarse, hemos enviado un enlace de confirmación. Caduca en 15 minutos.",
+      "haveAccountLink": "¿Ya tienes una cuenta? Inicia sesión",
+      "verifyTitle": "Confirma tu correo",
+      "verifyDescription": "Ingresa el correo que usaste y elige una contraseña para terminar de crear tu cuenta.",
+      "confirmEmailLabel": "Confirma tu correo",
+      "createPasswordLabel": "Elige una contraseña",
+      "createAccountButton": "Crear cuenta",
+      "creating": "Creando…",
+      "missingLink": "Este enlace está incompleto. Abre de nuevo el enlace de tu correo o solicita uno nuevo.",
+      "requestNewLink": "Solicitar un enlace nuevo",
+      "errors": {
+        "invalid_input": "Revisa los datos ingresados e inténtalo de nuevo.",
+        "invalid_credentials": "El correo o la contraseña no son correctos.",
+        "invalid_proof": "Este enlace caducó o ya se usó, o la contraseña no fue aceptada. Solicita un enlace nuevo e inténtalo de nuevo.",
+        "rate_limited": "Demasiados intentos. Espera unos minutos e inténtalo de nuevo.",
+        "unavailable": "No disponible por ahora. Inténtalo más tarde."
+      }
     }
   }
 }

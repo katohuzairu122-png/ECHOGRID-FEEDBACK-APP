@@ -57,13 +57,17 @@ describe('S3 stays unreachable from the deployed Worker until activation', () =>
     ]);
   });
 
-  it('S5-01/S5-02: the rotating session service is constructed ONLY by the two flag-gated entry points, each gated and mounted once', () => {
-    // Activation was approved (Option A) but stays behind CUSTOMER_EMAIL_AUTH_ENABLED: exactly two non-test constructors,
-    // the email-auth composition (issues sessions) and the customer middleware (verifies them).
+  it('S5-01..S5-03: the rotating session service is constructed ONLY by the three flag-gated entry points, each gated and mounted once', () => {
+    // Activation was approved (Option A) but stays behind CUSTOMER_EMAIL_AUTH_ENABLED: exactly three non-test constructors,
+    // the email-auth composition (issues sessions), the session lifecycle composition (refresh, logout) and the customer
+    // middleware (verifies them).
     expect(referencing(/new CustomerSessionService\(/)).toEqual([
       'src/customer-auth/customer-email-auth.composition.ts',
+      'src/customer-auth/customer-session-lifecycle.composition.ts',
       'src/middleware/customer-authenticate.ts',
     ]);
+    expect(read('src/customer-auth/customer-session-lifecycle.composition.ts')).toMatch(/isEnabled: \(c\) => isCustomerEmailAuthEnabled\(c\.env as Bindings\)/);
+    expect(read('src/index.ts')).toMatch(/api\.route\('\/customer-session', customerSessionLifecycleComposition\);/);
     const middlewareSource = read('src/middleware/customer-authenticate.ts');
     expect(middlewareSource).toMatch(/isEnabled: \(c\) => isCustomerEmailAuthEnabled\(c\.env as Bindings\)/);
     expect(middlewareSource).toContain('export const legacyCustomerAuthenticate = createCustomerAuthenticate();');

@@ -7,11 +7,11 @@ import { ApiError } from '@/lib/api-client';
 import { safeInternalPath } from '@/lib/safe-redirect';
 import {
   setCustomerSession,
-  clearCustomerSession,
   setPendingCustomerPhone,
   getPendingCustomerPhone,
   clearPendingCustomerPhone,
 } from '@/lib/customer-session';
+import { revokeRotatingCustomerSession } from '@/lib/customer-session-refresh';
 
 export interface OtpRequestState {
   error?: string;
@@ -90,6 +90,8 @@ export async function verifyOtpAction(
 }
 
 export async function customerLogoutAction(): Promise<void> {
-  await clearCustomerSession();
+  // Ends a rotating session on the server (best effort) and clears every customer credential cookie, legacy included, so a
+  // legacy-only customer signs out exactly as before.
+  await revokeRotatingCustomerSession();
   redirect('/loyalty/login');
 }

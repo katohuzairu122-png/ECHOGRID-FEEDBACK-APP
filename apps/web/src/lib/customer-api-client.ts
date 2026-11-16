@@ -2,9 +2,11 @@ import 'server-only';
 import { redirect } from 'next/navigation';
 import { API_BASE_URL, ApiError, parseEnvelope } from './api-client';
 import { signedAttributionHeadersSafe } from './cashier/client-attribution';
-import { getCustomerToken } from './customer-session';
+import { getCustomerToken, hasRotatingRefreshCredential, wasCustomerRecentlyRefreshed } from './customer-session';
 
 export const CUSTOMER_LOGIN_PATH = '/loyalty/login';
+export const CUSTOMER_REFRESH_PATH = '/loyalty/session/refresh';
+const DEFAULT_AFTER_LOGIN = '/loyalty/dashboard';
 
 /**
  * The customer counterpart to apiFetch() -- attaches the customer JWT
@@ -44,11 +46,16 @@ export async function customerApiFetch<T>(
   const loginPath = loginNext
     ? `${CUSTOMER_LOGIN_PATH}?next=${encodeURIComponent(loginNext)}`
     : CUSTOMER_LOGIN_PATH;
+  // A rotating session whose access cookie has expired (or was refused) is renewed from its refresh credential, once; a
+  // renewal that just happened and still fails goes to sign-in so the two can never loop. Cookies cannot be written while a
+  // page renders, so the renewal runs in a route handler and returns here.
+  const refreshPath = `${CUSTOMER_REFRESH_PATH}?next=${encodeURIComponent(loginNext ?? DEFAULT_AFTER_LOGIN)}`;
+  const canRefresh = async () => (await hasRotatingRefreshCredential()) && !(await wasCustomerRecentlyRefreshed());
   const token = await getCustomerToken();
   if (!token) {
     // No token at all -- same destination, reached without a wasted API
     // round trip. Previously an immediate uncaught ApiError.
-    redirect(loginPath);
+    redirect((await canRefresh()) ? refreshPath : loginPath);
   }
 
   const headers = new Headers(init.headers);
@@ -62,7 +69,7 @@ export async function customerApiFetch<T>(
     return await parseEnvelope<T>(response);
   } catch (err) {
     if (err instanceof ApiError && err.status === 401) {
-      redirect(loginPath);
+      redirect((await canRefresh()) ? refreshPath : loginPath);
     }
     // Every other failure keeps surfacing as an ApiError for the nearest
     // error boundary. A 403, a 500 or a malformed envelope is not something

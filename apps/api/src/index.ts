@@ -25,6 +25,7 @@ import { feedbackFormRoutes } from './feedback/feedback-form.routes';
 import { customerAuthRoutes } from './customer-auth/customer-auth.routes';
 import { customerRecoveryRoutes } from './customer-auth/customer-recovery.composition';
 import { customerEmailAuthComposition } from './customer-auth/customer-email-auth.composition';
+import { customerSessionLifecycleComposition } from './customer-auth/customer-session-lifecycle.composition';
 import { customerMembershipRoutes } from './customer-relationships/customer-membership.routes';
 import { customerLanguageRoutes } from './customer-language/customer-language.routes';
 import { consentRoutes } from './consent/consent.routes';
@@ -174,6 +175,8 @@ api.route('/customer-auth', customerAuthRoutes);
 // S5-01: email registration and login. DISABLED BY DEFAULT: every /customer-auth/email/* path is a generic 404 unless
 // CUSTOMER_EMAIL_AUTH_ENABLED is exactly "true"; when on, any missing setting answers 503 (no defaults, no fallback).
 api.route('/customer-auth', customerEmailAuthComposition);
+// S5-03: refresh and logout for rotating customer sessions, same gate, Web Worker only.
+api.route('/customer-session', customerSessionLifecycleComposition);
 // S4-03: account recovery. DISABLED BY DEFAULT: every path is a generic 404 unless CUSTOMER_RECOVERY_ENABLED is exactly "true".
 api.route('/customer-recovery', customerRecoveryRoutes);
 api.route('/customer-memberships', customerMembershipRoutes);

@@ -1,0 +1,80 @@
+'use client';
+
+import { useActionState, useEffect, useState } from 'react';
+import { useTranslations } from 'next-intl';
+import Link from 'next/link';
+import { completeEmailRegistrationAction, type EmailAuthState } from '@/lib/actions/customer-email-auth';
+import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Input, Label } from '@/components/ui';
+import { Logo } from '@/components/brand';
+import { LanguageSelector } from '@/components/language-selector';
+
+const initial: EmailAuthState = {};
+
+/** Reads `#c=<challengeId>.<proof>` and removes it from the address bar at once, so the proof is not kept in history. */
+export function readChallengeFromHash(hash: string): string | null {
+  const match = /^#c=([^&]+)$/.exec(hash);
+  if (!match) return null;
+  try {
+    const value = decodeURIComponent(match[1]!);
+    return /^[0-9a-fA-F-]{36}\.[A-Za-z0-9_-]{16,}$/.test(value) ? value : null;
+  } catch {
+    return null;
+  }
+}
+
+export function SignupVerifyForm({ next }: { next: string }) {
+  const [state, formAction, pending] = useActionState(completeEmailRegistrationAction, initial);
+  const t = useTranslations('loyalty.customer.emailAuth');
+  const [challenge, setChallenge] = useState<string | null | undefined>(undefined);
+
+  useEffect(() => {
+    setChallenge(readChallengeFromHash(window.location.hash));
+    window.history.replaceState(null, '', window.location.pathname + window.location.search);
+  }, []);
+  useEffect(() => {
+    if (state.success && state.next) window.location.assign(state.next);
+  }, [state]);
+
+  if (challenge === undefined) return null; // not read yet (server render has no fragment)
+
+  return (
+    <main className="flex min-h-screen flex-col items-center justify-center gap-8 bg-neutral-50 p-8">
+      <LanguageSelector className="w-40 self-end" />
+      <Logo variant="full" iconSize={40} />
+      <Card className="w-full max-w-sm">
+        <CardHeader>
+          <CardTitle>{t('verifyTitle')}</CardTitle>
+          <CardDescription>{challenge ? t('verifyDescription') : t('missingLink')}</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {challenge ? (
+            <form action={formAction} className="flex flex-col gap-4">
+              <input type="hidden" name="challenge" value={challenge} />
+              <input type="hidden" name="next" value={next} />
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="email">{t('confirmEmailLabel')}</Label>
+                <Input id="email" name="email" type="email" autoComplete="email" required />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="password">{t('createPasswordLabel')}</Label>
+                <Input id="password" name="password" type="password" autoComplete="new-password" required />
+              </div>
+              {state.error && (
+                <p role="alert" className="text-sm text-danger">
+                  {t(`errors.${state.error}`)}
+                </p>
+              )}
+              <Button type="submit" disabled={pending || state.success === true} className="w-full">
+                {pending ? t('creating') : t('createAccountButton')}
+              </Button>
+            </form>
+          ) : (
+            <Link href={`/loyalty/signup?next=${encodeURIComponent(next)}`} className="text-sm font-medium text-brand-700 hover:underline">
+              {t('requestNewLink')}
+            </Link>
+          )}
+        </CardContent>
+      </Card>
+    </main>
+  );
+}

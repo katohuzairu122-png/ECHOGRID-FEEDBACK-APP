@@ -2,6 +2,7 @@ import 'server-only';
 import { cookies } from 'next/headers';
 import {
   CUSTOMER_PENDING_PHONE_COOKIE,
+  CUSTOMER_RECENTLY_REFRESHED_COOKIE,
   CUSTOMER_TOKEN_COOKIE,
 } from './customer-cookies';
 
@@ -28,14 +29,38 @@ export async function setCustomerSession(accessToken: string): Promise<void> {
   });
 }
 
+/**
+ * The bearer for API calls. A rotating session takes precedence over the legacy cookie: its ACCESS cookie (undefined once it
+ * has expired, which is the cue to refresh). Without a rotating session this is the legacy 90-day token, unchanged.
+ */
 export async function getCustomerToken(): Promise<string | undefined> {
   const store = await cookies();
+  if (store.has(ROTATING_ACCESS_COOKIE) || store.has(ROTATING_REFRESH_COOKIE)) {
+    return store.get(ROTATING_ACCESS_COOKIE)?.value;
+  }
   return store.get(CUSTOMER_TOKEN_COOKIE)?.value;
 }
 
 export async function hasCustomerSession(): Promise<boolean> {
   const store = await cookies();
-  return store.has(CUSTOMER_TOKEN_COOKIE);
+  return store.has(CUSTOMER_TOKEN_COOKIE) || store.has(ROTATING_ACCESS_COOKIE) || store.has(ROTATING_REFRESH_COOKIE);
+}
+
+/** True when a rotating refresh credential exists, so an expired access token can be renewed instead of signing in again. */
+export async function hasRotatingRefreshCredential(): Promise<boolean> {
+  const store = await cookies();
+  return store.has(ROTATING_REFRESH_COOKIE);
+}
+
+/** Set by the refresh route handler after a successful refresh; read by the API client to avoid a redirect loop. */
+export async function markCustomerRefreshed(): Promise<void> {
+  const store = await cookies();
+  store.set(CUSTOMER_RECENTLY_REFRESHED_COOKIE, '1', { ...rotatingCookieOptions, maxAge: 60 });
+}
+
+export async function wasCustomerRecentlyRefreshed(): Promise<boolean> {
+  const store = await cookies();
+  return store.has(CUSTOMER_RECENTLY_REFRESHED_COOKIE);
 }
 
 export async function clearCustomerSession(): Promise<void> {
