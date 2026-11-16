@@ -64,3 +64,26 @@ SELECT count(*) FROM customer_credentials WHERE login_email_verified_at IS NOT N
 ```
 The first count must be 0 (or each row backfilled per `CUSTOMER_AUTH_01C_EXISTING_CUSTOMER_MIGRATION_PLAN.md`) before activation.
 The legacy kill switch (KS-2) is still hard-wired to "legacy accepted"; making it an environment setting is an owner decision.
+
+## Stage 3 (S5-03): web screens and the cookie bridge
+**API.** `/customer-session/refresh` and `/customer-session/logout` (`customer-session-lifecycle.composition.ts`), same gate as
+sign-up (generic 404 off, 503 unconfigured), Web Worker signature required, so a browser can never present a refresh credential.
+The session service is now constructed in exactly three flag-gated places (guard test): email-auth, session lifecycle, middleware.
+
+**Web.** Off unless the web Worker also has `CUSTOMER_EMAIL_AUTH_ENABLED=true`; the API has its own gate, so BOTH Workers need the
+flag. Routes: `/loyalty/login/email`, `/loyalty/signup`, `/loyalty/signup/verify` (404 when off; the phone sign-in page shows a
+"sign in with email" link only when on). Translated in en, fr, es, ar; errors are codes, so no message reveals whether an email is
+registered.
+- Credentials live only in host-only HttpOnly cookies `__Host-ff_customer_access` (expires with the 15-minute access token) and
+  `__Host-ff_customer_refresh`; they never appear in a response body or page. The confirmation proof is read from the URL fragment
+  and removed from the address bar at once.
+- A rotating session takes precedence over the legacy cookie. When the access cookie expires, `customerApiFetch` redirects to
+  `/loyalty/session/refresh` (a route handler, because cookies cannot be written while a page renders), which rotates the pair and
+  returns the customer to where they were. A one-minute `ff_customer_refreshed` cookie stops a refresh/401 redirect loop. The
+  handler refuses `Sec-Fetch-Site: cross-site` and only follows same-origin `next` paths.
+- A refused or replayed refresh credential clears the session and sends the customer to sign in; a transient failure keeps it.
+- Logout revokes the session server-side (best effort) and ALWAYS clears every customer credential cookie on that device.
+  Legacy-only customers sign out exactly as before.
+
+**Still to do before activation:** stage 4 (phone capture at registration, OTP attach), the idle-limit and step-up values,
+the Durable Object namespace and secrets, the cutoff readiness query, and a staging run of the sign-up and sign-in screens.

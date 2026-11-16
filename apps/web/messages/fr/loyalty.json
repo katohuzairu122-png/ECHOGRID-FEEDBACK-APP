@@ -446,6 +446,38 @@
       "unavailableBody": "C’est temporaire et vos adhésions n’ont pas changé. Veuillez réessayer dans un instant.",
       "retry": "Réessayer",
       "newMessages": "{count, plural, one {# nouveau message} other {# nouveaux messages}}"
+    },
+    "emailAuth": {
+      "signInTitle": "Se connecter avec l’e-mail",
+      "signInDescription": "Utilisez l’e-mail et le mot de passe que vous avez créés.",
+      "emailLabel": "E-mail",
+      "passwordLabel": "Mot de passe",
+      "signInButton": "Se connecter",
+      "signingIn": "Connexion…",
+      "usePhoneInstead": "Se connecter plutôt avec le numéro de téléphone",
+      "createAccountLink": "Nouveau ? Créer un compte avec l’e-mail",
+      "signUpTitle": "Créer votre compte",
+      "signUpDescription": "Saisissez votre e-mail. Nous vous enverrons un lien pour le confirmer.",
+      "sendLink": "Envoyer le lien de confirmation",
+      "sending": "Envoi…",
+      "sentTitle": "Vérifiez votre boîte mail",
+      "sentDescription": "Si cette adresse peut être utilisée, nous avons envoyé un lien de confirmation. Il expire dans 15 minutes.",
+      "haveAccountLink": "Vous avez déjà un compte ? Se connecter",
+      "verifyTitle": "Confirmer votre e-mail",
+      "verifyDescription": "Saisissez l’adresse e-mail utilisée et choisissez un mot de passe pour terminer la création de votre compte.",
+      "confirmEmailLabel": "Confirmez votre e-mail",
+      "createPasswordLabel": "Choisissez un mot de passe",
+      "createAccountButton": "Créer le compte",
+      "creating": "Création…",
+      "missingLink": "Ce lien est incomplet. Ouvrez de nouveau le lien reçu par e-mail ou demandez-en un nouveau.",
+      "requestNewLink": "Demander un nouveau lien",
+      "errors": {
+        "invalid_input": "Vérifiez les informations saisies et réessayez.",
+        "invalid_credentials": "L’e-mail ou le mot de passe est incorrect.",
+        "invalid_proof": "Ce lien a expiré ou a déjà été utilisé, ou le mot de passe n’a pas été accepté. Demandez un nouveau lien et réessayez.",
+        "rate_limited": "Trop de tentatives. Veuillez patienter quelques minutes puis réessayer.",
+        "unavailable": "Indisponible pour le moment. Veuillez réessayer plus tard."
+      }
     }
   }
 }

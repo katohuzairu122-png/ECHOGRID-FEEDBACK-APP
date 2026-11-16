@@ -446,6 +446,38 @@
       "unavailableBody": "This is temporary and nothing has changed on your memberships. Please try again in a moment.",
       "retry": "Try again",
       "newMessages": "{count, plural, one {# new message} other {# new messages}}"
+    },
+    "emailAuth": {
+      "signInTitle": "Sign in with email",
+      "signInDescription": "Use the email and password you created.",
+      "emailLabel": "Email",
+      "passwordLabel": "Password",
+      "signInButton": "Sign in",
+      "signingIn": "Signing in…",
+      "usePhoneInstead": "Sign in with your phone number instead",
+      "createAccountLink": "New here? Create an account with email",
+      "signUpTitle": "Create your account",
+      "signUpDescription": "Enter your email. We will send you a link to confirm it.",
+      "sendLink": "Send confirmation link",
+      "sending": "Sending…",
+      "sentTitle": "Check your email",
+      "sentDescription": "If this address can be used, we have sent a confirmation link. It expires in 15 minutes.",
+      "haveAccountLink": "Already have an account? Sign in",
+      "verifyTitle": "Confirm your email",
+      "verifyDescription": "Enter the email address you used and choose a password to finish creating your account.",
+      "confirmEmailLabel": "Confirm your email",
+      "createPasswordLabel": "Choose a password",
+      "createAccountButton": "Create account",
+      "creating": "Creating…",
+      "missingLink": "This link is incomplete. Open the link from your email again, or request a new one.",
+      "requestNewLink": "Request a new link",
+      "errors": {
+        "invalid_input": "Check the details you entered and try again.",
+        "invalid_credentials": "The email or password is not correct.",
+        "invalid_proof": "This link has expired or was already used, or the password was not accepted. Request a new link and try again.",
+        "rate_limited": "Too many attempts. Please wait a few minutes and try again.",
+        "unavailable": "This is not available right now. Please try again later."
+      }
     }
   }
 }
