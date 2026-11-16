@@ -105,6 +105,30 @@ for (const locale of ['en', 'ar'] as const) {
         FROM fixture_qr CROSS JOIN generate_series(1, 21) AS n;
     `);
 
+    if (!rtl) {
+      await test.step('Serve customers keeps manual entry available after a camera device error', async () => {
+        await page.addInitScript(() => {
+          Object.defineProperty(navigator.mediaDevices, 'getUserMedia', {
+            value: async () => {
+              throw new DOMException('', 'NotReadableError');
+            },
+          });
+        });
+        const response = await page.goto('/dashboard/loyalty/scan');
+        expect(response?.headers()['permissions-policy']).toContain('camera=(self)');
+        const serve = loyaltyEn.staff.serve;
+        await page.getByRole('button', { name: serve.scanLarge, exact: true }).tap();
+        await expect(page.getByRole('alert')).toHaveText(serve.cameraUnavailable);
+        const input = page.getByLabel(serve.scanField);
+        await input.fill('invalid-token');
+        await page.getByRole('button', { name: serve.findCustomer, exact: true }).tap();
+        await expect(page.getByText(serve.errors.unrecognizedInput)).toBeVisible();
+        await expect(page).toHaveURL(/\/dashboard\/loyalty\/scan$/);
+        await page.goBack();
+        await expect(page).not.toHaveURL(/\/dashboard\/loyalty\/scan$/);
+      });
+    }
+
     await test.step('F1–F3 quick form publication and advanced disclosure', async () => {
       await page.goto('/dashboard/feedback/forms');
       await expect(page.locator('html')).toHaveAttribute('dir', rtl ? 'rtl' : 'ltr');
