@@ -33,6 +33,7 @@ app.onError(errorHandler);
 function customer(status: Customer['status'] = 'active'): Customer {
   return {
     id: CUSTOMER_ID,
+    qrRevocationEpoch: 0,
     phone: '+15551234567',
     fullName: null,
     email: null,

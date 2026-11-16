@@ -2,7 +2,7 @@ import type { Bindings } from '../config/env';
 import type { Repositories } from '../repositories';
 import { AppError } from '../lib/errors';
 import { QrCodeService } from '../qr/qr-code.service';
-import { verifyCustomerQrToken } from '../qr/customer-qr-token';
+import { verifyCustomerQrToken, isCustomerQrRevoked } from '../qr/customer-qr-token';
 import { assertSurveyAudienceEligible } from '../surveys/survey-participation.service';
 
 export type LoyaltyResolvedAction =
@@ -66,7 +66,7 @@ export class LoyaltyActionResolver {
     }
 
     const customer = await this.repos.customers.findById(payload.sub);
-    if (!customer || customer.status !== 'active') {
+    if (!customer || customer.status !== 'active' || isCustomerQrRevoked(payload, customer.qrRevocationEpoch)) {
       throw new AppError('This customer QR code is no longer valid.', 404, 'CUSTOMER_QR_NOT_FOUND');
     }
 

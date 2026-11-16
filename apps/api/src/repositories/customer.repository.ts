@@ -25,6 +25,16 @@ export class CustomerRepository extends BaseRepository {
     return row ? this.liftIfSuspensionEnded(row) : row;
   }
 
+  /** Atomically moves the customer's QR revocation epoch forward; every earlier QR token stops resolving. */
+  async bumpQrRevocationEpoch(id: string): Promise<number | undefined> {
+    const [row] = await this.db
+      .update(customers)
+      .set({ qrRevocationEpoch: sql`${customers.qrRevocationEpoch} + 1` })
+      .where(and(eq(customers.id, id), eq(customers.isDeleted, false)))
+      .returning({ epoch: customers.qrRevocationEpoch });
+    return row?.epoch;
+  }
+
   async findByPhone(phone: string): Promise<Customer | undefined> {
     const row = await this.db.query.customers.findFirst({
       where: and(eq(customers.phone, phone), eq(customers.isDeleted, false)),

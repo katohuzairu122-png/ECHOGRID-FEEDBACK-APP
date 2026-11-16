@@ -10,7 +10,7 @@ export default async function CustomerQrPage() {
     <section className="space-y-5">
       <h1 className="text-2xl font-semibold">My customer QR</h1>
       <p>
-        Show this short-lived identity to authorized staff. It contains no balances, permissions or
+        Show this identity to authorized staff; it renews automatically and stays valid for scans all day. It contains no balances, permissions or
         business relationships. Purchase validation and reward handoff require separate staff
         actions.
       </p>

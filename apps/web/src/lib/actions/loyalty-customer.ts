@@ -12,6 +12,21 @@ import { customerApiFetch } from '@/lib/customer-api-client';
 import { rethrowControlFlow } from '@/lib/rethrow-control-flow';
 import { ApiError } from '@/lib/api-client';
 
+export interface CustomerQrCredential {
+  token: string;
+  expiresAt: string;
+}
+
+/** Renews the customer's identity QR (valid up to 24h). Identity only: it authorizes no points, redemption or payment. */
+export async function refreshCustomerQrAction(): Promise<CustomerQrCredential> {
+  return customerApiFetch<CustomerQrCredential>('/loyalty/me/customer-qr', { cache: 'no-store' });
+}
+
+/** Revokes every customer QR issued so far (lost phone / shared screenshot) and returns a fresh one. */
+export async function revokeCustomerQrAction(): Promise<CustomerQrCredential> {
+  return customerApiFetch<CustomerQrCredential>('/loyalty/me/customer-qr/revoke', { method: 'POST', cache: 'no-store' });
+}
+
 /** Explicit customer-consented join through a server-verified business QR
  * context. Split 01 deliberately rejects arbitrary businessId-only enrollment. */
 export async function joinLoyaltyAction(qrToken: string): Promise<LoyaltyAccountDto> {

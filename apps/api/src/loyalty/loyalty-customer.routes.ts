@@ -56,11 +56,33 @@ async function withDb<T>(c: Context<Env>, fn: (db: Database) => Promise<T>): Pro
   }
 }
 
-loyaltyCustomerRoutes.get('/customer-qr', async (c) => {
-  const token = await signCustomerQrToken(c.get('customerId'), c.env.QR_TOKEN_SECRET);
-  return ok(c, {
+function customerQrResponse(token: string) {
+  return {
     token,
     expiresAt: new Date(Date.now() + CUSTOMER_QR_TOKEN_TTL_SECONDS * 1000).toISOString(),
+  };
+}
+
+/** Issues (or re-issues, on rotation) a 24h identity QR bound to the customer's current revocation epoch. */
+loyaltyCustomerRoutes.get('/customer-qr', async (c) => {
+  c.header('Cache-Control', 'private, no-store');
+  return withDb(c, async (db) => {
+    const customer = await createRepositories(db).customers.findById(c.get('customerId'));
+    if (!customer) throw new AppError('Customer not found.', 404, 'NOT_FOUND');
+    return ok(c, customerQrResponse(await signCustomerQrToken(customer.id, c.env.QR_TOKEN_SECRET, customer.qrRevocationEpoch)));
+  });
+});
+
+/**
+ * Revokes every customer QR issued so far (lost phone, screenshot shared) and returns a fresh one. Atomic epoch
+ * increment: earlier tokens stop resolving immediately, the returned token is valid for the new epoch.
+ */
+loyaltyCustomerRoutes.post('/customer-qr/revoke', async (c) => {
+  c.header('Cache-Control', 'private, no-store');
+  return withDb(c, async (db) => {
+    const epoch = await createRepositories(db).customers.bumpQrRevocationEpoch(c.get('customerId'));
+    if (epoch === undefined) throw new AppError('Customer not found.', 404, 'NOT_FOUND');
+    return ok(c, customerQrResponse(await signCustomerQrToken(c.get('customerId'), c.env.QR_TOKEN_SECRET, epoch)));
   });
 });
 
