@@ -6,7 +6,7 @@ import {
   type RotatingCustomerCredentials,
 } from './customer-session';
 
-function readRefreshResponse(payload: unknown): RotatingCustomerCredentials | null {
+export function readRefreshResponse(payload: unknown): RotatingCustomerCredentials | null {
   if (!payload || typeof payload !== 'object') return null;
   const { accessToken, refreshCredential, accessExpiresAt, refreshExpiresAt } =
     payload as Record<string, unknown>;

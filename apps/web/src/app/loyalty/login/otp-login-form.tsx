@@ -15,6 +15,8 @@ const requestInitial: OtpRequestState = {};
 
 interface OtpLoginFormProps {
   next: string;
+  /** Show the "sign in with email" entry (only when the email feature is on). */
+  emailEnabled?: boolean | undefined;
   initialPhone?: string | undefined;
   verifyError?: string | undefined;
 }
@@ -25,12 +27,13 @@ interface OtpLoginFormProps {
  * and redirects to the QR loyalty page in one response, so Cloudflare and the
  * browser cannot race a separate client navigation against cookie storage.
  */
-export function OtpLoginForm({ next, initialPhone, verifyError }: OtpLoginFormProps) {
+export function OtpLoginForm({ next, emailEnabled, initialPhone, verifyError }: OtpLoginFormProps) {
   const [requestState, requestFormAction, requestPending] = useActionState(
     requestOtpAction,
     requestInitial,
   );
   const t = useTranslations('loyalty.customer.login');
+  const emailT = useTranslations('loyalty.customer.emailAuth');
   const verificationPhone = requestState.sent ? requestState.phone : initialPhone;
   const codeSent = Boolean(verificationPhone);
   const currentVerifyError = requestState.sent ? undefined : verifyError;
@@ -72,6 +75,14 @@ export function OtpLoginForm({ next, initialPhone, verifyError }: OtpLoginFormPr
               <Button type="submit" disabled={requestPending} className="w-full">
                 {requestPending ? t('sending') : t('sendCode')}
               </Button>
+              {emailEnabled ? (
+                <Link
+                  href={`/loyalty/login/email?next=${encodeURIComponent(next)}`}
+                  className="text-center text-sm font-medium text-brand-700 hover:underline"
+                >
+                  {emailT('signInTitle')}
+                </Link>
+              ) : null}
             </form>
           ) : (
             <form action="/api/customer-auth/otp/verify" method="post" className="flex flex-col gap-4">
