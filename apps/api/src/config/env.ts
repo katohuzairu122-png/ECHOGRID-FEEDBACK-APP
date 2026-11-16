@@ -275,6 +275,23 @@ export interface Bindings {
    * services refuse to start without it (customer-auth/customer-recovery-config.ts).
    */
   CUSTOMER_RECOVERY_HMAC_SECRET?: string;
+  /**
+   * CUSTOMER-AUTH-S4-03: the explicit server-side gate for the account-recovery routes. Anything other than the exact
+   * string "true" leaves every recovery path answering a generic 404. Not declared in wrangler.toml: it is turned on
+   * per environment only at an authorized activation.
+   */
+  CUSTOMER_RECOVERY_ENABLED?: string;
+  /**
+   * Recovery completion needs the customer password minimum length. The owner decision (CA-05) is not recorded, so there
+   * is no default: a missing or non-integer value keeps recovery unavailable (503).
+   */
+  CUSTOMER_PASSWORD_MIN_LENGTH?: string;
+  /**
+   * Durable Object namespace bound to the CustomerEmailRateLimit class, used for recovery rate limits. NOT declared in
+   * wrangler.toml and no namespace is created here (customer-auth/CUSTOMER_AUTH_S2_R2_READINESS.md); absent means every
+   * recovery operation that needs a limiter is denied.
+   */
+  CUSTOMER_AUTH_RATE_LIMIT?: DurableObjectNamespace;
   /** Guards POST /loyalty/actions/lookup-customer (cashier phone lookup). Keyed by business and staff user so one
    * cashier cannot exhaust another's budget; deliberately small because every call probes the member list. */
   LOOKUP_RATE_LIMITER: RateLimit;

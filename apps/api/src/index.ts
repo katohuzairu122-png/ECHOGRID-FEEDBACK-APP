@@ -23,6 +23,7 @@ import { qrRoutes } from './qr/qr.routes';
 import { feedbackRoutes } from './feedback/feedback.routes';
 import { feedbackFormRoutes } from './feedback/feedback-form.routes';
 import { customerAuthRoutes } from './customer-auth/customer-auth.routes';
+import { customerRecoveryRoutes } from './customer-auth/customer-recovery.composition';
 import { customerMembershipRoutes } from './customer-relationships/customer-membership.routes';
 import { customerLanguageRoutes } from './customer-language/customer-language.routes';
 import { consentRoutes } from './consent/consent.routes';
@@ -164,6 +165,8 @@ api.route('/qr', qrRoutes);
 api.route('/feedback', feedbackRoutes);
 api.route('/feedback-forms', feedbackFormRoutes);
 api.route('/customer-auth', customerAuthRoutes);
+// S4-03: account recovery. DISABLED BY DEFAULT: every path is a generic 404 unless CUSTOMER_RECOVERY_ENABLED is exactly "true".
+api.route('/customer-recovery', customerRecoveryRoutes);
 api.route('/customer-memberships', customerMembershipRoutes);
 api.route('/customer-language', customerLanguageRoutes);
 api.route('/consents', consentRoutes);
