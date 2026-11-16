@@ -21,7 +21,12 @@ describe('recovery trusted source', () => {
   });
 
   it('rejects a missing, unsigned, forged, stale or malformed source', async () => {
-    const forged = (await signed('192.0.2.7')).replace(/.$/, (c) => (c === 'A' ? 'B' : 'A'));
+    // Alter the SECOND-to-last character: the last base64url character of a 32-byte signature carries two unused padding
+    // bits, so swapping it (A<->B, or any of A-D for A) can decode to identical bytes and leave the signature valid,
+    // which made this case fail about 1 run in 16. Every bit of the second-to-last character is significant.
+    const valid = await signed('192.0.2.7');
+    const forged = valid.replace(/.(?=.$)/, (c) => (c === 'A' ? 'B' : 'A'));
+    expect(forged).not.toBe(valid);
     for (const headers of [
       {},
       { 'cf-connecting-ip': '192.0.2.7', 'x-forwarded-for': '192.0.2.7' }, // an unsigned address is never trusted
