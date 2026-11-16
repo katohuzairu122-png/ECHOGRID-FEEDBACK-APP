@@ -345,7 +345,30 @@
         "pointsTitle": "À propos des points Communauté",
         "pointsBody": "Les points Communauté sont tenus dans leur propre registre. Cette page n’affiche que votre solde et votre historique ; elle ne peut ni créer, ni dépenser, ni modifier des points."
       },
-      "retry": "Réessayer"
+      "retry": "Réessayer",
+      "sections": {
+        "label": "Sections de la Communauté",
+        "points": "Points et adhésion",
+        "feed": "Fil d’actualité"
+      },
+      "feed": {
+        "eyebrow": "Communauté Echo Grid",
+        "title": "Fil de la Communauté",
+        "description": "Actualités partagées avec les clients Echo Grid.",
+        "empty": {
+          "title": "Rien à afficher pour le moment",
+          "body": "Aucune actualité de la Communauté n’a été publiée pour vous. Dès qu’il y en aura, elles apparaîtront ici."
+        },
+        "error": "Le fil n’a pas pu être chargé pour le moment.",
+        "forbidden": "Le fil n’est pas disponible avec votre accès actuel.",
+        "retry": "Réessayer",
+        "loadMore": "Charger plus",
+        "official": "Echo Grid",
+        "business": "Actualité d’un commerce",
+        "openLink": "Ouvrir le lien",
+        "publishedOn": "Publié le {date}",
+        "listLabel": "Actualités du fil de la Communauté"
+      }
     },
     "surveys": {
       "title": "Enquêtes",

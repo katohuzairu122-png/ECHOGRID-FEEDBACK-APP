@@ -345,7 +345,30 @@
         "pointsTitle": "About Community Points",
         "pointsBody": "Community Points are kept in their own ledger. This page only shows your balance and history; it cannot create, spend or change points."
       },
-      "retry": "Try again"
+      "retry": "Try again",
+      "sections": {
+        "label": "Community sections",
+        "points": "Points & Membership",
+        "feed": "Feed"
+      },
+      "feed": {
+        "eyebrow": "Echo Grid Community",
+        "title": "Community feed",
+        "description": "Updates shared with Echo Grid customers.",
+        "empty": {
+          "title": "Nothing to show yet",
+          "body": "No Community updates have been published for you. When updates are available, they will appear here."
+        },
+        "error": "The feed could not be loaded right now.",
+        "forbidden": "The feed is not available with your current access.",
+        "retry": "Try again",
+        "loadMore": "Load more",
+        "official": "Echo Grid",
+        "business": "Business update",
+        "openLink": "Open link",
+        "publishedOn": "Published {date}",
+        "listLabel": "Community feed updates"
+      }
     },
     "surveys": {
       "title": "Surveys",
