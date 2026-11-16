@@ -63,7 +63,7 @@ describe('CustomerRepository timed suspension', () => {
         status,
         suspendedUntil: new Date(Date.now() - 1000),
       });
-      const result = await new CustomerRepository(db as never).findByPhone('+96555551234');
+      const result = await new CustomerRepository(db as never).findVerifiedByPhone('+96555551234');
       expect(result?.status).toBe(status);
       expect(updated).not.toHaveBeenCalled();
     }

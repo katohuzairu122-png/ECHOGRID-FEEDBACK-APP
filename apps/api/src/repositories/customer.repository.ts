@@ -1,5 +1,5 @@
-import { eq, and, sql, desc, lte, gt } from 'drizzle-orm';
-import { customers, customerSanctions, businessCustomerMemberships } from '../db/schema';
+import { eq, and, sql, desc, lte, gt, isNotNull, isNull, ne } from 'drizzle-orm';
+import { customers, customerCredentials, customerSanctions, businessCustomerMemberships } from '../db/schema';
 import { BaseRepository } from './base.repository';
 
 export type Customer = typeof customers.$inferSelect;
@@ -35,11 +35,24 @@ export class CustomerRepository extends BaseRepository {
     return row?.epoch;
   }
 
-  async findByPhone(phone: string): Promise<Customer | undefined> {
+  /**
+   * The VERIFIED owner of a phone number (at most one exists: partial unique index). This is the only phone lookup
+   * that may identify a customer for authentication or recovery: an unverified number is a claim, not ownership.
+   */
+  async findVerifiedByPhone(phone: string): Promise<Customer | undefined> {
     const row = await this.db.query.customers.findFirst({
-      where: and(eq(customers.phone, phone), eq(customers.isDeleted, false)),
+      where: and(eq(customers.phone, phone), isNotNull(customers.phoneVerifiedAt), eq(customers.isDeleted, false)),
     });
     return row ? this.liftIfSuspensionEnded(row) : row;
+  }
+
+  /** Every non-deleted customer holding the number, verified or not, verified first. Never an authentication input. */
+  async listByPhone(phone: string): Promise<Customer[]> {
+    const rows = await this.db.query.customers.findMany({
+      where: and(eq(customers.phone, phone), eq(customers.isDeleted, false)),
+    });
+    const lifted = await Promise.all(rows.map((row) => this.liftIfSuspensionEnded(row)));
+    return lifted.sort((x, y) => Number(Boolean(y.phoneVerifiedAt)) - Number(Boolean(x.phoneVerifiedAt)));
   }
 
   /**
@@ -136,34 +149,95 @@ export class CustomerRepository extends BaseRepository {
   }
 
   /**
-   * Find-or-create keyed on the phone, safe under concurrency. Two simultaneous
-   * first verifications of one new phone previously raced (read, then plain
-   * insert) and the loser hit the unique constraint. Here the insert is
-   * `ON CONFLICT DO NOTHING`, then the winner's row is re-read.
+   * Find-or-create keyed on the VERIFIED owner of a phone, safe under concurrency. The caller has just proven the
+   * phone (OTP). The insert is `ON CONFLICT DO NOTHING` against the partial unique index, then the winner is re-read.
    *
-   * A conflict with NO visible row means the phone is held by a soft-deleted
-   * customer (the unique constraint covers deleted rows, `findByPhone` does not).
-   * That is returned as `customer: undefined` so the caller can refuse cleanly
-   * instead of crashing. An existing but unverified customer is marked verified,
-   * because the caller has just proven the phone.
+   * A conflict with NO visible row means the number is held verified by a soft-deleted customer: returned as
+   * `customer: undefined` so the caller can refuse cleanly.
+   *
+   * Unverified rows holding the same number are NOT the owner. The one exception, so existing customers are never
+   * locked out: a legacy PHONE-ONLY account (no login credentials of its own) that is the only unverified holder is
+   * claimed and marked verified. A row that has its own credentials (an email customer who merely typed the number)
+   * is never handed to the person who proved the phone; they get their own verified account instead. Whenever a
+   * verified owner results, the remaining unverified claims on that number are released.
    */
   async createIfAbsent(input: {
     phone: string;
     phoneVerifiedAt: Date;
   }): Promise<{ customer: Customer | undefined; created: boolean }> {
+    const verified = await this.findVerifiedByPhone(input.phone);
+    if (verified) return { customer: verified, created: false };
+
+    const legacy = await this.soleLegacyPhoneOnlyHolder(input.phone);
+    if (legacy) {
+      const claimed = await this.markPhoneVerified(legacy.id);
+      if (claimed) {
+        await this.releaseUnverifiedClaims(input.phone, claimed.id);
+        return { customer: claimed, created: false };
+      }
+    }
+
     const inserted = await this.db
       .insert(customers)
       .values({ phone: input.phone, phoneVerifiedAt: input.phoneVerifiedAt })
-      .onConflictDoNothing({ target: customers.phone })
+      .onConflictDoNothing({ target: customers.phone, where: isNotNull(customers.phoneVerifiedAt) })
       .returning();
-    if (inserted[0]) return { customer: inserted[0], created: true };
-
-    const existing = await this.findByPhone(input.phone);
-    if (!existing) return { customer: undefined, created: false };
-    if (!existing.phoneVerifiedAt) {
-      return { customer: (await this.markPhoneVerified(existing.id)) ?? existing, created: false };
+    if (inserted[0]) {
+      await this.releaseUnverifiedClaims(input.phone, inserted[0].id);
+      return { customer: inserted[0], created: true };
     }
-    return { customer: existing, created: false };
+    const winner = await this.findVerifiedByPhone(input.phone);
+    return { customer: winner, created: false };
+  }
+
+  /** The only non-deleted UNVERIFIED holder of the number that has no credentials of its own, if exactly one. */
+  private async soleLegacyPhoneOnlyHolder(phone: string): Promise<Customer | undefined> {
+    const rows = await this.db
+      .select({ id: customers.id })
+      .from(customers)
+      .leftJoin(customerCredentials, eq(customerCredentials.customerId, customers.id))
+      .where(and(
+        eq(customers.phone, phone),
+        isNull(customers.phoneVerifiedAt),
+        eq(customers.isDeleted, false),
+        isNull(customerCredentials.customerId),
+      ));
+    if (rows.length !== 1) return undefined;
+    return this.db.query.customers.findFirst({ where: eq(customers.id, rows[0]!.id) });
+  }
+
+  /** A verified owner now exists: the number is cleared from every OTHER unverified row that merely claimed it. */
+  async releaseUnverifiedClaims(phone: string, verifiedOwnerId: string): Promise<void> {
+    await this.db
+      .update(customers)
+      .set({ phone: null, updatedAt: new Date() })
+      .where(and(eq(customers.phone, phone), isNull(customers.phoneVerifiedAt), ne(customers.id, verifiedOwnerId)));
+  }
+
+  /**
+   * An authenticated customer has proven ownership of `phone` (OTP): they become its verified owner, unless another
+   * customer already holds it verified ('taken'). First to verify owns the number; stale unverified claims are released.
+   */
+  async claimVerifiedPhone(
+    customerId: string,
+    phone: string,
+  ): Promise<{ ok: true; customer: Customer } | { ok: false; reason: 'taken' | 'not_found' }> {
+    const holder = await this.findVerifiedByPhone(phone);
+    if (holder && holder.id !== customerId) return { ok: false, reason: 'taken' };
+    try {
+      const [row] = await this.db
+        .update(customers)
+        .set({ phone, phoneVerifiedAt: new Date(), updatedAt: new Date() })
+        .where(and(eq(customers.id, customerId), eq(customers.isDeleted, false)))
+        .returning();
+      if (!row) return { ok: false, reason: 'not_found' };
+      await this.releaseUnverifiedClaims(phone, customerId);
+      return { ok: true, customer: row };
+    } catch (error) {
+      const cause = (error as { cause?: { code?: string } }).cause ?? (error as { code?: string });
+      if (cause.code === '23505') return { ok: false, reason: 'taken' };
+      throw error;
+    }
   }
 
   async markPhoneVerified(id: string): Promise<Customer | undefined> {

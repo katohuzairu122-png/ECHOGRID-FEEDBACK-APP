@@ -272,7 +272,7 @@ export class CustomerPasswordAuthService {
     // customer who linked a verified email. Runs before the password policy so
     // the outcome does not depend on the supplied password, and before any
     // hashing. The authoritative, race-safe check is in completeRecovery.
-    const existing = await r.customers.findByPhone(proof.phone);
+    const existing = await r.customers.findVerifiedByPhone(proof.phone);
     if (existing && (await r.credentials.findLegacyLoginState(existing.id))?.hasVerifiedEmail) {
       await this.bestEffort(r.events, {
         customerId: existing.id,
@@ -345,7 +345,7 @@ export class CustomerPasswordAuthService {
     const now = this.clock();
     const r = this.repos();
 
-    const customer = await r.customers.findByPhone(input.phone);
+    const customer = await r.customers.findVerifiedByPhone(input.phone);
     const credential = customer ? await r.credentials.findByCustomerId(customer.id) : undefined;
     const storedHash = credential?.passwordHash ?? (await this.dummy());
     const matches = await this.hasher.verify(normalizePassword(input.password), storedHash);
