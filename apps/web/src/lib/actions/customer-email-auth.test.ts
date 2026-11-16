@@ -32,6 +32,7 @@ const session = { accessToken: 'a', refreshCredential: 'r'.repeat(43), accessExp
 beforeEach(() => {
   vi.clearAllMocks();
   process.env.CUSTOMER_EMAIL_AUTH_ENABLED = 'true';
+  delete process.env.CUSTOMER_PASSWORD_MIN_LENGTH;
 });
 
 describe('email sign-up request', () => {
@@ -126,3 +127,46 @@ describe('ending a session', () => {
     expect(h.revoke).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('password minimum on the web (CUSTOMER-EMAIL-AUTH-POLICY-01: configured, approved 8)', () => {
+  const base = { email: 'a@example.test', challenge: 'chal-1.proof-1', next: '/loyalty/dashboard' };
+
+  it('with the minimum configured, a 7-character password is refused BEFORE any API call, so the proof is not spent', async () => {
+    process.env.CUSTOMER_PASSWORD_MIN_LENGTH = '8';
+    expect(await completeEmailRegistrationAction({}, form({ ...base, password: 'rBq4nZx' }))).toEqual({ error: 'password_too_short', minLength: 8 });
+    expect(h.api).not.toHaveBeenCalled();
+  });
+  it('an 8-character password goes through, and so do longer ones', async () => {
+    process.env.CUSTOMER_PASSWORD_MIN_LENGTH = '8';
+    for (const password of ['rBq4nZxk', 'a much longer passphrase than the minimum 2026']) {
+      h.api.mockClear();
+      h.api.mockResolvedValueOnce({ status: 201, body: {} }).mockResolvedValueOnce({ status: 200, body: session });
+      expect(await completeEmailRegistrationAction({}, form({ ...base, password }))).toEqual({ success: true, next: '/loyalty/dashboard' });
+      expect(h.api).toHaveBeenCalledTimes(2);
+    }
+  });
+  it('counts characters the way the API does (code points): eight emoji pass, seven do not', async () => {
+    process.env.CUSTOMER_PASSWORD_MIN_LENGTH = '8';
+    expect((await completeEmailRegistrationAction({}, form({ ...base, password: '🔐🔑🌟🚀🎯🔔🧩' }))).error).toBe('password_too_short');
+    h.api.mockResolvedValueOnce({ status: 201, body: {} }).mockResolvedValueOnce({ status: 200, body: session });
+    expect((await completeEmailRegistrationAction({}, form({ ...base, password: '🔐🔑🌟🚀🎯🔔🧩🍀' }))).success).toBe(true);
+  });
+  it('is configuration, not a hardcoded number: a configured 12 refuses 8, and an unset or malformed value skips the early check', async () => {
+    process.env.CUSTOMER_PASSWORD_MIN_LENGTH = '12';
+    expect((await completeEmailRegistrationAction({}, form({ ...base, password: 'rBq4nZxk' }))).error).toBe('password_too_short');
+    for (const unset of [undefined, '', '0', 'eight', '8.5', ' 8']) {
+      if (unset === undefined) delete process.env.CUSTOMER_PASSWORD_MIN_LENGTH; else process.env.CUSTOMER_PASSWORD_MIN_LENGTH = unset;
+      h.api.mockClear();
+      h.api.mockResolvedValue({ status: 401, body: {} });
+      // No assumption is made when the web has no usable setting: the API (authoritative, fail-closed) decides.
+      expect((await completeEmailRegistrationAction({}, form({ ...base, password: 'abc' }))).error).toBe('invalid_proof');
+      expect(h.api).toHaveBeenCalledTimes(1);
+    }
+  });
+  it('sign-in never applies the minimum: an existing shorter password can still be submitted', async () => {
+    process.env.CUSTOMER_PASSWORD_MIN_LENGTH = '8';
+    h.api.mockResolvedValue({ status: 200, body: session });
+    expect(await loginWithEmailAction({}, form({ email: 'a@example.test', password: 'abc123', next: '/loyalty/dashboard' }))).toEqual({ success: true, next: '/loyalty/dashboard' });
+  });
+});
+

@@ -63,7 +63,7 @@ describe.skipIf(!process.env.DATABASE_URL)('Rotating customer sessions in the cu
       CUSTOMER_SESSION_ABSOLUTE_TTL_SECONDS: '2592000',
       CUSTOMER_SESSION_IDLE_TTL_SECONDS: '1209600',
       CUSTOMER_STEP_UP_WINDOW_SECONDS: '300',
-      CUSTOMER_PASSWORD_MIN_LENGTH: '12',
+      CUSTOMER_PASSWORD_MIN_LENGTH: '8',
       CUSTOMER_JWT_SECRET: LEGACY_SECRET,
       CLIENT_ATTRIBUTION_SECRET: 'attribution-secret-value-0123456789',
       WEB_BASE_URL: 'https://app.example.test',

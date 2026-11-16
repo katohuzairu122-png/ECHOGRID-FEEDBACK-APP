@@ -478,8 +478,10 @@
         "invalid_credentials": "L’e-mail ou le mot de passe est incorrect.",
         "invalid_proof": "Ce lien a expiré ou a déjà été utilisé, ou le mot de passe n’a pas été accepté. Demandez un nouveau lien et réessayez.",
         "rate_limited": "Trop de tentatives. Veuillez patienter quelques minutes puis réessayer.",
-        "unavailable": "Indisponible pour le moment. Veuillez réessayer plus tard."
+        "unavailable": "Indisponible pour le moment. Veuillez réessayer plus tard.",
+        "password_too_short": "Votre mot de passe doit contenir au moins {min} caractères."
       },
+      "passwordHint": "Au moins {min} caractères.",
       "phoneOptionalLabel": "Numéro de téléphone (facultatif)",
       "phoneOptionalHint": "Vous pourrez le vérifier plus tard. La vérification est nécessaire pour rejoindre plusieurs commerces."
     },

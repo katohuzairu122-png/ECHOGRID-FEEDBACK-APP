@@ -117,3 +117,41 @@ describe('isHashableLength', () => {
     expect(isHashableLength('x'.repeat(5_000_000))).toBe(false);
   });
 });
+
+/**
+ * CUSTOMER-EMAIL-AUTH-POLICY-01: the owner-approved customer minimum is 8 (CA-05, 2026-11-16). The engine stays
+ * configuration-driven; these tests pin what the approved value means at the boundary.
+ */
+describe('approved customer password policy (minimum 8)', () => {
+  const approved = { minLength: 8 };
+  const policy = (password: unknown) => checkPasswordPolicy(password, { phone: null }, approved);
+
+  it('rejects seven characters and accepts eight', () => {
+    expect(policy('rBq4nZx')).toEqual({ ok: false, violations: ['too_short'] }); // 7
+    expect(policy('rBq4nZxk')).toEqual({ ok: true }); // 8
+  });
+  it('accepts longer passwords up to the unchanged maximum, and still rejects beyond it', () => {
+    expect(policy('rBq4nZxk9')).toEqual({ ok: true });
+    expect(policy('a long passphrase with spaces, no composition rules, 2026')).toEqual({ ok: true });
+    expect(policy('rBq4'.repeat(32))).toEqual({ ok: true }); // 128 = the existing maximum
+    expect(policy('rBq4'.repeat(32) + 'x')).toMatchObject({ ok: false, violations: expect.arrayContaining(['too_long']) });
+  });
+  it('counts code points, not UTF-16 units: eight emoji pass, seven do not', () => {
+    expect(policy('🔐🔑🌟🚀🎯🔔🧩🍀')).toEqual({ ok: true });
+    expect(policy('🔐🔑🌟🚀🎯🔔🧩')).toMatchObject({ ok: false, violations: expect.arrayContaining(['too_short']) });
+  });
+  it('lowering the minimum does not relax any other rule', () => {
+    expect(policy('password')).toMatchObject({ ok: false, violations: expect.arrayContaining(['too_common']) });
+    expect(policy('aaaaaaaa')).toMatchObject({ ok: false, violations: expect.arrayContaining(['repetitive']) });
+    expect(policy('12345678')).toMatchObject({ ok: false });
+    expect(policy('abcdefgh')).toMatchObject({ ok: false, violations: expect.arrayContaining(['repetitive']) });
+    expect(policy('tab\there8')).toMatchObject({ ok: false, violations: expect.arrayContaining(['control_characters']) });
+    expect(checkPasswordPolicy('x6690459189', { phone: '+96566904591' }, approved)).toMatchObject({
+      ok: false, violations: expect.arrayContaining(['contains_phone']),
+    });
+  });
+  it('is configuration, not a default: no minimum at all still throws, and a higher configured minimum is honoured', () => {
+    expect(() => checkPasswordPolicy('rBq4nZxk', { phone: null }, {} as never)).toThrow();
+    expect(checkPasswordPolicy('rBq4nZxk', { phone: null }, { minLength: 12 })).toMatchObject({ ok: false });
+  });
+});

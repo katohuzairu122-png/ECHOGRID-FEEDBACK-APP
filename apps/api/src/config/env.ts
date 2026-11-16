@@ -284,8 +284,10 @@ export interface Bindings {
   /** NETWORK-01: Network Feed feature flag. Disabled unless exactly "true". Not set in wrangler.toml. */
   NETWORK_FEED_ENABLED?: string;
   /**
-   * Recovery completion needs the customer password minimum length. The owner decision (CA-05) is not recorded, so there
-   * is no default: a missing or non-integer value keeps recovery unavailable (503).
+   * The customer password minimum length (owner decision CA-05, APPROVED 2026-11-16: 8). It is configuration, never a code
+   * default: every customer flow that sets a password (email sign-up, recovery, password setup and change) reads this one value,
+   * and a missing or non-integer value keeps those flows unavailable (503) instead of adopting a minimum. The staging
+   * configuration templates pin "8"; staff and business-user password rules are separate and unchanged.
    */
   CUSTOMER_PASSWORD_MIN_LENGTH?: string;
   /**

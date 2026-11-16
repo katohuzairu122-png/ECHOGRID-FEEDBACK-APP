@@ -13,7 +13,7 @@ const valid = (over: Record<string, unknown> = {}) => ({
   CUSTOMER_SESSION_ABSOLUTE_TTL_SECONDS: '2592000',
   CUSTOMER_SESSION_IDLE_TTL_SECONDS: '1209600',
   CUSTOMER_STEP_UP_WINDOW_SECONDS: '300',
-  CUSTOMER_PASSWORD_MIN_LENGTH: '12',
+  CUSTOMER_PASSWORD_MIN_LENGTH: '8',
   CUSTOMER_JWT_SECRET: 'legacy-customer-jwt-secret-value-0123456789',
   CLIENT_ATTRIBUTION_SECRET: 'attribution-secret-value-0123456789abcdef',
   WEB_BASE_URL: 'https://app.example.test',
@@ -44,7 +44,7 @@ describe('resolveEmailAuthConfig', () => {
     const result = resolveEmailAuthConfig(valid());
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.config.passwordMinLength).toBe(12);
+    expect(result.config.passwordMinLength).toBe(8);
     expect(result.config.webBaseUrl).toBe('https://app.example.test');
     expect(result.config.session).toMatchObject({
       sessionSigningSecret: S2, accessTtlSeconds: 900, refreshTtlSeconds: 2592000, absoluteTtlSeconds: 2592000,
@@ -96,3 +96,27 @@ describe('resolveEmailAuthConfig', () => {
     expect(await deriveEmailAuthSourceKey(S2)).not.toBe(key);
   });
 });
+
+describe('CUSTOMER_PASSWORD_MIN_LENGTH (CA-05, approved 8)', () => {
+  it('resolves the approved value from configuration', () => {
+    const result = resolveEmailAuthConfig(valid({ CUSTOMER_PASSWORD_MIN_LENGTH: '8' }));
+    expect(result.ok && result.config.passwordMinLength).toBe(8);
+  });
+  it('has no default in code: a missing minimum makes the feature unavailable and names only the setting', () => {
+    const result = resolveEmailAuthConfig(valid({ CUSTOMER_PASSWORD_MIN_LENGTH: undefined }));
+    expect(result).toEqual({ ok: false, missing: ['CUSTOMER_PASSWORD_MIN_LENGTH'] });
+  });
+  it('fails closed on anything that is not a plain positive integer', () => {
+    for (const bad of ['', '0', '-8', '8.5', '8e0', ' 8', '8 ', 'eight', '0008', '+8']) {
+      const result = resolveEmailAuthConfig(valid({ CUSTOMER_PASSWORD_MIN_LENGTH: bad }));
+      expect(result.ok, `value ${JSON.stringify(bad)}`).toBe(false);
+    }
+  });
+  it('is configuration-driven: a different configured value is honoured, not overridden by a hardcoded one', () => {
+    for (const configured of ['8', '10', '12']) {
+      const result = resolveEmailAuthConfig(valid({ CUSTOMER_PASSWORD_MIN_LENGTH: configured }));
+      expect(result.ok && result.config.passwordMinLength).toBe(Number(configured));
+    }
+  });
+});
+

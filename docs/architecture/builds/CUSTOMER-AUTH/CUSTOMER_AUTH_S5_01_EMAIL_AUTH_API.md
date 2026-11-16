@@ -23,7 +23,7 @@ design: rotating sessions, no reuse of the legacy 90-day token path).
 | `CUSTOMER_EMAIL_AUTH_HMAC_SECRET` | dedicated, >= 32 bytes, not reused by any other binding |
 | `CUSTOMER_SESSION_SIGNING_SECRET` | dedicated, >= 32 bytes, distinct from `CUSTOMER_JWT_SECRET` |
 | `CUSTOMER_SESSION_ACCESS_TTL_SECONDS`, `_REFRESH_TTL_SECONDS`, `_ABSOLUTE_TTL_SECONDS`, `_IDLE_TTL_SECONDS`, `CUSTOMER_STEP_UP_WINDOW_SECONDS` | **owner decision CA-02**, no defaults. Must satisfy access < refresh <= absolute and idle <= absolute |
-| `CUSTOMER_PASSWORD_MIN_LENGTH` | **owner decision CA-05**, no default |
+| `CUSTOMER_PASSWORD_MIN_LENGTH` | owner decision CA-05: **8** (approved); still no code default |
 | `CUSTOMER_AUTH_RATE_LIMIT` | Durable Object namespace bound to `CustomerEmailRateLimit` (class is now exported from the Worker entry; the binding and its migration are infrastructure to provision at activation review) |
 | `CLIENT_ATTRIBUTION_SECRET`, `WEB_BASE_URL`, `RESEND_*`, `HYPERDRIVE`, `PASSWORD_HASHER` | existing bindings |
 
@@ -33,7 +33,9 @@ design: rotating sessions, no reuse of the legacy 90-day token path).
   absolute limit as the proposal states). **Still open and needed before activation:** the idle limit
   (`CUSTOMER_SESSION_IDLE_TTL_SECONDS`, must be <= absolute) and the step-up "recent verification" window
   (`CUSTOMER_STEP_UP_WINDOW_SECONDS`). The code has no default for either.
-- **CA-05 (password minimum length):** open.
+- **CA-05 (password minimum length), APPROVED (final):** 8 characters, set as `CUSTOMER_PASSWORD_MIN_LENGTH=8` (supersedes the
+  proposed 12). Configuration only: no code default, missing value still fails closed. Applies to customer creation, recovery and
+  password change; staff policies unchanged. See `docs/runbooks/CUSTOMER_EMAIL_AUTH_STAGING.md`.
 
 ## Staged plan (each its own PR, each flag-off)
 1. **This stage:** the API endpoints, config resolver, delivery adapter, tests (including a real-Postgres end-to-end flow).

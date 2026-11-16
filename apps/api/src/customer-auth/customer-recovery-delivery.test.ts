@@ -119,6 +119,7 @@ describe('recovery gate and configuration parsing', () => {
     expect(isCustomerRecoveryEnabled({ CUSTOMER_RECOVERY_ENABLED: 'true' } as Bindings)).toBe(true);
   });
   it('requires a strict positive integer password minimum, with no default', () => {
+    expect(parsePasswordMinLength('8')).toBe(8); // the owner-approved customer minimum, supplied as configuration
     expect(parsePasswordMinLength('12')).toBe(12);
     for (const v of [undefined, '', '0', '-1', '1.5', '1e2', 'abc', ' 12', '12 ', '1234', 12 as unknown]) expect(parsePasswordMinLength(v)).toBeNull();
   });

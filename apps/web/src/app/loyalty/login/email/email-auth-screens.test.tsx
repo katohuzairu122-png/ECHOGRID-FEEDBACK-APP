@@ -9,6 +9,7 @@ const h = vi.hoisted(() => ({
   complete: vi.fn(),
   notFound: vi.fn(() => { throw new Error('NOT_FOUND'); }),
 }));
+vi.mock('server-only', () => ({}));
 vi.mock('@/lib/actions/customer-email-auth', () => ({
   loginWithEmailAction: h.login,
   requestEmailRegistrationAction: h.request,
@@ -139,3 +140,38 @@ describe('entry points', () => {
     }
   });
 });
+
+describe('SignupVerifyForm password minimum (configured, approved 8)', () => {
+  it('shows the configured minimum as a hint and as the input constraint', async () => {
+    window.location.hash = `#c=${encodeURIComponent(CHALLENGE)}`;
+    render(<SignupVerifyForm next="/loyalty/dashboard" minLength={8} />);
+    const input = await screen.findByLabelText('Choose a password');
+    expect(input).toHaveAttribute('minlength', '8');
+    expect(screen.getByText('At least 8 characters.')).toBeInTheDocument();
+  });
+  it('shows no number when none is configured (nothing is assumed on the screen)', async () => {
+    window.location.hash = `#c=${encodeURIComponent(CHALLENGE)}`;
+    render(<SignupVerifyForm next="/loyalty/dashboard" />);
+    const input = await screen.findByLabelText('Choose a password');
+    expect(input).not.toHaveAttribute('minlength');
+    expect(screen.queryByText(/At least/)).not.toBeInTheDocument();
+  });
+  it('a too-short password shows a translated error naming the configured minimum', async () => {
+    window.location.hash = `#c=${encodeURIComponent(CHALLENGE)}`;
+    h.complete.mockResolvedValue({ error: 'password_too_short', minLength: 8 });
+    render(<SignupVerifyForm next="/loyalty/dashboard" minLength={8} />);
+    await userEvent.type(await screen.findByLabelText('Confirm your email'), 'a@example.test');
+    await userEvent.type(screen.getByLabelText('Choose a password'), 'abc');
+    await userEvent.click(screen.getByRole('button', { name: 'Create account' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Your password must be at least 8 characters.');
+  });
+  it('the verify page passes the configured minimum to the screen', async () => {
+    process.env.CUSTOMER_PASSWORD_MIN_LENGTH = '8';
+    const element = (await VerifyPage({ searchParams: Promise.resolve({}) })) as { props: { minLength?: number } };
+    expect(element.props.minLength).toBe(8);
+    delete process.env.CUSTOMER_PASSWORD_MIN_LENGTH;
+    const without = (await VerifyPage({ searchParams: Promise.resolve({}) })) as { props: { minLength?: number } };
+    expect(without.props.minLength).toBeUndefined();
+  });
+});
+

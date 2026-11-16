@@ -6,19 +6,23 @@ import { readRefreshResponse } from '@/lib/customer-session-bff';
 import { setRotatingCustomerSession } from '@/lib/customer-session';
 import { revokeRotatingCustomerSession } from '@/lib/customer-session-refresh';
 import { safeInternalPath } from '@/lib/safe-redirect';
+import { getCustomerPasswordMinLength, passwordLength } from '@/lib/customer-password-policy';
 
 /**
  * Email sign-up and sign-in (CUSTOMER-AUTH-S5-03). Errors are CODES, not English text, so the screens translate them and no
  * message can leak whether an email is registered: sign-in failures are all `invalid_credentials`, sign-up always answers
  * "sent". Credentials returned by the API go straight into HttpOnly host-only cookies and never into a response body.
  */
-export type EmailAuthErrorCode = 'invalid_input' | 'invalid_credentials' | 'invalid_proof' | 'rate_limited' | 'unavailable';
+export type EmailAuthErrorCode =
+  | 'invalid_input' | 'invalid_credentials' | 'invalid_proof' | 'password_too_short' | 'rate_limited' | 'unavailable';
 
 export interface EmailAuthState {
   error?: EmailAuthErrorCode;
   sent?: boolean;
   success?: boolean;
   next?: string;
+  /** With `password_too_short`: the configured minimum, so the screen can say it. */
+  minLength?: number;
 }
 
 const text = (formData: FormData, key: string) => String(formData.get(key) ?? '').trim();
@@ -64,6 +68,10 @@ export async function completeEmailRegistrationAction(_prev: EmailAuthState, for
   const phone = text(formData, 'phone');
   const next = safeInternalPath(String(formData.get('next') ?? '/loyalty/dashboard'), '/loyalty/dashboard');
   if (!EMAIL.test(email) || !challengeId || !proof || password.length === 0) return { error: 'invalid_input' };
+  // Refuse an obviously short password before the proof is spent. The configured minimum only; the API remains authoritative
+  // (and fails closed if it has no minimum of its own), so an unset value here simply skips this early, friendlier check.
+  const minLength = getCustomerPasswordMinLength();
+  if (minLength !== null && passwordLength(password) < minLength) return { error: 'password_too_short', minLength };
   try {
     const reply = await callCustomerAuthApi('/customer-auth/email/register/complete', {
       body: { email, challengeId, proof, password, ...(phone ? { phone } : {}) },
