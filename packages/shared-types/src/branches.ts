@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { slugSchema } from './common';
+import { canonicalSlugSchema } from './slug';
 
 /**
  * Branch create/update request contract, shared by the API (server-side
@@ -9,7 +10,8 @@ import { slugSchema } from './common';
  */
 export const createBranchSchema = z.object({
   name: z.string().trim().min(1).max(200),
-  slug: slugSchema,
+  /** Optional: when omitted the server generates it from the name (ONBOARDING-UX-01). */
+  slug: canonicalSlugSchema.optional(),
   addressLine1: z.string().trim().max(200).optional(),
   addressLine2: z.string().trim().max(200).optional(),
   city: z.string().trim().max(100).optional(),
@@ -28,7 +30,10 @@ export const createBranchSchema = z.object({
   longitude: z.number().min(-180).max(180).optional(),
 });
 
+// Existing slugs may not be canonical (they were created under the lenient rule): a PATCH keeps that rule so nothing
+// established is ever rejected or rewritten.
 export const updateBranchSchema = createBranchSchema.partial().extend({
+  slug: slugSchema.optional(),
   status: z.enum(['active', 'inactive', 'archived']).optional(),
 });
 

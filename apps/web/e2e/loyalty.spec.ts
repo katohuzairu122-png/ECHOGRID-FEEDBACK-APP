@@ -30,7 +30,6 @@ test('staff sets up a loyalty tier, reward, and earning rates, end to end', asyn
   await expect(page).toHaveURL('/dashboard');
 
   await page.getByLabel('Business name').fill(`Loyalty E2E Business ${unique}`);
-  await page.getByLabel('URL slug').fill(`loyalty-e2e-business-${unique}`);
   await page.getByRole('button', { name: 'Create business' }).click();
 
   await page.getByRole('link', { name: 'Loyalty', exact: true }).click();

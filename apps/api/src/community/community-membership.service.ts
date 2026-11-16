@@ -7,6 +7,7 @@ import {
   type CommunityPointAccount,
 } from '../repositories';
 import { AppError } from '../lib/errors';
+import { assertVerifiedPhoneFor } from '../lib/customer-verification';
 
 export interface CommunityStatus {
   membership: CommunityMembership | null;
@@ -48,6 +49,7 @@ export class CommunityMembershipService {
       if (!customer || customer.status !== 'active') {
         throw new AppError('Customer account is not available.', 409, 'CUSTOMER_NOT_AVAILABLE');
       }
+      assertVerifiedPhoneFor(customer, 'community');
 
       let membership = await repos.communityMemberships.findByCustomerId(customerId);
       let created = false;

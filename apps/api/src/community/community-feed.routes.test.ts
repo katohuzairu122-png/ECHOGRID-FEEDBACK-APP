@@ -22,10 +22,16 @@ const customerId = '11111111-1111-4111-8111-111111111111';
 const env = { CUSTOMER_JWT_SECRET: 'customer-test-secret' } as Bindings;
 const ctx = { waitUntil: vi.fn(), passThroughOnException: vi.fn() } as unknown as ExecutionContext;
 
+const verifiedPhone = vi.fn(async (_customerId: string) => {});
+
 function appWith(source: FeedSource, enabled = true) {
   const app = new Hono<{ Bindings: Bindings }>();
   app.onError(errorHandler);
-  app.route('/network', createCommunityFeedRoutes({ isEnabled: () => enabled, openSource: async () => ({ source }) }));
+  app.route('/network', createCommunityFeedRoutes({
+    isEnabled: () => enabled,
+    openSource: async () => ({ source }),
+    assertVerifiedPhone: async (_c, customerId) => verifiedPhone(customerId),
+  }));
   return app;
 }
 
@@ -49,6 +55,24 @@ describe('GET /network/feed (COMMUNITY-01 foundation)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.findCustomer.mockResolvedValue({ status: 'active' });
+    verifiedPhone.mockResolvedValue(undefined);
+  });
+
+  it('refuses a customer without a verified phone before the source is touched (restricted Network feature)', async () => {
+    const { AppError } = await import('../lib/errors');
+    verifiedPhone.mockRejectedValue(new AppError('Verify your phone number to continue.', 403, 'PHONE_VERIFICATION_REQUIRED'));
+    const listVisible = vi.fn();
+    const response = await get(appWith({ listVisible }));
+    expect(response.status).toBe(403);
+    expect(await response.text()).toContain('PHONE_VERIFICATION_REQUIRED');
+    expect(listVisible).not.toHaveBeenCalled();
+    expect(verifiedPhone).toHaveBeenCalledWith(customerId);
+  });
+
+  it('checks the flag before the phone: a disabled feed is a generic 404 and never reaches the phone check', async () => {
+    const response = await get(appWith({ listVisible: vi.fn() }, false));
+    expect(response.status).toBe(404);
+    expect(verifiedPhone).not.toHaveBeenCalled();
   });
 
   it('refuses anonymous callers and never calls the source', async () => {

@@ -33,10 +33,16 @@
     "title": "Create your business",
     "description": "You're logged in but not part of a business yet -- set one up to continue.",
     "nameLabel": "Business name",
-    "slugLabel": "URL slug",
-    "slugHint": "Lowercase letters, numbers, and hyphens only.",
     "submit": "Create business",
-    "submitPending": "Creating…"
+    "submitPending": "Creating…",
+    "errors": {
+      "slugTaken": "That web address is already in use. Please try a slightly different business name.",
+      "slugUnavailable": "We could not create a web address for that name. Please try a slightly different name.",
+      "invalidInput": "Please enter a business name (1 to 200 characters).",
+      "tooManyRequests": "Too many attempts. Please wait a minute and try again.",
+      "forbidden": "You do not have permission to create a business here.",
+      "generic": "We could not create your business, so nothing was saved. Please try again."
+    }
   },
   "settings": {
     "title": "Settings",

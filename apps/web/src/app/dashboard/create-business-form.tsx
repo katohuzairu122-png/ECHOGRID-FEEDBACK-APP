@@ -25,11 +25,6 @@ export function CreateBusinessForm() {
               <Label htmlFor="name">{t('nameLabel')}</Label>
               <Input id="name" name="name" required />
             </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="slug">{t('slugLabel')}</Label>
-              <Input id="slug" name="slug" pattern="[a-z0-9-]+" required />
-              <p className="text-xs text-neutral-500">{t('slugHint')}</p>
-            </div>
             {state.error && (
               <p role="alert" className="text-sm text-danger">
                 {state.error}

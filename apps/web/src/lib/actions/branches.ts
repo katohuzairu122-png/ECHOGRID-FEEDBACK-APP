@@ -1,7 +1,9 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { apiFetch, ApiError } from '@/lib/api-client';
+import { getTranslations } from 'next-intl/server';
+import { apiFetch } from '@/lib/api-client';
+import { onboardingErrorKey } from '@/lib/onboarding-errors';
 import { getActiveBusiness } from '@/lib/business';
 import { readBranchForm } from '@/lib/branch-form';
 
@@ -24,8 +26,8 @@ export async function createBranchAction(
       body: JSON.stringify(readBranchForm(formData)),
     });
   } catch (err) {
-    if (err instanceof ApiError) return { error: err.message };
-    return { error: 'Something went wrong. Please try again.' };
+    const t = await getTranslations('branches.form.errors');
+    return { error: t(onboardingErrorKey(err)) };
   }
 
   // The client refreshes after receiving this success result. Calling
@@ -55,8 +57,8 @@ export async function updateBranchAction(
       body: JSON.stringify(readBranchForm(formData)),
     });
   } catch (err) {
-    if (err instanceof ApiError) return { error: err.message };
-    return { error: 'Something went wrong. Please try again.' };
+    const t = await getTranslations('branches.form.errors');
+    return { error: t(onboardingErrorKey(err)) };
   }
 
   // The client refreshes after receiving this success result.

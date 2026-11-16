@@ -103,6 +103,7 @@ describe('CustomerLookupService.lookup', () => {
     expect(result).toMatchObject({
       displayName: 'Amina',
       phoneMasked: '+•••••••4567',
+      phoneVerified: true,
       membershipStatus: 'active',
       actions: ['VIEW_ALLOWED_MEMBERSHIP_STATE', 'VALIDATE_PURCHASE', 'GRANT_LOYALTY_PROGRESS'],
     });
@@ -111,7 +112,7 @@ describe('CustomerLookupService.lookup', () => {
       expect(json).not.toContain(secret);
     }
     expect(Object.keys(result).sort()).toEqual(
-      ['actions', 'displayName', 'lookupToken', 'membershipStatus', 'phoneMasked'].sort(),
+      ['actions', 'displayName', 'lookupToken', 'membershipStatus', 'phoneMasked', 'phoneVerified'].sort(),
     );
   });
 
@@ -158,7 +159,6 @@ describe('CustomerLookupService.lookup', () => {
       build({ customer: null }), // unknown number
       build({ membership: null }), // customer exists but is not a member of this business
       build({ customer: { status: 'suspended' } }),
-      build({ customer: { phoneVerifiedAt: null } }), // active member whose phone was never verified
       build({ account: null }), // membership row but no loyalty account
     ];
     const errors = await Promise.all(cases.map((c) => failure(c.service.lookup(args))));
@@ -170,20 +170,27 @@ describe('CustomerLookupService.lookup', () => {
     }
   });
 
-  it('refuses an active member whose phone was never verified, records a miss and issues no token', async () => {
-    const { service, audit, repos } = build({ customer: { phoneVerifiedAt: null } });
-    const err = await failure(service.lookup(args));
-    expect(err.status).toBe(404);
-    expect(err.code).toBe('MEMBER_NOT_FOUND');
+  it('finds an active member whose phone was never verified, flags it, and still returns no redemption action (reverses #462)', async () => {
+    const { service, audit } = build({ customer: { phoneVerifiedAt: null } });
+    const result = await service.lookup(args);
+    expect(result.phoneVerified).toBe(false);
+    expect(result.phoneMasked).toBe('+•••••••4567');
+    expect(result.actions).not.toContain('REDEEM_REWARD');
     expect(audit).toHaveLength(1);
-    expect(audit[0]).toMatchObject({ action: LOOKUP_AUDIT_MISS });
-    expect(repos.customerMemberships.findActive).not.toHaveBeenCalled();
-    expect(repos.loyaltyAccounts.findByCustomerAndBusiness).not.toHaveBeenCalled();
+    expect(audit[0]).toMatchObject({ action: LOOKUP_AUDIT_HIT });
   });
 
-  it('still serves a verified member (verification is the only added requirement)', async () => {
+  it('keeps the lookup business-scoped: an unverified customer who is not a member of this business is still a miss', async () => {
+    const { service } = build({ customer: { phoneVerifiedAt: null }, membership: null });
+    const err = await failure(service.lookup(args));
+    expect(err.code).toBe('MEMBER_NOT_FOUND');
+  });
+
+  it('reports a verified member as verified', async () => {
     const { service } = build({ customer: { phoneVerifiedAt: new Date(NOW) } });
-    expect((await service.lookup(args)).actions).toContain('VALIDATE_PURCHASE');
+    const result = await service.lookup(args);
+    expect(result.phoneVerified).toBe(true);
+    expect(result.actions).toContain('VALIDATE_PURCHASE');
   });
 
   it('treats a member of a different business as a miss', async () => {

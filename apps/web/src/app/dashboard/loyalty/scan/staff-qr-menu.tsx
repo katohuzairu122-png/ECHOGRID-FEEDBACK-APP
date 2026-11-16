@@ -232,6 +232,11 @@ function LookupMenu({
         <p className="text-sm text-neutral-600">
           {lookup.phoneMasked} · {t('identified')}
         </p>
+        {lookup.phoneVerified ? null : (
+          <p role="note" className="mt-1 text-sm font-medium text-amber-700">
+            {t('phoneUnverifiedNotice')}
+          </p>
+        )}
       </div>
       {canRecordPurchase ? (
         <form action={action} className="space-y-3">

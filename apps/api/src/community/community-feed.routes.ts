@@ -12,6 +12,8 @@ import { createDb } from '../db/client';
 import { toFeedItemDto, type FeedSource } from './community-feed';
 import { createNetworkFeedSource } from '../network/network-feed-source';
 import { isNetworkFeedEnabled } from '../network/network-flag';
+import { assertVerifiedPhone } from '../lib/customer-verification';
+import { createRepositories } from '../repositories';
 
 type Env = { Bindings: Bindings; Variables: CustomerAuthVariables };
 
@@ -39,6 +41,8 @@ export type FeedSourceHandle = { source: FeedSource; release?: () => void };
 export function createCommunityFeedRoutes(options: {
   isEnabled: (env: Bindings) => boolean;
   openSource: (c: Context<Env>) => Promise<FeedSourceHandle>;
+  /** Required: Network is a restricted feature. Throws PHONE_VERIFICATION_REQUIRED unless the session customer's phone is verified. */
+  assertVerifiedPhone: (c: Context<Env>, customerId: string) => Promise<void>;
 }) {
   const routes = new Hono<Env>();
   routes.use('*', customerAuthenticate, rateLimitByCustomer());
@@ -52,6 +56,7 @@ export function createCommunityFeedRoutes(options: {
     if (!options.isEnabled(c.env)) throw new AppError('Not found.', 404, 'NOT_FOUND');
     const parsed = feedQuerySchema.safeParse(c.req.query());
     if (!parsed.success) throw new AppError('Invalid feed query.', 400, 'VALIDATION_ERROR');
+    await options.assertVerifiedPhone(c, c.get('customerId'));
     const limit = parsed.data.limit ?? FEED_DEFAULT_LIMIT;
 
     let page;
@@ -81,6 +86,14 @@ export function createCommunityFeedRoutes(options: {
 /** Mounted instance: flag off by default; a DB-backed source over network_* only, on the existing runtime connection. */
 export const communityFeedRoutes = createCommunityFeedRoutes({
   isEnabled: isNetworkFeedEnabled,
+  assertVerifiedPhone: async (c, customerId) => {
+    const { db, close } = await createDb(c.env.HYPERDRIVE);
+    try {
+      await assertVerifiedPhone(createRepositories(db), customerId, 'network');
+    } finally {
+      c.executionCtx.waitUntil(close());
+    }
+  },
   openSource: async (c) => {
     const { db, close } = await createDb(c.env.HYPERDRIVE);
     return { source: createNetworkFeedSource(db), release: () => c.executionCtx.waitUntil(close()) };

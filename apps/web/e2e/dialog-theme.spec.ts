@@ -12,7 +12,6 @@ test('dialogs in the dark workspace have a dark surface and readable title text'
   await page.getByLabel(/I agree to the Terms of Service/).check();
   await page.getByRole('button', { name: 'Create account' }).click();
   await page.getByLabel('Business name').fill(`Dialog ${unique}`);
-  await page.getByLabel('URL slug').fill(`dialog-theme-${unique}`);
   await page.getByRole('button', { name: 'Create business' }).click();
   await expect(page.getByRole('heading', { name: 'Business Overview', exact: true })).toBeVisible();
 

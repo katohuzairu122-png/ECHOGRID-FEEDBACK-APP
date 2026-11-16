@@ -1,3 +1,4 @@
+import { hasVerifiedPhone } from '../lib/customer-verification';
 import type { LoyaltyResolvedActionDto, LookupCustomerResultDto } from '@echo-grid-feedback/shared-types';
 import type { Bindings } from '../config/env';
 import type { Repositories } from '../repositories';
@@ -105,11 +106,13 @@ export class CustomerLookupService {
     const phoneHash = await phoneAuditHash(input.phone, this.secrets.QR_TOKEN_SECRET);
     const cashierMark = input.cashier ? { client: 'cashier', branchId: input.cashier.branchId } : {};
     const customer = await this.repos.customers.findByPhone(input.phone);
-    // A phone number that was never verified proves nothing about whoever holds
-    // it, so it cannot select a member for a cashier. Same generic miss as an
-    // unknown number, and it counts toward the miss throttle.
+    // CUSTOMER-PHONE-01 (reverses #462): finding a member by phone does NOT require a verified phone. The match is
+    // scoped to THIS business's own members (no global directory), the phone is masked, misses are throttled and
+    // audited, and the result says whether the phone was ever verified so the cashier can confirm the name. A phone
+    // match alone never authorizes a reward or redemption: the actions below carry no redemption, and each purchase
+    // keeps its own authorization.
     const membership =
-      customer && customer.status === 'active' && customer.phoneVerifiedAt
+      customer && customer.status === 'active'
         ? await this.repos.customerMemberships.findActive(customer.id, input.businessId)
         : undefined;
     const account =
@@ -157,6 +160,7 @@ export class CustomerLookupService {
       ),
       displayName: firstName ? firstName : 'Member',
       phoneMasked: maskPhone(input.phone),
+      phoneVerified: hasVerifiedPhone(customer),
       membershipStatus: 'active',
       actions,
     };

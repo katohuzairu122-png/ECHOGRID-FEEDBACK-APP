@@ -54,8 +54,10 @@ branchRoutes.post('/', requireBusinessWideAccess, requirePermission('branches:ma
   const body = await parseJsonBody(c.req.raw, createBranchSchema);
   const { db, close } = await createDb(c.env.HYPERDRIVE);
   try {
-    const service = new BranchService(createRepositories(db));
-    const branch = await service.createBranch(c.get('businessId'), body, c.get('userId'));
+    // One transaction: the creation lock, replay check and insert commit together (ONBOARDING-UX-01).
+    const branch = await db.transaction((tx) =>
+      new BranchService(createRepositories(tx)).createBranch(c.get('businessId'), body, c.get('userId')),
+    );
 
     c.set('auditMetadata', {
       action: 'branch.created',

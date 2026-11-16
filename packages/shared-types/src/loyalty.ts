@@ -558,6 +558,8 @@ export interface LookupCustomerResultDto {
   lookupToken: string;
   displayName: string;
   phoneMasked: string;
+  /** False when the customer never completed phone verification: the cashier should confirm the name in person. */
+  phoneVerified: boolean;
   membershipStatus: 'active';
   actions: LoyaltyResolvedActionDto[];
 }

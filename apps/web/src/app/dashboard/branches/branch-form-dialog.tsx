@@ -46,7 +46,6 @@ export function BranchFormDialog({ branch, trigger }: BranchFormDialogProps) {
   // open. Driving the values from state keeps them across that re-render.
   const [values, setValues] = useState({
     name: branch?.name ?? '',
-    slug: branch?.slug ?? '',
     addressLine1: branch?.addressLine1 ?? '',
     addressLine2: branch?.addressLine2 ?? '',
     city: branch?.city ?? '',
@@ -82,17 +81,12 @@ export function BranchFormDialog({ branch, trigger }: BranchFormDialogProps) {
             <Label htmlFor="name">{t('nameLabel')}</Label>
             <Input id="name" name="name" value={values.name} onChange={setField('name')} required />
           </div>
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="slug">{t('slugLabel')}</Label>
-            <Input
-              id="slug"
-              name="slug"
-              value={values.slug}
-              onChange={setField('slug')}
-              pattern="[a-z0-9-]+"
-              required
-            />
-          </div>
+          {branch && (
+            <p className="text-sm text-neutral-600">
+              {t('slugLabel')}: <span className="font-mono">/{branch.slug}</span>
+              <span className="block text-xs text-neutral-500">{t('slugFixedHint')}</span>
+            </p>
+          )}
           <div className="grid grid-cols-2 gap-4">
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="addressLine1">{t('addressLine1Label')}</Label>
