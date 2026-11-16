@@ -180,6 +180,9 @@
       "scanning": "Point the camera at the customer’s QR code.",
       "unsupported": "Camera scanning is not available in this browser. Enter the QR token below.",
       "cameraDenied": "The camera could not be opened. Allow camera access, or enter the QR token below.",
+      "cameraRequesting": "Waiting for camera permission…",
+      "cameraMissing": "No camera was found. Scan with a connected scanner or use the field below.",
+      "cameraUnavailable": "The camera could not start. Close other apps using it and try again, or use the field below.",
       "viewfinder": "Camera view for scanning the customer QR code",
       "scanField": "Find customer: scan, or enter phone number",
       "scanFieldHint": "Use a connected scanner or the camera, or type the customer’s phone number with country code (for example +15551234567), then press Enter.",
@@ -212,10 +215,7 @@
         "noPurchase": "Purchases are not available for this membership.",
         "redemptionNote": "Reward handoff needs the customer’s QR code. Scan it to redeem a reward.",
         "done": "Action completed. Look the customer up again before another action."
-      },
-      "noCamera": "No camera was found on this device. Enter the QR token below.",
-      "cameraBusy": "The camera is in use by another app or tab. Close it and try again, or enter the QR token below.",
-      "cameraFailed": "The camera could not be started. Try again, or enter the QR token below."
+      }
     }
   },
   "customer": {
@@ -348,7 +348,30 @@
         "pointsTitle": "About Community Points",
         "pointsBody": "Community Points are kept in their own ledger. This page only shows your balance and history; it cannot create, spend or change points."
       },
-      "retry": "Try again"
+      "retry": "Try again",
+      "sections": {
+        "label": "Community sections",
+        "points": "Points & Membership",
+        "feed": "Feed"
+      },
+      "feed": {
+        "eyebrow": "Echo Grid Community",
+        "title": "Community feed",
+        "description": "Updates shared with Echo Grid customers.",
+        "empty": {
+          "title": "Nothing to show yet",
+          "body": "No Community updates have been published for you. When updates are available, they will appear here."
+        },
+        "error": "The feed could not be loaded right now.",
+        "forbidden": "The feed is not available with your current access.",
+        "retry": "Try again",
+        "loadMore": "Load more",
+        "official": "Echo Grid",
+        "business": "Business update",
+        "openLink": "Open link",
+        "publishedOn": "Published {date}",
+        "listLabel": "Community feed updates"
+      }
     },
     "surveys": {
       "title": "Surveys",

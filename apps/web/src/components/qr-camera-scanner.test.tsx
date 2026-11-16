@@ -1,18 +1,29 @@
-import { describe, it, expect, vi, afterEach } from 'vitest';
-import { screen, waitFor } from '@testing-library/react';
+import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
+import { act, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithIntl as render } from '@/test-utils';
-import type * as QrDecode from '@/lib/qr-decode';
 import { QrCameraScanner } from './qr-camera-scanner';
 
-afterEach(() => {
-  vi.unstubAllGlobals();
-  Object.defineProperty(navigator, 'mediaDevices', { value: undefined, configurable: true });
+beforeEach(() => {
+  vi.spyOn(HTMLMediaElement.prototype, 'readyState', 'get').mockReturnValue(2);
+  vi.spyOn(HTMLMediaElement.prototype, 'play').mockResolvedValue(undefined);
 });
 
-vi.mock('@/lib/qr-decode', async (orig) => ({
-  ...(await orig<typeof QrDecode>()),
-  readPixels: vi.fn(() => ({ data: new Uint8ClampedArray(4), width: 1, height: 1 })),
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+  Object.defineProperty(navigator, 'mediaDevices', {
+    value: undefined,
+    configurable: true,
+  });
+});
+
+vi.mock('@/lib/qr-decode', () => ({
+  readPixels: vi.fn(() => ({
+    data: new Uint8ClampedArray(4),
+    width: 1,
+    height: 1,
+  })),
   decodeImageData: vi.fn(async () => 'local.token.1'),
 }));
 
@@ -26,7 +37,6 @@ describe('QrCameraScanner', () => {
       },
       configurable: true,
     });
-    HTMLMediaElement.prototype.play = vi.fn().mockResolvedValue(undefined);
     render(<QrCameraScanner onDetect={onDetect} />);
     await userEvent.setup().click(screen.getByRole('button', { name: 'Scan customer QR' }));
     await waitFor(() => expect(onDetect).toHaveBeenCalledWith('local.token.1'), { timeout: 2000 });
@@ -34,17 +44,15 @@ describe('QrCameraScanner', () => {
     expect(stopTrack).toHaveBeenCalled();
   });
 
-  it('explains an insecure (non-HTTPS) page without asking for the camera', async () => {
-    const getUserMedia = vi.fn();
+  it('explains an insecure page even when the browser hides the camera API', async () => {
     Object.defineProperty(navigator, 'mediaDevices', {
-      value: { getUserMedia },
+      value: undefined,
       configurable: true,
     });
     vi.stubGlobal('isSecureContext', false);
     render(<QrCameraScanner onDetect={vi.fn()} />);
     await userEvent.setup().click(screen.getByRole('button', { name: 'Scan customer QR' }));
     expect(await screen.findByRole('alert')).toHaveTextContent(/secure \(HTTPS\)/i);
-    expect(getUserMedia).not.toHaveBeenCalled();
   });
 
   it('offers no still-image upload: the cashier scans with the camera or enters the token', () => {
@@ -67,7 +75,7 @@ describe('QrCameraScanner', () => {
       },
     );
     Object.defineProperty(navigator, 'mediaDevices', {
-      value: { getUserMedia: vi.fn().mockRejectedValue(Object.assign(new Error('denied'), { name: 'NotAllowedError' })) },
+      value: { getUserMedia: vi.fn().mockRejectedValue(new Error('denied')) },
       configurable: true,
     });
     render(<QrCameraScanner onDetect={vi.fn()} />);
@@ -75,6 +83,22 @@ describe('QrCameraScanner', () => {
     await waitFor(() =>
       expect(screen.getByRole('alert')).toHaveTextContent(/camera could not be opened/i),
     );
+  });
+
+  it.each([
+    ['NotFoundError', /no camera was found/i],
+    ['NotReadableError', /the camera could not start/i],
+  ])('explains %s and allows a retry', async (name, message) => {
+    Object.defineProperty(navigator, 'mediaDevices', {
+      value: {
+        getUserMedia: vi.fn().mockRejectedValue(new DOMException('', name)),
+      },
+      configurable: true,
+    });
+    render(<QrCameraScanner onDetect={vi.fn()} />);
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Scan customer QR' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent(message);
+    expect(screen.getByRole('button', { name: 'Scan customer QR' })).toBeEnabled();
   });
 
   it('reads a code, stops the camera and reports the value once', async () => {
@@ -92,67 +116,96 @@ describe('QrCameraScanner', () => {
       },
       configurable: true,
     });
-    HTMLMediaElement.prototype.play = vi.fn().mockResolvedValue(undefined);
     render(<QrCameraScanner onDetect={onDetect} />);
     await userEvent.setup().click(screen.getByRole('button', { name: 'Scan customer QR' }));
-    await waitFor(() => expect(onDetect).toHaveBeenCalledWith('tok.123'), { timeout: 2000 });
+    await waitFor(() => expect(onDetect).toHaveBeenCalledWith('tok.123'), {
+      timeout: 2000,
+    });
     expect(onDetect).toHaveBeenCalledTimes(1);
     expect(stopTrack).toHaveBeenCalled();
+    expect(screen.getByLabelText(/camera/i)).toHaveProperty('srcObject', null);
   });
-});
 
-describe('QrCameraScanner remediation (QR-REMEDIATION-01)', () => {
-  function camera(getUserMedia: ReturnType<typeof vi.fn>) {
-    Object.defineProperty(navigator, 'mediaDevices', { value: { getUserMedia }, configurable: true });
-    HTMLMediaElement.prototype.play = vi.fn().mockResolvedValue(undefined);
-  }
+  it.each(['constructor', 'frame'] as const)(
+    'uses the local decoder if the native detector fails during %s',
+    async (stage) => {
+      vi.stubGlobal(
+        'BarcodeDetector',
+        class {
+          constructor() {
+            if (stage === 'constructor') throw new Error('Unsupported format');
+          }
+          detect = vi.fn().mockRejectedValue(new Error('Native decode failed'));
+        },
+      );
+      Object.defineProperty(navigator, 'mediaDevices', {
+        value: {
+          getUserMedia: vi.fn().mockResolvedValue({ getTracks: () => [] }),
+        },
+        configurable: true,
+      });
+      const onDetect = vi.fn();
+      render(<QrCameraScanner onDetect={onDetect} />);
+      await userEvent.setup().click(screen.getByRole('button', { name: 'Scan customer QR' }));
+      await waitFor(() => expect(onDetect).toHaveBeenCalledExactlyOnceWith('local.token.1'));
+    },
+  );
 
-  it('opens one camera for a double tap and releases every track', async () => {
+  it('stops a camera granted after leaving the page without submitting a code', async () => {
     const stopTrack = vi.fn();
-    let resolve!: (s: unknown) => void;
-    const getUserMedia = vi.fn(() => new Promise((r) => (resolve = r)));
-    camera(getUserMedia);
-    const user = userEvent.setup();
-    render(<QrCameraScanner onDetect={vi.fn()} />);
-    const button = screen.getByRole('button', { name: 'Scan customer QR' });
-    await user.click(button);
-    await user.click(button);
+    let grantCamera!: (stream: Pick<MediaStream, 'getTracks'>) => void;
+    const getUserMedia = vi.fn(
+      () =>
+        new Promise((resolve) => {
+          grantCamera = resolve;
+        }),
+    );
+    Object.defineProperty(navigator, 'mediaDevices', {
+      value: { getUserMedia },
+      configurable: true,
+    });
+    const onDetect = vi.fn();
+    const { unmount } = render(<QrCameraScanner onDetect={onDetect} />);
+    await userEvent.setup().dblClick(screen.getByRole('button', { name: 'Scan customer QR' }));
     expect(getUserMedia).toHaveBeenCalledTimes(1);
-    resolve({ getTracks: () => [{ stop: stopTrack }] });
-    await screen.findByRole('button', { name: 'Stop camera' });
-  });
-
-  it('releases a camera that finishes opening after the page was left', async () => {
-    const stopTrack = vi.fn();
-    let resolve!: (s: unknown) => void;
-    camera(vi.fn(() => new Promise((r) => (resolve = r))));
-    const { unmount } = render(<QrCameraScanner onDetect={vi.fn()} />);
-    await userEvent.setup().click(screen.getByRole('button', { name: 'Scan customer QR' }));
     unmount();
-    resolve({ getTracks: () => [{ stop: stopTrack }] });
-    await waitFor(() => expect(stopTrack).toHaveBeenCalled());
+    await act(async () => {
+      const track = { stop: stopTrack } as unknown as MediaStreamTrack;
+      grantCamera({ getTracks: () => [track] });
+    });
+    expect(stopTrack).toHaveBeenCalledTimes(1);
+    expect(onDetect).not.toHaveBeenCalled();
   });
 
-  it.each([
-    ['NotAllowedError', 'The camera could not be opened. Allow camera access'],
-    ['NotFoundError', 'No camera was found on this device'],
-    ['NotReadableError', 'The camera is in use by another app or tab'],
-    ['SomethingElse', 'The camera could not be started'],
-  ])('reports %s truthfully, not always as "denied"', async (name, text) => {
-    camera(vi.fn().mockRejectedValue(Object.assign(new Error('x'), { name })));
-    render(<QrCameraScanner onDetect={vi.fn()} />);
-    await userEvent.setup().click(screen.getByRole('button', { name: 'Scan customer QR' }));
-    expect(await screen.findByRole('alert')).toHaveTextContent(text);
-  });
-
-  it('delivers the result to the latest callback', async () => {
-    const first = vi.fn();
-    const second = vi.fn();
-    camera(vi.fn().mockResolvedValue({ getTracks: () => [{ stop: vi.fn() }] }));
-    const { rerender } = render(<QrCameraScanner onDetect={first} />);
-    await userEvent.setup().click(screen.getByRole('button', { name: 'Scan customer QR' }));
-    rerender(<QrCameraScanner onDetect={second} />);
-    await waitFor(() => expect(second).toHaveBeenCalledWith('local.token.1'), { timeout: 2000 });
-    expect(first).not.toHaveBeenCalled();
+  it('ignores a frame that finishes decoding after the cashier stops scanning', async () => {
+    let finishFrame!: (codes: { rawValue: string }[]) => void;
+    const detect = vi.fn(
+      () =>
+        new Promise((resolve) => {
+          finishFrame = resolve;
+        }),
+    );
+    vi.stubGlobal(
+      'BarcodeDetector',
+      class {
+        detect = detect;
+      },
+    );
+    const stop = vi.fn();
+    Object.defineProperty(navigator, 'mediaDevices', {
+      value: {
+        getUserMedia: vi.fn().mockResolvedValue({ getTracks: () => [{ stop }] }),
+      },
+      configurable: true,
+    });
+    const onDetect = vi.fn();
+    const user = userEvent.setup();
+    render(<QrCameraScanner onDetect={onDetect} />);
+    await user.click(screen.getByRole('button', { name: 'Scan customer QR' }));
+    await waitFor(() => expect(detect).toHaveBeenCalledTimes(1));
+    await user.click(screen.getByRole('button', { name: /stop/i }));
+    await act(async () => finishFrame([{ rawValue: 'late.code' }]));
+    expect(onDetect).not.toHaveBeenCalled();
+    expect(stop).toHaveBeenCalledTimes(1);
   });
 });

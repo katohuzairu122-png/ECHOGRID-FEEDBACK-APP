@@ -71,6 +71,16 @@ describe('authenticated workspace layout boundaries', () => {
     // Surveys is a destination now that a functioning Surveys interface exists (H2).
     expect(sidebar.querySelector('a[href="/loyalty/dashboard/surveys"]')).toBeInTheDocument();
   });
+  it('exposes Community exactly once; Feed, Points and Membership are sections inside it, not top-level entries', async () => {
+    identity.customer = true;
+    const { container } = renderWithIntl(await CustomerLayout({ children: <p>Customer content</p> }));
+    const hrefs = Array.from(container.querySelector('aside')!.querySelectorAll('a[href]')).map((a) =>
+      a.getAttribute('href'),
+    );
+    expect(hrefs.filter((h) => h === '/loyalty/dashboard/community')).toHaveLength(1);
+    expect(hrefs.filter((h) => h?.startsWith('/loyalty/dashboard/community'))).toHaveLength(1);
+    expect(hrefs.some((h) => /feed|points|membership/i.test(h ?? ''))).toBe(false);
+  });
   it('requires staff authentication before reading platform identity', async () => {
     await expect(PlatformLayout({ children: null })).rejects.toThrow('redirect:/login');
     expect(getCurrentUser).not.toHaveBeenCalled();

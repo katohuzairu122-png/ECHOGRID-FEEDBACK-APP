@@ -180,6 +180,9 @@
       "scanning": "Dirigez la caméra vers le code QR du client.",
       "unsupported": "La lecture par caméra n’est pas disponible dans ce navigateur. Saisissez le jeton QR ci-dessous.",
       "cameraDenied": "La caméra n’a pas pu être ouverte. Autorisez l’accès à la caméra ou saisissez le jeton QR ci-dessous.",
+      "cameraRequesting": "En attente de l’autorisation d’utiliser la caméra…",
+      "cameraMissing": "Aucune caméra n’a été détectée. Utilisez un lecteur connecté ou le champ ci-dessous.",
+      "cameraUnavailable": "La caméra n’a pas pu démarrer. Fermez les autres applications qui l’utilisent et réessayez, ou utilisez le champ ci-dessous.",
       "viewfinder": "Vue caméra pour scanner le code QR du client",
       "scanField": "Trouver un client : scanner ou saisir le numéro de téléphone",
       "scanFieldHint": "Utilisez un lecteur connecté ou la caméra, ou saisissez le numéro de téléphone du client avec l’indicatif du pays (par exemple +15551234567), puis appuyez sur Entrée.",
@@ -212,10 +215,7 @@
         "noPurchase": "Les achats ne sont pas disponibles pour cette adhésion.",
         "redemptionNote": "La remise d’une récompense nécessite le code QR du client. Scannez-le pour l’échanger.",
         "done": "Action terminée. Recherchez à nouveau le client avant une autre action."
-      },
-      "noCamera": "Aucune caméra n’a été trouvée sur cet appareil. Saisissez le jeton QR ci-dessous.",
-      "cameraBusy": "La caméra est utilisée par une autre application ou un autre onglet. Fermez-la puis réessayez, ou saisissez le jeton QR ci-dessous.",
-      "cameraFailed": "La caméra n’a pas pu démarrer. Réessayez ou saisissez le jeton QR ci-dessous."
+      }
     }
   },
   "customer": {
@@ -348,7 +348,30 @@
         "pointsTitle": "À propos des points Communauté",
         "pointsBody": "Les points Communauté sont tenus dans leur propre registre. Cette page n’affiche que votre solde et votre historique ; elle ne peut ni créer, ni dépenser, ni modifier des points."
       },
-      "retry": "Réessayer"
+      "retry": "Réessayer",
+      "sections": {
+        "label": "Sections de la Communauté",
+        "points": "Points et adhésion",
+        "feed": "Fil d’actualité"
+      },
+      "feed": {
+        "eyebrow": "Communauté Echo Grid",
+        "title": "Fil de la Communauté",
+        "description": "Actualités partagées avec les clients Echo Grid.",
+        "empty": {
+          "title": "Rien à afficher pour le moment",
+          "body": "Aucune actualité de la Communauté n’a été publiée pour vous. Dès qu’il y en aura, elles apparaîtront ici."
+        },
+        "error": "Le fil n’a pas pu être chargé pour le moment.",
+        "forbidden": "Le fil n’est pas disponible avec votre accès actuel.",
+        "retry": "Réessayer",
+        "loadMore": "Charger plus",
+        "official": "Echo Grid",
+        "business": "Actualité d’un commerce",
+        "openLink": "Ouvrir le lien",
+        "publishedOn": "Publié le {date}",
+        "listLabel": "Actualités du fil de la Communauté"
+      }
     },
     "surveys": {
       "title": "Enquêtes",

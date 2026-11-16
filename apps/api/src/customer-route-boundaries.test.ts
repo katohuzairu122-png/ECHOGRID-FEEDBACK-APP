@@ -74,6 +74,23 @@ describe('mounted customer and staff route boundaries', () => {
     expect(mocks.findUser).not.toHaveBeenCalled();
   });
 
+  it('mounts the Community feed foundation behind customer authentication, empty by default and read-only', async () => {
+    const anonymous = await worker.fetch(new Request('https://api.test/api/v1/network/feed'), env, ctx);
+    expect(anonymous.status).toBe(401);
+    const staffOnly = await worker.fetch(new Request('https://api.test/api/v1/network/feed', {
+      headers: { Authorization: 'Bearer not-a-customer-token' },
+    }), env, ctx);
+    expect(staffOnly.status).toBe(401);
+    const token = await signCustomerAccessToken(customerId, env.CUSTOMER_JWT_SECRET);
+    const headers = { Authorization: `Bearer ${token}` };
+    const response = await worker.fetch(new Request('https://api.test/api/v1/network/feed', { headers }), env, ctx);
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ success: true, data: { items: [], nextCursor: null } });
+    const write = await worker.fetch(new Request('https://api.test/api/v1/network/feed', { method: 'POST', headers }), env, ctx);
+    expect(write.status).toBe(404);
+    expect(mocks.findUser).not.toHaveBeenCalled();
+  });
+
   it('serves the customer unread summary from a customer session, scoped to that customer, and refuses anonymous callers', async () => {
     const anonymous = await worker.fetch(new Request('https://api.test/api/v1/messaging/me/unread-count'), env, ctx);
     expect(anonymous.status).toBe(401);

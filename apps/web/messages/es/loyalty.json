@@ -180,6 +180,9 @@
       "scanning": "Apunte la cámara al código QR del cliente.",
       "unsupported": "La lectura con cámara no está disponible en este navegador. Introduzca el token QR a continuación.",
       "cameraDenied": "No se pudo abrir la cámara. Permita el acceso a la cámara o introduzca el token QR a continuación.",
+      "cameraRequesting": "Esperando permiso para usar la cámara…",
+      "cameraMissing": "No se encontró ninguna cámara. Use un escáner conectado o el campo de abajo.",
+      "cameraUnavailable": "No se pudo iniciar la cámara. Cierre las otras aplicaciones que la usan y vuelva a intentarlo o use el campo de abajo.",
       "viewfinder": "Vista de cámara para escanear el código QR del cliente",
       "scanField": "Buscar cliente: escanear o introducir el teléfono",
       "scanFieldHint": "Use un lector conectado o la cámara, o escriba el teléfono del cliente con el código de país (por ejemplo +15551234567) y pulse Intro.",
@@ -212,10 +215,7 @@
         "noPurchase": "Las compras no están disponibles para esta membresía.",
         "redemptionNote": "La entrega de una recompensa requiere el código QR del cliente. Escanéelo para canjear.",
         "done": "Acción completada. Busque de nuevo al cliente antes de otra acción."
-      },
-      "noCamera": "No se encontró ninguna cámara en este dispositivo. Introduzca el token QR a continuación.",
-      "cameraBusy": "La cámara la está usando otra aplicación o pestaña. Ciérrela e inténtelo de nuevo, o introduzca el token QR a continuación.",
-      "cameraFailed": "No se pudo iniciar la cámara. Inténtelo de nuevo o introduzca el token QR a continuación."
+      }
     }
   },
   "customer": {
@@ -348,7 +348,30 @@
         "pointsTitle": "Acerca de los Puntos de la Comunidad",
         "pointsBody": "Los Puntos de la Comunidad se llevan en su propio registro. Esta página solo muestra su saldo e historial; no puede crear, gastar ni cambiar puntos."
       },
-      "retry": "Reintentar"
+      "retry": "Reintentar",
+      "sections": {
+        "label": "Secciones de la Comunidad",
+        "points": "Puntos y membresía",
+        "feed": "Novedades"
+      },
+      "feed": {
+        "eyebrow": "Comunidad Echo Grid",
+        "title": "Novedades de la Comunidad",
+        "description": "Novedades compartidas con los clientes de Echo Grid.",
+        "empty": {
+          "title": "Todavía no hay nada que mostrar",
+          "body": "No se han publicado novedades de la Comunidad para ti. Cuando las haya, aparecerán aquí."
+        },
+        "error": "No se pudo cargar el contenido en este momento.",
+        "forbidden": "Las novedades no están disponibles con tu acceso actual.",
+        "retry": "Reintentar",
+        "loadMore": "Cargar más",
+        "official": "Echo Grid",
+        "business": "Novedad de un negocio",
+        "openLink": "Abrir enlace",
+        "publishedOn": "Publicado el {date}",
+        "listLabel": "Novedades de la Comunidad"
+      }
     },
     "surveys": {
       "title": "Encuestas",
