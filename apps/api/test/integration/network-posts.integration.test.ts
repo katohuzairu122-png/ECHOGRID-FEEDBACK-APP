@@ -186,6 +186,23 @@ describe.skipIf(!process.env.DATABASE_URL)('network official posts (integration)
       await sqlFails("UPDATE network_posts SET state='published' WHERE id=$1", [post.id], /stays withdrawn/);
     });
 
+    it('denies TRUNCATE on every network table, even for a replica-role session', async () => {
+      for (const table of ['network_posts', 'network_post_revisions', 'network_revision_approvals']) {
+        await client.query('BEGIN');
+        await client.query('SET LOCAL session_replication_role = replica');
+        await expect(client.query(`TRUNCATE ${table} CASCADE`)).rejects.toThrow(/NETWORK_TRUNCATE_DENIED/);
+        await client.query('ROLLBACK');
+      }
+    });
+
+    it('the row guards also hold in a replica-role session (ENABLE ALWAYS)', async () => {
+      const { post } = await service.createDraft(author, content('Replica role attempt.'));
+      await client.query('BEGIN');
+      await client.query('SET LOCAL session_replication_role = replica');
+      await expect(client.query("UPDATE network_posts SET handle='AAAAAAAAAAAAAAAAAAAAAA' WHERE id=$1", [post.id])).rejects.toThrow(/identity is immutable/);
+      await client.query('ROLLBACK');
+    });
+
     it('enforces plain text, https links, locale, digest format and the 2,000 limit at the table', async () => {
       const post = (await client.query("INSERT INTO network_posts(handle, author_user_id) VALUES($1,$2) RETURNING id", [`R${RUN}`.padEnd(22, 'x').slice(0, 22), author])).rows[0].id;
       const ins = (body: string, link: string | null, locale = 'en', digest = 'a'.repeat(64), no = 1) =>

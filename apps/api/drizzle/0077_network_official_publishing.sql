@@ -160,3 +160,30 @@ $fn$;
 --> statement-breakpoint
 CREATE TRIGGER network_post_guard_trg BEFORE INSERT OR UPDATE OR DELETE ON network_posts
   FOR EACH ROW EXECUTE FUNCTION network_post_guard();
+--> statement-breakpoint
+-- TRUNCATE bypasses row triggers, so every guarded table also denies it (the repository-wide structural guard in
+-- financial-truncate-denial requires this), and every guard is ENABLE ALWAYS so a session_replication_role = replica
+-- session cannot skip it either.
+CREATE OR REPLACE FUNCTION network_truncate_denied() RETURNS trigger LANGUAGE plpgsql AS $fn$
+BEGIN
+  RAISE EXCEPTION 'NETWORK_TRUNCATE_DENIED (%)', TG_TABLE_NAME USING ERRCODE = 'integrity_constraint_violation';
+END
+$fn$;
+--> statement-breakpoint
+CREATE TRIGGER network_posts_no_truncate BEFORE TRUNCATE ON network_posts FOR EACH STATEMENT EXECUTE FUNCTION network_truncate_denied();
+--> statement-breakpoint
+CREATE TRIGGER network_post_revisions_no_truncate BEFORE TRUNCATE ON network_post_revisions FOR EACH STATEMENT EXECUTE FUNCTION network_truncate_denied();
+--> statement-breakpoint
+CREATE TRIGGER network_revision_approvals_no_truncate BEFORE TRUNCATE ON network_revision_approvals FOR EACH STATEMENT EXECUTE FUNCTION network_truncate_denied();
+--> statement-breakpoint
+ALTER TABLE network_posts ENABLE ALWAYS TRIGGER network_post_guard_trg;
+--> statement-breakpoint
+ALTER TABLE network_posts ENABLE ALWAYS TRIGGER network_posts_no_truncate;
+--> statement-breakpoint
+ALTER TABLE network_post_revisions ENABLE ALWAYS TRIGGER network_revision_guard_trg;
+--> statement-breakpoint
+ALTER TABLE network_post_revisions ENABLE ALWAYS TRIGGER network_post_revisions_no_truncate;
+--> statement-breakpoint
+ALTER TABLE network_revision_approvals ENABLE ALWAYS TRIGGER network_approval_guard_trg;
+--> statement-breakpoint
+ALTER TABLE network_revision_approvals ENABLE ALWAYS TRIGGER network_revision_approvals_no_truncate;
