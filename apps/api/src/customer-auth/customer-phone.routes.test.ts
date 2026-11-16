@@ -36,7 +36,8 @@ const ctx = () => ({ waitUntil: vi.fn(), passThroughOnException: vi.fn() }) as u
 
 function app() {
   const a = new Hono<{ Bindings: Bindings; Variables: { customerId: string } }>();
-  a.onError(errorHandler);
+  // The shared handler is typed for apps without session variables; the cast is type-only and changes no behaviour.
+  a.onError(errorHandler as never);
   a.use('*', async (c, next) => { c.set('customerId', CUSTOMER); await next(); });
   a.route('/phone', customerPhoneRoutes);
   return a;
