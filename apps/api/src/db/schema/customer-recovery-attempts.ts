@@ -45,6 +45,13 @@ export const customerRecoveryAttempts = pgTable('customer_recovery_attempts', {
   /** The verified-phone proof's own timestamp. Unique per customer: a proof can never be used twice. */
   phoneProofVerifiedAt: timestamp('phone_proof_verified_at', { withTimezone: true }),
   codeFactorAt: timestamp('code_factor_at', { withTimezone: true }),
+  /**
+   * S4-03: the phone OTP is only valid for the attempt that REQUESTED it through the recovery route. The
+   * provider (Twilio Verify) keys a code by phone alone, so without this a code issued for ordinary sign-in
+   * could be presented to recovery. Bounded to three requests per attempt.
+   */
+  phoneOtpRequestedAt: timestamp('phone_otp_requested_at', { withTimezone: true }),
+  phoneOtpRequestCount: integer('phone_otp_request_count').notNull().default(0),
   factorFailures: integer('factor_failures').notNull().default(0),
   /** Set only after the notifier ACCEPTED the initiation notice. Nothing proceeds without it. */
   noticeAcceptedAt: timestamp('notice_accepted_at', { withTimezone: true }),
@@ -70,6 +77,7 @@ export const customerRecoveryAttempts = pgTable('customer_recovery_attempts', {
   check('customer_recovery_attempts_terminal_check', sql`(${table.status} IN ('cancelled', 'expired', 'completed', 'rejected')) = (${table.endedAt} IS NOT NULL)`),
   check('customer_recovery_attempts_ended_reason_presence_check', sql`(${table.endedAt} IS NULL) = (${table.endedReason} IS NULL)`),
   check('customer_recovery_attempts_failures_check', sql`${table.factorFailures} >= 0 AND ${table.factorFailures} <= 5`),
+  check('customer_recovery_attempts_phone_otp_check', sql`${table.phoneOtpRequestCount} >= 0 AND ${table.phoneOtpRequestCount} <= 3 AND (${table.phoneOtpRequestCount} > 0) = (${table.phoneOtpRequestedAt} IS NOT NULL)`),
   check('customer_recovery_attempts_phone_evidence_check', sql`(${table.phoneFactorAt} IS NULL) = (${table.phoneProofVerifiedAt} IS NULL)`),
   check('customer_recovery_attempts_two_factor_check', sql`${table.status} NOT IN ('factors_verified', 'security_hold', 'completed') OR num_nonnulls(${table.emailFactorAt}, ${table.phoneFactorAt}, ${table.codeFactorAt}) >= 2`),
   check('customer_recovery_attempts_risk_required_check', sql`${table.status} NOT IN ('factors_verified', 'security_hold', 'completed') OR ${table.risk} IS NOT NULL`),
