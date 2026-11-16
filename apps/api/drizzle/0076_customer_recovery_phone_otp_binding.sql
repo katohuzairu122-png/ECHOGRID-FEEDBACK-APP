@@ -1,0 +1,3 @@
+ALTER TABLE "customer_recovery_attempts" ADD COLUMN "phone_otp_requested_at" timestamp with time zone;--> statement-breakpoint
+ALTER TABLE "customer_recovery_attempts" ADD COLUMN "phone_otp_request_count" integer DEFAULT 0 NOT NULL;--> statement-breakpoint
+ALTER TABLE "customer_recovery_attempts" ADD CONSTRAINT "customer_recovery_attempts_phone_otp_check" CHECK ("customer_recovery_attempts"."phone_otp_request_count" >= 0 AND "customer_recovery_attempts"."phone_otp_request_count" <= 3 AND ("customer_recovery_attempts"."phone_otp_request_count" > 0) = ("customer_recovery_attempts"."phone_otp_requested_at" IS NOT NULL));

@@ -533,6 +533,13 @@
       "when": 1794789749679,
       "tag": "0075_customer_recovery_attempts",
       "breakpoints": true
+    },
+    {
+      "idx": 76,
+      "version": "7",
+      "when": 1794792045774,
+      "tag": "0076_customer_recovery_phone_otp_binding",
+      "breakpoints": true
     }
   ]
 }

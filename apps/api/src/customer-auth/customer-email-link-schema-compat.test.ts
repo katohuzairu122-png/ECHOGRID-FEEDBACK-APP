@@ -91,14 +91,31 @@ describe('S3 stays unreachable from the deployed Worker until activation', () =>
     expect(read('src/index.ts')).not.toMatch(/recovery-code|RecoveryCode/);
   });
 
-  it('S4-02: the recovery orchestrator and its config are internal only (no non-test importer, no entry point reference)', () => {
-    expect(referencing(/from ['"][^'"]*customer-recovery-attempt\.service['"]/)).toEqual([]);
-    expect(referencing(/createCustomerRecoveryService/)).toEqual([
+  it('S4-03: the recovery services are reachable from the worker ONLY through the gated router, mounted once', () => {
+    const index = read('src/index.ts');
+    // exactly one entry point, and it is the gated router
+    expect(index.match(/customerRecoveryRoutes/g)?.length).toBe(2); // import + mount
+    expect(index).toMatch(/api\.route\('\/customer-recovery', customerRecoveryRoutes\);/);
+    expect(index).not.toMatch(/createCustomerRecoveryService|recovery-attempt|recovery-code|recovery-delivery|recovery-config/);
+    // the orchestrator is imported only by the composition root, the routes' type and the delivery adapters' types
+    expect(referencing(/from ['"][^'"]*customer-recovery-attempt\.service['"]/)).toEqual([
+      'src/customer-auth/customer-recovery-delivery.ts',
+      'src/customer-auth/customer-recovery.composition.ts',
+      'src/customer-auth/customer-recovery.routes.ts',
+    ]);
+    // defined in the service, constructed only by the composition root
+    expect(referencing(/createCustomerRecoveryService\(/)).toEqual([
       'src/customer-auth/customer-recovery-attempt.service.ts',
+      'src/customer-auth/customer-recovery.composition.ts',
     ]);
     expect(referencing(/from ['"][^'"]*customer-recovery-config['"]/)).toEqual([
       'src/customer-auth/customer-recovery-attempt.service.ts',
+      'src/customer-auth/customer-recovery.composition.ts',
     ]);
-    expect(read('src/index.ts')).not.toMatch(/recovery-attempt|RecoveryService|customer-recovery/);
+    // and the router refuses everything unless the explicit gate is on
+    const composition = read('src/customer-auth/customer-recovery.composition.ts');
+    expect(composition).toMatch(/isEnabled: \(c\) => isCustomerRecoveryEnabled\(c\.env as Bindings\)/);
+    expect(composition).toMatch(/env\.CUSTOMER_RECOVERY_ENABLED === 'true'/);
+    expect(read('src/customer-auth/customer-recovery.routes.ts')).toMatch(/if \(!config\.isEnabled\(c\)\) return notFound\(\);/);
   });
 });

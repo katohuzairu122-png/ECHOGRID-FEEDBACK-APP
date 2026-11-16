@@ -67,6 +67,7 @@ export type RecoveryNoticeResult = { email: 'accepted' | 'failed'; phone?: 'acce
  */
 export type RecoveryNotifier = (notice: {
   kind: RecoveryNoticeKind;
+  attemptId: string;
   recipients: { email: string; phone: string | null };
   cancelToken?: string;
   holdUntil?: Date;
@@ -80,16 +81,28 @@ export type RecoveryPhoneProof = {
   readonly purpose: 'account_recovery';
 };
 
+/**
+ * The one-time-code provider. The provider keys a code by PHONE ALONE, so purpose binding is enforced here instead: a
+ * code can only be checked for an attempt that requested it through `requestPhoneOtp`, and an approved check is turned
+ * into a recovery-purpose proof on the server, never accepted from a client.
+ */
+export type RecoveryPhoneOtp = {
+  send(phone: string): Promise<void>;
+  check(phone: string, code: string): Promise<boolean>;
+};
+
 export type RecoveryOutcome = { ok: false } | { ok: true; status: CustomerRecoveryAttemptStatus; holdUntil?: Date };
 const FAIL = { ok: false } as const;
 
-type Surface = 'initiate' | 'email_challenge' | 'email_verify' | 'phone_factor' | 'code_verify' | 'cancel' | 'complete';
+type Surface = 'initiate' | 'email_challenge' | 'email_verify' | 'phone_otp' | 'phone_factor' | 'code_verify' | 'cancel' | 'complete';
 type Dimension = 'source' | 'customer' | 'attempt_source';
 /** Only budgets from the approved closed set {5/900, 3/3600, 10/3600} of the customer-email limiter. */
 const BUDGETS: Record<Surface, ReadonlyArray<readonly [Dimension, number, number]>> = {
   initiate: [['source', 10, 3600], ['customer', 3, 3600]],
   email_challenge: [['source', 10, 3600], ['customer', 3, 3600]],
   email_verify: [['source', 5, 900], ['customer', 5, 900]],
+  // Every send costs real SMS money, so it is budgeted like email delivery.
+  phone_otp: [['source', 10, 3600], ['customer', 3, 3600]],
   phone_factor: [['source', 5, 900], ['customer', 5, 900]],
   code_verify: [['source', 5, 900], ['customer', 5, 900]],
   // Cancellation is the customer's safety net during a hold, so its budget is per attempt AND source: someone who
@@ -116,6 +129,7 @@ export function createCustomerRecoveryService(config: {
   limiter?: RecoveryLimiter;
   notifier?: RecoveryNotifier;
   deliverEmailChallenge?: RegistrationProofDelivery;
+  phoneOtp?: RecoveryPhoneOtp;
   phoneProofMaxAgeSeconds: number;
   recentPhoneWindowSeconds?: number;
   /** Must not be shorter than the approved 24 hours. */
@@ -255,7 +269,7 @@ export function createCustomerRecoveryService(config: {
     if (recipients && config.notifier) {
       try {
         const result = await config.notifier({
-          kind: 'hold_started', recipients: { email: recipients.email, phone: recipients.phone },
+          kind: 'hold_started', attemptId, recipients: { email: recipients.email, phone: recipients.phone },
           cancelToken: holdToken, ...(holdUntil ? { holdUntil } : {}),
         });
         accepted = result.email === 'accepted';
@@ -280,9 +294,10 @@ export function createCustomerRecoveryService(config: {
     surface: Surface,
     factor: RecoveryFactor,
     check: (tx: Transaction, attempt: NonNullable<Awaited<ReturnType<typeof lockLive>>>, now: Date) => Promise<boolean | 'budget'>,
+    enforceLimit = true,
   ): Promise<RecoveryOutcome> {
     const customerId = await customerIdOf(attemptId);
-    if (!(await allowed(surface, { sourceKey, customerId, attemptId }))) return FAIL;
+    if (enforceLimit && !(await allowed(surface, { sourceKey, customerId, attemptId }))) return FAIL;
     const holdToken = newCancelToken();
     const holdDigest = await cancelDigest(attemptId, holdToken);
     const outcome = await config.db.transaction(async (tx) => {
@@ -306,6 +321,27 @@ export function createCustomerRecoveryService(config: {
       return announced ? { ok: true, status: 'security_hold', ...(outcome.holdUntil ? { holdUntil: outcome.holdUntil } : {}) } : FAIL;
     }
     return { ok: true, status: outcome.status };
+  }
+
+  /** Records a recovery-purpose phone proof as the attempt's phone factor. */
+  async function recordPhoneProof(attemptId: string, sourceKey: string | undefined, proof: RecoveryPhoneProof, enforceLimit: boolean): Promise<RecoveryOutcome> {
+    if (!proof || proof.purpose !== 'account_recovery' || typeof proof.phone !== 'string' || !PHONE_FORMAT.test(proof.phone) ||
+        !(proof.verifiedAt instanceof Date)) return FAIL;
+    const age = clock().getTime() - proof.verifiedAt.getTime();
+    if (!(age >= 0 && age <= config.phoneProofMaxAgeSeconds * 1000)) return FAIL;
+    return verifyFactor(attemptId, sourceKey, 'phone_factor', 'phone', async (tx, attempt) => {
+      const [customer] = await tx.select({ phone: customers.phone, phoneVerifiedAt: customers.phoneVerifiedAt }).from(customers).where(eq(customers.id, attempt.customerId));
+      // D6: only the customer's own VERIFIED phone can ever be a factor.
+      if (!customer?.phone || !customer.phoneVerifiedAt || customer.phone !== proof.phone) return false;
+      // A proof obtained before this attempt began cannot be replayed into it.
+      if (proof.verifiedAt.getTime() < attempt.createdAt.getTime()) return false;
+      const [reused] = await tx.select({ id: customerRecoveryAttempts.id }).from(customerRecoveryAttempts)
+        .where(and(eq(customerRecoveryAttempts.customerId, attempt.customerId), eq(customerRecoveryAttempts.phoneProofVerifiedAt, proof.verifiedAt)));
+      if (reused) return false;
+      await tx.update(customerRecoveryAttempts).set({ phoneFactorAt: sql`now()`, phoneProofVerifiedAt: proof.verifiedAt })
+        .where(eq(customerRecoveryAttempts.id, attempt.id));
+      return true;
+    }, enforceLimit);
   }
 
   return {
@@ -342,7 +378,7 @@ export function createCustomerRecoveryService(config: {
       if (!made) return FAIL;
       let accepted = false;
       try {
-        const result = await config.notifier({ kind: 'initiated', recipients: { email: made.recipients.email, phone: made.recipients.phone }, cancelToken: token });
+        const result = await config.notifier({ kind: 'initiated', attemptId: made.id, recipients: { email: made.recipients.email, phone: made.recipients.phone }, cancelToken: token });
         accepted = result.email === 'accepted';
       } catch { accepted = false; }
       await config.db.transaction(async (tx) => {
@@ -409,24 +445,62 @@ export function createCustomerRecoveryService(config: {
     },
 
     async verifyPhoneFactor(input: { attemptId: string; sourceKey?: string; proof: RecoveryPhoneProof }): Promise<RecoveryOutcome> {
-      const proof = input.proof;
-      if (!proof || proof.purpose !== 'account_recovery' || typeof proof.phone !== 'string' || !PHONE_FORMAT.test(proof.phone) ||
-          !(proof.verifiedAt instanceof Date)) return FAIL;
-      const age = clock().getTime() - proof.verifiedAt.getTime();
-      if (!(age >= 0 && age <= config.phoneProofMaxAgeSeconds * 1000)) return FAIL;
-      return verifyFactor(input.attemptId, input.sourceKey, 'phone_factor', 'phone', async (tx, attempt) => {
-        const [customer] = await tx.select({ phone: customers.phone, phoneVerifiedAt: customers.phoneVerifiedAt }).from(customers).where(eq(customers.id, attempt.customerId));
-        // D6: only the customer's own VERIFIED phone can ever be a factor.
-        if (!customer?.phone || !customer.phoneVerifiedAt || customer.phone !== proof.phone) return false;
-        // A proof obtained before this attempt began cannot be replayed into it.
-        if (proof.verifiedAt.getTime() < attempt.createdAt.getTime()) return false;
-        const [reused] = await tx.select({ id: customerRecoveryAttempts.id }).from(customerRecoveryAttempts)
-          .where(and(eq(customerRecoveryAttempts.customerId, attempt.customerId), eq(customerRecoveryAttempts.phoneProofVerifiedAt, proof.verifiedAt)));
-        if (reused) return false;
-        await tx.update(customerRecoveryAttempts).set({ phoneFactorAt: sql`now()`, phoneProofVerifiedAt: proof.verifiedAt })
+      return recordPhoneProof(input.attemptId, input.sourceKey, input.proof, true);
+    },
+
+    /**
+     * Sends a one-time code to the customer's OWN verified phone (never a caller-supplied number), only for a live,
+     * announced attempt, at most three times per attempt. Records that THIS attempt asked for it.
+     */
+    async requestPhoneOtp(input: { attemptId: string; sourceKey?: string }): Promise<{ ok: boolean }> {
+      if (!config.phoneOtp) return FAIL;
+      const customerId = await customerIdOf(input.attemptId);
+      if (!(await allowed('phone_otp', { sourceKey: input.sourceKey, customerId, attemptId: input.attemptId }))) return FAIL;
+      const phone = await config.db.transaction(async (tx) => {
+        const attempt = await lockLive(tx, input.attemptId);
+        if (!attempt || attempt.status !== 'awaiting_factors' || !attempt.noticeAcceptedAt || attempt.phoneFactorAt || attempt.phoneOtpRequestCount >= 3) return null;
+        const [customer] = await tx.select({ phone: customers.phone, phoneVerifiedAt: customers.phoneVerifiedAt, status: customers.status, isDeleted: customers.isDeleted })
+          .from(customers).where(eq(customers.id, attempt.customerId));
+        // D6: an unverified phone is never sent a recovery code.
+        if (!customer?.phone || !customer.phoneVerifiedAt || !customerMayHaveSession(customer)) return null;
+        await tx.update(customerRecoveryAttempts)
+          .set({ phoneOtpRequestedAt: sql`now()`, phoneOtpRequestCount: sql`${customerRecoveryAttempts.phoneOtpRequestCount} + 1` })
           .where(eq(customerRecoveryAttempts.id, attempt.id));
-        return true;
+        await events(tx).append({ customerId: attempt.customerId, eventType: 'otp_requested', outcome: 'success', reasonCode: 'recovery_phone_otp', now: clock() });
+        return customer.phone;
       });
+      if (!phone) return FAIL;
+      try { await config.phoneOtp.send(phone); return { ok: true }; } catch { return FAIL; }
+    },
+
+    /**
+     * Checks the code with the provider (outside any transaction) and, only if approved, mints a recovery-purpose proof
+     * on the server and records the factor. The check is allowed only if THIS attempt requested a code in the last ten
+     * minutes, so a code issued for ordinary sign-in cannot satisfy recovery. A provider error spends no budget; a
+     * rejected code spends the attempt's factor budget.
+     */
+    async verifyPhoneOtp(input: { attemptId: string; sourceKey?: string; code: string }): Promise<RecoveryOutcome> {
+      if (!config.phoneOtp || typeof input.code !== 'string' || !/^[0-9]{4,10}$/.test(input.code) || !isUuid(input.attemptId)) return FAIL;
+      const customerId = await customerIdOf(input.attemptId);
+      if (!(await allowed('phone_factor', { sourceKey: input.sourceKey, customerId, attemptId: input.attemptId }))) return FAIL;
+      const [row] = await config.db.select({ phone: customers.phone, phoneVerifiedAt: customers.phoneVerifiedAt })
+        .from(customerRecoveryAttempts).innerJoin(customers, eq(customers.id, customerRecoveryAttempts.customerId))
+        .where(and(
+          eq(customerRecoveryAttempts.id, input.attemptId), eq(customerRecoveryAttempts.status, 'awaiting_factors'),
+          sql`${customerRecoveryAttempts.noticeAcceptedAt} IS NOT NULL`, sql`${customerRecoveryAttempts.phoneFactorAt} IS NULL`,
+          sql`${customerRecoveryAttempts.expiresAt} > now()`,
+          sql`${customerRecoveryAttempts.phoneOtpRequestedAt} > now() - interval '10 minutes'`));
+      if (!row?.phone || !row.phoneVerifiedAt) return FAIL;
+      let approved: boolean;
+      try { approved = await config.phoneOtp.check(row.phone, input.code); } catch { return FAIL; }
+      if (!approved) {
+        await config.db.transaction(async (tx) => {
+          const attempt = await lockLive(tx, input.attemptId);
+          if (attempt && attempt.status === 'awaiting_factors') await spendFailure(tx, attempt, 'phone_factor_invalid', clock());
+        });
+        return FAIL;
+      }
+      return recordPhoneProof(input.attemptId, input.sourceKey, { phone: row.phone, verifiedAt: clock(), source: 'twilio_verify', purpose: 'account_recovery' }, false);
     },
 
     async verifyCodeFactor(input: { attemptId: string; sourceKey?: string; code: unknown }): Promise<RecoveryOutcome> {
@@ -454,7 +528,7 @@ export function createCustomerRecoveryService(config: {
       });
       if (!cancelled) return FAIL;
       if (cancelled.recipients && config.notifier) {
-        try { await config.notifier({ kind: 'cancelled', recipients: { email: cancelled.recipients.email, phone: cancelled.recipients.phone } }); } catch { /* the cancellation already committed */ }
+        try { await config.notifier({ kind: 'cancelled', attemptId: input.attemptId, recipients: { email: cancelled.recipients.email, phone: cancelled.recipients.phone } }); } catch { /* the cancellation already committed */ }
       }
       return { ok: true };
     },
@@ -497,7 +571,7 @@ export function createCustomerRecoveryService(config: {
           return { recipients: await recipientsOf(tx, customerId) };
         });
         if (done.recipients && config.notifier) {
-          try { await config.notifier({ kind: 'completed', recipients: { email: done.recipients.email, phone: done.recipients.phone } }); } catch { /* the reset already committed */ }
+          try { await config.notifier({ kind: 'completed', attemptId: input.attemptId, recipients: { email: done.recipients.email, phone: done.recipients.phone } }); } catch { /* the reset already committed */ }
         }
         return { ok: true };
       } catch (error) {
