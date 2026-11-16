@@ -16,6 +16,8 @@ import { test, expect, type Page } from '@playwright/test';
  *   E2E_CUSTOMER_VERIFY_URL   the full /loyalty/signup/verify?... link from the delivered email
  *   E2E_CUSTOMER_EMAIL        the address the link was requested for (must be an @example.test-style test address)
  *   E2E_CUSTOMER_PASSWORD     an acceptable password of >= the configured minimum (8) characters
+ * Optional phone attachment needs a staging phone number and the code read from the Worker logs (the console SMS service logs it):
+ *   E2E_CUSTOMER_PHONE, E2E_CUSTOMER_PHONE_CODE
  * Legacy compatibility needs an already-issued legacy customer session token for a customer WITHOUT a verified login
  * email:  E2E_LEGACY_CUSTOMER_TOKEN
  */
@@ -119,6 +121,45 @@ test.describe('sign-in, refresh and logout', () => {
     await page.getByRole('button', { name: 'Log out' }).click();
     await page.goto('/loyalty/dashboard');
     await expect(page).not.toHaveURL(/\/loyalty\/dashboard$/);
+  });
+});
+
+test.describe('session revocation, rate limiting and phone attachment', () => {
+  test.skip(!email || password.length < 8, 'needs E2E_CUSTOMER_EMAIL and E2E_CUSTOMER_PASSWORD of a registered test customer');
+
+  test('after logout, the previously issued session cookies no longer authenticate', async ({ page, context }) => {
+    await signIn(page, email, password);
+    await expect(page).toHaveURL(/\/loyalty\/dashboard/);
+    const issued = await context.cookies();
+    await page.getByRole('button', { name: 'Log out' }).click();
+    await context.clearCookies();
+    await context.addCookies(issued); // replay what the server had issued before logout
+    await page.goto('/loyalty/dashboard');
+    await expect(page).not.toHaveURL(/\/loyalty\/dashboard$/);
+  });
+
+  test('repeated wrong passwords are rate limited with the generic throttle message', async ({ page }) => {
+    // Uses a throwaway address, never the registered test customer, so the real account cannot be locked out.
+    const throwaway = `e2e-throttle-${Date.now()}@example.test`;
+    let throttled = false;
+    for (let i = 0; i < 15 && !throttled; i += 1) {
+      await signIn(page, throwaway, `wrong-password-${i}`);
+      throttled = await page.getByText('Too many attempts. Please wait a few minutes and try again.').isVisible();
+    }
+    expect(throttled).toBe(true);
+  });
+
+  test('a signed-in customer can attach and verify a phone number (optional)', async ({ page }) => {
+    const phone = process.env.E2E_CUSTOMER_PHONE ?? '';
+    const code = process.env.E2E_CUSTOMER_PHONE_CODE ?? '';
+    test.skip(!phone || !code, 'needs E2E_CUSTOMER_PHONE and E2E_CUSTOMER_PHONE_CODE (code is read from the staging Worker logs)');
+    await signIn(page, email, password);
+    await page.goto('/loyalty/dashboard/phone');
+    await page.getByLabel('Phone number').fill(phone);
+    await page.getByRole('button', { name: 'Send code' }).click();
+    await page.getByLabel('Verification code').fill(code);
+    await page.getByRole('button', { name: 'Verify phone' }).click();
+    await expect(page.getByText('Your phone is verified')).toBeVisible();
   });
 });
 
