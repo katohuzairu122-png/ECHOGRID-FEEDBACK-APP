@@ -14,6 +14,15 @@ function getDetectorCtor(): BarcodeDetectorCtor | undefined {
   return (globalThis as { BarcodeDetector?: BarcodeDetectorCtor }).BarcodeDetector;
 }
 
+/** Maps a getUserMedia / play() failure to the message that is actually true, instead of "denied" for everything. */
+export function cameraFailureKey(error: unknown): 'cameraDenied' | 'noCamera' | 'cameraBusy' | 'cameraFailed' {
+  const name = (error as { name?: string } | null)?.name;
+  if (name === 'NotAllowedError' || name === 'SecurityError' || name === 'PermissionDeniedError') return 'cameraDenied';
+  if (name === 'NotFoundError' || name === 'DevicesNotFoundError' || name === 'OverconstrainedError') return 'noCamera';
+  if (name === 'NotReadableError' || name === 'TrackStartError' || name === 'AbortError') return 'cameraBusy';
+  return 'cameraFailed';
+}
+
 /**
  * Camera QR scanner for the cashier tab. Uses the browser's built-in BarcodeDetector where it exists and
  * otherwise a local decoder (jsQR, bundled; nothing is fetched or sent anywhere), so a missing
@@ -37,6 +46,16 @@ export function QrCameraScanner({
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [active, setActive] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  // Guards a double tap on Scan: two overlapping getUserMedia calls would each open a camera and the first stream
+  // would be overwritten in streamRef and never stopped (the camera light stays on).
+  const startingRef = useRef(false);
+  // Set on unmount so a camera that finishes opening after the page was left is released instead of leaked.
+  const unmountedRef = useRef(false);
+  // The latest callback, so a scan result is never delivered to a stale closure.
+  const onDetectRef = useRef(onDetect);
+  useEffect(() => {
+    onDetectRef.current = onDetect;
+  }, [onDetect]);
 
   const stop = useCallback(() => {
     if (timerRef.current) clearInterval(timerRef.current);
@@ -46,9 +65,25 @@ export function QrCameraScanner({
     setActive(false);
   }, []);
 
-  useEffect(() => stop, [stop]);
+  useEffect(() => {
+    unmountedRef.current = false;
+    return () => {
+      unmountedRef.current = true;
+      stop();
+    };
+  }, [stop]);
 
   async function start() {
+    if (startingRef.current || streamRef.current) return;
+    startingRef.current = true;
+    try {
+      await open();
+    } finally {
+      startingRef.current = false;
+    }
+  }
+
+  async function open() {
     setMessage(null);
     const Detector = getDetectorCtor();
     if (!navigator.mediaDevices?.getUserMedia) {
@@ -64,6 +99,10 @@ export function QrCameraScanner({
         video: { facingMode: { ideal: 'environment' } },
         audio: false,
       });
+      if (unmountedRef.current) {
+        stream.getTracks().forEach((track) => track.stop());
+        return;
+      }
       streamRef.current = stream;
       const video = videoRef.current;
       if (!video) {
@@ -94,7 +133,7 @@ export function QrCameraScanner({
           if (value && !done) {
             done = true;
             stop();
-            onDetect(value);
+            onDetectRef.current(value);
           }
         } catch {
           // A single failed frame is not fatal; keep scanning.
@@ -102,9 +141,9 @@ export function QrCameraScanner({
           busy = false;
         }
       }, 300);
-    } catch {
+    } catch (error) {
       stop();
-      setMessage(t('cameraDenied'));
+      if (!unmountedRef.current) setMessage(t(cameraFailureKey(error)));
     }
   }
 

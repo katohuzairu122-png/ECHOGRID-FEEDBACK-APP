@@ -36,4 +36,22 @@ describe('workspace navigation entries that need a fresh document', () => {
     expect(scan.getAttribute('data-client-nav')).toBeNull();
     expect(home.getAttribute('data-client-nav')).toBe('true');
   });
+
+  it('enters the cashier home (the camera page) with a full page load from both brand links', () => {
+    const { container } = render(
+      <WorkspaceNavigation
+        {...props}
+        home="/dashboard/loyalty/scan"
+        items={[{ href: '/support', label: 'Support', icon: 'chat' }]}
+      />,
+    );
+    const homes = container.querySelectorAll('a[href="/dashboard/loyalty/scan"]');
+    expect(homes.length).toBe(2);
+    homes.forEach((a) => expect(a.getAttribute('data-client-nav')).toBeNull());
+  });
+
+  it('keeps client navigation for an ordinary home', () => {
+    const { container } = render(<WorkspaceNavigation {...props} items={[{ href: '/support', label: 'S', icon: 'chat' }]} />);
+    container.querySelectorAll('a[href="/dashboard"]').forEach((a) => expect(a.getAttribute('data-client-nav')).toBe('true'));
+  });
 });

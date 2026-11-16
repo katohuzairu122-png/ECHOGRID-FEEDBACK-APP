@@ -202,10 +202,11 @@ export default async function DashboardPage({
               <LandingIcon name="chat" width={24} height={24} />
               {t('forms')}
             </Link>
-            <Link href="/dashboard/loyalty/scan">
+            {/* A full page load: the scanner page's camera permission is fixed when the document loads (lib/camera-routes.ts). */}
+            <a href="/dashboard/loyalty/scan">
               <LandingIcon name="star" width={24} height={24} />
               {t('scanCustomer')}
-            </Link>
+            </a>
             <Link href="/dashboard/settlements">
               <LandingIcon name="gift" width={24} height={24} />
               {t('settlements')}

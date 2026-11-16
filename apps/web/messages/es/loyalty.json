@@ -212,7 +212,10 @@
         "noPurchase": "Las compras no están disponibles para esta membresía.",
         "redemptionNote": "La entrega de una recompensa requiere el código QR del cliente. Escanéelo para canjear.",
         "done": "Acción completada. Busque de nuevo al cliente antes de otra acción."
-      }
+      },
+      "noCamera": "No se encontró ninguna cámara en este dispositivo. Introduzca el token QR a continuación.",
+      "cameraBusy": "La cámara la está usando otra aplicación o pestaña. Ciérrela e inténtelo de nuevo, o introduzca el token QR a continuación.",
+      "cameraFailed": "No se pudo iniciar la cámara. Inténtelo de nuevo o introduzca el token QR a continuación."
     }
   },
   "customer": {

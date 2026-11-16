@@ -212,7 +212,10 @@
         "noPurchase": "Purchases are not available for this membership.",
         "redemptionNote": "Reward handoff needs the customer’s QR code. Scan it to redeem a reward.",
         "done": "Action completed. Look the customer up again before another action."
-      }
+      },
+      "noCamera": "No camera was found on this device. Enter the QR token below.",
+      "cameraBusy": "The camera is in use by another app or tab. Close it and try again, or enter the QR token below.",
+      "cameraFailed": "The camera could not be started. Try again, or enter the QR token below."
     }
   },
   "customer": {

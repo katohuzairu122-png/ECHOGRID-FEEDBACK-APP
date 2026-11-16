@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation';
 import { Logo } from '@/components/brand';
 import { LandingIcon, type LandingIconName } from '@/components/landing/landing-icon';
 import type { UnreadSource } from '@/lib/unread-store';
+import { isCameraPath } from '@/lib/camera-routes';
 import { NavUnreadBadge, NavUnreadDot } from './nav-unread-badge';
 import styles from './workspace.module.css';
 
@@ -27,6 +28,32 @@ export function activeWorkspaceHref(pathname: string, items: WorkspaceNavItem[])
   return items
     .filter((item) => pathname === item.href || pathname.startsWith(item.href + '/'))
     .sort((a, b) => b.href.length - a.href.length)[0]?.href;
+}
+
+/**
+ * The workspace home link. For a cashier the home IS the camera page, so it must be a full page load like the
+ * hardNavigation items; a client-side transition would keep the previous page's `camera=()` policy.
+ */
+function HomeLink({
+  href,
+  className,
+  children,
+  ...rest
+}: {
+  href: string;
+  className?: string | undefined;
+  children: ReactNode;
+  'aria-label'?: string;
+}) {
+  return isCameraPath(href) ? (
+    <a href={href} {...(className ? { className } : {})} {...rest}>
+      {children}
+    </a>
+  ) : (
+    <Link href={href} {...(className ? { className } : {})} {...rest}>
+      {children}
+    </Link>
+  );
 }
 
 const FOCUSABLE =
@@ -148,17 +175,17 @@ export function WorkspaceNavigation({
   return (
     <>
       <aside className={styles.sidebar}>
-        <Link className={styles.brand} href={home}>
+        <HomeLink className={styles.brand} href={home}>
           <Logo variant="dark" iconSize={35} />
-        </Link>
+        </HomeLink>
         <p className={styles.workspaceLabel}>{label}</p>
         <nav aria-label={menuLabel}>{links(items)}</nav>
         <div className={styles.utilities}>{utilities}</div>
       </aside>
       <header className={styles.mobileHeader}>
-        <Link href={home} aria-label={label}>
+        <HomeLink href={home} aria-label={label}>
           <Logo variant="dark" iconSize={30} />
-        </Link>
+        </HomeLink>
       </header>
       <nav className={styles.bottomNav} aria-label={label}>
         {links(primary)}

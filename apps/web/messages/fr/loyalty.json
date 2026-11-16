@@ -212,7 +212,10 @@
         "noPurchase": "Les achats ne sont pas disponibles pour cette adhésion.",
         "redemptionNote": "La remise d’une récompense nécessite le code QR du client. Scannez-le pour l’échanger.",
         "done": "Action terminée. Recherchez à nouveau le client avant une autre action."
-      }
+      },
+      "noCamera": "Aucune caméra n’a été trouvée sur cet appareil. Saisissez le jeton QR ci-dessous.",
+      "cameraBusy": "La caméra est utilisée par une autre application ou un autre onglet. Fermez-la puis réessayez, ou saisissez le jeton QR ci-dessous.",
+      "cameraFailed": "La caméra n’a pas pu démarrer. Réessayez ou saisissez le jeton QR ci-dessous."
     }
   },
   "customer": {
