@@ -16,9 +16,7 @@ function getDetectorCtor(): BarcodeDetectorCtor | undefined {
 
 /**
  * Camera QR scanner for the cashier tab. Uses the browser's built-in BarcodeDetector where it exists and
- * otherwise a local decoder (jsQR, bundled; nothing is fetched or sent anywhere), so a missing
- * BarcodeDetector no longer means "no scanning". Where there is no camera at all, the camera is denied or
- * the page is not a secure context, it says so; an image upload and the caller's manual token field remain.
+ * otherwise a bundled local decoder (jsQR). The caller's manual lookup remains available.
  * The camera stops as soon as a code is read, on Stop, or on unmount. A detected value is reported once and
  * is never logged or placed in a URL.
  */
@@ -35,35 +33,54 @@ export function QrCameraScanner({
   const streamRef = useRef<MediaStream | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const generationRef = useRef(0);
+  const runningRef = useRef(false);
+  const [requesting, setRequesting] = useState(false);
   const [active, setActive] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
-  const stop = useCallback(() => {
+  const release = useCallback(() => {
+    generationRef.current += 1;
+    runningRef.current = false;
     if (timerRef.current) clearInterval(timerRef.current);
     timerRef.current = null;
     streamRef.current?.getTracks().forEach((track) => track.stop());
     streamRef.current = null;
-    setActive(false);
+    if (videoRef.current) videoRef.current.srcObject = null;
   }, []);
 
-  useEffect(() => stop, [stop]);
+  const stop = useCallback(() => {
+    release();
+    setRequesting(false);
+    setActive(false);
+  }, [release]);
+
+  useEffect(() => release, [release]);
 
   async function start() {
+    if (runningRef.current) return;
     setMessage(null);
-    const Detector = getDetectorCtor();
+    if (window.isSecureContext === false) {
+      setMessage(t('insecure'));
+      return;
+    }
     if (!navigator.mediaDevices?.getUserMedia) {
       setMessage(t('unsupported'));
       return;
     }
-    if (typeof window !== 'undefined' && window.isSecureContext === false) {
-      setMessage(t('insecure'));
-      return;
-    }
+    runningRef.current = true;
+    const generation = ++generationRef.current;
+    const isCurrent = () => generationRef.current === generation;
+    setRequesting(true);
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: { ideal: 'environment' } },
         audio: false,
       });
+      if (!isCurrent()) {
+        stream.getTracks().forEach((track) => track.stop());
+        return;
+      }
       streamRef.current = stream;
       const video = videoRef.current;
       if (!video) {
@@ -72,27 +89,40 @@ export function QrCameraScanner({
       }
       video.srcObject = stream;
       await video.play();
+      if (!isCurrent()) return;
+      setRequesting(false);
       setActive(true);
-      const native = Detector ? new Detector({ formats: ['qr_code'] }) : null;
+      let native: BarcodeDetectorLike | undefined;
+      const Detector = getDetectorCtor();
+      if (Detector) {
+        try {
+          native = new Detector({ formats: ['qr_code'] });
+        } catch {
+          // Some implementations expose the API without a usable QR detector.
+        }
+      }
       if (!canvasRef.current) canvasRef.current = document.createElement('canvas');
       const canvas = canvasRef.current;
       let busy = false;
-      let done = false;
       timerRef.current = setInterval(async () => {
-        if (busy || done) return;
+        if (busy || !isCurrent() || video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) return;
         busy = true;
         try {
           let value: string | undefined;
           if (native) {
-            value = (await native.detect(video))[0]?.rawValue?.trim();
-          } else {
+            try {
+              value = (await native.detect(video))[0]?.rawValue?.trim();
+            } catch {
+              native = undefined;
+            }
+          }
+          if (!native && isCurrent()) {
             const pixels = readPixels(video, video.videoWidth, video.videoHeight, canvas);
             value = pixels
               ? ((await decodeImageData(pixels.data, pixels.width, pixels.height)) ?? undefined)
               : undefined;
           }
-          if (value && !done) {
-            done = true;
+          if (value && isCurrent()) {
             stop();
             onDetect(value);
           }
@@ -102,9 +132,18 @@ export function QrCameraScanner({
           busy = false;
         }
       }, 300);
-    } catch {
+    } catch (error) {
+      if (!isCurrent()) return;
       stop();
-      setMessage(t('cameraDenied'));
+      const name =
+        typeof error === 'object' && error !== null && 'name' in error ? error.name : undefined;
+      if (name === 'NotFoundError' || name === 'OverconstrainedError') {
+        setMessage(t('cameraMissing'));
+      } else if (name === 'NotReadableError' || name === 'AbortError') {
+        setMessage(t('cameraUnavailable'));
+      } else {
+        setMessage(t('cameraDenied'));
+      }
     }
   }
 
@@ -117,7 +156,7 @@ export function QrCameraScanner({
         aria-label={t('viewfinder')}
         className={active ? 'aspect-square w-full rounded-xl bg-black object-cover' : 'hidden'}
       />
-      {active ? (
+      {active || requesting ? (
         <Button
           type="button"
           variant="outline"
@@ -135,9 +174,9 @@ export function QrCameraScanner({
           {t(large ? 'scanLarge' : 'scan')}
         </Button>
       )}
-      {active && (
+      {(active || requesting) && (
         <p role="status" className="text-sm">
-          {t('scanning')}
+          {t(requesting ? 'cameraRequesting' : 'scanning')}
         </p>
       )}
       {message && (
