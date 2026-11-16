@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, timestamp, date, check } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, text, timestamp, date, check, integer } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import { auditColumns, softDeleteColumns } from './_shared';
 
@@ -33,6 +33,9 @@ export const customers = pgTable(
     // account) but some features are off until this time. See
     // lib/customer-limits.ts for the list. NULL or a past time means not limited.
     limitedUntil: timestamp('limited_until', { withTimezone: true }),
+    // Customer QR revocation (CUSTOMER-QR-ROTATION-01): a customer QR token carries the epoch it was issued under
+    // and is rejected once the customer's epoch has moved on. Only the customer's own revoke action increments it.
+    qrRevocationEpoch: integer('qr_revocation_epoch').notNull().default(0),
     ...auditColumns,
     ...softDeleteColumns,
   },

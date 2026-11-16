@@ -44,7 +44,7 @@ function createRepos(
   hasAvailableOrphan = false,
   receivingBusinessStatus: 'active' | 'suspended' | 'archived' = 'active',
 ) {
-  const customer = { id: CUSTOMER_ID, status: 'active' };
+  const customer = { id: CUSTOMER_ID, status: 'active', qrRevocationEpoch: 0 };
   const membership = activeMembership
     ? {
         id: MEMBERSHIP_ID,
@@ -177,6 +177,30 @@ describe('LoyaltyActionResolver', () => {
           permissions: new Set(['loyalty:serve']),
         }),
       ).rejects.toMatchObject({ status: 404, code: 'CUSTOMER_QR_NOT_FOUND' });
+    }
+  });
+
+  it('rejects a customer QR issued under an older revocation epoch (CUSTOMER-QR-ROTATION-01)', async () => {
+    const stale = await signCustomerQrToken(CUSTOMER_ID, SECRET, 1); // fixture customer is at epoch 0
+    await expect(
+      resolver(true).resolveCustomerForStaff({
+        customerQrToken: stale,
+        businessId: BUSINESS_ID,
+        permissions: new Set(['loyalty:serve']),
+      }),
+    ).rejects.toMatchObject({ code: 'CUSTOMER_QR_NOT_FOUND' });
+  });
+
+  it('accepts the current-epoch QR repeatedly: resolving never consumes it', async () => {
+    const token = await signCustomerQrToken(CUSTOMER_ID, SECRET, 0);
+    const r = resolver(true);
+    for (let i = 0; i < 3; i += 1) {
+      const result = await r.resolveCustomerForStaff({
+        customerQrToken: token,
+        businessId: BUSINESS_ID,
+        permissions: new Set(['loyalty:serve']),
+      });
+      expect(result.customerId).toBe(CUSTOMER_ID);
     }
   });
 

@@ -45,5 +45,6 @@ export function validCustomerQrClaims(value: unknown, signatureVersion: number):
   const claims = objectValue(value);
   return claims !== null &&
     claims.type === 'qr_customer' &&
-    commonClaims(claims, signatureVersion);
+    commonClaims(claims, signatureVersion) &&
+    (claims.rev === undefined || (typeof claims.rev === 'number' && Number.isSafeInteger(claims.rev) && claims.rev >= 0));
 }

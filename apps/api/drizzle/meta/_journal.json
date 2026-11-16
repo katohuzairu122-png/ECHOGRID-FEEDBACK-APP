@@ -547,6 +547,13 @@
       "when": 1794802871114,
       "tag": "0077_network_official_publishing",
       "breakpoints": true
+    },
+    {
+      "idx": 78,
+      "version": "7",
+      "when": 1794820679701,
+      "tag": "0078_customer_qr_revocation",
+      "breakpoints": true
     }
   ]
 }

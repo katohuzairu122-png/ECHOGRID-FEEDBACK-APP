@@ -20,6 +20,7 @@ function createFakeRepos() {
       async create(input: NewCustomer): Promise<Customer> {
         const customer: Customer = {
           id: crypto.randomUUID(),
+          qrRevocationEpoch: 0,
           phone: input.phone ?? null,
           fullName: input.fullName ?? null,
           email: input.email ?? null,
