@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { renderWithIntl as render } from '@/test-utils';
 
 vi.mock('@/lib/actions/unified-qr', () => ({ staffUnifiedQrAction: vi.fn() }));
+vi.mock('@/lib/qr-decode', () => ({ readPixels: vi.fn(), decodeImageData: vi.fn() }));
 import { staffUnifiedQrAction } from '@/lib/actions/unified-qr';
 import { StaffQrMenu } from './staff-qr-menu';
 
@@ -50,6 +51,71 @@ describe('StaffQrMenu (cashier Serve customers)', () => {
     expect(container.querySelector('input[type="file"]')).toBeNull();
     expect(screen.queryByText(/upload a photo/i)).toBeNull();
     expect(screen.getByLabelText(/Find customer/i, { selector: 'input' })).toBeInTheDocument();
+  });
+
+  it('submits a camera scan and verified-phone search to the same branch-scoped counter action', async () => {
+    const serveAction = vi.fn<typeof staffUnifiedQrAction>().mockResolvedValueOnce({
+      businessId: 'business',
+      branchId: 'branch-7',
+      result: {
+        customerId: 'customer',
+        loyaltyAccountId: 'account',
+        membershipStatus: 'active',
+        actions: ['VIEW_ALLOWED_MEMBERSHIP_STATE'],
+      },
+    }).mockResolvedValueOnce({
+      businessId: 'business',
+      branchId: 'branch-7',
+      lookup: {
+        lookupToken: 'lookup.token.value',
+        displayName: 'Amina',
+        phoneMasked: '+•••••••4567',
+        membershipStatus: 'active',
+        actions: ['VIEW_ALLOWED_MEMBERSHIP_STATE'],
+      },
+    });
+    const media = Object.getOwnPropertyDescriptor(navigator, 'mediaDevices');
+    const stop = vi.fn();
+    const play = vi.spyOn(HTMLMediaElement.prototype, 'play').mockResolvedValue(undefined);
+    const ready = vi.spyOn(HTMLMediaElement.prototype, 'readyState', 'get').mockReturnValue(2);
+    vi.stubGlobal('BarcodeDetector', class {
+      async detect() {
+        return [{ rawValue: 'signed.customer.qr' }];
+      }
+    });
+    Object.defineProperty(navigator, 'mediaDevices', {
+      value: { getUserMedia: vi.fn().mockResolvedValue({ getTracks: () => [{ stop }] }) },
+      configurable: true,
+    });
+    const location = window.location.href;
+    const user = userEvent.setup();
+    try {
+      render(
+        <StaffQrMenu
+          contexts={[{ branchId: 'branch-7', branchName: 'Main street' }]}
+          serveAction={serveAction}
+        />,
+      );
+      await user.click(screen.getByRole('button', { name: 'Scan' }));
+      expect(await screen.findByText('Membership in this business: active')).toBeVisible();
+      expect(stop).toHaveBeenCalledTimes(1);
+      const field = screen.getByLabelText(/Find customer/i, { selector: 'input' });
+      await user.clear(field);
+      await user.type(field, '+15551234567{Enter}');
+      expect(await screen.findByText('Amina')).toBeVisible();
+      expect(serveAction.mock.calls.map(([, form]) => Object.fromEntries(form))).toEqual([
+        { operation: 'resolve', token: 'signed.customer.qr', branchId: 'branch-7' },
+        { operation: 'resolve', token: '+15551234567', branchId: 'branch-7' },
+      ]);
+      expect(window.location.href).toBe(location);
+      expect(screen.queryByRole('button', { name: 'Confirm verified purchase' })).toBeNull();
+    } finally {
+      play.mockRestore();
+      ready.mockRestore();
+      vi.unstubAllGlobals();
+      if (media) Object.defineProperty(navigator, 'mediaDevices', media);
+      else Reflect.deleteProperty(navigator, 'mediaDevices');
+    }
   });
 
   it('shows a phone-identified customer with a first name and masked number, and only the purchase form', async () => {
