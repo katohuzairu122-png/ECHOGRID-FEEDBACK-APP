@@ -1,4 +1,4 @@
-import { desc, eq, lt } from 'drizzle-orm';
+import { and, count, desc, eq, gte, lt } from 'drizzle-orm';
 import {
   customerAuthEvents,
   type CustomerAuthEventOutcome,
@@ -81,6 +81,25 @@ export class CustomerAuthEventRepository extends BaseRepository {
       metadata: sanitizeEventMetadata(input.metadata),
       ...(input.now ? { createdAt: input.now } : {}),
     });
+  }
+
+  /** How many events of one type and reason a customer has produced since `since`. Drives abuse caps; reads counts only. */
+  async countForCustomerSince(input: {
+    customerId: string;
+    eventType: CustomerAuthEventType;
+    reasonCode: string;
+    since: Date;
+  }): Promise<number> {
+    const [row] = await this.db
+      .select({ n: count() })
+      .from(customerAuthEvents)
+      .where(and(
+        eq(customerAuthEvents.customerId, input.customerId),
+        eq(customerAuthEvents.eventType, input.eventType),
+        eq(customerAuthEvents.reasonCode, input.reasonCode),
+        gte(customerAuthEvents.createdAt, input.since),
+      ));
+    return row?.n ?? 0;
   }
 
   async listForCustomer(customerId: string, limit = 50): Promise<CustomerAuthEvent[]> {

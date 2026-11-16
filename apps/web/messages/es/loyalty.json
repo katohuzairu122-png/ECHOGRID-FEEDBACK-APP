@@ -265,7 +265,9 @@
       "genericError": "Algo salió mal. Inténtalo de nuevo.",
       "joinRequired": "Únete al programa de fidelización de este negocio antes de registrarte.",
       "joining": "Uniéndome…",
-      "joinAndCheckIn": "Unirme y registrarme"
+      "joinAndCheckIn": "Unirme y registrarme",
+      "phoneRequired": "Verifica tu número de teléfono para unirte a otro negocio.",
+      "verifyPhoneLink": "Verificar mi teléfono"
     },
     "messages": {
       "title": "Mensajes",
@@ -476,6 +478,37 @@
         "invalid_credentials": "El correo o la contraseña no son correctos.",
         "invalid_proof": "Este enlace caducó o ya se usó, o la contraseña no fue aceptada. Solicita un enlace nuevo e inténtalo de nuevo.",
         "rate_limited": "Demasiados intentos. Espera unos minutos e inténtalo de nuevo.",
+        "unavailable": "No disponible por ahora. Inténtalo más tarde."
+      },
+      "phoneOptionalLabel": "Número de teléfono (opcional)",
+      "phoneOptionalHint": "Puedes verificarlo después. La verificación es necesaria para unirte a más de un negocio."
+    },
+    "phoneVerify": {
+      "title": "Verifica tu teléfono",
+      "description": "Verificar tu número te permite unirte a más de un negocio y participar en la Comunidad. Te enviaremos un código por SMS.",
+      "verifiedTitle": "Tu teléfono está verificado",
+      "verifiedDescription": "{phone} está verificado en tu cuenta.",
+      "continue": "Continuar",
+      "phoneLabel": "Número de teléfono",
+      "phoneHint": "Incluye el código de país, por ejemplo +965 o +1.",
+      "sendCode": "Enviar código",
+      "sending": "Enviando…",
+      "codeTitle": "Ingresa el código",
+      "codeDescription": "Enviamos un código al {phone}. Caduca en 10 minutos.",
+      "codeLabel": "Código de verificación",
+      "verify": "Verificar teléfono",
+      "verifying": "Verificando…",
+      "useAnotherNumber": "Usar otro número",
+      "onFile": "Número registrado, aún sin verificar: {phone}",
+      "errors": {
+        "invalid_phone": "Ingresa el número con su código de país, por ejemplo +96566904591.",
+        "invalid_code": "Ese código no es correcto o ha caducado.",
+        "locked": "Demasiados intentos incorrectos. Solicita un código nuevo.",
+        "cooldown": "Espera un minuto antes de solicitar otro código.",
+        "taken": "Este número ya está verificado en otra cuenta.",
+        "limited": "Demasiados intentos hoy. Inténtalo de nuevo mañana.",
+        "already_verified": "Este número ya está verificado.",
+        "change_unsupported": "Cambiar un número verificado aún no está disponible.",
         "unavailable": "No disponible por ahora. Inténtalo más tarde."
       }
     }

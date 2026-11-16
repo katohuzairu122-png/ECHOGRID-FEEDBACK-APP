@@ -3,6 +3,7 @@ import { customers } from '../db/schema';
 import { CustomerAuthChallengeRepository } from '../repositories/customer-auth-challenge.repository';
 import { CustomerCredentialRepository } from '../repositories/customer-credential.repository';
 import { customerChallengeDigest, normalizeLoginEmail } from './customer-email-challenge-digest';
+import { normalizeE164 } from '../lib/phone';
 
 /**
  * S2 transactional registration core (NOT mounted or activated).
@@ -22,9 +23,16 @@ export async function completeEmailRegistration(input: {
   email: string;
   proof: string;
   passwordHash: string | (() => Promise<string>);
+  /**
+   * Optional phone given at sign-up. It is stored UNVERIFIED (phone_verified_at stays null): a number someone typed proves
+   * nothing, gates nothing and is never used to find or sign in an account until the phone-attach flow verifies it.
+   */
+  phone?: string | undefined;
   now: Date;
 }): Promise<EmailRegistrationResult> {
   const invalid = { ok: false, kind: 'invalid' } as const;
+  const phone = input.phone === undefined ? null : normalizeE164(input.phone);
+  if (input.phone !== undefined && phone === null) return invalid;
   const email = normalizeLoginEmail(input.email);
   if (
     !email ||
@@ -66,7 +74,7 @@ export async function completeEmailRegistration(input: {
         throw new Error('Invalid password hash');
       }
       const [customer] = await tx.insert(customers).values({
-        phone: null,
+        phone,
         phoneVerifiedAt: null,
         createdAt: input.now,
         updatedAt: input.now,

@@ -109,6 +109,16 @@ export class CustomerAuthService {
   }
 
   async verifyOtp(phone: string, code: string): Promise<CustomerAuthResult> {
+    await this.consumeOtp(phone, code);
+    return this.completeVerifiedPhone(phone);
+  }
+
+  /**
+   * Validates and consumes a locally issued code (expiry, attempt cap, single use) and proves ownership of the phone. It
+   * issues no session: `verifyOtp` signs in after it, and the phone-attach flow links the proven number to an
+   * already signed-in customer. Throws CustomerAuthError (OTP_INVALID, OTP_MAX_ATTEMPTS) otherwise.
+   */
+  async consumeOtp(phone: string, code: string): Promise<void> {
     const active = await this.repos.otpCodes.findActiveForPhone(phone);
     if (!active) {
       throw new CustomerAuthError('Code is invalid or has expired.', 'OTP_INVALID');
@@ -144,8 +154,6 @@ export class CustomerAuthService {
     // re-authentication request while still keeping unverified SMS requests
     // under the full cooldown.
     await this.repos.otpCodes.releaseRequest(phone).catch(() => undefined);
-
-    return this.completeVerifiedPhone(phone);
   }
 }
 

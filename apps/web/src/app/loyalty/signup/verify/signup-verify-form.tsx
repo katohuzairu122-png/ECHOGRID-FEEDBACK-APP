@@ -56,6 +56,11 @@ export function SignupVerifyForm({ next }: { next: string }) {
                 <Input id="email" name="email" type="email" autoComplete="email" required />
               </div>
               <div className="flex flex-col gap-1.5">
+                <Label htmlFor="phone">{t('phoneOptionalLabel')}</Label>
+                <Input id="phone" name="phone" type="tel" inputMode="tel" autoComplete="tel" placeholder="+96566904591" />
+                <p className="text-xs text-neutral-500">{t('phoneOptionalHint')}</p>
+              </div>
+              <div className="flex flex-col gap-1.5">
                 <Label htmlFor="password">{t('createPasswordLabel')}</Label>
                 <Input id="password" name="password" type="password" autoComplete="new-password" required />
               </div>

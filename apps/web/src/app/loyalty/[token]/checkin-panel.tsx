@@ -27,6 +27,7 @@ export function CheckinPanel({ token, branchName, businessName, signedIn, feedba
   const [error, setError] = useState<string>();
   const [account, setAccount] = useState<LoyaltyAccountDto>();
   const [membershipRequired, setMembershipRequired] = useState(false);
+  const [phoneRequired, setPhoneRequired] = useState(false);
   const automaticCheckinStarted = useRef(false);
   // i18n & Multi-Currency Block 6.
   const t = useTranslations('loyalty.customer.checkin');
@@ -52,10 +53,16 @@ export function CheckinPanel({ token, branchName, businessName, signedIn, feedba
 
   const handleJoinAndCheckin = useCallback(() => {
     setError(undefined);
+    setPhoneRequired(false);
     startTransition(async () => {
       try {
         const result = await joinAndCheckinAction(token);
         if (result.error) {
+          // Joining an ADDITIONAL business needs a verified phone: send the customer to verify it, then bring them back.
+          if (result.code === 'PHONE_VERIFICATION_REQUIRED') {
+            setPhoneRequired(true);
+            return;
+          }
           setError(result.error);
           return;
         }
@@ -123,6 +130,17 @@ export function CheckinPanel({ token, branchName, businessName, signedIn, feedba
                   <Button onClick={handleJoinAndCheckin} disabled={pending} size="lg" className="w-full">
                     {pending ? t('joining') : t('joinAndCheckIn')}
                   </Button>
+                </div>
+              )}
+              {phoneRequired && (
+                <div role="alert" className="flex flex-col gap-2 rounded-md border border-amber-300 p-3">
+                  <p className="text-sm">{t('phoneRequired')}</p>
+                  <Link
+                    href={`/loyalty/dashboard/phone?next=${encodeURIComponent(`/loyalty/${token}?autocheckin=1`)}`}
+                    className={buttonVariants({ size: 'lg', className: 'w-full' })}
+                  >
+                    {t('verifyPhoneLink')}
+                  </Link>
                 </div>
               )}
               {error && !membershipRequired && (
