@@ -79,4 +79,12 @@ describe('S3 stays unreachable from the deployed Worker until activation', () =>
     expect(referencing(/\.recoverPassword\(/)).toEqual([]);
     expect(referencing(/\.completeRecovery\(/)).toEqual(['src/customer-auth/customer-password-auth.service.ts']);
   });
+
+  it('S4-01: the recovery-code service is internal only (no non-test importer, no entry point reference)', () => {
+    expect(referencing(/customer-recovery-code\.service/)).toEqual([]);
+    expect(referencing(/createCustomerRecoveryCodeService/)).toEqual([
+      'src/customer-auth/customer-recovery-code.service.ts',
+    ]);
+    expect(read('src/index.ts')).not.toMatch(/recovery-code|RecoveryCode/);
+  });
 });

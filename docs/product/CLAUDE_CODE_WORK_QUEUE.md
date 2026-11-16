@@ -59,6 +59,8 @@ Main advanced by three customer-auth merges after the baseline above: #454 (14:2
 
 **S3 email link (#457, merged 17:59Z as `f1c04de`)** is development-only and unmounted. Its seven review findings are remediated in follow-up PR #459 (draft). **Owner decision E10 (2026-11-15):** no routine phone-OTP login after email linking; phone is a possible recovery factor but never sufficient alone. Recovery is the unauthorized future block **CUSTOMER-AUTH-01D-4b-S4**. The dormant phone-proof-only `recoverPassword` conflict is closed at the service boundary by RECOVERY-GUARD-01 (development only, open draft PR until merged); S4 remains unauthorized. See `docs/architecture/builds/CUSTOMER-AUTH/CUSTOMER_AUTH_S3_EMAIL_LINK.md` sections 7 and 8.
 
+**S4-01 recovery code foundation** (owner-authorized 2026-11-15; rulings D1-D6 approved): development only and unmounted, in a draft PR with migration `0074` (not executed anywhere real). S4-02 (recovery flow, D2 hold, notifications, rate limits) needs separate authorization. See `docs/architecture/builds/CUSTOMER-AUTH/CUSTOMER_AUTH_S3_EMAIL_LINK.md` sections 8a and 8b.
+
 ## 3. Awaiting the owner (nothing here starts without an answer)
 
 | Item | Needs |
