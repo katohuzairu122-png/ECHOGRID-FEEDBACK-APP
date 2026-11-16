@@ -24,7 +24,7 @@ import { createCustomerRecoveryRoutes } from './customer-recovery.routes';
  * Nothing is invented: every dependency is an existing binding or abstraction, and a missing
  * one makes recovery unavailable (503) instead of falling back. Required to activate (none of
  * which this code creates): CUSTOMER_RECOVERY_ENABLED="true", the dedicated
- * CUSTOMER_RECOVERY_HMAC_SECRET, CUSTOMER_PASSWORD_MIN_LENGTH (owner decision CA-05),
+ * CUSTOMER_RECOVERY_HMAC_SECRET, CUSTOMER_PASSWORD_MIN_LENGTH (owner decision CA-05, approved: 8),
  * the CustomerEmailRateLimit Durable Object namespace as CUSTOMER_AUTH_RATE_LIMIT,
  * CLIENT_ATTRIBUTION_SECRET (so the Web Worker's signature can be verified), WEB_BASE_URL,
  * RESEND_*, TWILIO_* and TWILIO_VERIFY_SERVICE_SID.

@@ -331,6 +331,19 @@ ANTHROPIC_MONTHLY_SPEND_LIMIT_USD = "10"
 RESEND_FROM_ADDRESS = "Echo Grid Staging <support@echo-grid.uk>"
 ALLOWED_ORIGINS = "https://echo-grid-feedback-web-staging.katohuzairu122.workers.dev"
 WEB_BASE_URL = "https://echo-grid-feedback-web-staging.katohuzairu122.workers.dev"
+# --- CUSTOMER EMAIL SIGN-UP: STAGING CONFIGURATION TEMPLATE (CUSTOMER-EMAIL-AUTH-POLICY-01). DISABLED. -----------------------
+# The feature is OFF (generic 404 on every /customer-auth/email/* and /customer-session/* path) until the flag is exactly
+# "true" on BOTH this Worker and the web Worker, which is a separate, authorized activation step. Values below are the
+# owner-approved ones; nothing here is a default in code (every setting is required when the feature is on, and a missing or
+# invalid one answers 503). Secrets are NOT set here: see docs/runbooks/CUSTOMER_EMAIL_AUTH_STAGING.md for the names.
+CUSTOMER_EMAIL_AUTH_ENABLED = "false"
+CUSTOMER_PASSWORD_MIN_LENGTH = "8"
+CUSTOMER_SESSION_ACCESS_TTL_SECONDS = "900"
+CUSTOMER_SESSION_REFRESH_TTL_SECONDS = "2592000"
+CUSTOMER_SESSION_ABSOLUTE_TTL_SECONDS = "2592000"
+# OWNER DECISIONS PENDING. Deliberately NOT set: without them the feature stays unavailable even if the flag is turned on.
+# CUSTOMER_SESSION_IDLE_TTL_SECONDS = "<owner decision; must be <= the absolute lifetime>"
+# CUSTOMER_STEP_UP_WINDOW_SECONDS = "<owner decision>"
 
 [env.staging.secrets]
 required = [
@@ -352,6 +365,21 @@ required = [
 [[env.staging.durable_objects.bindings]]
 name = "PASSWORD_HASHER"
 class_name = "PasswordHasherDurableObject"
+
+# Shared rate-limit counters for customer email sign-up and sign-in (STAGING ONLY; the class already ships in the Worker).
+# The migration list is restated for this environment because migration arrays are not merged: v1 is the migration this
+# Worker already carries, v2 introduces the new class. Applying it happens only on an authorized staging deploy.
+[[env.staging.durable_objects.bindings]]
+name = "CUSTOMER_AUTH_RATE_LIMIT"
+class_name = "CustomerEmailRateLimit"
+
+[[env.staging.migrations]]
+tag = "v1"
+new_sqlite_classes = ["PasswordHasherDurableObject"]
+
+[[env.staging.migrations]]
+tag = "v2"
+new_sqlite_classes = ["CustomerEmailRateLimit"]
 
 [[env.staging.hyperdrive]]
 binding = "HYPERDRIVE"

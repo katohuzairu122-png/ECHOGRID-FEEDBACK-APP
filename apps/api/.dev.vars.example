@@ -44,3 +44,16 @@ RESEND_API_KEY=replace-with-resend-api-key
 # forwarding, which prints its own temporary whsec_... value.
 STRIPE_SECRET_KEY=sk_test_replace-with-your-stripe-test-secret-key
 STRIPE_WEBHOOK_SECRET=whsec_replace-with-your-webhook-signing-secret
+
+# Customer email sign-up (CUSTOMER-AUTH-S5). OFF unless CUSTOMER_EMAIL_AUTH_ENABLED=true; every setting below is REQUIRED when it is
+# on and has no default in code. Leave these commented out for normal local work. Names only, never commit real values.
+# CUSTOMER_EMAIL_AUTH_ENABLED=true
+# CUSTOMER_EMAIL_AUTH_HMAC_SECRET=replace-with-a-random-secret-of-at-least-32-bytes
+# CUSTOMER_SESSION_SIGNING_SECRET=replace-with-a-different-random-secret-of-at-least-32-bytes
+# CUSTOMER_PASSWORD_MIN_LENGTH=8
+# CUSTOMER_SESSION_ACCESS_TTL_SECONDS=900
+# CUSTOMER_SESSION_REFRESH_TTL_SECONDS=2592000
+# CUSTOMER_SESSION_ABSOLUTE_TTL_SECONDS=2592000
+# CUSTOMER_SESSION_IDLE_TTL_SECONDS=<owner decision>
+# CUSTOMER_STEP_UP_WINDOW_SECONDS=<owner decision>
+

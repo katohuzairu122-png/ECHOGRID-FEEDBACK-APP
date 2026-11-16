@@ -78,6 +78,10 @@ NODE_ENV = "production"
 NEXT_PRIVATE_MINIMAL_MODE = "1"
 # CASHIER-PWA-01: where the dashboard's "Open Cashier App" points (the staging cashier Worker below).
 CASHIER_APP_URL = "https://echo-grid-feedback-cashier-staging.katohuzairu122.workers.dev"
+# CUSTOMER EMAIL SIGN-UP (CUSTOMER-EMAIL-AUTH-POLICY-01): staging template, DISABLED. The screens are a 404 unless this is exactly
+# "true" here AND on the API Worker. The minimum only drives the sign-up hint and an early check; the API enforces it.
+CUSTOMER_EMAIL_AUTH_ENABLED = "false"
+CUSTOMER_PASSWORD_MIN_LENGTH = "8"
 
 [env.staging.assets]
 directory = ".open-next/assets"

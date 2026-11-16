@@ -14,7 +14,7 @@ import type { CustomerSessionServiceConfig } from './customer-session.service';
  *   CUSTOMER_SESSION_SIGNING_SECRET       dedicated, >= 32 bytes, signs session access tokens (never the legacy JWT secret)
  *   CUSTOMER_SESSION_ACCESS_TTL_SECONDS, CUSTOMER_SESSION_REFRESH_TTL_SECONDS, CUSTOMER_SESSION_ABSOLUTE_TTL_SECONDS,
  *   CUSTOMER_SESSION_IDLE_TTL_SECONDS, CUSTOMER_STEP_UP_WINDOW_SECONDS   (owner decision CA-02, no defaults)
- *   CUSTOMER_PASSWORD_MIN_LENGTH          (owner decision CA-05, no default)
+ *   CUSTOMER_PASSWORD_MIN_LENGTH          (owner decision CA-05, APPROVED: 8; still configuration with NO default in code)
  *   CUSTOMER_AUTH_RATE_LIMIT              Durable Object namespace bound to CustomerEmailRateLimit
  *   CLIENT_ATTRIBUTION_SECRET             so the Web Worker's signature on each request can be verified
  *   WEB_BASE_URL (https, or localhost), HYPERDRIVE, PASSWORD_HASHER, RESEND_* for proof delivery

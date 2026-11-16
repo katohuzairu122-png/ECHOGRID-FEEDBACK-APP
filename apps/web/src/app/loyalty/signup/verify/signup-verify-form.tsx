@@ -22,7 +22,7 @@ export function readChallengeFromHash(hash: string): string | null {
   }
 }
 
-export function SignupVerifyForm({ next }: { next: string }) {
+export function SignupVerifyForm({ next, minLength }: { next: string; minLength?: number | undefined }) {
   const [state, formAction, pending] = useActionState(completeEmailRegistrationAction, initial);
   const t = useTranslations('loyalty.customer.emailAuth');
   const [challenge, setChallenge] = useState<string | null | undefined>(undefined);
@@ -57,11 +57,12 @@ export function SignupVerifyForm({ next }: { next: string }) {
               </div>
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="password">{t('createPasswordLabel')}</Label>
-                <Input id="password" name="password" type="password" autoComplete="new-password" required />
+                <Input id="password" name="password" type="password" autoComplete="new-password" required {...(minLength ? { minLength } : {})} />
+                {minLength ? <p className="text-xs text-neutral-500">{t('passwordHint', { min: minLength })}</p> : null}
               </div>
               {state.error && (
                 <p role="alert" className="text-sm text-danger">
-                  {t(`errors.${state.error}`)}
+                  {t(`errors.${state.error}`, { min: state.minLength ?? minLength ?? 0 })}
                 </p>
               )}
               <Button type="submit" disabled={pending || state.success === true} className="w-full">

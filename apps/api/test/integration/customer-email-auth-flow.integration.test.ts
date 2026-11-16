@@ -13,6 +13,8 @@ import {
 } from '../../src/customer-auth/customer-email-auth.composition';
 import { CustomerSessionService } from '../../src/customer-auth/customer-session.service';
 import { CustomerCredentialRepository } from '../../src/repositories/customer-credential.repository';
+import { PASSWORD_ITERATIONS } from '../../src/auth/password';
+import { normalizePassword } from '../../src/customer-auth/customer-password-policy';
 
 /**
  * CUSTOMER-AUTH-S5-01 end to end against real Postgres: email proof -> registration -> login -> rotating session,
@@ -58,7 +60,7 @@ describe.skipIf(!process.env.DATABASE_URL)('Email registration and login flow (r
       CUSTOMER_SESSION_ABSOLUTE_TTL_SECONDS: '2592000',
       CUSTOMER_SESSION_IDLE_TTL_SECONDS: '1209600',
       CUSTOMER_STEP_UP_WINDOW_SECONDS: '300',
-      CUSTOMER_PASSWORD_MIN_LENGTH: '12',
+      CUSTOMER_PASSWORD_MIN_LENGTH: '8',
       CUSTOMER_JWT_SECRET: 'legacy-jwt-secret-value-0123456789abcdef',
       CLIENT_ATTRIBUTION_SECRET: 'attribution-secret-value-0123456789',
       WEB_BASE_URL: 'https://app.example.test',
@@ -174,5 +176,61 @@ describe.skipIf(!process.env.DATABASE_URL)('Email registration and login flow (r
     expect((await call('/email/login', { email, password })).status).toBe(429);
     limitAllowed = true;
     expect(delivered).toHaveLength(0);
+  });
+
+  describe('approved password policy: minimum 8 (CUSTOMER-EMAIL-AUTH-POLICY-01)', () => {
+    async function startRegistration(email: string) {
+      delivered.length = 0;
+      await call('/email/register/request', { email });
+      return delivered.find((d) => d.recipient === email)!;
+    }
+
+    it('a 7-character password is refused and does NOT consume the proof: the same link then works with 8 characters', async () => {
+      const email = newEmail();
+      const proof = await startRegistration(email);
+      const seven = await call('/email/register/complete', { email, challengeId: proof.challengeId, proof: proof.proof, password: 'rBq4nZx' });
+      expect(seven.status).toBe(401);
+      expect(await new CustomerCredentialRepository(db).findByLoginEmail(email)).toBeUndefined();
+      const eight = await call('/email/register/complete', { email, challengeId: proof.challengeId, proof: proof.proof, password: 'rBq4nZxk' });
+      expect(eight.status).toBe(201);
+      expect(await new CustomerCredentialRepository(db).findByLoginEmail(email)).toBeDefined();
+    });
+
+    it('an 8-character, a 40-character and a 128-character password are all accepted, and each can then sign in', async () => {
+      for (const pw of ['rBq4nZxk', 'a long passphrase with spaces 2026 ok!', 'rBq4'.repeat(32)]) {
+        const email = newEmail();
+        const proof = await startRegistration(email);
+        expect((await call('/email/register/complete', { email, challengeId: proof.challengeId, proof: proof.proof, password: pw })).status).toBe(201);
+        expect((await call('/email/login', { email, password: pw })).status, `length ${pw.length}`).toBe(200);
+      }
+    });
+
+    it('a password over the unchanged maximum is still refused', async () => {
+      const email = newEmail();
+      const proof = await startRegistration(email);
+      const tooLong = await call('/email/register/complete', { email, challengeId: proof.challengeId, proof: proof.proof, password: 'rBq4'.repeat(32) + 'x' });
+      expect(tooLong.status).toBe(401);
+    });
+
+    it('lowering the minimum relaxes nothing else: a common, a repeated and a sequential 8-character password are refused', async () => {
+      for (const pw of ['password', 'aaaaaaaa', '12345678', 'abcdefgh']) {
+        const email = newEmail();
+        const proof = await startRegistration(email);
+        expect((await call('/email/register/complete', { email, challengeId: proof.challengeId, proof: proof.proof, password: pw })).status, pw).toBe(401);
+      }
+    });
+
+    it('EXISTING passwords are not invalidated: a customer whose password is shorter than the new minimum still signs in', async () => {
+      const email = newEmail();
+      const [customer] = await db.insert(customers).values({}).returning();
+      const hash = await createDirectPbkdf2Worker().hash(normalizePassword('abc123'), PASSWORD_ITERATIONS); // 6 characters
+      await new CustomerCredentialRepository(db).create({
+        customerId: customer!.id, passwordHash: hash, now: new Date(),
+        verifiedLoginEmail: { address: email, verifiedAt: new Date() },
+      });
+      const login = await call('/email/login', { email, password: 'abc123' });
+      expect(login.status).toBe(200);
+      expect((await call('/email/login', { email, password: 'abc124' })).status).toBe(401);
+    });
   });
 });
