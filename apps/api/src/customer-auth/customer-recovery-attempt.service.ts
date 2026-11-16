@@ -84,7 +84,7 @@ export type RecoveryOutcome = { ok: false } | { ok: true; status: CustomerRecove
 const FAIL = { ok: false } as const;
 
 type Surface = 'initiate' | 'email_challenge' | 'email_verify' | 'phone_factor' | 'code_verify' | 'cancel' | 'complete';
-type Dimension = 'source' | 'customer' | 'attempt';
+type Dimension = 'source' | 'customer' | 'attempt_source';
 /** Only budgets from the approved closed set {5/900, 3/3600, 10/3600} of the customer-email limiter. */
 const BUDGETS: Record<Surface, ReadonlyArray<readonly [Dimension, number, number]>> = {
   initiate: [['source', 10, 3600], ['customer', 3, 3600]],
@@ -92,7 +92,9 @@ const BUDGETS: Record<Surface, ReadonlyArray<readonly [Dimension, number, number
   email_verify: [['source', 5, 900], ['customer', 5, 900]],
   phone_factor: [['source', 5, 900], ['customer', 5, 900]],
   code_verify: [['source', 5, 900], ['customer', 5, 900]],
-  cancel: [['source', 10, 3600], ['attempt', 5, 900]],
+  // Cancellation is the customer's safety net during a hold, so its budget is per attempt AND source: someone who
+  // merely knows an attempt id cannot exhaust a budget that the real owner, on another source, needs.
+  cancel: [['source', 10, 3600], ['attempt_source', 5, 900]],
   complete: [['source', 5, 900], ['customer', 5, 900]],
 };
 
@@ -141,7 +143,9 @@ export function createCustomerRecoveryService(config: {
     if (!config.limiter || !who.sourceKey || who.sourceKey.length < 8) return false;
     try {
       const results = await Promise.all(BUDGETS[surface].map(async ([dimension, limit, windowSeconds]) => {
-        const value = dimension === 'source' ? who.sourceKey : dimension === 'customer' ? who.customerId : who.attemptId;
+        const value = dimension === 'source' ? who.sourceKey
+          : dimension === 'customer' ? who.customerId
+          : who.attemptId ? `${who.attemptId}|${who.sourceKey}` : undefined;
         if (!value) return dimension !== 'source'; // an unknown customer or attempt cannot be keyed; the source budget still applies
         return config.limiter!({ key: `customer-recovery:${surface}:${dimension}:${await mac('rl', surface, dimension, value)}`, limit, windowSeconds });
       }));
