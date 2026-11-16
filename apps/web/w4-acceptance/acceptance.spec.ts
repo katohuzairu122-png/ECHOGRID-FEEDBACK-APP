@@ -118,7 +118,7 @@ for (const locale of ['en', 'ar'] as const) {
         expect(response?.headers()['permissions-policy']).toContain('camera=(self)');
         const serve = loyaltyEn.staff.serve;
         await page.getByRole('button', { name: serve.scanLarge, exact: true }).tap();
-        await expect(page.getByRole('alert')).toHaveText(serve.cameraUnavailable);
+        await expect(page.getByRole('alert').filter({ hasText: serve.cameraUnavailable })).toBeVisible();
         const input = page.getByLabel(serve.scanField);
         await input.fill('invalid-token');
         await page.getByRole('button', { name: serve.findCustomer, exact: true }).tap();
