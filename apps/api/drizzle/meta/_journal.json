@@ -526,6 +526,13 @@
       "when": 1794770936590,
       "tag": "0074_customer_recovery_codes",
       "breakpoints": true
+    },
+    {
+      "idx": 75,
+      "version": "7",
+      "when": 1794789749679,
+      "tag": "0075_customer_recovery_attempts",
+      "breakpoints": true
     }
   ]
 }
