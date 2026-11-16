@@ -1,5 +1,6 @@
 {
   "nav": {
+    "networkModeration": "Modération de la communauté",
     "brand": "Administration",
     "directory": "Annuaire",
     "auditLog": "Journal d'audit",
