@@ -30,6 +30,9 @@ type Overrides = {
   membership?: unknown;
   account?: Record<string, unknown> | null;
   counts?: Record<string, number>;
+  /** Extra customers holding the same phone (verified or not); `memberIds` limits who is a member of BUSINESS. */
+  holders?: Array<Record<string, unknown>>;
+  memberIds?: string[];
 };
 
 function build(o: Overrides = {}) {
@@ -42,13 +45,16 @@ function build(o: Overrides = {}) {
     o.account === null ? undefined : { id: ACCOUNT, customerId: CUSTOMER, status: 'active', points: 120, ...o.account };
   const repos = {
     customers: {
-      findByPhone: vi.fn(async (phone: string) => (customer && phone === PHONE ? customer : undefined)),
+      listByPhone: vi.fn(async (phone: string) =>
+        phone === PHONE ? [...(customer ? [customer] : []), ...(o.holders ?? [])] : [],
+      ),
       findById: vi.fn(async (id: string) => (customer && id === CUSTOMER ? customer : undefined)),
     },
     customerMemberships: {
-      findActive: vi.fn(async (_c: string, b: string) =>
-        o.membership === undefined ? (b === BUSINESS ? { id: 'm' } : undefined) : o.membership,
-      ),
+      findActive: vi.fn(async (c: string, b: string) => {
+        if (o.memberIds && !o.memberIds.includes(c)) return undefined;
+        return o.membership === undefined ? (b === BUSINESS ? { id: 'm' } : undefined) : o.membership;
+      }),
     },
     loyaltyAccounts: {
       findByCustomerAndBusiness: vi.fn(async (_c: string, b: string) => (b === BUSINESS ? account : undefined)),
@@ -193,6 +199,41 @@ describe('CustomerLookupService.lookup', () => {
     expect(result.actions).toContain('VALIDATE_PURCHASE');
   });
 
+  describe('several customers holding the same number (unverified numbers may repeat)', () => {
+    const other = (id: string, verified: boolean) => ({
+      id, phone: PHONE, status: 'active', phoneVerifiedAt: verified ? new Date(NOW) : null, fullName: 'Other Person',
+    });
+
+    it('prefers the VERIFIED owner when an unverified claimant is also a member of this business', async () => {
+      const { service } = build({ customer: { phoneVerifiedAt: null }, holders: [other('verified-owner', true)] });
+      const result = await service.lookup(args);
+      expect(result.phoneVerified).toBe(true);
+      expect(result.displayName).toBe('Other');
+    });
+
+    it('is a miss (fail closed) when two unverified claimants are both members of this business', async () => {
+      const { service, audit } = build({ customer: { phoneVerifiedAt: null }, holders: [other('second-claimant', false)] });
+      const err = await failure(service.lookup(args));
+      expect(err.code).toBe('MEMBER_NOT_FOUND');
+      expect(audit[0]).toMatchObject({ action: LOOKUP_AUDIT_MISS });
+    });
+
+    it('is scoped to this business: a verified owner who is NOT a member never selects someone else', async () => {
+      const { service } = build({
+        customer: { phoneVerifiedAt: null },
+        holders: [other('verified-owner', true)],
+        memberIds: [CUSTOMER],
+      });
+      const result = await service.lookup(args);
+      expect(result.phoneVerified).toBe(false); // the only member here is the unverified claimant: flagged for confirmation
+    });
+
+    it('ignores holders that are not active', async () => {
+      const { service } = build({ customer: { phoneVerifiedAt: null }, holders: [{ ...other('suspended', true), status: 'suspended' }] });
+      expect((await service.lookup(args)).phoneVerified).toBe(false);
+    });
+  });
+
   it('treats a member of a different business as a miss', async () => {
     const { service } = build();
     const err = await failure(service.lookup({ ...args, businessId: OTHER_BUSINESS }));
@@ -204,7 +245,7 @@ describe('CustomerLookupService.lookup', () => {
     const err = await failure(service.lookup(args));
     expect(err.status).toBe(429);
     expect(err.code).toBe('LOOKUP_THROTTLED');
-    expect(repos.customers.findByPhone).not.toHaveBeenCalled();
+    expect(repos.customers.listByPhone).not.toHaveBeenCalled();
   });
 
   it('counts misses for this cashier in this business over the last ten minutes', async () => {

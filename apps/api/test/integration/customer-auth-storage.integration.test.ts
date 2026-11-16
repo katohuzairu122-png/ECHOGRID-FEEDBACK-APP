@@ -364,7 +364,7 @@ describe.skipIf(!process.env.DATABASE_URL)('customer auth storage (integration)'
       expect(record.updatedAt.getTime()).toBe(final.getTime());
 
       // No per-customer data may be changed using an unrelated customer ID.
-      const other = await repos.customers.findByPhone(PHONES[3]!);
+      const other = await repos.customers.findVerifiedByPhone(PHONES[3]!);
       expect(await repos.customerCredentials.advanceLegacyTokenCutoff(other!.id, final)).toBe(true);
       expect(
         (await repos.customerCredentials.findByCustomerId(c.id))!.legacyTokensInvalidBefore?.getTime(),
@@ -405,18 +405,18 @@ describe.skipIf(!process.env.DATABASE_URL)('customer auth storage (integration)'
 
   describe('sessions', () => {
     it('reads session and customer status in one query, scoped to the customer (I11)', async () => {
-      const c = await repos.customers.findByPhone(PHONES[0]!);
+      const c = await repos.customers.findVerifiedByPhone(PHONES[0]!);
       const s = await newSession(c!.id);
       const hit = await repos.customerSessions.findWithCustomer(s.id, c!.id);
       expect(hit?.session.id).toBe(s.id);
       expect(hit?.customer).toEqual({ id: c!.id, status: 'active', isDeleted: false });
       // The wrong customer id never matches, even with a real session id.
-      const other = await repos.customers.findByPhone(PHONES[1]!);
+      const other = await repos.customers.findVerifiedByPhone(PHONES[1]!);
       expect(await repos.customerSessions.findWithCustomer(s.id, other!.id)).toBeUndefined();
     });
 
     it('lists only live sessions and orders by recent activity', async () => {
-      const c = await repos.customers.findByPhone(PHONES[1]!);
+      const c = await repos.customers.findVerifiedByPhone(PHONES[1]!);
       const now = NOW();
       const live = await newSession(c!.id, now);
       const expiredIdle = await repos.customerSessions.create({
@@ -440,7 +440,7 @@ describe.skipIf(!process.env.DATABASE_URL)('customer auth storage (integration)'
     });
 
     it('revokes a session and its tokens atomically, finally, and only for the owner', async () => {
-      const c = await repos.customers.findByPhone(PHONES[2]!);
+      const c = await repos.customers.findVerifiedByPhone(PHONES[2]!);
       const owner = c!;
       const s = await newSession(owner.id);
       const t = await repos.customerRefreshTokens.issue({
@@ -449,7 +449,7 @@ describe.skipIf(!process.env.DATABASE_URL)('customer auth storage (integration)'
         expiresAt: new Date(Date.now() + DAY),
         now: NOW(),
       });
-      const stranger = (await repos.customers.findByPhone(PHONES[0]!))!;
+      const stranger = (await repos.customers.findVerifiedByPhone(PHONES[0]!))!;
       expect(
         await repos.customerSessions.revoke({
           sessionId: s.id,
@@ -500,7 +500,7 @@ describe.skipIf(!process.env.DATABASE_URL)('customer auth storage (integration)'
     });
 
     it('revokes every other session in one call and can keep the current one (I6)', async () => {
-      const c = (await repos.customers.findByPhone(PHONES[0]!))!;
+      const c = (await repos.customers.findVerifiedByPhone(PHONES[0]!))!;
       const keep = await newSession(c.id);
       const a = await newSession(c.id);
       const b = await newSession(c.id);
@@ -527,7 +527,7 @@ describe.skipIf(!process.env.DATABASE_URL)('customer auth storage (integration)'
     });
 
     it('replay-induced revocation affects the compromised session, not the other device', async () => {
-      const c = (await repos.customers.findByPhone(PHONES[2]!))!;
+      const c = (await repos.customers.findVerifiedByPhone(PHONES[2]!))!;
       const compromised = await newSession(c.id);
       const otherDevice = await newSession(c.id);
       const badToken = await repos.customerRefreshTokens.issue({
@@ -565,7 +565,7 @@ describe.skipIf(!process.env.DATABASE_URL)('customer auth storage (integration)'
 
     it('surfaces a suspended customer through the joined read so the policy can deny it (I7)', async () => {
       await client.query(`UPDATE customers SET status='suspended' WHERE phone=$1`, [PHONES[1]!]);
-      const c = (await repos.customers.findByPhone(PHONES[1]!))!;
+      const c = (await repos.customers.findVerifiedByPhone(PHONES[1]!))!;
       const s = await newSession(c.id);
       expect((await repos.customerSessions.findWithCustomer(s.id, c.id))?.customer.status).toBe(
         'suspended',
@@ -574,7 +574,7 @@ describe.skipIf(!process.env.DATABASE_URL)('customer auth storage (integration)'
     });
 
     it('purges ended sessions and cascades their tokens', async () => {
-      const c = (await repos.customers.findByPhone(PHONES[2]!))!;
+      const c = (await repos.customers.findVerifiedByPhone(PHONES[2]!))!;
       const old = new Date(Date.now() - 100 * DAY);
       const s = await repos.customerSessions.create({
         customerId: c.id,
@@ -603,7 +603,7 @@ describe.skipIf(!process.env.DATABASE_URL)('customer auth storage (integration)'
 
   describe('refresh token exchange (I3)', () => {
     it('lets exactly one of two truly concurrent exchanges win, and creates exactly one successor', async () => {
-      const c = (await repos.customers.findByPhone(PHONES[0]!))!;
+      const c = (await repos.customers.findVerifiedByPhone(PHONES[0]!))!;
       const s = await newSession(c.id);
       const first = await repos.customerRefreshTokens.issue({
         sessionId: s.id,
@@ -636,7 +636,7 @@ describe.skipIf(!process.env.DATABASE_URL)('customer auth storage (integration)'
     });
 
     it('concurrent session revocation and exchange leaves no usable token behind', async () => {
-      const c = (await repos.customers.findByPhone(PHONES[0]!))!;
+      const c = (await repos.customers.findVerifiedByPhone(PHONES[0]!))!;
       const session = await newSession(c.id);
       const predecessor = await repos.customerRefreshTokens.issue({
         sessionId: session.id,
@@ -668,7 +668,7 @@ describe.skipIf(!process.env.DATABASE_URL)('customer auth storage (integration)'
     });
 
     it('refuses to exchange an already rotated, a revoked, or an unknown token and inserts nothing', async () => {
-      const c = (await repos.customers.findByPhone(PHONES[0]!))!;
+      const c = (await repos.customers.findVerifiedByPhone(PHONES[0]!))!;
       const s = await newSession(c.id);
       const tok = await repos.customerRefreshTokens.issue({
         sessionId: s.id,
@@ -725,7 +725,7 @@ describe.skipIf(!process.env.DATABASE_URL)('customer auth storage (integration)'
     });
 
     it('finds a token by its hash', async () => {
-      const c = (await repos.customers.findByPhone(PHONES[0]!))!;
+      const c = (await repos.customers.findVerifiedByPhone(PHONES[0]!))!;
       const s = await newSession(c.id);
       const h = await hash();
       const tok = await repos.customerRefreshTokens.issue({
@@ -741,7 +741,7 @@ describe.skipIf(!process.env.DATABASE_URL)('customer auth storage (integration)'
 
   describe('events', () => {
     it('appends an event with allow-listed metadata and lists it for the customer', async () => {
-      const c = (await repos.customers.findByPhone(PHONES[0]!))!;
+      const c = (await repos.customers.findVerifiedByPhone(PHONES[0]!))!;
       await repos.customerAuthEvents.append({
         customerId: c.id,
         eventType: 'session_created',

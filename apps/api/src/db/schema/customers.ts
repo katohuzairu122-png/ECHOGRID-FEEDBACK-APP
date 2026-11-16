@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, timestamp, date, check, integer } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, text, timestamp, date, check, integer, index, uniqueIndex } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import { auditColumns, softDeleteColumns } from './_shared';
 
@@ -17,7 +17,10 @@ export const customers = pgTable(
   'customers',
   {
     id: uuid('id').primaryKey().defaultRandom(),
-    phone: text('phone').unique(), // Nullable for email-first identity; populated E.164 values remain globally unique.
+    // E.164, nullable (email-first identity). A phone NUMBER is only a claim until verified: several customers may
+    // hold the same UNVERIFIED number, but at most one may hold it VERIFIED (partial unique index below), so the
+    // verified owner is unambiguous and an unverified typed number can never block or impersonate its real owner.
+    phone: text('phone'),
     fullName: text('full_name'),
     email: text('email'),
     birthday: date('birthday'), // month/day matter most (birthday rewards); full date stored, year optional in the UI
@@ -40,6 +43,8 @@ export const customers = pgTable(
     ...softDeleteColumns,
   },
   (table) => [
+    uniqueIndex('customers_phone_verified_unique').on(table.phone).where(sql`${table.phoneVerifiedAt} IS NOT NULL`),
+    index('customers_phone_idx').on(table.phone),
     check('customers_status_check', sql`${table.status} IN ('active', 'suspended', 'banned')`),
     check(
       'customers_preferred_locale_check',
