@@ -26,13 +26,11 @@ test('QR code scan to feedback inbox, end to end', async ({ page }) => {
   await expect(page).toHaveURL('/dashboard');
 
   await page.getByLabel('Business name').fill(`QR E2E Business ${unique}`);
-  await page.getByLabel('URL slug').fill(`qr-e2e-business-${unique}`);
   await page.getByRole('button', { name: 'Create business' }).click();
 
   await page.getByRole('link', { name: 'View branches' }).click();
   await page.getByRole('button', { name: '+ New branch' }).click();
   await page.getByLabel('Name').fill('Main');
-  await page.getByLabel('URL slug').fill('main');
   await page.getByRole('button', { name: 'Create branch' }).click();
   await expect(page.getByText('Main').first()).toBeVisible();
 
