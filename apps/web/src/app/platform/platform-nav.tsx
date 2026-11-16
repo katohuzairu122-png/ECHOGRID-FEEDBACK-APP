@@ -3,6 +3,7 @@ import type { CurrentUserDto } from '@echo-grid-feedback/shared-types';
 import { logoutAction } from '@/lib/actions/auth';
 import { Badge, Button } from '@/components/ui';
 import { WorkspaceNavigation } from '@/components/workspace/workspace-navigation';
+import { moderationPath } from './network-moderation/moderation';
 
 type PlatformRole = NonNullable<CurrentUserDto['platformRole']>;
 export async function PlatformNav({ role }: { role: PlatformRole }) {
@@ -18,6 +19,9 @@ export async function PlatformNav({ role }: { role: PlatformRole }) {
         { href: '/platform', label: t('brand'), icon: 'shield' },
         { href: '/platform/businesses', label: t('directory'), icon: 'store' },
         ...(role === 'billing' ? [] : [{ href: '/platform/customers', label: t('customers'), icon: 'users' as const }]),
+        ...(role === 'admin'
+          ? [{ href: moderationPath, label: t('networkModeration'), icon: 'shield' as const }]
+          : []),
         { href: '/platform/audit-log', label: t('auditLog'), icon: 'chart' },
         { href: '/platform/billing', label: t('billing'), icon: 'settings' },
         { href: '/dashboard', label: t('backToDashboard'), icon: 'arrow' },
