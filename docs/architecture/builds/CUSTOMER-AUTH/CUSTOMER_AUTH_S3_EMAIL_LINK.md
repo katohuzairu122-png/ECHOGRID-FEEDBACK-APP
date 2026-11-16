@@ -109,6 +109,26 @@ D1 two independent recovery factors; D2 a 24-hour hold for high-risk recovery wi
 
 **Residual risks / S4-02 requirements.** Route-level rate limiting (a dedicated limiter surface) and a dedicated HMAC secret binding are still required; the attempt budget can be exhausted by someone who already holds the other recovery factor, which delays but cannot bypass recovery; codes are shown once, so a customer who loses them must rotate while signed in; D2's hold, cancellation and notifications, and the combination of factors, are not implemented. Migration `0074` has been run only against disposable PostgreSQL.
 
+## 8c. S4-02 Two-factor recovery orchestration (development only, unmounted; migration `0075` not executed anywhere real)
+
+**What exists.** `customer-recovery-attempt.service.ts` (the orchestrator), `customer-recovery-policy.ts` (pure rules), `customer-recovery-config.ts` (dedicated secret), schema `customer-recovery-attempts.ts` and migration `0075_customer_recovery_attempts`. **No route, UI, recovery session or live binding exists; success issues no session.** A static test fails if anything outside the service imports it.
+
+**State machine** (the row is the state; all security times are the DATABASE clock): `awaiting_factors` -> `factors_verified` (standard risk) | `security_hold` (high risk) -> `completed`; any non-terminal -> `cancelled | expired | rejected`. The ruling set's `initiated` is not a persisted state: creating the attempt is initiation. CHECK constraints enforce two distinct factors before any verified state, a mandatory risk class, terminal consistency, and that a `completed` attempt had its initiation notice accepted and, for high risk, its hold notice accepted and `ended_at >= hold_until`. One active attempt per customer (partial unique index); a verified-phone proof is unique per customer (no reuse across attempts); the cancel token is stored only as a keyed digest.
+
+**Factors (D1/D3/D5/D6).** Email challenge (existing `email_recovery` purpose, bound to the customer and sent only to the customer's own verified login email), verified-phone proof (must be minted for `account_recovery`, fresh, newer than the attempt, the customer's own VERIFIED phone) and a recovery code (S4-01, redeemed inside the attempt's transaction so it is consumed if and only if recorded). Any two distinct factors satisfy a path; one never does, so a phone alone, a code alone, or both-lost cannot complete.
+
+**Hold (D2).** HIGH risk = any path using a recovery code, or a phone verified within the recent window (7 days, an owner decision to confirm). High risk holds 24 hours, enforced in SQL against `now()`, surviving restarts and unaffected by client or service clocks. The hold is an additional safeguard, never a factor. Completion also needs the hold notice to have been ACCEPTED.
+
+**Notifications and cancellation.** A `RecoveryNotifier` port is the only dependency; absent, failing or throwing means fail closed (attempt rejected, nothing proceeds). `accepted` means handed to the provider, not delivered. Notices never contain a code, OTP or password; only initiation and hold notices carry a cancel token (a fresh one at hold start; the old one dies). Cancellation is single use, attempt-bound, expiring and audited.
+
+**Completion.** One transaction: completes the attempt (the guard), replaces the password hash, advances the legacy cutoff, revokes every session (`recovery`), retires the active recovery-code set (`security`) and writes the audit row. Any failure rolls all of it back. No session is issued; the customer signs in afresh.
+
+**Rate limits.** Fail closed through the approved customer-email limiter shape, requesting only its closed budget set (5/900, 3/3600, 10/3600); keys are HMAC digests, never raw ids, phones or emails. No new namespace, binding or secret was created. **The specific per-surface budgets are an owner decision to confirm.**
+
+**Secret.** `CUSTOMER_RECOVERY_HMAC_SECRET` (optional in `Bindings`, not in `wrangler.toml`); the services refuse to construct without a 32-byte secret and `resolveCustomerRecoverySecret` rejects reuse of another secret. Production secrets are not created here.
+
+**Still required before any activation.** A real notifier adapter and email-challenge delivery; an OTP route that mints `account_recovery` phone proofs; routes with the trusted-source limiter; the production secret; the owner decisions above; applying `0074` and `0075` after read-only verification. Cancelling an attempt does not revoke recovery codes (consider in S4-03).
+
 ## 9. Changelog
 
 | Date | Change |
@@ -116,3 +136,4 @@ D1 two independent recovery factors; D2 a 24-hour hold for high-risk recovery wi
 | 2026-11-15 | S3 / R1 disposition; E10 recorded; S4 scoped as proposed |
 | 2026-11-15 | RECOVERY-GUARD-01: E10-B enforced in the session and password services |
 | 2026-11-15 | S4 rulings D1-D6 recorded; S4-01 recovery code foundation (draft, unmounted) |
+| 2026-11-16 | S4-02 recovery orchestration (draft, unmounted); migration 0075 prepared |
