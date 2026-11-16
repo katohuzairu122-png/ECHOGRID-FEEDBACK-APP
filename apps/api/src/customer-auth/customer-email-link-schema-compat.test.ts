@@ -57,17 +57,24 @@ describe('S3 stays unreachable from the deployed Worker until activation', () =>
     ]);
   });
 
-  it('S5-01: the rotating session service is constructed ONLY by the flag-gated email-auth composition, mounted once', () => {
-    // Activation was approved (Option A) but stays behind CUSTOMER_EMAIL_AUTH_ENABLED: exactly one non-test constructor.
-    expect(referencing(/new CustomerSessionService\(/)).toEqual(['src/customer-auth/customer-email-auth.composition.ts']);
+  it('S5-01/S5-02: the rotating session service is constructed ONLY by the two flag-gated entry points, each gated and mounted once', () => {
+    // Activation was approved (Option A) but stays behind CUSTOMER_EMAIL_AUTH_ENABLED: exactly two non-test constructors,
+    // the email-auth composition (issues sessions) and the customer middleware (verifies them).
+    expect(referencing(/new CustomerSessionService\(/)).toEqual([
+      'src/customer-auth/customer-email-auth.composition.ts',
+      'src/middleware/customer-authenticate.ts',
+    ]);
+    const middlewareSource = read('src/middleware/customer-authenticate.ts');
+    expect(middlewareSource).toMatch(/isEnabled: \(c\) => isCustomerEmailAuthEnabled\(c\.env as Bindings\)/);
+    expect(middlewareSource).toContain('export const legacyCustomerAuthenticate = createCustomerAuthenticate();');
     const composition = read('src/customer-auth/customer-email-auth.composition.ts');
     expect(composition).toMatch(/isEnabled: \(c\) => isCustomerEmailAuthEnabled\(c\.env as Bindings\)/);
     expect(read('src/customer-auth/customer-email-auth.config.ts')).toMatch(/CUSTOMER_EMAIL_AUTH_ENABLED === 'true'/);
     const index = read('src/index.ts');
     expect(index.match(/customerEmailAuthComposition/g)?.length).toBe(2); // import + mount
     expect(index).toMatch(/api\.route\('\/customer-auth', customerEmailAuthComposition\);/);
-    // Nothing here changes how existing customers authenticate: the legacy middleware default is untouched.
-    expect(read('src/middleware/customer-authenticate.ts')).toContain('export const customerAuthenticate = createCustomerAuthenticate();');
+    // The legacy-only verifier is preserved verbatim and is what runs whenever the flag is off.
+    expect(read('src/middleware/customer-authenticate.ts')).toContain('if (!options.isEnabled(c)) return legacyCustomerAuthenticate(c, next);');
   });
 
   it('only the session service, password service (E10 guard) and credential repository touch the 0072 login state read', () => {
@@ -81,7 +88,7 @@ describe('S3 stays unreachable from the deployed Worker until activation', () =>
   it('the deployed entry point and legacy middleware default do not reference the link flow', () => {
     expect(read('src/index.ts')).not.toMatch(/email-link|EmailLink/);
     const middleware = read('src/middleware/customer-authenticate.ts');
-    expect(middleware).toContain('export const customerAuthenticate = createCustomerAuthenticate();');
+    expect(middleware).toContain('export const legacyCustomerAuthenticate = createCustomerAuthenticate();');
   });
 
   it('E10: the phone-proof-only recovery methods have no non-test caller (not activated)', () => {
