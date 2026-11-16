@@ -394,6 +394,27 @@ describe.skipIf(!process.env.DATABASE_URL)('customer recovery orchestration (int
       expect(await h.svc.cancel({ attemptId: a3, token: t3, sourceKey: SRC })).toEqual({ ok: false });
     });
 
+    it('a cancellation link cannot be locked out by someone who only knows the attempt id (budget is per attempt AND source)', async () => {
+      const counts = new Map<string, number>();
+      const counting: RecoveryLimiter = async ({ key, limit }) => {
+        const n = (counts.get(key) ?? 0) + 1;
+        counts.set(key, n);
+        return n <= limit;
+      };
+      const hh = harness(client, { limiter: counting });
+      const c = await customer(41);
+      const id = await start(c, hh);
+      const token = hh.notices.at(-1)!.cancelToken!;
+      for (let i = 0; i < 20; i += 1) {
+        expect(await hh.svc.cancel({ attemptId: id, token: '0'.repeat(64), sourceKey: 'attacker-source-0123456789' })).toEqual({ ok: false });
+      }
+      // the attacker's own budget is spent, so even the right token from that source is refused ...
+      expect(await hh.svc.cancel({ attemptId: id, token, sourceKey: 'attacker-source-0123456789' })).toEqual({ ok: false });
+      // ... but the real owner, on another source, can still cancel
+      expect(await hh.svc.cancel({ attemptId: id, token, sourceKey: 'victim-source-0123456789ab' })).toEqual({ ok: true });
+      expect((await attempt(id)).status).toBe('cancelled');
+    });
+
     it('a cancelled hold cannot be completed even after the deadline passes', async () => {
       fresh();
       const c = await customer(22);
@@ -494,7 +515,7 @@ describe.skipIf(!process.env.DATABASE_URL)('customer recovery orchestration (int
       await h.svc.cancel({ attemptId: id, token: h.notices[0]!.cancelToken!, sourceKey: SRC });
       expect(h.limits.length).toBeGreaterThan(0);
       for (const l of h.limits) {
-        expect(l.key).toMatch(/^customer-recovery:[a-z_]+:(source|customer|attempt):[0-9a-f]{64}$/);
+        expect(l.key).toMatch(/^customer-recovery:[a-z_]+:(source|customer|attempt_source):[0-9a-f]{64}$/);
         for (const raw of [c.id, c.phone, `rec-27-${RUN}`, SRC, id]) expect(l.key).not.toContain(raw);
         expect([`${l.limit}/${l.windowSeconds}`]).toEqual(expect.arrayContaining([expect.stringMatching(/^(5\/900|3\/3600|10\/3600)$/)]));
       }
@@ -629,6 +650,62 @@ describe.skipIf(!process.env.DATABASE_URL)('customer recovery orchestration (int
       await emailFactor(second);
       expect(await h.svc.initiate({ customerId: c.id, sourceKey: SRC })).toEqual({ ok: false });
       expect((await attempt(second)).status).toBe('awaiting_factors');
+    });
+  });
+
+  describe('configuration and database invariants', () => {
+    it('never writes a secret, code, proof or token to any console channel, across a full recovery', async () => {
+      const calls: string[] = [];
+      for (const channel of ['log', 'info', 'warn', 'error', 'debug'] as const) {
+        vi.spyOn(console, channel).mockImplementation((...args: unknown[]) => { calls.push(args.map(String).join(' ')); });
+      }
+      fresh();
+      const c = await customer(42);
+      const code = (await issueCodes(c.id))[0]!;
+      const id = await start(c);
+      await emailFactor(id);
+      await h.svc.verifyCodeFactor({ attemptId: id, sourceKey: SRC, code });
+      await h.svc.verifyCodeFactor({ attemptId: id, sourceKey: SRC, code: 'AAAA-AAAA-AAAA-AAAA-AAAA-AAAA-AAAA' });
+      await h.svc.cancel({ attemptId: id, token: h.notices[0]!.cancelToken!, sourceKey: SRC });
+      const sensitive = [SECRET, code, code.replace(/-/g, ''), NEW, GOOD, h.challenges.at(-1)!.proof, h.notices[0]!.cancelToken!];
+      for (const line of calls) for (const secret of sensitive) expect(line).not.toContain(secret);
+    });
+
+    it('the database rejects every illegal attempt state or ownership, whoever writes it', async () => {
+      const c = await customer(43);
+      const base = (digest: string, extra = '', customerId = c.id) => q(
+        `INSERT INTO customer_recovery_attempts (customer_id, status, expires_at, cancel_digest, cancel_expires_at ${extra ? `, ${extra.split('=')[0]}` : ''})
+         VALUES ($1, $3, now() + interval '1 hour', $2, now() + interval '1 hour' ${extra ? `, ${extra.split('=')[1]}` : ''})`,
+        [customerId, digest, 'awaiting_factors'],
+      );
+      const hex = (n: number) => n.toString(16).padStart(64, '0');
+      const bad: Array<[string, () => Promise<unknown>]> = [
+        ['terminal_check', () => q(`INSERT INTO customer_recovery_attempts (customer_id, status, expires_at, cancel_digest, cancel_expires_at) VALUES ($1,'cancelled', now() + interval '1 hour', $2, now() + interval '1 hour')`, [c.id, hex(1)])], // terminal without ended_at
+        ['ended_reason_presence_check', () => q(`INSERT INTO customer_recovery_attempts (customer_id, status, expires_at, cancel_digest, cancel_expires_at, ended_reason) VALUES ($1,'awaiting_factors', now() + interval '1 hour', $2, now() + interval '1 hour', 'expired')`, [c.id, hex(2)])], // a reason with no end time
+        ['risk_required_check', () => q(`INSERT INTO customer_recovery_attempts (customer_id, status, expires_at, cancel_digest, cancel_expires_at, email_factor_at, code_factor_at) VALUES ($1,'factors_verified', now() + interval '1 hour', $2, now() + interval '1 hour', now(), now())`, [c.id, hex(3)])], // verified without a risk class
+        ['two_factor_check', () => q(`INSERT INTO customer_recovery_attempts (customer_id, status, risk, expires_at, cancel_digest, cancel_expires_at, email_factor_at) VALUES ($1,'factors_verified','standard', now() + interval '1 hour', $2, now() + interval '1 hour', now())`, [c.id, hex(4)])], // one factor only
+        ['hold_check', () => q(`INSERT INTO customer_recovery_attempts (customer_id, status, risk, expires_at, cancel_digest, cancel_expires_at, email_factor_at, code_factor_at, hold_started_at, hold_until) VALUES ($1,'security_hold','high', now() + interval '1 hour', $2, now() + interval '1 hour', now(), now(), now(), now() - interval '1 hour')`, [c.id, hex(5)])], // hold ends before it starts
+        ['hold_check', () => q(`INSERT INTO customer_recovery_attempts (customer_id, status, risk, expires_at, cancel_digest, cancel_expires_at, email_factor_at, code_factor_at) VALUES ($1,'security_hold','high', now() + interval '1 hour', $2, now() + interval '1 hour', now(), now())`, [c.id, hex(6)])], // hold without a deadline
+        ['hold_check', () => q(`INSERT INTO customer_recovery_attempts (customer_id, status, risk, expires_at, cancel_digest, cancel_expires_at, email_factor_at, code_factor_at, hold_started_at, hold_until) VALUES ($1,'factors_verified','standard', now() + interval '1 hour', $2, now() + interval '1 hour', now(), now(), now(), now() + interval '1 day')`, [c.id, hex(7)])], // a standard attempt cannot carry a hold
+        ['failures_check', () => q(`INSERT INTO customer_recovery_attempts (customer_id, status, expires_at, cancel_digest, cancel_expires_at, factor_failures) VALUES ($1,'awaiting_factors', now() + interval '1 hour', $2, now() + interval '1 hour', 6)`, [c.id, hex(8)])],
+        ['phone_evidence_check', () => q(`INSERT INTO customer_recovery_attempts (customer_id, status, expires_at, cancel_digest, cancel_expires_at, phone_factor_at) VALUES ($1,'awaiting_factors', now() + interval '1 hour', $2, now() + interval '1 hour', now())`, [c.id, hex(9)])], // phone evidence without its proof timestamp
+        ['digest_check', () => q(`INSERT INTO customer_recovery_attempts (customer_id, status, expires_at, cancel_digest, cancel_expires_at) VALUES ($1,'awaiting_factors', now() + interval '1 hour', 'not-a-digest', now() + interval '1 hour')`, [c.id])],
+        ['expiry_check', () => q(`INSERT INTO customer_recovery_attempts (customer_id, status, expires_at, cancel_digest, cancel_expires_at) VALUES ($1,'awaiting_factors', now() - interval '1 hour', $2, now() + interval '1 hour')`, [c.id, hex(10)])], // expires before created
+        ['customers_id_fk', () => q(`INSERT INTO customer_recovery_attempts (customer_id, status, expires_at, cancel_digest, cancel_expires_at) VALUES ('00000000-0000-4000-8000-000000000000','awaiting_factors', now() + interval '1 hour', $1, now() + interval '1 hour')`, [hex(11)])], // no such customer
+      ];
+      void base;
+      for (const [constraint, attemptInsert] of bad) {
+        // each illegal row is refused by the INTENDED constraint, not by an incidental one
+        await expect(attemptInsert()).rejects.toThrow(new RegExp(constraint));
+      }
+      // one active attempt per customer, and a digest is never shared
+      await q(`INSERT INTO customer_recovery_attempts (customer_id, status, expires_at, cancel_digest, cancel_expires_at) VALUES ($1,'awaiting_factors', now() + interval '1 hour', $2, now() + interval '1 hour')`, [c.id, hex(12)]);
+      await expect(q(`INSERT INTO customer_recovery_attempts (customer_id, status, expires_at, cancel_digest, cancel_expires_at) VALUES ($1,'awaiting_factors', now() + interval '1 hour', $2, now() + interval '1 hour')`, [c.id, hex(13)])).rejects.toThrow();
+      const c2 = await customer(44);
+      await expect(q(`INSERT INTO customer_recovery_attempts (customer_id, status, expires_at, cancel_digest, cancel_expires_at) VALUES ($1,'awaiting_factors', now() + interval '1 hour', $2, now() + interval '1 hour')`, [c2.id, hex(12)])).rejects.toThrow();
+      // deleting the customer removes the attempts with it (ownership)
+      await q('DELETE FROM customers WHERE id=$1', [c.id]);
+      expect((await q<{ n: number }>('SELECT count(*)::int n FROM customer_recovery_attempts WHERE customer_id=$1', [c.id]))[0]!.n).toBe(0);
     });
   });
 

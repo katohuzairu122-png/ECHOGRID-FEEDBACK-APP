@@ -129,6 +129,18 @@ D1 two independent recovery factors; D2 a 24-hour hold for high-risk recovery wi
 
 **Still required before any activation.** A real notifier adapter and email-challenge delivery; an OTP route that mints `account_recovery` phone proofs; routes with the trusted-source limiter; the production secret; the owner decisions above; applying `0074` and `0075` after read-only verification. Cancelling an attempt does not revoke recovery codes (consider in S4-03).
 
+### 8d. S4-02-R1 review findings (verified from the code; no policy was changed or approved)
+
+**Defect fixed.** The cancellation budget was keyed per attempt, so anyone who merely knew an attempt id could exhaust it and block the real customer's cancel link during a hold. It is now keyed per attempt AND source (plus the source budget); a regression test proves the owner on another source can still cancel.
+
+**A. High-risk classification.** Implemented signals: any path that uses a recovery code (loss of a verified factor) and a phone verified within the recent window. **Not implemented, gaps for an owner decision:** number reassignment or recycling (no signal exists), suspicious verification activity, repeated or unusual attempt patterns across attempts, and a short hold for the standard email + phone path (if both factors are attacker-controlled, for example SIM swap plus email compromise, the customer receives only notices sent to those same channels and no hold applies; D2 as written holds only high-risk recovery).
+
+**B. Recent-phone window (7 days, a PROPOSED value, not approved).** Source: `customers.phone_verified_at`, compared with database time; the value is a constant in `customer-recovery-policy.ts`, overridable only by service config, and not an environment binding. `phone_verified_at` is set once, at first verification, and is never refreshed or cleared; there is no phone-change flow (the `phone_change` challenge purpose is reserved). It therefore detects a NEWLY verified number but not a reassigned or recycled old one. A missing or future timestamp fails safe (treated as recent, and an unverified phone is never a factor anyway). It cannot be bypassed from the recovery path because nothing in it writes the timestamp.
+
+**C. Rate limits.** Budgets come only from the approved closed set of the customer-email limiter (5/900, 3/3600, 10/3600): initiation 10/3600 source + 3/3600 customer; email challenge issuance the same; email verification, phone factor, recovery-code verification and completion 5/900 source + 5/900 customer; cancellation 10/3600 source + 5/900 attempt-and-source. Keys are HMAC digests (no ids, phones or emails). A missing limiter, a missing or short source key, a denied budget or a limiter error all deny. The service cannot itself prove a source key is trusted: the route layer must supply the output of the trusted-source resolver. **Gaps:** the figures are not owner-approved for recovery; phone OTP issuance is outside this service and still has no approved recovery budget; customer-level budgets can delay a legitimate recovery for someone who knows the customer id (they cannot take over), and each initiation notifies the customer (bounded to 3 per hour).
+
+**PostgreSQL 18 coverage.** The hosted job "PG18 clean replay and read-only security catalog" runs the whole `test:integration` suite against PostgreSQL 18 (workflow `gate2-pg18-ephemeral.yml`), so the recovery suites, including concurrency, are exercised there; `Typecheck & Test` runs the same suite on PostgreSQL 16.
+
 ## 9. Changelog
 
 | Date | Change |
@@ -137,3 +149,4 @@ D1 two independent recovery factors; D2 a 24-hour hold for high-risk recovery wi
 | 2026-11-15 | RECOVERY-GUARD-01: E10-B enforced in the session and password services |
 | 2026-11-15 | S4 rulings D1-D6 recorded; S4-01 recovery code foundation (draft, unmounted) |
 | 2026-11-16 | S4-02 recovery orchestration (draft, unmounted); migration 0075 prepared |
+| 2026-11-16 | S4-02-R1: cancel-budget lockout fixed; policy review findings recorded |
