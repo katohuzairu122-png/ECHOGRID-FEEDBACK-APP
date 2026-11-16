@@ -109,6 +109,32 @@ try {
       )).rows[0];
       assert(!grant.executable,'SENSITIVE_FUNCTION_EXPOSED');
     }
+    // Probe the actual PostgreSQL operation classes while connected as the
+    // disposable login. Zero-row predicates avoid fixtures or data changes.
+    const denialProbes = [
+      ['customer identity', 'SELECT id FROM public.customers WHERE false'],
+      ['customer wallet', 'SELECT id FROM public.loyalty_accounts WHERE false'],
+      ['customer enrollment', 'INSERT INTO public.business_customer_memberships (customer_id, business_id) SELECT NULL::uuid, NULL::uuid WHERE false'],
+      ['owner reward catalog', 'SELECT id FROM public.loyalty_rewards WHERE false'],
+      ['manager activity', 'SELECT id FROM public.audit_log WHERE false'],
+      ['cashier purchase evidence', 'SELECT id FROM public.loyalty_purchase_events WHERE false'],
+      ['cashier ledger read', 'SELECT id FROM public.loyalty_transactions WHERE false'],
+      ['cashier ledger confirmation', 'UPDATE public.loyalty_transactions SET redemption_confirmed_at = NULL WHERE false'],
+      ['cashier balance update', 'UPDATE public.loyalty_accounts SET points = points WHERE false'],
+      ['financial ledger write', 'DELETE FROM public.partner_credit_ledger WHERE false'],
+    ];
+    for (const [operation, sql] of denialProbes) {
+      let denied = false;
+      try {
+        await candidate.query(sql);
+      } catch (error) {
+        if (error.code !== '42501') throw error;
+        denied = true;
+      }
+      assert(denied, 'WORKLOAD_PRIVILEGE_EXPOSED_' + operation.replaceAll(' ', '_'));
+    }
+    console.log(JSON.stringify({ loyaltyWorkloadDenials: denialProbes.length, sqlstate: '42501' }));
+
     // This is an intentionally unusable role. If a future change grants
     // cross-tenant business table access, the preflight must fail.
     console.log(JSON.stringify({
