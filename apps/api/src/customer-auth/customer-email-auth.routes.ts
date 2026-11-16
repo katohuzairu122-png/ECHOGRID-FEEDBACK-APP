@@ -10,6 +10,8 @@ const password = z.string().min(1).max(1024);
 export const emailRegistrationRequestSchema = z.object({ email }).strict();
 export const emailRegistrationCompleteSchema = z.object({
   email, challengeId: z.uuid(), proof: z.string().min(6).max(256), password,
+  /** Optional, stored unverified; proven later through /loyalty/me/phone. */
+  phone: z.string().trim().min(1).max(40).optional(),
 }).strict();
 export const emailPasswordLoginSchema = z.object({ email, password }).strict();
 

@@ -265,7 +265,9 @@
       "genericError": "Une erreur s'est produite. Veuillez réessayer.",
       "joinRequired": "Rejoignez le programme de fidélité de cette entreprise avant de vous enregistrer.",
       "joining": "Adhésion…",
-      "joinAndCheckIn": "Rejoindre et s'enregistrer"
+      "joinAndCheckIn": "Rejoindre et s'enregistrer",
+      "phoneRequired": "Vérifiez votre numéro de téléphone pour rejoindre un autre commerce.",
+      "verifyPhoneLink": "Vérifier mon téléphone"
     },
     "messages": {
       "title": "Messages",
@@ -479,7 +481,38 @@
         "unavailable": "Indisponible pour le moment. Veuillez réessayer plus tard.",
         "password_too_short": "Votre mot de passe doit contenir au moins {min} caractères."
       },
-      "passwordHint": "Au moins {min} caractères."
+      "passwordHint": "Au moins {min} caractères.",
+      "phoneOptionalLabel": "Numéro de téléphone (facultatif)",
+      "phoneOptionalHint": "Vous pourrez le vérifier plus tard. La vérification est nécessaire pour rejoindre plusieurs commerces."
+    },
+    "phoneVerify": {
+      "title": "Vérifier votre téléphone",
+      "description": "Vérifier votre numéro vous permet de rejoindre plusieurs commerces et de participer à la Communauté. Nous vous enverrons un code par SMS.",
+      "verifiedTitle": "Votre téléphone est vérifié",
+      "verifiedDescription": "{phone} est vérifié sur votre compte.",
+      "continue": "Continuer",
+      "phoneLabel": "Numéro de téléphone",
+      "phoneHint": "Indiquez l’indicatif du pays, par exemple +965 ou +1.",
+      "sendCode": "Envoyer le code",
+      "sending": "Envoi…",
+      "codeTitle": "Saisissez le code",
+      "codeDescription": "Nous avons envoyé un code au {phone}. Il expire dans 10 minutes.",
+      "codeLabel": "Code de vérification",
+      "verify": "Vérifier le téléphone",
+      "verifying": "Vérification…",
+      "useAnotherNumber": "Utiliser un autre numéro",
+      "onFile": "Numéro enregistré, pas encore vérifié : {phone}",
+      "errors": {
+        "invalid_phone": "Saisissez le numéro avec l’indicatif du pays, par exemple +96566904591.",
+        "invalid_code": "Ce code est incorrect ou a expiré.",
+        "locked": "Trop de tentatives incorrectes. Demandez un nouveau code.",
+        "cooldown": "Veuillez attendre une minute avant de demander un autre code.",
+        "taken": "Ce numéro est déjà vérifié sur un autre compte.",
+        "limited": "Trop de tentatives aujourd’hui. Réessayez demain.",
+        "already_verified": "Ce numéro est déjà vérifié.",
+        "change_unsupported": "Modifier un numéro vérifié n’est pas encore possible.",
+        "unavailable": "Indisponible pour le moment. Veuillez réessayer plus tard."
+      }
     }
   }
 }

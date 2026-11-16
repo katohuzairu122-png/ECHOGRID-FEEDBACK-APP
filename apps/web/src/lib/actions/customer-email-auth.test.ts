@@ -69,6 +69,18 @@ describe('email sign-up completion', () => {
     expect(h.setRotating).toHaveBeenCalledTimes(1);
     expect(JSON.stringify(result)).not.toContain('r'.repeat(43));
   });
+  it('an optional phone is sent only when given, and never as part of the sign-in', async () => {
+    h.api.mockResolvedValueOnce({ status: 201, body: {} }).mockResolvedValueOnce({ status: 200, body: session });
+    await completeEmailRegistrationAction({}, form({ ...good, phone: ' +965 6690 4591 ' }));
+    expect(h.api).toHaveBeenNthCalledWith(1, '/customer-auth/email/register/complete', {
+      body: { email: 'a@example.test', challengeId: 'chal-1', proof: 'proof-1', password: good.password, phone: '+965 6690 4591' },
+    });
+    expect(h.api).toHaveBeenNthCalledWith(2, '/customer-auth/email/login', { body: { email: 'a@example.test', password: good.password } });
+    h.api.mockClear();
+    h.api.mockResolvedValueOnce({ status: 201, body: {} }).mockResolvedValueOnce({ status: 200, body: session });
+    await completeEmailRegistrationAction({}, form({ ...good, phone: '   ' }));
+    expect((h.api.mock.calls[0]![1] as { body: Record<string, unknown> }).body).not.toHaveProperty('phone');
+  });
   it('a bad proof or weak password is one code and nothing is stored', async () => {
     h.api.mockResolvedValue({ status: 401, body: { error: 'Invalid credentials or proof' } });
     expect(await completeEmailRegistrationAction({}, form(good))).toEqual({ error: 'invalid_proof' });

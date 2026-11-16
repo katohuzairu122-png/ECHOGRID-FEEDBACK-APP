@@ -62,8 +62,8 @@ export function createEmailRegistrationService(config: {
   return {
     keyForIdentifier,
     requestProof,
-    completeRegistration: async (input: { email: string; challengeId: string; proof: string; password: string }) => {
-      if (!checkPasswordPolicy(input.password, { phone: null }, config.passwordPolicy).ok) {
+    completeRegistration: async (input: { email: string; challengeId: string; proof: string; password: string; phone?: string | undefined }) => {
+      if (!checkPasswordPolicy(input.password, { phone: input.phone ?? null }, config.passwordPolicy).ok) {
         return { ok: false, kind: 'invalid' } as const;
       }
       return completeEmailRegistration({
