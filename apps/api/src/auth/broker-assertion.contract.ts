@@ -6,12 +6,20 @@ export const BROKER_ISSUER = 'echogrid:development:b4-03';
 export const BROKER_AUDIENCE = 'echogrid:development:branch-broker';
 export const BROKER_WORKLOAD = 'echogrid:development:staff-issuer';
 export const BROKER_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+export const BROKER_OPERATIONS = Object.freeze({
+  'branches:read': 'branches:view',
+  'loyalty:confirmed-purchase-count': 'loyalty:serve',
+} as const);
+export type BrokerOperation = keyof typeof BROKER_OPERATIONS;
+export const isBrokerOperation = (x: unknown): x is BrokerOperation =>
+  typeof x === 'string' && Object.hasOwn(BROKER_OPERATIONS, x);
+
 export interface BrokerAssertionClaims {
   readonly version: 'B4-03/1'; readonly algorithm: 'Ed25519'; readonly environment: 'development';
   readonly issuer: typeof BROKER_ISSUER; readonly audience: typeof BROKER_AUDIENCE; readonly workloadId: typeof BROKER_WORKLOAD;
   readonly keyId: string; readonly keyVersion: number; readonly actorType: 'staff';
   readonly actorId: string; readonly sessionId: string; readonly businessId: string; readonly branchId: string;
-  readonly operation: 'branches:read'; readonly permission: 'branches:view';
+  readonly operation: BrokerOperation; readonly permission: typeof BROKER_OPERATIONS[BrokerOperation];
   readonly requestId: string; readonly nonce: string; readonly issuedAt: number; readonly expiresAt: number;
   /** Existing account/session/RBAC tables have no coordinated revocation epoch. Never fabricate one. */
   readonly authorizationVersion: null;
@@ -46,8 +54,8 @@ export async function verifyBrokerAssertionSignature(raw: unknown, keys: BrokerK
     const c = a.claims;
     if (!c || typeof c !== 'object' || Array.isArray(c) || Object.keys(c).length !== FIELDS.length || !FIELDS.every(f => Object.hasOwn(c, f))) return false;
     if (c.version !== 'B4-03/1' || c.algorithm !== 'Ed25519' || c.environment !== 'development' || c.issuer !== BROKER_ISSUER ||
-      c.audience !== BROKER_AUDIENCE || c.workloadId !== BROKER_WORKLOAD || c.actorType !== 'staff' || c.operation !== 'branches:read' ||
-      c.permission !== 'branches:view' || c.authorizationVersion !== null || !int(now) || !int(c.issuedAt) || !int(c.expiresAt) ||
+      c.audience !== BROKER_AUDIENCE || c.workloadId !== BROKER_WORKLOAD || c.actorType !== 'staff' || !isBrokerOperation(c.operation) ||
+      c.permission !== BROKER_OPERATIONS[c.operation] || c.authorizationVersion !== null || !int(now) || !int(c.issuedAt) || !int(c.expiresAt) ||
       c.issuedAt > now || c.expiresAt <= now || c.expiresAt <= c.issuedAt || c.expiresAt - c.issuedAt > 60 ||
       ![c.actorId,c.sessionId,c.businessId,c.branchId,c.requestId,c.nonce].every(x => typeof x === 'string' && BROKER_UUID.test(x)) ||
       typeof a.signature !== 'string' || !/^[0-9a-f]{128}$/.test(a.signature)) return false;

@@ -5,7 +5,7 @@
  * evidence before connecting as this login) does not exist yet; this proves what the DATABASE side must enforce on its own. See docs/architecture/builds/SPLIT-08/GATE2_B4_11_RESTRICTED_BROKER_DATABASE_ROLE.md.
  */
 import pg from 'pg';
-import { randomUUID, randomBytes } from 'node:crypto';
+import { randomUUID, randomBytes, webcrypto } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { setTimeout as delay } from 'node:timers/promises';
@@ -260,6 +260,101 @@ try {
     check((await call(reused, req('scoped'), { nonce })).outcome === 'REPLAYED', 'LOYALTY_SHARED_NONCE_REGISTRY');
     check((await attempt(reused, 'SELECT id FROM public.loyalty_purchase_events WHERE false')).code === '42501', 'LOYALTY_DIRECT_READ_DENIED');
     check((await attempt(reused, 'DELETE FROM public.partner_credit_ledger WHERE false')).code === '42501', 'LOYALTY_FINANCIAL_WRITE_DENIED');
+    const { buildDb } = await import('../src/db/client.ts');
+    const { signAccessToken } = await import('../src/auth/jwt.ts');
+    const { TrustedBrokerAssertionIssuer } = await import('../src/auth/trusted-broker-issuer.ts');
+    const { brokerHex } = await import('../src/auth/broker-assertion.contract.ts');
+    const { b409AssertionDigest, b409WorkloadMessage } = await import('../src/auth/broker-workload-attestation.ts');
+    const { ConfirmedPurchaseCountService } = await import('../src/loyalty/confirmed-purchase-count.service.ts');
+    const seconds = () => Math.floor(Date.now()/1000);
+    const makeKey = async keyId => {
+      const pair = await webcrypto.subtle.generateKey('Ed25519', true, ['sign','verify']);
+      return {
+        verifier: { keyId, version: 1, publicKeyHex: brokerHex(new Uint8Array(await webcrypto.subtle.exportKey('raw', pair.publicKey))),
+          state: 'ACTIVE', notBefore: seconds()-10, notAfter: seconds()+600 },
+        sign: async message => new Uint8Array(await webcrypto.subtle.sign('Ed25519', pair.privateKey, message)),
+      };
+    };
+    const assertion = await makeKey('loyalty-issuer-ci');
+    const workload = await makeKey('loyalty-workload-ci');
+    const accessSecret = randomBytes(32).toString('hex');
+    const issuer = new TrustedBrokerAssertionIssuer({ db: buildDb(owner), accessSecret,
+      keys: async () => assertion.verifier,
+      signer: { keyId: assertion.verifier.keyId, sign: assertion.sign } });
+    const issue = async (who, businessId, branchId, operation = 'loyalty:confirmed-purchase-count') => {
+      const token = await signAccessToken(U[who], accessSecret, S[who]);
+      return issuer.issue({ authorization: 'Bearer ' + token, businessId, branchId, operation });
+    };
+    const attest = async (signed, edits = {}) => {
+      const issuedAt = seconds();
+      const evidence = {
+        version: 'B4-09/1', environment: 'development', workload: 'echogrid:development:api-worker',
+        audience: 'echogrid:development:isolated-broker', keyId: workload.verifier.keyId, keyVersion: 1,
+        assertionDigest: await b409AssertionDigest(signed), issuedAt, expiresAt: issuedAt+30, ...edits,
+      };
+      return { assertion: signed, workloadEvidence: { ...evidence, signature: brokerHex(await workload.sign(b409WorkloadMessage(evidence))) } };
+    };
+    const envelope = async (...input) => {
+      const result = await issue(...input);
+      check(result.ok, 'SIGNED_LOYALTY_ISSUANCE_' + (result.reason ?? 'OK'));
+      return attest(result.assertion);
+    };
+    const url = new URL(DB_URL);
+    url.username = BROKER.name;
+    url.password = BROKER.password;
+    const pool = new pg.Pool({ connectionString: url.toString(), max: 1 });
+    let acquisitions = 0;
+    const clientIds = new Set();
+    const deps = {
+      assertionKeys: async () => assertion.verifier,
+      workloadKeys: async () => workload.verifier,
+      now: seconds,
+      connect: async () => {
+        acquisitions++;
+        const client = await pool.connect();
+        clientIds.add(client.processID);
+        return client;
+      },
+    };
+    const service = new ConfirmedPurchaseCountService(deps);
+    const scopeA = { businessId: A, branchId: A1 };
+    const scopeB = { businessId: B, branchId: B1 };
+    const expectDenied = async (promise, status, label) => {
+      const error = await promise.then(() => null, e => e);
+      check(error?.status === status, 'SIGNED_LOYALTY_' + label + '_' + error?.status);
+    };
+    try {
+      const first = await envelope('scoped', A, A1);
+      const second = await envelope('b', B, B1);
+      const count = await Promise.all([service.count(first, scopeA), service.count(second, scopeB)]);
+      check(count[0] === 2 && count[1] === 3 && clientIds.size === 1, 'SIGNED_LOYALTY_POOLED_TENANTS');
+      await expectDenied(service.count(first, scopeA), 403, 'REPLAY');
+      const before = acquisitions;
+      await expectDenied(service.count(second, scopeA), 403, 'ARGUMENT_SUBSTITUTION');
+      await expectDenied(service.count(await envelope('scoped', A, A1, 'branches:read'), scopeA), 403, 'BRANCH_AUTHORITY');
+      const forged = { ...first.assertion, claims: { ...first.assertion.claims, actorId: U.b } };
+      await expectDenied(service.count(await attest(forged), scopeA), 403, 'FORGED_ACTOR');
+      await expectDenied(service.count(await attest(first.assertion, { workload: 'wrong-workload' }), scopeA), 403, 'WRONG_WORKLOAD');
+      const timeShifted = new ConfirmedPurchaseCountService({ ...deps, now: () => seconds()+61 });
+      await expectDenied(timeShifted.count(first, scopeA), 403, 'EXPIRED');
+      check(acquisitions === before, 'SIGNED_LOYALTY_INVALID_PROVENANCE_NO_CONNECTION');
+      check(!(await issue('scoped', A, A2)).ok && !(await issue('b', A, A1)).ok, 'SIGNED_LOYALTY_ISSUER_SCOPE_DENIALS');
+      const revoked = await envelope('scoped', A, A1);
+      await q('UPDATE public.refresh_tokens SET revoked_at=now() WHERE session_id=$1', [S.scoped]);
+      await expectDenied(service.count(revoked, scopeA), 403, 'SESSION_REVOKED_AFTER_ISSUE');
+      await q('UPDATE public.refresh_tokens SET revoked_at=NULL WHERE session_id=$1', [S.scoped]);
+      const removed = await envelope('scoped', A, A1);
+      await q("DELETE FROM public.role_permissions WHERE role_id=$1 AND permission_id=(SELECT id FROM public.permissions WHERE key='loyalty:serve')", [roleAView]);
+      await expectDenied(service.count(removed, scopeA), 403, 'PERMISSION_REMOVED_AFTER_ISSUE');
+      check(!(await issue('scoped', A, A1)).ok && (await issue('scoped', A, A1, 'branches:read')).ok, 'SIGNED_LOYALTY_BRANCH_ONLY_DENIED');
+      await q('INSERT INTO public.role_permissions(role_id,permission_id) VALUES($1,$2)', [roleAView, await perm('loyalty:serve')]);
+      const unavailable = new ConfirmedPurchaseCountService({ ...deps, connect: async () => { throw Error('fixture unavailable'); } });
+      const recover = await envelope('scoped', A, A1);
+      await expectDenied(unavailable.count(recover, scopeA), 503, 'NO_PRIVILEGED_FALLBACK');
+      check(await service.count(recover, scopeA) === 2, 'SIGNED_LOYALTY_RETRY_NO_LEAK');
+    } finally {
+      await pool.end();
+    }
     await q("DELETE FROM public.role_permissions WHERE role_id=$1 AND permission_id=(SELECT id FROM public.permissions WHERE key='loyalty:serve')", [roleAView]);
     await expectation(req('scoped'), 'DENIED_GRANT', null, 'SERVE_PERMISSION_REMOVED');
   } finally {
@@ -267,7 +362,7 @@ try {
   }
 
   console.log(JSON.stringify({
-    gate: 'GATE2_B4_11_PG18_RESTRICTED_BROKER_ROLE', checks, schema: 'REAL_67_MIGRATIONS', operations: ['branch_read','confirmed_purchase_count'], brokerLoginHoldsNoTableSequenceOrSchemaPrivilege: true, routineOwnerSelectAndOneColumnUpdate: true,
+    gate: 'GATE2_B4_11_PG18_RESTRICTED_BROKER_ROLE', checks, schema: 'CURRENT_MIGRATION_JOURNAL', signedLoyaltyService: true, operations: ['branch_read','confirmed_purchase_count'], brokerLoginHoldsNoTableSequenceOrSchemaPrivilege: true, routineOwnerSelectAndOneColumnUpdate: true,
     useTimeAuthorization: 'SESSION_ACTOR_BUSINESS_BRANCH_GRANT_TENANT_MATCHED', singleUseNonceEveryOutcome: true, revocationRacesSerialized: true, lockTimeoutAndOutageConsumeNothing: true, arbitrarySqlAndDirectCrudDenied: true,
     injectedCrossTenantGrantsDenied: true, findings: ['PUBLIC_EXECUTE_ON_PARTNER_CREDIT_DIGEST_AND_ADVISORY_LOCK_FUNCTIONS', 'ROW_LOCKING_REQUIRES_COLUMN_UPDATE_PRIVILEGE_FOR_ROUTINE_OWNER'], signatureVerifiedInDatabase: false, brokerServiceExists: false, hyperdriveCompatibility: 'NOT_CERTIFIED', runtimeRoleReady: false, stagingCertification: 'BLOCKED',
     noLiveNeonWrites: true, migrationAdded: false, financialAuthorization: 'NOT_GRANTED',

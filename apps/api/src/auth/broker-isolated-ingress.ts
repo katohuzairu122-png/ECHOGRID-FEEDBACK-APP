@@ -105,6 +105,7 @@ export async function inspectB410Ingress(
     const invocation = raw as B409Invocation;
     if (!Number.isSafeInteger(finished) || finished < now ||
         invocation.assertion.claims.expiresAt <= finished || invocation.workloadEvidence.expiresAt <= finished ||
+        invocation.assertion.claims.operation !== 'branches:read' ||
         keys.length !== 2 || !keys.every(key => validBrokerKey(key, finished))) return denied('UNTRUSTED_PROVENANCE');
     return Object.freeze({acceptedForEvaluation:true,brokerAuthorization:'NOT_GRANTED',
       deploymentAuthorized:false,reason:'PROVENANCE_ONLY'});
