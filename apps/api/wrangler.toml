@@ -331,12 +331,12 @@ ANTHROPIC_MONTHLY_SPEND_LIMIT_USD = "10"
 RESEND_FROM_ADDRESS = "Echo Grid Staging <support@echo-grid.uk>"
 ALLOWED_ORIGINS = "https://echo-grid-feedback-web-staging.katohuzairu122.workers.dev"
 WEB_BASE_URL = "https://echo-grid-feedback-web-staging.katohuzairu122.workers.dev"
-# --- CUSTOMER EMAIL SIGN-UP: STAGING CONFIGURATION TEMPLATE (CUSTOMER-EMAIL-AUTH-POLICY-01). DISABLED. -----------------------
-# The feature is OFF (generic 404 on every /customer-auth/email/* and /customer-session/* path) until the flag is exactly
-# "true" on BOTH this Worker and the web Worker, which is a separate, authorized activation step. Values below are the
+# --- CUSTOMER EMAIL SIGN-UP: STAGING ONLY, ACTIVATED (CUSTOMER-EMAIL-AUTH-STAGING-ACTIVATION-01). -----------------------------
+# The feature is ON in STAGING only, owner-authorized 2026-11-16. It must be "true" on BOTH this Worker and the web Worker
+# (the drift guard enforces that). Production sets nothing and stays off. Rollback: set "false" on both and redeploy. Values below are the
 # owner-approved ones; nothing here is a default in code (every setting is required when the feature is on, and a missing or
 # invalid one answers 503). Secrets are NOT set here: see docs/runbooks/CUSTOMER_EMAIL_AUTH_STAGING.md for the names.
-CUSTOMER_EMAIL_AUTH_ENABLED = "false"
+CUSTOMER_EMAIL_AUTH_ENABLED = "true"
 CUSTOMER_PASSWORD_MIN_LENGTH = "8"
 CUSTOMER_SESSION_ACCESS_TTL_SECONDS = "900"
 CUSTOMER_SESSION_REFRESH_TTL_SECONDS = "2592000"

@@ -35,19 +35,20 @@ const web = sections(read('apps/web/wrangler.toml'));
 const apiStaging = Object.assign({}, ...(api.get('env.staging.vars') ?? []));
 const webStaging = Object.assign({}, ...(web.get('env.staging.vars') ?? []));
 
-describe('customer email sign-up is disabled in every deployment template', () => {
-  it('no wrangler section on either Worker enables it', () => {
+describe('customer email sign-up is enabled in STAGING only', () => {
+  it('no section other than env.staging on either Worker enables it (production, cashier-staging and the top level stay off)', () => {
     for (const [file, parsed] of [['api', api], ['web', web]] as const) {
       for (const [section, entries] of parsed) {
+        if (section === 'env.staging.vars') continue;
         for (const entry of entries) {
           expect(entry.CUSTOMER_EMAIL_AUTH_ENABLED, `${file} [${section}]`).not.toBe('true');
         }
       }
     }
   });
-  it('staging states "false" explicitly on both Workers, and production sets nothing', () => {
-    expect(apiStaging.CUSTOMER_EMAIL_AUTH_ENABLED).toBe('false');
-    expect(webStaging.CUSTOMER_EMAIL_AUTH_ENABLED).toBe('false');
+  it('staging enables it on BOTH Workers together, and production sets nothing', () => {
+    expect(apiStaging.CUSTOMER_EMAIL_AUTH_ENABLED).toBe('true');
+    expect(webStaging.CUSTOMER_EMAIL_AUTH_ENABLED).toBe('true');
     for (const parsed of [api, web]) {
       for (const entry of parsed.get('vars') ?? []) {
         expect(entry).not.toHaveProperty('CUSTOMER_EMAIL_AUTH_ENABLED');
