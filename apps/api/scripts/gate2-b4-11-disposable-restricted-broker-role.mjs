@@ -223,8 +223,51 @@ try {
   await q('GRANT UPDATE (updated_by) ON public.users TO gate2_b411_owner'); check((await call(raceBroker, req('wide'))).outcome === 'OK', 'PRIVILEGE_RESTORED');
   await victim.end().catch(() => {}); await rev.end(); await raceBroker.end();
 
+  // ---- 5. one additional narrow loyalty operation on the same restricted login ----
+  await q("INSERT INTO public.permissions(key,description,category) VALUES ('loyalty:serve','b411 loyalty','b411') ON CONFLICT (key) DO NOTHING");
+  for (const id of [roleAView, roleBView]) {
+    await q('INSERT INTO public.role_permissions(role_id,permission_id) VALUES($1,$2)', [id, await perm('loyalty:serve')]);
+  }
+  const cId = uid('e', 1);
+  await q("INSERT INTO public.customers(id,phone,phone_verified_at) VALUES($1,'+15550009112',now())", [cId]);
+  for (const [business, branch, count] of [[A,A1,2],[A,A2,1],[B,B1,3]]) {
+    const [membership] = await q("INSERT INTO public.business_customer_memberships (business_id,customer_id,status,onboarding_source,onboarding_reference) VALUES($1,$2,'active','integration_test',$3) ON CONFLICT (customer_id,business_id) DO UPDATE SET status='active' RETURNING id", [business,cId,branch]);
+    const [account] = await q("INSERT INTO public.loyalty_accounts(business_id,customer_id,membership_id) VALUES($1,$2,$3) ON CONFLICT (customer_id,business_id) DO UPDATE SET membership_id=EXCLUDED.membership_id RETURNING id", [business,cId,membership.id]);
+    for (let n = 0; n < count; n++) {
+      await q("INSERT INTO public.loyalty_purchase_events (business_id,branch_id,customer_id,membership_id,loyalty_account_id,idempotency_key,qualifying_amount) VALUES($1,$2,$3,$4,$5,$6,10)", [business,branch,cId,membership.id,account.id,branch+':'+n]);
+    }
+  }
+  await owner.query(readFileSync(new URL('./sql/gate2-b4-11-loyalty-purchase-count.sql', import.meta.url), 'utf8'));
+  const loyaltyCall = (request, over) => attempt(reused,
+    'SELECT * FROM gate2_b411.confirmed_purchase_count($1::uuid,$2::uuid,$3::uuid,$4::uuid,$5::uuid,$6::bigint)', args(request, over));
+  const expectation = async (request, outcome, count, label, over) => {
+    const result = await loyaltyCall(request, over);
+    check(result.ok && result.rowCount === 1 && result.rows[0].outcome === outcome &&
+      result.rows[0].purchase_count === count, 'LOYALTY_' + label + '_' + (result.rows?.[0]?.outcome ?? result.code));
+  };
+  const reused = await login(BROKER);
+  try {
+    await expectation(req('scoped', A, A1), 'OK', 2, 'SCOPED');
+    await expectation(req('wide', A, A2), 'OK', 1, 'BUSINESS_WIDE');
+    await expectation(req('b', B, B1), 'OK', 3, 'OTHER_TENANT');
+    await expectation(req('scoped', A, A2), 'DENIED_GRANT', null, 'WRONG_BRANCH');
+    await expectation(req('b', A, A1), 'DENIED_GRANT', null, 'FOREIGN_TENANT');
+    await expectation(req('wide', A, B1), 'DENIED_BRANCH', null, 'MISMATCHED_BRANCH');
+    await expectation(req('wide', A, A1, sessWithRows.revoked), 'DENIED_SESSION', null, 'REVOKED_SESSION');
+    const nonce = randomUUID();
+    await expectation(req('scoped'), 'OK', 2, 'FIRST_USE', { nonce });
+    await expectation(req('scoped'), 'REPLAYED', null, 'SAME_NONCE', { nonce });
+    check((await call(reused, req('scoped'), { nonce })).outcome === 'REPLAYED', 'LOYALTY_SHARED_NONCE_REGISTRY');
+    check((await attempt(reused, 'SELECT id FROM public.loyalty_purchase_events WHERE false')).code === '42501', 'LOYALTY_DIRECT_READ_DENIED');
+    check((await attempt(reused, 'DELETE FROM public.partner_credit_ledger WHERE false')).code === '42501', 'LOYALTY_FINANCIAL_WRITE_DENIED');
+    await q("DELETE FROM public.role_permissions WHERE role_id=$1 AND permission_id=(SELECT id FROM public.permissions WHERE key='loyalty:serve')", [roleAView]);
+    await expectation(req('scoped'), 'DENIED_GRANT', null, 'SERVE_PERMISSION_REMOVED');
+  } finally {
+    await reused.end();
+  }
+
   console.log(JSON.stringify({
-    gate: 'GATE2_B4_11_PG18_RESTRICTED_BROKER_ROLE', checks, schema: 'REAL_67_MIGRATIONS', operation: 'branch_read_only', brokerLoginHoldsNoTableSequenceOrSchemaPrivilege: true, routineOwnerSelectAndOneColumnUpdate: true,
+    gate: 'GATE2_B4_11_PG18_RESTRICTED_BROKER_ROLE', checks, schema: 'REAL_67_MIGRATIONS', operations: ['branch_read','confirmed_purchase_count'], brokerLoginHoldsNoTableSequenceOrSchemaPrivilege: true, routineOwnerSelectAndOneColumnUpdate: true,
     useTimeAuthorization: 'SESSION_ACTOR_BUSINESS_BRANCH_GRANT_TENANT_MATCHED', singleUseNonceEveryOutcome: true, revocationRacesSerialized: true, lockTimeoutAndOutageConsumeNothing: true, arbitrarySqlAndDirectCrudDenied: true,
     injectedCrossTenantGrantsDenied: true, findings: ['PUBLIC_EXECUTE_ON_PARTNER_CREDIT_DIGEST_AND_ADVISORY_LOCK_FUNCTIONS', 'ROW_LOCKING_REQUIRES_COLUMN_UPDATE_PRIVILEGE_FOR_ROUTINE_OWNER'], signatureVerifiedInDatabase: false, brokerServiceExists: false, hyperdriveCompatibility: 'NOT_CERTIFIED', runtimeRoleReady: false, stagingCertification: 'BLOCKED',
     noLiveNeonWrites: true, migrationAdded: false, financialAuthorization: 'NOT_GRANTED',
