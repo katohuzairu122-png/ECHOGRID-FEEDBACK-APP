@@ -141,6 +141,28 @@ D1 two independent recovery factors; D2 a 24-hour hold for high-risk recovery wi
 
 **PostgreSQL 18 coverage.** The hosted job "PG18 clean replay and read-only security catalog" runs the whole `test:integration` suite against PostgreSQL 18 (workflow `gate2-pg18-ephemeral.yml`), so the recovery suites, including concurrency, are exercised there; `Typecheck & Test` runs the same suite on PostgreSQL 16.
 
+## 8e. S4-03 Recovery integration (development only; every route is DISABLED by default; migration `0076` not executed anywhere real)
+
+**Routes** (`customer-recovery.routes.ts`, mounted once at `/api/v1/customer-recovery`, all `POST`, JSON, strict bodies of at most 8 KiB, never cached, no cookie, no session): `initiate`, `email-challenge`, `email-verify`, `phone-otp`, `phone-verify`, `code-verify`, `cancel`, `complete`.
+
+**Feature gate.** Unless the server-side variable `CUSTOMER_RECOVERY_ENABLED` is exactly the string `true`, every path and method answers the same generic 404 as an unmounted path, builds nothing and opens no database (proved on the deployed worker by `customer-recovery-boundaries.test.ts`). With the gate on but configuration incomplete the answer is a generic 503. The variable is not in `wrangler.toml`.
+
+**Source.** Every route first requires a trusted source from the existing Web Worker attribution signature (`CLIENT_ATTRIBUTION_SECRET`), turned into a keyed digest (a sub-key derived from the dedicated recovery secret, so no new secret). Missing, unsigned, forged, stale or malformed attribution is a 503 before anything is parsed or opened.
+
+**Phone OTP (purpose binding).** The provider (Twilio Verify) keys a code by phone alone, so a code issued for ordinary sign-in could otherwise be presented to recovery. Binding is enforced here: `phone-otp` sends only to the customer's OWN verified phone, only for a live, announced attempt, at most three times (DB CHECK), and records `phone_otp_requested_at`; `phone-verify` calls the provider only if THIS attempt asked for a code in the last ten minutes, then mints the recovery-purpose proof on the server (a caller can supply no phone, proof or purpose; the strict body rejects them). A wrong code spends the attempt's budget, a provider error spends none, and a replay fails because the provider consumes the code and the attempt already holds the factor.
+
+**Delivery.** `customer-recovery-delivery.ts` wraps the existing services: account-security email (`createAccountSecurityEmailService`: real sends on staging and production, console only in `development`), SMS (`createSmsService`: console, which logs the body, outside production; SMS bodies contain no link, code or token) and Twilio Verify. Notices carry no recovery code, OTP or password; only the initiation and hold emails carry the cancellation credential, in a URL fragment. `accepted` means the provider accepted the message, not that it was delivered. The web pages the links point to (`/account/recovery/cancel`, `/account/recovery/email`) do not exist yet.
+
+**Enumeration.** `initiate` always answers 202 with an attempt id: a real one, or a decoy that no later step accepts (unknown email, ineligible customer, rejected notice, spent budget, missing limiter). Other steps answer one generic status. A small timing difference between a real and a decoy initiation remains.
+
+**Cancellation and recovery codes (review only, NOT changed).** Today a cancel ends the attempt and leaves the customer's recovery codes untouched. If a hostile attempt consumed one code, the other seven remain valid and the attacker may hold them; revoking the active set on a cancel would close that, at the cost of making the customer issue a new set after signing in, and a hostile party could force that churn by cancelling nothing but initiating. A policy that revokes the set only when the cancelled attempt had already verified the code factor is the narrowest option. Needs an owner ruling.
+
+**Migration `0076`.** Adds `phone_otp_requested_at` and a bounded `phone_otp_request_count` with a consistency CHECK. Additive; applied only to disposable PostgreSQL.
+
+**Required before ANY activation (none is done or authorized here).** `CUSTOMER_RECOVERY_ENABLED`; the dedicated `CUSTOMER_RECOVERY_HMAC_SECRET`; `CUSTOMER_PASSWORD_MIN_LENGTH` (owner decision CA-05, no default); the `CustomerEmailRateLimit` Durable Object declared in `wrangler.toml` with its migration, exported from the worker entry and bound as `CUSTOMER_AUTH_RATE_LIMIT` after checking namespace ownership; `CLIENT_ATTRIBUTION_SECRET` set on the API and the web worker; `WEB_BASE_URL`; the Resend and Twilio bindings; applying `0074`, `0075` and `0076` after read-only verification; the web recovery pages and BFF; and the owner decisions below.
+
+**Owner decisions still open.** The high-risk definition and whether the standard email + phone path needs a hold; the 7-day recent-phone window and a trustworthy phone-change or reassignment signal; the per-surface budgets (only the closed approved set is used); the recovery phone-OTP issuance budget; whether cancellation revokes recovery codes; CA-05; the Durable Object namespace ownership.
+
 ## 9. Changelog
 
 | Date | Change |
@@ -150,3 +172,4 @@ D1 two independent recovery factors; D2 a 24-hour hold for high-risk recovery wi
 | 2026-11-15 | S4 rulings D1-D6 recorded; S4-01 recovery code foundation (draft, unmounted) |
 | 2026-11-16 | S4-02 recovery orchestration (draft, unmounted); migration 0075 prepared |
 | 2026-11-16 | S4-02-R1: cancel-budget lockout fixed; policy review findings recorded |
+| 2026-11-16 | S4-03: gated recovery routes, phone OTP binding (0076), delivery adapters; all disabled by default |

@@ -63,6 +63,8 @@ Main advanced by three customer-auth merges after the baseline above: #454 (14:2
 
 **S4-02 recovery orchestration** (owner-authorized 2026-11-16, after S4-01 merged as `6978e05`): development only and unmounted, in a draft PR with migration `0075` (not executed anywhere real). Owner decisions to confirm: the high-risk definition, the recent-phone window (7 days) and the per-surface rate-limit budgets. S4-03 (routes, adapters, activation) needs separate authorization. See `docs/architecture/builds/CUSTOMER-AUTH/CUSTOMER_AUTH_S3_EMAIL_LINK.md` section 8c.
 
+**S4-03 recovery integration** (owner-authorized 2026-11-16): development only, in a draft PR; gated routes (disabled by default), purpose-bound phone OTP (migration `0076`, not executed anywhere real), delivery adapters over the existing email, SMS and Verify services. Activation prerequisites and open owner decisions: `docs/architecture/builds/CUSTOMER-AUTH/CUSTOMER_AUTH_S3_EMAIL_LINK.md` section 8e. Next authorized priorities after merge: COMMUNITY-01, then BDPN-IMPLEMENTATION-01 (separate assignments, not started).
+
 ## 3. Awaiting the owner (nothing here starts without an answer)
 
 | Item | Needs |
