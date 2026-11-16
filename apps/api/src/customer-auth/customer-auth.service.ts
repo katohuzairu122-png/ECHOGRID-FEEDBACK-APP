@@ -94,16 +94,11 @@ export class CustomerAuthService {
    * validating its locally generated code in development and tests.
    */
   async completeVerifiedPhone(phone: string): Promise<CustomerAuthResult> {
-    let customer = await this.repos.customers.findByPhone(phone);
-    if (!customer) {
-      customer = await this.repos.customers.create({ phone, phoneVerifiedAt: new Date() });
-    } else {
-      if (customer.status !== 'active') {
-        throw new CustomerAuthError('This account is not active.', 'CUSTOMER_SUSPENDED');
-      }
-      if (!customer.phoneVerifiedAt) {
-        customer = (await this.repos.customers.markPhoneVerified(customer.id)) ?? customer;
-      }
+    // The caller has just proven the phone. Identity is the VERIFIED owner of the number (never an account that
+    // only typed it); a first-time number becomes a new verified customer.
+    const { customer } = await this.repos.customers.createIfAbsent({ phone, phoneVerifiedAt: new Date() });
+    if (!customer || customer.status !== 'active') {
+      throw new CustomerAuthError('This account is not active.', 'CUSTOMER_SUSPENDED');
     }
 
     const accessToken = await signCustomerAccessToken(

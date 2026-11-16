@@ -14,8 +14,17 @@ function createFakeRepos() {
 
   return {
     customers: {
-      async findByPhone(phone: string) {
-        return [...customers.values()].find((c) => c.phone === phone && !c.isDeleted);
+      /** Mirrors the real repository: identity is the VERIFIED owner of the number, created on first proof. */
+      async createIfAbsent(input: { phone: string; phoneVerifiedAt: Date }) {
+        const verified = [...customers.values()].find(
+          (c) => c.phone === input.phone && c.phoneVerifiedAt && !c.isDeleted,
+        );
+        if (verified) return { customer: verified, created: false };
+        const created = await (this as { create(i: NewCustomer): Promise<Customer> }).create({
+          phone: input.phone,
+          phoneVerifiedAt: input.phoneVerifiedAt,
+        });
+        return { customer: created, created: true };
       },
       async create(input: NewCustomer): Promise<Customer> {
         const customer: Customer = {
@@ -39,11 +48,6 @@ function createFakeRepos() {
           deletedBy: null,
         };
         customers.set(customer.id, customer);
-        return customer;
-      },
-      async markPhoneVerified(id: string) {
-        const customer = customers.get(id);
-        if (customer) customer.phoneVerifiedAt = new Date();
         return customer;
       },
     },

@@ -105,16 +105,29 @@ export class CustomerLookupService {
 
     const phoneHash = await phoneAuditHash(input.phone, this.secrets.QR_TOKEN_SECRET);
     const cashierMark = input.cashier ? { client: 'cashier', branchId: input.cashier.branchId } : {};
-    const customer = await this.repos.customers.findByPhone(input.phone);
     // CUSTOMER-PHONE-01 (reverses #462): finding a member by phone does NOT require a verified phone. The match is
     // scoped to THIS business's own members (no global directory), the phone is masked, misses are throttled and
     // audited, and the result says whether the phone was ever verified so the cashier can confirm the name. A phone
     // match alone never authorizes a reward or redemption: the actions below carry no redemption, and each purchase
     // keeps its own authorization.
-    const membership =
-      customer && customer.status === 'active'
-        ? await this.repos.customerMemberships.findActive(customer.id, input.businessId)
-        : undefined;
+    //
+    // Several customers may hold the same UNVERIFIED number, so the match is resolved among this business's active
+    // members: one candidate is a hit; with several, the VERIFIED owner wins; any remaining tie is a miss (fail
+    // closed: the cashier falls back to the customer's QR) and is indistinguishable from "not found".
+    const holders = await this.repos.customers.listByPhone(input.phone);
+    const members: Array<{
+      customer: (typeof holders)[number];
+      membership: NonNullable<Awaited<ReturnType<LookupRepos['customerMemberships']['findActive']>>>;
+    }> = [];
+    for (const holder of holders) {
+      if (holder.status !== 'active') continue;
+      const found = await this.repos.customerMemberships.findActive(holder.id, input.businessId);
+      if (found) members.push({ customer: holder, membership: found });
+    }
+    const verifiedMembers = members.filter((m) => m.customer.phoneVerifiedAt);
+    const chosen = verifiedMembers.length === 1 ? verifiedMembers[0] : members.length === 1 ? members[0] : undefined;
+    const customer = chosen?.customer;
+    const membership = chosen?.membership;
     const account =
       customer && membership
         ? await this.repos.loyaltyAccounts.findByCustomerAndBusiness(customer.id, input.businessId)
