@@ -455,9 +455,10 @@ describe.skipIf(!process.env.DATABASE_URL)('NETWORK-05 real HTTP-to-Postgres lif
         await page.getByRole('button', { name: 'Save draft revision', exact: true }).click();
         await browserExpect(page.getByRole('status')).toContainText('Draft saved.');
         await page.getByRole('button', { name: 'Submit for approval', exact: true }).click();
+        await browserExpect(page).toHaveURL(webUrl + '/platform/network-moderation');
         await browserExpect(
-          page.getByText('Draft submitted for approval.', { exact: true }),
-        ).toBeVisible();
+          page.getByRole('article').filter({ hasText: draft.handle }),
+        ).toContainText('Browser edited text');
         for (const [moderator, result] of [
           [moderatorA, 'Approval recorded (1 of 2).'],
           [moderatorB, 'Revision published.'],

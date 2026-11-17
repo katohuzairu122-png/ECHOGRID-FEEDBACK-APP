@@ -11,6 +11,9 @@ const mocks = vi.hoisted(() => ({
   api: vi.fn(),
   user: vi.fn(),
   revalidate: vi.fn(),
+  redirect: vi.fn(() => {
+    throw Object.assign(new Error('REDIRECT'), { digest: 'NEXT_REDIRECT' });
+  }),
   notFound: vi.fn(() => {
     throw Error('NOT_FOUND');
   }),
@@ -21,7 +24,7 @@ vi.mock('@/lib/api-client', async () => ({
 }));
 vi.mock('@/lib/platform', () => ({ getCurrentUser: mocks.user }));
 vi.mock('next/cache', () => ({ revalidatePath: mocks.revalidate }));
-vi.mock('next/navigation', () => ({ notFound: mocks.notFound }));
+vi.mock('next/navigation', () => ({ notFound: mocks.notFound, redirect: mocks.redirect }));
 
 const admin = { platformRole: 'admin', impersonatedBy: null };
 const handle = 'a'.repeat(22);
@@ -121,6 +124,14 @@ describe('moderation server boundary', () => {
       'error',
     );
     expect(mocks.api).not.toHaveBeenCalled();
+  });
+
+  it('returns a successfully submitted saved draft to the queue without swallowing the redirect', async () => {
+    mocks.api.mockResolvedValue({ status: 'submitted' });
+    await expect(
+      moderatePost({}, form({ operation: 'submit', target: handle, returnToQueue: 'on' })),
+    ).rejects.toThrow('REDIRECT');
+    expect(mocks.redirect).toHaveBeenCalledExactlyOnceWith(moderationPath);
   });
 
   it('reports the first approval without implying publication', async () => {

@@ -157,6 +157,7 @@ export function Authoring({ initialDraft }: { initialDraft?: NetworkSavedDraftDt
       )}
       <form action={submit} className="space-y-2" aria-busy={submitting}>
         <input type="hidden" name="operation" value="submit" />
+        {initialDraft && <input type="hidden" name="returnToQueue" value="on" />}
         <Label htmlFor="submit-handle">Saved draft handle</Label>
         <Input
           key={draft.handle}

@@ -1,6 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import { redirect } from 'next/navigation';
 import { apiFetch, ApiError } from '@/lib/api-client';
 import { getCurrentUser } from '@/lib/platform';
 import { rethrowControlFlow } from '@/lib/rethrow-control-flow';
@@ -76,6 +77,9 @@ export async function moderatePost(
       }
     >(moderationPath + path, { method, ...(body === undefined ? {} : { body }) });
     revalidatePath(moderationPath);
+    if (operation === 'submit' && form.get('returnToQueue') === 'on') {
+      redirect(moderationPath);
+    }
     if (operation === 'approve') {
       return response.status === 'published'
         ? { notice: 'Revision published.', ...(response.post ? { post: response.post } : {}) }
