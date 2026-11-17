@@ -7,6 +7,7 @@ import { setRotatingCustomerSession } from '@/lib/customer-session';
 import { revokeRotatingCustomerSession } from '@/lib/customer-session-refresh';
 import { safeInternalPath } from '@/lib/safe-redirect';
 import { getCustomerPasswordMinLength, passwordLength } from '@/lib/customer-password-policy';
+import { logEmailAuthWebUnavailable, type EmailAuthWebAction } from '@/lib/customer-email-auth-diagnostics';
 
 /**
  * Email sign-up and sign-in (CUSTOMER-AUTH-S5-03). Errors are CODES, not English text, so the screens translate them and no
@@ -32,24 +33,38 @@ function codeFor(status: number, mapping: Partial<Record<number, EmailAuthErrorC
   return mapping[status] ?? (status === 429 ? 'rate_limited' : status === 400 ? 'invalid_input' : 'unavailable');
 }
 
+/** Passes the code through; when it is the generic "unavailable", records which status caused it. */
+function unmappedLogged(code: EmailAuthErrorCode, action: EmailAuthWebAction, status: number): EmailAuthErrorCode {
+  if (code === 'unavailable') logEmailAuthWebUnavailable('api_unexpected_status', { action, status });
+  return code;
+}
+
 /** Step 1 of sign-up: ask for a confirmation email. Always `sent` for a well-formed address (no enumeration). */
 export async function requestEmailRegistrationAction(_prev: EmailAuthState, formData: FormData): Promise<EmailAuthState> {
-  if (!isCustomerEmailAuthWebEnabled()) return { error: 'unavailable' };
+  if (!isCustomerEmailAuthWebEnabled()) {
+    logEmailAuthWebUnavailable('web_flag_disabled', { action: 'register_request' });
+    return { error: 'unavailable' };
+  }
   const email = text(formData, 'email').toLowerCase();
   if (!EMAIL.test(email) || email.length > 254) return { error: 'invalid_input' };
   try {
     const reply = await callCustomerAuthApi('/customer-auth/email/register/request', { body: { email } });
-    return reply.status === 202 ? { sent: true } : { error: codeFor(reply.status, {}) };
-  } catch {
+    if (reply.status === 202) return { sent: true };
+    return { error: unmappedLogged(codeFor(reply.status, {}), 'register_request', reply.status) };
+  } catch (error) {
+    logEmailAuthWebUnavailable('api_fetch_failed', { action: 'register_request', error });
     return { error: 'unavailable' };
   }
 }
 
-async function signIn(email: string, password: string): Promise<EmailAuthErrorCode | null> {
+async function signIn(email: string, password: string, action: EmailAuthWebAction): Promise<EmailAuthErrorCode | null> {
   const reply = await callCustomerAuthApi('/customer-auth/email/login', { body: { email, password } });
-  if (reply.status !== 200) return codeFor(reply.status, { 401: 'invalid_credentials' });
+  if (reply.status !== 200) return unmappedLogged(codeFor(reply.status, { 401: 'invalid_credentials' }), action, reply.status);
   const credentials = readRefreshResponse(reply.body);
-  if (!credentials) return 'unavailable';
+  if (!credentials) {
+    logEmailAuthWebUnavailable('api_response_unreadable', { action });
+    return 'unavailable';
+  }
   await setRotatingCustomerSession(credentials);
   return null;
 }
@@ -60,7 +75,10 @@ async function signIn(email: string, password: string): Promise<EmailAuthErrorCo
  * both are `invalid_proof`.
  */
 export async function completeEmailRegistrationAction(_prev: EmailAuthState, formData: FormData): Promise<EmailAuthState> {
-  if (!isCustomerEmailAuthWebEnabled()) return { error: 'unavailable' };
+  if (!isCustomerEmailAuthWebEnabled()) {
+    logEmailAuthWebUnavailable('web_flag_disabled', { action: 'register_complete' });
+    return { error: 'unavailable' };
+  }
   const email = text(formData, 'email').toLowerCase();
   const password = String(formData.get('password') ?? '');
   const [challengeId = '', proof = ''] = text(formData, 'challenge').split('.');
@@ -76,25 +94,30 @@ export async function completeEmailRegistrationAction(_prev: EmailAuthState, for
     const reply = await callCustomerAuthApi('/customer-auth/email/register/complete', {
       body: { email, challengeId, proof, password, ...(phone ? { phone } : {}) },
     });
-    if (reply.status !== 201) return { error: codeFor(reply.status, { 401: 'invalid_proof' }) };
-    const failure = await signIn(email, password);
+    if (reply.status !== 201) return { error: unmappedLogged(codeFor(reply.status, { 401: 'invalid_proof' }), 'register_complete', reply.status) };
+    const failure = await signIn(email, password, 'register_complete');
     return failure ? { error: failure } : { success: true, next };
-  } catch {
+  } catch (error) {
+    logEmailAuthWebUnavailable('api_fetch_failed', { action: 'register_complete', error });
     return { error: 'unavailable' };
   }
 }
 
 /** Email and password sign-in. Returns only after the cookies are set; the client then navigates with a fresh document load. */
 export async function loginWithEmailAction(_prev: EmailAuthState, formData: FormData): Promise<EmailAuthState> {
-  if (!isCustomerEmailAuthWebEnabled()) return { error: 'unavailable' };
+  if (!isCustomerEmailAuthWebEnabled()) {
+    logEmailAuthWebUnavailable('web_flag_disabled', { action: 'login' });
+    return { error: 'unavailable' };
+  }
   const email = text(formData, 'email').toLowerCase();
   const password = String(formData.get('password') ?? '');
   const next = safeInternalPath(String(formData.get('next') ?? '/loyalty/dashboard'), '/loyalty/dashboard');
   if (!EMAIL.test(email) || password.length === 0) return { error: 'invalid_credentials' };
   try {
-    const failure = await signIn(email, password);
+    const failure = await signIn(email, password, 'login');
     return failure ? { error: failure } : { success: true, next };
-  } catch {
+  } catch (error) {
+    logEmailAuthWebUnavailable('api_fetch_failed', { action: 'login', error });
     return { error: 'unavailable' };
   }
 }
