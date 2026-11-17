@@ -291,11 +291,6 @@ jobs:
       - name: Install Chromium
         run: pnpm --filter @echo-grid-feedback/web exec playwright install --with-deps chromium
 
-      - name: NETWORK-05 disposable moderation browser lifecycle
-        run: pnpm --filter @echo-grid-feedback/api exec vitest run --config vitest.integration.config.ts test/integration/network-draft-publication.integration.test.ts -t "browser resumes"
-        env:
-          NETWORK_LIFECYCLE_BROWSER: "true"
-
       - name: Block 2D browser verification
         run: pnpm block14:e2e
 

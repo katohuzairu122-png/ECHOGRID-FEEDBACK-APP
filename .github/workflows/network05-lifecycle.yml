@@ -1,0 +1,63 @@
+name: NETWORK-05 disposable moderation lifecycle
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/network05-lifecycle.yml'
+      - 'apps/api/test/integration/network-draft-publication.integration.test.ts'
+      - 'apps/api/src/network/**'
+      - 'apps/api/src/platform/network-*'
+      - 'apps/web/src/app/platform/network-moderation/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: network05-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lifecycle:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: echogrid
+          POSTGRES_PASSWORD: echogrid
+          POSTGRES_DB: network05_disposable
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://echogrid:echogrid@localhost:5432/network05_disposable
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.9.0
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Initialize disposable database from existing migrations
+        run: pnpm --filter @echo-grid-feedback/api db:migrate
+      - name: Verify lifecycle against real PostgreSQL
+        run: pnpm --filter @echo-grid-feedback/api exec vitest run --config vitest.integration.config.ts test/integration/network-draft-publication.integration.test.ts
+      - name: Build web for real Server Actions
+        run: pnpm --filter @echo-grid-feedback/web build
+      - name: Install Chromium
+        run: pnpm --filter @echo-grid-feedback/api exec playwright install --with-deps chromium
+      - name: Browser saved-draft-to-publication lifecycle
+        run: pnpm --filter @echo-grid-feedback/api exec vitest run --config vitest.integration.config.ts test/integration/network-draft-publication.integration.test.ts -t "browser resumes"
+        env:
+          NETWORK_LIFECYCLE_BROWSER: "true"
