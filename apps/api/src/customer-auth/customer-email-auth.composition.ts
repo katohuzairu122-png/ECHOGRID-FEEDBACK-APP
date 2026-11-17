@@ -10,6 +10,7 @@ import { createRegistrationProofDelivery } from './customer-email-auth.delivery'
 import { createIsolatedCustomerEmailAuthRoutes, type IsolatedEmailAuthDependencies } from './customer-email-auth.routes';
 import { customerChallengeDigest } from './customer-email-challenge-digest';
 import { CustomerSessionService } from './customer-session.service';
+import { logEmailAuthUnavailable } from './customer-email-auth.diagnostics';
 import { CustomerPasswordAuthService } from './customer-password-auth.service';
 import {
   type ResolvedEmailAuthConfig,
@@ -44,7 +45,8 @@ export function createCustomerEmailAuthComposition(options: {
     let runtime: EmailAuthRuntime | null = null;
     try {
       runtime = await options.open(c);
-    } catch {
+    } catch (error) {
+      logEmailAuthUnavailable('runtime_open_failed', { surface: 'runtime', error });
       runtime = null;
     }
     if (!runtime) return c.json({ error: 'Service unavailable' }, 503);
@@ -112,7 +114,10 @@ export function createEmailAuthDependencies(config: ResolvedEmailAuthConfig, par
 export async function openEmailAuthRuntime(c: Context): Promise<EmailAuthRuntime | null> {
   const env = c.env as Bindings;
   const resolved = resolveEmailAuthConfig(env);
-  if (!resolved.ok) return null;
+  if (!resolved.ok) {
+    logEmailAuthUnavailable('config_incomplete', { surface: 'runtime', missing: resolved.missing });
+    return null;
+  }
   const { config } = resolved;
 
   const closers: Array<() => Promise<void>> = [];
