@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { ApiError, apiFetch } from '@/lib/api-client';
 import { getCurrentUser } from '@/lib/platform';
@@ -13,5 +14,12 @@ export default async function NetworkModerationPage() {
     if (error instanceof ApiError && [401, 403, 404].includes(error.status)) notFound();
     throw error;
   }
-  return <ModerationWorkspace queue={queue} />;
+  return (
+    <div className="space-y-4">
+      <Link className="underline" href={`${moderationPath}/history`}>
+        Moderation history
+      </Link>
+      <ModerationWorkspace queue={queue} />
+    </div>
+  );
 }

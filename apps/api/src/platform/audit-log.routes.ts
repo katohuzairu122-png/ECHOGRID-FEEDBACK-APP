@@ -7,6 +7,7 @@ import { authenticate, type AuthVariables } from '../middleware/authenticate';
 import { requirePlatformRole, type PlatformVariables } from '../middleware/require-platform-role';
 import { ok } from '../lib/response';
 import { AppError } from '../lib/errors';
+import { platformRoleHasNetworkPermission } from './network-permissions';
 
 type Env = {
   Bindings: Bindings;
@@ -66,7 +67,10 @@ platformAuditLogRoutes.get('/', async (c) => {
   const { db, close } = await createDb(c.env.HYPERDRIVE);
   try {
     const entries = await createRepositories(db).auditLog.listAllWithDetails(
-      { businessId, actorUserId, entityType, action, from, to },
+      {
+        businessId, actorUserId, entityType, action, from, to,
+        excludeNetworkModeration: !platformRoleHasNetworkPermission(c.get('platformRole'), 'network:moderate'),
+      },
       { limit, offset },
     );
     return ok(c, entries.map(toPlatformAuditLogEntryDto));

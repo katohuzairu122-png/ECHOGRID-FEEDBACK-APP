@@ -1,4 +1,4 @@
-import { eq, and, or, gte, lte, lt, inArray, count, sql, desc, type SQL } from 'drizzle-orm';
+import { eq, and, or, ne, gte, lte, lt, inArray, count, sql, desc, type SQL } from 'drizzle-orm';
 import { auditLog, users } from '../db/schema';
 import { MARKED_ACTIONS, SESSION_ACTIONS, type ActivityFilter } from '../cashier-activity/categories';
 import { BaseRepository } from './base.repository';
@@ -112,6 +112,7 @@ export class AuditLogRepository extends BaseRepository {
       actorUserId?: string | undefined;
       entityType?: string | undefined;
       action?: string | undefined;
+      excludeNetworkModeration?: boolean;
       from?: Date | undefined;
       to?: Date | undefined;
     } = {},
@@ -120,6 +121,7 @@ export class AuditLogRepository extends BaseRepository {
     const limit = Math.min(pagination.limit ?? DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE);
     const rows = await this.db.query.auditLog.findMany({
       where: and(
+        filters.excludeNetworkModeration ? ne(auditLog.entityType, 'network_post') : undefined,
         filters.businessId ? eq(auditLog.businessId, filters.businessId) : undefined,
         filters.actorUserId ? eq(auditLog.actorUserId, filters.actorUserId) : undefined,
         filters.entityType ? eq(auditLog.entityType, filters.entityType) : undefined,
