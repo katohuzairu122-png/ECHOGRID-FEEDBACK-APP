@@ -63,3 +63,31 @@ describe('customerApiFetch with rotating sessions', () => {
     expect((h.fetch.mock.calls[0]![1] as RequestInit).headers).toSatisfy((hd: Headers) => hd.get('authorization') === 'Bearer legacy-token');
   });
 });
+
+describe('a 401 that answers a submitted code is not a session failure (staging phone-attachment acceptance)', () => {
+  const wrongCode = () => Response.json({ success: false, error: { code: 'OTP_INVALID', message: 'Code is invalid or has expired.' } }, { status: 401 });
+  const suspended = () => Response.json({ success: false, error: { code: 'CUSTOMER_SUSPENDED', message: 'suspended' } }, { status: 401 });
+
+  it('a wrong OTP on a rotating session surfaces as an ApiError (the code step stays open); it never redirects to refresh or sign-in', async () => {
+    h.values.set(ACCESS, 'access-token');
+    h.values.set(REFRESH, 'r'.repeat(43));
+    h.fetch.mockResolvedValue(wrongCode());
+    await expect(customerApiFetch('/loyalty/me/phone/verify', { method: 'POST', body: '{}' }, '/loyalty/dashboard/phone')).rejects.toMatchObject({ status: 401, code: 'OTP_INVALID' });
+    expect(h.redirect).not.toHaveBeenCalled();
+  });
+
+  it('a wrong OTP on a legacy-only session is the same: no redirect to sign-in', async () => {
+    h.values.set(CUSTOMER_TOKEN_COOKIE, 'legacy-token');
+    h.fetch.mockResolvedValue(wrongCode());
+    await expect(customerApiFetch('/loyalty/me/phone/verify', { method: 'POST', body: '{}' }, '/loyalty/dashboard/phone')).rejects.toMatchObject({ code: 'OTP_INVALID' });
+    expect(h.redirect).not.toHaveBeenCalled();
+  });
+
+  it('real session failures still redirect: UNAUTHENTICATED (expired/invalid token) and CUSTOMER_SUSPENDED', async () => {
+    h.values.set(CUSTOMER_TOKEN_COOKIE, 'legacy-token');
+    h.fetch.mockResolvedValue(unauthorized());
+    await expect(customerApiFetch('/loyalty/me/x')).rejects.toThrow(target('/loyalty/login'));
+    h.fetch.mockResolvedValue(suspended());
+    await expect(customerApiFetch('/loyalty/me/x')).rejects.toThrow(target('/loyalty/login'));
+  });
+});

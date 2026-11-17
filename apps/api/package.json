@@ -29,7 +29,8 @@
     "test:watch": "vitest",
     "test:integration": "vitest run --config vitest.integration.config.ts",
     "test:workers": "vitest run --config vitest.workers.config.ts",
-    "billing:stripe:provision": "node scripts/provision-stripe-catalog.mjs"
+    "billing:stripe:provision": "node scripts/provision-stripe-catalog.mjs",
+    "test:workers:local": "vitest run --config vitest.workers-local.config.ts"
   },
   "dependencies": {
     "hono": "^4.7.0",

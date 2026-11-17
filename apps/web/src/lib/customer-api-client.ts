@@ -68,7 +68,10 @@ export async function customerApiFetch<T>(
   try {
     return await parseEnvelope<T>(response);
   } catch (err) {
-    if (err instanceof ApiError && err.status === 401) {
+    // A 401 normally means the session is gone. The one exception is OTP_INVALID: the API answers a wrong or expired phone
+    // code with 401 too (it is a reply to the code the customer just typed, not a verdict on their session), so it must reach
+    // the caller and keep the code step open instead of bouncing the customer to refresh or sign-in.
+    if (err instanceof ApiError && err.status === 401 && err.code !== 'OTP_INVALID') {
       redirect((await canRefresh()) ? refreshPath : loginPath);
     }
     // Every other failure keeps surfacing as an ApiError for the nearest
