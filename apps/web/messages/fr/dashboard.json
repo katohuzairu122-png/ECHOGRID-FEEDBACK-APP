@@ -19,7 +19,8 @@
     "customerQr": "QR client",
     "settlements": "Règlement des récompenses orphelines",
     "serve": "Servir les clients",
-    "cashierApp": "Application de caisse"
+    "cashierApp": "Application de caisse",
+    "surveys": "Enquêtes"
   },
   "home": {
     "branchesTitle": "Succursales",
@@ -213,5 +214,31 @@
     "forbiddenBody": "Demandez à un propriétaire ou à un administrateur de l’entreprise si vous en avez besoin.",
     "retry": "Réessayer",
     "logout": "Se déconnecter"
+  },
+  "surveys": {
+    "title": "Enquêtes",
+    "description": "Lecture seule. Les enquêtes et campagnes de votre entreprise. La création, la publication et le lancement de campagnes ne sont pas encore disponibles ici.",
+    "surveysHeading": "Enquêtes",
+    "surveysDescription": "Enquêtes appartenant à votre entreprise.",
+    "surveysEmpty": "Votre entreprise n'a pas encore d'enquête.",
+    "campaignsHeading": "Campagnes",
+    "campaignsDescription": "Campagnes qui diffusent vos enquêtes.",
+    "campaignsEmpty": "Votre entreprise n'a pas encore de campagne d'enquête.",
+    "forbidden": "Les enquêtes sont visibles pour les utilisateurs ayant l'accès aux enquêtes de cette entreprise.",
+    "unavailable": "Impossible de charger les enquêtes pour le moment.",
+    "retry": "Réessayer",
+    "surveyStatus": {
+      "draft": "Brouillon",
+      "published": "Publiée",
+      "paused": "En pause",
+      "closed": "Clôturée",
+      "archived": "Archivée"
+    },
+    "campaignStatus": {
+      "draft": "Brouillon",
+      "active": "Active",
+      "paused": "En pause",
+      "closed": "Clôturée"
+    }
   }
 }
