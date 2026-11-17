@@ -9,8 +9,10 @@ const escapeHtml = (value: string) => value
  * The proof travels in the URL FRAGMENT (`#c=<challengeId>.<proof>`): fragments are not sent to servers, not logged
  * and not forwarded in referrers. The web page (a later stage) reads it client-side and submits it with the password.
  */
+export const REGISTRATION_VERIFY_PATH = '/loyalty/signup/verify'; // apps/web/src/app/loyalty/signup/verify/page.tsx (the customer page, not the staff /signup)
+
 export function buildRegistrationProofLink(webBaseUrl: string, challengeId: string, proof: string): string {
-  return `${webBaseUrl.replace(/\/+$/, '')}/signup/verify#c=${encodeURIComponent(`${challengeId}.${proof}`)}`;
+  return `${webBaseUrl.replace(/\/+$/, '')}${REGISTRATION_VERIFY_PATH}#c=${encodeURIComponent(`${challengeId}.${proof}`)}`;
 }
 
 /** Delivers the registration proof through the existing EmailService. Never logs the recipient, link or proof. */

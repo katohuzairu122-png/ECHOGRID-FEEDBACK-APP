@@ -61,9 +61,12 @@ test.describe('verification and password policy (minimum 8)', () => {
     await page.goto(verifyUrl);
     await expect(page.getByText('At least 8 characters.')).toBeVisible();
     await page.getByLabel('Confirm your email').fill(email);
-    await page.getByLabel('Choose a password').fill('rBq4nZx'); // 7 characters
+    const password = page.getByLabel('Choose a password');
+    await password.fill('rBq4nZx'); // 7 characters
+    // The input carries the configured minimum natively, so a real browser refuses the submit before any server call. (The
+    // server-side message for non-browser clients is covered by the unit and integration tests.)
+    expect(await password.evaluate((el: HTMLInputElement) => el.validity.tooShort)).toBe(true);
     await page.getByRole('button', { name: 'Create account' }).click();
-    await expect(page.getByText('Your password must be at least 8 characters.')).toBeVisible();
     await expect(page).toHaveURL(/\/loyalty\/signup\/verify/); // not signed in; the link is not consumed
   });
 
