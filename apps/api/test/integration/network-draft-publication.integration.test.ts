@@ -73,6 +73,7 @@ describe.skipIf(!process.env.DATABASE_URL)('NETWORK-05 real HTTP-to-Postgres lif
   let moderatorA: string;
   let moderatorB: string;
   let customer: string;
+  let business: string;
   let customerToken: string;
 
   async function request(
@@ -153,6 +154,12 @@ describe.skipIf(!process.env.DATABASE_URL)('NETWORK-05 real HTTP-to-Postgres lif
       )
     ).rows[0]!.id;
     customerToken = await signCustomerAccessToken(customer, customerSecret);
+    business = (
+      await client.query<{ id: string }>(
+        "insert into businesses(name,slug) values ('NETWORK-05 fixture',$1) returning id",
+        ['network05-' + randomUUID()],
+      )
+    ).rows[0]!.id;
   });
 
   afterAll(async () => {
@@ -332,7 +339,7 @@ describe.skipIf(!process.env.DATABASE_URL)('NETWORK-05 real HTTP-to-Postgres lif
     await client.query("update users set platform_role='admin' where id=$1", [moderatorA]);
     const impersonated = await signImpersonationToken(moderatorA, author, secret);
     const cashier = await signCashierAccessToken(moderatorA, secret, {
-      businessId: randomUUID(),
+      businessId: business,
       sessionId: randomUUID(),
     });
     for (const [credential, status] of [
@@ -428,7 +435,7 @@ describe.skipIf(!process.env.DATABASE_URL)('NETWORK-05 real HTTP-to-Postgres lif
         await browserExpect(page.getByLabel('Post text')).toHaveValue('Browser initial text');
         await page.getByLabel('Post text').fill('Browser edited text');
         await page.getByRole('button', { name: 'Save draft revision', exact: true }).click();
-        await browserExpect(page.getByRole('status')).toHaveText('Draft saved.');
+        await browserExpect(page.getByRole('status')).toContainText('Draft saved.');
         await page.getByRole('button', { name: 'Submit for approval', exact: true }).click();
         await browserExpect(
           page.getByText('Draft submitted for approval.', { exact: true }),

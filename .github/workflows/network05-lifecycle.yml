@@ -32,7 +32,7 @@ jobs:
         ports:
           - 5432:5432
         options: >-
-          --health-cmd pg_isready
+          --health-cmd "pg_isready -U echogrid -d network05_disposable"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
@@ -52,7 +52,7 @@ jobs:
       - name: Initialize disposable database from existing migrations
         run: pnpm --filter @echo-grid-feedback/api db:migrate
       - name: Verify lifecycle against real PostgreSQL
-        run: pnpm --filter @echo-grid-feedback/api exec vitest run --config vitest.integration.config.ts test/integration/network-draft-publication.integration.test.ts
+        run: pnpm --filter @echo-grid-feedback/api exec vitest run --config vitest.integration.config.ts test/integration/network-draft-publication.integration.test.ts test/integration/network-posts.integration.test.ts test/integration/network-saved-drafts.integration.test.ts test/integration/network-moderation-history.integration.test.ts
       - name: Build web for real Server Actions
         run: pnpm --filter @echo-grid-feedback/web build
       - name: Install Chromium
