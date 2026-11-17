@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { Client } from 'pg';
 import { Hono } from 'hono';
+import { sign } from 'hono/jwt';
 import { sql } from 'drizzle-orm';
 import { buildDb } from '../../src/db/client';
 import type { Bindings } from '../../src/config/env';
@@ -160,5 +161,50 @@ describe.skipIf(!process.env.DATABASE_URL)('Rotating customer sessions in the cu
     const id = await phoneCustomer();
     await db.execute(sql`update customers set status = 'suspended' where id = ${id}`);
     expect((await me(app, await signCustomerAccessToken(id, LEGACY_SECRET))).status).toBe(401);
+  });
+  // --- STAGING ACCEPTANCE CLOSURE: legacy-token compatibility, expiry, deletion and session isolation (real Postgres) ---
+  const rawLegacy = (claims: Record<string, unknown>, secret = LEGACY_SECRET) => {
+    const iat = Math.floor(Date.now() / 1000);
+    return sign({ type: 'customer_access', iat, exp: iat + 900, ...claims }, secret, 'HS256');
+  };
+
+  it('an EXPIRED legacy token is refused even for an otherwise valid phone customer', async () => {
+    const id = await phoneCustomer();
+    const past = Math.floor(Date.now() / 1000) - 3600;
+    expect((await me(app, await rawLegacy({ sub: id, iat: past - 900, exp: past }))).status).toBe(401);
+    expect((await me(app, await rawLegacy({ sub: id }))).status).toBe(200); // the same customer with a live token still works
+  });
+
+  it('a legacy token of the wrong type, or for a customer that does not exist, is refused', async () => {
+    const id = await phoneCustomer();
+    expect((await me(app, await rawLegacy({ sub: id, type: 'customer_refresh' }))).status).toBe(401);
+    expect((await me(app, await rawLegacy({ sub: crypto.randomUUID() }))).status).toBe(401);
+  });
+
+  it('a legacy token for a soft-deleted customer is refused', async () => {
+    const id = await phoneCustomer();
+    expect((await me(app, await rawLegacy({ sub: id }))).status).toBe(200);
+    await db.execute(sql`update customers set is_deleted = true, deleted_at = now() where id = ${id}`);
+    expect((await me(app, await rawLegacy({ sub: id }))).status).toBe(401);
+  });
+
+  it('session isolation: each token resolves to its own customer only, and revoking one customer changes nothing for another', async () => {
+    const legacyId = await phoneCustomer();
+    const { customerId: emailId, session } = await emailSession();
+    const legacyToken = await signCustomerAccessToken(legacyId, LEGACY_SECRET);
+    const legacyResponse = await me(app, legacyToken);
+    const emailResponse = await me(app, session.accessToken);
+    expect(await legacyResponse.json()).toEqual({ customerId: legacyId });
+    expect(await emailResponse.json()).toEqual({ customerId: emailId });
+    expect(legacyId).not.toBe(emailId);
+    // Revoke the email customer's session: it dies at once; the other customer's legacy token is untouched.
+    expect(await sessions.revokeSession({ customerId: emailId, sessionId: session.sessionId })).toBe(true);
+    expect((await me(app, session.accessToken)).status).toBe(401);
+    expect((await me(app, legacyToken)).status).toBe(200);
+  });
+
+  it('a token signed with the rotating key is not accepted as a legacy token and vice versa (the two keyspaces stay separate)', async () => {
+    const id = await phoneCustomer();
+    expect((await me(app, await rawLegacy({ sub: id }, 's'.repeat(40)))).status).toBe(401);
   });
 });
