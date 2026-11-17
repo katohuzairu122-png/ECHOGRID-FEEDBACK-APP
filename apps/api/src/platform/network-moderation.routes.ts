@@ -10,6 +10,7 @@ import { ok } from '../lib/response';
 import { AppError } from '../lib/errors';
 import { NETWORK_LOCALES } from '../db/schema/network-posts';
 import { NetworkPostService, type NetworkPostRow } from '../network/network-post.service';
+import { listNetworkModerationHistory } from '../network/network-moderation-history';
 import { isNetworkFeedEnabled } from '../network/network-flag';
 import { requireNetworkPlatformPermission } from './network-permissions';
 
@@ -67,6 +68,23 @@ export function createNetworkModerationRoutes(options: { open?: (c: Context<Env>
 
   const audit = (c: Context<Env>, action: string, entityId: string, details?: unknown) =>
     c.set('auditMetadata', { action, entityType: 'network_post', entityId, ...(details !== undefined ? { details } : {}) });
+
+  routes.get('/history', requireNetworkPlatformPermission('network:moderate'), async (c) => {
+    c.header('Cache-Control', 'private, no-store');
+    const params = new URL(c.req.url).searchParams;
+    const cursors = params.getAll('cursor');
+    const cursor = cursors[0];
+    if (Array.from(params.keys()).some((key) => key !== 'cursor') || cursors.length > 1 ||
+        (cursor !== undefined && !z.uuid().safeParse(cursor).success)) {
+      throw new AppError('Invalid history pagination.', 400, 'INVALID_HISTORY_PAGINATION');
+    }
+    const { db, release } = await open(c);
+    try {
+      return ok(c, await listNetworkModerationHistory(db, cursor));
+    } finally {
+      release();
+    }
+  });
 
   routes.get('/queue', requireNetworkPlatformPermission('network:moderate'), async (c) =>
     run(c, async (service) => {

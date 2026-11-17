@@ -296,3 +296,30 @@ export const applyCustomerSanctionSchema = z
   });
 
 export type ApplyCustomerSanctionInput = z.infer<typeof applyCustomerSanctionSchema>;
+
+export const NETWORK_MODERATION_HISTORY_STATUS = {
+  'network.post_draft_created': 'draft',
+  'network.post_draft_saved': 'draft',
+  'network.revision_submitted': 'submitted',
+  'network.revision_approved': 'approval_recorded',
+  'network.post_published': 'published',
+  'network.revision_rejected': 'rejected',
+  'network.post_suspended': 'suspended',
+  'network.post_lifted': 'published',
+  'network.post_withdrawn': 'withdrawn',
+  'network.post_pinned': 'pinned',
+  'network.post_unpinned': 'unpinned',
+} as const;
+
+export type NetworkModerationHistoryAction = keyof typeof NETWORK_MODERATION_HISTORY_STATUS;
+
+export interface NetworkModerationHistoryPageDto {
+  entries: {
+    occurredAt: string;
+    action: NetworkModerationHistoryAction;
+    status: (typeof NETWORK_MODERATION_HISTORY_STATUS)[NetworkModerationHistoryAction];
+    postHandle: string | null;
+    actorUserId: string | null;
+  }[];
+  nextCursor: string | null;
+}
