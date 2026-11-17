@@ -1,0 +1,13 @@
+# LOCAL, OFFLINE Workers-runtime test harness only (no remote bindings). Never deployed.
+name = "echogrid-workers-local-test"
+main = "./test/workers-local/worker.ts"
+compatibility_date = "2025-06-01"
+compatibility_flags = ["nodejs_compat"]
+
+[[durable_objects.bindings]]
+name = "CUSTOMER_AUTH_RATE_LIMIT"
+class_name = "CustomerEmailRateLimit"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["CustomerEmailRateLimit"]
