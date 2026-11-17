@@ -26,7 +26,9 @@ export function createCustomerSessionBff(options: {
 }) {
   const send = (path: '/refresh' | '/logout', credential: string) => options.callApi(path, {
     method: 'POST',
-    redirect: 'error',
+    // 'manual', never 'error': the Workers runtime throws a TypeError for redirect:'error' before sending anything. A 3xx reply is
+    // not `ok`, so it is answered as a failure below; a redirect is never followed.
+    redirect: 'manual',
     cache: 'no-store',
     headers: { Authorization: `Bearer ${credential}` },
   });

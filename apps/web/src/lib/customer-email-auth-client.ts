@@ -20,9 +20,13 @@ export async function callCustomerAuthApi(
     method: 'POST',
     headers,
     body: init.body === undefined ? null : JSON.stringify(init.body),
-    redirect: 'error',
+    // 'manual', never 'error': the Workers runtime does not implement redirect:'error' and throws a TypeError before any request
+    // is sent (every call then looked "unavailable"). 'manual' still refuses to follow a redirect, so the bearer credential
+    // cannot be forwarded elsewhere; the 3xx is returned as a status, which the callers treat as a failure.
+    redirect: 'manual',
     cache: 'no-store',
   });
+  if (response.status >= 300 && response.status < 400) return { status: response.status, body: null };
   const body = await response.json().catch(() => null);
   return { status: response.status, body };
 }
