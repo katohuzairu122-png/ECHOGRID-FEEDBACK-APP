@@ -19,7 +19,8 @@
     "customerQr": "Customer QR",
     "settlements": "Orphan settlement",
     "serve": "Serve customers",
-    "cashierApp": "Cashier app"
+    "cashierApp": "Cashier app",
+    "surveys": "Surveys"
   },
   "home": {
     "branchesTitle": "Branches",
@@ -213,5 +214,31 @@
     "forbiddenBody": "Ask a business owner or administrator if you need it.",
     "retry": "Try again",
     "logout": "Sign out"
+  },
+  "surveys": {
+    "title": "Surveys",
+    "description": "Read-only. Your business surveys and campaigns. Creating, publishing and running campaigns is not available here yet.",
+    "surveysHeading": "Surveys",
+    "surveysDescription": "Surveys owned by your business.",
+    "surveysEmpty": "Your business has no surveys yet.",
+    "campaignsHeading": "Campaigns",
+    "campaignsDescription": "Campaigns that run your surveys.",
+    "campaignsEmpty": "Your business has no survey campaigns yet.",
+    "forbidden": "Surveys are visible to users with survey access for this business.",
+    "unavailable": "Surveys could not be loaded right now.",
+    "retry": "Try again",
+    "surveyStatus": {
+      "draft": "Draft",
+      "published": "Published",
+      "paused": "Paused",
+      "closed": "Closed",
+      "archived": "Archived"
+    },
+    "campaignStatus": {
+      "draft": "Draft",
+      "active": "Active",
+      "paused": "Paused",
+      "closed": "Closed"
+    }
   }
 }

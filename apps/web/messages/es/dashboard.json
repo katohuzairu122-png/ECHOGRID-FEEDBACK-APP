@@ -19,7 +19,8 @@
     "customerQr": "QR del cliente",
     "settlements": "Liquidación de recompensas huérfanas",
     "serve": "Atender clientes",
-    "cashierApp": "App de cajero"
+    "cashierApp": "App de cajero",
+    "surveys": "Encuestas"
   },
   "home": {
     "branchesTitle": "Sucursales",
@@ -213,5 +214,31 @@
     "forbiddenBody": "Consulte con un propietario o administrador del negocio si la necesita.",
     "retry": "Reintentar",
     "logout": "Cerrar sesión"
+  },
+  "surveys": {
+    "title": "Encuestas",
+    "description": "Solo lectura. Las encuestas y campañas de su negocio. Crear, publicar y ejecutar campañas aún no está disponible aquí.",
+    "surveysHeading": "Encuestas",
+    "surveysDescription": "Encuestas que pertenecen a su negocio.",
+    "surveysEmpty": "Su negocio aún no tiene encuestas.",
+    "campaignsHeading": "Campañas",
+    "campaignsDescription": "Campañas que ejecutan sus encuestas.",
+    "campaignsEmpty": "Su negocio aún no tiene campañas de encuestas.",
+    "forbidden": "Las encuestas son visibles para los usuarios con acceso a encuestas de este negocio.",
+    "unavailable": "No se pudieron cargar las encuestas en este momento.",
+    "retry": "Reintentar",
+    "surveyStatus": {
+      "draft": "Borrador",
+      "published": "Publicada",
+      "paused": "En pausa",
+      "closed": "Cerrada",
+      "archived": "Archivada"
+    },
+    "campaignStatus": {
+      "draft": "Borrador",
+      "active": "Activa",
+      "paused": "En pausa",
+      "closed": "Cerrada"
+    }
   }
 }

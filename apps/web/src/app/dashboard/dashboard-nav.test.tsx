@@ -111,6 +111,17 @@ describe('DashboardNav presentation', () => {
     expect(container.querySelectorAll('aside form')).toHaveLength(1);
   });
 
+  it('Surveys appears only with survey:view', async () => {
+    vi.mocked(getMyAccess).mockResolvedValue({ known: true, permissions: new Set([...FULL, 'survey:view']) });
+    const withView = render(await DashboardNav());
+    expect(withView.container.querySelector('aside nav a[href="/dashboard/surveys"]')).toBeInTheDocument();
+    withView.unmount();
+
+    vi.mocked(getMyAccess).mockResolvedValue(owner);
+    const withoutView = render(await DashboardNav());
+    expect(withoutView.container.querySelector('aside nav a[href="/dashboard/surveys"]')).not.toBeInTheDocument();
+  });
+
   it('manager without billing:view or team grants does not see billing or team', async () => {
     vi.mocked(getMyAccess).mockResolvedValue({
       known: true,
