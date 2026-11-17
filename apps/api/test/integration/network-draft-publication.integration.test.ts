@@ -474,8 +474,15 @@ describe.skipIf(!process.env.DATABASE_URL)('NETWORK-05 real HTTP-to-Postgres lif
           await page.goto(webUrl + '/platform/network-moderation');
           const card = page.getByRole('article').filter({ hasText: draft.handle });
           await card.getByRole('button', { name: 'Approve revision', exact: true }).click();
-          await browserExpect(card.getByRole('status')).toContainText(result);
-          expect(await isVisible(draft.handle)).toBe(moderator === moderatorB);
+          if (moderator === moderatorA) {
+            await browserExpect(card.getByRole('status')).toContainText(result);
+            expect(await isVisible(draft.handle)).toBe(false);
+          } else {
+            await vi.waitFor(async () => {
+              expect(await isVisible(draft.handle)).toBe(true);
+            });
+            await browserExpect(card).toHaveCount(0);
+          }
         }
         await page.goto(webUrl + '/platform/network-moderation/history');
         await browserExpect(
