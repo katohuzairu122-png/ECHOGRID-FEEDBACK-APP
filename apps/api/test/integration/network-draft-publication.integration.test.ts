@@ -1,3 +1,5 @@
+import type * as PlaywrightTest from '@playwright/test';
+import type * as DbClient from '../../src/db/client';
 import { createServer, type Server } from 'node:http';
 import { createRequire } from 'node:module';
 import { spawn, type ChildProcess } from 'node:child_process';
@@ -19,7 +21,7 @@ import type { Bindings } from '../../src/config/env';
 // real JWT checks, current-role queries, domain transactions, DB triggers and
 // audit middleware against the disposable integration database.
 vi.mock('../../src/db/client', async (original) => {
-  const actual = await original<typeof import('../../src/db/client')>();
+  const actual = await original<typeof DbClient>();
   return {
     ...actual,
     createDb: async () => {
@@ -36,12 +38,21 @@ import { platformNetworkModerationRoutes } from '../../src/platform/network-mode
 import { auditTrail } from '../../src/middleware/audit';
 import { errorHandler } from '../../src/lib/error-handler';
 
+type LifecycleData = {
+  handle: string;
+  revisionId: string;
+  revisionNo: number;
+  body: string;
+  status: string;
+  entries: { postHandle: string; action: string }[];
+};
+
 const base = '/api/v1/platform/network-moderation';
 const secret = 'network05-disposable-staff-secret';
 const customerSecret = 'network05-disposable-customer-secret';
 const browserEnabled = process.env.NETWORK_LIFECYCLE_BROWSER === 'true';
 const requireWeb = createRequire(resolve('../web/package.json'));
-type BrowserModule = typeof import('../../../web/node_modules/@playwright/test');
+type BrowserModule = typeof PlaywrightTest;
 
 describe.skipIf(!process.env.DATABASE_URL)('NETWORK-05 real HTTP-to-Postgres lifecycle', () => {
   const client = new Client({ connectionString: process.env.DATABASE_URL });
@@ -102,7 +113,7 @@ describe.skipIf(!process.env.DATABASE_URL)('NETWORK-05 real HTTP-to-Postgres lif
       body,
     );
     expect(response.status).toBe(expected);
-    return (await response.json()).data;
+    return ((await response.json()) as { data: LifecycleData }).data;
   }
 
   async function createDraft(body = 'Initial draft') {
@@ -118,7 +129,7 @@ describe.skipIf(!process.env.DATABASE_URL)('NETWORK-05 real HTTP-to-Postgres lif
   async function isVisible(handle: string) {
     const response = await request('/api/v1/network/feed?limit=50', customerToken);
     expect(response.status).toBe(200);
-    return (await response.json()).data.items.some(
+    return ((await response.json()) as { data: { items: { handle: string }[] } }).data.items.some(
       (item: { handle: string }) => item.handle === handle,
     );
   }

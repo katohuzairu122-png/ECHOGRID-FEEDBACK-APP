@@ -64,6 +64,9 @@ importers:
       '@echo-grid-feedback/secure-file':
         specifier: workspace:*
         version: link:../../packages/secure-file
+      '@playwright/test':
+        specifier: 1.61.1
+        version: 1.61.1
       '@types/pg':
         specifier: ^8.11.10
         version: 8.20.0

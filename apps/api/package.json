@@ -41,6 +41,7 @@
     "@echo-grid-feedback/shared-types": "workspace:*"
   },
   "devDependencies": {
+    "@playwright/test": "1.61.1",
     "@cloudflare/workers-types": "^4.0.0",
     "@types/pg": "^8.11.10",
     "typescript": "^5.7.2",
