@@ -1,9 +1,17 @@
 'use client';
 
+import type { NetworkSavedDraftDto } from '@echo-grid-feedback/shared-types';
+import Link from 'next/link';
 import { useActionState, useState } from 'react';
 import { Badge, Button, Input, Label, Textarea } from '@/components/ui';
 import { moderatePost } from './actions';
-import { locales, reasons, type ModerationResult, type PendingRevision } from './moderation';
+import {
+  locales,
+  moderationPath,
+  reasons,
+  type ModerationResult,
+  type PendingRevision,
+} from './moderation';
 
 const selectStyle =
   'w-full rounded-md border border-neutral-300 bg-neutral-50 p-2 text-sm text-neutral-900';
@@ -65,21 +73,22 @@ function Result({ result }: { result: ModerationResult }) {
   );
 }
 
-function Authoring() {
+export function Authoring({ initialDraft }: { initialDraft?: NetworkSavedDraftDto } = {}) {
   const [draft, save, saving] = useActionState(moderatePost, {});
   const [submitted, submit, submitting] = useActionState(moderatePost, {});
-  const [body, setBody] = useState('');
-  const [link, setLink] = useState('');
-  const [locale, setLocale] = useState('en');
-  const [handle, setHandle] = useState('');
+  const [body, setBody] = useState(initialDraft?.body ?? '');
+  const [link, setLink] = useState(initialDraft?.linkUrl ?? '');
+  const [locale, setLocale] = useState(initialDraft?.contentLocale ?? 'en');
+  const [handle, setHandle] = useState(initialDraft?.handle ?? '');
   return (
     <section aria-labelledby="author-heading" className={panelStyle}>
       <h2 id="author-heading" className="text-lg font-semibold">
         Official post authoring
       </h2>
       <p className="text-sm text-neutral-600">
-        Leave the handle blank to create a draft. To edit a post, enter its handle and supply the
-        full replacement text, language and optional link.
+        {initialDraft
+          ? 'Edit the saved text, language and optional link.'
+          : 'Leave the handle blank to create a draft. To edit a post, enter its handle and supply the full replacement text, language and optional link.'}
       </p>
       <form action={save} className="space-y-3" aria-busy={saving}>
         <fieldset disabled={saving || submitting} className="space-y-3">
@@ -89,6 +98,7 @@ function Authoring() {
               id="author-handle"
               name="target"
               value={handle}
+              readOnly={Boolean(initialDraft)}
               onChange={(event) => setHandle(event.target.value)}
             />
           </div>
@@ -152,7 +162,7 @@ function Authoring() {
           key={draft.handle}
           id="submit-handle"
           name="target"
-          defaultValue={draft.handle}
+          defaultValue={draft.handle ?? initialDraft?.handle}
           required
         />
         <Button type="submit" variant="outline" disabled={saving || submitting}>
@@ -289,6 +299,9 @@ export function ModerationWorkspace({ queue }: { queue: PendingRevision[] }) {
           <ReviewCard key={revision.revisionId} revision={revision} />
         ))}
       </section>
+      <Link className="underline" href={`${moderationPath}/drafts`}>
+        Saved drafts
+      </Link>
       <div className="grid items-start gap-4 lg:grid-cols-2">
         <Authoring />
         <ExistingPost />

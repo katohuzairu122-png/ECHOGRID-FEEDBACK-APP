@@ -1,3 +1,4 @@
+import { NETWORK_DRAFT_HANDLE } from '@echo-grid-feedback/shared-types';
 import { Hono, type Context } from 'hono';
 import { z } from 'zod';
 import type { Bindings } from '../config/env';
@@ -13,6 +14,7 @@ import { NetworkPostService, type NetworkPostRow } from '../network/network-post
 import { listNetworkModerationHistory } from '../network/network-moderation-history';
 import { isNetworkFeedEnabled } from '../network/network-flag';
 import { requireNetworkPlatformPermission } from './network-permissions';
+import { getNetworkSavedDraft, listNetworkSavedDrafts, type NetworkDraftCursor } from '../network/network-saved-drafts';
 
 type Env = { Bindings: Bindings; Variables: AuthVariables & PlatformVariables & AuditVariables };
 
@@ -159,6 +161,46 @@ export function createNetworkModerationRoutes(options: { open?: (c: Context<Env>
         return ok(c, present(post));
       }));
   }
+
+  routes.get('/drafts', requireNetworkPlatformPermission('network:moderate'), async (c) => {
+    c.header('Cache-Control', 'private, no-store');
+    const params = new URL(c.req.url).searchParams;
+    const values = params.getAll('cursor');
+    const parts = values[0]?.split('~');
+    let cursor: NetworkDraftCursor | undefined;
+    if (parts) {
+      const [createdAt, handle] = parts;
+      if (parts.length === 2 && createdAt && handle &&
+          z.iso.datetime({ precision: 3 }).safeParse(createdAt).success && NETWORK_DRAFT_HANDLE.test(handle)) {
+        cursor = { createdAt, handle };
+      }
+    }
+    if ([...params.keys()].some((name) => name !== 'cursor') || values.length > 1 || (parts && !cursor)) {
+      throw new AppError('Invalid draft pagination.', 400, 'INVALID_DRAFT_PAGINATION');
+    }
+    const { db, release } = await open(c);
+    try {
+      return ok(c, await listNetworkSavedDrafts(db, c.get('userId') as string, cursor));
+    } finally {
+      release();
+    }
+  });
+
+  routes.get('/drafts/:handle', requireNetworkPlatformPermission('network:moderate'), async (c) => {
+    c.header('Cache-Control', 'private, no-store');
+    const handle = c.req.param('handle');
+    if (!NETWORK_DRAFT_HANDLE.test(handle)) {
+      throw new AppError('Not found.', 404, 'NETWORK_NOT_FOUND');
+    }
+    const { db, release } = await open(c);
+    try {
+      const draft = await getNetworkSavedDraft(db, c.get('userId') as string, handle);
+      if (!draft) throw new AppError('Not found.', 404, 'NETWORK_NOT_FOUND');
+      return ok(c, draft);
+    } finally {
+      release();
+    }
+  });
 
   return routes;
 }
