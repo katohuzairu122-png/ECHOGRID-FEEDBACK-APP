@@ -336,6 +336,24 @@ describe.skipIf(!process.env.DATABASE_URL)('NETWORK-05 real HTTP-to-Postgres lif
         ).toBe(403);
       }
     }
+    for (const roleName of ['Owner', 'Manager']) {
+      const roleId = (
+        await client.query<{ id: string }>(
+          'insert into roles(business_id,name) values ($1,$2) returning id',
+          [business, roleName],
+        )
+      ).rows[0]!.id;
+      await client.query(
+        'insert into user_business_roles(user_id,business_id,role_id) values ($1,$2,$3)',
+        [moderatorA, business, roleId],
+      );
+      await client.query('update users set platform_role=null where id=$1', [moderatorA]);
+      for (const path of paths) {
+        expect(
+          (await request(base + path, token, path === '/history' ? 'GET' : 'POST')).status,
+        ).toBe(403);
+      }
+    }
     await client.query("update users set platform_role='admin' where id=$1", [moderatorA]);
     const impersonated = await signImpersonationToken(moderatorA, author, secret);
     const cashier = await signCashierAccessToken(moderatorA, secret, {
