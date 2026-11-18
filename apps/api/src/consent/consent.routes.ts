@@ -8,6 +8,7 @@ import { ok } from '../lib/response';
 import { AppError } from '../lib/errors';
 import { isUuid } from '../lib/uuid';
 import { parseListPagination } from '../lib/list-pagination';
+import { toCustomerConsentDto } from './consent-dto';
 import { ConsentWithdrawalService } from './consent-withdrawal.service';
 
 type Env = { Bindings: Bindings; Variables: CustomerAuthVariables };
@@ -28,7 +29,7 @@ consentRoutes.get('/', async (c) => {
   const { limit = 100, offset = 0 } = parseListPagination(new URL(c.req.url).searchParams, 100);
   return withDb(c, async (db) => {
     const rows = await createRepositories(db).consentGrants.listForCustomer(c.get('customerId'), { limit, offset });
-    return ok(c, rows);
+    return ok(c, rows.map(toCustomerConsentDto));
   });
 });
 

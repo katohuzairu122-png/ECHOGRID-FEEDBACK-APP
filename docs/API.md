@@ -1313,10 +1313,12 @@ for a malformed `businessId`), `MEMBERSHIP_NOT_LEAVABLE` (409),
 
 **Customer-authenticated.** The caller's consent grants across every business
 and purpose, newest first. `?limit=&offset=` (`limit` defaults to and is capped
-at 100). Returns the grants as stored: `id`, `customerId`, `businessId`,
+at 100). Returns a closed customer-facing projection: `id`, `businessId`,
 `purpose`, `scope`, `resourceType`, `resourceId`, `consentVersion`, `status`
-(`active`, `revoked`, `expired`, `consumed`), `idempotencyKey`, `metadata`,
-`grantedAt`, `expiresAt`, `revokedAt`, `consumedAt`, `createdAt`.
+(`active`, `revoked`, `expired`, `consumed`), `grantedAt`, `expiresAt`,
+`revokedAt`, `consumedAt`. Dates are ISO strings or null. Internal idempotency
+keys, metadata, customer identifiers and creation bookkeeping are excluded.
+The authenticated customer determines scope; query parameters cannot override it.
 
 **Errors**: `UNAUTHENTICATED` (401), `INVALID_PAGINATION` (400),
 `RATE_LIMITED` (429).
