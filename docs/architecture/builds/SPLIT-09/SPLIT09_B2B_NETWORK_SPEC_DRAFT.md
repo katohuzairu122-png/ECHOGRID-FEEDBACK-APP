@@ -153,6 +153,28 @@ Proposal: **in-app only** for the businesses involved (request received, accepte
 | S9-D12 | Migration shape | one Split 09 migration (D-19) vs per-block (OD-24) | Follow whichever the owner approves for BDPN so the two do not diverge |
 | S9-D13 | Cross-business research and any shared data | out of scope | Out until its own specification |
 
+## 12A. Proposed owner rulings (2026-11-18) — AWAITING OWNER CONFIRMATION
+
+Received from the owner as "ECHO GRID — SPLIT 09 OWNER RULINGS (PROPOSED)", scope S9-D1, S9-D2, S9-D8, S9-D12. They are recorded verbatim below and are **not yet confirmed**, so they are not treated as decided anywhere else in this document. All other decisions in section 12 remain open.
+
+| ID | Proposed ruling (verbatim) |
+| --- | --- |
+| S9-D1 | B2B participation requires explicit platform enrollment and acceptance of B2B terms. Publishing a business profile alone does not confer B2B participation. |
+| S9-D2 | BDPN-01 owns the single authoritative business profile entity. Split 09 extends that entity with B2B capabilities rather than creating a duplicate listing entity. |
+| S9-D8 | B2B v1 listings support structured categories and a short free-text description. No media uploads. Reuse the approved BDPN taxonomy and content restrictions where applicable. |
+| S9-D12 | Prefer independently versioned, per-block migrations, subject to reconciliation with the final BDPN migration ruling. No migration execution is authorized. |
+
+Restrictions that came with the rulings: no B2B feature activation, deployment, migration execution or automatic PR merge is authorized.
+
+**Consistency notes (for the owner; nothing here changes a ruling):**
+
+- **S9-D1** matches the section 12 recommendation (option b). Enrollment follows the Split 07 pattern: platform-recorded, business-accepted, revocable by the platform. A published BDPN profile is necessary context but never sufficient for B2B participation.
+- **S9-D2** matches the section 12 recommendation. Consequence: Split 09 listing work cannot start before the BDPN profile foundation exists, and the foundation is still gated by OD-1/D-24, OD-14 and D-16 (see `BDPN_PREREQUISITE_MATRIX_2026-11-16.md`). The B2B capability sections would extend the BDPN profile revision model (immutable revisions plus a live pointer, D-01), so they inherit its review-before-live rule (D-14).
+- **S9-D8** matches the recommendation. "Approved BDPN taxonomy and content restrictions" resolves to: category names from the platform category catalog with translated names (D-11), no subcategories (D-08), no media (D-05), and the BDPN content policy. **The content policy (D-16) is still an unapproved interim draft**, so "content restrictions" has no approved text yet. The short free-text length limit is not specified by the ruling and remains to be set.
+- **S9-D12** prefers per-block migrations. This is the shape proposed by BDPN **OD-24**, which is **not yet approved**, while the decided BDPN rule is **D-19** (apply the backlog, then ship BDPN as one new migration). The ruling already defers to "the final BDPN migration ruling", so the conflict resolves when OD-24 versus D-19 is decided. Until then Split 09 should assume neither and write no migration.
+
+**Effect on phasing (section 13):** S9-A is now scoped as "extend the BDPN profile entity with a B2B participation record and B2B capability sections", still blocked on the BDPN profile foundation. No block in section 13 is authorized to start.
+
 ## 13. Proposed phasing and acceptance (each a separate authorization)
 
 | Block | Delivers | Needs first |
@@ -175,3 +197,4 @@ Acceptance tests every block must carry: cross-tenant denial for every route; un
 ## 15. Changelog
 
 - 2026-11-18: first draft by Claude Code for owner review. No decision recorded.
+- 2026-11-18: recorded the owner's proposed rulings for S9-D1, S9-D2, S9-D8 and S9-D12 in section 12A, marked awaiting owner confirmation. All other decisions remain open.
