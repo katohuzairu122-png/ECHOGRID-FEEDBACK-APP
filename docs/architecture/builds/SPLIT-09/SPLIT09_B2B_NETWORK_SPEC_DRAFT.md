@@ -139,34 +139,34 @@ Proposal: **in-app only** for the businesses involved (request received, accepte
 
 | ID | Question | Options | Recommendation |
 | --- | --- | --- | --- |
-| S9-D1 | Who may participate? | (a) all active published businesses; (b) only businesses the platform enrolls and that accept B2B terms | (b), consistent with the 2026-11-12 workspace proposal and Split 07 enrollment |
-| S9-D2 | One profile entity or two (BDPN D-A) | one shared entity owned by BDPN-01 with B2B capability sections; or a separate B2B listing entity | One entity, so publication and moderation exist once. Split 09 listing then depends on the BDPN profile foundation |
+| S9-D1 **(DECIDED, 12A)** | Who may participate? | (a) all active published businesses; (b) only businesses the platform enrolls and that accept B2B terms | (b), consistent with the 2026-11-12 workspace proposal and Split 07 enrollment |
+| S9-D2 **(DECIDED, 12A)** | One profile entity or two (BDPN D-A) | one shared entity owned by BDPN-01 with B2B capability sections; or a separate B2B listing entity | One entity, so publication and moderation exist once. Split 09 listing then depends on the BDPN profile foundation |
 | S9-D3 | Request limits | cooling-off after a decline, per-day request cap, request expiry | Owner picks the numbers; Claude proposes none |
 | S9-D4 | Who approves a partnership? | counterparty only; or counterparty plus platform | Counterparty only; platform may suspend or terminate |
 | S9-D5 | What does a partnership grant? | visibility + messages only (this draft); or richer capabilities | Visibility and messages only in v1; richer capability needs its own spec |
 | S9-D6 | Termination effects and retention | immediate unilateral termination; how long threads and events are retained | Immediate unilateral; retention period is an owner/legal decision |
 | S9-D7 | B2B messaging in v1? | none; or threads tied to a request/partnership | Defer threads until content policy and staff-access rules are decided; ship listings and partnership state first |
-| S9-D8 | Listing content shape | structured categories; or free text; no media in v1 | Structured category plus short free text, no media (parallels D-04/D-05) |
+| S9-D8 **(DECIDED, 12A)** | Listing content shape | structured categories; or free text; no media in v1 | Structured category plus short free text, no media (parallels D-04/D-05) |
 | S9-D9 | Notifications | in-app only | In-app only |
 | S9-D10 | Moderation roles and suspension | which platform roles moderate; two-person rule for suspension | Platform admins only; support read-only, as BDPN D-03 |
 | S9-D11 | Plan gating of B2B | universal vs plan-gated | Do not decide here; blocked with OD-1/D-24 and OD-14 (entitlements). Until then the model stays ungated |
-| S9-D12 | Migration shape | one Split 09 migration (D-19) vs per-block (OD-24) | Follow whichever the owner approves for BDPN so the two do not diverge |
+| S9-D12 **(DECIDED, 12A; conditional on the final BDPN migration ruling)** | Migration shape | one Split 09 migration (D-19) vs per-block (OD-24) | Follow whichever the owner approves for BDPN so the two do not diverge |
 | S9-D13 | Cross-business research and any shared data | out of scope | Out until its own specification |
 
-## 12A. Proposed owner rulings (2026-11-18) — AWAITING OWNER CONFIRMATION
+## 12A. Owner rulings (2026-11-18) — CONFIRMED BY THE OWNER
 
-Received from the owner as "ECHO GRID — SPLIT 09 OWNER RULINGS (PROPOSED)", scope S9-D1, S9-D2, S9-D8, S9-D12. They are recorded verbatim below and are **not yet confirmed**, so they are not treated as decided anywhere else in this document. All other decisions in section 12 remain open.
+Received from the owner as "ECHO GRID — SPLIT 09 OWNER RULINGS (PROPOSED)", scope S9-D1, S9-D2, S9-D8, S9-D12, and **confirmed by the owner on 2026-11-18** ("Confirm the four rulings"). They are recorded verbatim below. These four are now **DECIDED**. All other decisions in section 12 remain open.
 
-| ID | Proposed ruling (verbatim) |
-| --- | --- |
-| S9-D1 | B2B participation requires explicit platform enrollment and acceptance of B2B terms. Publishing a business profile alone does not confer B2B participation. |
-| S9-D2 | BDPN-01 owns the single authoritative business profile entity. Split 09 extends that entity with B2B capabilities rather than creating a duplicate listing entity. |
-| S9-D8 | B2B v1 listings support structured categories and a short free-text description. No media uploads. Reuse the approved BDPN taxonomy and content restrictions where applicable. |
-| S9-D12 | Prefer independently versioned, per-block migrations, subject to reconciliation with the final BDPN migration ruling. No migration execution is authorized. |
+| ID | Ruling (verbatim) | Status |
+| --- | --- | --- |
+| S9-D1 | B2B participation requires explicit platform enrollment and acceptance of B2B terms. Publishing a business profile alone does not confer B2B participation. | DECIDED |
+| S9-D2 | BDPN-01 owns the single authoritative business profile entity. Split 09 extends that entity with B2B capabilities rather than creating a duplicate listing entity. | DECIDED |
+| S9-D8 | B2B v1 listings support structured categories and a short free-text description. No media uploads. Reuse the approved BDPN taxonomy and content restrictions where applicable. | DECIDED |
+| S9-D12 | Prefer independently versioned, per-block migrations, subject to reconciliation with the final BDPN migration ruling. No migration execution is authorized. | DECIDED, with the stated condition: subject to reconciliation with the final BDPN migration ruling |
 
-Restrictions that came with the rulings: no B2B feature activation, deployment, migration execution or automatic PR merge is authorized.
+Restrictions that came with the rulings (still in force): no B2B feature activation, deployment, migration execution or automatic PR merge is authorized.
 
-**Consistency notes (for the owner; nothing here changes a ruling):**
+**Consistency notes (nothing here changes a ruling):**
 
 - **S9-D1** matches the section 12 recommendation (option b). Enrollment follows the Split 07 pattern: platform-recorded, business-accepted, revocable by the platform. A published BDPN profile is necessary context but never sufficient for B2B participation.
 - **S9-D2** matches the section 12 recommendation. Consequence: Split 09 listing work cannot start before the BDPN profile foundation exists, and the foundation is still gated by OD-1/D-24, OD-14 and D-16 (see `BDPN_PREREQUISITE_MATRIX_2026-11-16.md`). The B2B capability sections would extend the BDPN profile revision model (immutable revisions plus a live pointer, D-01), so they inherit its review-before-live rule (D-14).
@@ -198,3 +198,4 @@ Acceptance tests every block must carry: cross-tenant denial for every route; un
 
 - 2026-11-18: first draft by Claude Code for owner review. No decision recorded.
 - 2026-11-18: recorded the owner's proposed rulings for S9-D1, S9-D2, S9-D8 and S9-D12 in section 12A, marked awaiting owner confirmation. All other decisions remain open.
+- 2026-11-18: owner confirmed the four rulings. S9-D1, S9-D2, S9-D8 and S9-D12 are DECIDED (S9-D12 conditional on the final BDPN migration ruling). The nine other decisions (S9-D3 to S9-D7, S9-D9 to S9-D11, S9-D13) remain open. No implementation is authorized.
