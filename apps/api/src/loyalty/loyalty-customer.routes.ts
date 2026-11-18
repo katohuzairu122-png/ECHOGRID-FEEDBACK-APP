@@ -158,6 +158,14 @@ loyaltyCustomerRoutes.post('/checkin', async (c) => {
     }).resolveToken(body.qrToken);
     const customerId = c.get('customerId');
 
+    // Split 01: gate on an active, consistent membership BEFORE any check-in
+    // side effect (velocity counters, visit-proof verification, the KV
+    // cooldown below). A non-member's scan must not consume the cooldown, or
+    // the "join, then check in" call that follows is answered with the new
+    // account unchanged and zero points. recordCheckin re-checks inside its
+    // transaction; this is a gate, not the authoritative guard.
+    await new LoyaltyAccountService(db).assertCheckinReady(customerId, qrCode.businessId);
+
     // Continuing Development Block 4.1 (S5.4/S5.5). Same velocity pattern as
     // qr.routes.ts's feedback submit -- see fraud/velocity-tracker.ts for why
     // this is a KV layer distinct from this router's own PUBLIC_RATE_LIMITER.

@@ -97,31 +97,7 @@ export class LoyaltyAccountService {
   ): Promise<LoyaltyAccount> {
     return this.db.transaction(async (tx) => {
       const repos = createRepositories(tx);
-
-      const membership = await repos.customerMemberships.findActive(customerId, businessId);
-      if (!membership) {
-        throw new AppError(
-          'Join this loyalty program before checking in.',
-          409,
-          'MEMBERSHIP_REQUIRED',
-        );
-      }
-
-      const account = await repos.loyaltyAccounts.findByCustomerAndBusiness(customerId, businessId);
-      if (!account) {
-        throw new AppError(
-          'Your loyalty account is not ready for this membership.',
-          409,
-          'LOYALTY_ACCOUNT_NOT_READY',
-        );
-      }
-      if (account.membershipId && account.membershipId !== membership.id) {
-        throw new AppError(
-          'Loyalty membership mapping is inconsistent.',
-          409,
-          'MEMBERSHIP_MAPPING_CONFLICT',
-        );
-      }
+      const { account } = await this.resolveCheckinContext(repos, customerId, businessId);
 
       if (visitSessionId) {
         const already = await repos.loyaltyTransactions.findCheckinByVisitSession(account.id, visitSessionId);
@@ -135,6 +111,54 @@ export class LoyaltyAccountService {
         recordVisit: true,
       });
     });
+  }
+
+  /** Read-only preflight for the customer check-in route (Split 01).
+   *
+   * Runs the same membership/account preconditions as `recordCheckin`, but
+   * outside a transaction and without writing anything, so the route can
+   * reject a non-member BEFORE it touches any check-in side effect (velocity
+   * counters, visit-proof verification, the KV cooldown). Without this, a
+   * non-member's first scan reserved the cooldown, the follow-up "join, then
+   * check in" call found the new account in cooldown and answered with it
+   * unchanged -- a successful-looking check-in that awarded no points.
+   * `recordCheckin` re-checks inside its transaction, so this is a gate, not
+   * a replacement for that guard. */
+  async assertCheckinReady(customerId: string, businessId: string): Promise<void> {
+    await this.resolveCheckinContext(createRepositories(this.db), customerId, businessId);
+  }
+
+  /** Single source of truth for the check-in preconditions: an active
+   * membership, a loyalty account, and a consistent membership mapping.
+   * Shared by `assertCheckinReady` (preflight) and `recordCheckin`
+   * (authoritative, inside the earning transaction). */
+  private async resolveCheckinContext(repos: Repositories, customerId: string, businessId: string) {
+    const membership = await repos.customerMemberships.findActive(customerId, businessId);
+    if (!membership) {
+      throw new AppError(
+        'Join this loyalty program before checking in.',
+        409,
+        'MEMBERSHIP_REQUIRED',
+      );
+    }
+
+    const account = await repos.loyaltyAccounts.findByCustomerAndBusiness(customerId, businessId);
+    if (!account) {
+      throw new AppError(
+        'Your loyalty account is not ready for this membership.',
+        409,
+        'LOYALTY_ACCOUNT_NOT_READY',
+      );
+    }
+    if (account.membershipId && account.membershipId !== membership.id) {
+      throw new AppError(
+        'Loyalty membership mapping is inconsistent.',
+        409,
+        'MEMBERSHIP_MAPPING_CONFLICT',
+      );
+    }
+
+    return { membership, account };
   }
 
   /** Staff-recorded qualifying purchase. Split 03 gives the purchase its
