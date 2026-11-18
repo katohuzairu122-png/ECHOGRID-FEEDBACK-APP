@@ -74,3 +74,4 @@ export * from './stripe-read-policy-administration';
 export * from './signed-evidence-custody';
 export * from './settlement-custody-authorization-links';
 export * from './network-posts';
+export * from './business-profiles';
