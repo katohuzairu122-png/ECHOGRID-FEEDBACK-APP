@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '@/lib/api-error';
 import LoadingSavedDrafts from './loading';
@@ -6,6 +6,7 @@ import SavedDraftsPage from './page';
 
 const mocks = vi.hoisted(() => ({
   api: vi.fn(),
+  refresh: vi.fn(),
   user: vi.fn(),
   action: vi.fn(),
   notFound: vi.fn(() => {
@@ -17,7 +18,10 @@ vi.mock('@/lib/api-client', async () => ({
   apiFetch: mocks.api,
 }));
 vi.mock('@/lib/platform', () => ({ getCurrentUser: mocks.user }));
-vi.mock('next/navigation', () => ({ notFound: mocks.notFound }));
+vi.mock('next/navigation', () => ({
+  notFound: mocks.notFound,
+  useRouter: () => ({ refresh: mocks.refresh }),
+}));
 vi.mock('../actions', () => ({ moderatePost: mocks.action }));
 
 const admin = { platformRole: 'admin', impersonatedBy: null };
@@ -111,5 +115,57 @@ describe('saved drafts workspace', () => {
     view.rerender(await page({ draft: handle }));
     expect(screen.getByRole('alert')).toHaveTextContent('This saved draft is unavailable.');
     expect(screen.getByText('Saved preview')).toBeVisible();
+  });
+  it('retries a temporary listing failure without saving or submitting', async () => {
+    mocks.api.mockRejectedValue(new ApiError('private list detail', 503));
+    render(await page({ cursor: 'position', draft: handle }));
+    fireEvent.click(screen.getByRole('button', { name: 'Retry loading' }));
+    expect(mocks.refresh).toHaveBeenCalledOnce();
+    expect(mocks.api).toHaveBeenCalledExactlyOnceWith(path + '?cursor=position', {
+      cache: 'no-store',
+    });
+    expect(mocks.action).not.toHaveBeenCalled();
+    expect(screen.queryByText(/private/)).not.toBeInTheDocument();
+  });
+
+  it('offers retry for a temporary selection failure while keeping its listing usable', async () => {
+    mocks.api
+      .mockResolvedValueOnce(listing)
+      .mockRejectedValueOnce(new Error('private upstream detail'));
+    render(await page({ cursor: 'position', draft: handle }));
+    expect(screen.getByText('Saved preview')).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Retry loading' }));
+    expect(mocks.refresh).toHaveBeenCalledOnce();
+    expect(mocks.action).not.toHaveBeenCalled();
+    expect(screen.queryByLabelText('Post text')).not.toBeInTheDocument();
+    expect(screen.queryByText(/private/)).not.toBeInTheDocument();
+  });
+
+  it.each([400, 404, 429])(
+    'does not retry missing, invalid or rate-limited draft selection (%s)',
+    async (status) => {
+      mocks.api
+        .mockResolvedValueOnce(listing)
+        .mockRejectedValueOnce(new ApiError('private', status));
+      render(await page({ draft: handle }));
+      expect(screen.queryByRole('button', { name: 'Retry loading' })).not.toBeInTheDocument();
+    },
+  );
+
+  it.each([401, 403])('preserves selection denial (%s)', async (status) => {
+    mocks.api.mockResolvedValueOnce(listing).mockRejectedValueOnce(new ApiError('private', status));
+    await expect(page({ draft: handle })).rejects.toThrow('NOT_FOUND');
+    expect(mocks.action).not.toHaveBeenCalled();
+  });
+
+  it('does not retry a repeated cursor or swallow a redirect', async () => {
+    render(await page({ cursor: ['one', 'two'] }));
+    expect(mocks.api).not.toHaveBeenCalled();
+    expect(screen.queryByRole('button', { name: 'Retry loading' })).not.toBeInTheDocument();
+    const error = Object.assign(new Error('NEXT_REDIRECT'), {
+      digest: 'NEXT_REDIRECT;replace;/login;307;',
+    });
+    mocks.api.mockRejectedValue(error);
+    await expect(page()).rejects.toBe(error);
   });
 });

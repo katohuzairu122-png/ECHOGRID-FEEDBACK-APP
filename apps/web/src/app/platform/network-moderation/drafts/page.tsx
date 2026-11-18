@@ -10,6 +10,8 @@ import { getCurrentUser } from '@/lib/platform';
 import { rethrowControlFlow } from '@/lib/rethrow-control-flow';
 import { canModerate, moderationPath } from '../moderation';
 import { Authoring } from '../workspace';
+import { isTemporaryReadFailure } from '../read-failure';
+import { ModerationReadRetry } from '../read-retry';
 
 const draftsPath = `${moderationPath}/drafts`;
 
@@ -31,6 +33,8 @@ export default async function SavedDraftsPage({
   const position = typeof cursor === 'string' ? cursor : undefined;
   let page: NetworkSavedDraftPageDto | undefined;
   let selected: NetworkSavedDraftDto | undefined;
+  let retryListing = false;
+  let retrySelection = false;
   if (!Array.isArray(cursor)) {
     try {
       page = await apiFetch<NetworkSavedDraftPageDto>(draftPageHref(position), {
@@ -39,6 +43,7 @@ export default async function SavedDraftsPage({
     } catch (error) {
       rethrowControlFlow(error);
       if (error instanceof ApiError && [401, 403, 404].includes(error.status)) notFound();
+      retryListing = isTemporaryReadFailure(error);
     }
   }
   if (page && typeof draft === 'string' && NETWORK_DRAFT_HANDLE.test(draft)) {
@@ -49,6 +54,7 @@ export default async function SavedDraftsPage({
     } catch (error) {
       rethrowControlFlow(error);
       if (error instanceof ApiError && [401, 403].includes(error.status)) notFound();
+      retrySelection = isTemporaryReadFailure(error);
     }
   }
 
@@ -64,7 +70,7 @@ export default async function SavedDraftsPage({
           <Link className="underline" href={draftsPath}>
             Return to the first page
           </Link>
-          .
+          .{retryListing && <ModerationReadRetry />}
         </p>
       ) : (
         <>
@@ -112,7 +118,12 @@ export default async function SavedDraftsPage({
           {selected ? (
             <Authoring key={selected.handle} initialDraft={selected} />
           ) : (
-            draft !== undefined && <p role="alert">This saved draft is unavailable.</p>
+            draft !== undefined && (
+              <p role="alert">
+                This saved draft is unavailable.
+                {retrySelection && <ModerationReadRetry />}
+              </p>
+            )
           )}
         </>
       )}
