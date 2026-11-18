@@ -1,7 +1,9 @@
+import { sql } from 'drizzle-orm';
 import type { Database } from '../db/client';
 import { assertCustomerNotLimited } from '../lib/customer-limits';
 import { createRepositories, type BusinessCustomerMembership, type LoyaltyAccount } from '../repositories';
 import { AppError } from '../lib/errors';
+import { isUniqueViolation } from '../lib/pg-errors';
 import { assertVerifiedPhone } from '../lib/customer-verification';
 
 export interface JoinCustomerMembershipInput {
@@ -18,11 +20,56 @@ export interface JoinCustomerMembershipResult {
   loyaltyAccount: LoyaltyAccount;
 }
 
+/** Unique indexes a join can still collide on once concurrent joins are serialised. */
+const JOIN_RACE_CONSTRAINTS = [
+  'business_customer_memberships_customer_business_key',
+  'loyalty_accounts_membership_id_key',
+] as const;
+/** Covers soft-deleted rows too, so it fires when a closed account blocks a new one. */
+const LOYALTY_ACCOUNT_PAIR_CONSTRAINT = 'loyalty_accounts_customer_business_key';
+
+/** Turns the two unique-violation shapes a join can still hit into deliberate 409s
+ * instead of a generic 500; every other failure is returned untouched. */
+function translateJoinError(error: unknown): unknown {
+  if (isUniqueViolation(error, [LOYALTY_ACCOUNT_PAIR_CONSTRAINT])) {
+    return new AppError(
+      'This loyalty account is closed. Please contact the business.',
+      409,
+      'LOYALTY_ACCOUNT_UNAVAILABLE',
+    );
+  }
+  if (isUniqueViolation(error, JOIN_RACE_CONSTRAINTS)) {
+    return new AppError(
+      'Your enrollment is already being processed. Please try again.',
+      409,
+      'MEMBERSHIP_JOIN_CONFLICT',
+    );
+  }
+  return error;
+}
+
 export class CustomerMembershipService {
   constructor(private readonly db: Database) {}
 
+  /** Idempotent: joining a business you already belong to returns the existing membership and account. */
   async join(input: JoinCustomerMembershipInput): Promise<JoinCustomerMembershipResult> {
+    try {
+      return await this.joinSerialized(input);
+    } catch (error) {
+      throw translateJoinError(error);
+    }
+  }
+
+  private async joinSerialized(input: JoinCustomerMembershipInput): Promise<JoinCustomerMembershipResult> {
     return this.db.transaction(async (tx) => {
+      // Serialise concurrent joins of the same customer to the same business (a double-tap, a retry racing
+      // the original request). Without this, both calls read "no membership", both insert, and the loser
+      // fails on the unique index with a 500 -- or, when a membership already exists, both create a consent
+      // grant. The lock is released when this transaction ends, so the second call then sees the first
+      // call's committed rows and returns them. Same pattern as business/branch name serialisation.
+      await tx.execute(
+        sql`SELECT pg_advisory_xact_lock(hashtextextended(${`customer_membership_join:${input.customerId}:${input.businessId}`}, 0))`,
+      );
       const repos = createRepositories(tx);
       const business = await repos.businesses.findById(input.businessId);
       if (!business || business.status !== 'active') {
