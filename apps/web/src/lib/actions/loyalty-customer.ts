@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { CURRENT_JOIN_LOYALTY_CONSENT_VERSION } from '@echo-grid-feedback/shared-types';
 import type {
+  CustomerMembershipDto,
   LoyaltyAccountDto,
   RedemptionResult,
   MaterializedNotificationPreferenceDto,
@@ -89,6 +90,37 @@ export async function joinAndCheckinAction(qrToken: string, consentAccepted: boo
   try {
     await joinLoyaltyAction(qrToken, consentAccepted);
     return await checkinAction(qrToken);
+  } catch (err) {
+    rethrowControlFlow(err);
+    if (err instanceof ApiError) {
+      return {
+        error: err.message,
+        ...(err.code !== undefined ? { code: err.code } : {}),
+      };
+    }
+    return { error: 'Something went wrong. Please try again.' };
+  }
+}
+
+export interface LeaveMembershipResult {
+  error?: string;
+  code?: string;
+  /** True once the membership has ended (or already had). */
+  left?: boolean;
+}
+
+/** The customer ends their own membership with a business. Earning and redeeming stop, the consent
+ * they gave to join is withdrawn, and the points balance is kept for a later re-join. Failures become
+ * serializable state, like checkinAction, so the dashboard can show a message instead of Next.js's
+ * generic production server-action error; a session redirect is still re-thrown. */
+export async function leaveLoyaltyAction(businessId: string): Promise<LeaveMembershipResult> {
+  try {
+    await customerApiFetch<CustomerMembershipDto>(`/customer-memberships/${businessId}/leave`, {
+      method: 'POST',
+    });
+    revalidatePath('/loyalty/dashboard');
+    revalidatePath(`/loyalty/dashboard/${businessId}`);
+    return { left: true };
   } catch (err) {
     rethrowControlFlow(err);
     if (err instanceof ApiError) {

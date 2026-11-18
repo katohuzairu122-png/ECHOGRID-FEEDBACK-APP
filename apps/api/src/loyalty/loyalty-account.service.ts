@@ -6,6 +6,7 @@ import {
   type LoyaltyAccountWithCustomer,
 } from '../repositories';
 import { AppError } from '../lib/errors';
+import { assertMembershipGate } from '../customer-relationships/membership-gate';
 import type { LoyaltyPurchaseChannel } from '../db/schema';
 
 export interface EnrollInput {
@@ -97,7 +98,11 @@ export class LoyaltyAccountService {
   ): Promise<LoyaltyAccount> {
     return this.db.transaction(async (tx) => {
       const repos = createRepositories(tx);
-      const { account } = await this.resolveCheckinContext(repos, customerId, businessId);
+      // Share-locks the membership row so a concurrent leave or consent withdrawal is ordered
+      // against this earning: it either finishes first (and this is refused) or waits for us.
+      const { account } = await this.resolveCheckinContext(repos, customerId, businessId, {
+        lockMembership: true,
+      });
 
       if (visitSessionId) {
         const already = await repos.loyaltyTransactions.findCheckinByVisitSession(account.id, visitSessionId);
@@ -128,37 +133,24 @@ export class LoyaltyAccountService {
     await this.resolveCheckinContext(createRepositories(this.db), customerId, businessId);
   }
 
-  /** Single source of truth for the check-in preconditions: an active
-   * membership, a loyalty account, and a consistent membership mapping.
-   * Shared by `assertCheckinReady` (preflight) and `recordCheckin`
-   * (authoritative, inside the earning transaction). */
-  private async resolveCheckinContext(repos: Repositories, customerId: string, businessId: string) {
-    const membership = await repos.customerMemberships.findActive(customerId, businessId);
-    if (!membership) {
-      throw new AppError(
-        'Join this loyalty program before checking in.',
-        409,
-        'MEMBERSHIP_REQUIRED',
-      );
-    }
-
-    const account = await repos.loyaltyAccounts.findByCustomerAndBusiness(customerId, businessId);
-    if (!account) {
-      throw new AppError(
-        'Your loyalty account is not ready for this membership.',
-        409,
-        'LOYALTY_ACCOUNT_NOT_READY',
-      );
-    }
-    if (account.membershipId && account.membershipId !== membership.id) {
-      throw new AppError(
-        'Loyalty membership mapping is inconsistent.',
-        409,
-        'MEMBERSHIP_MAPPING_CONFLICT',
-      );
-    }
-
-    return { membership, account };
+  /** Single source of truth for the check-in preconditions, shared by
+   * `assertCheckinReady` (preflight) and `recordCheckin` (authoritative,
+   * inside the earning transaction). The rule itself -- an active membership
+   * and a usable, consistently mapped account -- lives in the shared
+   * membership gate, the same one customer redemption goes through.
+   * `lockMembership` is for the in-transaction caller only. */
+  private resolveCheckinContext(
+    repos: Repositories,
+    customerId: string,
+    businessId: string,
+    options: { lockMembership?: boolean } = {},
+  ) {
+    return assertMembershipGate(repos, {
+      customerId,
+      businessId,
+      action: 'checkin',
+      ...(options.lockMembership ? { lockMembership: true } : {}),
+    });
   }
 
   /** Staff-recorded qualifying purchase. Split 03 gives the purchase its

@@ -28,7 +28,15 @@ vi.mock('../db/client', () => ({
   createDb: async () => ({ db: {}, close: async () => undefined }),
 }));
 vi.mock('../repositories', () => ({
-  createRepositories: () => ({ consentGrants: { revoke: mocks.revoke } }),
+  createRepositories: () => ({ consentGrants: {} }),
+}));
+// The route's job is the HTTP mapping of the service's boolean outcome. Whether
+// a revoke also ends the loyalty membership is covered by
+// consent-withdrawal.service.test.ts and the real-database lifecycle test.
+vi.mock('./consent-withdrawal.service', () => ({
+  ConsentWithdrawalService: class {
+    revoke = mocks.revoke;
+  },
 }));
 
 type Env = { Bindings: Bindings; Variables: CustomerAuthVariables };

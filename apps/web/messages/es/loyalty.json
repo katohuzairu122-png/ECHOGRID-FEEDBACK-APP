@@ -244,7 +244,17 @@
       "topTierReached": "Nivel máximo alcanzado",
       "rewardsHeading": "Recompensas",
       "recentActivityHeading": "Actividad reciente",
-      "backToWallet": "← Mis programas de fidelidad"
+      "backToWallet": "← Mis programas de fidelidad",
+      "membership": {
+        "leaveButton": "Salir del programa de fidelización",
+        "leavePrompt": "¿Salir del programa de fidelización de {business}? Dejarás de acumular y canjear puntos, y se retirará tu consentimiento para unirte. Tus puntos se conservan y vuelven si te unes de nuevo.",
+        "leaveConfirm": "Sí, salir",
+        "leaveCancel": "Mantener mi membresía",
+        "leaving": "Saliendo…",
+        "leaveError": "No se pudo salir ahora. Inténtalo de nuevo.",
+        "leftNotice": "Saliste de este programa de fidelización. Tus puntos se conservan y vuelven si te unes de nuevo escaneando el código QR del negocio.",
+        "inactiveNotice": "Tu membresía con este negocio no está activa, por lo que las recompensas no están disponibles. Ponte en contacto con el negocio."
+      }
     },
     "rewardCard": {
       "points": "{points} pts",

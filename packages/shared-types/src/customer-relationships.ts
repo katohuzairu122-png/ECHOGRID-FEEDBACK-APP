@@ -15,6 +15,8 @@ export const customerMembershipSchema = z.object({
   businessId: z.uuid(),
   status: customerMembershipStatusSchema,
   joinedAt: z.string(),
+  /** Set while status is `left` (the customer ended the membership); null otherwise. */
+  leftAt: z.string().nullable(),
   onboardingSource: z.string().nullable(),
   onboardingReference: z.string().nullable(),
 });

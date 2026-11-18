@@ -1,4 +1,5 @@
 import { Hono, type Context } from 'hono';
+import { z } from 'zod';
 import { joinCustomerMembershipSchema } from '@echo-grid-feedback/shared-types';
 import type { Bindings } from '../config/env';
 import { createDb, type Database } from '../db/client';
@@ -10,6 +11,7 @@ import { ok } from '../lib/response';
 import { AppError } from '../lib/errors';
 import { QrCodeService } from '../qr/qr-code.service';
 import { CustomerMembershipService } from './customer-membership.service';
+import { toCustomerMembershipDto } from './membership-dto';
 
 type Env = { Bindings: Bindings; Variables: CustomerAuthVariables };
 
@@ -64,5 +66,20 @@ customerMembershipRoutes.post('/join', async (c) => {
     });
 
     return ok(c, result, 201);
+  });
+});
+
+// The customer ends their own membership: earning and redeeming stop, the join
+// consent is withdrawn, the points balance is kept for a later re-join.
+// Idempotent. A malformed businessId cannot name a membership, so it is a 404
+// rather than a database error.
+customerMembershipRoutes.post('/:businessId/leave', async (c) => {
+  const businessId = c.req.param('businessId');
+  if (!z.uuid().safeParse(businessId).success) {
+    throw new AppError('Membership not found.', 404, 'CUSTOMER_MEMBERSHIP_NOT_FOUND');
+  }
+  return withDb(c, async (db) => {
+    const membership = await new CustomerMembershipService(db).leave(c.get('customerId'), businessId);
+    return ok(c, toCustomerMembershipDto(membership));
   });
 });

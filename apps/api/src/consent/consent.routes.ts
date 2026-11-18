@@ -7,6 +7,7 @@ import { rateLimitByCustomer } from '../middleware/rate-limit';
 import { ok } from '../lib/response';
 import { AppError } from '../lib/errors';
 import { parseListPagination } from '../lib/list-pagination';
+import { ConsentWithdrawalService } from './consent-withdrawal.service';
 
 type Env = { Bindings: Bindings; Variables: CustomerAuthVariables };
 
@@ -32,7 +33,9 @@ consentRoutes.get('/', async (c) => {
 
 consentRoutes.post('/:id/revoke', async (c) =>
   withDb(c, async (db) => {
-    const revoked = await createRepositories(db).consentGrants.revoke(c.req.param('id'), c.get('customerId'));
+    // Withdrawing the join_loyalty consent also ends that loyalty membership
+    // (Split 01); every other purpose is a plain revoke.
+    const revoked = await new ConsentWithdrawalService(db).revoke(c.req.param('id'), c.get('customerId'));
     // DEV-70: a nonexistent, cross-customer, expired or already revoked
     // grant must not be represented as a successful state transition.
     if (!revoked) {

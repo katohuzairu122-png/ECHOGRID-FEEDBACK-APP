@@ -244,7 +244,17 @@
       "topTierReached": "Top tier reached",
       "rewardsHeading": "Rewards",
       "recentActivityHeading": "Recent activity",
-      "backToWallet": "← My loyalties"
+      "backToWallet": "← My loyalties",
+      "membership": {
+        "leaveButton": "Leave loyalty program",
+        "leavePrompt": "Leave {business}'s loyalty program? You will stop earning and redeeming points, and your consent to join is withdrawn. Your points are kept and come back if you rejoin.",
+        "leaveConfirm": "Yes, leave",
+        "leaveCancel": "Keep my membership",
+        "leaving": "Leaving…",
+        "leaveError": "Unable to leave right now. Please try again.",
+        "leftNotice": "You left this loyalty program. Your points are saved and come back if you rejoin by scanning the business's QR code.",
+        "inactiveNotice": "Your membership with this business is not active, so rewards are unavailable. Please contact the business."
+      }
     },
     "rewardCard": {
       "points": "{points} pts",

@@ -16,6 +16,37 @@ export class CustomerMembershipRepository extends BaseRepository {
     });
   }
 
+  /**
+   * Same lookup as `findByCustomerAndBusiness`, but takes a row-level SHARE lock
+   * that is held until the surrounding transaction ends. Spending and earning
+   * paths read the membership through this so that a concurrent leave or
+   * consent withdrawal (which UPDATEs the row) is strictly ordered against
+   * them: a spend that read "active" finishes before the leave commits, and one
+   * that starts after it sees "left". SHARE locks do not block each other, so
+   * concurrent spends stay concurrent.
+   *
+   * Only meaningful inside a transaction. Uses the select builder because the
+   * relational query API does not expose FOR SHARE (see
+   * `LoyaltyRewardRepository.lockForUpdate` for the same reasoning).
+   */
+  async findByCustomerAndBusinessForShare(
+    customerId: string,
+    businessId: string,
+  ): Promise<BusinessCustomerMembership | undefined> {
+    const [row] = await this.db
+      .select()
+      .from(businessCustomerMemberships)
+      .where(
+        and(
+          eq(businessCustomerMemberships.customerId, customerId),
+          eq(businessCustomerMemberships.businessId, businessId),
+          eq(businessCustomerMemberships.isDeleted, false),
+        ),
+      )
+      .for('share');
+    return row;
+  }
+
   async findActive(customerId: string, businessId: string): Promise<BusinessCustomerMembership | undefined> {
     return this.db.query.businessCustomerMemberships.findFirst({
       where: and(
@@ -42,6 +73,29 @@ export class CustomerMembershipRepository extends BaseRepository {
   async create(input: NewBusinessCustomerMembership): Promise<BusinessCustomerMembership> {
     const [row] = await this.db.insert(businessCustomerMemberships).values(input).returning();
     if (!row) throw new Error('Insert returned no row');
+    return row;
+  }
+
+  /**
+   * Active -> left. Conditional on the row still being active, so it returns
+   * `undefined` (and changes nothing) when the membership was already left,
+   * suspended or closed; the caller decides what that means. The loyalty
+   * account and its points are deliberately untouched: leaving stops earning
+   * and spending but keeps the balance, which comes back on re-join.
+   */
+  async markLeft(id: string): Promise<BusinessCustomerMembership | undefined> {
+    const now = new Date();
+    const [row] = await this.db
+      .update(businessCustomerMemberships)
+      .set({ status: 'left', leftAt: now, updatedAt: now })
+      .where(
+        and(
+          eq(businessCustomerMemberships.id, id),
+          eq(businessCustomerMemberships.status, 'active'),
+          eq(businessCustomerMemberships.isDeleted, false),
+        ),
+      )
+      .returning();
     return row;
   }
 
