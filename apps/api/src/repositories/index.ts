@@ -20,6 +20,7 @@ import { CriticalIncidentRepository } from './critical-incident.repository';
 import { FraudSignalRepository } from './fraud-signal.repository';
 import { CustomerRepository } from './customer.repository';
 import { CustomerSanctionRepository } from './customer-sanction.repository';
+import { CustomerOnboardingEventRepository } from './customer-onboarding-event.repository';
 import { CustomerMembershipRepository } from './customer-membership.repository';
 import { ConsentGrantRepository } from './consent-grant.repository';
 import { CustomerActionAuthorizationRepository } from './customer-action-authorization.repository';
@@ -135,6 +136,7 @@ export function createRepositories(db: Db) {
     customers: new CustomerRepository(db),
     customerSanctions: new CustomerSanctionRepository(db),
     customerMemberships: new CustomerMembershipRepository(db),
+    customerOnboardingEvents: new CustomerOnboardingEventRepository(db),
     consentGrants: new ConsentGrantRepository(db),
     customerActionAuthorizations: new CustomerActionAuthorizationRepository(db),
     otpCodes: new OtpCodeRepository(db),

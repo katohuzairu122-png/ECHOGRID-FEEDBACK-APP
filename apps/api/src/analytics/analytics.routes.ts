@@ -13,6 +13,8 @@ import { AnalyticsService } from './analytics.service';
 import { enqueueSummaryGeneration } from '../sentiment/sentiment-job';
 import { computePeriodRange } from '../sentiment/period';
 import { authorizedBranchId } from '../rbac/branch-access';
+import { AppError } from '../lib/errors';
+import { isUuid } from '../lib/uuid';
 
 type Env = {
   Bindings: Bindings;
@@ -118,4 +120,39 @@ analyticsRoutes.post('/summaries/generate', requirePermission('analytics:manage'
   });
 
   return ok(c, { status: 'queued', periodType: body.periodType }, 202);
+});
+
+/**
+ * CASHIER-AUTH-02D: read-only onboarding attribution counts for ONE business (events vs unique customers, by source, branch and
+ * cashier, re-joins, events with no branch). Counts only: no customer identifier or contact detail is returned. A branch-restricted
+ * role sees its own branch only; the per-cashier breakdown is business-wide information and is withheld from branch-restricted roles.
+ * A cashier-scoped token never reaches this route (outside the cashier allow-list).
+ */
+analyticsRoutes.get('/onboarding', requirePermission('analytics:view'), async (c) => {
+  const url = new URL(c.req.url);
+  const date = (name: string): Date | undefined => {
+    const raw = url.searchParams.get(name);
+    if (!raw) return undefined;
+    const d = new Date(raw);
+    if (Number.isNaN(d.getTime())) throw new AppError('Invalid date range.', 400, 'INVALID_DATE_RANGE');
+    return d;
+  };
+  const from = date('from');
+  const to = date('to');
+  if (from && to && from >= to) throw new AppError('`from` must be before `to`.', 400, 'INVALID_DATE_RANGE');
+  const requested = url.searchParams.get('branchId') ?? undefined;
+  if (requested !== undefined && !isUuid(requested)) throw new AppError('Invalid branch.', 400, 'INVALID_BRANCH');
+  const branchId = authorizedBranchId(c.var, requested);
+  const { db, close } = await createDb(c.env.HYPERDRIVE);
+  try {
+    const summary = await createRepositories(db).customerOnboardingEvents.summarize({
+      businessId: c.get('businessId'),
+      ...(from ? { from } : {}),
+      ...(to ? { to } : {}),
+      ...(branchId ? { branchId } : {}),
+    });
+    return ok(c, { ...summary, byCashier: c.get('businessWideAccess') ? summary.byCashier : [] });
+  } finally {
+    c.executionCtx.waitUntil(close());
+  }
 });

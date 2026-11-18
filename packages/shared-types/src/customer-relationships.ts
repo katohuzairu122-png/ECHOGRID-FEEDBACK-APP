@@ -39,5 +39,17 @@ export const joinCustomerMembershipSchema = z.object({
   idempotencyKey: z.string().trim().min(8).max(200).optional(),
 });
 
+/**
+ * CASHIER-AUTH-02D: a customer accepting a cashier-issued, one-time onboarding invitation. Same consent rule as a QR join: the
+ * customer must explicitly accept, and the invitation (not the request body) decides the business, branch and cashier.
+ */
+export const joinAssistedMembershipSchema = z.object({
+  inviteToken: z.string().min(1).max(2048),
+  consentAccepted: z.literal(true),
+  consentVersion: z.enum(JOIN_LOYALTY_CONSENT_VERSIONS).default(CURRENT_JOIN_LOYALTY_CONSENT_VERSION),
+  idempotencyKey: z.string().trim().min(8).max(200).optional(),
+});
+export type JoinAssistedMembershipInput = z.infer<typeof joinAssistedMembershipSchema>;
+
 export type CustomerMembershipDto = z.infer<typeof customerMembershipSchema>;
 export type JoinCustomerMembershipInput = z.infer<typeof joinCustomerMembershipSchema>;

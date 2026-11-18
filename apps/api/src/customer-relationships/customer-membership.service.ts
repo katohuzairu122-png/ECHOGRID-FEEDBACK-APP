@@ -6,6 +6,7 @@ import { AppError } from '../lib/errors';
 import { isUniqueViolation } from '../lib/pg-errors';
 import { assertVerifiedPhone } from '../lib/customer-verification';
 import { endActiveMembership, lockCustomerBusinessRelationship } from './membership-lifecycle';
+import { assertInviteCashierAuthorized, readVerificationState, type JoinAttribution } from './onboarding-attribution';
 
 export interface JoinCustomerMembershipInput {
   customerId: string;
@@ -20,6 +21,11 @@ export interface JoinCustomerMembershipInput {
    */
   consentVersion: JoinLoyaltyConsentVersion;
   idempotencyKey?: string;
+  /**
+   * CASHIER-AUTH-02D: where this onboarding happened. Both public join routes always supply it, derived on the server (never from
+   * the request body). When omitted, no onboarding event is recorded: callers must not invent one.
+   */
+  attribution?: JoinAttribution;
 }
 
 export interface JoinCustomerMembershipResult {
@@ -28,6 +34,7 @@ export interface JoinCustomerMembershipResult {
 }
 
 /** Unique indexes a join can still collide on once concurrent joins are serialised. */
+const INVITE_ONCE_CONSTRAINT = 'customer_onboarding_events_invite_once_key';
 const JOIN_RACE_CONSTRAINTS = [
   'business_customer_memberships_customer_business_key',
   'loyalty_accounts_membership_id_key',
@@ -38,6 +45,9 @@ const LOYALTY_ACCOUNT_PAIR_CONSTRAINT = 'loyalty_accounts_customer_business_key'
 /** Turns the two unique-violation shapes a join can still hit into deliberate 409s
  * instead of a generic 500; every other failure is returned untouched. */
 function translateJoinError(error: unknown): unknown {
+  if (isUniqueViolation(error, [INVITE_ONCE_CONSTRAINT])) {
+    return new AppError('This invitation has already been used. Ask the cashier for a new one.', 409, 'ONBOARDING_INVITE_USED');
+  }
   if (isUniqueViolation(error, [LOYALTY_ACCOUNT_PAIR_CONSTRAINT])) {
     return new AppError(
       'This loyalty account is closed. Please contact the business.',
@@ -93,6 +103,17 @@ export class CustomerMembershipService {
           await assertVerifiedPhone(repos, input.customerId, 'join_additional_business');
         }
       }
+      // A join is a NEW onboarding occurrence only when it creates the membership or brings a left one back; an idempotent retry of
+      // an already-active membership records nothing, so a duplicate request can never add a second event.
+      const isNewOccurrence = !membership || membership.status !== 'active';
+      const isRejoin = Boolean(membership);
+      if (isNewOccurrence && input.attribution?.source === 'cashier_assisted') {
+        // Takes the shared lock on the cashier's live, still-bound session BEFORE anything is written (see onboarding-attribution.ts).
+        await assertInviteCashierAuthorized(tx, {
+          cashierUserId: input.attribution.cashier.userId, sessionId: input.attribution.cashier.sessionId,
+          businessId: input.businessId, branchId: input.attribution.branchId,
+        });
+      }
       if (!membership) {
         membership = await repos.customerMemberships.create({
           customerId: input.customerId,
@@ -117,6 +138,7 @@ export class CustomerMembershipService {
         input.businessId,
         'join_loyalty',
       );
+      let joinConsentId: string | undefined = existingJoinConsent?.id;
       if (!existingJoinConsent) {
         const grant = await repos.consentGrants.create({
           customerId: input.customerId,
@@ -137,6 +159,7 @@ export class CustomerMembershipService {
         if (grant.status !== 'active') {
           throw new AppError('Consent idempotency key is already in use.', 409, 'CONSENT_IDEMPOTENCY_CONFLICT');
         }
+        joinConsentId = grant.id;
       }
 
       let loyaltyAccount = await repos.loyaltyAccounts.findByCustomerAndBusiness(input.customerId, input.businessId);
@@ -150,6 +173,41 @@ export class CustomerMembershipService {
         loyaltyAccount = await repos.loyaltyAccounts.attachMembership(loyaltyAccount.id, membership.id);
       } else if (loyaltyAccount.membershipId !== membership.id) {
         throw new AppError('Loyalty membership mapping is inconsistent.', 409, 'MEMBERSHIP_MAPPING_CONFLICT');
+      }
+
+      if (isNewOccurrence && input.attribution) {
+        // Same transaction as the membership and consent writes: either the join and its history both commit, or neither does.
+        // The membership row's own onboarding_* summary columns keep describing the CURRENT relationship; this row is the history.
+        const eventId = crypto.randomUUID();
+        const occurredAt = new Date();
+        const attribution = input.attribution;
+        const verificationState = await readVerificationState(tx, input.customerId);
+        const auditLogId = await repos.auditLog.recordReturningId({
+          businessId: input.businessId,
+          actorUserId: attribution.source === 'cashier_assisted' ? attribution.cashier.userId : null,
+          action: 'customer.onboarded',
+          entityType: 'customer_onboarding_event',
+          entityId: eventId,
+          metadata: {
+            source: attribution.source, branchId: attribution.branchId, membershipId: membership.id, rejoin: isRejoin,
+            verificationState,
+          },
+        });
+        await repos.customerOnboardingEvents.append({
+          id: eventId,
+          membershipId: membership.id,
+          businessId: input.businessId,
+          customerId: input.customerId,
+          branchId: attribution.branchId,
+          cashierUserId: attribution.source === 'cashier_assisted' ? attribution.cashier.userId : null,
+          source: attribution.source,
+          verificationState,
+          ...(joinConsentId !== undefined ? { consentGrantId: joinConsentId } : {}),
+          reference: attribution.reference,
+          isRejoin,
+          occurredAt,
+          auditLogId,
+        });
       }
 
       return { membership, loyaltyAccount };
