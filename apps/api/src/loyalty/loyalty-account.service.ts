@@ -6,7 +6,10 @@ import {
   type LoyaltyAccountWithCustomer,
 } from '../repositories';
 import { AppError } from '../lib/errors';
-import { assertMembershipGate } from '../customer-relationships/membership-gate';
+import {
+  assertMembershipGate,
+  evaluateMembershipGate,
+} from '../customer-relationships/membership-gate';
 import type { LoyaltyPurchaseChannel } from '../db/schema';
 
 export interface EnrollInput {
@@ -71,7 +74,13 @@ export class LoyaltyAccountService {
         // member's own enrollment over it.
         if (referrerAccount) {
           const settings = await repos.loyaltySettings.getOrCreateDefaults(input.businessId);
-          await this.applyEarning(repos, referrerAccount, 'referral_bonus', settings.referralBonusPoints, {});
+          await this.applyEarning(
+            repos,
+            referrerAccount,
+            'referral_bonus',
+            settings.referralBonusPoints,
+            {},
+          );
         }
       }
 
@@ -113,7 +122,10 @@ export class LoyaltyAccountService {
       });
 
       if (visitSessionId) {
-        const already = await repos.loyaltyTransactions.findCheckinByVisitSession(account.id, visitSessionId);
+        const already = await repos.loyaltyTransactions.findCheckinByVisitSession(
+          account.id,
+          visitSessionId,
+        );
         if (already) return account;
       }
 
@@ -175,16 +187,11 @@ export class LoyaltyAccountService {
   }): Promise<{ account: LoyaltyAccount; inserted: boolean }> {
     return this.db.transaction(async (tx) => {
       const repos = createRepositories(tx);
-      const account = await this.requireAccount(repos, input.accountId, input.businessId);
-
-      const membership = await repos.customerMemberships.findActive(account.customerId, input.businessId);
-      if (!membership || (account.membershipId && account.membershipId !== membership.id)) {
-        throw new AppError(
-          'An active customer membership is required before loyalty progress can be granted.',
-          409,
-          'MEMBERSHIP_REQUIRED',
-        );
-      }
+      const { account, membership } = await this.requireEligibleEarningAccount(
+        repos,
+        input.accountId,
+        input.businessId,
+      );
 
       const amount = input.purchaseAmount.toFixed(2);
       const { event, inserted } = await repos.loyaltyPurchaseEvents.createIdempotent({
@@ -245,7 +252,14 @@ export class LoyaltyAccountService {
   ): Promise<LoyaltyAccount> {
     return this.db.transaction(async (tx) => {
       const repos = createRepositories(tx);
-      const account = await this.requireAccount(repos, accountId, businessId);
+      // Positive adjustments earn value and must use the same lock order as purchases.
+      // Negative corrections retain their existing behavior and take only the account lock.
+      const account =
+        pointsDelta > 0
+          ? (await this.requireEligibleEarningAccount(repos, accountId, businessId)).account
+          : await repos.loyaltyAccounts.lockForUpdate(accountId, businessId);
+      if (!account)
+        throw new AppError('Loyalty account not found.', 404, 'LOYALTY_ACCOUNT_NOT_FOUND');
 
       if (account.points + pointsDelta < 0) {
         throw new AppError(
@@ -280,7 +294,10 @@ export class LoyaltyAccountService {
     return repos.loyaltyAccounts.listForBusiness(businessId, options);
   }
 
-  async getSummary(customerId: string, businessId: string): Promise<LoyaltyAccountSummary | undefined> {
+  async getSummary(
+    customerId: string,
+    businessId: string,
+  ): Promise<LoyaltyAccountSummary | undefined> {
     const repos = createRepositories(this.db);
     const account = await repos.loyaltyAccounts.findByCustomerAndBusiness(customerId, businessId);
     if (!account) return undefined;
@@ -299,6 +316,31 @@ export class LoyaltyAccountService {
     const repos = createRepositories(this.db);
     await this.requireAccount(repos, accountId, businessId);
     return repos.loyaltyTransactions.listForAccount(accountId, options);
+  }
+
+  private async requireEligibleEarningAccount(
+    repos: Repositories,
+    accountId: string,
+    businessId: string,
+  ) {
+    // Read only to locate the relationship; acquire no account lock before the membership.
+    const reference = await this.requireAccount(repos, accountId, businessId);
+    const membership = await repos.customerMemberships.findByCustomerAndBusinessForShare(
+      reference.customerId,
+      businessId,
+    );
+    const account = await repos.loyaltyAccounts.lockForUpdate(accountId, businessId);
+    if (account && account.customerId !== reference.customerId) {
+      throw new AppError(
+        'Loyalty membership mapping is inconsistent.',
+        409,
+        'MEMBERSHIP_MAPPING_CONFLICT',
+      );
+    }
+    const decision = evaluateMembershipGate(membership, account, 'checkin');
+    if (!decision.ok)
+      throw new AppError(decision.refusal.message, decision.refusal.status, decision.refusal.code);
+    return { membership: decision.membership, account: decision.account };
   }
 
   private async requireAccount(
@@ -339,7 +381,10 @@ export class LoyaltyAccountService {
       recordVisit: extra.recordVisit,
     });
 
-    const eligibleTier = await repos.loyaltyTiers.findHighestEligible(account.businessId, updated.points);
+    const eligibleTier = await repos.loyaltyTiers.findHighestEligible(
+      account.businessId,
+      updated.points,
+    );
     const eligibleTierId = eligibleTier?.id ?? null;
     if (eligibleTierId !== updated.tierId) {
       updated = await repos.loyaltyAccounts.updateTier(account.id, eligibleTierId);

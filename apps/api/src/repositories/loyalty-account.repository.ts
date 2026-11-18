@@ -33,6 +33,22 @@ export class LoyaltyAccountRepository extends BaseRepository {
     });
   }
 
+  /** Tenant-scoped authoritative account state, held through the caller transaction. */
+  async lockForUpdate(id: string, businessId: string): Promise<LoyaltyAccount | undefined> {
+    const [row] = await this.db
+      .select()
+      .from(loyaltyAccounts)
+      .where(
+        and(
+          eq(loyaltyAccounts.id, id),
+          eq(loyaltyAccounts.businessId, businessId),
+          eq(loyaltyAccounts.isDeleted, false),
+        ),
+      )
+      .for('update');
+    return row;
+  }
+
   /** All of a customer's memberships across every business -- the customer
    * app's "my loyalty cards" list. No businessId scoping here on purpose:
    * this is the customer's own view of their own global identity's
