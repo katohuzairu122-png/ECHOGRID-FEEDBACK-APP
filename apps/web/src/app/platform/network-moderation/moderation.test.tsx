@@ -187,6 +187,38 @@ describe('moderation server boundary', () => {
     expect(mocks.api).not.toHaveBeenCalled();
   });
 
+  it.each(['pin', 'unpin'])(
+    'requires confirmation before %s reaches the API',
+    async (operation) => {
+      const result = await moderatePost({}, form({ operation, target: handle }));
+      expect(result.error).toContain('Confirm the action');
+      expect(mocks.api).not.toHaveBeenCalled();
+      expect(mocks.revalidate).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(['pin', 'unpin'])(
+    'uses the existing confirmed %s endpoint and returns its authoritative state',
+    async (operation) => {
+      const post = {
+        handle,
+        state: 'published',
+        pinned: operation === 'pin',
+        expiresAt: '2026-12-18T10:00:00Z',
+      };
+      mocks.api.mockResolvedValue(post);
+      expect(await moderatePost({}, form({ operation, target: handle, confirm: 'on' }))).toEqual({
+        notice: 'Post updated.',
+        post,
+      });
+      expect(mocks.api).toHaveBeenCalledExactlyOnceWith(
+        `${moderationPath}/posts/${handle}/${operation}`,
+        { method: 'POST' },
+      );
+      expect(mocks.revalidate).toHaveBeenCalledExactlyOnceWith(moderationPath);
+    },
+  );
+
   it('returns a successfully submitted saved draft to the queue without swallowing the redirect', async () => {
     mocks.api.mockResolvedValue({ status: 'submitted' });
     await expect(
@@ -272,5 +304,21 @@ describe('moderation workspace', () => {
     render(<ModerationWorkspace queue={[]} />);
     expect(screen.getByText('No revisions are awaiting review.')).toBeVisible();
     expect(screen.getByRole('button', { name: 'Create draft' })).toBeEnabled();
+  });
+  it('resets confirmation when pin action or post handle changes', async () => {
+    render(<ModerationWorkspace queue={[]} />);
+    const user = userEvent.setup();
+    await user.selectOptions(screen.getByLabelText('Action', { exact: true }), 'pin');
+    await user.type(screen.getByLabelText('Post handle', { exact: true }), handle);
+    await user.click(screen.getByLabelText('Apply this action to the specified post'));
+    expect(screen.getByLabelText('Apply this action to the specified post')).toBeChecked();
+    await user.selectOptions(screen.getByLabelText('Action', { exact: true }), 'unpin');
+    expect(screen.getByLabelText('Apply this action to the specified post')).not.toBeChecked();
+    await user.click(screen.getByLabelText('Apply this action to the specified post'));
+    await user.clear(screen.getByLabelText('Post handle', { exact: true }));
+    await user.type(screen.getByLabelText('Post handle', { exact: true }), 'b'.repeat(22));
+    expect(screen.getByLabelText('Apply this action to the specified post')).not.toBeChecked();
+    await user.click(screen.getByRole('button', { name: 'Apply action' }));
+    expect(mocks.api).not.toHaveBeenCalled();
   });
 });

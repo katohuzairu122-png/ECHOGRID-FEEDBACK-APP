@@ -1179,4 +1179,181 @@ describe.skipIf(!process.env.DATABASE_URL)('NETWORK-05 real HTTP-to-Postgres lif
     },
     120000,
   );
+
+  it.skipIf(!browserEnabled)(
+    'browser pins, unpins and transfers the single official pin with customer ordering and audit evidence (NETWORK-11)',
+    async () => {
+      const publish = async (body: string) => {
+        const draft = await prepareSubmitted(body);
+        await action(moderatorA, `/revisions/${draft.revisionId}/approve`);
+        await action(moderatorB, `/revisions/${draft.revisionId}/approve`);
+        return draft;
+      };
+      const older = await publish('NETWORK-11 older official update');
+      const newer = await publish('NETWORK-11 newer official update');
+      const firstVisible = async () => {
+        const response = await request('/api/v1/network/feed?limit=50', customerToken);
+        expect(response.status).toBe(200);
+        return ((await response.json()) as { data: { items: { handle: string }[] } }).data.items[0]
+          ?.handle;
+      };
+      expect(await firstVisible()).toBe(newer.handle);
+      await withModerationBrowser(moderatorB, async (page, context, webUrl, browserExpect) => {
+        await context.addCookies([
+          { name: 'ff_customer_token', value: customerToken, url: webUrl, httpOnly: true },
+        ]);
+        const manage = page.getByRole('region', { name: 'Moderate by post handle' });
+        const apply = async (handle: string, operation: 'pin' | 'unpin') => {
+          await page.goto(webUrl + '/platform/network-moderation');
+          await manage.getByLabel('Post handle', { exact: true }).fill(handle);
+          await manage.getByLabel('Action', { exact: true }).selectOption(operation);
+          await manage.getByLabel('Apply this action to the specified post').check();
+          await manage.getByRole('button', { name: 'Apply action', exact: true }).click();
+          const status = manage.getByRole('status');
+          await browserExpect(status).toContainText(handle);
+          await browserExpect(status).toContainText('published');
+          if (operation === 'pin') await browserExpect(status).toContainText('pinned');
+          else await browserExpect(status).not.toContainText('pinned');
+        };
+        await apply(older.handle, 'pin');
+        expect(await firstVisible()).toBe(older.handle);
+        await page.goto(webUrl + '/loyalty/dashboard/community/feed');
+        await browserExpect(page.getByRole('article').first()).toContainText(
+          'NETWORK-11 older official update',
+        );
+        await apply(older.handle, 'unpin');
+        expect(await firstVisible()).toBe(newer.handle);
+        await page.goto(webUrl + '/loyalty/dashboard/community/feed');
+        await browserExpect(page.getByRole('article').first()).toContainText(
+          'NETWORK-11 newer official update',
+        );
+        await apply(older.handle, 'pin');
+        await apply(newer.handle, 'pin');
+        const pins = await client.query('select handle from network_posts where pinned');
+        expect(pins.rows.map((row) => row.handle)).toEqual([newer.handle]);
+        expect(await firstVisible()).toBe(newer.handle);
+        await apply(newer.handle, 'unpin');
+        expect(
+          (await client.query('select count(*)::int n from network_posts where pinned')).rows[0].n,
+        ).toBe(0);
+        await page.goto(webUrl + '/platform/network-moderation/history');
+        for (const [handle, pinCount] of [
+          [older.handle, 2],
+          [newer.handle, 1],
+        ] as const) {
+          await browserExpect(
+            page.getByRole('row').filter({ hasText: handle }).filter({ hasText: 'Post pinned' }),
+          ).toHaveCount(pinCount);
+          await browserExpect(
+            page.getByRole('row').filter({ hasText: handle }).filter({ hasText: 'Post unpinned' }),
+          ).toHaveCount(1);
+          expect(
+            (
+              await client.query(
+                `select count(*)::int n from network_revision_approvals
+            where revision_id=(select live_revision_id from network_posts where handle=$1)`,
+                [handle],
+              )
+            ).rows[0].n,
+          ).toBe(2);
+        }
+      });
+    },
+    120000,
+  );
+
+  it.skipIf(!browserEnabled)(
+    'browser refuses ineligible pins and revalidates moderator authority without pin audit or publication changes (NETWORK-11)',
+    async () => {
+      const unpublished = await createDraft('NETWORK-11 unpublished pin refusal');
+      const publish = async (body: string) => {
+        const draft = await prepareSubmitted(body);
+        await action(moderatorA, `/revisions/${draft.revisionId}/approve`);
+        await action(moderatorB, `/revisions/${draft.revisionId}/approve`);
+        return draft;
+      };
+      const expired = await publish('NETWORK-11 expired pin refusal');
+      // Synthetic disposable fixture only, using the existing integration expiry setup.
+      await client.query(
+        `update network_posts set published_at=now()-interval '31 days',
+        expires_at=now()-interval '1 day' where handle=$1`,
+        [expired.handle],
+      );
+      const suspended = await publish('NETWORK-11 suspended pin refusal');
+      await action(moderatorB, `/posts/${suspended.handle}/suspend`, { reasonCode: 'unsafe_link' });
+      const withdrawn = await publish('NETWORK-11 withdrawn pin refusal');
+      await action(moderatorB, `/posts/${withdrawn.handle}/withdraw`);
+      const eligible = await publish('NETWORK-11 authority pin refusal');
+      const state = async (handle: string) =>
+        (
+          await client.query(
+            `select state,pinned,live_revision_id,expires_at
+        from network_posts where handle=$1`,
+            [handle],
+          )
+        ).rows[0];
+      const pinAuditCount = async (handle: string) =>
+        (
+          await client.query(
+            `select count(*)::int n from audit_log
+        where action='network.post_pinned' and entity_id=(select id from network_posts where handle=$1)`,
+            [handle],
+          )
+        ).rows[0].n;
+      await withModerationBrowser(moderatorB, async (page, _context, webUrl, browserExpect) => {
+        const manage = page.getByRole('region', { name: 'Moderate by post handle' });
+        for (const draft of [unpublished, expired, suspended, withdrawn]) {
+          const before = await state(draft.handle);
+          const auditBefore = await pinAuditCount(draft.handle);
+          await page.goto(webUrl + '/platform/network-moderation');
+          await manage.getByLabel('Post handle', { exact: true }).fill(draft.handle);
+          await manage.getByLabel('Action', { exact: true }).selectOption('pin');
+          await manage.getByLabel('Apply this action to the specified post').check();
+          await manage.getByRole('button', { name: 'Apply action', exact: true }).click();
+          await browserExpect(manage.getByRole('alert')).toContainText(
+            'conflicts with its current state',
+          );
+          expect(await state(draft.handle)).toEqual(before);
+          expect(await pinAuditCount(draft.handle)).toBe(auditBefore);
+          expect(await isVisible(draft.handle)).toBe(false);
+        }
+        await page.goto(webUrl + '/platform/network-moderation');
+        await manage.getByLabel('Post handle', { exact: true }).fill(eligible.handle);
+        await manage.getByLabel('Action', { exact: true }).selectOption('pin');
+        await manage.getByLabel('Apply this action to the specified post').check();
+        const before = await state(eligible.handle);
+        const auditBefore = await pinAuditCount(eligible.handle);
+        await client.query("update users set platform_role='support' where id=$1", [moderatorB]);
+        try {
+          await manage.getByRole('button', { name: 'Apply action', exact: true }).click();
+          await browserExpect(manage.getByRole('alert')).toContainText(
+            /not authorized|administrator access is required/,
+          );
+          const impersonated = await signImpersonationToken(moderatorA, author, secret);
+          const cashier = await signCashierAccessToken(moderatorA, secret, {
+            businessId: business,
+            sessionId: randomUUID(),
+          });
+          for (const [token, expected] of [
+            [await signAccessToken(moderatorB, secret), 403],
+            [impersonated.token, 403],
+            [cashier, 403],
+            [customerToken, 401],
+          ] as const) {
+            for (const operation of ['pin', 'unpin']) {
+              expect(
+                (await request(`${base}/posts/${eligible.handle}/${operation}`, token, 'POST'))
+                  .status,
+              ).toBe(expected);
+            }
+          }
+          expect(await state(eligible.handle)).toEqual(before);
+          expect(await pinAuditCount(eligible.handle)).toBe(auditBefore);
+        } finally {
+          await client.query("update users set platform_role='admin' where id=$1", [moderatorB]);
+        }
+      });
+    },
+    120000,
+  );
 });
