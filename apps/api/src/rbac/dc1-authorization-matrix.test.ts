@@ -154,6 +154,7 @@ async function defaultRoleGrants(): Promise<Record<string, string[]>> {
     'messages:send',
     'profile:edit',
     'profile:submit',
+    'cashier:manage',
   ];
   const grants: Record<string, string[]> = {};
   const roleNames = new Map<string, string>();
@@ -386,6 +387,14 @@ describe('default role grants (real RoleProvisioningService)', () => {
       expect(personas.Manager, `Manager ${key}`).not.toContain(key);
       expect(personas.Staff, `Staff ${key}`).not.toContain(key);
     }
+  });
+  // CASHIER-AUTH-02A (D-4): cashier:manage defaults to Owner and Admin; a Manager only gets it if the Owner grants it, and
+  // a cashier (Staff) never holds it.
+  it('cashier:manage goes to Owner and Admin only by default, never to Manager or Staff', () => {
+    expect(personas.Owner).toContain('cashier:manage');
+    expect(personas.Admin).toContain('cashier:manage');
+    expect(personas.Manager).not.toContain('cashier:manage');
+    expect(personas.Staff).not.toContain('cashier:manage');
   });
   it('the platform moderation permission is never a business permission', () => {
     for (const role of ['Owner', 'Admin', 'Manager', 'Staff']) {

@@ -268,7 +268,9 @@ export class AuthService {
 
     // Silent no-op, deliberately -- see the enumeration note above. This is
     // the one place in this service where "not found" is not an error.
-    if (!user || user.status !== 'active') return;
+    // CASHIER-AUTH-02A (D-5): a managed cashier identity has no email and no recovery path; the lookup is by email so it
+    // cannot match one, and this guard keeps that true even if the lookup ever changes.
+    if (!user || user.status !== 'active' || user.email === null || user.managedBusinessId !== null) return;
 
     const rawToken = generateResetToken();
     // H3-5: atomic "issue unless one was issued in the last 120 s". Suppressed = same silent return as an unknown account:
@@ -328,6 +330,10 @@ export class AuthService {
     if (!user || user.status !== 'active') {
       throw new AuthError('This account is not active.', 'ACCOUNT_INACTIVE');
     }
+    // CASHIER-AUTH-02A: managed cashier identities have no recovery; same answer as any invalid link.
+    if (user.managedBusinessId !== null) {
+      throw new AuthError('This reset link is invalid or has expired.', 'INVALID_RESET_TOKEN');
+    }
 
     // Consume BEFORE writing the new password, and honour the guarded
     // update's result. Two concurrent redemptions of one link both pass the
@@ -354,6 +360,10 @@ export class AuthService {
     const user = await this.repos.users.findById(input.userId);
     if (!user) {
       throw new AuthError('User not found.', 'USER_NOT_FOUND');
+    }
+    // CASHIER-AUTH-02A (D-5): a managed cashier cannot change its own credential; only an administrator can.
+    if (user.managedBusinessId !== null) {
+      throw new AuthError('This account cannot change its own password.', 'INVALID_CREDENTIALS');
     }
     const verifiedPasswordHash = user.passwordHash;
     if (!(await this.hasher.verify(input.currentPassword, verifiedPasswordHash))) {
@@ -417,11 +427,12 @@ export class AuthService {
   private async afterPasswordChanged(
     userId: string,
     fullName: string,
-    email: string,
+    email: string | null,
     emailService: EmailService,
   ): Promise<void> {
     await this.repos.refreshTokens.revokeAllForUser(userId);
     await this.repos.passwordResetTokens.invalidateAllForUser(userId);
+    if (email === null) return; // managed identity: nothing to notify
 
     const { subject, html } = renderPasswordChangedEmail(fullName);
     try {

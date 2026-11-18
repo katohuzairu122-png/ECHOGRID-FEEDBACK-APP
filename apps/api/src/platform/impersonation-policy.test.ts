@@ -45,7 +45,7 @@ const users = new Map([
   [ADMIN_ID, { id: ADMIN_ID, status: 'active', platformRole: 'admin', email: 'admin@example.test', fullName: 'Admin' }],
   [SUPPORT_ID, { id: SUPPORT_ID, status: 'active', platformRole: 'support', email: 'support@example.test', fullName: 'Support' }],
   [BILLING_ID, { id: BILLING_ID, status: 'active', platformRole: 'billing', email: 'billing@example.test', fullName: 'Billing' }],
-  [TARGET_ID, { id: TARGET_ID, status: 'active', platformRole: null, email: 'target@example.test', fullName: 'Target' }],
+  [TARGET_ID, { id: TARGET_ID, status: 'active', platformRole: null, managedBusinessId: null, email: 'target@example.test', fullName: 'Target' }],
 ]);
 
 function env(flag?: string): Bindings {

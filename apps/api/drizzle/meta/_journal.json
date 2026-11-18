@@ -575,6 +575,13 @@
       "when": 1795004640085,
       "tag": "0081_b2b_participation_foundation",
       "breakpoints": true
+    },
+    {
+      "idx": 82,
+      "version": "7",
+      "when": 1795007523559,
+      "tag": "0082_cashier_managed_identity",
+      "breakpoints": true
     }
   ]
 }

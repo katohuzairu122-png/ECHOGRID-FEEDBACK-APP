@@ -10,7 +10,7 @@ export interface ImpersonateInput {
 export interface ImpersonationResult {
   accessToken: string;
   expiresAt: Date;
-  targetUser: { id: string; email: string; fullName: string };
+  targetUser: { id: string; email: string | null; fullName: string };
 }
 
 /**
@@ -38,6 +38,10 @@ export class ImpersonationService {
     }
     if (targetUser.status !== 'active') {
       throw new AppError('Cannot impersonate an inactive user.', 409, 'USER_NOT_ACTIVE');
+    }
+    // CASHIER-AUTH-02A: a managed cashier identity is never impersonated (it has no web session or dashboard).
+    if (targetUser.managedBusinessId !== null) {
+      throw new AppError('Cannot impersonate a managed cashier identity.', 409, 'USER_NOT_IMPERSONATABLE');
     }
 
     const grants = await this.repos.userBusinessRoles.listForUserAtBusiness(

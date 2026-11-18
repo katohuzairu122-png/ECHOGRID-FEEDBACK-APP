@@ -9,6 +9,7 @@ import {
   signupSchema,
   loginSchema,
   cashierLoginSchema,
+  managedCashierLoginSchema,
   cashierSessionSchema,
   refreshSchema,
   requestPasswordResetSchema,
@@ -22,6 +23,7 @@ import { ok } from '../lib/response';
 import { AppError } from '../lib/errors';
 import {
   cashierAuthRateLimit,
+  managedCashierLoginRateLimit,
   passwordChangeRateLimit,
   passwordResetConfirmRateLimit,
   passwordResetRequestRateLimit,
@@ -153,6 +155,36 @@ authRoutes.post('/cashier/login', cashierAuthRateLimit('login'), async (c) => {
       entityType: 'session',
       ...(businesses.size === 1 ? { businessId: [...businesses][0]! } : {}),
       details: { choices: result.choices.length },
+    });
+  }
+  const { userId: _userId, ...publicResult } = result;
+  return ok(c, publicResult);
+});
+
+/**
+ * CASHIER-AUTH-02A: business-managed cashier sign-in (business code + username + password; no email). Same response shape and
+ * session machinery as /cashier/login, so everything after it (refresh, logout, allow-list, revocation) is unchanged.
+ */
+authRoutes.post('/cashier/managed-login', managedCashierLoginRateLimit(), async (c) => {
+  const body = await parseJsonBody(c.req.raw, managedCashierLoginSchema);
+  const client = await resolveClient(c.req.raw.headers, c.env.CLIENT_ATTRIBUTION_SECRET, Date.now(), c.env.CLIENT_ATTRIBUTION_SECRET_PREVIOUS);
+  const result = await withCashierService(c, (service) =>
+    service.managedLogin({ ...body, userAgent: client.userAgent, ipAddress: client.ip }),
+  );
+  c.set('userId', result.userId);
+  if (result.status === 'authenticated') {
+    c.set('auditMetadata', {
+      action: 'auth.cashier_login',
+      entityType: 'session',
+      businessId: result.session.businessId,
+      details: { branchId: result.session.branchId, deviceLabel: result.session.deviceLabel, method: 'managed' },
+    });
+  } else {
+    c.set('auditMetadata', {
+      action: 'auth.cashier_selection_required',
+      entityType: 'session',
+      ...(result.choices.length > 0 ? { businessId: result.choices[0]!.businessId } : {}),
+      details: { choices: result.choices.length, method: 'managed' },
     });
   }
   const { userId: _userId, ...publicResult } = result;

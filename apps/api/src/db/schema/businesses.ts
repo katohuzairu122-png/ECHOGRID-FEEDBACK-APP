@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, check, index } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, text, check, index, timestamp } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import { auditColumns, softDeleteColumns } from './_shared';
 import { businessCategories } from './business-categories';
@@ -22,10 +22,14 @@ export const businesses = pgTable(
     defaultCurrency: text('default_currency').notNull().default('USD'),
     defaultTimezone: text('default_timezone').notNull().default('UTC'),
     status: text('status').notNull().default('active'),
+    /** CASHIER-AUTH-02A (D-3): public, owner-rotatable cashier sign-in code. NOT an authorization secret. NULL until first used. */
+    cashierCode: text('cashier_code').unique(),
+    cashierCodeRotatedAt: timestamp('cashier_code_rotated_at', { withTimezone: true }),
     ...auditColumns,
     ...softDeleteColumns,
   },
   (table) => [
+    check('businesses_cashier_code_check', sql`${table.cashierCode} IS NULL OR ${table.cashierCode} ~ '^[A-HJ-NP-Z2-9]{10}$'`),
     check(
       'businesses_status_check',
       sql`${table.status} IN ('active', 'suspended', 'archived')`,

@@ -66,7 +66,8 @@ billingRoutes.post('/checkout', requirePermission('billing:manage'), async (c) =
   try {
     const repos = createRepositories(db);
     const user = await repos.users.findById(c.get('userId'));
-    if (!user) {
+    if (!user || user.email === null) {
+      // CASHIER-AUTH-02A: a managed cashier identity has no email and is never a billing contact.
       throw new AppError('User not found.', 404, 'USER_NOT_FOUND');
     }
 

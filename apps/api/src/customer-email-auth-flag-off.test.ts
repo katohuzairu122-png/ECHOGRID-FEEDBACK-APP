@@ -17,7 +17,7 @@ vi.mock('./middleware/rate-limit', () => {
   const pass = () => async (_c: unknown, next: () => Promise<void>) => next();
   return {
     rateLimit: pass, globalApiRateLimit: pass, rateLimitByCustomer: pass, staffLoginRateLimit: pass, signupRateLimit: pass,
-    passwordResetRequestRateLimit: pass, passwordResetConfirmRateLimit: pass, passwordChangeRateLimit: pass, cashierAuthRateLimit: pass,
+    passwordResetRequestRateLimit: pass, passwordResetConfirmRateLimit: pass, passwordChangeRateLimit: pass, cashierAuthRateLimit: pass, managedCashierLoginRateLimit: pass, adminReauthRateLimit: pass,
   };
 });
 vi.mock('./middleware/audit', () => ({ auditTrail: async (_c: unknown, next: () => Promise<void>) => next() }));

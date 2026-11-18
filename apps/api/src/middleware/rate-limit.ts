@@ -118,9 +118,9 @@ async function digest(value: string): Promise<string> {
   return hex(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value))).slice(0, 32);
 }
 
-type CashierAuthKind = 'login' | 'session' | 'refresh' | 'logout';
+type CashierAuthKind = 'login' | 'session' | 'refresh' | 'logout' | 'managed-login';
 /** H3: the staff recovery and account endpoints that share the attributed throttle. */
-type StaffAuthKind = 'signup' | 'reset-request' | 'reset-confirm' | 'password-change';
+type StaffAuthKind = 'signup' | 'reset-request' | 'reset-confirm' | 'password-change' | 'admin-reauth';
 type AuthKind = CashierAuthKind | StaffAuthKind;
 
 /**
@@ -128,8 +128,15 @@ type AuthKind = CashierAuthKind | StaffAuthKind;
  * otherwise, and the authenticated user id for a password change. Never the raw secret.
  */
 async function subjectOf(kind: AuthKind, body: unknown, userId?: string): Promise<string> {
-  if (kind === 'password-change') return userId ? digest(`user:${userId}`) : 'none';
+  if (kind === 'password-change' || kind === 'admin-reauth') return userId ? digest(`user:${userId}`) : 'none';
   const record = body !== null && typeof body === 'object' ? (body as Record<string, unknown>) : {};
+  // CASHIER-AUTH-02A: a managed sign-in is about (business code, username), never an email. Normalised so case and spacing
+  // variants share one bucket; without this every managed sign-in would share the single `none` subject floor.
+  if (kind === 'managed-login') {
+    const code = typeof record.businessCode === 'string' ? record.businessCode.toUpperCase().replace(/[\s-]/g, '') : '';
+    const name = typeof record.username === 'string' ? record.username.trim().toLowerCase() : '';
+    return code && name ? digest(`managed:${code}:${name}`) : 'none';
+  }
   const byEmail = kind === 'login' || kind === 'signup' || kind === 'reset-request';
   const raw = byEmail ? record.email : kind === 'session' ? record.ticket : kind === 'reset-confirm' ? record.token : record.refreshToken;
   return typeof raw === 'string' && raw.length > 0 ? digest(byEmail ? raw.trim().toLowerCase() : raw) : 'none';
@@ -267,3 +274,9 @@ export const signupRateLimit = () => attributedAuthRateLimit('staff', 'signup', 
 export const passwordResetRequestRateLimit = () => attributedAuthRateLimit('staff', 'reset-request', true);
 export const passwordResetConfirmRateLimit = () => attributedAuthRateLimit('staff', 'reset-confirm', true);
 export const passwordChangeRateLimit = () => attributedAuthRateLimit('staff', 'password-change', true);
+
+/** CASHIER-AUTH-02A: managed cashier sign-in (strict per-IP legacy bucket plus a per business-code/username floor). */
+export const managedCashierLoginRateLimit = () => attributedAuthRateLimit('cashier', 'managed-login', true);
+
+/** CASHIER-AUTH-02A: administrator re-authentication; keyed by the authenticated user, mounted AFTER authenticate. */
+export const adminReauthRateLimit = () => attributedAuthRateLimit('staff', 'admin-reauth', true);

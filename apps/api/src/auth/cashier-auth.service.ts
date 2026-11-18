@@ -4,6 +4,9 @@ import type { Pbkdf2Worker } from './pbkdf2-worker';
 import { hashToken } from './token-hash';
 import { constantTimeEqualHex } from './crypto-utils';
 import { AuthError, DUMMY_PASSWORD_HASH } from './auth.service';
+import {
+  LOCKOUT_DURATION_MS, LOCKOUT_MAX_FAILURES, LOCKOUT_WINDOW_MS, normalizeBusinessCode, normalizeUsername,
+} from '../cashier-accounts/credentials';
 
 /** Short, non-reversible fingerprint of the stored password hash: changes whenever the password does. */
 const passwordVersion = async (passwordHash: string) => (await hashToken(passwordHash)).slice(0, 16);
@@ -86,7 +89,51 @@ export class CashierAuthService {
     if (user.status !== 'active')
       throw new AuthError('This account is not active.', 'ACCOUNT_INACTIVE');
 
-    const choices = await this.eligibleChoices(user.id);
+    return this.proceedAfterCredentials(user, input.deviceLabel, input);
+  }
+
+  /**
+   * CASHIER-AUTH-02A (D-3, D-5): sign-in for a business-managed cashier identity (no email). The business is resolved from its
+   * public cashier code FIRST, then the username is looked up inside that business only. Every failure (bad format, unknown
+   * code, unknown username, wrong password, locked, disabled, revoked, no branch grant) is the same generic error after the
+   * same PBKDF2 work, so neither existence nor lock state can be probed. A correct password never unlocks a locked identity.
+   */
+  async managedLogin(
+    input: { businessCode: string; username: string; password: string; deviceLabel?: string | undefined } & Meta,
+  ): Promise<CashierLoginResult & { userId: string }> {
+    const fail = () => new AuthError('Invalid sign-in details.', 'INVALID_CREDENTIALS');
+    const code = normalizeBusinessCode(input.businessCode);
+    const username = normalizeUsername(input.username);
+    const business = code ? await this.repos.businesses.findByCashierCode(code) : undefined;
+    const user = business && username ? await this.repos.users.findManagedByUsername(business.id, username) : undefined;
+    const valid = await this.hasher.verify(input.password, user?.passwordHash ?? DUMMY_PASSWORD_HASH);
+    if (!business || !user || business.status !== 'active') throw fail();
+    const lockedNow = user.lockedUntil !== null && user.lockedUntil > new Date();
+    if (!valid) {
+      await this.repos.users.recordFailedManagedLogin(user.id, LOCKOUT_MAX_FAILURES, LOCKOUT_WINDOW_MS, LOCKOUT_DURATION_MS);
+      throw fail();
+    }
+    if (lockedNow || user.status !== 'active') throw fail();
+    await this.repos.users.clearManagedLoginFailures(user.id);
+    // Only this business: a managed identity can never be offered another one (the database also forbids such a grant).
+    try {
+      return await this.proceedAfterCredentials(user, input.deviceLabel, input, business.id);
+    } catch (error) {
+      // No branch grant: the same generic failure, never a distinguishable "account exists but has no access".
+      if (error instanceof AuthError && error.code === 'CASHIER_ACCESS_DENIED') throw fail();
+      throw error;
+    }
+  }
+
+  /** The part of sign-in that follows a verified credential: eligibility, then a session or a selection ticket. */
+  private async proceedAfterCredentials(
+    user: { id: string; passwordHash: string },
+    deviceLabel: string | undefined,
+    meta: Meta,
+    onlyBusinessId?: string,
+  ): Promise<CashierLoginResult & { userId: string }> {
+    const all = await this.eligibleChoices(user.id);
+    const choices = onlyBusinessId ? all.filter((c) => c.businessId === onlyBusinessId) : all;
     if (choices.length === 0) {
       throw new AuthError('This account cannot use the cashier app.', 'CASHIER_ACCESS_DENIED');
     }
@@ -101,19 +148,13 @@ export class CashierAuthService {
       only.branches.length <= 1
     ) {
       const branchId = only.branches[0]?.id ?? null;
-      const session = await this.openSession(
-        user.id,
-        only.businessId,
-        branchId,
-        input.deviceLabel,
-        input,
-      );
+      const session = await this.openSession(user.id, only.businessId, branchId, deviceLabel, meta);
       return { status: 'authenticated', ...session, userId: user.id };
     }
     const ticket = await signCashierSelectionTicket(
       user.id,
       this.secrets.JWT_ACCESS_SECRET,
-      input.deviceLabel,
+      deviceLabel,
       await passwordVersion(user.passwordHash),
     );
     return { status: 'selection_required', ticket, choices, userId: user.id };

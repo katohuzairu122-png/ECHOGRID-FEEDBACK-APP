@@ -118,7 +118,7 @@ teamRoutes.post('/invitations/accept', authenticate, async (c) => {
       }
 
       const user = await repos.users.findById(userId);
-      if (!user || normalizeEmail(user.email) !== invitation.email) {
+      if (!user || user.email === null || normalizeEmail(user.email) !== invitation.email) {
         throw new AppError(
           'Sign in with the invited email address.',
           403,
