@@ -21,7 +21,7 @@
 import { pathToFileURL } from 'node:url';
 import pg from 'pg';
 
-/** Eight invariant counts plus two informational totals; one row, counts only. */
+/** Seven invariant counts plus three informational totals; one row, counts only. */
 export const RECONCILIATION_SQL = `
 SELECT
   (SELECT count(*) FROM loyalty_accounts)::int AS accounts_total,
