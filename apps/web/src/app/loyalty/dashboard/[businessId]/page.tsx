@@ -2,6 +2,7 @@ import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { getFormatter, getTranslations } from 'next-intl/server';
 import type {
+  CustomerMembershipDto,
   LoyaltyAccountDto,
   LoyaltyTransactionDto,
   LoyaltyRewardDto,
@@ -12,7 +13,9 @@ import type {
 import { customerApiFetch } from '@/lib/customer-api-client';
 import { publicApiFetch } from '@/lib/public-api-client';
 import { ApiError } from '@/lib/api-client';
+import { rethrowControlFlow } from '@/lib/rethrow-control-flow';
 import { Badge, Card, CardContent, CardHeader, CardTitle, Progress } from '@/components/ui';
+import { LeaveMembership } from './leave-membership';
 import { RewardCard } from './reward-card';
 
 interface LoyaltyAccountSummary {
@@ -35,7 +38,7 @@ export default async function LoyaltyBusinessPage({ params }: LoyaltyBusinessPag
     throw err;
   }
 
-  const [business, rewards, tiers, unreadMessageCount] = await Promise.all([
+  const [business, rewards, tiers, unreadMessageCount, membership] = await Promise.all([
     publicApiFetch<BusinessPublicDto>(`/businesses/${businessId}/public`),
     customerApiFetch<LoyaltyRewardDto[]>(`/loyalty/me/rewards/${businessId}`),
     customerApiFetch<LoyaltyTierDto[]>(`/loyalty/me/tiers/${businessId}`),
@@ -45,6 +48,13 @@ export default async function LoyaltyBusinessPage({ params }: LoyaltyBusinessPag
     customerApiFetch<ConversationWithBusinessDto>(`/messaging/me/conversations/${businessId}`)
       .then((c) => c.unreadCount)
       .catch(() => 0),
+    // Whether the customer is still a member decides if rewards can be redeemed and if Leave is
+    // offered. A failure here must not break the page (the API still refuses anything the customer
+    // is not entitled to), but a session redirect raised by customerApiFetch must still go through.
+    customerApiFetch<CustomerMembershipDto>(`/customer-memberships/${businessId}`).catch((err: unknown) => {
+      rethrowControlFlow(err);
+      return null;
+    }),
   ]);
 
   // i18n & Multi-Currency Block 3 -- reads from the [businessId] layout's
@@ -56,6 +66,9 @@ export default async function LoyaltyBusinessPage({ params }: LoyaltyBusinessPag
   const t = await getTranslations('loyalty.customer.businessDashboard');
 
   const { account, recentTransactions } = summary;
+  // Unknown (null) keeps the previous behaviour; only a membership known not to be active hides rewards.
+  const membershipStatus = membership?.status;
+  const canRedeem = membershipStatus === undefined || membershipStatus === 'active';
   const sortedTiers = [...tiers].sort((a, b) => a.minPoints - b.minPoints);
   const currentTier = sortedTiers.filter((tier) => tier.minPoints <= account.points).at(-1);
   const nextTier = sortedTiers.find((tier) => tier.minPoints > account.points);
@@ -116,7 +129,17 @@ export default async function LoyaltyBusinessPage({ params }: LoyaltyBusinessPag
         </CardContent>
       </Card>
 
-      {rewards.length > 0 && (
+      {!canRedeem && (
+        <Card>
+          <CardContent className="py-4">
+            <p role="status" className="text-sm text-neutral-700">
+              {membershipStatus === 'left' ? t('membership.leftNotice') : t('membership.inactiveNotice')}
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
+      {canRedeem && rewards.length > 0 && (
         <div className="flex flex-col gap-3">
           <h2 className="text-lg font-semibold text-neutral-900">{t('rewardsHeading')}</h2>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -150,6 +173,10 @@ export default async function LoyaltyBusinessPage({ params }: LoyaltyBusinessPag
             </CardContent>
           </Card>
         </div>
+      )}
+
+      {membershipStatus === 'active' && (
+        <LeaveMembership businessId={businessId} businessName={business.name} />
       )}
     </div>
   );

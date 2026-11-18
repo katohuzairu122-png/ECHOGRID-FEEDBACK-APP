@@ -68,7 +68,8 @@ describe.skipIf(!process.env.DATABASE_URL)('Phone attach (real Postgres)', () =>
     const b = (await repos.businesses.create({ name: 'Attach B', slug: `attach-b-${suffix}` })).id;
     const memberships = new CustomerMembershipService(db);
     const id = await emailCustomer();
-    const join = (businessId: string) => memberships.join({ customerId: id, businessId, onboardingSource: 'business_qr', onboardingReference: 'attach-test' });
+    const join = (businessId: string) =>
+      memberships.join({ customerId: id, businessId, onboardingSource: 'business_qr', onboardingReference: 'attach-test', consentVersion: 'v1' });
     await join(a);
     await expect(join(b)).rejects.toMatchObject({ code: 'PHONE_VERIFICATION_REQUIRED' });
     const number = phone();

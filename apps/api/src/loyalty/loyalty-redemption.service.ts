@@ -1,7 +1,8 @@
 import type { Database } from '../db/client';
 import { createRepositories } from '../repositories';
-import type { LoyaltyTransaction, LoyaltyReward } from '../repositories';
+import type { LoyaltyAccount, LoyaltyTransaction, LoyaltyReward } from '../repositories';
 import { AppError } from '../lib/errors';
+import { assertMembershipGate, evaluateMembershipGate } from '../customer-relationships/membership-gate';
 import { generateRedemptionCode } from './redemption-code';
 import { wouldExceedBudget } from './budget-limit';
 import { VisitSessionService } from '../visits/visit-session.service';
@@ -424,6 +425,31 @@ export class LoyaltyRedemptionService {
     }
   }
 
+  /**
+   * Split 01: a customer may only redeem or be issued a reward while their
+   * membership with the business is active and the account is not suspended.
+   * Leaving the program, withdrawing the join consent, or a suspension stops
+   * redemption but never touches the points balance. Shared by redeem() and
+   * issue(); runs inside their transaction with the membership row
+   * share-locked, so a leave or withdrawal racing this call is strictly
+   * ordered against it. Staff confirming a code at the counter stays the
+   * control on the physical hand-over (documented in the Split 01 addendum).
+   */
+  private async assertMayRedeem(
+    repos: ReturnType<typeof createRepositories>,
+    customerId: string,
+    businessId: string,
+    account: LoyaltyAccount,
+  ) {
+    return (await assertMembershipGate(repos, {
+      customerId,
+      businessId,
+      action: 'redeem',
+      account,
+      lockMembership: true,
+    })).membership;
+  }
+
   async redeem(
     customerId: string,
     businessId: string,
@@ -433,10 +459,11 @@ export class LoyaltyRedemptionService {
     return this.db.transaction(async (tx) => {
       const repos = createRepositories(tx);
 
-      const account = await repos.loyaltyAccounts.findByCustomerAndBusiness(customerId, businessId);
+      let account = await repos.loyaltyAccounts.findByCustomerAndBusiness(customerId, businessId);
       if (!account) {
         throw new AppError('You are not enrolled in this loyalty program yet.', 404, 'LOYALTY_ACCOUNT_NOT_FOUND');
       }
+      const membership = await this.assertMayRedeem(repos, customerId, businessId, account);
 
       // lockForUpdate, not findById, since Block 6.4: this row's lock is
       // held for the rest of this transaction, serializing any concurrent
@@ -448,6 +475,15 @@ export class LoyaltyRedemptionService {
       if (!reward || reward.status !== 'active') {
         throw new AppError('This reward is not available.', 404, 'LOYALTY_REWARD_NOT_FOUND');
       }
+      // Lock order: membership SHARE -> reward UPDATE -> account UPDATE. Re-read status
+      // after every blocking lock; a pre-lock snapshot cannot authorize spending.
+      account = await repos.loyaltyAccounts.lockForUpdate(account.id, businessId);
+      const decision = evaluateMembershipGate(membership, account, 'redeem');
+      if (!decision.ok) {
+        throw new AppError(decision.refusal.message, decision.refusal.status, decision.refusal.code);
+      }
+      account = decision.account;
+
       // Continuing Development Block 6.2 (S6.2 reward types): redeem() is
       // the points-balance path only. A discount/free_item/voucher reward
       // isn't paid for out of the account's points -- see issue() below.
@@ -581,10 +617,11 @@ export class LoyaltyRedemptionService {
     return this.db.transaction(async (tx) => {
       const repos = createRepositories(tx);
 
-      const account = await repos.loyaltyAccounts.findByCustomerAndBusiness(customerId, businessId);
+      let account = await repos.loyaltyAccounts.findByCustomerAndBusiness(customerId, businessId);
       if (!account) {
         throw new AppError('You are not enrolled in this loyalty program yet.', 404, 'LOYALTY_ACCOUNT_NOT_FOUND');
       }
+      const membership = await this.assertMayRedeem(repos, customerId, businessId, account);
 
       // lockForUpdate, not findById -- see redeem()'s identical comment on
       // this same call, and checkDailyAndBudgetLimits' own doc comment.
@@ -592,6 +629,15 @@ export class LoyaltyRedemptionService {
       if (!reward || reward.status !== 'active') {
         throw new AppError('This reward is not available.', 404, 'LOYALTY_REWARD_NOT_FOUND');
       }
+      // Lock order: membership SHARE -> reward UPDATE -> account UPDATE. Re-read status
+      // after every blocking lock; a pre-lock snapshot cannot authorize spending.
+      account = await repos.loyaltyAccounts.lockForUpdate(account.id, businessId);
+      const decision = evaluateMembershipGate(membership, account, 'redeem');
+      if (!decision.ok) {
+        throw new AppError(decision.refusal.message, decision.refusal.status, decision.refusal.code);
+      }
+      account = decision.account;
+
       if (reward.type === 'points') {
         throw new AppError('Use the redeem endpoint for a points reward.', 422, 'LOYALTY_REWARD_WRONG_TYPE');
       }

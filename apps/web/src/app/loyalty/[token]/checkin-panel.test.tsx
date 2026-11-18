@@ -59,12 +59,35 @@ describe('CheckinPanel', () => {
     vi.mocked(joinAndCheckinAction).mockResolvedValue({ error: 'Verify your phone number to continue.', code: 'PHONE_VERIFICATION_REQUIRED' });
     render(<CheckinPanel token="qr-token" branchName="Main branch" businessName="Echo Grid Cafe" signedIn />);
     await user.click(screen.getByRole('button', { name: 'Check in' }));
-    await user.click(await screen.findByRole('button', { name: /Join/ }));
+    const join = await screen.findByRole('button', { name: /Join/ });
+    await user.click(screen.getByRole('checkbox'));
+    await user.click(join);
     expect(await screen.findByText('Verify your phone number to join another business.')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Verify my phone' })).toHaveAttribute(
       'href',
       '/loyalty/dashboard/phone?next=%2Floyalty%2Fqr-token%3Fautocheckin%3D1',
     );
     expect(screen.queryByText('Verify your phone number to continue.')).not.toBeInTheDocument();
+  });
+
+  it('asks for explicit consent to join and sends nothing until the box is ticked', async () => {
+    const user = userEvent.setup();
+    vi.mocked(checkinAction).mockResolvedValue({ error: 'Join first.', code: 'MEMBERSHIP_REQUIRED', membershipRequired: true });
+    vi.mocked(joinAndCheckinAction).mockResolvedValue({ error: 'Verify your phone number to continue.', code: 'PHONE_VERIFICATION_REQUIRED' });
+    render(<CheckinPanel token="qr-token" branchName="Main branch" businessName="Echo Grid Cafe" signedIn />);
+    await user.click(screen.getByRole('button', { name: 'Check in' }));
+
+    const join = await screen.findByRole('button', { name: /Join/ });
+    const consent = screen.getByRole('checkbox', { name: /I agree to join this business's loyalty program/ });
+    expect(consent).not.toBeChecked();
+    expect(join).toBeDisabled();
+    await user.click(join);
+    expect(joinAndCheckinAction).not.toHaveBeenCalled();
+
+    await user.click(consent);
+    expect(join).toBeEnabled();
+    await user.click(join);
+    expect(joinAndCheckinAction).toHaveBeenCalledTimes(1);
+    expect(joinAndCheckinAction).toHaveBeenCalledWith('qr-token', true);
   });
 });

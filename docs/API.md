@@ -93,6 +93,21 @@ below for the full authorization model.
 | `OTP_MAX_ATTEMPTS` | 429 | `POST /customer-auth/otp/verify`: the outstanding code has already been guessed wrong 5 times; the correct code no longer works either — request a new one |
 | `CUSTOMER_SUSPENDED` | 401 | `POST /customer-auth/otp/verify`: the code was correct, but this customer's account `status` is not `active` |
 | `LOYALTY_ACCOUNT_NOT_FOUND` | 404 | The loyalty account doesn't exist, or belongs to a different business/customer than the caller |
+| `MEMBERSHIP_REQUIRED` | 409 | Check-in, redeem or issue: the customer has no membership with this business, or has left it. Join (again) first |
+| `MEMBERSHIP_SUSPENDED` | 403 | Check-in, redeem or issue: the membership or the loyalty account is suspended. Joining cannot fix this; the business has to |
+| `MEMBERSHIP_UNAVAILABLE` | 409 | Check-in, redeem or issue: the membership is `pending`, `business_exited` or `closed` (or has a status this API does not recognise) |
+| `LOYALTY_ACCOUNT_NOT_READY` | 409 | Check-in, redeem or issue: the customer has an active membership but no loyalty account yet. Joining again creates it |
+| `MEMBERSHIP_MAPPING_CONFLICT` | 409 | The loyalty account is linked to a different membership than the customer's own. An integrity fault: retrying will not help |
+| `CUSTOMER_MEMBERSHIP_NOT_FOUND` | 404 | `GET /customer-memberships/:businessId`, `POST /customer-memberships/:businessId/leave`: no membership with that business, or the id is malformed |
+| `MEMBERSHIP_NOT_LEAVABLE` | 409 | `POST /customer-memberships/:businessId/leave`: only an `active` membership can be left by the customer |
+| `MEMBERSHIP_NOT_REACTIVATABLE` | 409 | Join: the existing membership is `suspended`, `pending`, `business_exited` or `closed`, which the customer cannot restart |
+| `MEMBERSHIP_JOIN_CONFLICT` | 409 | Join: another join for the same customer and business was in flight and collided. Retry |
+| `LOYALTY_ACCOUNT_UNAVAILABLE` | 409 | Join: a closed (soft-deleted) loyalty account blocks a new one. Contact the business |
+| `BUSINESS_NOT_AVAILABLE` | 409 | Join: the business is not active |
+| `CONSENT_IDEMPOTENCY_CONFLICT` | 409 | Join: the `idempotencyKey` was already used for a different consent, or for a consent the customer has since withdrawn. Ask again with a new key |
+| `CONSENT_GRANT_NOT_ACTIVE` | 404 | `POST /consents/:id/revoke`: no active grant with that id belongs to the caller (missing, someone else's, expired, already revoked, or a malformed id) |
+| `CUSTOMER_LIMITED` | 403 | Join a business the customer does not already belong to: a limit is in place on this customer for `join_business` |
+| `PHONE_VERIFICATION_REQUIRED` | 403 | Join an additional business: the customer must verify their phone first; `details.feature` names the feature |
 | `LOYALTY_TIER_NOT_FOUND` | 404 | The tier doesn't exist or belongs to a different business |
 | `LOYALTY_REWARD_NOT_FOUND` | 404 | The reward doesn't exist, is inactive, or belongs to a different business |
 | `INSUFFICIENT_POINTS` | 422 | A points-adjustment or redemption would drop (or already leaves) the account balance below zero |
@@ -1183,33 +1198,167 @@ enrolled at this business), `RATE_LIMITED` (429).
 
 ---
 
+### `POST /api/v1/customer-memberships/join`
+
+**Customer-authenticated.** Joins the loyalty program of the business a QR
+code belongs to. The business comes from the signed QR token, never from the
+request, and a join without explicit consent is refused. In one transaction it
+creates the membership (or reactivates one the customer had left), records a
+`join_loyalty` consent grant, and creates or links the loyalty account. It is
+idempotent and safe under a double-submit: a concurrent duplicate waits for the
+first and returns the same rows.
+
+**Request body**
+
+```json
+{ "qrToken": "…", "consentAccepted": true, "consentVersion": "v1", "idempotencyKey": "optional, 8–200 characters" }
+```
+
+- `consentAccepted` must be the literal `true`: the customer ticked the
+  consent box. Anything else is `VALIDATION_ERROR` (400).
+- `consentVersion` names the consent wording the customer was shown. `"v1"` is
+  the only version and the default. The server accepts only versions that
+  map to a shipped wording.
+- `idempotencyKey` makes a retry of the same request return the same result.
+  Replaying it after the consent was withdrawn is refused.
+
+**Response `201`**
+
+```json
+{
+  "success": true,
+  "data": {
+    "membership": {
+      "id": "uuid", "customerId": "uuid", "businessId": "uuid", "status": "active",
+      "joinedAt": "2026-11-18T10:00:00.000Z", "leftAt": null,
+      "onboardingSource": "business_qr", "onboardingReference": "uuid"
+    },
+    "loyaltyAccount": { "...": "LoyaltyAccountDto" }
+  }
+}
+```
+
+`onboardingReference` is the id of the QR code used. Joining again after leaving
+needs fresh consent and restores the points balance the account kept.
+
+**Errors**: `UNAUTHENTICATED` (401), `VALIDATION_ERROR` (400, includes a missing
+consent), `QR_CODE_NOT_FOUND` (404), `BUSINESS_NOT_AVAILABLE` (409),
+`MEMBERSHIP_NOT_REACTIVATABLE` (409), `MEMBERSHIP_JOIN_CONFLICT` (409),
+`LOYALTY_ACCOUNT_UNAVAILABLE` (409), `MEMBERSHIP_MAPPING_CONFLICT` (409),
+`CONSENT_IDEMPOTENCY_CONFLICT` (409), `CUSTOMER_LIMITED` (403),
+`PHONE_VERIFICATION_REQUIRED` (403, joining an additional business),
+`RATE_LIMITED` (429).
+
+---
+
 ### `POST /api/v1/loyalty/me/join`
 
-Explicit "join this business's loyalty program" — idempotent, returns the
-existing account if already enrolled. Distinct from `POST .../checkin`'s
-auto-enroll, for a customer joining without having scanned a QR code (e.g. a
-referral link).
+The same join, with the same request body, behaviour and errors as
+`POST /customer-memberships/join`, kept for existing clients. It returns
+`201` with the `LoyaltyAccountDto` only. Prefer `/customer-memberships/join`,
+which also returns the membership.
 
-**Request body**: `{ "businessId": "uuid" }`.
+The earlier `{ "businessId": "uuid" }` body is no longer accepted: joining
+requires a QR code and consent.
 
-**Response `201`**: the account.
+---
 
-**Errors**: `UNAUTHENTICATED` (401), `VALIDATION_ERROR` (400), `RATE_LIMITED` (429).
+### `GET /api/v1/customer-memberships`
+
+**Customer-authenticated.** Every membership the calling customer has, in any
+status (a membership the customer left is still listed, with `status: "left"`).
+Not paginated.
+
+**Response `200`**: array of `CustomerMembershipDto`
+(`id`, `customerId`, `businessId`, `status`, `joinedAt`, `leftAt`,
+`onboardingSource`, `onboardingReference`). `status` is one of `pending`,
+`active`, `suspended`, `left`, `business_exited`, `closed`. `leftAt` is set
+while the status is `left`, otherwise `null`.
+
+**Errors**: `UNAUTHENTICATED` (401), `RATE_LIMITED` (429).
+
+---
+
+### `GET /api/v1/customer-memberships/:businessId`
+
+The caller's membership with one business, as a `CustomerMembershipDto`.
+
+**Errors**: `UNAUTHENTICATED` (401), `CUSTOMER_MEMBERSHIP_NOT_FOUND` (404: no
+membership with that business, or `businessId` is not a uuid),
+`RATE_LIMITED` (429).
+
+---
+
+### `POST /api/v1/customer-memberships/:businessId/leave`
+
+The customer ends their own membership. Earning and redeeming stop, the
+`join_loyalty` consent is withdrawn, and the loyalty account and its points
+balance are kept; joining again restores them. Idempotent: leaving a
+membership that is already `left` returns it unchanged. No request body.
+
+Only an `active` membership can be left by the customer. A `suspended`,
+`pending`, `business_exited` or `closed` membership is for the business or the
+platform to resolve.
+
+**Response `200`**: the membership as a `CustomerMembershipDto` with
+`status: "left"` and `leftAt` set.
+
+**Errors**: `UNAUTHENTICATED` (401), `CUSTOMER_MEMBERSHIP_NOT_FOUND` (404, also
+for a malformed `businessId`), `MEMBERSHIP_NOT_LEAVABLE` (409),
+`RATE_LIMITED` (429).
+
+---
+
+### `GET /api/v1/consents`
+
+**Customer-authenticated.** The caller's consent grants across every business
+and purpose, newest first. `?limit=&offset=` (`limit` defaults to and is capped
+at 100). Returns a closed customer-facing projection: `id`, `businessId`,
+`purpose`, `scope`, `resourceType`, `resourceId`, `consentVersion`, `status`
+(`active`, `revoked`, `expired`, `consumed`), `grantedAt`, `expiresAt`,
+`revokedAt`, `consumedAt`. Dates are ISO strings or null. Internal idempotency
+keys, metadata, customer identifiers and creation bookkeeping are excluded.
+The authenticated customer determines scope; query parameters cannot override it.
+
+**Errors**: `UNAUTHENTICATED` (401), `INVALID_PAGINATION` (400),
+`RATE_LIMITED` (429).
+
+---
+
+### `POST /api/v1/consents/:id/revoke`
+
+Withdraws one of the caller's active consent grants. Withdrawing a
+`join_loyalty` consent also ends the customer's membership with that business
+(`status: "left"`) in the same transaction, exactly as `POST
+/customer-memberships/:businessId/leave` does, and keeps the points balance.
+Every other purpose is a plain revoke.
+
+**Response `200`**: `{ "success": true, "data": { "revoked": true } }`
+
+**Errors**: `UNAUTHENTICATED` (401), `CONSENT_GRANT_NOT_ACTIVE` (404: the grant
+does not exist, is another customer's, has expired, was already revoked, or
+`id` is not a uuid), `RATE_LIMITED` (429).
 
 ---
 
 ### `POST /api/v1/loyalty/me/checkin`
 
 Scans the same anonymous QR token `GET /qr/:token`/feedback submission uses.
-Auto-enrolls the customer if this is their first visit to this business, then
-awards `pointsPerCheckin` and bumps `visitCount`/`lastVisitAt`.
+Requires an **active membership** with the business and a loyalty account;
+check-in never creates a membership (join first, see
+`POST /customer-memberships/join`). It then awards `pointsPerCheckin` and bumps
+`visitCount`/`lastVisitAt`. The membership is read under a row lock, so a
+concurrent leave is strictly ordered against it.
 
 **Request body**: `{ "qrToken": "..." }`.
 
 **Response `200`**: the updated account.
 
 **Errors**: `UNAUTHENTICATED` (401), `VALIDATION_ERROR` (400),
-`QR_CODE_NOT_FOUND` (404), `RATE_LIMITED` (429).
+`QR_CODE_NOT_FOUND` (404), `MEMBERSHIP_REQUIRED` (409),
+`MEMBERSHIP_SUSPENDED` (403), `MEMBERSHIP_UNAVAILABLE` (409),
+`LOYALTY_ACCOUNT_NOT_READY` (409), `MEMBERSHIP_MAPPING_CONFLICT` (409),
+`RATE_LIMITED` (429).
 
 ---
 
@@ -1244,6 +1393,14 @@ staff at the counter. Does **not** hand over the reward itself — that's
 design (a customer redeeming does not mean staff has yet verified and handed
 over the physical item).
 
+Requires an **active membership** and a loyalty account that is not
+suspended, checked under a row lock so a concurrent leave or consent
+withdrawal is strictly ordered against it. A customer who has left, or whose
+membership is suspended, cannot spend the points they kept. The same gate
+applies to `POST /loyalty/me/accounts/:businessId/issue`. Staff confirmation of
+the code at the counter remains the control on the physical hand-over; no
+separate short-lived authorization is required of the customer for a redeem.
+
 **Request body**: `{ "rewardId": "uuid" }`.
 
 **Response `201`**
@@ -1253,8 +1410,10 @@ over the physical item).
 ```
 
 **Errors**: `UNAUTHENTICATED` (401), `VALIDATION_ERROR` (400),
-`LOYALTY_ACCOUNT_NOT_FOUND` (404), `LOYALTY_REWARD_NOT_FOUND` (404, includes
-a retired/inactive reward), `INSUFFICIENT_POINTS` (422),
+`LOYALTY_ACCOUNT_NOT_FOUND` (404), `MEMBERSHIP_REQUIRED` (409),
+`MEMBERSHIP_SUSPENDED` (403), `MEMBERSHIP_UNAVAILABLE` (409),
+`MEMBERSHIP_MAPPING_CONFLICT` (409), `LOYALTY_REWARD_NOT_FOUND` (404,
+includes a retired/inactive reward), `INSUFFICIENT_POINTS` (422),
 `REDEMPTION_CODE_EXHAUSTED` (500, effectively unreachable), `RATE_LIMITED` (429).
 
 ### `GET /api/v1/analytics/trends`

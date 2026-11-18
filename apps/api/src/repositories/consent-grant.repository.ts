@@ -118,9 +118,30 @@ export class ConsentGrantRepository extends BaseRepository {
     });
   }
 
+  /**
+   * The customer's own grant in ANY state (active, revoked, expired), or
+   * `undefined` when it does not exist or belongs to someone else. Lets a
+   * caller learn what revoking it would affect (purpose, business) before it
+   * takes the locks that make the revoke safe.
+   */
+  async findOwned(id: string, customerId: string): Promise<ConsentGrant | undefined> {
+    return this.db.query.consentGrants.findFirst({
+      where: and(eq(consentGrants.id, id), eq(consentGrants.customerId, customerId)),
+    });
+  }
+
   async revoke(id: string, customerId: string): Promise<boolean> {
-    // DEV-70: signal whether an active, customer-owned grant actually
-    // transitioned to revoked; do not treat an unmatched UPDATE as success.
+    return (await this.revokeReturning(id, customerId)) !== undefined;
+  }
+
+  /**
+   * DEV-70: revokes an ACTIVE, unexpired, customer-owned grant and returns the
+   * revoked row, or `undefined` when nothing transitioned (missing, another
+   * customer's, expired or already revoked). An unmatched UPDATE is never
+   * treated as success. The row tells the caller which purpose and business
+   * were withdrawn.
+   */
+  async revokeReturning(id: string, customerId: string): Promise<ConsentGrant | undefined> {
     const [updated] = await this.db
       .update(consentGrants)
       .set({ status: 'revoked', revokedAt: new Date() })
@@ -130,7 +151,27 @@ export class ConsentGrantRepository extends BaseRepository {
         eq(consentGrants.status, 'active'),
         or(isNull(consentGrants.expiresAt), gt(consentGrants.expiresAt, new Date())),
       ))
+      .returning();
+    return updated;
+  }
+
+  /**
+   * Revokes every grant of one purpose that is still marked active for one
+   * customer and business (expired ones included, so nothing stays "active" in
+   * the table) and returns how many changed. Used when a membership ends: the
+   * consent that created it goes with it.
+   */
+  async revokeActiveForPurpose(customerId: string, businessId: string, purpose: ConsentPurpose): Promise<number> {
+    const revoked = await this.db
+      .update(consentGrants)
+      .set({ status: 'revoked', revokedAt: new Date() })
+      .where(and(
+        eq(consentGrants.customerId, customerId),
+        eq(consentGrants.businessId, businessId),
+        eq(consentGrants.purpose, purpose),
+        eq(consentGrants.status, 'active'),
+      ))
       .returning({ id: consentGrants.id });
-    return updated !== undefined;
+    return revoked.length;
   }
 }

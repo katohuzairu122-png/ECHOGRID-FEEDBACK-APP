@@ -96,7 +96,7 @@ describe.skipIf(!databaseUrl)('Core loyalty acceptance (real HTTP and disposable
   const join = (id: string, businessId: string, branchId: string) =>
     membershipService.join({
       customerId: id, businessId, onboardingSource: 'integration_test',
-      onboardingReference: branchId,
+      onboardingReference: branchId, consentVersion: 'v1',
     });
   const q = async (sql: string, values: unknown[]) => (await dbClient.query(sql, values)).rows;
 

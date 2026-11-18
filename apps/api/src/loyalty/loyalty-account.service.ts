@@ -6,6 +6,10 @@ import {
   type LoyaltyAccountWithCustomer,
 } from '../repositories';
 import { AppError } from '../lib/errors';
+import {
+  assertMembershipGate,
+  evaluateMembershipGate,
+} from '../customer-relationships/membership-gate';
 import type { LoyaltyPurchaseChannel } from '../db/schema';
 
 export interface EnrollInput {
@@ -31,7 +35,15 @@ export interface LoyaltyAccountSummary {
 export class LoyaltyAccountService {
   constructor(private readonly db: Database) {}
 
-  /** Creates a business membership for a customer who doesn't have one yet
+  /**
+   * @deprecated Legacy enrolment; do not use it for new code. It creates a
+   * loyalty account with no membership and no JOIN_LOYALTY consent, and the
+   * check-in and redeem gates refuse such an account (MEMBERSHIP_REQUIRED).
+   * Join through `CustomerMembershipService.join`, which records the
+   * membership, the consent and the account together. Nothing calls this, so
+   * the referral bonus below is unreachable as well.
+   *
+   * Creates a business membership for a customer who doesn't have one yet
    * (idempotent -- returns the existing account if already enrolled). A
    * referral, if given, awards the REFERRER's account a bonus once, at the
    * moment their referral actually joins -- not before, since an
@@ -62,7 +74,13 @@ export class LoyaltyAccountService {
         // member's own enrollment over it.
         if (referrerAccount) {
           const settings = await repos.loyaltySettings.getOrCreateDefaults(input.businessId);
-          await this.applyEarning(repos, referrerAccount, 'referral_bonus', settings.referralBonusPoints, {});
+          await this.applyEarning(
+            repos,
+            referrerAccount,
+            'referral_bonus',
+            settings.referralBonusPoints,
+            {},
+          );
         }
       }
 
@@ -97,34 +115,17 @@ export class LoyaltyAccountService {
   ): Promise<LoyaltyAccount> {
     return this.db.transaction(async (tx) => {
       const repos = createRepositories(tx);
-
-      const membership = await repos.customerMemberships.findActive(customerId, businessId);
-      if (!membership) {
-        throw new AppError(
-          'Join this loyalty program before checking in.',
-          409,
-          'MEMBERSHIP_REQUIRED',
-        );
-      }
-
-      const account = await repos.loyaltyAccounts.findByCustomerAndBusiness(customerId, businessId);
-      if (!account) {
-        throw new AppError(
-          'Your loyalty account is not ready for this membership.',
-          409,
-          'LOYALTY_ACCOUNT_NOT_READY',
-        );
-      }
-      if (account.membershipId && account.membershipId !== membership.id) {
-        throw new AppError(
-          'Loyalty membership mapping is inconsistent.',
-          409,
-          'MEMBERSHIP_MAPPING_CONFLICT',
-        );
-      }
+      // Share-locks the membership row so a concurrent leave or consent withdrawal is ordered
+      // against this earning: it either finishes first (and this is refused) or waits for us.
+      const { account } = await this.resolveCheckinContext(repos, customerId, businessId, {
+        lockMembership: true,
+      });
 
       if (visitSessionId) {
-        const already = await repos.loyaltyTransactions.findCheckinByVisitSession(account.id, visitSessionId);
+        const already = await repos.loyaltyTransactions.findCheckinByVisitSession(
+          account.id,
+          visitSessionId,
+        );
         if (already) return account;
       }
 
@@ -134,6 +135,41 @@ export class LoyaltyAccountService {
         visitSessionId,
         recordVisit: true,
       });
+    });
+  }
+
+  /** Read-only preflight for the customer check-in route (Split 01).
+   *
+   * Runs the same membership/account preconditions as `recordCheckin`, but
+   * outside a transaction and without writing anything, so the route can
+   * reject a non-member BEFORE it touches any check-in side effect (velocity
+   * counters, visit-proof verification, the KV cooldown). Without this, a
+   * non-member's first scan reserved the cooldown, the follow-up "join, then
+   * check in" call found the new account in cooldown and answered with it
+   * unchanged -- a successful-looking check-in that awarded no points.
+   * `recordCheckin` re-checks inside its transaction, so this is a gate, not
+   * a replacement for that guard. */
+  async assertCheckinReady(customerId: string, businessId: string): Promise<void> {
+    await this.resolveCheckinContext(createRepositories(this.db), customerId, businessId);
+  }
+
+  /** Single source of truth for the check-in preconditions, shared by
+   * `assertCheckinReady` (preflight) and `recordCheckin` (authoritative,
+   * inside the earning transaction). The rule itself -- an active membership
+   * and a usable, consistently mapped account -- lives in the shared
+   * membership gate, the same one customer redemption goes through.
+   * `lockMembership` is for the in-transaction caller only. */
+  private resolveCheckinContext(
+    repos: Repositories,
+    customerId: string,
+    businessId: string,
+    options: { lockMembership?: boolean } = {},
+  ) {
+    return assertMembershipGate(repos, {
+      customerId,
+      businessId,
+      action: 'checkin',
+      ...(options.lockMembership ? { lockMembership: true } : {}),
     });
   }
 
@@ -151,16 +187,11 @@ export class LoyaltyAccountService {
   }): Promise<{ account: LoyaltyAccount; inserted: boolean }> {
     return this.db.transaction(async (tx) => {
       const repos = createRepositories(tx);
-      const account = await this.requireAccount(repos, input.accountId, input.businessId);
-
-      const membership = await repos.customerMemberships.findActive(account.customerId, input.businessId);
-      if (!membership || (account.membershipId && account.membershipId !== membership.id)) {
-        throw new AppError(
-          'An active customer membership is required before loyalty progress can be granted.',
-          409,
-          'MEMBERSHIP_REQUIRED',
-        );
-      }
+      const { account, membership } = await this.requireEligibleEarningAccount(
+        repos,
+        input.accountId,
+        input.businessId,
+      );
 
       const amount = input.purchaseAmount.toFixed(2);
       const { event, inserted } = await repos.loyaltyPurchaseEvents.createIdempotent({
@@ -221,7 +252,14 @@ export class LoyaltyAccountService {
   ): Promise<LoyaltyAccount> {
     return this.db.transaction(async (tx) => {
       const repos = createRepositories(tx);
-      const account = await this.requireAccount(repos, accountId, businessId);
+      // Positive adjustments earn value and must use the same lock order as purchases.
+      // Negative corrections retain their existing behavior and take only the account lock.
+      const account =
+        pointsDelta > 0
+          ? (await this.requireEligibleEarningAccount(repos, accountId, businessId)).account
+          : await repos.loyaltyAccounts.lockForUpdate(accountId, businessId);
+      if (!account)
+        throw new AppError('Loyalty account not found.', 404, 'LOYALTY_ACCOUNT_NOT_FOUND');
 
       if (account.points + pointsDelta < 0) {
         throw new AppError(
@@ -256,7 +294,10 @@ export class LoyaltyAccountService {
     return repos.loyaltyAccounts.listForBusiness(businessId, options);
   }
 
-  async getSummary(customerId: string, businessId: string): Promise<LoyaltyAccountSummary | undefined> {
+  async getSummary(
+    customerId: string,
+    businessId: string,
+  ): Promise<LoyaltyAccountSummary | undefined> {
     const repos = createRepositories(this.db);
     const account = await repos.loyaltyAccounts.findByCustomerAndBusiness(customerId, businessId);
     if (!account) return undefined;
@@ -275,6 +316,31 @@ export class LoyaltyAccountService {
     const repos = createRepositories(this.db);
     await this.requireAccount(repos, accountId, businessId);
     return repos.loyaltyTransactions.listForAccount(accountId, options);
+  }
+
+  private async requireEligibleEarningAccount(
+    repos: Repositories,
+    accountId: string,
+    businessId: string,
+  ) {
+    // Read only to locate the relationship; acquire no account lock before the membership.
+    const reference = await this.requireAccount(repos, accountId, businessId);
+    const membership = await repos.customerMemberships.findByCustomerAndBusinessForShare(
+      reference.customerId,
+      businessId,
+    );
+    const account = await repos.loyaltyAccounts.lockForUpdate(accountId, businessId);
+    if (account && account.customerId !== reference.customerId) {
+      throw new AppError(
+        'Loyalty membership mapping is inconsistent.',
+        409,
+        'MEMBERSHIP_MAPPING_CONFLICT',
+      );
+    }
+    const decision = evaluateMembershipGate(membership, account, 'checkin');
+    if (!decision.ok)
+      throw new AppError(decision.refusal.message, decision.refusal.status, decision.refusal.code);
+    return { membership: decision.membership, account: decision.account };
   }
 
   private async requireAccount(
@@ -315,7 +381,10 @@ export class LoyaltyAccountService {
       recordVisit: extra.recordVisit,
     });
 
-    const eligibleTier = await repos.loyaltyTiers.findHighestEligible(account.businessId, updated.points);
+    const eligibleTier = await repos.loyaltyTiers.findHighestEligible(
+      account.businessId,
+      updated.points,
+    );
     const eligibleTierId = eligibleTier?.id ?? null;
     if (eligibleTierId !== updated.tierId) {
       updated = await repos.loyaltyAccounts.updateTier(account.id, eligibleTierId);

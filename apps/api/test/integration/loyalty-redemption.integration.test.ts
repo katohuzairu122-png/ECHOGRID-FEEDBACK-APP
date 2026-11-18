@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { Client } from 'pg';
 import { buildDb } from '../../src/db/client';
 import { createRepositories } from '../../src/repositories';
+import { CustomerMembershipService } from '../../src/customer-relationships/customer-membership.service';
 import { LoyaltyAccountService } from '../../src/loyalty/loyalty-account.service';
 import { LoyaltyRedemptionService } from '../../src/loyalty/loyalty-redemption.service';
 import { LoyaltyRewardService } from '../../src/loyalty/loyalty-reward.service';
@@ -36,6 +37,7 @@ describe.skipIf(!process.env.DATABASE_URL)('LoyaltyRedemptionService (integratio
   let client: Client;
   let repos: ReturnType<typeof createRepositories>;
   let accountService: LoyaltyAccountService;
+  let membershipService: CustomerMembershipService;
   let redemptionService: LoyaltyRedemptionService;
   // Block 6.7.4 (S6.3 campaign dashboard tests) -- constructed the same way
   // loyalty-reward.integration.test.ts does (repos, no db-only args), reused
@@ -48,12 +50,27 @@ describe.skipIf(!process.env.DATABASE_URL)('LoyaltyRedemptionService (integratio
   let customerId: string;
   let rewardId: string;
 
+  // Split 01: redeem()/issue() require an active membership, so fixtures join through the
+  // real membership path (consent, membership and account in one transaction) instead of the
+  // legacy LoyaltyAccountService.enroll(), which creates an account with no membership.
+  const enrollMember = async (memberCustomerId: string, memberBusinessId: string) =>
+    (
+      await membershipService.join({
+        customerId: memberCustomerId,
+        businessId: memberBusinessId,
+        onboardingSource: 'integration_test',
+        onboardingReference: 'loyalty-redemption',
+        consentVersion: 'v1',
+      })
+    ).loyaltyAccount;
+
   beforeAll(async () => {
     client = new Client({ connectionString: process.env.DATABASE_URL });
     await client.connect();
     const db = buildDb(client);
     repos = createRepositories(db);
     accountService = new LoyaltyAccountService(db);
+    membershipService = new CustomerMembershipService(db);
     redemptionService = new LoyaltyRedemptionService(db);
     rewardService = new LoyaltyRewardService(repos);
 
@@ -71,7 +88,7 @@ describe.skipIf(!process.env.DATABASE_URL)('LoyaltyRedemptionService (integratio
     const customer = await repos.customers.create({ phone: `+1555${Date.now()}9` });
     customerId = customer.id;
 
-    const account = await accountService.enroll({ customerId, businessId: businessA });
+    const account = await enrollMember(customerId, businessA);
     await accountService.adjustPoints(businessA, account.id, 500, 'seed points for redemption test', STAFF_ACTOR_ID);
 
     const reward = await repos.loyaltyRewards.create({
@@ -432,7 +449,7 @@ describe.skipIf(!process.env.DATABASE_URL)('LoyaltyRedemptionService (integratio
       cooldownSeconds: 3600,
     });
     const otherCustomer = await repos.customers.create({ phone: `+1555${Date.now()}1` });
-    await accountService.enroll({ customerId: otherCustomer.id, businessId: businessA });
+    await enrollMember(otherCustomer.id, businessA);
 
     await redemptionService.issue(customerId, businessA, reward.id);
 
@@ -931,7 +948,7 @@ describe.skipIf(!process.env.DATABASE_URL)('LoyaltyRedemptionService (integratio
         limitPer: 'visit',
       });
       const otherCustomer = await repos.customers.create({ phone: `+1555${Date.now()}2` });
-      await accountService.enroll({ customerId: otherCustomer.id, businessId: businessA });
+      await enrollMember(otherCustomer.id, businessA);
 
       await redemptionService.issue(customerId, businessA, reward.id, {
         visitProof: session.code,
@@ -999,7 +1016,7 @@ describe.skipIf(!process.env.DATABASE_URL)('LoyaltyRedemptionService (integratio
     const codes: string[] = [];
     for (let i = 0; i < 3; i++) {
       const customer = await repos.customers.create({ phone: `+1555${Date.now()}${i}` });
-      await accountService.enroll({ customerId: customer.id, businessId: businessA });
+      await enrollMember(customer.id, businessA);
       const { redemptionCode } = await redemptionService.issue(customer.id, businessA, reward.id);
       codes.push(redemptionCode);
     }
@@ -1025,7 +1042,7 @@ describe.skipIf(!process.env.DATABASE_URL)('LoyaltyRedemptionService (integratio
       rewardValue: '5.00',
     });
     const customer = await repos.customers.create({ phone: `+1555${Date.now()}9` });
-    await accountService.enroll({ customerId: customer.id, businessId: businessA });
+    await enrollMember(customer.id, businessA);
     await redemptionService.issue(customer.id, businessA, rewardX.id);
 
     const statsY = await repos.loyaltyTransactions.getCampaignStats(rewardY.id);
@@ -1041,7 +1058,7 @@ describe.skipIf(!process.env.DATABASE_URL)('LoyaltyRedemptionService (integratio
       maxBudget: '100.00',
     });
     const customer = await repos.customers.create({ phone: `+1555${Date.now()}8` });
-    await accountService.enroll({ customerId: customer.id, businessId: businessA });
+    await enrollMember(customer.id, businessA);
     const { redemptionCode } = await redemptionService.issue(customer.id, businessA, reward.id);
     await redemptionService.confirmRedemption(businessA, redemptionCode);
 

@@ -32,6 +32,7 @@ import { LoyaltyRedemptionService } from './loyalty-redemption.service';
 import { LoyaltyTierService } from './loyalty-tier.service';
 import { NotificationService } from '../notifications/notification.service';
 import { CustomerMembershipService } from '../customer-relationships/customer-membership.service';
+import { toCustomerLoyaltyAccountDto } from '../customer-relationships/membership-dto';
 import { signCustomerQrToken, CUSTOMER_QR_TOKEN_TTL_SECONDS } from '../qr/customer-qr-token';
 import { LoyaltyActionResolver } from './loyalty-action-resolver';
 
@@ -122,6 +123,8 @@ loyaltyCustomerRoutes.get('/accounts/:businessId', async (c) => {
   });
 });
 
+// Second entry point to the same join as POST /customer-memberships/join, which
+// is the one to use (it also returns the membership). Kept for existing clients.
 loyaltyCustomerRoutes.post('/join', async (c) => {
   const body = await parseJsonBody(c.req.raw, joinLoyaltyProgramSchema);
   return withDb(c, async (db) => {
@@ -140,7 +143,7 @@ loyaltyCustomerRoutes.post('/join', async (c) => {
       ...(body.idempotencyKey !== undefined ? { idempotencyKey: body.idempotencyKey } : {}),
     });
 
-    return ok(c, result.loyaltyAccount, 201);
+    return ok(c, toCustomerLoyaltyAccountDto(result.loyaltyAccount), 201);
   });
 });
 
@@ -157,6 +160,14 @@ loyaltyCustomerRoutes.post('/checkin', async (c) => {
       QR_TOKEN_SECRET_PREVIOUS: c.env.QR_TOKEN_SECRET_PREVIOUS,
     }).resolveToken(body.qrToken);
     const customerId = c.get('customerId');
+
+    // Split 01: gate on an active, consistent membership BEFORE any check-in
+    // side effect (velocity counters, visit-proof verification, the KV
+    // cooldown below). A non-member's scan must not consume the cooldown, or
+    // the "join, then check in" call that follows is answered with the new
+    // account unchanged and zero points. recordCheckin re-checks inside its
+    // transaction; this is a gate, not the authoritative guard.
+    await new LoyaltyAccountService(db).assertCheckinReady(customerId, qrCode.businessId);
 
     // Continuing Development Block 4.1 (S5.4/S5.5). Same velocity pattern as
     // qr.routes.ts's feedback submit -- see fraud/velocity-tracker.ts for why

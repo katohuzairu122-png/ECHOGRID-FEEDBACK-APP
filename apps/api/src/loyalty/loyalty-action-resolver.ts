@@ -158,7 +158,12 @@ export class LoyaltyActionResolver {
     const receivingBusiness = await this.repos.businesses.findById(qrCode.businessId);
     const actions: LoyaltyResolvedAction[] = ['LEAVE_FEEDBACK'];
     if (!membership || !account) {
-      if (receivingBusiness?.status === 'active') actions.unshift('JOIN_LOYALTY');
+      if (
+        receivingBusiness?.status === 'active' &&
+        (await this.canStartMembership(input.customerId, qrCode.businessId, membership !== undefined))
+      ) {
+        actions.unshift('JOIN_LOYALTY');
+      }
     } else {
       actions.unshift('OPEN_LOYALTY_CARD', 'VIEW_REWARDS');
       if (account.status !== 'suspended' && receivingBusiness?.status === 'active')
@@ -186,5 +191,22 @@ export class LoyaltyActionResolver {
       actions,
       surveyCampaigns,
     };
+  }
+
+  /**
+   * Whether offering JOIN_LOYALTY can lead to a membership. True with no
+   * relationship at all, after the customer left, or for an active member whose
+   * account is missing (joining creates it). A suspended, pending,
+   * business-exited or closed membership is not the customer's to restart: the
+   * join would be refused (MEMBERSHIP_NOT_REACTIVATABLE), so it is not offered.
+   */
+  private async canStartMembership(
+    customerId: string,
+    businessId: string,
+    hasActiveMembership: boolean,
+  ): Promise<boolean> {
+    if (hasActiveMembership) return true;
+    const existing = await this.repos.customerMemberships.findByCustomerAndBusiness(customerId, businessId);
+    return existing === undefined || existing.status === 'left';
   }
 }

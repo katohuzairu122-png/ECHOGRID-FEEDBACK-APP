@@ -19,7 +19,7 @@ describe.skipIf(!process.env.DATABASE_URL)('Verified-phone gates (real Postgres)
   let businessB: string;
   const phone = () => `+1559${Math.floor(Math.random() * 9_000_000 + 1_000_000)}`;
   const join = (customerId: string, businessId: string) =>
-    membership.join({ customerId, businessId, onboardingSource: 'business_qr', onboardingReference: 'gate-test' });
+    membership.join({ customerId, businessId, onboardingSource: 'business_qr', onboardingReference: 'gate-test', consentVersion: 'v1' });
 
   beforeAll(async () => {
     client = new Client({ connectionString: process.env.DATABASE_URL });

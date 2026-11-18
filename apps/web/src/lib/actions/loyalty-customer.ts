@@ -1,7 +1,10 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import { CURRENT_JOIN_LOYALTY_CONSENT_VERSION } from '@echo-grid-feedback/shared-types';
 import type {
+  CustomerMembershipDto,
+  JoinCustomerMembershipResultDto,
   LoyaltyAccountDto,
   RedemptionResult,
   MaterializedNotificationPreferenceDto,
@@ -28,11 +31,17 @@ export async function revokeCustomerQrAction(): Promise<CustomerQrCredential> {
 }
 
 /** Explicit customer-consented join through a server-verified business QR
- * context. Split 01 deliberately rejects arbitrary businessId-only enrollment. */
-export async function joinLoyaltyAction(qrToken: string): Promise<LoyaltyAccountDto> {
-  const result = await customerApiFetch<{ loyaltyAccount: LoyaltyAccountDto }>('/customer-memberships/join', {
+ * context. Split 01 deliberately rejects arbitrary businessId-only enrollment,
+ * and a join the customer did not explicitly accept: `consentAccepted` must be
+ * the literal `true`. A Server Action can be invoked with any arguments, so it
+ * refuses here without a round trip; the API enforces the same rule. */
+export async function joinLoyaltyAction(qrToken: string, consentAccepted: boolean): Promise<LoyaltyAccountDto> {
+  if (consentAccepted !== true) {
+    throw new ApiError('Accept the loyalty program consent to join.', 400, 'CONSENT_REQUIRED');
+  }
+  const result = await customerApiFetch<JoinCustomerMembershipResultDto>('/customer-memberships/join', {
     method: 'POST',
-    body: JSON.stringify({ qrToken, consentVersion: 'v1' }),
+    body: JSON.stringify({ qrToken, consentAccepted: true, consentVersion: CURRENT_JOIN_LOYALTY_CONSENT_VERSION }),
   });
   revalidatePath('/loyalty/dashboard');
   return result.loyaltyAccount;
@@ -78,10 +87,41 @@ export async function checkinAction(qrToken: string): Promise<CheckinResult> {
   }
 }
 
-export async function joinAndCheckinAction(qrToken: string): Promise<CheckinResult> {
+export async function joinAndCheckinAction(qrToken: string, consentAccepted: boolean): Promise<CheckinResult> {
   try {
-    await joinLoyaltyAction(qrToken);
+    await joinLoyaltyAction(qrToken, consentAccepted);
     return await checkinAction(qrToken);
+  } catch (err) {
+    rethrowControlFlow(err);
+    if (err instanceof ApiError) {
+      return {
+        error: err.message,
+        ...(err.code !== undefined ? { code: err.code } : {}),
+      };
+    }
+    return { error: 'Something went wrong. Please try again.' };
+  }
+}
+
+export interface LeaveMembershipResult {
+  error?: string;
+  code?: string;
+  /** True once the membership has ended (or already had). */
+  left?: boolean;
+}
+
+/** The customer ends their own membership with a business. Earning and redeeming stop, the consent
+ * they gave to join is withdrawn, and the points balance is kept for a later re-join. Failures become
+ * serializable state, like checkinAction, so the dashboard can show a message instead of Next.js's
+ * generic production server-action error; a session redirect is still re-thrown. */
+export async function leaveLoyaltyAction(businessId: string): Promise<LeaveMembershipResult> {
+  try {
+    await customerApiFetch<CustomerMembershipDto>(`/customer-memberships/${businessId}/leave`, {
+      method: 'POST',
+    });
+    revalidatePath('/loyalty/dashboard');
+    revalidatePath(`/loyalty/dashboard/${businessId}`);
+    return { left: true };
   } catch (err) {
     rethrowControlFlow(err);
     if (err instanceof ApiError) {

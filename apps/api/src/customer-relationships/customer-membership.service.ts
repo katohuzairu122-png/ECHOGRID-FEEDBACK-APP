@@ -1,15 +1,24 @@
+import type { JoinLoyaltyConsentVersion } from '@echo-grid-feedback/shared-types';
 import type { Database } from '../db/client';
 import { assertCustomerNotLimited } from '../lib/customer-limits';
 import { createRepositories, type BusinessCustomerMembership, type LoyaltyAccount } from '../repositories';
 import { AppError } from '../lib/errors';
+import { isUniqueViolation } from '../lib/pg-errors';
 import { assertVerifiedPhone } from '../lib/customer-verification';
+import { endActiveMembership, lockCustomerBusinessRelationship } from './membership-lifecycle';
 
 export interface JoinCustomerMembershipInput {
   customerId: string;
   businessId: string;
   onboardingSource: string;
   onboardingReference: string;
-  consentVersion?: string;
+  /**
+   * The JOIN_LOYALTY consent wording the customer explicitly accepted. Required,
+   * so no caller can create a membership and a consent grant without naming the
+   * text that was shown. Routes obtain it only after the request schema has
+   * confirmed `consentAccepted: true`; the service never defaults it.
+   */
+  consentVersion: JoinLoyaltyConsentVersion;
   idempotencyKey?: string;
 }
 
@@ -18,11 +27,55 @@ export interface JoinCustomerMembershipResult {
   loyaltyAccount: LoyaltyAccount;
 }
 
+/** Unique indexes a join can still collide on once concurrent joins are serialised. */
+const JOIN_RACE_CONSTRAINTS = [
+  'business_customer_memberships_customer_business_key',
+  'loyalty_accounts_membership_id_key',
+] as const;
+/** Covers soft-deleted rows too, so it fires when a closed account blocks a new one. */
+const LOYALTY_ACCOUNT_PAIR_CONSTRAINT = 'loyalty_accounts_customer_business_key';
+
+/** Turns the two unique-violation shapes a join can still hit into deliberate 409s
+ * instead of a generic 500; every other failure is returned untouched. */
+function translateJoinError(error: unknown): unknown {
+  if (isUniqueViolation(error, [LOYALTY_ACCOUNT_PAIR_CONSTRAINT])) {
+    return new AppError(
+      'This loyalty account is closed. Please contact the business.',
+      409,
+      'LOYALTY_ACCOUNT_UNAVAILABLE',
+    );
+  }
+  if (isUniqueViolation(error, JOIN_RACE_CONSTRAINTS)) {
+    return new AppError(
+      'Your enrollment is already being processed. Please try again.',
+      409,
+      'MEMBERSHIP_JOIN_CONFLICT',
+    );
+  }
+  return error;
+}
+
 export class CustomerMembershipService {
   constructor(private readonly db: Database) {}
 
+  /** Idempotent: joining a business you already belong to returns the existing membership and account. */
   async join(input: JoinCustomerMembershipInput): Promise<JoinCustomerMembershipResult> {
+    try {
+      return await this.joinSerialized(input);
+    } catch (error) {
+      throw translateJoinError(error);
+    }
+  }
+
+  private async joinSerialized(input: JoinCustomerMembershipInput): Promise<JoinCustomerMembershipResult> {
     return this.db.transaction(async (tx) => {
+      // Serialise concurrent joins of the same customer to the same business (a double-tap, a retry racing
+      // the original request). Without this, both calls read "no membership", both insert, and the loser
+      // fails on the unique index with a 500 -- or, when a membership already exists, both create a consent
+      // grant. The lock is released when this transaction ends, so the second call then sees the first
+      // call's committed rows and returns them. It is the same lock leaving and consent withdrawal take, so
+      // a join can never interleave with either. Same pattern as business/branch name serialisation.
+      await lockCustomerBusinessRelationship(tx, input.customerId, input.businessId);
       const repos = createRepositories(tx);
       const business = await repos.businesses.findById(input.businessId);
       if (!business || business.status !== 'active') {
@@ -65,11 +118,11 @@ export class CustomerMembershipService {
         'join_loyalty',
       );
       if (!existingJoinConsent) {
-        await repos.consentGrants.create({
+        const grant = await repos.consentGrants.create({
           customerId: input.customerId,
           businessId: input.businessId,
           purpose: 'join_loyalty',
-          consentVersion: input.consentVersion ?? 'v1',
+          consentVersion: input.consentVersion,
           status: 'active',
           ...(input.idempotencyKey !== undefined ? { idempotencyKey: input.idempotencyKey } : {}),
           metadata: {
@@ -78,6 +131,12 @@ export class CustomerMembershipService {
             membershipId: membership.id,
           },
         });
+        // An idempotency key resolves to the grant it first created. If the customer has since withdrawn that
+        // consent, replaying the old request must not quietly bring the membership back without a live consent;
+        // the client has to ask again with a new key. Throwing rolls back the reactivation above.
+        if (grant.status !== 'active') {
+          throw new AppError('Consent idempotency key is already in use.', 409, 'CONSENT_IDEMPOTENCY_CONFLICT');
+        }
       }
 
       let loyaltyAccount = await repos.loyaltyAccounts.findByCustomerAndBusiness(input.customerId, input.businessId);
@@ -94,6 +153,37 @@ export class CustomerMembershipService {
       }
 
       return { membership, loyaltyAccount };
+    });
+  }
+
+  /**
+   * The customer ends their own membership. The loyalty program no longer
+   * earns or redeems for them and the consent they gave to join is withdrawn,
+   * but the loyalty account and its points balance are kept: joining again
+   * (with fresh consent) restores them.
+   *
+   * Idempotent: leaving a membership that is already `left` returns it
+   * unchanged. Only an active membership can be left; a suspended, pending or
+   * closed one is the business's or the platform's to resolve, not the
+   * customer's.
+   */
+  async leave(customerId: string, businessId: string): Promise<BusinessCustomerMembership> {
+    return this.db.transaction(async (tx) => {
+      await lockCustomerBusinessRelationship(tx, customerId, businessId);
+      const repos = createRepositories(tx);
+
+      const membership = await repos.customerMemberships.findByCustomerAndBusiness(customerId, businessId);
+      if (!membership) {
+        throw new AppError('Membership not found.', 404, 'CUSTOMER_MEMBERSHIP_NOT_FOUND');
+      }
+      if (membership.status === 'left') return membership;
+
+      const left =
+        membership.status === 'active' ? await endActiveMembership(repos, membership) : undefined;
+      if (!left) {
+        throw new AppError('This membership cannot be left by the customer.', 409, 'MEMBERSHIP_NOT_LEAVABLE');
+      }
+      return left;
     });
   }
 }

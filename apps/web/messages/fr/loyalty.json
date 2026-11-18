@@ -244,7 +244,17 @@
       "topTierReached": "Niveau maximum atteint",
       "rewardsHeading": "Récompenses",
       "recentActivityHeading": "Activité récente",
-      "backToWallet": "← Mes programmes de fidélité"
+      "backToWallet": "← Mes programmes de fidélité",
+      "membership": {
+        "leaveButton": "Quitter le programme de fidélité",
+        "leavePrompt": "Quitter le programme de fidélité de {business} ? Vous ne cumulerez plus et n'utiliserez plus de points, et votre consentement à l'adhésion sera retiré. Vos points sont conservés et vous sont rendus si vous rejoignez de nouveau le programme.",
+        "leaveConfirm": "Oui, quitter",
+        "leaveCancel": "Garder mon adhésion",
+        "leaving": "Départ en cours…",
+        "leaveError": "Impossible de quitter le programme pour le moment. Veuillez réessayer.",
+        "leftNotice": "Vous avez quitté ce programme de fidélité. Vos points sont conservés et vous sont rendus si vous rejoignez de nouveau le programme en scannant le QR code de l'entreprise.",
+        "inactiveNotice": "Votre adhésion auprès de cette entreprise n'est pas active, les récompenses sont donc indisponibles. Veuillez contacter l'entreprise."
+      }
     },
     "rewardCard": {
       "points": "{points} pts",
@@ -268,6 +278,12 @@
       "joinAndCheckIn": "Rejoindre et s'enregistrer",
       "phoneRequired": "Vérifiez votre numéro de téléphone pour rejoindre un autre commerce.",
       "verifyPhoneLink": "Vérifier mon téléphone"
+    },
+    "join": {
+      "consentLabel": "J'accepte de rejoindre le programme de fidélité de cette entreprise et qu'elle enregistre mes visites, mes achats et mes points. Je peux retirer ce consentement à tout moment.",
+      "button": "Rejoindre le programme",
+      "joining": "Adhésion en cours…",
+      "error": "Impossible de rejoindre le programme. Reconnectez-vous ou scannez de nouveau ce QR code."
     },
     "messages": {
       "title": "Messages",
