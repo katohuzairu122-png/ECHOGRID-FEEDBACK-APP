@@ -670,4 +670,54 @@ describe.skipIf(!process.env.DATABASE_URL)('NETWORK-05 real HTTP-to-Postgres lif
       }),
     120000,
   );
+  it.skipIf(!browserEnabled)(
+    'browser refreshes the customer Feed after publication and withdrawal (NETWORK-07)',
+    async () =>
+      withModerationBrowser(moderatorB, async (page, context, webUrl, browserExpect) => {
+        await context.addCookies([
+          { name: 'ff_customer_token', value: customerToken, url: webUrl, httpOnly: true },
+        ]);
+        const body = 'NETWORK-07 refresh after moderation';
+        const draft = await prepareSubmitted(body);
+        await page.goto(webUrl + '/loyalty/dashboard/community/feed');
+        await browserExpect(page.getByText(body, { exact: true })).toHaveCount(0);
+        await action(moderatorA, `/revisions/${draft.revisionId}/approve`);
+        await action(moderatorB, `/revisions/${draft.revisionId}/approve`);
+        await page.getByRole('button', { name: 'Refresh feed', exact: true }).click();
+        await browserExpect(page.getByText(body, { exact: true })).toBeVisible();
+        await action(moderatorB, `/posts/${draft.handle}/withdraw`);
+        await page.getByRole('button', { name: 'Refresh feed', exact: true }).click();
+        await browserExpect(page.getByText(body, { exact: true })).toHaveCount(0);
+        await browserExpect(
+          page.getByRole('navigation', { name: 'Community sections' }),
+        ).toBeVisible();
+      }),
+    120000,
+  );
+
+  it.skipIf(!browserEnabled)(
+    'browser pages through published customer updates and returns to latest (NETWORK-07)',
+    async () =>
+      withModerationBrowser(moderatorB, async (page, context, webUrl, browserExpect) => {
+        await context.addCookies([
+          { name: 'ff_customer_token', value: customerToken, url: webUrl, httpOnly: true },
+        ]);
+        const prefix = 'NETWORK-07 pagination';
+        for (let index = 0; index < 21; index++) {
+          const draft = await prepareSubmitted(`${prefix} ${index}`);
+          await action(moderatorA, `/revisions/${draft.revisionId}/approve`);
+          await action(moderatorB, `/revisions/${draft.revisionId}/approve`);
+        }
+        await page.goto(webUrl + '/loyalty/dashboard/community/feed');
+        await browserExpect(page.getByText(`${prefix} 20`, { exact: true })).toBeVisible();
+        await browserExpect(page.getByText(`${prefix} 0`, { exact: true })).toHaveCount(0);
+        await page.getByRole('link', { name: 'Load more', exact: true }).click();
+        await browserExpect(page).toHaveURL(/cursor=/);
+        await browserExpect(page.getByText(`${prefix} 0`, { exact: true })).toBeVisible();
+        await page.getByRole('link', { name: 'Latest updates', exact: true }).click();
+        await browserExpect(page).toHaveURL(webUrl + '/loyalty/dashboard/community/feed');
+        await browserExpect(page.getByText(`${prefix} 20`, { exact: true })).toBeVisible();
+      }),
+    120000,
+  );
 });

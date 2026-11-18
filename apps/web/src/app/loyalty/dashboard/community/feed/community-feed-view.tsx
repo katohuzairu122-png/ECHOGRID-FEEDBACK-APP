@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { useFormatter, useTranslations } from 'next-intl';
 import type { CommunityFeedResult } from '@/lib/community-feed-types';
 import styles from '../community-sections.module.css';
+import { FeedRefreshButton } from './feed-refresh-button';
 
 const FEED_PATH = '/loyalty/dashboard/community/feed';
 
@@ -34,14 +35,20 @@ export function CommunityFeedView({
         <p>{t('feed.description')}</p>
       </header>
 
+      {result.status !== 'forbidden' && (
+        <div className={styles.feedActions}>
+          <FeedRefreshButton retry={result.status === 'unavailable'} />
+          {cursor && (
+            <Link className={styles.action} href={FEED_PATH}>
+              {t('feed.latest')}
+            </Link>
+          )}
+        </div>
+      )}
+
       {result.status !== 'ready' ? (
         <div className={styles.state} role="status" data-state={result.status}>
           <p>{result.status === 'forbidden' ? t('feed.forbidden') : t('feed.error')}</p>
-          {result.status === 'unavailable' && (
-            <Link className={styles.action} href={cursor ? `${FEED_PATH}?cursor=${cursor}` : FEED_PATH}>
-              {t('feed.retry')}
-            </Link>
-          )}
         </div>
       ) : result.data.items.length === 0 ? (
         <div className={styles.state} data-state="empty">
@@ -70,7 +77,12 @@ export function CommunityFeedView({
                     </div>
                     <p className={styles.cardBody}>{item.body}</p>
                     {href && (
-                      <a className={styles.cardLink} href={href} rel="noopener noreferrer nofollow" target="_blank">
+                      <a
+                        className={styles.cardLink}
+                        href={href}
+                        rel="noopener noreferrer nofollow"
+                        target="_blank"
+                      >
                         {t('feed.openLink')}
                       </a>
                     )}
@@ -80,7 +92,10 @@ export function CommunityFeedView({
             })}
           </ul>
           {result.data.nextCursor && (
-            <Link className={styles.action} href={`${FEED_PATH}?cursor=${encodeURIComponent(result.data.nextCursor)}`}>
+            <Link
+              className={styles.action}
+              href={`${FEED_PATH}?cursor=${encodeURIComponent(result.data.nextCursor)}`}
+            >
               {t('feed.loadMore')}
             </Link>
           )}
