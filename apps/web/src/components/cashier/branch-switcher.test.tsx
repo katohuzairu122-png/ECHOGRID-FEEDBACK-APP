@@ -57,7 +57,8 @@ describe('branch switcher (multi-branch managed cashier)', () => {
     const sent = m.swap.mock.calls[0]![1] as FormData;
     expect(sent.get('branchId')).toBe('b2');
     expect(sent.get('fromBranchId')).toBe('b1');
-    expect(screen.getByRole('button', { name: 'Switch to this branch' })).toBeDisabled(); // selection cleared after success
+    // The success message is shown from inside the pending transition, so wait for the form to settle before asserting it reset.
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Switch to this branch' })).toBeDisabled()); // selection cleared after success
   });
 
   it('asking for the branch already active is reported as such', async () => {
