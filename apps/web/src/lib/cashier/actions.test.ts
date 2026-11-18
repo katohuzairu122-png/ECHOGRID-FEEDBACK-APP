@@ -16,13 +16,17 @@ const m = vi.hoisted(() => ({
   lookup: vi.fn(),
   confirm: vi.fn(),
   surface: [] as boolean[],
+  context: vi.fn(),
+  revalidate: vi.fn(),
 }));
+vi.mock('next/cache', () => ({ revalidatePath: m.revalidate }));
 vi.mock('next/navigation', () => ({ redirect: m.redirect }));
 vi.mock('./auth-api', () => ({ postCashierAuth: m.post, ensureCashierAccess: m.ensure }));
 vi.mock('./session', () => ({
   setCashierSession: m.setSession,
   clearCashierSession: m.clear,
   getCashierRefreshToken: m.refreshToken,
+  getCashierContext: m.context,
   getCashierSelectionTicket: m.ticket,
   setCashierSelectionTicket: m.setTicket,
 }));
@@ -39,6 +43,8 @@ import {
   cashierLookupRedemptionAction,
   cashierSelectAction,
   cashierServeAction,
+  cashierSwitchBranchAction,
+  cashierListBranchesAction,
 } from './actions';
 
 const form = (o: Record<string, string>) => {
@@ -51,6 +57,8 @@ const redirected = async (p: Promise<unknown>) => p.then(() => null, (e: { diges
 beforeEach(() => {
   vi.clearAllMocks();
   m.ensure.mockResolvedValue(true);
+  m.context.mockResolvedValue({ businessId: 'b', branchId: 'branch-1', businessName: 'Biz', branchName: 'One', deviceLabel: null, canSwitchBranch: true });
+  m.refreshToken.mockResolvedValue('refresh-token-1');
 });
 
 describe('cashier sign-in', () => {
@@ -126,8 +134,8 @@ describe('cashier serve actions', () => {
     m.lookup.mockImplementation(async () => ({ error: String(isCashierSurface()) }));
     m.confirm.mockImplementation(async () => ({ id: String(isCashierSurface()) }));
     expect(await cashierServeAction({}, form({}))).toEqual({ seen: true });
-    expect(await cashierLookupRedemptionAction({}, form({}))).toEqual({ error: 'true' });
-    expect(await cashierConfirmRedemptionAction('CODE')).toEqual({ id: 'true' });
+    expect(await cashierLookupRedemptionAction('branch-1', {}, form({}))).toEqual({ error: 'true' });
+    expect(await cashierConfirmRedemptionAction('branch-1', 'CODE')).toEqual({ id: 'true' });
     expect(isCashierSurface()).toBe(false);
   });
 
@@ -136,5 +144,111 @@ describe('cashier serve actions', () => {
     const out = await redirected(cashierServeAction({}, form({})));
     expect(out).toContain('/cashier/login');
     expect(m.serve).not.toHaveBeenCalled();
+  });
+});
+
+describe('CASHIER-AUTH-02C: a screen drawn for one branch never acts after the session moved to another', () => {
+  it('serve: a form drawn for another branch is redirected to the counter and the action does not run', async () => {
+    m.context.mockResolvedValue({ businessId: 'b', branchId: 'branch-2', businessName: 'Biz', branchName: 'Two', deviceLabel: null, canSwitchBranch: true });
+    m.serve.mockResolvedValue({});
+    expect(await redirected(cashierServeAction({}, form({ branchId: 'branch-1' })))).toContain('/cashier;');
+    expect(m.serve).not.toHaveBeenCalled();
+  });
+
+  it('serve: a form for the current branch runs normally', async () => {
+    m.serve.mockResolvedValue({ ok: true });
+    expect(await cashierServeAction({}, form({ branchId: 'branch-1' }))).toEqual({ ok: true });
+  });
+
+  it('redeem lookup and confirm: bound to the drawn branch; a mismatch redirects without running', async () => {
+    m.context.mockResolvedValue({ businessId: 'b', branchId: 'branch-2', businessName: 'Biz', branchName: 'Two', deviceLabel: null, canSwitchBranch: true });
+    expect(await redirected(cashierLookupRedemptionAction('branch-1', {}, form({})))).toContain('/cashier;');
+    expect(await redirected(cashierConfirmRedemptionAction('branch-1', 'CODE'))).toContain('/cashier;');
+    expect(m.lookup).not.toHaveBeenCalled();
+    expect(m.confirm).not.toHaveBeenCalled();
+  });
+
+  it('a business-wide screen (no branch) matches a business-wide session', async () => {
+    m.context.mockResolvedValue({ businessId: 'b', branchId: null, businessName: 'Biz', branchName: null, deviceLabel: null, canSwitchBranch: false });
+    m.confirm.mockResolvedValue({ id: 'ok' });
+    expect(await cashierConfirmRedemptionAction(null, 'CODE')).toEqual({ id: 'ok' });
+  });
+});
+
+describe('CASHIER-AUTH-02C: switching branches', () => {
+  const payload = (branch: string) => ({
+    switched: true, accessToken: 'new-access', refreshToken: 'new-refresh',
+    session: { businessId: 'b', branchId: branch, deviceLabel: null, businessName: 'Biz', branchName: 'Two', canSwitchBranch: true },
+  });
+
+  it('sends the session refresh token, the chosen branch and the branch this window believes is active', async () => {
+    m.post.mockResolvedValue(payload('branch-2'));
+    await cashierSwitchBranchAction({}, form({ branchId: 'branch-2', fromBranchId: 'branch-1' }));
+    expect(m.post).toHaveBeenCalledWith('switch-branch', { refreshToken: 'refresh-token-1', branchId: 'branch-2', fromBranchId: 'branch-1' });
+  });
+
+  it('on success replaces the cashier session cookies with the new branch binding and revalidates the counter', async () => {
+    m.post.mockResolvedValue(payload('branch-2'));
+    expect(await cashierSwitchBranchAction({}, form({ branchId: 'branch-2', fromBranchId: 'branch-1' }))).toEqual({ status: 'switched', branchName: 'Two' });
+    expect(m.setSession).toHaveBeenCalledWith({ accessToken: 'new-access', refreshToken: 'new-refresh', session: expect.objectContaining({ branchId: 'branch-2' }) });
+    expect(m.revalidate).toHaveBeenCalledWith('/cashier', 'layout');
+    expect(m.clear).not.toHaveBeenCalled();
+  });
+
+  it('asking for the branch already active changes no cookie', async () => {
+    m.post.mockResolvedValue({ switched: false, session: { businessId: 'b', branchId: 'branch-1', deviceLabel: null, branchName: 'One', canSwitchBranch: true } });
+    expect(await cashierSwitchBranchAction({}, form({ branchId: 'branch-1' }))).toEqual({ status: 'unchanged', branchName: 'One' });
+    expect(m.setSession).not.toHaveBeenCalled();
+  });
+
+  it('never returns a token to the browser', async () => {
+    m.post.mockResolvedValue(payload('branch-2'));
+    const out = await cashierSwitchBranchAction({}, form({ branchId: 'branch-2' }));
+    expect(JSON.stringify(out)).not.toMatch(/new-access|new-refresh|refresh-token-1/);
+  });
+
+  it('maps refusals without touching the cookies: denied, conflict (stale window or concurrent switch) and unavailable', async () => {
+    for (const [code, status, expected] of [
+      ['CASHIER_ACCESS_DENIED', 403, 'denied'], ['CASHIER_SWITCH_NOT_AVAILABLE', 403, 'denied'],
+      ['CASHIER_SWITCH_CONFLICT', 409, 'conflict'], ['REFRESH_TOKEN_ROTATED', 409, 'conflict'],
+      ['SOMETHING_ELSE', 500, 'unavailable'], ['RATE_LIMITED', 429, 'unavailable'],
+    ] as const) {
+      m.post.mockRejectedValueOnce(new ApiError('x', status, code));
+      expect((await cashierSwitchBranchAction({}, form({ branchId: 'branch-2' }))).status, code).toBe(expected);
+    }
+    m.post.mockRejectedValueOnce(new Error('network down'));
+    expect((await cashierSwitchBranchAction({}, form({ branchId: 'branch-2' }))).status).toBe('unavailable');
+    expect(m.setSession).not.toHaveBeenCalled();
+    expect(m.clear).not.toHaveBeenCalled();
+  });
+
+  it('an ended session (revoked, disabled, replayed, access removed) clears the cashier cookies and goes to the sign-in', async () => {
+    for (const code of ['INVALID_REFRESH_TOKEN', 'ACCOUNT_INACTIVE', 'CASHIER_ACCESS_REVOKED']) {
+      m.clear.mockClear();
+      m.post.mockRejectedValueOnce(new ApiError('x', 401, code));
+      expect(await redirected(cashierSwitchBranchAction({}, form({ branchId: 'branch-2' })))).toContain('/cashier/login?reason=session');
+      expect(m.clear).toHaveBeenCalledTimes(1);
+    }
+  });
+
+  it('no refresh cookie: sign in, and nothing is sent', async () => {
+    m.refreshToken.mockResolvedValue(undefined);
+    expect(await redirected(cashierSwitchBranchAction({}, form({ branchId: 'branch-2' })))).toContain('/cashier/login');
+    expect(m.post).not.toHaveBeenCalled();
+  });
+
+  it('an empty branch choice is refused locally (a branch must be chosen explicitly)', async () => {
+    expect(await cashierSwitchBranchAction({}, form({}))).toEqual({ status: 'denied' });
+    expect(m.post).not.toHaveBeenCalled();
+  });
+
+  it('listing: returns the current branch and only what the server lists; failures are retryable; an ended session signs out', async () => {
+    m.post.mockResolvedValue({ current: { id: 'branch-1', name: 'One' }, branches: [{ id: 'branch-1', name: 'One' }, { id: 'branch-2', name: 'Two' }], canSwitchBranch: true });
+    expect(await cashierListBranchesAction()).toEqual({ status: 'ready', branches: [{ id: 'branch-1', name: 'One' }, { id: 'branch-2', name: 'Two' }], currentBranchId: 'branch-1' });
+    expect(m.post).toHaveBeenCalledWith('branches', { refreshToken: 'refresh-token-1' });
+    m.post.mockRejectedValueOnce(new ApiError('x', 500, 'BOOM'));
+    expect(await cashierListBranchesAction()).toEqual({ status: 'failed' });
+    m.post.mockRejectedValueOnce(new ApiError('x', 401, 'INVALID_REFRESH_TOKEN'));
+    expect(await redirected(cashierListBranchesAction())).toContain('/cashier/login?reason=session');
   });
 });

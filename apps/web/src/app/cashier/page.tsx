@@ -12,8 +12,10 @@ async function ServeScreen() {
   return (
     <section className="space-y-4">
       <p className="text-sm text-neutral-600">{t('scanHint')}</p>
-      {/* A session is bound to one place, so the branch choice is fixed: one context, nothing to pick or tamper with. */}
+      {/* The screen is drawn for the session's current branch: one context, nothing to pick or tamper with. */}
       <StaffQrMenu
+        // CASHIER-AUTH-02C: keyed by branch, so switching branches discards any customer lookup or pending confirmation held in the screen.
+        key={ctx.branchId ?? 'business'}
         contexts={[{ branchId: ctx.branchId, branchName: ctx.branchName }]}
         serveAction={cashierServeAction}
       />

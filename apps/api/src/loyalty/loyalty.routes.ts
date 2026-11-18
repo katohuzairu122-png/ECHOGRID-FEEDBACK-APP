@@ -14,6 +14,7 @@ import {
 import type { Bindings } from '../config/env';
 import { createDb, type Database } from '../db/client';
 import type { LoyaltyPurchaseChannel } from '../db/schema/loyalty-purchase-events';
+import type { CashierSessionBinding } from '../cashier-sessions/session-binding';
 import { createRepositories, type LoyaltySettings } from '../repositories';
 import { authenticate, type AuthVariables } from '../middleware/authenticate';
 import { resolveTenantContext, type TenantVariables } from '../middleware/tenant-context';
@@ -106,6 +107,12 @@ loyaltyRoutes.get('/accounts/:id/transactions', requirePermission('loyalty:accou
   });
 });
 
+/** CASHIER-AUTH-02C: the verified session binding of a cashier token (absent for any other caller), for the in-transaction ordering guard. */
+function sessionBindingOf(c: Context<Env>): { cashierSession?: CashierSessionBinding } {
+  const cashier = c.get('cashier');
+  return cashier?.sessionId ? { cashierSession: { userId: c.get('userId'), sessionId: cashier.sessionId, branchId: cashier.branchId } } : {};
+}
+
 type PurchaseInput = {
   purchaseAmount: number;
   idempotencyKey: string;
@@ -140,6 +147,7 @@ async function recordPurchaseAndNotify(
     ...(body.externalReference !== undefined ? { externalReference: body.externalReference } : {}),
     channel: body.channel,
     staffUserId: c.get('userId'),
+    ...sessionBindingOf(c),
   });
   const account = purchase.account;
   c.set('auditMetadata', {
@@ -427,7 +435,7 @@ loyaltyRoutes.post('/redemptions/:code/confirm', requirePermission('loyalty:serv
   // comment for why this belongs here and not on redeem()/issue().
   const branchId = c.get('branchId');
   return withDb(c, async (db) => {
-    const transaction = await new LoyaltyRedemptionService(db).confirmRedemption(businessId, c.req.param('code'), branchId);
+    const transaction = await new LoyaltyRedemptionService(db).confirmRedemption(businessId, c.req.param('code'), branchId, sessionBindingOf(c).cashierSession);
     c.set('auditMetadata', { action: 'loyalty.redemption_confirmed', entityType: 'loyalty_transaction', entityId: transaction.id });
 
     // Same "after commit, not inside the service's transaction" ordering as

@@ -33,6 +33,7 @@ export const ACTION = {
   cashierLogin: 'auth.cashier_login',
   cashierSelectionRequired: 'auth.cashier_selection_required',
   cashierLogout: 'auth.cashier_logout',
+  cashierBranchSwitched: 'auth.cashier_branch_switched',
   authFailed: 'security.authentication_failed',
   authzFailed: 'security.authorization_failed',
 } as const;
@@ -44,6 +45,7 @@ export const SESSION_ACTIONS: readonly string[] = [
   ACTION.cashierLogin,
   ACTION.cashierSelectionRequired,
   ACTION.cashierLogout,
+  ACTION.cashierBranchSwitched,
 ];
 
 /** Actions that count as cashier activity only when the row carries the cashier marker. */

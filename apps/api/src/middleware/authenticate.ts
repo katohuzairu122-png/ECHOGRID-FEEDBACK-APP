@@ -18,7 +18,7 @@ export type AuthVariables = {
   impersonatedBy?: string;
   // Set only for a cashier-scoped token (CASHIER-PWA-01 C2): the business and branch the token is bound to, read from
   // the SIGNED claims. resolveTenantContext treats these as the proof of context; request headers must match them.
-  cashier?: { businessId: string; branchId: string | null };
+  cashier?: { businessId: string; branchId: string | null; sessionId?: string };
 };
 
 /**
@@ -51,7 +51,7 @@ export const authenticate = createMiddleware<{ Bindings: Bindings; Variables: Au
     // with the right actor and business. This grants nothing: authorization still runs in full.
     if (payload.client === 'cashier' && payload.bid) {
       c.set('userId', payload.sub);
-      c.set('cashier', { businessId: payload.bid, branchId: payload.brid ?? null });
+      c.set('cashier', { businessId: payload.bid, branchId: payload.brid ?? null, ...(payload.sid ? { sessionId: payload.sid } : {}) });
     }
 
     // A cashier-scoped token is accepted only on the explicit allow-list. The global guard has already applied the same
@@ -97,7 +97,7 @@ export const authenticate = createMiddleware<{ Bindings: Bindings; Variables: Au
 
       c.set('userId', payload.sub);
       if (payload.client === 'cashier' && payload.bid) {
-        c.set('cashier', { businessId: payload.bid, branchId: payload.brid ?? null });
+        c.set('cashier', { businessId: payload.bid, branchId: payload.brid ?? null, ...(payload.sid ? { sessionId: payload.sid } : {}) });
       }
       if (payload.impersonatedBy) {
         c.set('impersonatedBy', payload.impersonatedBy);

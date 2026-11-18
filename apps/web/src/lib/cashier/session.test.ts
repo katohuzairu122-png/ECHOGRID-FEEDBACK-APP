@@ -58,7 +58,12 @@ describe('cashier cookies', () => {
 
   it('reads back the sign-in context, and treats a malformed or edited cookie as no context', async () => {
     await setCashierSession(payload);
-    expect(await getCashierContext()).toEqual({ businessId: 'biz', businessName: 'Cafe', branchId: 'br', branchName: 'Main', deviceLabel: 'Counter 1' });
+    expect(await getCashierContext()).toEqual({ businessId: 'biz', businessName: 'Cafe', branchId: 'br', branchName: 'Main', deviceLabel: 'Counter 1', canSwitchBranch: false });
+    // CASHIER-AUTH-02C: the switch control flag is display-only, defaults to off, and is true only when the API said so.
+    await setCashierSession({ ...payload, session: { ...payload.session, canSwitchBranch: true } });
+    expect((await getCashierContext())?.canSwitchBranch).toBe(true);
+    cookieStore.jar.set(CASHIER_CONTEXT_COOKIE, { value: JSON.stringify({ businessId: 'biz', canSwitchBranch: 'yes' }) });
+    expect((await getCashierContext())?.canSwitchBranch).toBe(false); // anything but boolean true is off
     cookieStore.jar.set(CASHIER_CONTEXT_COOKIE, { value: '{not json' });
     expect(await getCashierContext()).toBeNull();
     cookieStore.jar.set(CASHIER_CONTEXT_COOKIE, { value: JSON.stringify({ businessId: 42 }) });

@@ -10,6 +10,7 @@ import {
   loginSchema,
   cashierLoginSchema,
   managedCashierLoginSchema,
+  cashierSwitchSchema,
   cashierSessionSchema,
   refreshSchema,
   requestPasswordResetSchema,
@@ -217,6 +218,49 @@ authRoutes.post('/cashier/refresh', cashierAuthRateLimit('refresh'), async (c) =
   const result = await withCashierService(c, (service) => service.refresh(body.refreshToken));
   const { userId: _userId, ...publicResult } = result;
   return ok(c, publicResult);
+});
+
+/**
+ * CASHIER-AUTH-02C: in-session branch switching for a managed cashier. Like refresh and logout it takes the session's own refresh
+ * token in the body and never a bearer, so it is outside the cashier route allow-list on purpose (a cashier ACCESS token cannot
+ * call it). The whole operation runs in ONE transaction: a failure anywhere (including the audit write) leaves the session as it was.
+ * A refusal that had to revoke a session commits that revocation first and then answers the error.
+ */
+authRoutes.post('/cashier/switch-branch', cashierAuthRateLimit('switch'), async (c) => {
+  const body = await parseJsonBody(c.req.raw, cashierSwitchSchema);
+  const client = await resolveClient(c.req.raw.headers, c.env.CLIENT_ATTRIBUTION_SECRET, Date.now(), c.env.CLIENT_ATTRIBUTION_SECRET_PREVIOUS);
+  const { db, close } = await createDb(c.env.HYPERDRIVE);
+  try {
+    const outcome = await db.transaction((tx) =>
+      new CashierAuthService(
+        createRepositories(tx),
+        { JWT_ACCESS_SECRET: c.env.JWT_ACCESS_SECRET, JWT_REFRESH_SECRET: c.env.JWT_REFRESH_SECRET },
+        createDurableObjectPbkdf2Worker(c.env.PASSWORD_HASHER),
+      ).switchBranch(
+        { refreshToken: body.refreshToken, targetBranchId: body.branchId, fromBranchId: body.fromBranchId, userAgent: client.userAgent, ipAddress: client.ip },
+        // The session is identified (signature, hash and stored row) before any authorization decision, so even a refusal is a
+        // security event attributed to this cashier and business by the audit recorder.
+        (identity) => {
+          c.set('userId', identity.userId);
+          c.set('cashier', { businessId: identity.businessId, branchId: identity.branchId });
+        },
+      ),
+    );
+    if (outcome.status === 'denied') throw outcome.error;
+    // The switch audit row is written inside the transaction; nothing else is recorded for a success.
+    c.set('auditAlreadyRecorded', true);
+    if (outcome.status === 'unchanged') return ok(c, { switched: false, session: outcome.session });
+    const { userId: _userId, status: _status, previousSessionId: _p, sessionId: _s, fromBranchId: _f, toBranchId: _t, ...publicResult } = outcome;
+    return ok(c, { switched: true, ...publicResult });
+  } finally {
+    c.executionCtx.waitUntil(close());
+  }
+});
+
+/** CASHIER-AUTH-02C: the branches this session may switch to (advisory, read-only; every switch re-checks everything). */
+authRoutes.post('/cashier/branches', cashierAuthRateLimit('branches'), async (c) => {
+  const body = await parseJsonBody(c.req.raw, refreshSchema);
+  return ok(c, await withCashierService(c, (service) => service.listBranches(body.refreshToken)));
 });
 
 authRoutes.post('/cashier/logout', cashierAuthRateLimit('logout'), async (c) => {

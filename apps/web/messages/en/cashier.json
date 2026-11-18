@@ -266,5 +266,23 @@
         "PERMISSION_DENIED": "You do not have permission to do that."
       }
     }
+  },
+  "branchSwitch": {
+    "button": "Switch branch",
+    "title": "Switch branch",
+    "hint": "Choose the branch you are serving at now. You stay signed in.",
+    "current": "Current",
+    "groupLabel": "Branches you can serve at",
+    "confirm": "Switch to this branch",
+    "switching": "Switching…",
+    "loading": "Loading branches…",
+    "loadFailed": "The branches could not be loaded.",
+    "retry": "Try again",
+    "success": "Now serving at {branch}.",
+    "noChange": "You are already serving at {branch}.",
+    "denied": "You can no longer serve at that branch. The list has been updated.",
+    "conflict": "The branch changed in another window. The list has been updated.",
+    "unavailable": "Switching is not available right now. Try again in a moment.",
+    "close": "Close"
   }
 }

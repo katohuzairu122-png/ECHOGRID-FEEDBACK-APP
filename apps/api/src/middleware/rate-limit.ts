@@ -118,7 +118,7 @@ async function digest(value: string): Promise<string> {
   return hex(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value))).slice(0, 32);
 }
 
-type CashierAuthKind = 'login' | 'session' | 'refresh' | 'logout' | 'managed-login';
+type CashierAuthKind = 'login' | 'session' | 'refresh' | 'logout' | 'managed-login' | 'switch' | 'branches';
 /** H3: the staff recovery and account endpoints that share the attributed throttle. */
 type StaffAuthKind = 'signup' | 'reset-request' | 'reset-confirm' | 'password-change' | 'admin-reauth';
 type AuthKind = CashierAuthKind | StaffAuthKind;

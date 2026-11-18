@@ -46,6 +46,17 @@ export const managedCashierLoginSchema = z.object({
   deviceLabel: deviceLabelSchema,
 });
 
+/**
+ * CASHIER-AUTH-02C: switch the active branch of a live managed-cashier session. The credential is the session's own refresh token
+ * (like refresh and logout, so no bearer is sent); `fromBranchId` is the branch the caller believes is active, so a stale tab or a
+ * concurrent switch is a clear conflict instead of a silent change.
+ */
+export const cashierSwitchSchema = z.object({
+  refreshToken: z.string().min(1).max(4096),
+  branchId: z.uuid(),
+  fromBranchId: z.uuid().optional(),
+});
+
 /** Finishes a cashier sign-in when the user has more than one place to serve. */
 export const cashierSessionSchema = z.object({
   ticket: z.string().min(1).max(4096),

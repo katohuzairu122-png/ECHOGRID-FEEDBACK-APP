@@ -266,5 +266,23 @@
         "PERMISSION_DENIED": "No tiene permiso para hacer eso."
       }
     }
+  },
+  "branchSwitch": {
+    "button": "Cambiar de sucursal",
+    "title": "Cambiar de sucursal",
+    "hint": "Elija la sucursal donde atiende ahora. Su sesión sigue abierta.",
+    "current": "Actual",
+    "groupLabel": "Sucursales donde puede atender",
+    "confirm": "Cambiar a esta sucursal",
+    "switching": "Cambiando…",
+    "loading": "Cargando sucursales…",
+    "loadFailed": "No se pudieron cargar las sucursales.",
+    "retry": "Intentar de nuevo",
+    "success": "Ahora atiende en {branch}.",
+    "noChange": "Ya atiende en {branch}.",
+    "denied": "Ya no puede atender en esa sucursal. Se actualizó la lista.",
+    "conflict": "La sucursal cambió en otra ventana. Se actualizó la lista.",
+    "unavailable": "El cambio no está disponible ahora. Inténtelo de nuevo en un momento.",
+    "close": "Cerrar"
   }
 }

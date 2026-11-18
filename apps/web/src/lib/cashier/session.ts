@@ -19,6 +19,8 @@ export interface CashierContext {
   branchId: string | null;
   branchName: string | null;
   deviceLabel: string | null;
+  /** CASHIER-AUTH-02C: display only (shows the switch control). The server decides every switch. */
+  canSwitchBranch: boolean;
 }
 
 export interface CashierSessionPayload {
@@ -30,6 +32,7 @@ export interface CashierSessionPayload {
     deviceLabel: string | null;
     businessName?: string | null;
     branchName?: string | null;
+    canSwitchBranch?: boolean;
   };
 }
 
@@ -52,6 +55,7 @@ export async function setCashierSession(payload: CashierSessionPayload): Promise
     branchId: payload.session.branchId,
     branchName: payload.session.branchName ?? null,
     deviceLabel: payload.session.deviceLabel,
+    canSwitchBranch: payload.session.canSwitchBranch === true,
   };
   store.set(CASHIER_CONTEXT_COOKIE, JSON.stringify(ctx), options(REFRESH_MAX_AGE));
   store.delete({ name: CASHIER_SELECT_COOKIE, path: '/cashier' });
@@ -88,6 +92,7 @@ export async function getCashierContext(): Promise<CashierContext | null> {
       branchId: str(v.branchId),
       branchName: str(v.branchName),
       deviceLabel: str(v.deviceLabel),
+      canSwitchBranch: v.canSwitchBranch === true,
     };
   } catch {
     return null;
