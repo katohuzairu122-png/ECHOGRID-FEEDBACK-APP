@@ -9,6 +9,8 @@ on:
       - 'apps/api/src/network/**'
       - 'apps/api/src/platform/network-*'
       - 'apps/web/src/app/platform/network-moderation/**'
+      - 'apps/web/src/app/loyalty/dashboard/community/**'
+      - 'apps/web/messages/*/loyalty.json'
   workflow_dispatch:
 
 permissions:
