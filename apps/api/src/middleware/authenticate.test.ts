@@ -51,6 +51,13 @@ function user(id: string, status: User['status'] = 'active'): User {
     isDeleted: false,
     deletedAt: null,
     deletedBy: null,
+    managedBusinessId: null,
+    loginUsername: null,
+    managedByUserId: null,
+    credentialChangedAt: null,
+    failedLoginCount: 0,
+    failedLoginWindowStartedAt: null,
+    lockedUntil: null,
   };
 }
 

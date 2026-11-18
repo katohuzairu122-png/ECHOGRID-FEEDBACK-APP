@@ -68,6 +68,7 @@ export const DEFAULT_ROLES: Record<DefaultRoleName, string[]> = {
     'messages:send',
     'profile:edit',
     'profile:submit',
+    'cashier:manage',
   ],
   // Admin mirrors Owner for everything EXCEPT the two irreversible,
   // financially-consequential actions: deleting the business and managing
@@ -109,6 +110,7 @@ export const DEFAULT_ROLES: Record<DefaultRoleName, string[]> = {
     'messages:send',
     'profile:edit',
     'profile:submit',
+    'cashier:manage',
   ],
   Manager: [
     'team:view',

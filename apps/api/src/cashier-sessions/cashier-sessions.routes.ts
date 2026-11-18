@@ -46,7 +46,7 @@ cashierSessionRoutes.get('/', ...guard, async (c) => {
         .filter((r) => r.sessionId !== null)
         .map((r) => ({
           sessionId: r.sessionId,
-          user: { id: r.userId, name: r.userName, email: r.userEmail },
+          user: { id: r.userId, name: r.userName, email: r.userEmail, username: r.loginUsername },
           branch: r.branchId ? { id: r.branchId, name: r.branchName } : null,
           deviceLabel: r.deviceLabel,
           lastActiveAt: r.lastActiveAt,

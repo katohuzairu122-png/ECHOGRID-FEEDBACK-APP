@@ -171,7 +171,7 @@ export class NotificationService {
       // invited, suspended or deactivated identity may receive business
       // data. Authentication already applies the same active-account gate.
       if (!user || user.status !== 'active') return {};
-      return { email: user.email, phone: user.phone ?? undefined };
+      return { email: user.email ?? undefined, phone: user.phone ?? undefined };
     }
     if (recipient.customerId) {
       const customer = await this.repos.customers.findById(recipient.customerId);

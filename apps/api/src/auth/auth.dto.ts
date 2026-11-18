@@ -35,6 +35,17 @@ export const cashierLoginSchema = z.object({
   deviceLabel: deviceLabelSchema,
 });
 
+/**
+ * CASHIER-AUTH-02A (D-3): sign-in for a business-managed cashier. No email. The code and username are normalised (not trusted)
+ * by the service; limits here only bound the request size.
+ */
+export const managedCashierLoginSchema = z.object({
+  businessCode: z.string().trim().min(1).max(40),
+  username: z.string().trim().min(1).max(64),
+  password: z.string().min(1).max(256),
+  deviceLabel: deviceLabelSchema,
+});
+
 /** Finishes a cashier sign-in when the user has more than one place to serve. */
 export const cashierSessionSchema = z.object({
   ticket: z.string().min(1).max(4096),

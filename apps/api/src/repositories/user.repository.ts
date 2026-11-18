@@ -1,4 +1,4 @@
-import { eq, and } from 'drizzle-orm';
+import { eq, and, sql } from 'drizzle-orm';
 import { users } from '../db/schema';
 import { BaseRepository } from './base.repository';
 
@@ -22,6 +22,53 @@ export class UserRepository extends BaseRepository {
     return this.db.query.users.findFirst({
       where: and(eq(users.email, email), eq(users.isDeleted, false)),
     });
+  }
+
+  /** CASHIER-AUTH-02A: the managed identity named `loginUsername` INSIDE one business (the namespace), or undefined. */
+  async findManagedByUsername(businessId: string, loginUsername: string): Promise<User | undefined> {
+    return this.db.query.users.findFirst({
+      where: and(eq(users.managedBusinessId, businessId), eq(users.loginUsername, loginUsername), eq(users.isDeleted, false)),
+    });
+  }
+
+  /** A managed identity by id, pinned to its owning business: another business's cashier id is simply not found. */
+  async findManagedById(businessId: string, id: string): Promise<User | undefined> {
+    return this.db.query.users.findFirst({
+      where: and(eq(users.id, id), eq(users.managedBusinessId, businessId), eq(users.isDeleted, false)),
+    });
+  }
+
+  async listManagedForBusiness(businessId: string): Promise<User[]> {
+    return this.db.query.users.findMany({
+      where: and(eq(users.managedBusinessId, businessId), eq(users.isDeleted, false)),
+      orderBy: (u, { asc }) => [asc(u.loginUsername)],
+    });
+  }
+
+  /**
+   * D-5 lockout, one atomic statement (the row lock serialises concurrent failures): failures inside a rolling window are
+   * counted, the fifth locks the identity. While already locked nothing is recorded, so an attacker cannot extend a lock.
+   */
+  async recordFailedManagedLogin(id: string, maxFailures: number, windowMs: number, lockMs: number): Promise<void> {
+    const windowSec = windowMs / 1000;
+    const lockSec = lockMs / 1000;
+    const stale = sql`(${users.failedLoginWindowStartedAt} IS NULL OR ${users.failedLoginWindowStartedAt} < now() - make_interval(secs => ${windowSec}))`;
+    const nextCount = sql`(CASE WHEN ${stale} THEN 1 ELSE ${users.failedLoginCount} + 1 END)`;
+    await this.db
+      .update(users)
+      .set({
+        failedLoginWindowStartedAt: sql`(CASE WHEN ${stale} THEN now() ELSE ${users.failedLoginWindowStartedAt} END)`,
+        failedLoginCount: sql`${nextCount}`,
+        lockedUntil: sql`(CASE WHEN ${nextCount} >= ${maxFailures} THEN now() + make_interval(secs => ${lockSec}) ELSE ${users.lockedUntil} END)`,
+      })
+      .where(and(eq(users.id, id), sql`(${users.lockedUntil} IS NULL OR ${users.lockedUntil} <= now())`));
+  }
+
+  async clearManagedLoginFailures(id: string): Promise<void> {
+    await this.db
+      .update(users)
+      .set({ failedLoginCount: 0, failedLoginWindowStartedAt: null, lockedUntil: null })
+      .where(eq(users.id, id));
   }
 
   async create(input: NewUser): Promise<User> {

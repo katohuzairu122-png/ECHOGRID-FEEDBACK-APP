@@ -1,6 +1,7 @@
-import { pgTable, uuid, text, timestamp, check } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, text, timestamp, check, integer, uniqueIndex, type AnyPgColumn } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import { auditColumns, softDeleteColumns } from './_shared';
+import { businesses } from './businesses';
 
 /**
  * Platform Admin Console roles (Platform Admin Console module, Block 1).
@@ -45,7 +46,12 @@ export const users = pgTable(
   'users',
   {
     id: uuid('id').primaryKey().defaultRandom(),
-    email: text('email').notNull().unique(),
+    /**
+     * CASHIER-AUTH-02A (owner ruling D-1): NULL only for a MANAGED cashier identity (see managedBusinessId). Every other
+     * user still has a unique email; the `users_managed_shape_check` constraint makes the two shapes mutually exclusive,
+     * so a managed row can never gain an email and a normal row can never lose one.
+     */
+    email: text('email').unique(),
     emailVerifiedAt: timestamp('email_verified_at', { withTimezone: true }),
     passwordHash: text('password_hash').notNull(),
     fullName: text('full_name').notNull(),
@@ -53,10 +59,29 @@ export const users = pgTable(
     status: text('status').notNull().default('invited'),
     lastLoginAt: timestamp('last_login_at', { withTimezone: true }),
     platformRole: text('platform_role').$type<PlatformRole>(),
+    /** CASHIER-AUTH-02A: the ONE business that owns a managed cashier identity; NULL for every ordinary user. Immutable once set (trigger). */
+    managedBusinessId: uuid('managed_business_id').references(() => businesses.id, { onDelete: 'restrict' }),
+    /** Canonical lowercase login name, unique inside managedBusinessId only (never across tenants). */
+    loginUsername: text('login_username'),
+    /** The administrator who provisioned the identity. */
+    managedByUserId: uuid('managed_by_user_id').references((): AnyPgColumn => users.id, { onDelete: 'restrict' }),
+    credentialChangedAt: timestamp('credential_changed_at', { withTimezone: true }),
+    /** D-5 lockout: failures inside a rolling 15 minute window; five lock the identity for 15 minutes. */
+    failedLoginCount: integer('failed_login_count').notNull().default(0),
+    failedLoginWindowStartedAt: timestamp('failed_login_window_started_at', { withTimezone: true }),
+    lockedUntil: timestamp('locked_until', { withTimezone: true }),
     ...auditColumns,
     ...softDeleteColumns,
   },
   (table) => [
+    check(
+      'users_managed_shape_check',
+      sql`(${table.managedBusinessId} IS NULL AND ${table.loginUsername} IS NULL AND ${table.managedByUserId} IS NULL AND ${table.email} IS NOT NULL)
+        OR (${table.managedBusinessId} IS NOT NULL AND ${table.loginUsername} IS NOT NULL AND ${table.managedByUserId} IS NOT NULL AND ${table.email} IS NULL AND ${table.emailVerifiedAt} IS NULL AND ${table.platformRole} IS NULL)`,
+    ),
+    check('users_login_username_check', sql`${table.loginUsername} IS NULL OR ${table.loginUsername} ~ '^[a-z0-9][a-z0-9._-]{2,31}$'`),
+    check('users_failed_login_count_check', sql`${table.failedLoginCount} >= 0`),
+    uniqueIndex('users_managed_username_key').on(table.managedBusinessId, table.loginUsername).where(sql`${table.managedBusinessId} IS NOT NULL`),
     check(
       'users_status_check',
       sql`${table.status} IN ('invited', 'active', 'suspended', 'deactivated')`,

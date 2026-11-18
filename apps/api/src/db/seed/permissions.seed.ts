@@ -150,6 +150,11 @@ const PERMISSIONS: NewPermission[] = [
     category: 'Business profile',
   },
   {
+    key: 'cashier:manage',
+    description: 'Create and manage business-managed cashier accounts (credentials, status, sessions, business code). Business-wide access only; granted to Owner and Admin by default, never to Manager unless the Owner grants it.',
+    category: 'Cashier accounts',
+  },
+  {
     key: 'profile:submit',
     description: 'Submit the business public profile for platform review and withdraw or re-publish an approved profile. Business-wide access only.',
     category: 'Business profile',

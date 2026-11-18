@@ -11,7 +11,7 @@ export type NewUserBusinessRole = typeof userBusinessRoles.$inferInsert;
 export type PlatformTeamMember = {
   id: string;
   userId: string;
-  userEmail: string;
+  userEmail: string | null;
   userFullName: string;
   roleId: string;
   roleName: string;

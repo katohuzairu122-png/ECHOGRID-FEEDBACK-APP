@@ -31,7 +31,7 @@ function createFakeRepos() {
       async create(input: NewUser): Promise<User> {
         const user: User = {
           id: (input.id as string) ?? crypto.randomUUID(),
-          email: input.email,
+          email: input.email ?? null,
           emailVerifiedAt: null,
           passwordHash: input.passwordHash,
           fullName: input.fullName,
@@ -46,6 +46,13 @@ function createFakeRepos() {
           isDeleted: false,
           deletedAt: null,
           deletedBy: null,
+          managedBusinessId: null,
+          loginUsername: null,
+          managedByUserId: null,
+          credentialChangedAt: null,
+          failedLoginCount: 0,
+          failedLoginWindowStartedAt: null,
+          lockedUntil: null,
         };
         users.set(user.id, user);
         return user;

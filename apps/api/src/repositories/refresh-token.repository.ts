@@ -141,6 +141,7 @@ export class RefreshTokenRepository extends BaseRepository {
         userId: refreshTokens.userId,
         userName: users.fullName,
         userEmail: users.email,
+        loginUsername: users.loginUsername,
         branchId: refreshTokens.branchId,
         branchName: branches.name,
         deviceLabel: refreshTokens.deviceLabel,
@@ -207,7 +208,8 @@ export interface CashierSessionRow {
   sessionId: string | null;
   userId: string;
   userName: string;
-  userEmail: string;
+  userEmail: string | null;
+  loginUsername: string | null;
   branchId: string | null;
   branchName: string | null;
   deviceLabel: string | null;

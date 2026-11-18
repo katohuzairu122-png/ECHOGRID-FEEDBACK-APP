@@ -26,6 +26,13 @@ export class BusinessRepository extends BaseRepository {
     });
   }
 
+  /** CASHIER-AUTH-02A (D-3): resolves the public cashier sign-in code to its business. The code identifies, it never authorizes. */
+  async findByCashierCode(cashierCode: string): Promise<Business | undefined> {
+    return this.db.query.businesses.findFirst({
+      where: and(eq(businesses.cashierCode, cashierCode), eq(businesses.isDeleted, false)),
+    });
+  }
+
   /** Businesses are the tenant root, so slug is globally unique (see schema). */
   async findBySlug(slug: string): Promise<Business | undefined> {
     return this.db.query.businesses.findFirst({

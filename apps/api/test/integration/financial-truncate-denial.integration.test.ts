@@ -137,8 +137,20 @@ describe.skipIf(!process.env.DATABASE_URL)('Split 07/08 financial TRUNCATE denia
     const before = { b: await count(admin, 'businesses'), a: await count(admin, 'partner_credit_accounts') };
     expect(before.a).toBeGreaterThan(0);
     const normal = await connect();
-    expect(await rejects(normal.query('truncate businesses cascade'))).toMatch(/FINANCIAL_EVIDENCE_TRUNCATE_DENIED/);
-    expect(await rejects(fx.query('truncate businesses cascade'))).toMatch(/FINANCIAL_EVIDENCE_TRUNCATE_DENIED/);
+    // CASHIER-AUTH-02A: the cascade now also reaches `users` and `user_business_roles` (managed identities reference businesses), which carry
+    // their own TRUNCATE denial. Whichever denial fires first refuses the whole statement, so BOTH families are accepted here ...
+    const anyDenial = /(FINANCIAL_EVIDENCE|CASHIER_IDENTITY)_TRUNCATE_DENIED/;
+    expect(await rejects(normal.query('truncate businesses cascade'))).toMatch(anyDenial);
+    expect(await rejects(fx.query('truncate businesses cascade'))).toMatch(anyDenial);
+    // ... and the original guarantee is still proven on its own: with the two identity denials disabled (rolled back), the financial
+    // evidence denial alone still refuses the cascade.
+    const solo = await connect();
+    await solo.query('begin');
+    try {
+      await solo.query('alter table users disable trigger users_no_truncate');
+      await solo.query('alter table user_business_roles disable trigger user_business_roles_no_truncate');
+      expect(await rejects(solo.query('truncate businesses cascade'))).toMatch(/FINANCIAL_EVIDENCE_TRUNCATE_DENIED/);
+    } finally { await solo.query('rollback'); await solo.end(); }
     expect({ b: await count(admin, 'businesses'), a: await count(admin, 'partner_credit_accounts') }).toEqual(before);
   });
 

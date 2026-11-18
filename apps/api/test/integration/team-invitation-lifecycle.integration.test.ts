@@ -93,7 +93,7 @@ describe.skipIf(!process.env.DATABASE_URL)('team invitation lifecycle (integrati
 
     const invitation = await repos.teamInvitations.create({
       businessId: invitedBusinessId,
-      email: invitedUser!.email,
+      email: invitedUser!.email!,
       roleId: invitedRoleIds.Staff,
       branchId: branchAId,
       tokenHash: await hashToken(originalToken),

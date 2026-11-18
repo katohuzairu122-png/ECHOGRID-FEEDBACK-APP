@@ -32,7 +32,7 @@ const DEFAULT_ROLES: Record<string, string[]> = {
     'analytics:view', 'analytics:manage', 'notifications:view', 'notifications:manage',
     'settlement:view', 'settlement:accept', 'settlement:fulfill',
     'billing:view', 'billing:manage', 'messages:view', 'messages:send',
-    'profile:edit', 'profile:submit',
+    'profile:edit', 'profile:submit', 'cashier:manage',
   ],
   Admin: [
     'team:invite', 'team:remove', 'team:view', 'roles:manage', 'roles:view',
@@ -42,7 +42,7 @@ const DEFAULT_ROLES: Record<string, string[]> = {
     'analytics:view', 'analytics:manage', 'notifications:view', 'notifications:manage',
     'settlement:view', 'settlement:accept', 'settlement:fulfill',
     'billing:view', 'messages:view', 'messages:send',
-    'profile:edit', 'profile:submit',
+    'profile:edit', 'profile:submit', 'cashier:manage',
   ],
   Manager: [
     'team:view', 'roles:view', 'business:view',
