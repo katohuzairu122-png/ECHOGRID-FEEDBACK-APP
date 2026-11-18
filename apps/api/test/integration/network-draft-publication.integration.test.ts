@@ -1070,4 +1070,113 @@ describe.skipIf(!process.env.DATABASE_URL)('NETWORK-05 real HTTP-to-Postgres lif
     },
     120000,
   );
+
+  it.skipIf(!browserEnabled)(
+    'browser recovers a failed approval queue without mutation and preserves revoked-role and flag denials (NETWORK-10)',
+    async () => {
+      const body = 'NETWORK-10 queue recovery evidence';
+      const draft = await prepareSubmitted(body);
+      const snapshot = async () =>
+        (
+          await client.query(
+            `select r.status,r.body,p.state,p.author_user_id,
+        (select count(*)::int from network_revision_approvals where revision_id=r.id) approvals,
+        (select count(*)::int from audit_log where entity_id=p.id) audit_count
+        from network_post_revisions r join network_posts p on p.id=r.post_id where r.id=$1`,
+            [draft.revisionId],
+          )
+        ).rows;
+      const before = await snapshot();
+      let outage = true;
+      let flag = 'true';
+      const methods: string[] = [];
+      await withModerationBrowser(
+        moderatorB,
+        async (page, _context, webUrl, browserExpect) => {
+          const target = webUrl + '/platform/network-moderation';
+          await page.goto(target);
+          await browserExpect(
+            page
+              .getByRole('alert')
+              .filter({ hasText: 'Pending approval queue could not be loaded' }),
+          ).toBeVisible();
+          await browserExpect(page.getByText('private synthetic upstream detail')).toHaveCount(0);
+          await browserExpect(page.getByText('No revisions are awaiting review.')).toHaveCount(0);
+          await browserExpect(
+            page.getByRole('button', { name: 'Approve revision', exact: true }),
+          ).toHaveCount(0);
+          await browserExpect(
+            page.getByRole('button', { name: 'Create draft', exact: true }),
+          ).toHaveCount(0);
+          await page.getByRole('link', { name: 'Moderation history', exact: true }).click();
+          await browserExpect(
+            page.getByRole('heading', { name: 'Moderation history', exact: true }),
+          ).toBeVisible();
+          await page.goto(target);
+          await page.getByRole('link', { name: 'Saved drafts', exact: true }).click();
+          await browserExpect(
+            page.getByRole('heading', { name: 'Saved drafts', exact: true }),
+          ).toBeVisible();
+          await page.goto(target);
+          outage = false;
+          await page.getByRole('button', { name: 'Retry loading', exact: true }).click();
+          await browserExpect(page.getByRole('article').filter({ hasText: body })).toBeVisible();
+          await browserExpect(page).toHaveURL(target);
+          expect(await snapshot()).toEqual(before);
+          expect(methods.every((method) => method === 'GET')).toBe(true);
+
+          outage = true;
+          await page.reload();
+          await browserExpect(
+            page.getByRole('button', { name: 'Retry loading', exact: true }),
+          ).toBeVisible();
+          await client.query("update users set platform_role='support' where id=$1", [moderatorB]);
+          try {
+            outage = false;
+            expect(
+              (await request(base + '/queue', await signAccessToken(moderatorB, secret))).status,
+            ).toBe(403);
+            await page.getByRole('button', { name: 'Retry loading', exact: true }).click();
+            await browserExpect(
+              page.getByRole('heading', { name: 'Community moderation', exact: true }),
+            ).toHaveCount(0);
+            await browserExpect(page.getByText(body, { exact: true })).toHaveCount(0);
+            await browserExpect(
+              page.getByRole('button', { name: 'Retry loading', exact: true }),
+            ).toHaveCount(0);
+          } finally {
+            await client.query("update users set platform_role='admin' where id=$1", [moderatorB]);
+          }
+          flag = 'false';
+          expect(
+            (
+              await request(
+                base + '/queue',
+                await signAccessToken(moderatorB, secret),
+                'GET',
+                undefined,
+                flag,
+              )
+            ).status,
+          ).toBe(404);
+          await page.goto(target);
+          await browserExpect(
+            page.getByRole('heading', { name: 'Community moderation', exact: true }),
+          ).toHaveCount(0);
+          await browserExpect(
+            page.getByRole('button', { name: 'Retry loading', exact: true }),
+          ).toHaveCount(0);
+          expect(await snapshot()).toEqual(before);
+        },
+        {
+          feedFlag: () => flag,
+          failRead: (path, method) => {
+            methods.push(method);
+            return outage && new URL(path, 'http://fixture.invalid').pathname === base + '/queue';
+          },
+        },
+      );
+    },
+    120000,
+  );
 });

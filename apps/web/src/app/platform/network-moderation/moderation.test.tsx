@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ApiError } from '@/lib/api-error';
 import { moderatePost } from './actions';
@@ -9,6 +9,7 @@ import { ModerationWorkspace } from './workspace';
 
 const mocks = vi.hoisted(() => ({
   api: vi.fn(),
+  refresh: vi.fn(),
   user: vi.fn(),
   revalidate: vi.fn(),
   redirect: vi.fn(() => {
@@ -24,7 +25,11 @@ vi.mock('@/lib/api-client', async () => ({
 }));
 vi.mock('@/lib/platform', () => ({ getCurrentUser: mocks.user }));
 vi.mock('next/cache', () => ({ revalidatePath: mocks.revalidate }));
-vi.mock('next/navigation', () => ({ notFound: mocks.notFound, redirect: mocks.redirect }));
+vi.mock('next/navigation', () => ({
+  notFound: mocks.notFound,
+  redirect: mocks.redirect,
+  useRouter: () => ({ refresh: mocks.refresh }),
+}));
 
 const admin = { platformRole: 'admin', impersonatedBy: null };
 const handle = 'a'.repeat(22);
@@ -80,6 +85,62 @@ describe('moderation server boundary', () => {
     await expect(NetworkModerationPage()).rejects.toThrow('NOT_FOUND');
     await expect(moderatePost({}, form(draftFields))).resolves.toHaveProperty('error');
     expect(mocks.revalidate).not.toHaveBeenCalled();
+  });
+
+  it.each([new ApiError('private database detail', 503), new Error('private transport detail')])(
+    'offers safe temporary queue recovery without an empty-queue claim or mutation controls',
+    async (error) => {
+      mocks.api.mockRejectedValue(error);
+      render(await NetworkModerationPage());
+      expect(screen.getByRole('alert')).toHaveTextContent(
+        'Pending approval queue could not be loaded',
+      );
+      expect(screen.queryByText(/private/)).not.toBeInTheDocument();
+      expect(screen.queryByText('No revisions are awaiting review.')).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Approve revision' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Create draft' })).not.toBeInTheDocument();
+      expect(screen.getByRole('link', { name: 'Moderation history' })).toHaveAttribute(
+        'href',
+        moderationPath + '/history',
+      );
+      expect(screen.getByRole('link', { name: 'Saved drafts' })).toHaveAttribute(
+        'href',
+        moderationPath + '/drafts',
+      );
+      fireEvent.click(screen.getByRole('button', { name: 'Retry loading' }));
+      expect(mocks.refresh).toHaveBeenCalledOnce();
+      expect(mocks.api).toHaveBeenCalledExactlyOnceWith(moderationPath + '/queue', {
+        cache: 'no-store',
+      });
+      expect(mocks.revalidate).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([401, 403])('preserves queue API access denial (%s)', async (status) => {
+    mocks.api.mockRejectedValue(new ApiError('private', status));
+    await expect(NetworkModerationPage()).rejects.toThrow('NOT_FOUND');
+  });
+
+  it.each([400, 429])(
+    'leaves non-temporary queue errors on the existing error boundary (%s)',
+    async (status) => {
+      const error = new ApiError('private', status);
+      mocks.api.mockRejectedValue(error);
+      await expect(NetworkModerationPage()).rejects.toBe(error);
+    },
+  );
+
+  it('preserves redirect control flow and distinguishes a genuine empty queue', async () => {
+    const redirect = Object.assign(new Error('NEXT_REDIRECT'), {
+      digest: 'NEXT_REDIRECT;replace;/login;307;',
+    });
+    mocks.api.mockRejectedValueOnce(redirect);
+    await expect(NetworkModerationPage()).rejects.toBe(redirect);
+    mocks.api.mockResolvedValueOnce([]);
+    render(await NetworkModerationPage());
+    expect(screen.getByText('No revisions are awaiting review.')).toBeVisible();
+    expect(screen.queryByRole('button', { name: 'Retry loading' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Create draft' })).toBeEnabled();
   });
 
   it('creates, edits, and submits through the existing draft APIs', async () => {
