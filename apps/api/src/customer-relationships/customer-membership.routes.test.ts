@@ -148,7 +148,7 @@ describe('GET /customer-memberships', () => {
       membershipRow(OTHER_BUSINESS_ID, 'left'),
     ]);
 
-    const response = await call('/');
+    const response = await call('');
 
     expect(response.status).toBe(200);
     expect(mocks.list).toHaveBeenCalledExactlyOnceWith('customer-a');
@@ -164,7 +164,7 @@ describe('GET /customer-memberships', () => {
   it('returns an empty list for a customer with no memberships', async () => {
     mocks.list.mockResolvedValueOnce([]);
 
-    const response = await call('/');
+    const response = await call('');
 
     expect(response.status).toBe(200);
     expect(((await response.json()) as { data: unknown[] }).data).toEqual([]);
