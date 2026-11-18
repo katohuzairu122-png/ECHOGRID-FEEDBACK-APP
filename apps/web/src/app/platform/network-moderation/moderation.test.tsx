@@ -318,7 +318,7 @@ describe('moderation workspace', () => {
     await user.clear(screen.getByLabelText('Post handle', { exact: true }));
     await user.type(screen.getByLabelText('Post handle', { exact: true }), 'b'.repeat(22));
     expect(screen.getByLabelText('Apply this action to the specified post')).not.toBeChecked();
-    await user.click(screen.getByRole('button', { name: 'Apply action', exact: true }));
+    await user.click(screen.getByRole('button', { name: 'Apply action' }));
     expect(mocks.api).not.toHaveBeenCalled();
   });
 });
