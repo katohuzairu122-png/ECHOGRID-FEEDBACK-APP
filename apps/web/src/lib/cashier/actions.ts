@@ -73,6 +73,33 @@ export async function cashierLoginAction(
   }
 }
 
+/**
+ * CASHIER-AUTH-02B: sign-in for a business-managed cashier (business code + username + password; no email). Same result
+ * shape as the email sign-in, so the branch-selection step below is shared and an account with several branches picks one.
+ */
+export async function cashierManagedLoginAction(
+  _prev: CashierLoginState,
+  form: FormData,
+): Promise<CashierLoginState> {
+  await requireCashierOrigin();
+  try {
+    const result = await postCashierAuth<CashierLoginResponse>('managed-login', {
+      businessCode: text(form, 'businessCode'),
+      username: text(form, 'username'),
+      password: String(form.get('password') ?? ''),
+      deviceLabel: label(form),
+    });
+    if (result.status === 'authenticated') {
+      await setCashierSession(result as CashierSessionPayload);
+      redirect(HOME);
+    }
+    await setCashierSelectionTicket(result.ticket);
+    return { choices: result.choices };
+  } catch (err) {
+    return failureState(err);
+  }
+}
+
 /** Step 2: choose the business (and branch) to serve; the API re-checks eligibility now. */
 export async function cashierSelectAction(
   _prev: CashierLoginState,

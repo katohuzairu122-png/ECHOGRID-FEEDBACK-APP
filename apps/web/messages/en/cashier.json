@@ -13,7 +13,8 @@
       "credentials": "That email or password is not correct.",
       "access": "This account cannot use the cashier app. Ask your manager for access.",
       "expired": "This sign-in expired. Please sign in again.",
-      "unavailable": "Sign-in is not available right now. Try again in a moment."
+      "unavailable": "Sign-in is not available right now. Try again in a moment.",
+      "managedCredentials": "That business code, username or password is not correct."
     },
     "chooseTitle": "Where are you serving?",
     "chooseHint": "Choose the business and branch for this device.",
@@ -21,7 +22,14 @@
     "branch": "Branch",
     "branchWide": "All branches",
     "continue": "Start serving",
-    "back": "Use a different account"
+    "back": "Use a different account",
+    "managed": {
+      "useCode": "Sign in with a business code instead",
+      "useEmail": "Sign in with email instead",
+      "businessCode": "Business code",
+      "businessCodeHint": "Ask your manager for the business code and your username.",
+      "username": "Username"
+    }
   },
   "header": {
     "servingAt": "Serving at",
@@ -155,6 +163,108 @@
       "noAccess": "Your role cannot view cashier activity. Ask the business owner or an administrator.",
       "branchRequired": "Choose a branch to view its activity.",
       "correlation": "Reference ID"
+    },
+    "accounts": {
+      "link": "Manage cashier accounts",
+      "title": "Cashier accounts",
+      "subtitle": "Create sign-ins for your cashiers without needing their email address, and choose which branches each one can serve.",
+      "noAccess": "Your role cannot manage cashier accounts. Ask the business owner for access.",
+      "loadFailed": "Cashier accounts could not be loaded. Try again in a moment.",
+      "reauth": {
+        "title": "Confirm it is you",
+        "hint": "Changes to cashier accounts need your password. Confirming lasts 5 minutes.",
+        "password": "Your password",
+        "confirm": "Confirm",
+        "confirmed": "Confirmed. You can make changes for the next 5 minutes.",
+        "wrong": "That password is not correct."
+      },
+      "code": {
+        "title": "Business code",
+        "hint": "Cashiers sign in with this code, their username and their password. It is not a secret, but change it if it is shared by mistake.",
+        "none": "Created with your first cashier account.",
+        "rotate": "Change business code",
+        "confirmRotate": "Change the business code? Cashiers will need the new code the next time they sign in. Signed-in cashiers are not signed out.",
+        "rotated": "The business code was changed."
+      },
+      "create": {
+        "title": "Create a cashier account",
+        "username": "Username",
+        "usernameHint": "3 to 32 characters: lowercase letters, numbers, dot, underscore or hyphen.",
+        "displayName": "Name or employee label",
+        "password": "Password (optional)",
+        "passwordHint": "Leave empty to generate a secure password. If you set one, it must be at least 8 characters.",
+        "submit": "Create account",
+        "created": "The cashier account was created."
+      },
+      "assign": {
+        "mode": "Branch access",
+        "single": "One branch",
+        "multiple": "Several branches",
+        "singleHint": "The cashier serves at one branch only.",
+        "multipleHint": "The cashier chooses between the branches you tick, and no others.",
+        "branches": "Branches",
+        "singleNeeds": "Tick exactly one branch.",
+        "multipleNeeds": "Tick at least two branches.",
+        "removeNote": "Removing a branch signs out the cashier's sessions on that branch straight away."
+      },
+      "list": {
+        "title": "Your cashiers",
+        "empty": "No cashier accounts yet.",
+        "branches": "Branches",
+        "noBranches": "None",
+        "lastLogin": "Last sign-in",
+        "never": "Never",
+        "locked": "Temporarily locked",
+        "status": {
+          "active": "Active",
+          "disabled": "Disabled",
+          "revoked": "Revoked"
+        },
+        "mode": {
+          "single": "One branch",
+          "multiple": "Several branches"
+        }
+      },
+      "actions": {
+        "editBranches": "Branches",
+        "saveBranches": "Save branches",
+        "cancel": "Cancel",
+        "resetCredential": "Reset password",
+        "confirmReset": "Reset this cashier's password? Their current sessions end and you will see the new password once.",
+        "disable": "Disable",
+        "confirmDisable": "Disable this account? It is signed out now and cannot sign in until you enable it.",
+        "enable": "Enable",
+        "confirmEnable": "Enable this account again?",
+        "signOut": "Sign out devices",
+        "confirmSignOut": "Sign this cashier out of every device?",
+        "revoke": "Revoke access",
+        "confirmRevoke": "Revoke this account permanently? This cannot be undone."
+      },
+      "credential": {
+        "title": "Save this sign-in now",
+        "warning": "This password is shown only once and cannot be recovered. Give it to the cashier securely.",
+        "code": "Business code",
+        "username": "Username",
+        "password": "Password",
+        "setByYou": "The password you chose",
+        "dismiss": "I have saved it"
+      },
+      "errors": {
+        "generic": "That could not be done. Try again.",
+        "REAUTH_REQUIRED": "Confirm your password above, then try again.",
+        "CASHIER_USERNAME_TAKEN": "That username is already used in this business.",
+        "CASHIER_USERNAME_INVALID": "Usernames are 3 to 32 characters: lowercase letters, numbers, dot, underscore or hyphen.",
+        "CASHIER_PASSWORD_INVALID": "Passwords must be 8 to 128 characters.",
+        "CASHIER_BRANCH_ASSIGNMENT_INVALID": "Choose one branch for single access, or at least two for several.",
+        "CASHIER_BRANCH_NOT_FOUND": "One of the chosen branches was not found.",
+        "CASHIER_ACCOUNT_STATE_CONFLICT": "That is not possible for the account's current status.",
+        "CASHIER_ACCOUNT_REVOKED": "A revoked account cannot be changed.",
+        "CASHIER_ROLE_NAME_CONFLICT": "A custom role named Cashier already exists. Rename it first.",
+        "CASHIER_ROLE_ALTERED": "The Cashier role was changed and no longer matches its fixed permissions.",
+        "CASHIER_CATALOG_NOT_SEEDED": "Cashier accounts are not available yet. Contact support.",
+        "CASHIER_ACCOUNT_NOT_FOUND": "That account no longer exists.",
+        "PERMISSION_DENIED": "You do not have permission to do that."
+      }
     }
   }
 }

@@ -13,7 +13,8 @@
       "credentials": "El correo o la contraseña no son correctos.",
       "access": "Esta cuenta no puede usar la app de cajero. Pide acceso a tu gerente.",
       "expired": "Este inicio de sesión caducó. Inicia sesión de nuevo.",
-      "unavailable": "El inicio de sesión no está disponible ahora. Inténtalo en un momento."
+      "unavailable": "El inicio de sesión no está disponible ahora. Inténtalo en un momento.",
+      "managedCredentials": "Ese código de negocio, nombre de usuario o contraseña no es correcto."
     },
     "chooseTitle": "¿Dónde vas a atender?",
     "chooseHint": "Elige el negocio y la sucursal de este dispositivo.",
@@ -21,7 +22,14 @@
     "branch": "Sucursal",
     "branchWide": "Todas las sucursales",
     "continue": "Empezar a atender",
-    "back": "Usar otra cuenta"
+    "back": "Usar otra cuenta",
+    "managed": {
+      "useCode": "Iniciar sesión con un código de negocio",
+      "useEmail": "Iniciar sesión con correo",
+      "businessCode": "Código del negocio",
+      "businessCodeHint": "Pida a su gerente el código del negocio y su nombre de usuario.",
+      "username": "Nombre de usuario"
+    }
   },
   "header": {
     "servingAt": "Atendiendo en",
@@ -155,6 +163,108 @@
       "noAccess": "Tu rol no puede ver la actividad de cajero. Pídelo al propietario o a un administrador.",
       "branchRequired": "Elige una sucursal para ver su actividad.",
       "correlation": "ID de referencia"
+    },
+    "accounts": {
+      "link": "Administrar cuentas de cajeros",
+      "title": "Cuentas de cajeros",
+      "subtitle": "Cree accesos para sus cajeros sin necesitar su correo electrónico y elija en qué sucursales puede atender cada uno.",
+      "noAccess": "Su rol no puede administrar cuentas de cajeros. Pida acceso al propietario del negocio.",
+      "loadFailed": "No se pudieron cargar las cuentas de cajeros. Inténtelo de nuevo en un momento.",
+      "reauth": {
+        "title": "Confirme que es usted",
+        "hint": "Los cambios en las cuentas de cajeros requieren su contraseña. La confirmación dura 5 minutos.",
+        "password": "Su contraseña",
+        "confirm": "Confirmar",
+        "confirmed": "Confirmado. Puede hacer cambios durante los próximos 5 minutos.",
+        "wrong": "Esa contraseña no es correcta."
+      },
+      "code": {
+        "title": "Código del negocio",
+        "hint": "Los cajeros inician sesión con este código, su nombre de usuario y su contraseña. No es un secreto, pero cámbielo si se compartió por error.",
+        "none": "Se crea con su primera cuenta de cajero.",
+        "rotate": "Cambiar el código del negocio",
+        "confirmRotate": "¿Cambiar el código del negocio? Los cajeros necesitarán el nuevo código en su próximo inicio de sesión. Los cajeros con sesión abierta no se desconectan.",
+        "rotated": "Se cambió el código del negocio."
+      },
+      "create": {
+        "title": "Crear una cuenta de cajero",
+        "username": "Nombre de usuario",
+        "usernameHint": "De 3 a 32 caracteres: letras minúsculas, números, punto, guion bajo o guion.",
+        "displayName": "Nombre o etiqueta del empleado",
+        "password": "Contraseña (opcional)",
+        "passwordHint": "Déjela vacía para generar una contraseña segura. Si define una, debe tener al menos 8 caracteres.",
+        "submit": "Crear cuenta",
+        "created": "Se creó la cuenta de cajero."
+      },
+      "assign": {
+        "mode": "Acceso a sucursales",
+        "single": "Una sucursal",
+        "multiple": "Varias sucursales",
+        "singleHint": "El cajero atiende en una sola sucursal.",
+        "multipleHint": "El cajero elige entre las sucursales marcadas y ninguna otra.",
+        "branches": "Sucursales",
+        "singleNeeds": "Marque exactamente una sucursal.",
+        "multipleNeeds": "Marque al menos dos sucursales.",
+        "removeNote": "Quitar una sucursal cierra de inmediato las sesiones del cajero en esa sucursal."
+      },
+      "list": {
+        "title": "Sus cajeros",
+        "empty": "Aún no hay cuentas de cajeros.",
+        "branches": "Sucursales",
+        "noBranches": "Ninguna",
+        "lastLogin": "Último inicio de sesión",
+        "never": "Nunca",
+        "locked": "Bloqueada temporalmente",
+        "status": {
+          "active": "Activa",
+          "disabled": "Desactivada",
+          "revoked": "Revocada"
+        },
+        "mode": {
+          "single": "Una sucursal",
+          "multiple": "Varias sucursales"
+        }
+      },
+      "actions": {
+        "editBranches": "Sucursales",
+        "saveBranches": "Guardar sucursales",
+        "cancel": "Cancelar",
+        "resetCredential": "Restablecer contraseña",
+        "confirmReset": "¿Restablecer la contraseña de este cajero? Sus sesiones actuales terminan y verá la nueva contraseña una sola vez.",
+        "disable": "Desactivar",
+        "confirmDisable": "¿Desactivar esta cuenta? Se cierra su sesión ahora y no podrá entrar hasta que la active.",
+        "enable": "Activar",
+        "confirmEnable": "¿Activar esta cuenta de nuevo?",
+        "signOut": "Cerrar sesión en dispositivos",
+        "confirmSignOut": "¿Cerrar la sesión de este cajero en todos los dispositivos?",
+        "revoke": "Revocar acceso",
+        "confirmRevoke": "¿Revocar esta cuenta de forma permanente? No se puede deshacer."
+      },
+      "credential": {
+        "title": "Guarde este acceso ahora",
+        "warning": "Esta contraseña se muestra una sola vez y no se puede recuperar. Entréguesela al cajero de forma segura.",
+        "code": "Código del negocio",
+        "username": "Nombre de usuario",
+        "password": "Contraseña",
+        "setByYou": "La contraseña que eligió",
+        "dismiss": "Ya la guardé"
+      },
+      "errors": {
+        "generic": "No se pudo hacer. Inténtelo de nuevo.",
+        "REAUTH_REQUIRED": "Confirme su contraseña arriba y vuelva a intentarlo.",
+        "CASHIER_USERNAME_TAKEN": "Ese nombre de usuario ya se usa en este negocio.",
+        "CASHIER_USERNAME_INVALID": "Los nombres de usuario tienen de 3 a 32 caracteres: letras minúsculas, números, punto, guion bajo o guion.",
+        "CASHIER_PASSWORD_INVALID": "Las contraseñas deben tener de 8 a 128 caracteres.",
+        "CASHIER_BRANCH_ASSIGNMENT_INVALID": "Elija una sucursal para acceso único, o al menos dos para varias.",
+        "CASHIER_BRANCH_NOT_FOUND": "No se encontró una de las sucursales elegidas.",
+        "CASHIER_ACCOUNT_STATE_CONFLICT": "Eso no es posible en el estado actual de la cuenta.",
+        "CASHIER_ACCOUNT_REVOKED": "Una cuenta revocada no se puede cambiar.",
+        "CASHIER_ROLE_NAME_CONFLICT": "Ya existe un rol personalizado llamado Cashier. Cámbiele el nombre primero.",
+        "CASHIER_ROLE_ALTERED": "El rol Cashier se modificó y ya no coincide con sus permisos fijos.",
+        "CASHIER_CATALOG_NOT_SEEDED": "Las cuentas de cajeros aún no están disponibles. Contacte con soporte.",
+        "CASHIER_ACCOUNT_NOT_FOUND": "Esa cuenta ya no existe.",
+        "PERMISSION_DENIED": "No tiene permiso para hacer eso."
+      }
     }
   }
 }

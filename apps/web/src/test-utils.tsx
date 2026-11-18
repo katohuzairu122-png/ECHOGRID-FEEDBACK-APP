@@ -13,6 +13,7 @@ import enAnalytics from '../messages/en/analytics.json';
 import enNotifications from '../messages/en/notifications.json';
 import enPlatform from '../messages/en/platform.json';
 import enMessaging from '../messages/en/messaging.json';
+import enCashier from '../messages/en/cashier.json';
 
 /**
  * Test-only message bundle (i18n & Multi-Currency Block 4) -- English
@@ -37,6 +38,7 @@ const messages = {
   notifications: enNotifications,
   platform: enPlatform,
   messaging: enMessaging,
+  cashier: enCashier,
 };
 
 /**
