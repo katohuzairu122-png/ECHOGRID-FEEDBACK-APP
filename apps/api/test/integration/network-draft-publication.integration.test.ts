@@ -952,9 +952,11 @@ describe.skipIf(!process.env.DATABASE_URL)('NETWORK-05 real HTTP-to-Postgres lif
           const target =
             webUrl + '/platform/network-moderation/history?' + new URLSearchParams({ cursor });
           await page.goto(target);
-          await browserExpect(page.getByRole('alert')).toContainText(
-            'Moderation history could not be loaded',
-          );
+          await browserExpect(
+            page
+              .getByRole('alert')
+              .filter({ hasText: /could not be loaded|saved draft is unavailable/ }),
+          ).toContainText('Moderation history could not be loaded');
           await browserExpect(page.getByText('private synthetic upstream detail')).toHaveCount(0);
           outage = false;
           await page.getByRole('button', { name: 'Retry loading', exact: true }).click();
@@ -1025,9 +1027,11 @@ describe.skipIf(!process.env.DATABASE_URL)('NETWORK-05 real HTTP-to-Postgres lif
         async (page, _context, webUrl, browserExpect) => {
           const target = webUrl + '/platform/network-moderation/drafts?' + query;
           await page.goto(target);
-          await browserExpect(page.getByRole('alert')).toContainText(
-            'Saved drafts could not be loaded',
-          );
+          await browserExpect(
+            page
+              .getByRole('alert')
+              .filter({ hasText: /could not be loaded|saved draft is unavailable/ }),
+          ).toContainText('Saved drafts could not be loaded');
           await browserExpect(page.getByText('private synthetic upstream detail')).toHaveCount(0);
           failedPath = null;
           await page.getByRole('button', { name: 'Retry loading', exact: true }).click();
@@ -1038,9 +1042,11 @@ describe.skipIf(!process.env.DATABASE_URL)('NETWORK-05 real HTTP-to-Postgres lif
 
           failedPath = `/api/v1/platform/network-moderation/drafts/${draft.handle}`;
           await page.reload();
-          await browserExpect(page.getByRole('alert')).toContainText(
-            'This saved draft is unavailable',
-          );
+          await browserExpect(
+            page
+              .getByRole('alert')
+              .filter({ hasText: /could not be loaded|saved draft is unavailable/ }),
+          ).toContainText('This saved draft is unavailable');
           await browserExpect(
             page.getByRole('link', { name: 'Open draft ' + draft.handle, exact: true }),
           ).toBeVisible();
