@@ -677,7 +677,7 @@ describe.skipIf(!process.env.DATABASE_URL)('NETWORK-05 real HTTP-to-Postgres lif
         await context.addCookies([
           { name: 'ff_customer_token', value: customerToken, url: webUrl, httpOnly: true },
         ]);
-        const body = 'NETWORK-07 refresh ' + randomUUID();
+        const body = 'NETWORK-07 refresh after moderation';
         const draft = await prepareSubmitted(body);
         await page.goto(webUrl + '/loyalty/dashboard/community/feed');
         await browserExpect(page.getByText(body, { exact: true })).toHaveCount(0);
@@ -702,7 +702,7 @@ describe.skipIf(!process.env.DATABASE_URL)('NETWORK-05 real HTTP-to-Postgres lif
         await context.addCookies([
           { name: 'ff_customer_token', value: customerToken, url: webUrl, httpOnly: true },
         ]);
-        const prefix = 'NETWORK-07 pagination ' + randomUUID();
+        const prefix = 'NETWORK-07 pagination';
         for (let index = 0; index < 21; index++) {
           const draft = await prepareSubmitted(`${prefix} ${index}`);
           await action(moderatorA, `/revisions/${draft.revisionId}/approve`);
