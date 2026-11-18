@@ -269,6 +269,12 @@
       "phoneRequired": "Verifica tu número de teléfono para unirte a otro negocio.",
       "verifyPhoneLink": "Verificar mi teléfono"
     },
+    "join": {
+      "consentLabel": "Acepto unirme al programa de fidelización de este negocio y que registre mis visitas, compras y puntos. Puedo retirar este consentimiento en cualquier momento.",
+      "button": "Unirme al programa",
+      "joining": "Uniéndome…",
+      "error": "No se pudo completar la unión. Inicia sesión de nuevo o vuelve a escanear este QR."
+    },
     "messages": {
       "title": "Mensajes",
       "emptyTitle": "Aún no hay mensajes",

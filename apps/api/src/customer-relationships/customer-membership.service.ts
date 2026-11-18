@@ -1,4 +1,5 @@
 import { sql } from 'drizzle-orm';
+import type { JoinLoyaltyConsentVersion } from '@echo-grid-feedback/shared-types';
 import type { Database } from '../db/client';
 import { assertCustomerNotLimited } from '../lib/customer-limits';
 import { createRepositories, type BusinessCustomerMembership, type LoyaltyAccount } from '../repositories';
@@ -11,7 +12,13 @@ export interface JoinCustomerMembershipInput {
   businessId: string;
   onboardingSource: string;
   onboardingReference: string;
-  consentVersion?: string;
+  /**
+   * The JOIN_LOYALTY consent wording the customer explicitly accepted. Required,
+   * so no caller can create a membership and a consent grant without naming the
+   * text that was shown. Routes obtain it only after the request schema has
+   * confirmed `consentAccepted: true`; the service never defaults it.
+   */
+  consentVersion: JoinLoyaltyConsentVersion;
   idempotencyKey?: string;
 }
 
@@ -116,7 +123,7 @@ export class CustomerMembershipService {
           customerId: input.customerId,
           businessId: input.businessId,
           purpose: 'join_loyalty',
-          consentVersion: input.consentVersion ?? 'v1',
+          consentVersion: input.consentVersion,
           status: 'active',
           ...(input.idempotencyKey !== undefined ? { idempotencyKey: input.idempotencyKey } : {}),
           metadata: {

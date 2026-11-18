@@ -269,6 +269,12 @@
       "phoneRequired": "Vérifiez votre numéro de téléphone pour rejoindre un autre commerce.",
       "verifyPhoneLink": "Vérifier mon téléphone"
     },
+    "join": {
+      "consentLabel": "J'accepte de rejoindre le programme de fidélité de cette entreprise et qu'elle enregistre mes visites, mes achats et mes points. Je peux retirer ce consentement à tout moment.",
+      "button": "Rejoindre le programme",
+      "joining": "Adhésion en cours…",
+      "error": "Impossible de rejoindre le programme. Reconnectez-vous ou scannez de nouveau ce QR code."
+    },
     "messages": {
       "title": "Messages",
       "emptyTitle": "Aucun message pour le moment",

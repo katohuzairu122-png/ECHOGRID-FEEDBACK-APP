@@ -269,6 +269,12 @@
       "phoneRequired": "Verify your phone number to join another business.",
       "verifyPhoneLink": "Verify my phone"
     },
+    "join": {
+      "consentLabel": "I agree to join this business's loyalty program and let it record my visits, purchases and points. I can withdraw this consent at any time.",
+      "button": "Join loyalty",
+      "joining": "Joining…",
+      "error": "Unable to join. Sign in again or retry this QR."
+    },
     "messages": {
       "title": "Messages",
       "emptyTitle": "No messages yet",

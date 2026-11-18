@@ -7,6 +7,7 @@ import type { LoyaltyAccountDto } from '@echo-grid-feedback/shared-types';
 import { checkinAction, joinAndCheckinAction } from '@/lib/actions/loyalty-customer';
 import { Button, buttonVariants, Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui';
 import { PoweredByFooter } from '@/components/brand';
+import { JoinConsentField } from '@/components/join-consent-field';
 
 interface CheckinPanelProps {
   token: string;
@@ -28,6 +29,8 @@ export function CheckinPanel({ token, branchName, businessName, signedIn, feedba
   const [account, setAccount] = useState<LoyaltyAccountDto>();
   const [membershipRequired, setMembershipRequired] = useState(false);
   const [phoneRequired, setPhoneRequired] = useState(false);
+  // JOIN_LOYALTY consent: nothing is sent to the server until the customer ticks the box (the API enforces it too).
+  const [consentAccepted, setConsentAccepted] = useState(false);
   const automaticCheckinStarted = useRef(false);
   // i18n & Multi-Currency Block 6.
   const t = useTranslations('loyalty.customer.checkin');
@@ -52,11 +55,12 @@ export function CheckinPanel({ token, branchName, businessName, signedIn, feedba
   }, [t, token]);
 
   const handleJoinAndCheckin = useCallback(() => {
+    if (!consentAccepted) return;
     setError(undefined);
     setPhoneRequired(false);
     startTransition(async () => {
       try {
-        const result = await joinAndCheckinAction(token);
+        const result = await joinAndCheckinAction(token, consentAccepted);
         if (result.error) {
           // Joining an ADDITIONAL business needs a verified phone: send the customer to verify it, then bring them back.
           if (result.code === 'PHONE_VERIFICATION_REQUIRED') {
@@ -72,7 +76,7 @@ export function CheckinPanel({ token, branchName, businessName, signedIn, feedba
         setError(t('genericError'));
       }
     });
-  }, [t, token]);
+  }, [consentAccepted, t, token]);
 
   useEffect(() => {
     if (!signedIn || !autoCheckin || automaticCheckinStarted.current) return;
@@ -125,9 +129,15 @@ export function CheckinPanel({ token, branchName, businessName, signedIn, feedba
                 </Link>
               )}
               {membershipRequired && signedIn && (
-                <div className="flex flex-col gap-2 rounded-md border p-3">
+                <div className="flex flex-col gap-3 rounded-md border p-3">
                   <p className="text-sm">{t('joinRequired')}</p>
-                  <Button onClick={handleJoinAndCheckin} disabled={pending} size="lg" className="w-full">
+                  <JoinConsentField checked={consentAccepted} onChange={setConsentAccepted} disabled={pending} />
+                  <Button
+                    onClick={handleJoinAndCheckin}
+                    disabled={pending || !consentAccepted}
+                    size="lg"
+                    className="w-full"
+                  >
                     {pending ? t('joining') : t('joinAndCheckIn')}
                   </Button>
                 </div>

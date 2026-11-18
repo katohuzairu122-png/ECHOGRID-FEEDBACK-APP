@@ -1,15 +1,17 @@
 import { randomUUID } from 'node:crypto';
-import { Hono } from 'hono';
 import { Client } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import type { Bindings } from '../../src/config/env';
 import { signCustomerAccessToken } from '../../src/customer-auth/customer-jwt';
 import { buildDb } from '../../src/db/client';
 import type { VelocityKv } from '../../src/fraud/velocity-tracker';
-import { errorHandler } from '../../src/lib/error-handler';
-import { loyaltyCustomerRoutes } from '../../src/loyalty/loyalty-customer.routes';
 import { signQrToken } from '../../src/qr/qr-token';
 import { createRepositories } from '../../src/repositories';
+import {
+  CUSTOMER_JWT_SECRET,
+  QR_TOKEN_SECRET,
+  createFakeKv,
+  customerRequest,
+} from './helpers/customer-http';
 
 /**
  * Split 01 (finding J): the customer check-in route must gate on an active
@@ -32,69 +34,8 @@ if (databaseUrl) {
   }
 }
 
-const customerSecret = 'checkin-gate-fixture-customer-only';
-const qrSecret = 'checkin-gate-fixture-qr-secret-do-not-use';
-const allow = { limit: async () => ({ success: true }) };
-
-const app = new Hono<{ Bindings: Bindings }>();
-app.route('/api/v1/loyalty/me', loyaltyCustomerRoutes);
-app.onError(errorHandler);
-
-type Envelope<T> = { data?: T; error?: { code: string } };
-
-/** In-memory stand-in for the CACHE binding, shared across the calls of one test. */
-function createFakeKv(): VelocityKv {
-  const store = new Map<string, { value: string; expiresAt: number }>();
-  return {
-    async get(key: string) {
-      const entry = store.get(key);
-      if (!entry) return null;
-      if (Date.now() / 1000 >= entry.expiresAt) {
-        store.delete(key);
-        return null;
-      }
-      return entry.value;
-    },
-    async put(key: string, value: string, options: { expirationTtl: number }) {
-      store.set(key, { value, expiresAt: Date.now() / 1000 + options.expirationTtl });
-    },
-  };
-}
-
-async function post<T = unknown>(token: string, path: string, body: unknown, kv: VelocityKv) {
-  const pending: Promise<unknown>[] = [];
-  const env = {
-    HYPERDRIVE: { connectionString: databaseUrl },
-    CUSTOMER_JWT_SECRET: customerSecret,
-    QR_TOKEN_SECRET: qrSecret,
-    FRAUD_DETECTION_SALT: 'checkin-gate-fixture-salt-do-not-use-in-production',
-    CACHE: kv,
-    CUSTOMER_API_RATE_LIMITER: allow,
-    PUBLIC_RATE_LIMITER: allow,
-    JOBS: { send: async () => {}, sendBatch: async () => {} },
-  } as unknown as Bindings;
-  const response = await app.request(
-    `/api/v1/loyalty/me${path}`,
-    {
-      method: 'POST',
-      headers: new Headers({
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      }),
-      body: JSON.stringify(body),
-    },
-    env,
-    {
-      waitUntil: (promise: Promise<unknown>) => {
-        pending.push(promise);
-      },
-      passThroughOnException: () => {},
-      props: {},
-    },
-  );
-  await Promise.all(pending);
-  return { status: response.status, ...((await response.json()) as Envelope<T>) };
-}
+const post = <T = unknown>(token: string, path: string, body: unknown, kv: VelocityKv) =>
+  customerRequest<T>(databaseUrl!, token, 'POST', `/loyalty/me${path}`, body, kv);
 
 describe.skipIf(!databaseUrl)(
   'Check-in membership gate (real HTTP and disposable PostgreSQL)',
@@ -113,7 +54,7 @@ describe.skipIf(!databaseUrl)(
           phoneVerifiedAt: new Date(),
         })
       ).id;
-      return { id, token: await signCustomerAccessToken(id, customerSecret) };
+      return { id, token: await signCustomerAccessToken(id, CUSTOMER_JWT_SECRET) };
     };
     const checkinRows = async (customerId: string) =>
       (
@@ -152,7 +93,10 @@ describe.skipIf(!databaseUrl)(
         type: 'business',
         createdBy: staffId,
       });
-      qrToken = await signQrToken({ qrCodeId: qr.id, businessId, branchId: branch.id }, qrSecret);
+      qrToken = await signQrToken(
+        { qrCodeId: qr.id, businessId, branchId: branch.id },
+        QR_TOKEN_SECRET,
+      );
       pointsPerCheckin = (await repos.loyaltySettings.getOrCreateDefaults(businessId))
         .pointsPerCheckin;
     });
@@ -169,7 +113,12 @@ describe.skipIf(!databaseUrl)(
       expect(first.status).toBe(409);
       expect(first.error?.code).toBe('MEMBERSHIP_REQUIRED');
 
-      const joined = await post(customer.token, '/join', { qrToken, consentVersion: 'v1' }, kv);
+      const joined = await post(
+        customer.token,
+        '/join',
+        { qrToken, consentAccepted: true, consentVersion: 'v1' },
+        kv,
+      );
       expect(joined.status).toBe(201);
 
       const second = await post<{ points: number }>(customer.token, '/checkin', { qrToken }, kv);
@@ -182,7 +131,12 @@ describe.skipIf(!databaseUrl)(
     it('still blocks a repeat scan by an active member (the cooldown itself is unchanged)', async () => {
       const kv = createFakeKv();
       const customer = await newCustomer();
-      await post(customer.token, '/join', { qrToken, consentVersion: 'v1' }, kv);
+      await post(
+        customer.token,
+        '/join',
+        { qrToken, consentAccepted: true, consentVersion: 'v1' },
+        kv,
+      );
 
       const first = await post<{ points: number }>(customer.token, '/checkin', { qrToken }, kv);
       expect(first.status).toBe(200);

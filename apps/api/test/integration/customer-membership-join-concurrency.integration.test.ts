@@ -56,6 +56,7 @@ describe.skipIf(!databaseUrl)(
         businessId,
         onboardingSource: 'integration_test',
         onboardingReference: `join-idempotency-${run}`,
+        consentVersion: 'v1',
       });
     const count = async (statement: string, values: unknown[]) =>
       Number((await admin.query(statement, values)).rows[0].n);

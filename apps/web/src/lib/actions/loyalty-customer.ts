@@ -1,6 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import { CURRENT_JOIN_LOYALTY_CONSENT_VERSION } from '@echo-grid-feedback/shared-types';
 import type {
   LoyaltyAccountDto,
   RedemptionResult,
@@ -28,11 +29,17 @@ export async function revokeCustomerQrAction(): Promise<CustomerQrCredential> {
 }
 
 /** Explicit customer-consented join through a server-verified business QR
- * context. Split 01 deliberately rejects arbitrary businessId-only enrollment. */
-export async function joinLoyaltyAction(qrToken: string): Promise<LoyaltyAccountDto> {
+ * context. Split 01 deliberately rejects arbitrary businessId-only enrollment,
+ * and a join the customer did not explicitly accept: `consentAccepted` must be
+ * the literal `true`. A Server Action can be invoked with any arguments, so it
+ * refuses here without a round trip; the API enforces the same rule. */
+export async function joinLoyaltyAction(qrToken: string, consentAccepted: boolean): Promise<LoyaltyAccountDto> {
+  if (consentAccepted !== true) {
+    throw new ApiError('Accept the loyalty program consent to join.', 400, 'CONSENT_REQUIRED');
+  }
   const result = await customerApiFetch<{ loyaltyAccount: LoyaltyAccountDto }>('/customer-memberships/join', {
     method: 'POST',
-    body: JSON.stringify({ qrToken, consentVersion: 'v1' }),
+    body: JSON.stringify({ qrToken, consentAccepted: true, consentVersion: CURRENT_JOIN_LOYALTY_CONSENT_VERSION }),
   });
   revalidatePath('/loyalty/dashboard');
   return result.loyaltyAccount;
@@ -78,9 +85,9 @@ export async function checkinAction(qrToken: string): Promise<CheckinResult> {
   }
 }
 
-export async function joinAndCheckinAction(qrToken: string): Promise<CheckinResult> {
+export async function joinAndCheckinAction(qrToken: string, consentAccepted: boolean): Promise<CheckinResult> {
   try {
-    await joinLoyaltyAction(qrToken);
+    await joinLoyaltyAction(qrToken, consentAccepted);
     return await checkinAction(qrToken);
   } catch (err) {
     rethrowControlFlow(err);

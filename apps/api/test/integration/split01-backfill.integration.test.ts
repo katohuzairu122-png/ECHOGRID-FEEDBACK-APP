@@ -266,6 +266,7 @@ describe.skipIf(!databaseUrl)(
         businessId: BUSINESS_A,
         onboardingSource: 'business_qr',
         onboardingReference: 'legacy-member-scan',
+        consentVersion: 'v1' as const,
       };
       const first = await service.join(input);
       const replay = await service.join(input);
@@ -290,6 +291,7 @@ describe.skipIf(!databaseUrl)(
           businessId: BUSINESS_A,
           onboardingSource: 'business_qr',
           onboardingReference: 'legacy-suspended-scan',
+          consentVersion: 'v1',
         }),
       ).rejects.toMatchObject({ status: 409, code: 'MEMBERSHIP_NOT_REACTIVATABLE' });
       expect(
@@ -306,6 +308,7 @@ describe.skipIf(!databaseUrl)(
           businessId: BUSINESS_A,
           onboardingSource: 'business_qr',
           onboardingReference: 'legacy-deleted-scan',
+          consentVersion: 'v1',
         }),
       ).rejects.toMatchObject({ status: 409, code: 'LOYALTY_ACCOUNT_UNAVAILABLE' });
       expect(
