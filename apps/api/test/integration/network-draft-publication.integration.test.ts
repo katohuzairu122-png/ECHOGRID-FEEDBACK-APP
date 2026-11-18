@@ -7,6 +7,7 @@ import { randomUUID } from 'node:crypto';
 import { once } from 'node:events';
 import { resolve } from 'node:path';
 import { Hono } from 'hono';
+import { sign } from 'hono/jwt';
 import { Client } from 'pg';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import {
@@ -34,6 +35,8 @@ vi.mock('../../src/db/client', async (original) => {
 
 import { authRoutes } from '../../src/auth/auth.routes';
 import { communityFeedRoutes } from '../../src/community/community-feed.routes';
+import { communityCustomerRoutes } from '../../src/community/community-customer.routes';
+import { communityPointCustomerRoutes } from '../../src/community/community-point-customer.routes';
 import { platformNetworkModerationRoutes } from '../../src/platform/network-moderation.routes';
 import { auditTrail } from '../../src/middleware/audit';
 import { errorHandler } from '../../src/lib/error-handler';
@@ -69,6 +72,8 @@ describe.skipIf(!process.env.DATABASE_URL)('NETWORK-05 real HTTP-to-Postgres lif
   app.route(base, platformNetworkModerationRoutes);
   app.route('/api/v1/auth', authRoutes);
   app.route('/api/v1/network', communityFeedRoutes);
+  app.route('/api/v1/community/me', communityCustomerRoutes);
+  app.route('/api/v1/community-points/me', communityPointCustomerRoutes);
   let author: string;
   let moderatorA: string;
   let moderatorB: string;
@@ -386,6 +391,7 @@ describe.skipIf(!process.env.DATABASE_URL)('NETWORK-05 real HTTP-to-Postgres lif
       webUrl: string,
       browserExpect: typeof PlaywrightTest.expect,
     ) => Promise<void>,
+    options: { feedFlag?: () => string } = {},
   ) {
     const { chromium, expect: browserExpect } = requireWeb('@playwright/test') as BrowserModule;
     let apiServer: Server | undefined;
@@ -402,6 +408,7 @@ describe.skipIf(!process.env.DATABASE_URL)('NETWORK-05 real HTTP-to-Postgres lif
             String(incoming.headers.authorization ?? '').replace(/^Bearer /, ''),
             incoming.method,
             bytes.length ? JSON.parse(bytes.toString()) : undefined,
+            options.feedFlag?.() ?? 'true',
           );
           outgoing.writeHead(response.status, Object.fromEntries(response.headers));
           outgoing.end(await response.text());
@@ -718,6 +725,195 @@ describe.skipIf(!process.env.DATABASE_URL)('NETWORK-05 real HTTP-to-Postgres lif
         await browserExpect(page).toHaveURL(webUrl + '/loyalty/dashboard/community/feed');
         await browserExpect(page.getByText(`${prefix} 20`, { exact: true })).toBeVisible();
       }),
+    120000,
+  );
+
+  it.skipIf(!browserEnabled)(
+    'browser denies missing, expired and noncustomer credentials without leaking Feed content (NETWORK-08)',
+    async () =>
+      withModerationBrowser(moderatorB, async (page, context, webUrl, browserExpect) => {
+        const body = 'NETWORK-08 authorized customer content';
+        const draft = await prepareSubmitted(body);
+        await action(moderatorA, `/revisions/${draft.revisionId}/approve`);
+        await action(moderatorB, `/revisions/${draft.revisionId}/approve`);
+        expect(await isVisible(draft.handle)).toBe(true);
+
+        // The helper installs valid staff cookies. Their presence grants no customer access.
+        await page.goto(webUrl + '/loyalty/dashboard/community/feed');
+        await browserExpect(page).toHaveURL(/\/loyalty\/login(?:\?|$)/);
+        await browserExpect(page.getByText(body, { exact: true })).toHaveCount(0);
+        const expired = await sign(
+          { sub: customer, type: 'customer_access', iat: 1, exp: 2 },
+          customerSecret,
+          'HS256',
+        );
+        const impersonated = await signImpersonationToken(moderatorA, author, secret);
+        const cashier = await signCashierAccessToken(moderatorA, secret, {
+          businessId: business,
+          sessionId: randomUUID(),
+        });
+        for (const token of [
+          'malformed-credential',
+          expired,
+          await signAccessToken(moderatorA, secret),
+          cashier,
+          impersonated.token,
+        ]) {
+          const denied = await request('/api/v1/network/feed', token);
+          expect(denied.status).toBe(401);
+          expect(await denied.text()).not.toContain(body);
+          await context.addCookies([
+            { name: 'ff_customer_token', value: token, url: webUrl, httpOnly: true },
+          ]);
+          await page.goto(webUrl + '/loyalty/dashboard/community/feed');
+          await browserExpect(page).toHaveURL(/\/loyalty\/login(?:\?|$)/);
+          await browserExpect(page.getByText(body, { exact: true })).toHaveCount(0);
+        }
+        await context.addCookies([
+          { name: 'ff_customer_token', value: customerToken, url: webUrl, httpOnly: true },
+        ]);
+        await page.goto(webUrl + '/loyalty/dashboard/community/feed');
+        await browserExpect(page.getByText(body, { exact: true })).toBeVisible();
+      }),
+    120000,
+  );
+
+  it.skipIf(!browserEnabled)(
+    'browser revalidates phone verification and active customer status on Feed refresh (NETWORK-08)',
+    async () =>
+      withModerationBrowser(moderatorB, async (page, context, webUrl, browserExpect) => {
+        const original = (
+          await client.query('select status,phone_verified_at from customers where id=$1', [
+            customer,
+          ])
+        ).rows[0];
+        const body = 'NETWORK-08 eligibility revalidation';
+        const draft = await prepareSubmitted(body);
+        await action(moderatorA, `/revisions/${draft.revisionId}/approve`);
+        await action(moderatorB, `/revisions/${draft.revisionId}/approve`);
+        await context.addCookies([
+          { name: 'ff_customer_token', value: customerToken, url: webUrl, httpOnly: true },
+        ]);
+        try {
+          await page.goto(webUrl + '/loyalty/dashboard/community/feed');
+          await browserExpect(page.getByText(body, { exact: true })).toBeVisible();
+          await client.query('update customers set phone_verified_at=null where id=$1', [customer]);
+          const denied = await request('/api/v1/network/feed', customerToken);
+          expect(denied.status).toBe(403);
+          expect(await denied.text()).not.toContain(body);
+          await page.getByRole('button', { name: 'Refresh feed', exact: true }).click();
+          await browserExpect(page.getByRole('status')).toContainText(
+            'not available with your current access',
+          );
+          await browserExpect(page.getByText(body, { exact: true })).toHaveCount(0);
+          await browserExpect(
+            page.getByRole('button', { name: 'Refresh feed', exact: true }),
+          ).toHaveCount(0);
+          await client.query('update customers set phone_verified_at=$2 where id=$1', [
+            customer,
+            original.phone_verified_at,
+          ]);
+          await page.reload();
+          await browserExpect(page.getByText(body, { exact: true })).toBeVisible();
+          await client.query("update customers set status='suspended' where id=$1", [customer]);
+          expect((await request('/api/v1/network/feed', customerToken)).status).toBe(401);
+          await page.getByRole('button', { name: 'Refresh feed', exact: true }).click();
+          await browserExpect(page).toHaveURL(/\/loyalty\/login(?:\?|$)/);
+          await browserExpect(page.getByText(body, { exact: true })).toHaveCount(0);
+        } finally {
+          await client.query('update customers set status=$2,phone_verified_at=$3 where id=$1', [
+            customer,
+            original.status,
+            original.phone_verified_at,
+          ]);
+        }
+      }),
+    120000,
+  );
+
+  it.skipIf(!browserEnabled)(
+    'browser fails closed on Feed flags while preserving read-only Points and Membership (NETWORK-08)',
+    async () => {
+      let flag = 'true';
+      await withModerationBrowser(
+        moderatorB,
+        async (page, context, webUrl, browserExpect) => {
+          await context.addCookies([
+            { name: 'ff_customer_token', value: customerToken, url: webUrl, httpOnly: true },
+          ]);
+          const snapshot = async () =>
+            (
+              await client.query(
+                `select
+          (select count(*)::int from community_memberships where customer_id=$1) memberships,
+          (select count(*)::int from community_point_accounts where customer_id=$1) accounts,
+          (select count(*)::int from community_point_transactions where customer_id=$1) transactions`,
+                [customer],
+              )
+            ).rows[0];
+          const before = await snapshot();
+          const allowed = await request('/api/v1/network/feed', customerToken);
+          expect(allowed.headers.get('cache-control')).toBe('private, no-store');
+          await page.goto(webUrl + '/loyalty/dashboard/community/feed');
+          await browserExpect(
+            page.getByRole('heading', { name: 'Community feed', exact: true }),
+          ).toBeVisible();
+          await browserExpect(
+            page.getByRole('navigation', { name: 'Community sections' }),
+          ).toBeVisible();
+          for (const disabled of ['false', 'TRUE', '']) {
+            flag = disabled;
+            const status = await request(
+              '/api/v1/network/status',
+              customerToken,
+              'GET',
+              undefined,
+              flag,
+            );
+            expect(status.status).toBe(200);
+            expect(status.headers.get('cache-control')).toBe('private, no-store');
+            expect(((await status.json()) as { data: { enabled: boolean } }).data.enabled).toBe(
+              false,
+            );
+            const denied = await request(
+              '/api/v1/network/feed',
+              customerToken,
+              'GET',
+              undefined,
+              flag,
+            );
+            expect(denied.status).toBe(404);
+            await page.goto(webUrl + '/loyalty/dashboard/community/feed');
+            await browserExpect(
+              page.getByRole('heading', { name: 'Community feed', exact: true }),
+            ).toHaveCount(0);
+            await browserExpect(
+              page.getByRole('button', { name: 'Refresh feed', exact: true }),
+            ).toHaveCount(0);
+            await page.goto(webUrl + '/loyalty/dashboard/community');
+            await browserExpect(
+              page.getByRole('heading', { name: 'Community hub', exact: true }),
+            ).toBeVisible();
+            await browserExpect(
+              page.getByRole('heading', { name: 'Community Points', exact: true }),
+            ).toBeVisible();
+            await browserExpect(page.getByTestId('membership-status')).toHaveText('Not a member');
+            await browserExpect(
+              page.getByRole('navigation', { name: 'Community sections' }),
+            ).toHaveCount(0);
+            await browserExpect(
+              page.getByRole('link', { name: 'Community', exact: true }),
+            ).toHaveCount(1);
+            expect((await request('/api/v1/community/me', customerToken)).status).toBe(200);
+            expect(
+              (await request('/api/v1/community-points/me/transactions', customerToken)).status,
+            ).toBe(200);
+          }
+          expect(await snapshot()).toEqual(before);
+        },
+        { feedFlag: () => flag },
+      );
+    },
     120000,
   );
 });
