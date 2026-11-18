@@ -57,7 +57,7 @@ jobs:
         run: pnpm --filter @echo-grid-feedback/web build
       - name: Install Chromium
         run: pnpm --filter @echo-grid-feedback/api exec playwright install --with-deps chromium
-      - name: Browser saved-draft-to-publication lifecycle
-        run: pnpm --filter @echo-grid-feedback/api exec vitest run --config vitest.integration.config.ts test/integration/network-draft-publication.integration.test.ts -t "browser resumes"
+      - name: Browser publication and moderation lifecycle
+        run: pnpm --filter @echo-grid-feedback/api exec vitest run --config vitest.integration.config.ts test/integration/network-draft-publication.integration.test.ts -t "browser"
         env:
           NETWORK_LIFECYCLE_BROWSER: "true"
