@@ -1,6 +1,6 @@
 # CASHIER-AUTH-02: business-managed cashier identity, design decision record
 
-Status: **DESIGN ONLY. No code, no migration.** Awaiting owner ruling on D-1 to D-6 before CASHIER-AUTH-02A.
+Status: **DESIGN ONLY. No code, no migration.** Owner rulings D-1 to D-6 RECORDED 2026-11-18 (section 4A). CASHIER-AUTH-02A implementation is BLOCKED only on the migration prerequisite: PR #515 (migration 0081) is unmerged, so 0082 cannot be allocated.
 Baseline: `origin/main` @ `81645bcbbebb5511ae6dad636ec6ca2e19627d77` (2026-11-18). Open PR at baseline: #515 (B2B S9-A1, claims migration 0081).
 Nothing named CASHIER-AUTH-02 exists in the repository (grep for `CASHIER-AUTH`, `username`, managed cashier: no hits outside unrelated docs).
 
@@ -36,15 +36,29 @@ Cleanest isolation, but `audit_log.actor_user_id`, `refresh_tokens.user_id`, `us
 5. Tests: the 15 adversarial cases in the directive that apply at 02A (1, 4, 5, 8, 9, 11, 13, 14, 15 plus username-namespace confusion and web-login refusal).
 No UI, no branch-assignment changes, no onboarding attribution in 02A.
 
-## 4. Decisions needed (not assumed)
-| ID | Decision | Recommendation |
-| --- | --- | --- |
-| D-1 | Identity model: A (managed `users` row) or B (separate principal) | A |
-| D-2 | Managed cashiers hold only a fixed `Cashier` role (no other roles, no web dashboard) | Yes |
-| D-3 | Business identifier at login: business slug, or a separate short owner-visible cashier code (slugs are public and guessable) | Separate code, rotatable |
-| D-4 | Who administers: Owner only, or Owner/Admin plus Manager | Owner and Admin; Manager opt-in |
-| D-5 | Credential policy: minimum length/complexity, who sets the initial password (owner-typed vs generated), lockout threshold and duration, whether MFA step-up applies (the repo has no MFA today) | Generated one-time password, forced rotation is NOT possible (cashiers may not self-manage), lockout 5 failures / 15 min (owner to confirm; numbers are not invented here) |
-| D-6 | PBKDF2 iteration count: Workers cap is 100k; owner to accept PBKDF2 at the cap or require a stronger KDF (separate decision) | Accept existing PBKDF2 hasher |
+## 4. Decisions
+Section 4A records the owner's rulings. The options table that was here is superseded.
+
+## 4A. OWNER RULINGS (2026-11-18, authorization "CASHIER-AUTH-02A OWNER RULINGS AND DEVELOPMENT AUTHORIZATION")
+| ID | Ruling |
+| --- | --- |
+| D-1 **Option A** | Managed identities live in the existing `users` table. Nullable email with strict database constraints distinguishing normal users from managed cashier identities. Preserve existing user ids, tenant-aware permissions, session references and audit relationships. |
+| D-2 **Approved** | Managed cashier identities receive only a fixed Cashier role. No business dashboard, platform administration, billing, team management or account recovery. Ordinary staff identities and email-based cashier authentication keep working. |
+| D-3 **Separate business code** | A unique, owner-rotatable cashier business code. Login = business code + cashier username + password. The business is resolved before the scoped username is validated. Codes are public identifiers, not secrets. Generic authentication failures prevent enumeration. |
+| D-4 **Owner + authorized Admin** | Owner and authorized business Admin manage cashier accounts. A Manager may do so only through an explicit Owner-controlled authorization. New narrowly scoped `cashier:manage`, NOT automatically granted to all managers. Enforced server-side. |
+| D-5 **Approved credential policy** | Minimum password length 8. Default initial password cryptographically random, 24 characters, provisioned by an administrator, shown once, never stored in plaintext. Five failed attempts in 15 minutes trigger a 15-minute lockout; existing IP and authentication rate limits retained; mitigate enumeration and deliberate-lockout abuse. Fresh administrative reauthentication within 5 minutes for sensitive changes. No cashier-controlled password change or email recovery. Reset revokes active cashier sessions; disable revokes sessions immediately. All administrative changes audited. MFA is a separate future block and is NOT implemented. |
+| D-6 **Existing PBKDF2** | Preserve the existing PBKDF2 and constant-cost verification architecture and its currently supported iteration configuration. Do not weaken hashing, verification or rate limiting. Stronger KDF evaluation is separate future work. |
+
+### Prerequisite status (2026-11-18)
+- `origin/main` = `81645bcbbebb5511ae6dad636ec6ca2e19627d77`; journal ends at `0080_business_public_profiles`; no `0081` on main.
+- PR #515 (B2B S9-A1, migration 0081): OPEN, draft, unmerged. PR #516 (this record): OPEN, draft, unmerged.
+- Therefore migration 0082 is NOT allocated and no 02A schema or code is written. 02A starts only after #515 is integrated into main (owner merges) and the ledger is re-confirmed.
+
+### Implementation notes carried into 02A (from the rulings)
+- Reauthentication: a short-lived (5 minute) proof that the administrator re-entered their password, checked server-side on every sensitive mutation. Not MFA.
+- Lockout counts failures per managed identity within a 15 minute window; an unknown business code or username spends the same IP-level budget and returns the same generic failure, and a locked identity is indistinguishable from a wrong password to the caller.
+- Every site that reads `users.email` must be audited for NULL (about 65 read sites at baseline) and managed identities refused by web login, signup, invitation, password reset and email-change flows.
+- Eight-route cashier allow-list unchanged. Existing eligibility rule (`loyalty:serve`) unchanged.
 
 Also open for later blocks: onboarding attribution columns (02D) must not backfill history; branch switching (02C) needs an in-session rebind endpoint and a re-eligibility check per request; existing email login for cashiers stays during transition.
 
@@ -55,3 +69,4 @@ Also open for later blocks: onboarding attribution columns (02D) must not backfi
 
 ## Changelog
 - 2026-11-18: created.
+- 2026-11-18: owner rulings D-1 to D-6 recorded; 02A blocked on #515 (migration 0081).
