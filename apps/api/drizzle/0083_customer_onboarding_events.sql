@@ -40,6 +40,8 @@ DECLARE
   membership_row business_customer_memberships%ROWTYPE;
   branch_business uuid;
   grant_row consent_grants%ROWTYPE;
+  audit_business uuid;
+  audit_found boolean;
   cashier_row users%ROWTYPE;
 BEGIN
   IF TG_OP <> 'INSERT' THEN
@@ -60,6 +62,12 @@ BEGIN
     IF NOT FOUND OR grant_row.customer_id <> NEW.customer_id OR grant_row.business_id <> NEW.business_id
        OR grant_row.purpose <> 'join_loyalty' THEN
       RAISE EXCEPTION 'ONBOARDING_EVENT_CONSENT_MISMATCH' USING ERRCODE = 'integrity_constraint_violation';
+    END IF;
+  END IF;
+  IF NEW.audit_log_id IS NOT NULL THEN
+    SELECT business_id, true INTO audit_business, audit_found FROM audit_log WHERE id = NEW.audit_log_id;
+    IF audit_found IS NOT TRUE OR audit_business IS DISTINCT FROM NEW.business_id THEN
+      RAISE EXCEPTION 'ONBOARDING_EVENT_AUDIT_MISMATCH' USING ERRCODE = 'integrity_constraint_violation';
     END IF;
   END IF;
   IF NEW.cashier_user_id IS NOT NULL THEN

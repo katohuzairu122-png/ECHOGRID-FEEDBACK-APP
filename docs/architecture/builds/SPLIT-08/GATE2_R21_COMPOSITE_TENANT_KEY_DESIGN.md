@@ -10,7 +10,7 @@ Why this exists: R20 showed that row-level security and claim checks do not stop
 ## Correction to R20
 R20 counted 37 single-column foreign keys between tenant-owned tables. **Four of them are already covered**: 0047 added composite keys for `partner_credit_reservations` (account, decision) and `billing_partner_credit_applications` (reservation, subscription); the single-column keys remain beside them. That leaves **33 uncovered candidates**, classified below. A composite key counts as coverage **only when validated**: a `NOT VALID` composite key says nothing about rows that already exist (found by the self-test; the pre-check's inventory enforces it).
 
-## The 33 candidates, classified
+## The 37 candidates, classified (the 33 counted at R20 plus the four references of `customer_onboarding_events`, CASHIER-AUTH-02D)
 | Class | Count | Meaning | Intended handling |
 |---|---|---|---|
 | STRAIGHT | 20 | child and parent `business_id` are both NOT NULL | composite foreign key on `(business_id, fk)` to the parent's `(business_id, id)` |
@@ -18,7 +18,7 @@ R20 counted 37 single-column foreign keys between tenant-owned tables. **Four of
 | NULLABLE_TENANT_DECISION | 8 | the child or the parent may have no tenant (platform-owned rows) | **owner decision**, see below |
 | SELF_REFERENCE | 1 | `community_point_transactions.reversal_of` | composite self-key; also tenant-nullable, so decided with the group above |
 | FINANCIAL_DEFER | 2 | `partner_credit_multiunit_lot_allocations` | **not changed here**: financial table, needs its own reviewed block |
-| GUARDED_BY_TRIGGER | 1 | `signed_evidence_events.evidence_id` | already tenant-checked by the DEV-15 event trigger; a composite key is optional later hardening |
+| GUARDED_BY_TRIGGER | 5 | `signed_evidence_events.evidence_id`; the four tenant references of `customer_onboarding_events` (CASHIER-AUTH-02D) | already tenant-checked by the DEV-15 event trigger, and by `customer_onboarding_event_guard` (membership, branch, consent grant, audit row, cashier); a composite key is optional later hardening |
 
 | Child | Parent | FK column | Class |
 |---|---|---|---|
@@ -27,6 +27,10 @@ R20 counted 37 single-column foreign keys between tenant-owned tables. **Four of
 | community_point_transactions | community_point_transactions | reversal_of | SELF_REFERENCE |
 | critical_incidents | branches | branch_id | STRAIGHT |
 | critical_incidents | feedback | feedback_id | STRAIGHT |
+| customer_onboarding_events | audit_log | audit_log_id | GUARDED_BY_TRIGGER |
+| customer_onboarding_events | branches | branch_id | GUARDED_BY_TRIGGER |
+| customer_onboarding_events | business_customer_memberships | membership_id | GUARDED_BY_TRIGGER |
+| customer_onboarding_events | consent_grants | consent_grant_id | GUARDED_BY_TRIGGER |
 | feedback | branches | branch_id | STRAIGHT |
 | feedback | qr_codes | qr_code_id | STRAIGHT |
 | feedback_summaries | branches | branch_id | STRAIGHT |

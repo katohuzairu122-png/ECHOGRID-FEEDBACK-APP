@@ -611,6 +611,8 @@ describe.skipIf(!databaseUrl)('CASHIER-AUTH-02D customer onboarding attribution 
       await joinQr(other.token, qrA1);
       const [otherGrant] = await q(`SELECT id FROM consent_grants WHERE customer_id = $1`, [other.id]);
       await expect(insert({ consent_grant_id: otherGrant.id })).rejects.toThrow(/CONSENT_MISMATCH/);
+      const [foreignAudit] = await q(`SELECT id FROM audit_log WHERE business_id = $1 LIMIT 1`, [bizB]).then((r) => (r.length ? r : q(`INSERT INTO audit_log (business_id, action, entity_type) VALUES ($1, 'test.fixture', 'fixture') RETURNING id`, [bizB])));
+      await expect(insert({ audit_log_id: foreignAudit.id })).rejects.toThrow(/AUDIT_MISMATCH/);
     });
 
     it('enforces the attribution shape: a cashier exactly when assisted, always with a branch and a reference', async () => {
