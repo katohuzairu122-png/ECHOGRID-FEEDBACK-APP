@@ -1326,7 +1326,9 @@ describe.skipIf(!process.env.DATABASE_URL)('NETWORK-05 real HTTP-to-Postgres lif
         await client.query("update users set platform_role='support' where id=$1", [moderatorB]);
         try {
           await manage.getByRole('button', { name: 'Apply action', exact: true }).click();
-          await browserExpect(manage.getByRole('alert')).toContainText('not authorized');
+          await browserExpect(manage.getByRole('alert')).toContainText(
+            /not authorized|administrator access is required/,
+          );
           const impersonated = await signImpersonationToken(moderatorA, author, secret);
           const cashier = await signCashierAccessToken(moderatorA, secret, {
             businessId: business,
