@@ -8,6 +8,8 @@ import { ApiError, apiFetch } from '@/lib/api-client';
 import { getCurrentUser } from '@/lib/platform';
 import { rethrowControlFlow } from '@/lib/rethrow-control-flow';
 import { canModerate, moderationPath } from '../moderation';
+import { isTemporaryReadFailure } from '../read-failure';
+import { ModerationReadRetry } from '../read-retry';
 
 const historyPath = `${moderationPath}/history`;
 const actionLabels: Record<NetworkModerationHistoryAction, string> = {
@@ -33,6 +35,7 @@ export default async function ModerationHistoryPage({
 
   const { cursor } = await searchParams;
   let history: NetworkModerationHistoryPageDto | undefined;
+  let retryable = false;
   if (!Array.isArray(cursor)) {
     try {
       const query = cursor === undefined ? '' : `?${new URLSearchParams({ cursor })}`;
@@ -42,6 +45,7 @@ export default async function ModerationHistoryPage({
     } catch (error) {
       rethrowControlFlow(error);
       if (error instanceof ApiError && [401, 403, 404].includes(error.status)) notFound();
+      retryable = isTemporaryReadFailure(error);
     }
   }
 
@@ -57,7 +61,7 @@ export default async function ModerationHistoryPage({
           <Link className="underline" href={historyPath}>
             Return to latest records
           </Link>
-          .
+          .{retryable && <ModerationReadRetry />}
         </p>
       ) : history.entries.length === 0 ? (
         <p>No moderation records on this page.</p>

@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '@/lib/api-error';
 import LoadingModerationHistory from './loading';
@@ -6,6 +6,7 @@ import ModerationHistoryPage from './page';
 
 const mocks = vi.hoisted(() => ({
   api: vi.fn(),
+  refresh: vi.fn(),
   user: vi.fn(),
   notFound: vi.fn(() => {
     throw new Error('NOT_FOUND');
@@ -16,7 +17,10 @@ vi.mock('@/lib/api-client', async () => ({
   apiFetch: mocks.api,
 }));
 vi.mock('@/lib/platform', () => ({ getCurrentUser: mocks.user }));
-vi.mock('next/navigation', () => ({ notFound: mocks.notFound }));
+vi.mock('next/navigation', () => ({
+  notFound: mocks.notFound,
+  useRouter: () => ({ refresh: mocks.refresh }),
+}));
 
 const admin = { platformRole: 'admin', impersonatedBy: null };
 const historyPath = '/platform/network-moderation/history';
@@ -97,5 +101,39 @@ describe('platform moderation history page', () => {
     render(await page({ cursor: [cursor, cursor] }));
     expect(screen.getByRole('alert')).toBeVisible();
     expect(mocks.api).not.toHaveBeenCalled();
+  });
+  it.each([new ApiError('private', 503), new Error('private network detail')])(
+    'retries a temporary failure on the current cursor without exposing details',
+    async (error) => {
+      mocks.api.mockRejectedValue(error);
+      render(await page({ cursor }));
+      fireEvent.click(screen.getByRole('button', { name: 'Retry loading' }));
+      expect(mocks.refresh).toHaveBeenCalledOnce();
+      expect(mocks.api).toHaveBeenCalledExactlyOnceWith(`${historyPath}?cursor=${cursor}`, {
+        cache: 'no-store',
+      });
+      expect(screen.queryByText(/private/)).not.toBeInTheDocument();
+    },
+  );
+
+  it.each([400, 429])(
+    'does not advertise a temporary-error retry for status %s',
+    async (status) => {
+      mocks.api.mockRejectedValue(new ApiError('private', status));
+      render(await page({ cursor }));
+      expect(screen.queryByRole('button', { name: 'Retry loading' })).not.toBeInTheDocument();
+      expect(screen.getByRole('link', { name: 'Return to latest records' })).toHaveAttribute(
+        'href',
+        historyPath,
+      );
+    },
+  );
+
+  it('preserves redirect control flow instead of showing a retry', async () => {
+    const error = Object.assign(new Error('NEXT_REDIRECT'), {
+      digest: 'NEXT_REDIRECT;replace;/login;307;',
+    });
+    mocks.api.mockRejectedValue(error);
+    await expect(page()).rejects.toBe(error);
   });
 });

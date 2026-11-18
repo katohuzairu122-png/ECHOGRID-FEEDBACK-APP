@@ -391,7 +391,7 @@ describe.skipIf(!process.env.DATABASE_URL)('NETWORK-05 real HTTP-to-Postgres lif
       webUrl: string,
       browserExpect: typeof PlaywrightTest.expect,
     ) => Promise<void>,
-    options: { feedFlag?: () => string } = {},
+    options: { feedFlag?: () => string; failRead?: (path: string, method: string) => boolean } = {},
   ) {
     const { chromium, expect: browserExpect } = requireWeb('@playwright/test') as BrowserModule;
     let apiServer: Server | undefined;
@@ -400,6 +400,21 @@ describe.skipIf(!process.env.DATABASE_URL)('NETWORK-05 real HTTP-to-Postgres lif
     try {
       apiServer = createServer(async (incoming, outgoing) => {
         try {
+          // Synthetic upstream read outages only; real authorization runs again on retry.
+          const failRead = options.failRead?.(incoming.url!, incoming.method ?? 'GET');
+          if (incoming.method === 'GET' && failRead) {
+            outgoing.writeHead(503, { 'content-type': 'application/json' });
+            outgoing.end(
+              JSON.stringify({
+                success: false,
+                error: {
+                  code: 'SYNTHETIC_UNAVAILABLE',
+                  message: 'private synthetic upstream detail',
+                },
+              }),
+            );
+            return;
+          }
           const chunks: Buffer[] = [];
           for await (const chunk of incoming) chunks.push(Buffer.from(chunk));
           const bytes = Buffer.concat(chunks);
@@ -912,6 +927,145 @@ describe.skipIf(!process.env.DATABASE_URL)('NETWORK-05 real HTTP-to-Postgres lif
           expect(await snapshot()).toEqual(before);
         },
         { feedFlag: () => flag },
+      );
+    },
+    120000,
+  );
+
+  it.skipIf(!browserEnabled)(
+    'browser retries moderation history at the same cursor and rechecks revoked authority (NETWORK-09)',
+    async () => {
+      const older = await createDraft('NETWORK-09 older history evidence');
+      const boundary = await createDraft('NETWORK-09 history cursor boundary');
+      const cursor = (
+        await client.query(
+          `select id from audit_log where action='network.post_draft_created'
+        and entity_id=(select id from network_posts where handle=$1)`,
+          [boundary.handle],
+        )
+      ).rows[0].id as string;
+      let outage = true;
+      const methods: string[] = [];
+      await withModerationBrowser(
+        moderatorB,
+        async (page, _context, webUrl, browserExpect) => {
+          const target =
+            webUrl + '/platform/network-moderation/history?' + new URLSearchParams({ cursor });
+          await page.goto(target);
+          await browserExpect(
+            page
+              .getByRole('alert')
+              .filter({ hasText: /could not be loaded|saved draft is unavailable/ }),
+          ).toContainText('Moderation history could not be loaded');
+          await browserExpect(page.getByText('private synthetic upstream detail')).toHaveCount(0);
+          outage = false;
+          await page.getByRole('button', { name: 'Retry loading', exact: true }).click();
+          await browserExpect(page.getByRole('table')).toBeVisible();
+          await browserExpect(page).toHaveURL(target);
+          await browserExpect(
+            page.getByRole('row').filter({ hasText: older.handle }),
+          ).toBeVisible();
+          expect(methods.every((method) => method === 'GET')).toBe(true);
+
+          outage = true;
+          await page.reload();
+          await browserExpect(
+            page.getByRole('button', { name: 'Retry loading', exact: true }),
+          ).toBeVisible();
+          await client.query("update users set platform_role='support' where id=$1", [moderatorB]);
+          try {
+            outage = false;
+            await page.getByRole('button', { name: 'Retry loading', exact: true }).click();
+            await browserExpect(
+              page.getByRole('heading', { name: 'Moderation history', exact: true }),
+            ).toHaveCount(0);
+            await browserExpect(page.getByRole('table')).toHaveCount(0);
+            await browserExpect(
+              page.getByRole('button', { name: 'Retry loading', exact: true }),
+            ).toHaveCount(0);
+          } finally {
+            await client.query("update users set platform_role='admin' where id=$1", [moderatorB]);
+          }
+        },
+        {
+          failRead: (path, method) => {
+            methods.push(method);
+            return outage && path.startsWith('/api/v1/platform/network-moderation/history');
+          },
+        },
+      );
+    },
+    120000,
+  );
+
+  it.skipIf(!browserEnabled)(
+    'browser retries saved draft list and selection without losing cursor or mutating the draft (NETWORK-09)',
+    async () => {
+      const draft = await createDraft('NETWORK-09 retained saved draft');
+      const newer = await createDraft('NETWORK-09 saved draft cursor boundary');
+      const createdAt = (
+        await client.query('select created_at from network_post_revisions where id=$1', [
+          newer.revisionId,
+        ])
+      ).rows[0].created_at as Date;
+      const cursor = `${createdAt.toISOString()}~${newer.handle}`;
+      const query = new URLSearchParams({ cursor, draft: draft.handle });
+      const snapshot = async () =>
+        (
+          await client.query(
+            `select p.author_user_id,p.state,r.body,r.status,r.revision_no,
+        (select count(*)::int from audit_log where entity_id=p.id) audit_count
+        from network_posts p join network_post_revisions r on r.post_id=p.id where p.handle=$1`,
+            [draft.handle],
+          )
+        ).rows;
+      const before = await snapshot();
+      let failedPath: string | null = '/api/v1/platform/network-moderation/drafts';
+      const methods: string[] = [];
+      await withModerationBrowser(
+        author,
+        async (page, _context, webUrl, browserExpect) => {
+          const target = webUrl + '/platform/network-moderation/drafts?' + query;
+          await page.goto(target);
+          await browserExpect(
+            page
+              .getByRole('alert')
+              .filter({ hasText: /could not be loaded|saved draft is unavailable/ }),
+          ).toContainText('Saved drafts could not be loaded');
+          await browserExpect(page.getByText('private synthetic upstream detail')).toHaveCount(0);
+          failedPath = null;
+          await page.getByRole('button', { name: 'Retry loading', exact: true }).click();
+          await browserExpect(page.getByLabel('Post text')).toHaveValue(
+            'NETWORK-09 retained saved draft',
+          );
+          await browserExpect(page).toHaveURL(target);
+
+          failedPath = `/api/v1/platform/network-moderation/drafts/${draft.handle}`;
+          await page.reload();
+          await browserExpect(
+            page
+              .getByRole('alert')
+              .filter({ hasText: /could not be loaded|saved draft is unavailable/ }),
+          ).toContainText('This saved draft is unavailable');
+          await browserExpect(
+            page.getByRole('link', { name: 'Open draft ' + draft.handle, exact: true }),
+          ).toBeVisible();
+          await browserExpect(page.getByLabel('Post text')).toHaveCount(0);
+          failedPath = null;
+          await page.getByRole('button', { name: 'Retry loading', exact: true }).click();
+          await browserExpect(page.getByLabel('Post text')).toHaveValue(
+            'NETWORK-09 retained saved draft',
+          );
+          await browserExpect(page).toHaveURL(target);
+          expect(methods.every((method) => method === 'GET')).toBe(true);
+          expect(await snapshot()).toEqual(before);
+        },
+        {
+          failRead: (path, method) => {
+            methods.push(method);
+            return new URL(path, 'http://fixture.invalid').pathname === failedPath;
+          },
+        },
       );
     },
     120000,
