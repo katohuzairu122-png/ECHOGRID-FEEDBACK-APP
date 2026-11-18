@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { joinCustomerMembershipSchema } from './customer-relationships';
+import { customerMembershipSchema, joinCustomerMembershipSchema } from './customer-relationships';
 
 /**
  * Digital Loyalty module contract -- request/response shapes shared between
@@ -394,6 +394,14 @@ export const loyaltyAccountWithCustomerSchema = loyaltyAccountSchema.extend({
   }),
 });
 
+/** What `POST /customer-memberships/join` returns on success: the customer-facing
+ * membership and account DTOs, never raw database rows. (`POST /loyalty/me/join`
+ * returns only the account.) */
+export const joinCustomerMembershipResultSchema = z.object({
+  membership: customerMembershipSchema,
+  loyaltyAccount: loyaltyAccountSchema,
+});
+
 // Continuing Development Block 2 added visitSessionId/feedbackId below --
 // correcting a real staleness, not adding new API surface, same reasoning
 // as loyaltyRewardSchema's own Block 6.1 widening comment above: the API
@@ -467,6 +475,7 @@ export type LoyaltyTierDto = z.infer<typeof loyaltyTierSchema>;
 export type LoyaltyRewardDto = z.infer<typeof loyaltyRewardSchema>;
 export type CampaignDashboardDto = z.infer<typeof campaignDashboardSchema>;
 export type LoyaltyAccountDto = z.infer<typeof loyaltyAccountSchema>;
+export type JoinCustomerMembershipResultDto = z.infer<typeof joinCustomerMembershipResultSchema>;
 export type LoyaltyAccountWithCustomerDto = z.infer<typeof loyaltyAccountWithCustomerSchema>;
 export type LoyaltyTransactionDto = z.infer<typeof loyaltyTransactionSchema>;
 export type LoyaltySettingsDto = z.infer<typeof loyaltySettingsSchema>;

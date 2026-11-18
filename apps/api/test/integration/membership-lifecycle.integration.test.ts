@@ -460,4 +460,118 @@ describe.skipIf(!databaseUrl)('Membership lifecycle (real HTTP and disposable Po
       expect(await ledgerCount(member.accountId)).toBe(1);
     });
   });
+
+  describe('customer-facing responses and discovery', () => {
+    const get = <T = unknown>(token: string, path: string) =>
+      customerRequest<T>(databaseUrl!, token, 'GET', path, undefined, createFakeKv());
+    const resolveBusiness = (token: string) =>
+      post<{ actions: string[]; membershipStatus: string }>(
+        token,
+        '/loyalty/me/actions/resolve-business',
+        { businessQrToken: qrToken },
+      );
+
+    it('returns the customer-facing membership and account, never database rows, from join, list and lookup', async () => {
+      const customer = await newCustomer();
+      const joined = await join(customer);
+      expect(joined.status).toBe(201);
+      const result = joined.data as unknown as {
+        membership: Record<string, unknown>;
+        loyaltyAccount: Record<string, unknown>;
+      };
+
+      // Exactly the declared fields: no audit columns, soft-delete flags, membership link or referrer.
+      expect(Object.keys(result.membership).sort()).toEqual([
+        'businessId',
+        'customerId',
+        'id',
+        'joinedAt',
+        'leftAt',
+        'onboardingReference',
+        'onboardingSource',
+        'status',
+      ]);
+      expect(Object.keys(result.loyaltyAccount).sort()).toEqual([
+        'businessId',
+        'customerId',
+        'id',
+        'lastVisitAt',
+        'points',
+        'status',
+        'tierId',
+        'visitCount',
+      ]);
+      expect(result.membership).toMatchObject({
+        status: 'active',
+        leftAt: null,
+        businessId,
+        customerId: customer.id,
+      });
+
+      const list = await get<Record<string, unknown>[]>(customer.token, '/customer-memberships');
+      expect(list.status).toBe(200);
+      expect(list.data).toEqual([result.membership]);
+
+      const one = await get<Record<string, unknown>>(
+        customer.token,
+        `/customer-memberships/${businessId}`,
+      );
+      expect(one.status).toBe(200);
+      expect(one.data).toEqual(result.membership);
+    });
+
+    it('returns the account DTO from the legacy join endpoint too', async () => {
+      const customer = await newCustomer();
+
+      const response = await post<Record<string, unknown>>(customer.token, '/loyalty/me/join', {
+        qrToken,
+        consentAccepted: true,
+        consentVersion: 'v1',
+      });
+
+      expect(response.status).toBe(201);
+      expect(Object.keys(response.data ?? {}).sort()).toEqual([
+        'businessId',
+        'customerId',
+        'id',
+        'lastVisitAt',
+        'points',
+        'status',
+        'tierId',
+        'visitCount',
+      ]);
+    });
+
+    it('answers a malformed id, or a business the customer never joined, with 404 instead of a server error', async () => {
+      const customer = await newCustomer();
+
+      const malformed = await get(customer.token, '/customer-memberships/not-a-uuid');
+      expect(malformed.status).toBe(404);
+      expect(malformed.error?.code).toBe('CUSTOMER_MEMBERSHIP_NOT_FOUND');
+
+      const unknown = await get(customer.token, `/customer-memberships/${randomUUID()}`);
+      expect(unknown.status).toBe(404);
+      expect(unknown.error?.code).toBe('CUSTOMER_MEMBERSHIP_NOT_FOUND');
+
+      const revoke = await post(customer.token, '/consents/not-a-uuid/revoke');
+      expect(revoke.status).toBe(404);
+      expect(revoke.error?.code).toBe('CONSENT_GRANT_NOT_ACTIVE');
+    });
+
+    it('offers JOIN_LOYALTY to a customer who left, but not for a membership the customer cannot restart', async () => {
+      const customer = await memberWithPoints(0);
+      expect((await post(customer.token, leavePath())).status).toBe(200);
+
+      const afterLeaving = await resolveBusiness(customer.token);
+      expect(afterLeaving.status).toBe(200);
+      expect(afterLeaving.data?.actions).toContain('JOIN_LOYALTY');
+
+      for (const status of ['suspended', 'business_exited', 'closed', 'pending'] as const) {
+        await setMembershipStatus(customer.id, status);
+        const response = await resolveBusiness(customer.token);
+        expect(response.status, status).toBe(200);
+        expect(response.data?.actions, status).not.toContain('JOIN_LOYALTY');
+      }
+    });
+  });
 });

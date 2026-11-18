@@ -6,6 +6,7 @@ import { customerAuthenticate, type CustomerAuthVariables } from '../middleware/
 import { rateLimitByCustomer } from '../middleware/rate-limit';
 import { ok } from '../lib/response';
 import { AppError } from '../lib/errors';
+import { isUuid } from '../lib/uuid';
 import { parseListPagination } from '../lib/list-pagination';
 import { ConsentWithdrawalService } from './consent-withdrawal.service';
 
@@ -31,16 +32,20 @@ consentRoutes.get('/', async (c) => {
   });
 });
 
-consentRoutes.post('/:id/revoke', async (c) =>
-  withDb(c, async (db) => {
+const grantNotActive = () => new AppError('Active consent grant not found.', 404, 'CONSENT_GRANT_NOT_ACTIVE');
+
+consentRoutes.post('/:id/revoke', async (c) => {
+  const grantId: string | undefined = c.req.param('id');
+  // A malformed id cannot name a grant: answer as for any grant that is not
+  // active, instead of letting the database reject it (a 500).
+  if (grantId === undefined || !isUuid(grantId)) throw grantNotActive();
+  return withDb(c, async (db) => {
     // Withdrawing the join_loyalty consent also ends that loyalty membership
     // (Split 01); every other purpose is a plain revoke.
-    const revoked = await new ConsentWithdrawalService(db).revoke(c.req.param('id'), c.get('customerId'));
+    const revoked = await new ConsentWithdrawalService(db).revoke(grantId, c.get('customerId'));
     // DEV-70: a nonexistent, cross-customer, expired or already revoked
     // grant must not be represented as a successful state transition.
-    if (!revoked) {
-      throw new AppError('Active consent grant not found.', 404, 'CONSENT_GRANT_NOT_ACTIVE');
-    }
+    if (!revoked) throw grantNotActive();
     return ok(c, { revoked: true });
-  }),
-);
+  });
+});

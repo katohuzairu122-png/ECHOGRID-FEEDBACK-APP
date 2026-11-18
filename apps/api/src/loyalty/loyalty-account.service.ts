@@ -32,7 +32,15 @@ export interface LoyaltyAccountSummary {
 export class LoyaltyAccountService {
   constructor(private readonly db: Database) {}
 
-  /** Creates a business membership for a customer who doesn't have one yet
+  /**
+   * @deprecated Legacy enrolment; do not use it for new code. It creates a
+   * loyalty account with no membership and no JOIN_LOYALTY consent, and the
+   * check-in and redeem gates refuse such an account (MEMBERSHIP_REQUIRED).
+   * Join through `CustomerMembershipService.join`, which records the
+   * membership, the consent and the account together. Nothing calls this, so
+   * the referral bonus below is unreachable as well.
+   *
+   * Creates a business membership for a customer who doesn't have one yet
    * (idempotent -- returns the existing account if already enrolled). A
    * referral, if given, awards the REFERRER's account a bonus once, at the
    * moment their referral actually joins -- not before, since an

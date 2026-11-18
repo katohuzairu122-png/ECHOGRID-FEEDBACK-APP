@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { CURRENT_JOIN_LOYALTY_CONSENT_VERSION } from '@echo-grid-feedback/shared-types';
 import type {
   CustomerMembershipDto,
+  JoinCustomerMembershipResultDto,
   LoyaltyAccountDto,
   RedemptionResult,
   MaterializedNotificationPreferenceDto,
@@ -38,7 +39,7 @@ export async function joinLoyaltyAction(qrToken: string, consentAccepted: boolea
   if (consentAccepted !== true) {
     throw new ApiError('Accept the loyalty program consent to join.', 400, 'CONSENT_REQUIRED');
   }
-  const result = await customerApiFetch<{ loyaltyAccount: LoyaltyAccountDto }>('/customer-memberships/join', {
+  const result = await customerApiFetch<JoinCustomerMembershipResultDto>('/customer-memberships/join', {
     method: 'POST',
     body: JSON.stringify({ qrToken, consentAccepted: true, consentVersion: CURRENT_JOIN_LOYALTY_CONSENT_VERSION }),
   });

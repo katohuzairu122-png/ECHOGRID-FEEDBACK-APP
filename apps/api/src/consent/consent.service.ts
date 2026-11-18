@@ -1,6 +1,12 @@
 import type { ConsentPurpose } from '../db/schema';
 import type { Repositories } from '../repositories';
 
+/**
+ * Thin pass-through to the consent repository. Nothing in the API uses it: the
+ * join consent is recorded by `CustomerMembershipService.join`, withdrawal goes
+ * through `ConsentWithdrawalService`, and the settlement flows use the
+ * repository directly.
+ */
 export class ConsentService {
   constructor(private readonly repos: Pick<Repositories, 'consentGrants'>) {}
 
@@ -32,6 +38,11 @@ export class ConsentService {
     return this.repos.consentGrants.findActive(customerId, businessId, purpose);
   }
 
+  /**
+   * @deprecated Revokes the grant only. For a `join_loyalty` consent that leaves
+   * the customer's membership active and earning, which withdrawing that
+   * consent must not do. Use `ConsentWithdrawalService.revoke`.
+   */
   revoke(id: string, customerId: string) {
     return this.repos.consentGrants.revoke(id, customerId);
   }

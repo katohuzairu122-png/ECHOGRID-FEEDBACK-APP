@@ -43,6 +43,8 @@ function createRepos(
   activeCommunityMembership = false,
   hasAvailableOrphan = false,
   receivingBusinessStatus: 'active' | 'suspended' | 'archived' = 'active',
+  /** A membership the customer holds that is not active (left, suspended, ...). */
+  otherMembershipStatus?: string,
 ) {
   const customer = { id: CUSTOMER_ID, status: 'active', qrRevocationEpoch: 0 };
   const membership = activeMembership
@@ -51,6 +53,14 @@ function createRepos(
         customerId: CUSTOMER_ID,
         businessId: BUSINESS_ID,
         status: 'active',
+      }
+    : undefined;
+  const otherMembership = otherMembershipStatus
+    ? {
+        id: MEMBERSHIP_ID,
+        customerId: CUSTOMER_ID,
+        businessId: BUSINESS_ID,
+        status: otherMembershipStatus,
       }
     : undefined;
   const account = activeMembership
@@ -79,6 +89,11 @@ function createRepos(
     customerMemberships: {
       async findActive(customerId: string, businessId: string) {
         return customerId === CUSTOMER_ID && businessId === BUSINESS_ID ? membership : undefined;
+      },
+      async findByCustomerAndBusiness(customerId: string, businessId: string) {
+        return customerId === CUSTOMER_ID && businessId === BUSINESS_ID
+          ? (membership ?? otherMembership)
+          : undefined;
       },
     },
     communityMemberships: {
@@ -141,6 +156,7 @@ function resolver(
   activeCommunityMembership = false,
   hasAvailableOrphan = false,
   receivingBusinessStatus: 'active' | 'suspended' | 'archived' = 'active',
+  otherMembershipStatus?: string,
 ) {
   return new LoyaltyActionResolver(
     createRepos(
@@ -149,6 +165,7 @@ function resolver(
       activeCommunityMembership,
       hasAvailableOrphan,
       receivingBusinessStatus,
+      otherMembershipStatus,
     ) as unknown as ConstructorParameters<typeof LoyaltyActionResolver>[0],
     { QR_TOKEN_SECRET: SECRET, QR_TOKEN_SECRET_PREVIOUS: undefined },
   );
@@ -302,6 +319,41 @@ describe('LoyaltyActionResolver', () => {
     });
     expect(result.actions).toEqual(['JOIN_LOYALTY', 'LEAVE_FEEDBACK']);
     expect(result.surveyCampaigns).toEqual([]);
+  });
+
+  it('offers JOIN_LOYALTY to a customer who left, so they can come back', async () => {
+    const result = await resolver(false, [], false, false, 'active', 'left').resolveBusinessForCustomer({
+      businessQrToken: await businessQrToken(),
+      customerId: CUSTOMER_ID,
+    });
+    expect(result.actions).toEqual(['JOIN_LOYALTY', 'LEAVE_FEEDBACK']);
+    expect(result.membershipStatus).toBe('none');
+  });
+
+  it.each(['suspended', 'pending', 'business_exited', 'closed'])(
+    'does not offer JOIN_LOYALTY for a %s membership: the customer cannot restart it, so the join would be refused',
+    async (status) => {
+      const result = await resolver(false, [], false, false, 'active', status).resolveBusinessForCustomer({
+        businessQrToken: await businessQrToken(),
+        customerId: CUSTOMER_ID,
+      });
+      expect(result.actions).toEqual(['LEAVE_FEEDBACK']);
+      expect(result.loyaltyAccountId).toBeNull();
+      expect(result.membershipStatus).toBe('none');
+    },
+  );
+
+  it('still offers JOIN_LOYALTY to an active member whose loyalty account is missing: joining creates it', async () => {
+    const repos = createRepos(true);
+    repos.loyaltyAccounts.findByCustomerAndBusiness = async () => undefined;
+    const result = await new LoyaltyActionResolver(
+      repos as unknown as ConstructorParameters<typeof LoyaltyActionResolver>[0],
+      { QR_TOKEN_SECRET: SECRET, QR_TOKEN_SECRET_PREVIOUS: undefined },
+    ).resolveBusinessForCustomer({
+      businessQrToken: await businessQrToken(),
+      customerId: CUSTOMER_ID,
+    });
+    expect(result.actions).toEqual(['JOIN_LOYALTY', 'LEAVE_FEEDBACK']);
   });
 
   it('exposes SETTLE_ORPHAN_REWARD only when an available claim exists for another origin business', async () => {
