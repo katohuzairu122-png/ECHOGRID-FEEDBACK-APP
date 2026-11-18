@@ -539,6 +539,21 @@ describe.skipIf(!databaseUrl)('CASHIER-AUTH-02A managed cashier identity (real H
       await fails(`INSERT INTO users (email, password_hash, full_name, managed_business_id) VALUES ('m@example.test','h','n',$1)`, [bizA], /users_managed_shape_check/);
       await fails(`INSERT INTO users (email, password_hash, full_name) VALUES (NULL,'h','n')`, [], /users_managed_shape_check/);
     });
+    it('TRUNCATE of the two guarded tables is denied, even in a replica-role session', async () => {
+      for (const table of ['users', 'user_business_roles']) {
+        await fails(`TRUNCATE ${table} CASCADE`, [], /CASHIER_IDENTITY_TRUNCATE_DENIED/);
+        const c = new Client({ connectionString: databaseUrl });
+        await c.connect();
+        try {
+          await c.query('BEGIN');
+          await c.query('SET LOCAL session_replication_role = replica');
+          await expect(c.query(`TRUNCATE ${table} CASCADE`)).rejects.toThrow(/CASHIER_IDENTITY_TRUNCATE_DENIED/);
+        } finally {
+          await c.query('ROLLBACK').catch(() => undefined);
+          await c.end();
+        }
+      }
+    });
     it('usernames and business codes are format-checked in the database and unique where they must be', async () => {
       await fails(`INSERT INTO users (password_hash, full_name, managed_business_id, login_username, managed_by_user_id) VALUES ('h','n',$1,'BadName',$2)`, [bizA, ownerA], /users_login_username_check/);
       await fails(`INSERT INTO users (password_hash, full_name, managed_business_id, login_username, managed_by_user_id) VALUES ('h','n',$1,'supplied1',$2)`, [bizA, ownerA], /users_managed_username_key/);

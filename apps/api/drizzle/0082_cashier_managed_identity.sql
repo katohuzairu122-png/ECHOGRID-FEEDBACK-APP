@@ -68,3 +68,19 @@ $fn$;
 CREATE TRIGGER user_business_roles_managed_guard_trg BEFORE INSERT OR UPDATE ON user_business_roles FOR EACH ROW EXECUTE FUNCTION user_business_roles_managed_guard();
 --> statement-breakpoint
 ALTER TABLE user_business_roles ENABLE ALWAYS TRIGGER user_business_roles_managed_guard_trg;
+--> statement-breakpoint
+-- 3) TRUNCATE bypasses row triggers, so both guarded tables also deny it (the repository-wide structural guard in
+--    financial-truncate-denial requires this), and the denial is ENABLE ALWAYS so session_replication_role = replica cannot skip it.
+CREATE OR REPLACE FUNCTION cashier_identity_truncate_denied() RETURNS trigger LANGUAGE plpgsql AS $fn$
+BEGIN
+  RAISE EXCEPTION 'CASHIER_IDENTITY_TRUNCATE_DENIED (%)', TG_TABLE_NAME USING ERRCODE = 'integrity_constraint_violation';
+END
+$fn$;
+--> statement-breakpoint
+CREATE TRIGGER users_no_truncate BEFORE TRUNCATE ON users FOR EACH STATEMENT EXECUTE FUNCTION cashier_identity_truncate_denied();
+--> statement-breakpoint
+CREATE TRIGGER user_business_roles_no_truncate BEFORE TRUNCATE ON user_business_roles FOR EACH STATEMENT EXECUTE FUNCTION cashier_identity_truncate_denied();
+--> statement-breakpoint
+ALTER TABLE users ENABLE ALWAYS TRIGGER users_no_truncate;
+--> statement-breakpoint
+ALTER TABLE user_business_roles ENABLE ALWAYS TRIGGER user_business_roles_no_truncate;
