@@ -635,6 +635,7 @@ describe.skipIf(!process.env.DATABASE_URL)('NETWORK-05 real HTTP-to-Postgres lif
         await browserExpect(manage.getByRole('status')).toContainText('suspended');
         expect(await isVisible(draft.handle)).toBe(false);
 
+        await manage.getByLabel('Post handle', { exact: true }).fill(draft.handle);
         await manage.getByLabel('Action', { exact: true }).selectOption('lift');
         await manage.getByLabel('Apply this action to the specified post').check();
         await manage.getByRole('button', { name: 'Apply action', exact: true }).click();
