@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
+import { render, screen } from '@testing-library/react';
 
 vi.mock('server-only', () => ({}));
 const m = vi.hoisted(() => ({
@@ -29,6 +30,10 @@ vi.mock('@/lib/cashier/session', () => ({
   getCashierContext: m.ctx,
 }));
 vi.mock('@/lib/cashier/auth-api', () => ({ cashierApiFetch: m.me, refreshCashierSession: m.refreshSession }));
+// The switcher is a client component with its own tests; here only WHETHER the shell offers it, and with which branch, matters.
+vi.mock('@/components/cashier/branch-switcher', () => ({
+  BranchSwitcher: (p: { currentBranchId: string }) => <button data-testid="branch-switcher" data-current={p.currentBranchId} />,
+}));
 
 import { ApiError } from '@/lib/api-error';
 import CashierLayout from './layout';
@@ -248,5 +253,29 @@ describe('refresh route (SEC-CASHIER-R1 F3)', () => {
     expect((await get()).status).toBe(404);
     expect((await post(same)).status).toBe(404);
     expect(m.refreshSession).not.toHaveBeenCalled();
+  });
+});
+
+describe('CASHIER-AUTH-02C: the header offers a branch switch only to an account that can switch', () => {
+  const ctx = (over: Record<string, unknown>) => m.ctx.mockResolvedValue({ businessId: 'b', businessName: 'Cafe', branchId: 'b1', branchName: 'Main', deviceLabel: null, canSwitchBranch: false, ...over });
+
+  it('a single-branch account sees its assigned branch and NO switch action', async () => {
+    ctx({ canSwitchBranch: false });
+    render(await CashierAppLayout({ children: null }));
+    expect(screen.getByText('Cafe · Main')).toBeInTheDocument();
+    expect(screen.queryByTestId('branch-switcher')).not.toBeInTheDocument();
+  });
+
+  it('a multi-branch account sees its current branch and the switch action, bound to that branch', async () => {
+    ctx({ canSwitchBranch: true });
+    render(await CashierAppLayout({ children: null }));
+    expect(screen.getByText('Cafe · Main')).toBeInTheDocument();
+    expect(screen.getByTestId('branch-switcher')).toHaveAttribute('data-current', 'b1');
+  });
+
+  it('no switch action without a bound branch, even if the flag were set (a business-wide session has nothing to switch from)', async () => {
+    ctx({ canSwitchBranch: true, branchId: null, branchName: null });
+    render(await CashierAppLayout({ children: null }));
+    expect(screen.queryByTestId('branch-switcher')).not.toBeInTheDocument();
   });
 });

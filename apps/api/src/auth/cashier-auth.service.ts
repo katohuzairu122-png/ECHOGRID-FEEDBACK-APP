@@ -2,6 +2,7 @@ import type { Repositories } from '../repositories';
 import type { Bindings } from '../config/env';
 import type { Pbkdf2Worker } from './pbkdf2-worker';
 import { hashToken } from './token-hash';
+import type { RefreshToken } from '../repositories/refresh-token.repository';
 import { constantTimeEqualHex } from './crypto-utils';
 import { AuthError, DUMMY_PASSWORD_HASH } from './auth.service';
 import {
@@ -49,8 +50,20 @@ export interface CashierSession {
     /** Display names for the cashier app header (it may not call any route beyond its allow-list to learn them). */
     businessName: string | null;
     branchName: string | null;
+    /** CASHIER-AUTH-02C: true only for a managed identity currently assigned two or more branches. Display only; the server decides every switch. */
+    canSwitchBranch: boolean;
   };
 }
+
+/** The verified identity of a presented session credential, reported before any authorization decision so a refusal is attributable. */
+export interface SwitchIdentity { userId: string; businessId: string; branchId: string | null }
+
+export type SwitchOutcome =
+  | ({ status: 'switched'; fromBranchId: string | null; toBranchId: string; previousSessionId: string; sessionId: string; userId: string } & CashierSession)
+  /** Asking for the branch the session is already on: nothing is rotated, revoked or audited (documented, deterministic no-op). */
+  | { status: 'unchanged'; userId: string; session: CashierSession['session'] }
+  /** A refusal that also needed state changes (a revocation) to be committed first; the caller throws `error` after commit. */
+  | { status: 'denied'; error: AuthError };
 
 export type CashierLoginResult =
   | ({ status: 'authenticated' } & CashierSession)
@@ -58,7 +71,7 @@ export type CashierLoginResult =
 
 type CashierRepos = Pick<
   Repositories,
-  'users' | 'refreshTokens' | 'userBusinessRoles' | 'permissions' | 'businesses' | 'branches'
+  'users' | 'refreshTokens' | 'userBusinessRoles' | 'permissions' | 'businesses' | 'branches' | 'auditLog'
 >;
 
 interface Meta {
@@ -127,7 +140,7 @@ export class CashierAuthService {
 
   /** The part of sign-in that follows a verified credential: eligibility, then a session or a selection ticket. */
   private async proceedAfterCredentials(
-    user: { id: string; passwordHash: string },
+    user: { id: string; passwordHash: string; managedBusinessId?: string | null },
     deviceLabel: string | undefined,
     meta: Meta,
     onlyBusinessId?: string,
@@ -148,7 +161,8 @@ export class CashierAuthService {
       only.branches.length <= 1
     ) {
       const branchId = only.branches[0]?.id ?? null;
-      const session = await this.openSession(user.id, only.businessId, branchId, deviceLabel, meta);
+      // Exactly one branch (or none): there is nothing to switch to.
+      const session = await this.openSession(user.id, only.businessId, branchId, deviceLabel, meta, false);
       return { status: 'authenticated', ...session, userId: user.id };
     }
     const ticket = await signCashierSelectionTicket(
@@ -214,6 +228,7 @@ export class CashierAuthService {
       branchId,
       input.deviceLabel ?? ticket.deviceLabel,
       input,
+      user.managedBusinessId !== null && choice.branches.length >= 2,
     );
     return { ...session, userId: user.id };
   }
@@ -238,9 +253,10 @@ export class CashierAuthService {
           'REFRESH_TOKEN_ROTATED',
         );
       }
-      // A replay means this cashier credential escaped. Contain it by ending THIS cashier session only; the same
-      // person's web session and other devices are not implicated by a counter-device replay and stay signed in.
-      await this.repos.refreshTokens.revokeSession(stored.userId, stored.sessionId);
+      // A replay means this cashier credential escaped. Contain it by ending THIS cashier session AND every session that
+      // descends from it (a branch switch starts a new session; see containReplay). The same person's web session and
+      // other devices are not implicated by a counter-device replay and stay signed in.
+      await this.containReplay(stored);
       throw invalid();
     }
 
@@ -256,6 +272,7 @@ export class CashierAuthService {
       throw new AuthError('Cashier access is no longer available.', 'CASHIER_ACCESS_REVOKED');
     }
 
+    const canSwitchBranch = await this.canSwitch(user, stored.businessId);
     const next = await this.issue(
       stored.userId,
       stored.sessionId,
@@ -283,9 +300,179 @@ export class CashierAuthService {
         branchId: stored.branchId,
         deviceLabel: stored.deviceLabel,
         ...(await this.names(stored.businessId, stored.branchId)),
+        canSwitchBranch,
       },
       userId: stored.userId,
     };
+  }
+
+  /**
+   * CASHIER-AUTH-02C (D-1 to D-7): moves a live managed-cashier session to another branch it is assigned to, without a password.
+   *
+   * MUST run inside a database transaction (the route supplies it): everything below commits or rolls back as one unit, so a
+   * failure at any point (including the audit write) leaves the old session exactly as it was. The credential is the session's
+   * own refresh token. Steps, all server-side and none trusting the client's branch id:
+   *  1. verify the token and identify the session (the identity is reported to `onIdentified` so even a refusal is attributable);
+   *  2. take the EXCLUSIVE session lock (serialises with refresh, other switches and in-flight mutations, which hold the shared lock);
+   *  3. re-read under the lock, then check account active, managed identity, not locked, business active, current binding still
+   *     authorised, and the target is a currently assigned, live branch of the SAME business;
+   *  4. replace the session: a NEW session id, new access and refresh tokens bound to the target, the presented token marked as
+   *     superseded and every row of the old session revoked, so the old branch's access token stops working on its next request;
+   *  5. write the audit row in the same transaction.
+   * Only managed identities may switch; staff-email cashier sessions keep signing in again (documented decision).
+   */
+  async switchBranch(
+    input: { refreshToken: string; targetBranchId: string; fromBranchId?: string | undefined } & Meta,
+    onIdentified?: (identity: SwitchIdentity) => void,
+  ): Promise<SwitchOutcome> {
+    const invalid = () => new AuthError('Refresh token is invalid or expired.', 'INVALID_REFRESH_TOKEN');
+    const payload = await this.verifyRefresh(input.refreshToken);
+    const first = await this.repos.refreshTokens.findById(payload.jti);
+    if (!first || first.expiresAt < new Date()) throw invalid();
+    if (!constantTimeEqualHex(await hashToken(input.refreshToken), first.tokenHash)) throw invalid();
+    // Only a cashier session: a web refresh token is refused here and nothing is revoked.
+    if (first.client !== 'cashier' || !first.businessId || !first.sessionId) throw invalid();
+    onIdentified?.({ userId: first.userId, businessId: first.businessId, branchId: first.branchId });
+
+    const previousSessionId = first.sessionId;
+    await this.repos.refreshTokens.lockSessionForUpdate(first.userId, previousSessionId);
+    const stored = await this.repos.refreshTokens.findById(first.id); // re-read UNDER the lock
+    if (!stored || !stored.businessId) throw invalid();
+    if (stored.revokedAt) {
+      // Already spent: a concurrent switch or refresh won, or this is a replay. Same rule as refresh().
+      const justRotated = stored.replacedByTokenId != null && Date.now() - stored.revokedAt.getTime() <= GRACE_MS;
+      if (justRotated) {
+        throw new AuthError('Refresh token was already rotated by a concurrent request.', 'REFRESH_TOKEN_ROTATED');
+      }
+      await this.containReplay(stored);
+      return { status: 'denied', error: invalid() };
+    }
+
+    const user = await this.repos.users.findById(stored.userId);
+    if (!user || user.status !== 'active') {
+      await this.repos.refreshTokens.revokeSession(stored.userId, previousSessionId);
+      return { status: 'denied', error: new AuthError('This account is not active.', 'ACCOUNT_INACTIVE') };
+    }
+    if (user.managedBusinessId === null || user.managedBusinessId !== stored.businessId) {
+      throw new AuthError('Branch switching is not available for this account.', 'CASHIER_SWITCH_NOT_AVAILABLE');
+    }
+    // A locked identity cannot switch (fail closed). Existing sessions keep serving until an administrator acts.
+    if (user.lockedUntil !== null && user.lockedUntil > new Date()) {
+      throw new AuthError('This account cannot use the cashier app right now.', 'CASHIER_ACCESS_DENIED');
+    }
+    if (!(await this.stillEligible(stored.userId, stored.businessId, stored.branchId))) {
+      await this.repos.refreshTokens.revokeSession(stored.userId, previousSessionId);
+      return { status: 'denied', error: new AuthError('Cashier access is no longer available.', 'CASHIER_ACCESS_REVOKED') };
+    }
+    const choice = (await this.eligibleChoices(user.id)).find((c) => c.businessId === stored.businessId);
+    if (!choice) {
+      await this.repos.refreshTokens.revokeSession(stored.userId, previousSessionId);
+      return { status: 'denied', error: new AuthError('Cashier access is no longer available.', 'CASHIER_ACCESS_REVOKED') };
+    }
+    // The client's branch id is only a request: it must be one of the branches the server currently lists for this identity.
+    const target = choice.branches.find((b) => b.id === input.targetBranchId);
+    if (!target) {
+      throw new AuthError('This account cannot use the cashier app at that branch.', 'CASHIER_ACCESS_DENIED');
+    }
+    const canSwitchBranch = choice.branches.length >= 2;
+    if (target.id === stored.branchId) {
+      return {
+        status: 'unchanged',
+        userId: user.id,
+        session: {
+          businessId: stored.businessId, branchId: stored.branchId, deviceLabel: stored.deviceLabel,
+          ...(await this.names(stored.businessId, stored.branchId)), canSwitchBranch,
+        },
+      };
+    }
+    if (input.fromBranchId !== undefined && input.fromBranchId !== stored.branchId) {
+      throw new AuthError('The active branch changed. Reload and try again.', 'CASHIER_SWITCH_CONFLICT');
+    }
+
+    const sessionId = crypto.randomUUID();
+    const next = await this.issue(user.id, sessionId, stored.businessId, target.id, stored.deviceLabel, input);
+    if (!(await this.repos.refreshTokens.rotate(stored.id, next.refreshTokenId))) {
+      throw new AuthError('Refresh token was already rotated by a concurrent request.', 'REFRESH_TOKEN_ROTATED');
+    }
+    await this.repos.refreshTokens.revokeSession(stored.userId, previousSessionId); // any sibling row of the old session
+    await this.repos.auditLog.record({
+      businessId: stored.businessId,
+      actorUserId: user.id,
+      action: 'auth.cashier_branch_switched',
+      entityType: 'session',
+      entityId: sessionId,
+      metadata: {
+        client: 'cashier', outcome: 'success', method: 'branch_switch',
+        fromBranchId: stored.branchId, toBranchId: target.id, previousSessionId, sessionId,
+      },
+      ipAddress: input.ipAddress ?? null,
+      userAgent: input.userAgent ?? null,
+    });
+    return {
+      status: 'switched',
+      userId: user.id,
+      fromBranchId: stored.branchId,
+      toBranchId: target.id,
+      previousSessionId,
+      sessionId,
+      accessToken: next.accessToken,
+      refreshToken: next.refreshToken,
+      session: {
+        businessId: stored.businessId, branchId: target.id, deviceLabel: stored.deviceLabel,
+        ...(await this.names(stored.businessId, target.id)), canSwitchBranch,
+      },
+    };
+  }
+
+  /**
+   * CASHIER-AUTH-02C: the branches the session may switch to, for the switch dialog. Read-only (no rotation, no lock): the
+   * answer is advisory, because every switch re-checks everything. Returns the current binding and the full current list.
+   */
+  async listBranches(rawRefreshToken: string): Promise<{
+    businessId: string; current: { id: string; name: string } | null; branches: { id: string; name: string }[]; canSwitchBranch: boolean;
+  }> {
+    const invalid = () => new AuthError('Refresh token is invalid or expired.', 'INVALID_REFRESH_TOKEN');
+    const payload = await this.verifyRefresh(rawRefreshToken);
+    const stored = await this.repos.refreshTokens.findById(payload.jti);
+    if (!stored || stored.expiresAt < new Date() || stored.revokedAt) throw invalid();
+    if (!constantTimeEqualHex(await hashToken(rawRefreshToken), stored.tokenHash)) throw invalid();
+    if (stored.client !== 'cashier' || !stored.businessId || !stored.sessionId) throw invalid();
+    const user = await this.repos.users.findById(stored.userId);
+    if (!user || user.status !== 'active') throw new AuthError('This account is not active.', 'ACCOUNT_INACTIVE');
+    if (user.managedBusinessId === null || user.managedBusinessId !== stored.businessId) {
+      throw new AuthError('Branch switching is not available for this account.', 'CASHIER_SWITCH_NOT_AVAILABLE');
+    }
+    if (!(await this.stillEligible(stored.userId, stored.businessId, stored.branchId))) {
+      throw new AuthError('Cashier access is no longer available.', 'CASHIER_ACCESS_REVOKED');
+    }
+    const choice = (await this.eligibleChoices(user.id)).find((c) => c.businessId === stored.businessId);
+    if (!choice) throw new AuthError('Cashier access is no longer available.', 'CASHIER_ACCESS_REVOKED');
+    const current = choice.branches.find((b) => b.id === stored.branchId) ?? null;
+    return { businessId: stored.businessId, current, branches: choice.branches, canSwitchBranch: choice.branches.length >= 2 };
+  }
+
+  /**
+   * Ends a replayed credential's session AND every session that descends from it. A branch switch replaces the session, linking
+   * the superseded refresh token to its successor, so a stolen pre-switch token cannot be replayed without also ending the
+   * session the real cashier moved to. Follows the replacement chain (bounded, cycle-safe).
+   */
+  private async containReplay(stored: RefreshToken): Promise<void> {
+    const seen = new Set<string>();
+    let current: RefreshToken | undefined = stored;
+    for (let hop = 0; current && hop < 25; hop++) {
+      if (current.sessionId && !seen.has(current.sessionId)) {
+        seen.add(current.sessionId);
+        await this.repos.refreshTokens.revokeSession(current.userId, current.sessionId);
+      }
+      current = current.replacedByTokenId ? await this.repos.refreshTokens.findById(current.replacedByTokenId) : undefined;
+    }
+  }
+
+  /** Display flag only: a managed identity with two or more currently eligible branches in this business. */
+  private async canSwitch(user: { id: string; managedBusinessId: string | null }, businessId: string): Promise<boolean> {
+    if (user.managedBusinessId === null || user.managedBusinessId !== businessId) return false;
+    const choice = (await this.eligibleChoices(user.id)).find((c) => c.businessId === businessId);
+    return (choice?.branches.length ?? 0) >= 2;
   }
 
   /** Ends only the cashier session the token belongs to. A web token, or anything unrecognised, does nothing. */
@@ -370,6 +557,7 @@ export class CashierAuthService {
     branchId: string | null,
     deviceLabel: string | undefined,
     meta: Meta,
+    canSwitchBranch = false,
   ): Promise<CashierSession> {
     const t = await this.issue(
       userId,
@@ -387,6 +575,7 @@ export class CashierAuthService {
         branchId,
         deviceLabel: deviceLabel ?? null,
         ...(await this.names(businessId, branchId)),
+        canSwitchBranch,
       },
     };
   }

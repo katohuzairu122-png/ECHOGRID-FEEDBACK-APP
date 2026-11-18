@@ -35,6 +35,8 @@ import {
   cashierLookupRedemptionAction,
   cashierSelectAction,
   cashierServeAction,
+  cashierSwitchBranchAction,
+  cashierListBranchesAction,
 } from './actions';
 
 const CASHIER = 'cashier.echo-grid.uk';
@@ -66,8 +68,10 @@ describe('cashier actions refuse every host except the cashier host', () => {
     ['cashierSelectAction', () => cashierSelectAction({}, form())],
     ['cashierLogoutAction', () => cashierLogoutAction()],
     ['cashierServeAction', () => cashierServeAction({}, form())],
-    ['cashierLookupRedemptionAction', () => cashierLookupRedemptionAction({}, form())],
-    ['cashierConfirmRedemptionAction', () => cashierConfirmRedemptionAction('CODE')],
+    ['cashierLookupRedemptionAction', () => cashierLookupRedemptionAction(null, {}, form())],
+    ['cashierConfirmRedemptionAction', () => cashierConfirmRedemptionAction(null, 'CODE')],
+    ['cashierSwitchBranchAction', () => cashierSwitchBranchAction({}, form())],
+    ['cashierListBranchesAction', () => cashierListBranchesAction()],
   ];
 
   it.each(calls)('%s on the main host is a 404 and reaches nothing', async (_n, run) => {

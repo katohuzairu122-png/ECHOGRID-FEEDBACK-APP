@@ -31,6 +31,10 @@ const AUTH_ERROR_STATUS = {
   /** A live cashier session whose business, branch, role or account no longer allows counter access. */
   CASHIER_ACCESS_REVOKED: 403,
   CASHIER_SELECTION_INVALID: 400,
+  /** CASHIER-AUTH-02C: the session is not on the branch the client expected (another tab or a concurrent switch won). */
+  CASHIER_SWITCH_CONFLICT: 409,
+  /** CASHIER-AUTH-02C: only a managed cashier identity may switch branches in-session. */
+  CASHIER_SWITCH_NOT_AVAILABLE: 403,
   /** 400, not 401: the caller is not failing to authenticate, they are
    * presenting a token that is expired, already used, or unknown. A 401
    * would invite clients to retry with credentials, which is not the fix. */

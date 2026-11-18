@@ -124,7 +124,8 @@ describe('cashier auth routes', () => {
   });
 
   it('SEC-CASHIER-R2b: every cashier auth route mounts its own throttle', () => {
-    expect([...mocks.limiterKinds].sort()).toEqual(['login', 'logout', 'refresh', 'session']);
+    // CASHIER-AUTH-02C added `branches` and `switch`; each mounts its own throttle like every other cashier auth route.
+    expect([...mocks.limiterKinds].sort()).toEqual(['branches', 'login', 'logout', 'refresh', 'session', 'switch']);
   });
 
   it('login returns a selection step without tokens', async () => {

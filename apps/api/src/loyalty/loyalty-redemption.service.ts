@@ -2,6 +2,7 @@ import type { Database } from '../db/client';
 import { createRepositories } from '../repositories';
 import type { LoyaltyAccount, LoyaltyTransaction, LoyaltyReward } from '../repositories';
 import { AppError } from '../lib/errors';
+import { assertCashierSessionBound, type CashierSessionBinding } from '../cashier-sessions/session-binding';
 import { assertMembershipGate, evaluateMembershipGate } from '../customer-relationships/membership-gate';
 import { generateRedemptionCode } from './redemption-code';
 import { wouldExceedBudget } from './budget-limit';
@@ -723,8 +724,29 @@ export class LoyaltyRedemptionService {
    * rather than failing the confirmation: this method isn't re-validating
    * the reward's continued existence, only adding one more constraint on
    * top of a redemption that was already legitimately issued. */
-  async confirmRedemption(businessId: string, code: string, branchId?: string): Promise<LoyaltyTransaction> {
-    const repos = createRepositories(this.db);
+  async confirmRedemption(
+    businessId: string,
+    code: string,
+    branchId?: string,
+    /** CASHIER-AUTH-02C: for a cashier token, the session binding the request was authorised under (see session-binding.ts). */
+    cashierSession?: CashierSessionBinding,
+  ): Promise<LoyaltyTransaction> {
+    if (cashierSession) {
+      // Own transaction, so the shared session lock is held until the confirmation commits: it serialises with a branch switch.
+      return this.db.transaction(async (tx) => {
+        await assertCashierSessionBound(tx, cashierSession);
+        return this.confirmWithRepos(createRepositories(tx), businessId, code, branchId);
+      });
+    }
+    return this.confirmWithRepos(createRepositories(this.db), businessId, code, branchId);
+  }
+
+  private async confirmWithRepos(
+    repos: ReturnType<typeof createRepositories>,
+    businessId: string,
+    code: string,
+    branchId?: string,
+  ): Promise<LoyaltyTransaction> {
 
     const transaction = await repos.loyaltyTransactions.findByRedemptionCode(code.toUpperCase());
     if (!transaction || transaction.type !== 'redemption') {

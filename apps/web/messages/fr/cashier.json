@@ -266,5 +266,23 @@
         "PERMISSION_DENIED": "Vous n'avez pas l'autorisation de faire cela."
       }
     }
+  },
+  "branchSwitch": {
+    "button": "Changer de succursale",
+    "title": "Changer de succursale",
+    "hint": "Choisissez la succursale où vous servez maintenant. Vous restez connecté.",
+    "current": "Actuelle",
+    "groupLabel": "Succursales où vous pouvez servir",
+    "confirm": "Passer à cette succursale",
+    "switching": "Changement…",
+    "loading": "Chargement des succursales…",
+    "loadFailed": "Impossible de charger les succursales.",
+    "retry": "Réessayer",
+    "success": "Vous servez maintenant à {branch}.",
+    "noChange": "Vous servez déjà à {branch}.",
+    "denied": "Vous ne pouvez plus servir dans cette succursale. La liste a été mise à jour.",
+    "conflict": "La succursale a changé dans une autre fenêtre. La liste a été mise à jour.",
+    "unavailable": "Le changement n'est pas disponible pour le moment. Réessayez dans un instant.",
+    "close": "Fermer"
   }
 }

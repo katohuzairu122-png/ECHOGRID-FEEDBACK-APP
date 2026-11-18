@@ -7,6 +7,7 @@ import {
   getCashierContext,
   getCashierRefreshToken,
 } from '@/lib/cashier/session';
+import { BranchSwitcher } from './branch-switcher';
 import { CashierTabs } from './cashier-tabs';
 import { OfflineBanner } from './offline-banner';
 
@@ -41,13 +42,40 @@ export async function CashierShell({ children }: { children: React.ReactNode }) 
     <div className="pb-20">
       <OfflineBanner title={t('offline.title')} body={t('offline.body')} />
       <header className="border-b border-neutral-200 bg-white px-4 py-3">
-        <div className="mx-auto max-w-2xl">
-          <p className="text-xs text-neutral-500">{t('header.servingAt')}</p>
-          <p className="text-lg font-bold leading-tight">
-            {ctx.businessName ?? ''}
-            {ctx.branchName ? ` · ${ctx.branchName}` : ''}
-          </p>
-          {userName && <p className="text-xs text-neutral-600">{t('header.signedInAs', { name: userName })}</p>}
+        <div className="mx-auto flex max-w-2xl flex-wrap items-start justify-between gap-3">
+          <div>
+            <p className="text-xs text-neutral-500">{t('header.servingAt')}</p>
+            <p className="text-lg font-bold leading-tight">
+              {ctx.businessName ?? ''}
+              {ctx.branchName ? ` · ${ctx.branchName}` : ''}
+            </p>
+            {userName && <p className="text-xs text-neutral-600">{t('header.signedInAs', { name: userName })}</p>}
+          </div>
+          {/* Only a managed cashier with two or more assigned branches sees this. A single-branch account shows its branch and nothing to switch. */}
+          {ctx.canSwitchBranch && ctx.branchId && (
+            <BranchSwitcher
+              currentBranchId={ctx.branchId}
+              currentBranchName={ctx.branchName}
+              copy={{
+                button: t('branchSwitch.button'),
+                title: t('branchSwitch.title'),
+                hint: t('branchSwitch.hint'),
+                current: t('branchSwitch.current'),
+                groupLabel: t('branchSwitch.groupLabel'),
+                confirm: t('branchSwitch.confirm'),
+                switching: t('branchSwitch.switching'),
+                loading: t('branchSwitch.loading'),
+                loadFailed: t('branchSwitch.loadFailed'),
+                retry: t('branchSwitch.retry'),
+                success: t('branchSwitch.success', { branch: '{branch}' }),
+                noChange: t('branchSwitch.noChange', { branch: '{branch}' }),
+                denied: t('branchSwitch.denied'),
+                conflict: t('branchSwitch.conflict'),
+                unavailable: t('branchSwitch.unavailable'),
+                close: t('branchSwitch.close'),
+              }}
+            />
+          )}
         </div>
       </header>
       <main className="mx-auto max-w-2xl px-4 py-5">{children}</main>

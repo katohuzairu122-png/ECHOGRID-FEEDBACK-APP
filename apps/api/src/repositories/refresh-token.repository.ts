@@ -73,6 +73,38 @@ export class RefreshTokenRepository extends BaseRepository {
     return rows.length > 0;
   }
 
+  /**
+   * CASHIER-AUTH-02C: takes an EXCLUSIVE row lock on every row of one session (live or not) until the surrounding
+   * transaction ends. A branch switch calls this first, so it serialises with a concurrent refresh, another switch and any
+   * in-flight counter mutation (which holds the shared lock below). Must run inside a transaction.
+   */
+  async lockSessionForUpdate(userId: string, sessionId: string): Promise<RefreshToken[]> {
+    return this.db
+      .select()
+      .from(refreshTokens)
+      .where(and(eq(refreshTokens.userId, userId), eq(refreshTokens.sessionId, sessionId)))
+      .for('update');
+  }
+
+  /**
+   * CASHIER-AUTH-02C: is this session still live AND still bound to exactly this branch? Takes a SHARED lock on the matching
+   * row until the surrounding transaction ends, so a switch (exclusive lock) waits for an in-flight mutation to commit, and a
+   * mutation that starts after the switch committed finds no matching row. Must run inside the mutation's own transaction.
+   */
+  async lockLiveBoundSessionShared(userId: string, sessionId: string, branchId: string | null, nowMs: number): Promise<boolean> {
+    const rows = await this.db
+      .select({ id: refreshTokens.id })
+      .from(refreshTokens)
+      .where(and(
+        eq(refreshTokens.userId, userId), eq(refreshTokens.sessionId, sessionId), eq(refreshTokens.client, 'cashier'),
+        isNull(refreshTokens.revokedAt), gt(refreshTokens.expiresAt, new Date(nowMs)),
+        branchId === null ? isNull(refreshTokens.branchId) : eq(refreshTokens.branchId, branchId),
+      ))
+      .limit(1)
+      .for('share');
+    return rows.length > 0;
+  }
+
   /** Revokes every row of one session (logout): the session ends even if an older sibling row were somehow still unrevoked. */
   async revokeSession(userId: string, sessionId: string): Promise<number> {
     const rows = await this.db

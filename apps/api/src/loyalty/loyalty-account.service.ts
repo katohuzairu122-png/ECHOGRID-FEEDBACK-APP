@@ -6,6 +6,7 @@ import {
   type LoyaltyAccountWithCustomer,
 } from '../repositories';
 import { AppError } from '../lib/errors';
+import { assertCashierSessionBound, type CashierSessionBinding } from '../cashier-sessions/session-binding';
 import {
   assertMembershipGate,
   evaluateMembershipGate,
@@ -184,8 +185,12 @@ export class LoyaltyAccountService {
     externalReference?: string;
     channel: LoyaltyPurchaseChannel;
     staffUserId: string;
+    /** CASHIER-AUTH-02C: for a cashier token, the session binding the request was authorised under (see session-binding.ts). */
+    cashierSession?: CashierSessionBinding;
   }): Promise<{ account: LoyaltyAccount; inserted: boolean }> {
     return this.db.transaction(async (tx) => {
+      // Ordering against a concurrent branch switch: the shared session lock is taken BEFORE anything is read or written.
+      if (input.cashierSession) await assertCashierSessionBound(tx, input.cashierSession);
       const repos = createRepositories(tx);
       const { account, membership } = await this.requireEligibleEarningAccount(
         repos,
