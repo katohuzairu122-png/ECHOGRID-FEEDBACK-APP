@@ -620,24 +620,25 @@ describe.skipIf(!process.env.DATABASE_URL)('NETWORK-05 real HTTP-to-Postgres lif
     'browser suspends and lifts a published post, preserving Feed and audit visibility (NETWORK-06)',
     async () =>
       withModerationBrowser(moderatorB, async (page, _context, webUrl, browserExpect) => {
+        const manage = page.getByRole('region', { name: 'Moderate by post handle' });
         const draft = await prepareSubmitted('NETWORK-06 suspension');
         await action(moderatorA, `/revisions/${draft.revisionId}/approve`);
         await action(moderatorB, `/revisions/${draft.revisionId}/approve`);
         expect(await isVisible(draft.handle)).toBe(true);
 
         await page.goto(webUrl + '/platform/network-moderation');
-        await page.getByLabel('Post handle', { exact: true }).fill(draft.handle);
-        await page.getByLabel('Action', { exact: true }).selectOption('suspend');
-        await page.getByLabel('Moderation reason', { exact: true }).selectOption('unsafe_link');
-        await page.getByLabel('Apply this action to the specified post').check();
-        await page.getByRole('button', { name: 'Apply action', exact: true }).click();
-        await browserExpect(page.getByRole('status')).toContainText('suspended');
+        await manage.getByLabel('Post handle', { exact: true }).fill(draft.handle);
+        await manage.getByLabel('Action', { exact: true }).selectOption('suspend');
+        await manage.getByLabel('Moderation reason', { exact: true }).selectOption('unsafe_link');
+        await manage.getByLabel('Apply this action to the specified post').check();
+        await manage.getByRole('button', { name: 'Apply action', exact: true }).click();
+        await browserExpect(manage.getByRole('status')).toContainText('suspended');
         expect(await isVisible(draft.handle)).toBe(false);
 
-        await page.getByLabel('Action', { exact: true }).selectOption('lift');
-        await page.getByLabel('Apply this action to the specified post').check();
-        await page.getByRole('button', { name: 'Apply action', exact: true }).click();
-        await browserExpect(page.getByRole('status')).toContainText('published');
+        await manage.getByLabel('Action', { exact: true }).selectOption('lift');
+        await manage.getByLabel('Apply this action to the specified post').check();
+        await manage.getByRole('button', { name: 'Apply action', exact: true }).click();
+        await browserExpect(manage.getByRole('status')).toContainText('published');
         expect(await isVisible(draft.handle)).toBe(true);
         await page.goto(webUrl + '/platform/network-moderation/history');
         for (const label of ['Post suspended', 'Suspension lifted']) {
@@ -648,11 +649,11 @@ describe.skipIf(!process.env.DATABASE_URL)('NETWORK-05 real HTTP-to-Postgres lif
 
         const invalid = await createDraft('NETWORK-06 cannot suspend an unpublished draft');
         await page.goto(webUrl + '/platform/network-moderation');
-        await page.getByLabel('Post handle', { exact: true }).fill(invalid.handle);
-        await page.getByLabel('Moderation reason', { exact: true }).selectOption('unsafe_link');
-        await page.getByLabel('Apply this action to the specified post').check();
-        await page.getByRole('button', { name: 'Apply action', exact: true }).click();
-        await browserExpect(page.getByRole('alert')).toContainText(
+        await manage.getByLabel('Post handle', { exact: true }).fill(invalid.handle);
+        await manage.getByLabel('Moderation reason', { exact: true }).selectOption('unsafe_link');
+        await manage.getByLabel('Apply this action to the specified post').check();
+        await manage.getByRole('button', { name: 'Apply action', exact: true }).click();
+        await browserExpect(manage.getByRole('alert')).toContainText(
           'conflicts with its current state',
         );
         expect(await isVisible(invalid.handle)).toBe(false);
