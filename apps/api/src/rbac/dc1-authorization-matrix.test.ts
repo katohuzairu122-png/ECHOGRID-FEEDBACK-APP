@@ -152,6 +152,8 @@ async function defaultRoleGrants(): Promise<Record<string, string[]>> {
     'settlement:fulfill',
     'messages:view',
     'messages:send',
+    'profile:edit',
+    'profile:submit',
   ];
   const grants: Record<string, string[]> = {};
   const roleNames = new Map<string, string>();
@@ -375,6 +377,20 @@ describe('default role grants (real RoleProvisioningService)', () => {
     expect(personas.Manager).not.toContain('billing:manage');
     expect(personas.Manager).not.toContain('business:delete');
     expect(personas.Admin).not.toContain('billing:manage');
+  });
+  // BDPN-01B (D-02): only Owner and Admin may change what the public sees; Manager and Staff cannot.
+  it('profile:edit and profile:submit go to Owner and Admin only, never to Manager or Staff', () => {
+    for (const key of ['profile:edit', 'profile:submit']) {
+      expect(personas.Owner, `Owner ${key}`).toContain(key);
+      expect(personas.Admin, `Admin ${key}`).toContain(key);
+      expect(personas.Manager, `Manager ${key}`).not.toContain(key);
+      expect(personas.Staff, `Staff ${key}`).not.toContain(key);
+    }
+  });
+  it('the platform moderation permission is never a business permission', () => {
+    for (const role of ['Owner', 'Admin', 'Manager', 'Staff']) {
+      expect(personas[role], role).not.toContain('profile:moderate');
+    }
   });
   it('the historical Staff default is documented evidence, not the current default', () => {
     expect(HISTORICAL_STAFF_DEFAULT).toContain('loyalty:manage');
