@@ -13,7 +13,8 @@
       "credentials": "Cet e-mail ou ce mot de passe est incorrect.",
       "access": "Ce compte ne peut pas utiliser l'application de caisse. Demandez l'accès à votre responsable.",
       "expired": "Cette connexion a expiré. Reconnectez-vous.",
-      "unavailable": "La connexion est indisponible pour le moment. Réessayez dans un instant."
+      "unavailable": "La connexion est indisponible pour le moment. Réessayez dans un instant.",
+      "managedCredentials": "Ce code d'entreprise, ce nom d'utilisateur ou ce mot de passe n'est pas correct."
     },
     "chooseTitle": "Où servez-vous ?",
     "chooseHint": "Choisissez l'entreprise et la succursale de cet appareil.",
@@ -21,7 +22,14 @@
     "branch": "Succursale",
     "branchWide": "Toutes les succursales",
     "continue": "Commencer à servir",
-    "back": "Utiliser un autre compte"
+    "back": "Utiliser un autre compte",
+    "managed": {
+      "useCode": "Se connecter avec un code d'entreprise",
+      "useEmail": "Se connecter avec un e-mail",
+      "businessCode": "Code d'entreprise",
+      "businessCodeHint": "Demandez à votre responsable le code d'entreprise et votre nom d'utilisateur.",
+      "username": "Nom d'utilisateur"
+    }
   },
   "header": {
     "servingAt": "Service chez",
@@ -155,6 +163,108 @@
       "noAccess": "Votre rôle ne permet pas de voir l'activité de caisse. Demandez au propriétaire ou à un administrateur.",
       "branchRequired": "Choisissez une succursale pour voir son activité.",
       "correlation": "ID de référence"
+    },
+    "accounts": {
+      "link": "Gérer les comptes caissiers",
+      "title": "Comptes caissiers",
+      "subtitle": "Créez des accès pour vos caissiers sans avoir besoin de leur adresse e-mail, et choisissez les succursales où chacun peut servir.",
+      "noAccess": "Votre rôle ne permet pas de gérer les comptes caissiers. Demandez l'accès au propriétaire.",
+      "loadFailed": "Impossible de charger les comptes caissiers. Réessayez dans un instant.",
+      "reauth": {
+        "title": "Confirmez votre identité",
+        "hint": "Les modifications des comptes caissiers demandent votre mot de passe. La confirmation dure 5 minutes.",
+        "password": "Votre mot de passe",
+        "confirm": "Confirmer",
+        "confirmed": "Confirmé. Vous pouvez faire des modifications pendant 5 minutes.",
+        "wrong": "Ce mot de passe n'est pas correct."
+      },
+      "code": {
+        "title": "Code d'entreprise",
+        "hint": "Les caissiers se connectent avec ce code, leur nom d'utilisateur et leur mot de passe. Ce n'est pas un secret, mais changez-le s'il est partagé par erreur.",
+        "none": "Créé avec votre premier compte caissier.",
+        "rotate": "Changer le code d'entreprise",
+        "confirmRotate": "Changer le code d'entreprise ? Les caissiers auront besoin du nouveau code à leur prochaine connexion. Les caissiers connectés ne sont pas déconnectés.",
+        "rotated": "Le code d'entreprise a été changé."
+      },
+      "create": {
+        "title": "Créer un compte caissier",
+        "username": "Nom d'utilisateur",
+        "usernameHint": "3 à 32 caractères : lettres minuscules, chiffres, point, tiret bas ou tiret.",
+        "displayName": "Nom ou libellé de l'employé",
+        "password": "Mot de passe (facultatif)",
+        "passwordHint": "Laissez vide pour générer un mot de passe sûr. Si vous en choisissez un, il doit compter au moins 8 caractères.",
+        "submit": "Créer le compte",
+        "created": "Le compte caissier a été créé."
+      },
+      "assign": {
+        "mode": "Accès aux succursales",
+        "single": "Une succursale",
+        "multiple": "Plusieurs succursales",
+        "singleHint": "Le caissier sert dans une seule succursale.",
+        "multipleHint": "Le caissier choisit parmi les succursales cochées, et aucune autre.",
+        "branches": "Succursales",
+        "singleNeeds": "Cochez exactement une succursale.",
+        "multipleNeeds": "Cochez au moins deux succursales.",
+        "removeNote": "Retirer une succursale déconnecte immédiatement les sessions du caissier dans cette succursale."
+      },
+      "list": {
+        "title": "Vos caissiers",
+        "empty": "Aucun compte caissier pour le moment.",
+        "branches": "Succursales",
+        "noBranches": "Aucune",
+        "lastLogin": "Dernière connexion",
+        "never": "Jamais",
+        "locked": "Temporairement verrouillé",
+        "status": {
+          "active": "Actif",
+          "disabled": "Désactivé",
+          "revoked": "Révoqué"
+        },
+        "mode": {
+          "single": "Une succursale",
+          "multiple": "Plusieurs succursales"
+        }
+      },
+      "actions": {
+        "editBranches": "Succursales",
+        "saveBranches": "Enregistrer les succursales",
+        "cancel": "Annuler",
+        "resetCredential": "Réinitialiser le mot de passe",
+        "confirmReset": "Réinitialiser le mot de passe de ce caissier ? Ses sessions en cours prennent fin et vous verrez le nouveau mot de passe une seule fois.",
+        "disable": "Désactiver",
+        "confirmDisable": "Désactiver ce compte ? Il est déconnecté maintenant et ne peut plus se connecter tant que vous ne le réactivez pas.",
+        "enable": "Activer",
+        "confirmEnable": "Réactiver ce compte ?",
+        "signOut": "Déconnecter les appareils",
+        "confirmSignOut": "Déconnecter ce caissier de tous ses appareils ?",
+        "revoke": "Révoquer l'accès",
+        "confirmRevoke": "Révoquer ce compte définitivement ? Cette action est irréversible."
+      },
+      "credential": {
+        "title": "Enregistrez cet accès maintenant",
+        "warning": "Ce mot de passe n'est affiché qu'une seule fois et ne peut pas être retrouvé. Transmettez-le au caissier de façon sécurisée.",
+        "code": "Code d'entreprise",
+        "username": "Nom d'utilisateur",
+        "password": "Mot de passe",
+        "setByYou": "Le mot de passe que vous avez choisi",
+        "dismiss": "Je l'ai enregistré"
+      },
+      "errors": {
+        "generic": "Impossible de le faire. Réessayez.",
+        "REAUTH_REQUIRED": "Confirmez votre mot de passe ci-dessus, puis réessayez.",
+        "CASHIER_USERNAME_TAKEN": "Ce nom d'utilisateur est déjà utilisé dans cette entreprise.",
+        "CASHIER_USERNAME_INVALID": "Les noms d'utilisateur comptent 3 à 32 caractères : lettres minuscules, chiffres, point, tiret bas ou tiret.",
+        "CASHIER_PASSWORD_INVALID": "Les mots de passe doivent compter de 8 à 128 caractères.",
+        "CASHIER_BRANCH_ASSIGNMENT_INVALID": "Choisissez une succursale pour l'accès simple, ou au moins deux pour plusieurs.",
+        "CASHIER_BRANCH_NOT_FOUND": "Une des succursales choisies est introuvable.",
+        "CASHIER_ACCOUNT_STATE_CONFLICT": "Ce n'est pas possible dans l'état actuel du compte.",
+        "CASHIER_ACCOUNT_REVOKED": "Un compte révoqué ne peut pas être modifié.",
+        "CASHIER_ROLE_NAME_CONFLICT": "Un rôle personnalisé nommé Cashier existe déjà. Renommez-le d'abord.",
+        "CASHIER_ROLE_ALTERED": "Le rôle Cashier a été modifié et ne correspond plus à ses autorisations fixes.",
+        "CASHIER_CATALOG_NOT_SEEDED": "Les comptes caissiers ne sont pas encore disponibles. Contactez le support.",
+        "CASHIER_ACCOUNT_NOT_FOUND": "Ce compte n'existe plus.",
+        "PERMISSION_DENIED": "Vous n'avez pas l'autorisation de faire cela."
+      }
     }
   }
 }

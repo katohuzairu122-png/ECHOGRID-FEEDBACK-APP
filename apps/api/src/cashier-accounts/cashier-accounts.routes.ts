@@ -13,7 +13,7 @@ import { createDurableObjectPbkdf2Worker } from '../auth/pbkdf2-worker';
 import { parseJsonBody } from '../lib/validate';
 import { ok } from '../lib/response';
 import { AppError } from '../lib/errors';
-import { ManagedCashierService } from './managed-cashier.service';
+import { ManagedCashierService, MAX_ASSIGNED_BRANCHES } from './managed-cashier.service';
 import { signAdminReauthProof, verifyAdminReauthProof } from './credentials';
 
 type Env = { Bindings: Bindings; Variables: AuthVariables & TenantVariables & AuditVariables };
@@ -59,12 +59,18 @@ async function withService<T>(c: Context<Env> | { readonly env: unknown; readonl
 }
 
 const reauthSchema = z.object({ password: z.string().min(1).max(256) });
+const accessModeSchema = z.enum(['single', 'multiple']);
+const branchIdsSchema = z.array(z.uuid()).min(1).max(MAX_ASSIGNED_BRANCHES);
+// `branchId` (one branch) stays accepted so the 02A request shape keeps working; `branchIds` + `accessMode` is the 02B shape.
 const createSchema = z.object({
   username: z.string().trim().min(1).max(64),
   displayName: z.string().trim().min(1).max(120),
-  branchId: z.uuid(),
+  branchId: z.uuid().optional(),
+  branchIds: branchIdsSchema.optional(),
+  accessMode: accessModeSchema.optional(),
   password: z.string().max(256).optional(),
-});
+}).refine((b) => (b.branchId === undefined) !== (b.branchIds === undefined), { error: 'Send either branchId or branchIds.' });
+const branchesSchema = z.object({ accessMode: accessModeSchema, branchIds: branchIdsSchema });
 const passwordSchema = z.object({ password: z.string().max(256).optional() });
 const usernameSchema = z.object({ username: z.string().trim().min(1).max(64) });
 
@@ -89,9 +95,22 @@ cashierAccountRoutes.post('/business-code/rotate', ...mutate, async (c) =>
 // The initial credential, when generated, is in this response ONLY. It is never stored in plaintext and never logged.
 cashierAccountRoutes.post('/', ...mutate, async (c) => {
   const body = await parseJsonBody(c.req.raw, createSchema);
-  const result = await withService(c, (s) => s.createAccount({ businessId: c.get('businessId'), actorUserId: c.get('userId'), ...body }));
+  const branchIds = body.branchIds ?? [body.branchId as string];
+  const accessMode = body.accessMode ?? (branchIds.length === 1 ? 'single' : 'multiple');
+  const result = await withService(c, (s) => s.createAccount({
+    businessId: c.get('businessId'), actorUserId: c.get('userId'), username: body.username, displayName: body.displayName,
+    branchIds, accessMode, password: body.password,
+  }));
   c.header('Cache-Control', 'no-store');
   return ok(c, result, 201);
+});
+
+cashierAccountRoutes.put('/:id/branches', ...mutate, async (c) => {
+  const body = await parseJsonBody(c.req.raw, branchesSchema);
+  return ok(c, await withService(c, (s) => s.setBranchAssignments({
+    businessId: c.get('businessId'), accountId: idParam(c.req.param('id')), actorUserId: c.get('userId'),
+    accessMode: body.accessMode, branchIds: body.branchIds,
+  })));
 });
 
 cashierAccountRoutes.post('/:id/reset-credential', ...mutate, async (c) => {

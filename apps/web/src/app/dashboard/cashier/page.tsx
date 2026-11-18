@@ -76,6 +76,12 @@ export default async function CashierAppPage() {
         </Link>
       )}
 
+      {access.permissions.has('cashier:manage') && (
+        <Link href="/dashboard/cashier/accounts" className="inline-block text-sm underline">
+          {t('accounts.link')}
+        </Link>
+      )}
+
       {canManage && sessions && <CashierSessionsPanel sessions={sessions} />}
       {canManage && !sessions && (
         <p className="text-sm text-red-700">{t('sessions.loadFailed')}</p>

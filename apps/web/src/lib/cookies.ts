@@ -30,3 +30,9 @@ export const CASHIER_REFRESH_COOKIE = 'ff_cashier_refresh';
 export const CASHIER_CONTEXT_COOKIE = 'ff_cashier_ctx';
 /** The short-lived signed selection ticket between the two steps of a multi-business cashier sign-in. */
 export const CASHIER_SELECT_COOKIE = 'ff_cashier_select';
+
+/**
+ * CASHIER-AUTH-02B: the 5 minute administrator re-authentication proof for managed cashier account changes. httpOnly, read only by
+ * server actions and forwarded to the API as `X-Reauth-Proof`; client scripts never see it. Scoped to the cashier area of the dashboard.
+ */
+export const CASHIER_ADMIN_REAUTH_COOKIE = 'ff_cashier_admin_reauth';

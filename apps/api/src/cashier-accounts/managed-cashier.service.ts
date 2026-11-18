@@ -1,10 +1,10 @@
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, eq, inArray, isNull } from 'drizzle-orm';
 import type { Database, Transaction } from '../db/client';
 import { AppError } from '../lib/errors';
 import { PASSWORD_ITERATIONS } from '../auth/password';
 import type { Pbkdf2Worker } from '../auth/pbkdf2-worker';
 import { createRepositories } from '../repositories';
-import { auditLog, branches, businesses, permissions, rolePermissions, roles, userBusinessRoles, users } from '../db/schema';
+import { auditLog, branches, businesses, permissions, refreshTokens, rolePermissions, roles, userBusinessRoles, users } from '../db/schema';
 import {
   generateBusinessCode, generateInitialPassword, isAcceptablePassword, normalizeUsername,
   MIN_PASSWORD_LENGTH, MAX_PASSWORD_LENGTH,
@@ -24,12 +24,32 @@ export const CASHIER_ROLE_NAME = 'Cashier';
 /** D-2: the fixed permission set of the Cashier role. Identical to the default Staff counter role (D-C1): nothing administrative. */
 export const CASHIER_ROLE_PERMISSIONS = ['business:view', 'branches:view', 'loyalty:serve'] as const;
 
+/** 02B: the two branch-access configurations. Derived from the explicit grants, never stored separately, so it cannot drift. */
+export type BranchAccessMode = 'single' | 'multiple';
+export const MAX_ASSIGNED_BRANCHES = 50;
+
+/** Single = exactly one branch. Multiple = two or more, each explicitly chosen. Duplicates collapse; anything else is refused. */
+export function validateBranchAssignment(mode: BranchAccessMode, branchIds: readonly string[]): string[] {
+  const unique = [...new Set(branchIds)];
+  if (mode === 'single' && unique.length !== 1) {
+    throw new AppError('Single-branch access needs exactly one branch.', 422, 'CASHIER_BRANCH_ASSIGNMENT_INVALID');
+  }
+  if (mode === 'multiple' && (unique.length < 2 || unique.length > MAX_ASSIGNED_BRANCHES)) {
+    throw new AppError(`Multiple-branch access needs between 2 and ${MAX_ASSIGNED_BRANCHES} branches.`, 422, 'CASHIER_BRANCH_ASSIGNMENT_INVALID');
+  }
+  if (mode !== 'single' && mode !== 'multiple') {
+    throw new AppError('Choose single-branch or multiple-branch access.', 422, 'CASHIER_BRANCH_ASSIGNMENT_INVALID');
+  }
+  return unique;
+}
+
 export interface ManagedCashierSummary {
   id: string;
   username: string;
   displayName: string;
   status: 'active' | 'disabled' | 'revoked';
   branches: { id: string; name: string }[];
+  accessMode: BranchAccessMode | 'none';
   lastLoginAt: Date | null;
   locked: boolean;
   credentialChangedAt: Date | null;
@@ -97,12 +117,14 @@ export class ManagedCashierService {
   }
 
   /**
-   * Creates a managed cashier on ONE explicitly chosen branch of this business (02A: single branch; multi-branch assignment
-   * is 02B). The credential is returned exactly once and only when the service generated it; it is never stored in plaintext.
+   * Creates a managed cashier on the explicitly chosen branches of this business (02B: exactly one for single-branch access,
+   * two or more for multiple-branch access; a branch is never added implicitly). The credential is returned exactly once and only when the service generated it; it is never stored in plaintext.
    */
   async createAccount(input: {
-    businessId: string; actorUserId: string; username: string; displayName: string; branchId: string; password?: string | undefined;
+    businessId: string; actorUserId: string; username: string; displayName: string; branchIds: readonly string[];
+    accessMode: BranchAccessMode; password?: string | undefined;
   }): Promise<{ account: ManagedCashierSummary; initialPassword: string | null; cashierCode: string }> {
+    const branchIds = validateBranchAssignment(input.accessMode, input.branchIds);
     const username = normalizeUsername(input.username);
     if (!username) throw new AppError('Username must be 3 to 32 characters: lowercase letters, digits, dot, underscore or hyphen.', 422, 'CASHIER_USERNAME_INVALID');
     const displayName = input.displayName.trim();
@@ -118,8 +140,7 @@ export class ManagedCashierService {
     const created = await this.db.transaction(async (tx) => {
       const business = await tx.query.businesses.findFirst({ where: and(eq(businesses.id, input.businessId), eq(businesses.isDeleted, false)) });
       if (!business || business.status !== 'active') throw new AppError('The business is not active.', 409, 'CASHIER_BUSINESS_INACTIVE');
-      const branch = await tx.query.branches.findFirst({ where: and(eq(branches.id, input.branchId), eq(branches.businessId, input.businessId)) });
-      if (!branch || branch.isDeleted) throw new AppError('Branch not found.', 404, 'CASHIER_BRANCH_NOT_FOUND');
+      const chosen = await this.requireBranches(tx, input.businessId, branchIds);
       const roleId = await this.ensureCashierRole(tx, input.businessId, input.actorUserId);
       const cashierCode = business.cashierCode ?? (await this.assignFreshCode(tx, input.businessId));
       let userRow;
@@ -134,19 +155,19 @@ export class ManagedCashierService {
         throw error;
       }
       if (!userRow) throw new AppError('Cashier account could not be created.', 409, 'CASHIER_CREATE_FAILED');
-      await tx.insert(userBusinessRoles).values({
-        userId: userRow.id, businessId: input.businessId, branchId: input.branchId, roleId, createdBy: input.actorUserId,
-      });
+      await tx.insert(userBusinessRoles).values(branchIds.map((branchId) => ({
+        userId: userRow.id, businessId: input.businessId, branchId, roleId, createdBy: input.actorUserId,
+      })));
       await tx.insert(auditLog).values({
         businessId: input.businessId, actorUserId: input.actorUserId, action: 'cashier_account.created',
         entityType: 'user', entityId: userRow.id,
-        metadata: { username, branchId: input.branchId, credentialSource: supplied ? 'administrator_supplied' : 'generated' },
+        metadata: { username, accessMode: input.accessMode, branchIds, credentialSource: supplied ? 'administrator_supplied' : 'generated' },
       });
-      return { userRow, cashierCode, branch };
+      return { userRow, cashierCode, chosen };
     });
 
     return {
-      account: this.summarise(created.userRow, [{ id: created.branch.id, name: created.branch.name }]),
+      account: this.summarise(created.userRow, created.chosen),
       initialPassword: supplied ? null : password,
       cashierCode: created.cashierCode,
     };
@@ -176,16 +197,73 @@ export class ManagedCashierService {
     return role.id;
   }
 
+  private async assignedBranches(db: Pick<Database, 'select'>, businessId: string, userId: string): Promise<{ id: string; name: string }[]> {
+    return db.select({ id: branches.id, name: branches.name }).from(userBusinessRoles)
+      .innerJoin(branches, eq(branches.id, userBusinessRoles.branchId))
+      .where(and(eq(userBusinessRoles.userId, userId), eq(userBusinessRoles.businessId, businessId),
+        isNull(userBusinessRoles.deletedAt), eq(branches.isDeleted, false)))
+      .orderBy(branches.name);
+  }
+
+  /** Every id must be a live branch of THIS business; a foreign, deleted or unknown id fails the whole request. */
+  private async requireBranches(tx: Transaction, businessId: string, branchIds: readonly string[]): Promise<{ id: string; name: string }[]> {
+    const rows = await tx.select({ id: branches.id, name: branches.name }).from(branches)
+      .where(and(inArray(branches.id, [...branchIds]), eq(branches.businessId, businessId), eq(branches.isDeleted, false)));
+    if (rows.length !== branchIds.length) throw new AppError('Branch not found.', 404, 'CASHIER_BRANCH_NOT_FOUND');
+    return rows;
+  }
+
+  /**
+   * 02B: replaces a cashier's branch assignment with exactly `branchIds`, atomically. The account row is locked first, so two
+   * concurrent changes serialise. Only the sessions bound to a REMOVED branch end (at once, in the same transaction); sessions on
+   * a kept branch are untouched. A new branch of the business is never added by anything except this explicit call.
+   */
+  async setBranchAssignments(input: {
+    businessId: string; accountId: string; actorUserId: string; accessMode: BranchAccessMode; branchIds: readonly string[];
+  }): Promise<ManagedCashierSummary> {
+    const wanted = validateBranchAssignment(input.accessMode, input.branchIds);
+    return this.db.transaction(async (tx) => {
+      const [locked] = await tx.select().from(users)
+        .where(and(eq(users.id, input.accountId), eq(users.managedBusinessId, input.businessId), eq(users.isDeleted, false))).for('update');
+      if (!locked) throw notFound();
+      if (locked.status === 'deactivated') throw new AppError('A revoked cashier account cannot be changed.', 409, 'CASHIER_ACCOUNT_REVOKED');
+      const chosen = await this.requireBranches(tx, input.businessId, wanted);
+      const roleId = await this.ensureCashierRole(tx, input.businessId, input.actorUserId);
+      const current = await tx.select({ branchId: userBusinessRoles.branchId }).from(userBusinessRoles)
+        .where(and(eq(userBusinessRoles.userId, input.accountId), eq(userBusinessRoles.businessId, input.businessId), isNull(userBusinessRoles.deletedAt)));
+      const have = new Set(current.map((c) => c.branchId).filter((b): b is string => b !== null));
+      const toAdd = wanted.filter((b) => !have.has(b));
+      const toRemove = [...have].filter((b) => !wanted.includes(b));
+      let sessionsRevoked = 0;
+      if (toAdd.length > 0 || toRemove.length > 0) {
+        if (toRemove.length > 0) {
+          await tx.update(userBusinessRoles).set({ deletedAt: new Date(), deletedBy: input.actorUserId })
+            .where(and(eq(userBusinessRoles.userId, input.accountId), eq(userBusinessRoles.businessId, input.businessId),
+              inArray(userBusinessRoles.branchId, toRemove), isNull(userBusinessRoles.deletedAt)));
+          const ended = await tx.update(refreshTokens).set({ revokedAt: new Date() })
+            .where(and(eq(refreshTokens.userId, input.accountId), eq(refreshTokens.client, 'cashier'),
+              inArray(refreshTokens.branchId, toRemove), isNull(refreshTokens.revokedAt))).returning({ id: refreshTokens.id });
+          sessionsRevoked = ended.length;
+        }
+        if (toAdd.length > 0) {
+          await tx.insert(userBusinessRoles).values(toAdd.map((branchId) => ({
+            userId: input.accountId, businessId: input.businessId, branchId, roleId, createdBy: input.actorUserId,
+          })));
+        }
+        await tx.insert(auditLog).values({
+          businessId: input.businessId, actorUserId: input.actorUserId, action: 'cashier_account.branches_changed',
+          entityType: 'user', entityId: input.accountId, metadata: { accessMode: input.accessMode, added: toAdd, removed: toRemove, sessionsRevoked },
+        });
+      }
+      return this.summarise(locked, chosen);
+    });
+  }
+
   async listAccounts(businessId: string): Promise<ManagedCashierSummary[]> {
     const repos = createRepositories(this.db);
     const accounts = await repos.users.listManagedForBusiness(businessId);
     const out: ManagedCashierSummary[] = [];
-    for (const user of accounts) {
-      const rows = await this.db.select({ id: branches.id, name: branches.name }).from(userBusinessRoles)
-        .innerJoin(branches, eq(branches.id, userBusinessRoles.branchId))
-        .where(and(eq(userBusinessRoles.userId, user.id), eq(userBusinessRoles.businessId, businessId), isNull(userBusinessRoles.deletedAt)));
-      out.push(this.summarise(user, rows));
-    }
+    for (const user of accounts) out.push(this.summarise(user, await this.assignedBranches(this.db, businessId, user.id)));
     return out;
   }
 
@@ -235,7 +313,7 @@ export class ManagedCashierService {
         businessId: input.businessId, actorUserId: input.actorUserId, action: 'cashier_account.username_changed',
         entityType: 'user', entityId: input.accountId, metadata: { from: before.loginUsername, to: username },
       });
-      return this.summarise(row, []);
+      return this.summarise(row, await this.assignedBranches(tx, input.businessId, input.accountId));
     });
   }
 
@@ -293,6 +371,7 @@ export class ManagedCashierService {
       displayName: user.fullName,
       status: toStatus(user.status),
       branches: branchList,
+      accessMode: branchList.length === 0 ? 'none' : branchList.length === 1 ? 'single' : 'multiple',
       lastLoginAt: user.lastLoginAt,
       locked: user.lockedUntil !== null && user.lockedUntil > new Date(),
       credentialChangedAt: user.credentialChangedAt,
