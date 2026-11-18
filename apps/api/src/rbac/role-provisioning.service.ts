@@ -66,6 +66,8 @@ export const DEFAULT_ROLES: Record<DefaultRoleName, string[]> = {
     'settlement:fulfill',
     'messages:view',
     'messages:send',
+    'profile:edit',
+    'profile:submit',
   ],
   // Admin mirrors Owner for everything EXCEPT the two irreversible,
   // financially-consequential actions: deleting the business and managing
@@ -105,6 +107,8 @@ export const DEFAULT_ROLES: Record<DefaultRoleName, string[]> = {
     'settlement:fulfill',
     'messages:view',
     'messages:send',
+    'profile:edit',
+    'profile:submit',
   ],
   Manager: [
     'team:view',

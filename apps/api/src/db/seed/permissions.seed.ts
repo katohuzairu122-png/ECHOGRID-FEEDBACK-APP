@@ -144,6 +144,16 @@ const PERMISSIONS: NewPermission[] = [
     description: 'Send a message to a customer and reply within a conversation.',
     category: 'Messages',
   },
+  {
+    key: 'profile:edit',
+    description: 'Edit the draft of the business public profile. Business-wide access only; never publishes anything.',
+    category: 'Business profile',
+  },
+  {
+    key: 'profile:submit',
+    description: 'Submit the business public profile for platform review and withdraw or re-publish an approved profile. Business-wide access only.',
+    category: 'Business profile',
+  },
 ];
 
 /**
