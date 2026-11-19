@@ -383,6 +383,25 @@ describe.skipIf(!databaseUrl)('CASHIER-AUTH-02A managed cashier identity (real H
       expect(after.n).toBe(before.n);
     });
 
+    it('a lock is scoped to one identity: it never affects another cashier of the business, the same username in another business, or any other row', async () => {
+      await create('iso1', a1, { password: 'iso-password-1' });
+      await create('iso2', a1, { password: 'iso-password-2' });
+      await create('iso1', b1, { password: 'iso-password-b1' }, 'ownerB');
+      const others = async () => (await q(`SELECT login_username, managed_business_id, failed_login_count AS n, locked_until AS l FROM users WHERE login_username IN ('iso1','iso2') AND NOT (managed_business_id = $1 AND login_username = 'iso1') ORDER BY managed_business_id, login_username`, [bizA]));
+      const before = await others();
+      for (let i = 0; i < 6; i++) await signIn(codeA, 'iso1', 'attacker-guess');
+      expect((await lockRow('iso1')).l).not.toBeNull();
+      // the same business-code + username in the OTHER business, and a sibling cashier, still sign in and carry no failure state
+      expect((await signIn(codeB, 'iso1', 'iso-password-b1')).status).toBe(200);
+      expect((await signIn(codeA, 'iso2', 'iso-password-2')).status).toBe(200);
+      expect(await others()).toEqual(before);
+      // an attempt that names a business code and an unknown username records nothing anywhere
+      const total = async () => Number((await q(`SELECT coalesce(sum(failed_login_count),0) AS n FROM users WHERE managed_business_id IS NOT NULL`))[0].n);
+      const t0 = await total();
+      await signIn(codeA, 'no-such-cashier', 'whatever-1');
+      expect(await total()).toBe(t0);
+    });
+
     it('the lock lapses after fifteen minutes and a correct password then clears the counters', async () => {
       await q(`UPDATE users SET locked_until = now() - interval '1 second', failed_login_window_started_at = now() - interval '16 minutes' WHERE managed_business_id = $1 AND login_username = 'lock1'`, [bizA]);
       expect((await signIn(codeA, 'lock1', 'correct-horse-1')).status).toBe(200);
