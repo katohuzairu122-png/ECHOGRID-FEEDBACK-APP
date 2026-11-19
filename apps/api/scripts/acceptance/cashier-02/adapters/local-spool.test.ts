@@ -43,7 +43,7 @@ const rewrite = async (dir: string, mutate: (f: { version: number; messages: any
 
 describe('local-spool adapter: configuration (fails closed)', () => {
   it('is registered under the name the configuration must use', () => {
-    expect(Object.keys(MAILBOX_ADAPTERS)).toEqual(['local-spool']);
+    expect(Object.keys(MAILBOX_ADAPTERS)).toEqual(['local-spool', 'cloudflare-receiver']);
   });
   it('refuses a missing or relative directory, a missing or short delivery key, and a missing directory on disk, by name only', async () => {
     expect(() => createLocalSpoolSource({})).toThrow(/ACCEPTANCE_MAILBOX_SPOOL_DIR/);

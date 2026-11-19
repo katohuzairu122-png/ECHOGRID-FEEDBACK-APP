@@ -36,6 +36,8 @@ export interface MailboxConfig {
   approvedBy: string | null;
   adapter: string;
   allowedRecipientDomains: string[];
+  /** E2D: the owner-approved host of the test-only mail receiver (receiver-backed adapters only). Approving the mailbox does not approve a host: this is a separate recorded value. */
+  receiverHost?: string | null;
 }
 
 /** E2-A: the owner's authorization to create synthetic customers through the real sign-up flow. Absent means not approved. */
@@ -125,6 +127,19 @@ export function parseTargetsConfig(raw: unknown): TargetsConfig {
   if (mailbox.approved && (mailbox.adapter === 'none' || domains.length === 0 || approver(mailbox.approvedBy, 'mailbox.approvedBy') === null)) {
     throw new HarnessRefusal('CONFIG_INVALID', 'An approved mailbox needs an adapter, allowed domains and an approver.');
   }
+  let receiverHost: string | null = null;
+  if (mailbox.receiverHost !== undefined && mailbox.receiverHost !== null) {
+    const h = mailbox.receiverHost;
+    if (typeof h !== 'string' || !HOST_PATTERN.test(h) || h !== h.toLowerCase()) {
+      throw new HarnessRefusal('CONFIG_INVALID', 'mailbox.receiverHost must be null or a lowercase DNS host name.');
+    }
+    if (isProductionHost(h)) throw new HarnessRefusal('HOST_PRODUCTION', 'mailbox.receiverHost is a production host.');
+    if (Object.values(hosts).includes(h)) throw new HarnessRefusal('CONFIG_INVALID', 'mailbox.receiverHost must not be one of the three staging application hosts.');
+    receiverHost = h;
+  }
+  if (mailbox.approved && mailbox.adapter === 'cloudflare-receiver' && (receiverHost === null || domains.length !== 1)) {
+    throw new HarnessRefusal('CONFIG_INVALID', 'An approved cloudflare-receiver mailbox needs a receiverHost and exactly one allowed recipient domain.');
+  }
   const provisioning = root.customerProvisioning === undefined ? { approved: false, approvedBy: null } : asRecord(root.customerProvisioning, 'customerProvisioning');
   if (typeof provisioning.approved !== 'boolean') throw new HarnessRefusal('CONFIG_INVALID', 'customerProvisioning.approved must be a boolean.');
   const provisioningApprover = approver(provisioning.approvedBy ?? null, 'customerProvisioning.approvedBy');
@@ -154,6 +169,7 @@ export function parseTargetsConfig(raw: unknown): TargetsConfig {
       approvedBy: approver(mailbox.approvedBy, 'mailbox.approvedBy'),
       adapter: mailbox.adapter,
       allowedRecipientDomains: [...(domains as string[])],
+      receiverHost,
     },
     customerProvisioning: { approved: provisioning.approved, approvedBy: provisioningApprover },
     liveExecution: { authorized: live.authorized, authorizedBy: liveBy, reference: liveRef },

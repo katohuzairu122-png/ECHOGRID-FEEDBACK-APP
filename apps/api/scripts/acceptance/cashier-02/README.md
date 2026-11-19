@@ -91,3 +91,8 @@ No live adapter ships in E1. Without an approved mailbox and a live customer pro
 
 `pnpm test` runs the safety unit tests (`scripts/acceptance/cashier-02/*.test.ts`). `test/integration/cashier-02-acceptance-harness.integration.test.ts` runs all scenarios against the real application and a local PostgreSQL through an in-process client, and proves they discriminate:
 five deliberately faulty applications (no consent check, reusable invitation, cross-business report, skipped revocation, unauthorised branch switch) are each caught.
+
+## E2D: the receiver-backed mailbox adapter (`cloudflare-receiver`)
+
+Reads the confirmation email of a synthetic customer from the test-only Email Worker in `apps/mail-receiver` (design: `docs/architecture/builds/CASHIER/CASHIER_AUTH_02E_E2D_CLOUDFLARE_TEST_MAIL_RECEIVER.md`). It is a `MessageSource` behind the unchanged `RestrictedVerificationMailbox`. It needs, all supplied by the owner and none committed: `mailbox.adapter = "cloudflare-receiver"`, `mailbox.receiverHost`, exactly one `mailbox.allowedRecipientDomains` entry, and the environment variables `ACCEPTANCE_MAILBOX_RECEIVER_HOST` (must equal `receiverHost`), `ACCEPTANCE_RECEIVER_RETRIEVAL_KEY` and `ACCEPTANCE_MAILBOX_DELIVERY_KEY` (two different keys, at least 32 characters each). Preflight items P16/P17 report the receiver prerequisites. Nothing in this change approves anything: every flag in `staging-targets.json` is still `false`.
+
