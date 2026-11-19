@@ -16,13 +16,25 @@ const RULES: ReadonlyArray<readonly [RegExp, (match: string) => string]> = [
   [/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g, (m) => `[email:${short(m.toLowerCase())}]`],
   [/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi, (m) => `[id:${short(m.toLowerCase())}]`],
   [/\+\d[\d\s().-]{7,}\d/g, () => '[phone]'],
-  [/\b[A-Za-z0-9_-]{32,}\b/g, () => '[opaque]'],
+  [/\b[A-Za-z0-9_-]{32,}\b/g, (m) => m], // placeholder: handled with its position below (a DNS host label is not a secret)
   [/(?<![\d.])\d{6}(?![\d.])/g, () => '[digits6]'],
 ];
 
+const OPAQUE = /\b[A-Za-z0-9_-]{32,}\b/g;
+
+/** A long lowercase hyphenated label that is followed by a domain (for example `echo-grid-feedback-cashier-staging.example.workers.dev`) is a public host name, not a secret. */
+const isHostLabel = (match: string, whole: string, offset: number) =>
+  /^[a-z0-9-]+$/.test(match) && match.includes('-') && /^\.[a-z0-9-]+\.[a-z]{2,}/.test(whole.slice(offset + match.length));
+
 export function redactString(text: string): string {
   let out = text;
-  for (const [pattern, replace] of RULES) out = out.replace(pattern, replace);
+  for (const [pattern, replace] of RULES) {
+    if (pattern.source === OPAQUE.source) {
+      out = out.replace(OPAQUE, (m, offset: number, whole: string) => (isHostLabel(m, whole, offset) ? m : '[opaque]'));
+    } else {
+      out = out.replace(pattern, replace);
+    }
+  }
   return out;
 }
 
@@ -55,6 +67,11 @@ export function findSecretLeaks(text: string): string[] {
     ['opaque', /\b[A-Za-z0-9_-]{32,}\b/],
     ['otp', /(?<![\d.])\d{6}(?![\d.])/],
   ];
-  for (const [kind, re] of probes) if (re.test(text)) kinds.push(kind);
+  for (const [kind, re] of probes) {
+    if (kind === 'opaque') {
+      const hit = [...text.matchAll(new RegExp(OPAQUE.source, 'g'))].some((m) => !isHostLabel(m[0], text, m.index ?? 0));
+      if (hit) kinds.push(kind);
+    } else if (re.test(text)) kinds.push(kind);
+  }
   return kinds;
 }

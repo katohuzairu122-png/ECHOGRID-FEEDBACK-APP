@@ -19,6 +19,8 @@ describe('shipped configuration', () => {
     expect(c.approved).toBe(false);
     expect(c.mailbox.approved).toBe(false);
     expect(c.mailbox.adapter).toBe('none');
+    expect(c.customerProvisioning.approved).toBe(false);
+    expect(c.liveExecution).toEqual({ authorized: false, authorizedBy: null, reference: null });
   });
   it('lists exactly the staging hosts that the repository configuration defines (not invented)', () => {
     const api = readFileSync(path.join(__dirname, '../../../wrangler.toml'), 'utf8');
@@ -61,6 +63,12 @@ describe('configuration validation', () => {
     refusal(() => parseTargetsConfig(null), 'CONFIG_INVALID');
     refusal(() => parseTargetsConfig({ ...(shipped as object), approved: true }), 'CONFIG_INVALID');
     refusal(() => parseTargetsConfig({ ...(shipped as object), mailbox: { approved: true, approvedBy: null, adapter: 'none', allowedRecipientDomains: [] } }), 'CONFIG_INVALID');
+  });
+  it('validates the live-execution authorization', () => {
+    refusal(() => parseTargetsConfig({ ...(shipped as object), liveExecution: { authorized: true, authorizedBy: null, reference: null } }), 'CONFIG_INVALID');
+    refusal(() => parseTargetsConfig({ ...(shipped as object), liveExecution: { authorized: 'yes' } }), 'CONFIG_INVALID');
+    expect(parseTargetsConfig({ ...(shipped as object), liveExecution: { authorized: true, authorizedBy: 'owner', reference: 'directive' } }).liveExecution.authorized).toBe(true);
+    expect(parseTargetsConfig({ ...(shipped as object), liveExecution: undefined }).liveExecution.authorized).toBe(false);
   });
   it('classifies production hosts', () => {
     expect(isProductionHost('echo-grid-feedback-api.x.workers.dev')).toBe(true);

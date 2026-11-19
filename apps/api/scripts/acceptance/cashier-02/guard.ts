@@ -44,6 +44,14 @@ export interface CustomerProvisioningConfig {
   approvedBy: string | null;
 }
 
+/** The owner's separate authorization to RUN live acceptance (distinct from approving the hostnames). Absent means not authorized. */
+export interface LiveExecutionConfig {
+  authorized: boolean;
+  authorizedBy: string | null;
+  /** The directive or decision that authorizes the run, for the audit trail. */
+  reference: string | null;
+}
+
 export interface TargetsConfig {
   version: 1;
   approved: boolean;
@@ -52,6 +60,7 @@ export interface TargetsConfig {
   targets: { api: { host: string }; web: { host: string }; cashier: { host: string } };
   mailbox: MailboxConfig;
   customerProvisioning: CustomerProvisioningConfig;
+  liveExecution: LiveExecutionConfig;
 }
 
 const HOST_PATTERN = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/;
@@ -122,6 +131,13 @@ export function parseTargetsConfig(raw: unknown): TargetsConfig {
   if (provisioning.approved && provisioningApprover === null) {
     throw new HarnessRefusal('CONFIG_INVALID', 'An approved customer provisioning authorization records who approved it.');
   }
+  const live = root.liveExecution === undefined ? { authorized: false, authorizedBy: null, reference: null } : asRecord(root.liveExecution, 'liveExecution');
+  if (typeof live.authorized !== 'boolean') throw new HarnessRefusal('CONFIG_INVALID', 'liveExecution.authorized must be a boolean.');
+  const liveBy = approver(live.authorizedBy ?? null, 'liveExecution.authorizedBy');
+  const liveRef = approver(live.reference ?? null, 'liveExecution.reference');
+  if (live.authorized && (liveBy === null || liveRef === null)) {
+    throw new HarnessRefusal('CONFIG_INVALID', 'An authorized live execution records who authorized it and the directive reference.');
+  }
   const approvedBy = approver(root.approvedBy, 'approvedBy');
   const approvedAt = approver(root.approvedAt, 'approvedAt');
   if (root.approved && (approvedBy === null || approvedAt === null)) {
@@ -140,6 +156,7 @@ export function parseTargetsConfig(raw: unknown): TargetsConfig {
       allowedRecipientDomains: [...(domains as string[])],
     },
     customerProvisioning: { approved: provisioning.approved, approvedBy: provisioningApprover },
+    liveExecution: { authorized: live.authorized, authorizedBy: liveBy, reference: liveRef },
   };
 }
 

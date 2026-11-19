@@ -15,6 +15,7 @@ const io = (config: unknown = shipped, fetchFn?: CliIo['fetch']) => {
   };
   return { impl, lines, requests };
 };
+const liveOk = { liveExecution: { authorized: true, authorizedBy: 'owner', reference: 'test directive' } };
 const creds = { ACCEPTANCE_OWNER_A_EMAIL: 'a@example.test', ACCEPTANCE_OWNER_A_PASSWORD: 'pw', ACCEPTANCE_OWNER_A_BUSINESS_ID: 'a', ACCEPTANCE_OWNER_B_EMAIL: 'b@example.test', ACCEPTANCE_OWNER_B_PASSWORD: 'pw', ACCEPTANCE_OWNER_B_BUSINESS_ID: 'b' };
 
 describe('command line entry point', () => {
@@ -48,14 +49,14 @@ describe('command line entry point', () => {
     expect(t.requests).toEqual([]);
   });
   it('blocks on missing credentials (names only) once approved, before any request', async () => {
-    const t = io({ ...shipped, approved: true, approvedBy: 'owner', approvedAt: 'now' });
+    const t = io({ ...shipped, ...liveOk, approved: true, approvedBy: 'owner', approvedAt: 'now' });
     expect(await runCli(['--env', 'staging'], {}, t.impl)).toBe(2);
     expect(t.requests).toEqual([]);
     expect(t.lines.join('\n')).toMatch(/ACCEPTANCE_OWNER_A_EMAIL/);
     expect(t.lines.join('\n')).not.toMatch(/@example/);
   });
   it('blocks when the API does not identify itself as staging; the only request is the health probe', async () => {
-    const t = io({ ...shipped, approved: true, approvedBy: 'owner', approvedAt: 'now' }, undefined);
+    const t = io({ ...shipped, ...liveOk, approved: true, approvedBy: 'owner', approvedAt: 'now' }, undefined);
     const seen: string[] = [];
     t.impl.fetch = async (url) => { seen.push(url); return new Response(JSON.stringify({ status: 'ok', service: 'echo-grid-feedback-api', environment: 'production' })); };
     expect(await runCli(['--env', 'staging'], creds, t.impl)).toBe(2);
@@ -70,7 +71,7 @@ describe('command line entry point', () => {
 });
 
 describe('E2 wiring: approvals, provisioner, mailbox and browser evidence', () => {
-  const all = { ...shipped, approved: true, approvedBy: 'owner', approvedAt: 'now',
+  const all = { ...shipped, ...liveOk, approved: true, approvedBy: 'owner', approvedAt: 'now',
     mailbox: { approved: true, approvedBy: 'owner', adapter: 'fixture', allowedRecipientDomains: ['mail.example.test'] },
     customerProvisioning: { approved: true, approvedBy: 'owner' } };
   const stagingHealth = async (url: string) => new Response(JSON.stringify(url.endsWith('/health') ? { status: 'ok', service: 'echo-grid-feedback-api', environment: 'staging' } : { data: {} }), { status: 200 });
@@ -97,5 +98,32 @@ describe('E2 wiring: approvals, provisioner, mailbox and browser evidence', () =
     const t = live({ ...all, customerProvisioning: { approved: false, approvedBy: null } }, { signupDriver: async () => { asked = true; return {} as never; }, mailboxAdapters: { fixture: () => ({ listMessages: async () => [] }) } });
     await runCli(['--env', 'staging'], creds, t.impl);
     expect(asked).toBe(false);
+  });
+  it('a live run is refused while live execution is not authorized, even with the hostnames approved', async () => {
+    const t = live({ ...shipped, approved: true, approvedBy: 'owner', approvedAt: 'now' });
+    expect(await runCli(['--env', 'staging'], creds, t.impl)).toBe(2);
+    expect(t.lines.join('\n')).toMatch(/Live execution is not authorized/);
+  });
+});
+
+describe('E2: the preflight command', () => {
+  const pf = { readRepoFile: () => null, browser: async () => ({ ok: false, detail: 'no browser' }), driverPresent: () => false };
+  it('reports every prerequisite and the verdict, makes no request, and exits 2 while anything is BLOCKED', async () => {
+    const t = io();
+    t.impl.preflight = pf;
+    expect(await runCli(['--preflight', '--online'], {}, t.impl)).toBe(2);
+    expect(t.requests).toEqual([]);
+    const text = t.lines.join('\n');
+    expect(text).toMatch(/BLOCKED\s+P01/);
+    expect(text).toMatch(/verdict: NOT READY/);
+  });
+  it('still rejects host overrides', async () => {
+    const t = io();
+    t.impl.preflight = pf;
+    expect(await runCli(['--preflight', '--api-url=https://x.dev'], {}, t.impl)).toBe(2);
+    expect(t.lines.join('\n')).toMatch(/OVERRIDE_REJECTED/);
+  });
+  it('is unavailable (blocked) where its dependencies are not provided', async () => {
+    expect(await runCli(['--preflight'], {}, io().impl)).toBe(2);
   });
 });
