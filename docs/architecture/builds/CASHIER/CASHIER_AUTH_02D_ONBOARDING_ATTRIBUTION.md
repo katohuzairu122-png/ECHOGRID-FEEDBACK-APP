@@ -1,6 +1,6 @@
 # CASHIER-AUTH-02D: customer onboarding attribution
 
-Status: **IMPLEMENTED, development only.** Migration `0083` is NOT applied to staging or production. Not merged, not deployed.
+Status: **IMPLEMENTED.** Migration `0083` is NOT applied to staging or production. The issuer (Option A) is added in a follow-up PR.
 Baseline: `origin/main` @ `fb7f4b994c8d9885433830d02e662a55164acc62` (02A, 02B, 02C merged). Journal 83 entries, so `0083` was free.
 
 ## Purpose and scope
@@ -68,16 +68,45 @@ Constraints and guards (all in the migration):
 3. **Re-join.** A new event is appended; the first is never touched; the unique membership, the loyalty account and the single customer identity are reused.
 4. **Idempotency.** An event is appended only when the join creates the membership or reactivates a left one. A retry while already a member writes nothing.
 
-## Architecture conflict reported (stopped for owner decision)
+## Invitation issuer (owner-authorised addition, Option A)
 
-**Issuing the invitation requires a new cashier-callable route**, and the cashier route allow-list is pinned at exactly eight routes (`cashier-scope.test.ts`),
-with the owner direction to preserve those restrictions and not broaden cashier privileges. Adding a ninth route (or a refresh-token-credentialed auth route like 02C's
-switch) is a change to that frozen boundary, so it was **not made**. Consequences:
+The architecture conflict reported with 02D (issuing needs a cashier-callable route while the allow-list is pinned at eight) was resolved by the owner: **Option A**, one explicit
+allow-list addition. Refresh tokens are never used to issue invitations.
 
-- The customer-side endpoint, signing/verification, authority re-check, database guards and reporting are implemented and tested with invitations signed exactly as the issuer will sign them.
-- No server code mints an invitation today, so the `cashier_assisted` path is **dormant in production** until the owner rules.
-- Options: **A** (recommended) add `POST /loyalty/actions/onboarding-invite` to the allow-list: access-token authenticated, `loyalty:serve`, branch from the session, no customer data;
-  **B** a refresh-token-credentialed route under `/auth/cashier/` (outside the allow-list, but spends the long-lived credential on a non-auth action).
+`POST /loyalty/actions/onboarding-invite` (the ninth cashier route; `middleware/cashier-scope.ts`, pinned by `cashier-scope.test.ts` as exactly nine):
+
+| Control | Implementation |
+|---|---|
+| Authentication | existing cashier **access token** (`authenticate`, live session check); refresh, invitation and web tokens are refused |
+| Authorisation | `requirePermission('loyalty:serve')` against live grants; the per-request tenant context still applies |
+| Business, branch, cashier, session | only from the verified token claims and the live session; the request body, query and headers are never read (a header naming another business or branch is `CASHIER_CONTEXT_MISMATCH`) |
+| No branch | a cashier session with no branch gets `409 ONBOARDING_INVITE_BRANCH_REQUIRED`: no branch is guessed |
+| Non-cashier callers | a staff web token gets `403 ONBOARDING_INVITE_CASHIER_ONLY`: an invitation must be bound to a revocable cashier session |
+| Invitation | HS256, type `onboarding_invite`, 10 minutes, claims `sub, sid, biz, brid, jti, iat, exp` only; no customer data; not valid as any other token |
+| Single use | enforced by the database when accepted (unique `(business_id, reference)` for assisted events); a second customer gets `409 ONBOARDING_INVITE_USED` |
+| Invalidation | acceptance re-checks inside its own transaction under the 02C session lock: sign-out, branch switch, branch removal, session revocation, disable, credential reset and business suspension all make it unusable (tested for each) |
+| Rate limiting | the existing lookup limiter binding on its own key `onboarding-invite:<business>:<user>` (10 per minute, separate from lookups); no new binding or configuration |
+| Audit | `loyalty.onboarding_invite_issued`, cashier-marked, entity = the invitation id; never the token or customer data. Written synchronously before the token is returned; fail-closed |
+
+Tests: `test/integration/cashier-onboarding-invite.integration.test.ts` (23, real PostgreSQL, real customer acceptance), plus the exact-route pins.
+
+### Independent security review of the allow-list change (2026-11-19)
+
+A reviewer with no context from the implementation (fresh agent, read-only, instructed to attack the change) reviewed commit `d22939e`. Verdict: **APPROVE WITH CONDITIONS**; no critical or high findings; every one of the owner's eleven required controls PASS.
+Confirmed: the allow-list grew by exactly one fully anchored route (no wildcard; trailing slash, double slash, case, encoding, HEAD/OPTIONS and method-override variants are all refused); only a verified live cashier access token reaches the handler
+(refresh, invitation, customer, impersonation and staff web tokens are refused); business, branch, cashier and session come only from signed claims; single use is database-enforced and a rolled-back attempt consumes nothing.
+
+| Finding | Severity | Disposition |
+|---|---|---|
+| M-1 soft-deleted or archived branch did not end outstanding invitations | medium | **FIXED** (acceptance now requires an existing, active branch of that business) + test |
+| L-3 acceptance omitted `users.is_deleted` and the session row's business | low | **FIXED** + test |
+| L-2 audit row written after the response by fail-open middleware | low | **FIXED**: written in the handler before the token is returned; failure refuses the request (tested with an injected failure); the middleware row is suppressed |
+| L-1 invitation signed with the shared `JWT_ACCESS_SECRET` (type check enforced in every verifier read) | low | deferred, defence in depth: a dedicated `ONBOARDING_INVITE_SECRET` or `aud`/`iss` claims in a later hardening block |
+| I-1 the rate limiter is a per-location, eventually consistent Cloudflare binding (soft limit) | info | accepted; same as every other limiter here |
+| I-2 an invitation is a bearer credential for 10 minutes (not bound to a customer) | info | by design; short TTL, single use |
+| I-3 a malicious cashier could mass-attribute onboardings (about 10 invitations per minute) | info, speculative | matters only if attribution later feeds incentives: add a daily cap per cashier, an issued-versus-accepted anomaly report and exclusion of re-join events before any such use |
+| I-4 no test of acceptance racing revocation | info | the 02D suite races a switch against acceptance for 6 rounds and 02C-R1 covers revocation ordering; a dedicated looped acceptance-versus-revocation test is a possible follow-up |
+| `BranchService.deleteBranch` does not revoke sessions bound to the deleted branch (pre-existing; also affects purchases and redemptions, which the per-request tenant check already refuses) | medium, pre-existing | **not changed here** (outside this change); recommended as a separate reviewed block |
 
 ## Reporting foundation
 
@@ -95,7 +124,7 @@ breakdown. Cashier tokens cannot reach it (outside the allow-list).
 
 ## Not done / out of scope
 
-Cashier PWA screen to show the invitation and customer web screen to accept it (UI, blocked on the issuance decision); `remote_invitation` workflow; any backfill;
+Cashier PWA screen to show the invitation and customer web screen to accept it (separate UI block); `remote_invitation` workflow; any backfill;
 staging/production deployment; rate-limit, secrets, consent or verification policy changes; MFA.
 
 ## Tests

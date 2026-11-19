@@ -52,6 +52,13 @@ export const CASHIER_ALLOWED_ROUTES: readonly CashierRoute[] = [
     pattern: new RegExp(`^/loyalty/redemptions/${PARAM}/confirm$`),
     label: 'POST /loyalty/redemptions/:code/confirm',
   },
+  {
+    // CASHIER-AUTH-02D (owner-authorised, ONE explicit addition): issues a short-lived, single-use onboarding invitation that the customer
+    // accepts with their own consent. Access-token authenticated, `loyalty:serve`, branch and session from the token, no body, no customer data.
+    method: 'POST',
+    pattern: /^\/loyalty\/actions\/onboarding-invite$/,
+    label: 'POST /loyalty/actions/onboarding-invite',
+  },
   { method: 'GET', pattern: /^\/businesses\/me$/, label: 'GET /businesses/me' },
   { method: 'GET', pattern: /^\/auth\/me$/, label: 'GET /auth/me' },
 ];

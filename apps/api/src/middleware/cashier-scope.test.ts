@@ -39,18 +39,21 @@ const EXPECTED_ALLOWED = [
   'POST /api/v1/loyalty/accounts/:id/purchase',
   'POST /api/v1/loyalty/actions/lookup-customer',
   'POST /api/v1/loyalty/actions/lookup-purchase',
+  // CASHIER-AUTH-02D: the ONE owner-authorised addition (onboarding invitation issuer)
+  'POST /api/v1/loyalty/actions/onboarding-invite',
   'POST /api/v1/loyalty/actions/resolve-customer',
   'POST /api/v1/loyalty/redemptions/:code/confirm',
 ].sort();
 
 describe('cashier route allow-list (exact, default deny)', () => {
-  it('has exactly the eight counter routes', () => {
+  it('has exactly the nine counter routes (the eight originals plus the one owner-authorised onboarding-invite route)', () => {
     expect(CASHIER_ALLOWED_ROUTES.map((r) => r.label).sort()).toEqual(
       EXPECTED_ALLOWED.map((s) => s.replace('/api/v1', '')).sort(),
     );
   });
 
   it('accepts each listed method and path', () => {
+    expect(isCashierRouteAllowed('POST', '/loyalty/actions/onboarding-invite')).toBe(true);
     expect(isCashierRouteAllowed('POST', '/loyalty/actions/lookup-customer')).toBe(true);
     expect(isCashierRouteAllowed('POST', '/loyalty/accounts/abc-123/purchase')).toBe(true);
     expect(isCashierRouteAllowed('GET', '/loyalty/redemptions/CODE1')).toBe(true);
@@ -65,6 +68,7 @@ describe('cashier route allow-list (exact, default deny)', () => {
       expect(isCashierRouteAllowed(m, '/loyalty/accounts/x/purchase')).toBe(false);
     }
     expect(isCashierRouteAllowed('GET', '/loyalty/actions/lookup-customer')).toBe(false);
+    for (const m of ['GET', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS']) expect(isCashierRouteAllowed(m, '/loyalty/actions/onboarding-invite')).toBe(false);
     expect(isCashierRouteAllowed('POST', '/businesses/me')).toBe(false);
     expect(isCashierRouteAllowed('POST', '/loyalty/redemptions/CODE1')).toBe(false);
     expect(isCashierRouteAllowed('GET', '/loyalty/redemptions/CODE1/confirm')).toBe(false);
@@ -84,6 +88,11 @@ describe('cashier route allow-list (exact, default deny)', () => {
       '/loyalty/redemptions',
       '/loyalty/redemptions/a/b/confirm',
       '/loyalty/actions/lookup-customer/extra',
+      '/loyalty/actions/onboarding-invite/',
+      '/loyalty/actions/onboarding-invite/extra',
+      '/loyalty/actions/Onboarding-Invite',
+      '/loyalty/actions/onboarding-invites',
+      '/customer-memberships/join-assisted', // customer endpoint: never reachable with a cashier token
       '/loyalty/settings',
       '/loyalty/tiers',
       '/loyalty/rewards',
@@ -158,7 +167,7 @@ describe('route introspection: no registered route is reachable by a cashier tok
     expect(routes.some((r) => r.path.startsWith('/api/v1/billing'))).toBe(true);
   });
 
-  it('allows exactly the eight listed routes and nothing else', () => {
+  it('allows exactly the nine listed routes and nothing else', () => {
     const allowed = routes
       .filter((r) =>
         isCashierRouteAllowed(
