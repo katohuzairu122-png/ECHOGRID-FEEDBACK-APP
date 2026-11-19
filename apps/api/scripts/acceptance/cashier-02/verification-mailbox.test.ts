@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { buildRegistrationProofLink } from '../../../src/customer-auth/customer-email-auth.delivery';
 import type { MailboxConfig } from './guard';
 import { FixtureMessageSource, NullVerificationMailbox, RestrictedVerificationMailbox, createVerificationMailbox, requireCredentials, type InboundMessage } from './verification-mailbox';
 
@@ -6,7 +7,11 @@ const WEB = 'echo-grid-feedback-web-staging.example.workers.dev';
 const config: MailboxConfig = { approved: true, approvedBy: 'owner', adapter: 'fixture', allowedRecipientDomains: ['mail.example.test'] };
 const NOW = 2_000_000_000_000;
 const RECIPIENT = 'acc-abc123-one@mail.example.test';
-const link = `https://${WEB}/loyalty/signup/verify?token=SECRETTOKENVALUE&email=x`;
+const CHALLENGE = '8142403d-073a-4ff9-9d4d-4f7a07b5c550';
+const PROOF = 'ab12'.repeat(16);
+/** The link exactly as the application BUILDS it (so a change to the real format fails these tests). */
+const realLink = (challenge = CHALLENGE, proof = PROOF, host = WEB) => buildRegistrationProofLink(`https://${host}`, challenge, proof);
+const link = realLink();
 const msg = (over: Partial<InboundMessage> = {}): InboundMessage => ({ to: RECIPIENT, receivedAtMs: NOW - 1000, text: `Confirm: ${link}`, ...over });
 const make = (messages: InboundMessage[], over: Partial<ConstructorParameters<typeof RestrictedVerificationMailbox>[0]> = {}) => {
   const source = new FixtureMessageSource(messages);
@@ -66,7 +71,7 @@ describe('verification mailbox: recipient binding', () => {
 
 describe('verification mailbox: freshness', () => {
   it('uses only a message that arrived in this run\'s window and returns the newest', async () => {
-    const newer = `https://${WEB}/loyalty/signup/verify?token=NEWER`;
+    const newer = realLink(CHALLENGE, 'cd34'.repeat(16));
     const { box } = make([msg({ receivedAtMs: NOW - 4000 }), msg({ receivedAtMs: NOW - 500, text: `x ${newer}` })]);
     await expect(ask(box)).resolves.toEqual({ kind: 'link', url: newer });
   });
@@ -94,17 +99,26 @@ describe('verification mailbox: freshness', () => {
 });
 
 describe('verification mailbox: what may be extracted', () => {
+  it('accepts exactly the link the application builds (fragment, no query)', async () => {
+    await expect(ask(make([msg()]).box)).resolves.toEqual({ kind: 'link', url: link });
+    expect(new URL(link).search).toBe('');
+    expect(new URL(link).hash).toMatch(/^#c=/);
+  });
   it.each([
-    ['a link on another host', `https://evil.example/loyalty/signup/verify?token=x`],
-    ['a link on a lookalike host', `https://${WEB}.evil.example/loyalty/signup/verify?token=x`],
-    ['the production web host', 'https://echo-grid.uk/loyalty/signup/verify?token=x'],
-    ['another path on the right host', `https://${WEB}/loyalty/dashboard?token=x`],
-    ['a link without parameters', `https://${WEB}/loyalty/signup/verify`],
-    ['a link with a port', `https://${WEB}:8443/loyalty/signup/verify?token=x`],
-    ['a link with credentials', `https://u:p@${WEB}/loyalty/signup/verify?token=x`],
-    ['a link with a fragment', `https://${WEB}/loyalty/signup/verify?token=x#y`],
-    ['plain http', `http://${WEB}/loyalty/signup/verify?token=x`],
-    ['two different verification links', `https://${WEB}/loyalty/signup/verify?token=a and https://${WEB}/loyalty/signup/verify?token=b`],
+    ['a link on another host', realLink(CHALLENGE, PROOF, 'evil.example')],
+    ['a link on a lookalike host', realLink(CHALLENGE, PROOF, `${WEB}.evil.example`)],
+    ['the production web host', realLink(CHALLENGE, PROOF, 'echo-grid.uk')],
+    ['another path on the right host', `https://${WEB}/loyalty/dashboard#c=${CHALLENGE}.${PROOF}`],
+    ['the old query style (no fragment)', `https://${WEB}/loyalty/signup/verify?c=${CHALLENGE}.${PROOF}`],
+    ['a link with no proof at all', `https://${WEB}/loyalty/signup/verify`],
+    ['a fragment that is not the challenge format', `https://${WEB}/loyalty/signup/verify#c=short`],
+    ['a proof of the wrong length', `https://${WEB}/loyalty/signup/verify#c=${CHALLENGE}.${'ab'.repeat(8)}`],
+    ['a query next to the fragment', `https://${WEB}/loyalty/signup/verify?x=1#c=${CHALLENGE}.${PROOF}`],
+    ['a fragment with extra parameters', `https://${WEB}/loyalty/signup/verify#c=${CHALLENGE}.${PROOF}&x=1`],
+    ['a link with a port', `https://${WEB}:8443/loyalty/signup/verify#c=${CHALLENGE}.${PROOF}`],
+    ['a link with credentials', `https://u:p@${WEB}/loyalty/signup/verify#c=${CHALLENGE}.${PROOF}`],
+    ['plain http', `http://${WEB}/loyalty/signup/verify#c=${CHALLENGE}.${PROOF}`],
+    ['two different verification links', `${realLink()} and ${realLink(CHALLENGE, 'cd34'.repeat(16))}`],
     ['no link at all', 'hello'],
   ])('refuses %s', async (_n, text) => {
     await refuse(ask(make([msg({ text })]).box), 'OTP_REFUSED');
@@ -124,12 +138,12 @@ describe('verification mailbox: what may be extracted', () => {
 describe('verification mailbox: nothing sensitive leaks', () => {
   it('no refusal message contains the link, the token or the code', async () => {
     const cases: Array<[InboundMessage, 'customer-signup-link' | 'customer-sms-code']> = [
-      [msg({ text: `https://evil.example/loyalty/signup/verify?token=SECRETTOKENVALUE` }), 'customer-signup-link'],
+      [msg({ text: realLink(CHALLENGE, PROOF, 'evil.example') }), 'customer-signup-link'],
       [msg({ text: 'codes 987654 and 123456' }), 'customer-sms-code'],
-      [msg({ to: 'acc-abc123-two@mail.example.test', text: `token=SECRETTOKENVALUE 987654` }), 'customer-signup-link'],
+      [msg({ to: 'acc-abc123-two@mail.example.test', text: `${link} 987654` }), 'customer-signup-link'],
     ];
     for (const [m, purpose] of cases) {
-      try { await ask(make([m]).box, { purpose }); } catch (e) { expect(String((e as Error).message)).not.toMatch(/SECRETTOKENVALUE|987654|123456|evil\.example/); continue; }
+      try { await ask(make([m]).box, { purpose }); } catch (e) { expect(String((e as Error).message)).not.toMatch(new RegExp(`${PROOF}|${CHALLENGE}|987654|123456|evil\\.example`)); continue; }
       throw new Error('expected a refusal');
     }
   });

@@ -17,5 +17,10 @@
   "customerProvisioning": {
     "approved": false,
     "approvedBy": null
+  },
+  "liveExecution": {
+    "authorized": false,
+    "authorizedBy": null,
+    "reference": null
   }
 }

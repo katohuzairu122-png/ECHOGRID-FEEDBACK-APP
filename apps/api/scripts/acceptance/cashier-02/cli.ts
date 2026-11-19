@@ -1,6 +1,7 @@
 import { execFileSync } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createLiveClient } from './client';
@@ -13,15 +14,18 @@ import { LiveCustomerProvisioner, missingApprovals, type SignupDriver } from './
 import { createVerificationMailbox, type MessageSourceFactory } from './verification-mailbox';
 import { redactString } from './redact';
 import { exitCodeFor, runAcceptance } from './runner';
+import { MAILBOX_ADAPTERS } from './adapters';
+import { runPreflight, type PreflightDeps } from './preflight';
 import { SCENARIOS, type Context, type OwnerCredentials } from './scenarios';
 
 /**
  * Usage (from apps/api):
  *   pnpm acceptance:cashier-02                 offline self-check: validates the configuration, runs nothing, makes no request
+ *   pnpm acceptance:cashier-02 -- --preflight [--online]   live-acceptance readiness: PASS / BLOCKED / NOT VERIFIED per prerequisite, no scenario runs
  *   pnpm acceptance:cashier-02 -- --env staging [--scenarios S01,S02] [--out DIR] [--require-all] [--browser-results FILE]
  *
  * Live execution is DISABLED until the owner records the approval of the staging hostnames in staging-targets.json.
- * Exit codes: 0 all runnable checks passed, 1 a check failed (or NOT RUN with --require-all), 2 blocked by a safety refusal, 3 interrupted.
+ * Exit codes: 0 all runnable checks passed (preflight: READY), 1 a check failed (or NOT RUN with --require-all), 2 blocked by a safety refusal (preflight: something BLOCKED), 3 interrupted, 4 preflight: nothing blocked but a required item NOT VERIFIED.
  */
 export interface CliIo {
   log(line: string): void;
@@ -35,9 +39,12 @@ export interface CliIo {
   mailboxAdapters?: Readonly<Record<string, MessageSourceFactory>>;
   /** E2-D: reads the Playwright JSON report named by --browser-results. */
   readReport?: (file: string) => unknown;
+  /** Preflight dependencies that touch the machine (repository files, browser, driver file). */
+  preflight?: Pick<PreflightDeps, 'readRepoFile' | 'browser' | 'driverPresent'>;
 }
 
 const CONFIG_PATH = path.join(path.dirname(fileURLToPath(import.meta.url)), 'staging-targets.json');
+const REPO_API = path.join(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 
 export const defaultIo = (signal?: AbortSignal): CliIo => ({
   log: (line) => process.stdout.write(`${redactString(line)}\n`),
@@ -47,6 +54,27 @@ export const defaultIo = (signal?: AbortSignal): CliIo => ({
     try { return execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim(); } catch { return process.env.GITHUB_SHA ?? 'unknown'; }
   },
   readReport: (file) => JSON.parse(readFileSync(file, 'utf8')) as unknown,
+  mailboxAdapters: MAILBOX_ADAPTERS,
+  preflight: {
+    readRepoFile: (name) => {
+      try {
+        return readFileSync(path.join(REPO_API, name === 'api-wrangler' ? 'wrangler.toml' : '../web/wrangler.toml'), 'utf8');
+      } catch {
+        return null;
+      }
+    },
+    driverPresent: () => existsSync(path.join(REPO_API, '../web/e2e/acceptance/signup-driver.ts')),
+    browser: async () => {
+      try {
+        const require = createRequire(path.join(REPO_API, '../web/package.json'));
+        const pw = require('@playwright/test') as { chromium: { executablePath(): string } };
+        const exe = process.env.E2E_CHROMIUM_PATH ?? pw.chromium.executablePath();
+        return existsSync(exe) ? { ok: true, detail: 'Playwright and a Chromium executable are available' } : { ok: false, detail: 'no Chromium executable found (install the browser or set E2E_CHROMIUM_PATH)' };
+      } catch {
+        return { ok: false, detail: 'Playwright could not be loaded from apps/web' };
+      }
+    },
+  },
   // The real sign-up driver is a browser and lives in the web package's browser tier. Loaded only when all three approvals are recorded.
   signupDriver: async ({ webHost }) => {
     const modulePath = new URL('../../../../web/e2e/acceptance/signup-driver.ts', import.meta.url).href;
@@ -84,9 +112,20 @@ export async function runCli(argv: readonly string[], env: Readonly<Record<strin
     const value = (name: string) => { const i = argv.indexOf(name); return i >= 0 ? argv[i + 1] : undefined; };
     const envName = value('--env');
     if (flag('--env') && envName !== 'staging') throw new HarnessRefusal('HOST_NOT_ALLOWED', 'Only the staging environment is supported.');
+    if (flag('--preflight')) {
+      if (!io.preflight) throw new HarnessRefusal('CONFIG_INVALID', 'The preflight is not available here.');
+      const result = await runPreflight(config, { env, fetch: io.fetch, adapters: io.mailboxAdapters ?? MAILBOX_ADAPTERS, ...io.preflight }, { online: flag('--online') });
+      io.log('CASHIER-AUTH-02E live acceptance preflight (no scenario is run)');
+      for (const i of result.items) io.log(`${i.status.padEnd(12)} ${i.id} ${i.title}${i.required ? '' : ' (advisory)'} :: ${i.detail}`);
+      io.log(`verdict: ${result.verdict}`);
+      return result.exitCode;
+    }
     if (!flag('--env') || flag('--self-check')) return selfCheck(config, io);
 
     const targets = guardTargets(config, { requireApproval: true });
+    if (!(config.liveExecution.authorized && config.liveExecution.authorizedBy !== null && config.liveExecution.reference !== null)) {
+      throw new HarnessRefusal('LIVE_NOT_APPROVED', 'Live execution is not authorized: liveExecution is not recorded in staging-targets.json.');
+    }
     const ownerA = ownerFromEnv(env, 'A');
     const ownerB = ownerFromEnv(env, 'B');
     await verifyStagingIdentity(io.fetch, targets);

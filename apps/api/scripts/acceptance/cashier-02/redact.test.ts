@@ -27,6 +27,14 @@ describe('redaction', () => {
     expect(findSecretLeaks(text)).toEqual([]);
     expect(text).toContain('[redacted]');
   });
+  it('keeps a public staging host name readable (the owner must be told exactly which hosts to approve) but still redacts a long secret', () => {
+    const host = 'echo-grid-feedback-cashier-staging.katohuzairu122.workers.dev';
+    expect(redactString(`approve ${host}`)).toBe(`approve ${host}`);
+    expect(findSecretLeaks(`approve ${host}`)).toEqual([]);
+    expect(redactString(`${'a'.repeat(40)}.example.com`)).toContain('example.com');
+    expect(redactString('secret-ish-looking-but-not-a-host-label-abcdefghijklmnop')).toBe('[opaque]');
+    expect(redactString(`${'Ab1'.repeat(14)} then ${host}`)).toBe(`[opaque] then ${host}`);
+  });
   it('the leak detector names kinds, never the material', () => {
     expect(findSecretLeaks(sample).sort()).toEqual(['bearer', 'email', 'jwt', 'opaque', 'otp', 'phone', 'uuid'].sort());
     expect(findSecretLeaks('nothing sensitive here')).toEqual([]);

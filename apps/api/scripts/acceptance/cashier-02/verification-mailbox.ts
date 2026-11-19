@@ -1,3 +1,5 @@
+import { REGISTRATION_VERIFY_PATH } from '../../../src/customer-auth/customer-email-auth.delivery';
+import { createHash } from 'node:crypto';
 import { HarnessRefusal, type MailboxConfig } from './guard';
 
 /**
@@ -9,7 +11,7 @@ import { HarnessRefusal, type MailboxConfig } from './guard';
  *  - the adapter is asked about ONE exact recipient (`acc-<runId>-<label>@<approved domain>`), never to list or search an inbox;
  *  - the adapter may only return messages addressed to that recipient: anything else is a refusal, not silently ignored;
  *  - only messages that arrived at or after the instant this run asked for them count; a stale message is never used;
- *  - a link is accepted only if it is https, on the approved WEB host, on the sign-up verification path; a code only if exactly six digits;
+ *  - a link is accepted only if it is https, on the approved WEB host, on the sign-up verification path, with the exact `#c=<id>.<proof>` fragment and no query; a code only if exactly six digits;
  *  - the value goes to the caller only and is never part of a message, an error, a log line or a result.
  */
 export type VerificationPurpose = 'customer-signup-link' | 'customer-sms-code';
@@ -27,9 +29,20 @@ export interface MessageSource {
 
 export type Verification = { kind: 'link'; url: string } | { kind: 'code'; value: string };
 
+/** What is kept as proof that a verification was retrieved. Deliberately contains NO message, link, token or code: only hashes, a kind and an age. */
+export interface EvidenceRecord {
+  at: string;
+  recipient: string;
+  purpose: VerificationPurpose;
+  kind: 'link' | 'code';
+  ageMs: number;
+  adapter: string;
+}
+
 export interface VerificationMailbox {
   readonly kind: string;
   fetchVerification(request: { recipient: string; purpose: VerificationPurpose; sinceMs: number }): Promise<Verification>;
+  evidence?(): readonly EvidenceRecord[];
 }
 
 export const NullVerificationMailbox: VerificationMailbox = {
@@ -39,7 +52,10 @@ export const NullVerificationMailbox: VerificationMailbox = {
   },
 };
 
-export const SIGNUP_VERIFY_PATH = '/loyalty/signup/verify';
+/** Single source of truth with the code that BUILDS the link (customer-email-auth.delivery.ts). */
+export const SIGNUP_VERIFY_PATH = REGISTRATION_VERIFY_PATH;
+/** The real link is `<web>/loyalty/signup/verify#c=<challengeId>.<proof>`: the proof travels in the fragment and there is no query. */
+const SIGNUP_FRAGMENT = /^#c=[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.[0-9a-f]{64}$/i;
 const MAX_MESSAGES = 25;
 const MAX_TEXT = 20_000;
 const CLOCK_SKEW_MS = 60_000;
@@ -62,6 +78,11 @@ export interface RestrictedVerificationOptions {
 export class RestrictedVerificationMailbox implements VerificationMailbox {
   readonly kind: string;
   private readonly opts: RestrictedVerificationOptions;
+  private readonly records: EvidenceRecord[] = [];
+
+  evidence(): readonly EvidenceRecord[] {
+    return this.records;
+  }
 
   constructor(opts: RestrictedVerificationOptions) {
     if (!RUN_ID.test(opts.runId)) throw new HarnessRefusal('OTP_REFUSED', 'The run identifier is not valid.');
@@ -101,7 +122,18 @@ export class RestrictedVerificationMailbox implements VerificationMailbox {
         .filter((m) => Number.isFinite(m.receivedAtMs) && m.receivedAtMs >= request.sinceMs && m.receivedAtMs <= now() + CLOCK_SKEW_MS)
         .sort((a, b) => b.receivedAtMs - a.receivedAtMs);
       const newest = fresh[0];
-      if (newest) return extract(newest.text, request.purpose, webHost);
+      if (newest) {
+        const verification = extract(newest.text, request.purpose, webHost);
+        this.records.push({
+          at: new Date(now()).toISOString(),
+          recipient: createHash('sha256').update(recipient).digest('hex').slice(0, 12),
+          purpose: request.purpose,
+          kind: verification.kind,
+          ageMs: Math.max(0, now() - newest.receivedAtMs),
+          adapter: this.kind,
+        });
+        return verification;
+      }
       if (i < attempts - 1) await sleep(this.opts.pollMs ?? 5000);
     }
     throw new HarnessRefusal('OTP_REFUSED', 'No verification arrived in time.');
@@ -128,7 +160,7 @@ function extract(text: string, purpose: VerificationPurpose, webHost: string): V
   });
   if (links.length !== 1) throw new HarnessRefusal('OTP_REFUSED', 'The message did not contain exactly one verification link.');
   const url = new URL(links[0] as string);
-  if (url.protocol !== 'https:' || url.username !== '' || url.password !== '' || url.port !== '' || url.search === '' || url.hash !== '') {
+  if (url.protocol !== 'https:' || url.username !== '' || url.password !== '' || url.port !== '' || url.search !== '' || !SIGNUP_FRAGMENT.test(url.hash)) {
     throw new HarnessRefusal('OTP_REFUSED', 'The verification link is not acceptable.');
   }
   return { kind: 'link', url: url.toString() };
