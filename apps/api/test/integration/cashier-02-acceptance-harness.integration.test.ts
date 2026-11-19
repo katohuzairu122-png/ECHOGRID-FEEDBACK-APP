@@ -24,7 +24,13 @@ import { createInProcessClient, type ApiResult, type CallOptions } from '../../s
 import { runAcceptance } from '../../scripts/acceptance/cashier-02/runner';
 import type { Context, CustomerProvisioner } from '../../scripts/acceptance/cashier-02/scenarios';
 import { LiveCustomerProvisioner, type SignupDriver } from '../../scripts/acceptance/cashier-02/provisioner';
-import { FixtureMessageSource, RestrictedVerificationMailbox } from '../../scripts/acceptance/cashier-02/verification-mailbox';
+import { RestrictedVerificationMailbox } from '../../scripts/acceptance/cashier-02/verification-mailbox';
+import { createLocalSpoolSource, SPOOL_ENV } from '../../scripts/acceptance/cashier-02/adapters/local-spool';
+import { deliverToSpool } from '../../scripts/acceptance/cashier-02/adapters/local-spool-writer';
+import { DELIVERY_KEY_ENV } from '../../scripts/acceptance/cashier-02/adapters/spool-envelope';
+import { chmod, mkdtemp } from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
 import { parseTargetsConfig } from '../../scripts/acceptance/cashier-02/guard';
 import { buildRegistrationProofLink } from '../../src/customer-auth/customer-email-auth.delivery';
 import stagingTargets from '../../scripts/acceptance/cashier-02/staging-targets.json';
@@ -164,18 +170,21 @@ describe.skipIf(!databaseUrl)('CASHIER-AUTH-02E E1 acceptance scenarios against 
     expect(out.report.checks.find((c) => c.id === 'S08.5')?.status).toBe('NOT_RUN');
   });
 
-  it('MOCK-BACKED: scenarios that need customers run through the live provisioner abstraction (fixture mailbox + fixture sign-up driver), not through the real web sign-up', async () => {
+  it('MOCK-BACKED: scenarios that need customers run through the live provisioner abstraction with the authenticated local spool (a fixture delivery boundary and a fixture sign-up driver), not through the real web sign-up or a real mailbox', async () => {
     const config = parseTargetsConfig({
       ...stagingTargets, approved: true, approvedBy: 'owner', approvedAt: 'test',
-      mailbox: { approved: true, approvedBy: 'owner', adapter: 'fixture', allowedRecipientDomains: ['mail.example.test'] },
+      mailbox: { approved: true, approvedBy: 'owner', adapter: 'local-spool', allowedRecipientDomains: ['mail.example.test'] },
       customerProvisioning: { approved: true, approvedBy: 'owner' },
     });
     const runId = 'mock' + randomUUID().replace(/[^a-z0-9]/g, '').slice(0, 5);
-    const source = new FixtureMessageSource([]);
-    const mailbox = new RestrictedVerificationMailbox({ runId, config: config.mailbox, webHost: config.targets.web.host, source, attempts: 1, sleep: async () => {} });
+    const dir = await mkdtemp(path.join(os.tmpdir(), 'spool-'));
+    await chmod(dir, 0o700);
+    const env = { [SPOOL_ENV]: dir, [DELIVERY_KEY_ENV]: 'k'.repeat(40) };
+    const mailbox = new RestrictedVerificationMailbox({ runId, config: config.mailbox, webHost: config.targets.web.host, source: createLocalSpoolSource(env), attempts: 1, sleep: async () => {} });
     const byEmail = new Map<string, string>();
     const driver: SignupDriver = {
-      async requestSignup(email) { source.set([{ to: email, receivedAtMs: Date.now(), text: buildRegistrationProofLink(`https://${config.targets.web.host}`, '8142403d-073a-4ff9-9d4d-4f7a07b5c550', 'ab12'.repeat(16)) }]); },
+      // the fixture delivery boundary: the real application would send the email; here the boundary places the application's own link format in the spool
+      async requestSignup(email) { await deliverToSpool({ env, to: email, receivedAtMs: Date.now(), text: buildRegistrationProofLink(`https://${config.targets.web.host}`, '8142403d-073a-4ff9-9d4d-4f7a07b5c550', 'ab12'.repeat(16)) }); },
       async completeSignup() {},
       async signIn(email) {
         let id = byEmail.get(email);
@@ -188,6 +197,9 @@ describe.skipIf(!databaseUrl)('CASHIER-AUTH-02E E1 acceptance scenarios against 
     expect(out.report.checks.filter((c) => c.status !== 'PASS'), JSON.stringify(out.report.checks.filter((c) => c.status !== 'PASS'))).toEqual([]);
     expect(out.report.counts.pass).toBeGreaterThanOrEqual(10);
     expect(JSON.stringify(out.report)).not.toMatch(/ab12ab12|loyalty\/signup\/verify|8142403d/);
+    expect(mailbox.evidence().length).toBeGreaterThan(0);
+    expect(mailbox.evidence().every((e) => e.cleanup === 'done')).toBe(true);
+    expect(await (await import('node:fs/promises')).readdir(dir)).toEqual([]);
   });
 
   describe('the scenarios discriminate: a faulty application is caught, not passed', () => {

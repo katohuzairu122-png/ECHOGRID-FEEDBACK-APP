@@ -6,6 +6,8 @@ import { describe, expect, it } from 'vitest';
 import { parseTargetsConfig, type TargetsConfig } from './guard';
 import { MAILBOX_ADAPTERS } from './adapters';
 import { SPOOL_ENV } from './adapters/local-spool';
+import { DELIVERY_KEY_ENV } from './adapters/spool-envelope';
+import { chmod } from 'node:fs/promises';
 import { runPreflight, type PreflightDeps } from './preflight';
 
 const shippedJson = JSON.parse(readFileSync(path.join(__dirname, 'staging-targets.json'), 'utf8')) as Record<string, unknown>;
@@ -24,7 +26,7 @@ async function deps(over: Partial<PreflightDeps> = {}, env: Record<string, strin
   const requests: string[] = [];
   const dir = await mkdtemp(path.join(os.tmpdir(), 'pf-'));
   const base: PreflightDeps = {
-    env: { ...ownerEnv, [SPOOL_ENV]: dir, ...env },
+    env: { ...ownerEnv, [SPOOL_ENV]: dir, [DELIVERY_KEY_ENV]: 'k'.repeat(40), ...env },
     fetch: async (url) => {
       requests.push(url);
       return new Response(JSON.stringify(url.endsWith('/health') ? { status: 'ok', service: 'echo-grid-feedback-api', environment: 'staging' } : {}), { status: 200 });
@@ -110,6 +112,20 @@ describe('preflight: mailbox, hosts and tooling', () => {
     const r = await runPreflight(fullyApproved(), { ...d, env: { ...ownerEnv } }, { online: false });
     expect(status(r, 'P07')).toBe('BLOCKED');
     expect(r.items.find((i) => i.id === 'P07')?.detail).toContain(SPOOL_ENV);
+  });
+  it('the delivery key and a private spool directory are part of the mailbox prerequisite (names only, never values)', async () => {
+    const { deps: d } = await deps();
+    const noKey = await runPreflight(fullyApproved(), { ...d, env: { ...d.env, [DELIVERY_KEY_ENV]: undefined } }, { online: false });
+    expect(status(noKey, 'P07')).toBe('BLOCKED');
+    expect(noKey.items.find((i) => i.id === 'P07')?.detail).toContain(DELIVERY_KEY_ENV);
+    const shortKey = await runPreflight(fullyApproved(), { ...d, env: { ...d.env, [DELIVERY_KEY_ENV]: 'short-secret' } }, { online: false });
+    expect(status(shortKey, 'P07')).toBe('BLOCKED');
+    expect(JSON.stringify(shortKey)).not.toContain('short-secret');
+    const open = await mkdtemp(path.join(os.tmpdir(), 'pf-open-'));
+    await chmod(open, 0o755);
+    const exposed = await runPreflight(fullyApproved(), { ...d, env: { ...d.env, [SPOOL_ENV]: open } }, { online: false });
+    expect(status(exposed, 'P07')).toBe('BLOCKED');
+    expect(exposed.items.find((i) => i.id === 'P07')?.detail).toMatch(/group or others/);
   });
   it('hostnames that are not in the repository Worker configuration are BLOCKED; unreadable files are NOT VERIFIED', async () => {
     const { deps: d } = await deps();

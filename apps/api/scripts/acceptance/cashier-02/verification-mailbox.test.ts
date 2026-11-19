@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { buildRegistrationProofLink } from '../../../src/customer-auth/customer-email-auth.delivery';
 import type { MailboxConfig } from './guard';
-import { FixtureMessageSource, NullVerificationMailbox, RestrictedVerificationMailbox, createVerificationMailbox, requireCredentials, type InboundMessage } from './verification-mailbox';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+import { FixtureMessageSource, LINK_LIFETIME_MS, NullVerificationMailbox, RestrictedVerificationMailbox, createVerificationMailbox, requireCredentials, type InboundMessage } from './verification-mailbox';
 
 const WEB = 'echo-grid-feedback-web-staging.example.workers.dev';
 const config: MailboxConfig = { approved: true, approvedBy: 'owner', adapter: 'fixture', allowedRecipientDomains: ['mail.example.test'] };
@@ -146,5 +148,17 @@ describe('verification mailbox: nothing sensitive leaks', () => {
       try { await ask(make([m]).box, { purpose }); } catch (e) { expect(String((e as Error).message)).not.toMatch(new RegExp(`${PROOF}|${CHALLENGE}|987654|123456|evil\\.example`)); continue; }
       throw new Error('expected a refusal');
     }
+  });
+});
+
+describe('verification mailbox: lifetime and run binding stay in step with the application', () => {
+  it('the link lifetime equals the registration challenge lifetime in the application (15 minutes)', () => {
+    const service = readFileSync(path.join(__dirname, '../../../src/customer-auth/customer-email-auth.service.ts'), 'utf8');
+    expect(service).toContain(`timestamp.getTime() + ${LINK_LIFETIME_MS.toLocaleString('en-US').replace(/,/g, '_')}`);
+    expect(LINK_LIFETIME_MS).toBe(15 * 60_000);
+  });
+  it('a message the source bound to another run is refused, and one bound to this run is accepted', async () => {
+    await refuse(ask(make([msg({ runId: 'zzz999' })]).box), 'RECIPIENT_NOT_ALLOWED');
+    await expect(ask(make([msg({ runId: 'abc123' })]).box)).resolves.toMatchObject({ kind: 'link' });
   });
 });
