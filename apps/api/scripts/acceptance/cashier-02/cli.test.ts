@@ -106,6 +106,42 @@ describe('E2 wiring: approvals, provisioner, mailbox and browser evidence', () =
   });
 });
 
+describe('E2C: live-execution gates cannot be bypassed', () => {
+  const approvedHostsOnly = { ...shipped, approved: true, approvedBy: 'owner', approvedAt: 'now' };
+  it.each([
+    ['environment switches', { ACCEPTANCE_LIVE_EXECUTION: '1', ACCEPTANCE_APPROVED: 'true', STAGING_APPROVED: '1', FORCE: '1', CI: 'true' }],
+    ['environment authorization claims', { ACCEPTANCE_LIVE_EXECUTION_AUTHORIZED: 'true', ACCEPTANCE_AUTHORIZED_BY: 'me' }],
+  ])('%s do not authorize a live run', async (_n, extra) => {
+    const t = io(approvedHostsOnly);
+    t.impl.fetch = async (u) => { t.requests.push(u); return new Response('{}'); };
+    expect(await runCli(['--env', 'staging'], { ...creds, ...extra }, t.impl)).toBe(2);
+    expect(t.requests).toEqual([]);
+    expect(t.lines.join('\n')).toMatch(/Live execution is not authorized/);
+  });
+  it.each([['--force'], ['--approve'], ['--live'], ['--authorized=true'], ['--skip-preflight'], ['--no-guard']])('the flag %s changes nothing', async (flag) => {
+    const t = io(approvedHostsOnly);
+    t.impl.fetch = async (u) => { t.requests.push(u); return new Response('{}'); };
+    expect(await runCli(['--env', 'staging', flag], creds, t.impl)).toBe(2);
+    expect(t.requests).toEqual([]);
+  });
+  it('an approved mailbox without the other approvals, or a domain without the mailbox, does not enable customer provisioning', async () => {
+    const mailboxOnly = { ...approvedHostsOnly, liveExecution: { authorized: true, authorizedBy: 'owner', reference: 'x' }, mailbox: { approved: true, approvedBy: 'owner', adapter: 'local-spool', allowedRecipientDomains: ['mail.example.test'] } };
+    let asked = false;
+    const t = io(mailboxOnly);
+    t.impl.fetch = async (u) => new Response(JSON.stringify(u.endsWith('/health') ? { status: 'ok', service: 'echo-grid-feedback-api', environment: 'staging' } : { data: {} }));
+    t.impl.signupDriver = async () => { asked = true; return {} as never; };
+    await runCli(['--env', 'staging'], creds, t.impl);
+    expect(asked).toBe(false);
+  });
+  it('a production host in the configuration is refused before any request even when everything else is approved', async () => {
+    const prod = { ...approvedHostsOnly, targets: { ...(shipped.targets as object), api: { host: 'echo-grid-feedback-api.katohuzairu122.workers.dev' } }, liveExecution: { authorized: true, authorizedBy: 'o', reference: 'r' } };
+    const t = io(prod);
+    t.impl.fetch = async (u) => { t.requests.push(u); return new Response('{}'); };
+    expect(await runCli(['--env', 'staging'], creds, t.impl)).toBe(2);
+    expect(t.requests).toEqual([]);
+  });
+});
+
 describe('E2: the preflight command', () => {
   const pf = { readRepoFile: () => null, browser: async () => ({ ok: false, detail: 'no browser' }), driverPresent: () => false };
   it('reports every prerequisite and the verdict, makes no request, and exits 2 while anything is BLOCKED', async () => {

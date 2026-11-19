@@ -20,11 +20,15 @@ export interface InboundMessage {
   to: string;
   receivedAtMs: number;
   text: string;
+  /** The acceptance run the delivery boundary bound this message to. When present it must equal the current run. */
+  runId?: string;
 }
 
 /** What an adapter provides. It receives only the exact recipient and a lower time bound. */
 export interface MessageSource {
   listMessages(query: { recipient: string; sinceMs: number }): Promise<InboundMessage[]>;
+  /** Removes the temporary sensitive material for this recipient once it has been used. Optional: a source that keeps nothing has nothing to remove. */
+  consume?(recipient: string): Promise<void>;
 }
 
 export type Verification = { kind: 'link'; url: string } | { kind: 'code'; value: string };
@@ -37,6 +41,8 @@ export interface EvidenceRecord {
   kind: 'link' | 'code';
   ageMs: number;
   adapter: string;
+  /** Whether the temporary message material was removed after use. */
+  cleanup: 'done' | 'failed' | 'not-applicable';
 }
 
 export interface VerificationMailbox {
@@ -56,6 +62,9 @@ export const NullVerificationMailbox: VerificationMailbox = {
 export const SIGNUP_VERIFY_PATH = REGISTRATION_VERIFY_PATH;
 /** The real link is `<web>/loyalty/signup/verify#c=<challengeId>.<proof>`: the proof travels in the fragment and there is no query. */
 const SIGNUP_FRAGMENT = /^#c=[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.[0-9a-f]{64}$/i;
+/** The registration confirmation link is valid for 15 minutes (`expiresAt = now + 900_000` in customer-email-auth.service.ts; a test keeps the two in step). */
+export const LINK_LIFETIME_MS = 900_000;
+const DEFAULT_SOURCE_TIMEOUT_MS = 20_000;
 const MAX_MESSAGES = 25;
 const MAX_TEXT = 20_000;
 const CLOCK_SKEW_MS = 60_000;
@@ -73,6 +82,8 @@ export interface RestrictedVerificationOptions {
   attempts?: number;
   pollMs?: number;
   maxAgeMs?: number;
+  /** How long the source may take to answer one query before the run is refused (a provider that hangs must not hang the run). */
+  sourceTimeoutMs?: number;
 }
 
 export class RestrictedVerificationMailbox implements VerificationMailbox {
@@ -89,6 +100,25 @@ export class RestrictedVerificationMailbox implements VerificationMailbox {
     if (!opts.config.approved) throw new HarnessRefusal('MAILBOX_NOT_APPROVED', 'No test mailbox is approved.');
     this.opts = opts;
     this.kind = opts.config.adapter;
+  }
+
+  /** One bounded query: a source that errors or hangs is a sanitized refusal, never a hung or leaking run. */
+  private async ask(source: MessageSource, recipient: string, sinceMs: number): Promise<InboundMessage[]> {
+    const limit = this.opts.sourceTimeoutMs ?? DEFAULT_SOURCE_TIMEOUT_MS;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      return await Promise.race([
+        source.listMessages({ recipient, sinceMs }),
+        new Promise<never>((_, reject) => {
+          timer = setTimeout(() => reject(new HarnessRefusal('OTP_REFUSED', 'The mailbox did not answer in time.')), limit);
+        }),
+      ]);
+    } catch (error) {
+      if (error instanceof HarnessRefusal) throw error;
+      throw new HarnessRefusal('OTP_REFUSED', 'The mailbox could not be read.');
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
   }
 
   async fetchVerification(request: { recipient: string; purpose: VerificationPurpose; sinceMs: number }): Promise<Verification> {
@@ -109,7 +139,7 @@ export class RestrictedVerificationMailbox implements VerificationMailbox {
     }
     const attempts = this.opts.attempts ?? 12;
     for (let i = 0; i < attempts; i++) {
-      const messages = await source.listMessages({ recipient, sinceMs: request.sinceMs });
+      const messages = await this.ask(source, recipient, request.sinceMs);
       if (!Array.isArray(messages) || messages.length > MAX_MESSAGES) {
         throw new HarnessRefusal('OTP_REFUSED', 'The mailbox returned more messages than a single recipient can have in a run.');
       }
@@ -117,13 +147,28 @@ export class RestrictedVerificationMailbox implements VerificationMailbox {
         if (typeof m.to !== 'string' || m.to.toLowerCase() !== recipient) {
           throw new HarnessRefusal('RECIPIENT_NOT_ALLOWED', 'The mailbox returned a message for another recipient.');
         }
+        if (m.runId !== undefined && m.runId !== runId) {
+          throw new HarnessRefusal('RECIPIENT_NOT_ALLOWED', 'The mailbox returned a message bound to another run.');
+        }
       }
       const fresh = messages
         .filter((m) => Number.isFinite(m.receivedAtMs) && m.receivedAtMs >= request.sinceMs && m.receivedAtMs <= now() + CLOCK_SKEW_MS)
         .sort((a, b) => b.receivedAtMs - a.receivedAtMs);
       const newest = fresh[0];
       if (newest) {
+        if (request.purpose === 'customer-signup-link' && now() - newest.receivedAtMs > LINK_LIFETIME_MS) {
+          throw new HarnessRefusal('OTP_REFUSED', 'The confirmation link has expired.');
+        }
         const verification = extract(newest.text, request.purpose, webHost);
+        let cleanup: EvidenceRecord['cleanup'] = 'not-applicable';
+        if (source.consume) {
+          try {
+            await source.consume(recipient);
+            cleanup = 'done';
+          } catch {
+            cleanup = 'failed';
+          }
+        }
         this.records.push({
           at: new Date(now()).toISOString(),
           recipient: createHash('sha256').update(recipient).digest('hex').slice(0, 12),
@@ -131,6 +176,7 @@ export class RestrictedVerificationMailbox implements VerificationMailbox {
           kind: verification.kind,
           ageMs: Math.max(0, now() - newest.receivedAtMs),
           adapter: this.kind,
+          cleanup,
         });
         return verification;
       }
