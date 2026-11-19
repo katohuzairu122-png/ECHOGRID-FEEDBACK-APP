@@ -2,9 +2,9 @@ name: Deploy production Cashier Worker
 
 # Manual, owner-approved release of the dedicated cashier Worker ONLY (echo-grid-feedback-cashier). It never touches the API
 # Worker, the web Worker, any database, any migration, or any DNS/domain binding. Run it AFTER the production migrations
-# 0069-0071 have been applied through migrate-production.yml and the API has been released (see
-# docs/CASHIER-PRODUCTION-RELEASE.md). The domain cashier.echo-grid.uk is attached by the owner in the Cloudflare
-# dashboard, not by this workflow.
+# 0080-0083 have been applied through migrate-production.yml, the cashier:manage permission has been provisioned, and the API
+# and web Workers have been released through deploy-production.yml (see docs/CASHIER-PRODUCTION-RELEASE.md). The domain
+# cashier.echo-grid.uk is attached by the owner in the Cloudflare dashboard, not by this workflow.
 
 on:
   workflow_dispatch:
