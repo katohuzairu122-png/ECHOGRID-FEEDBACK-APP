@@ -24,6 +24,7 @@ export const SPEC = [
   ['customer_onboarding_events', 'branches', 'branch_id', 'GUARDED_BY_TRIGGER'],
   ['customer_onboarding_events', 'business_customer_memberships', 'membership_id', 'GUARDED_BY_TRIGGER'],
   ['customer_onboarding_events', 'consent_grants', 'consent_grant_id', 'GUARDED_BY_TRIGGER'],
+  ['customer_onboarding_events', 'onboarding_erasure_operations', 'erasure_operation_id', 'GUARDED_BY_TRIGGER'],
   ['feedback', 'branches', 'branch_id', 'STRAIGHT'],
   ['feedback', 'qr_codes', 'qr_code_id', 'STRAIGHT'],
   ['feedback_summaries', 'branches', 'branch_id', 'STRAIGHT'],
