@@ -90,7 +90,13 @@ describe.skipIf(!process.env.DATABASE_URL)('B2B participation foundation (integr
 
   it('a stale (>24h) receipt is refused', async () => {
     const { acceptanceRef } = await svc.recordAcceptance({ businessId: ids.bizA, authenticatedUserId: ids.ownerA, termsVersion: version });
+    // Fixture only: audit_log is immutable (migration 0085), so the test connection (the table owner) lifts the guard inside one transaction
+    // to backdate this receipt, then restores it. No production code path does this.
+    await client.query('BEGIN');
+    await client.query('ALTER TABLE audit_log DISABLE TRIGGER audit_log_immutability_guard_trg');
     await client.query(`UPDATE audit_log SET created_at = now() - interval '25 hours' WHERE id=$1`, [acceptanceRef]);
+    await client.query('ALTER TABLE audit_log ENABLE ALWAYS TRIGGER audit_log_immutability_guard_trg');
+    await client.query('COMMIT');
     await expect(svc.enroll({ businessId: ids.bizA, consentingUserId: ids.ownerA, platformAdminId: ids.admin, termsVersion: version, acceptanceRef }))
       .rejects.toMatchObject({ code: 'B2B_ENROLLMENT_VALID_ACCEPTANCE_REQUIRED' });
   });
