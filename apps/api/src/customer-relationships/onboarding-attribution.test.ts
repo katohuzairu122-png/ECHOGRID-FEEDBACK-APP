@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { sign } from 'hono/jwt';
 import { signAccessToken } from '../auth/jwt';
 import {
@@ -57,5 +57,30 @@ describe('onboarding invitation token (CASHIER-AUTH-02D)', () => {
       void _omitted;
       await expect(verifyOnboardingInvite(await sign(partial, SECRET, 'HS256'), SECRET)).rejects.toMatchObject({ code: 'ONBOARDING_INVITE_INVALID' });
     }
+  });
+});
+
+describe('onboarding invitation expiry boundary (production-readiness, deterministic clock)', () => {
+  const SECRET = 'boundary-test-secret';
+  const input = { cashierUserId: 'u-1', sessionId: 's-1', businessId: 'b-1', branchId: 'br-1' };
+  afterEach(() => vi.useRealTimers());
+
+  it('is valid for the whole 10 minute lifetime, refused from the expiry second on, with no grace period', async () => {
+    vi.useFakeTimers(); vi.setSystemTime(new Date('2026-11-19T10:00:00Z'));
+    const { token, expiresAt } = await signOnboardingInvite(input, SECRET);
+    expect(expiresAt.toISOString()).toBe('2026-11-19T10:10:00.000Z');
+    vi.setSystemTime(new Date('2026-11-19T10:09:59Z'));
+    await expect(verifyOnboardingInvite(token, SECRET)).resolves.toMatchObject({ businessId: 'b-1', branchId: 'br-1' });
+    vi.setSystemTime(new Date('2026-11-19T10:10:00Z'));
+    await expect(verifyOnboardingInvite(token, SECRET)).rejects.toMatchObject({ code: 'ONBOARDING_INVITE_INVALID', status: 400 });
+    vi.setSystemTime(new Date('2026-11-19T10:10:01Z'));
+    await expect(verifyOnboardingInvite(token, SECRET)).rejects.toMatchObject({ code: 'ONBOARDING_INVITE_INVALID' });
+  });
+
+  it('a token issued in the future (clock manipulation or skew) is not honoured early', async () => {
+    vi.useFakeTimers(); vi.setSystemTime(new Date('2026-11-19T10:00:00Z'));
+    const { token } = await signOnboardingInvite(input, SECRET);
+    vi.setSystemTime(new Date('2026-11-19T09:00:00Z'));
+    await expect(verifyOnboardingInvite(token, SECRET)).rejects.toMatchObject({ code: 'ONBOARDING_INVITE_INVALID' });
   });
 });
