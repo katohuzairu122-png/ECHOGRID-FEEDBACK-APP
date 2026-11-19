@@ -37,7 +37,7 @@ pnpm --filter @echo-grid-feedback/api acceptance:cashier-02 -- --preflight      
 pnpm --filter @echo-grid-feedback/api acceptance:cashier-02 -- --preflight --online   # also probes the three staging hosts, only if hostnames AND live execution are approved
 ```
 
-A live run additionally needs `liveExecution.authorized` (separate from the hostname approval). Mailbox adapters: `local-spool` (provider-neutral; one file per recipient in `ACCEPTANCE_MAILBOX_SPOOL_DIR`). See `docs/architecture/builds/CASHIER/CASHIER_AUTH_02E_E2_MAILBOX_AND_READINESS.md`.
+A live run additionally needs `liveExecution.authorized` (separate from the hostname approval). Mailbox adapters: `local-spool` (provider-neutral; one **authenticated** file per recipient in a private `ACCEPTANCE_MAILBOX_SPOOL_DIR`, signed with `ACCEPTANCE_MAILBOX_DELIVERY_KEY`; the delivery boundary writes it with `adapters/local-spool-writer.ts`; a used message is removed). See `CASHIER_AUTH_02E_E2C_ISOLATED_VERIFICATION_MAILBOX.md`. See `docs/architecture/builds/CASHIER/CASHIER_AUTH_02E_E2_MAILBOX_AND_READINESS.md`.
 
 ## E2: what was added (and what is still blocked)
 
