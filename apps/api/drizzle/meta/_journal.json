@@ -589,6 +589,13 @@
       "when": 1795026929598,
       "tag": "0083_customer_onboarding_events",
       "breakpoints": true
+    },
+    {
+      "idx": 84,
+      "version": "7",
+      "when": 1795106970716,
+      "tag": "0084_d2r1_onboarding_event_erasure",
+      "breakpoints": true
     }
   ]
 }

@@ -17,7 +17,12 @@ export interface OnboardingBucket {
   uniqueCustomers: number;
 }
 export interface OnboardingSummary {
-  totals: OnboardingBucket & { rejoinEvents: number; withoutBranch: number };
+  /**
+   * `erasedEvents`: events whose personal links were severed by a controlled erasure (D2-R1). They are still counted as events, but no
+   * customer can be attributed to them, so `uniqueCustomers` EXCLUDES them and under-counts by up to this many customers. It is never
+   * estimated or back-filled: the distinct-customer figure for erased history is unavailable by design.
+   */
+  totals: OnboardingBucket & { rejoinEvents: number; withoutBranch: number; erasedEvents: number };
   bySource: Array<OnboardingBucket & { source: string }>;
   byBranch: Array<OnboardingBucket & { branchId: string | null; branchName: string | null }>;
   byCashier: Array<OnboardingBucket & { cashierUserId: string; displayName: string | null }>;
@@ -58,7 +63,8 @@ export class CustomerOnboardingEventRepository extends BaseRepository {
   /**
    * Read-only aggregates for one business. Re-joins use the is_rejoin fact stored on each event, so a customer whose membership pre-dates
    * this table and who then re-joins is still counted correctly, with no history invented. Returns counts only: no customer identifier or
-   * contact detail ever leaves this method.
+   * contact detail ever leaves this method. After a controlled erasure the personal links are NULL: distinct-customer counts exclude those
+   * events (see `erasedEvents`), and an event whose cashier link was severed no longer appears in `byCashier` (it stays in every other total).
    */
   async summarize(filter: OnboardingSummaryFilter): Promise<OnboardingSummary> {
     const range = [
@@ -70,7 +76,8 @@ export class CustomerOnboardingEventRepository extends BaseRepository {
     const where = sql`WHERE true ${range[0]} ${range[1]} ${range[2]}`;
     const totals = await this.db.execute(sql`${ranked}
       SELECT count(*) AS events, count(DISTINCT r.customer_id) AS unique_customers,
-             count(*) FILTER (WHERE r.is_rejoin) AS rejoin_events, count(*) FILTER (WHERE r.branch_id IS NULL) AS without_branch
+             count(*) FILTER (WHERE r.is_rejoin) AS rejoin_events, count(*) FILTER (WHERE r.branch_id IS NULL) AS without_branch,
+             count(*) FILTER (WHERE r.erased_at IS NOT NULL) AS erased_events
       FROM r ${where}`);
     const bySource = await this.db.execute(sql`${ranked}
       SELECT r.source, count(*) AS events, count(DISTINCT r.customer_id) AS unique_customers
@@ -85,7 +92,7 @@ export class CustomerOnboardingEventRepository extends BaseRepository {
       GROUP BY r.cashier_user_id, u.full_name ORDER BY count(*) DESC, u.full_name`);
     const t = (totals.rows[0] ?? {}) as Record<string, unknown>;
     return {
-      totals: { events: n(t.events), uniqueCustomers: n(t.unique_customers), rejoinEvents: n(t.rejoin_events), withoutBranch: n(t.without_branch) },
+      totals: { events: n(t.events), uniqueCustomers: n(t.unique_customers), rejoinEvents: n(t.rejoin_events), withoutBranch: n(t.without_branch), erasedEvents: n(t.erased_events) },
       bySource: bySource.rows.map((r) => ({ source: String(r.source), events: n(r.events), uniqueCustomers: n(r.unique_customers) })),
       byBranch: byBranch.rows.map((r) => ({
         branchId: (r.branch_id as string | null) ?? null, branchName: (r.branch_name as string | null) ?? null,

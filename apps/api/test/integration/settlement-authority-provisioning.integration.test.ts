@@ -24,6 +24,8 @@ describe.skipIf(!process.env.DATABASE_URL)('D1/D3-DEV-05 settlement authority: n
   const READ_AUTH_ROLES = ['stripe_read_auth_lifecycle', 'stripe_read_auth_admin', 'stripe_read_auth_verifier', 'stripe_read_auth_tenant_reader', 'stripe_read_auth_auditor'];
   /** DEV-15 (migration 0065) group roles. */
   const SIGNED_EVIDENCE_ROLES = ['signed_evidence_lifecycle', 'signed_evidence_writer', 'signed_evidence_reader', 'signed_evidence_auditor'];
+  /** D2-R1 (migration 0084) group roles. */
+  const ONBOARDING_ERASURE_ROLES = ['onboarding_erasure_owner', 'onboarding_erasure_operator'];
   const clients: Client[] = [];
   let root: Client;
   let owner: Client;
@@ -37,7 +39,7 @@ describe.skipIf(!process.env.DATABASE_URL)('D1/D3-DEV-05 settlement authority: n
     await root.query(`create role ${migrator} login createrole password '${password}'`);
     for (const l of [appLogin, recorderLogin]) await root.query(`create role ${l} login password '${password}'`);
     // the group roles may already exist (created by another database's migration, by a superuser): the migrator is then given ADMIN OPTION, which is what creating them itself would have given it
-    for (const r of [...SETTLEMENT_ROLES, ...READ_AUTH_ROLES, ...SIGNED_EVIDENCE_ROLES]) {
+    for (const r of [...SETTLEMENT_ROLES, ...READ_AUTH_ROLES, ...SIGNED_EVIDENCE_ROLES, ...ONBOARDING_ERASURE_ROLES]) {
       if ((await root.query('select 1 from pg_roles where rolname=$1', [r])).rowCount) await root.query(`grant ${r} to ${migrator} with admin option, inherit false, set false`);
     }
     await root.query(`create database ${dbName} owner ${migrator}`);
