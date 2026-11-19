@@ -29,3 +29,6 @@ apps/web/next-env.d.ts
 # alongside its commit); intentionally untracked, not repository hygiene
 # debt.
 *.bundle
+
+# CASHIER-AUTH-02E acceptance harness results (evidence kept locally, never committed)
+acceptance-results/

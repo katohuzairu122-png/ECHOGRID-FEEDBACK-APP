@@ -9,7 +9,7 @@ import { defineConfig } from 'vitest/config';
  */
 export default defineConfig({
   test: {
-    include: ['src/**/*.test.ts'],
+    include: ['src/**/*.test.ts', 'scripts/acceptance/**/*.test.ts'],
     environment: 'node',
     // The password tests exercise PBKDF2 at the real production work factor
     // (600k iterations, OWASP's 2026 minimum) -- a single hash is ~1-3s, and
