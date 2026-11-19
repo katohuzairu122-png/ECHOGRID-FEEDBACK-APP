@@ -28,6 +28,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:integration": "vitest run --config vitest.integration.config.ts",
+    "acceptance:cashier-02": "tsx scripts/acceptance/cashier-02/cli.ts",
     "test:workers": "vitest run --config vitest.workers.config.ts",
     "billing:stripe:provision": "node scripts/provision-stripe-catalog.mjs",
     "test:workers:local": "vitest run --config vitest.workers-local.config.ts"

@@ -21,6 +21,7 @@
   "extends": "./tsconfig.json",
   "include": [
     "test/**/*.ts",
+    "scripts/acceptance/**/*.ts",
     "vitest.config.ts",
     "vitest.operator.config.ts",
     "vitest.integration.config.ts",

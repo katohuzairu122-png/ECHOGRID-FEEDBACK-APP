@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "approved": false,
+  "approvedBy": null,
+  "approvedAt": null,
+  "targets": {
+    "api": { "host": "echo-grid-feedback-api-staging.katohuzairu122.workers.dev" },
+    "web": { "host": "echo-grid-feedback-web-staging.katohuzairu122.workers.dev" },
+    "cashier": { "host": "echo-grid-feedback-cashier-staging.katohuzairu122.workers.dev" }
+  },
+  "mailbox": {
+    "approved": false,
+    "approvedBy": null,
+    "adapter": "none",
+    "allowedRecipientDomains": []
+  }
+}
