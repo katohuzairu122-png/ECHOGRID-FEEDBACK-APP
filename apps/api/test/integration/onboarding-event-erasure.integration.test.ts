@@ -610,15 +610,16 @@ describe.skipIf(!databaseUrl)('D2-R1 controlled onboarding-event erasure (real P
       expect(back.customer_id).toBe(c.id);
     });
 
-    it('the erasure roles can read neither audit_log, memberships nor customers; audit_log immutability is by application convention, NOT enforced by the database', async () => {
+    it('the erasure roles can read neither audit_log, memberships nor customers; audit_log is now guarded by the 0085 immutability triggers, which do NOT redact or unlink anything', async () => {
       for (const role of ['onboarding_erasure_operator', 'onboarding_erasure_owner']) {
         for (const table of ['audit_log', 'business_customer_memberships', 'customers']) {
           expect(await q(`SELECT has_table_privilege($1, $2, 'SELECT') AS ok`, [role, table])).toEqual([{ ok: false }]);
         }
       }
-      // Characterization: audit_log carries no database trigger, so it is NOT database-enforced append-only (unlike customer_onboarding_events).
-      // Redacting or protecting it is therefore a governance decision, not something this block may assume. Update deliberately if that changes.
-      expect(await q(`SELECT tgname FROM pg_trigger WHERE tgrelid = 'public.audit_log'::regclass AND NOT tgisinternal`)).toEqual([]);
+      // D2-R8 (migration 0085) made audit_log database-immutable. That PROTECTS the audit row (including the linkage above) from change; it does
+      // not minimize it. The re-identification path therefore remains until a separately approved minimization exists (R8-B, R6, R7).
+      expect((await q(`SELECT tgname FROM pg_trigger WHERE tgrelid = 'public.audit_log'::regclass AND NOT tgisinternal ORDER BY tgname`)).map((r) => r.tgname))
+        .toEqual(['audit_log_immutability_guard_trg', 'audit_log_no_truncate']);
     });
   });
 
