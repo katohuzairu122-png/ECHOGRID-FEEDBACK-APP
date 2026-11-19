@@ -1,6 +1,6 @@
 # Cashier production release plan (corrected 2026-11-19, CASHIER-PROD-RELEASE-P1)
 
-> **Update (D2-R1-V1):** `main` now also contains **migration 0084** (D2-R1 onboarding-event erasure function; dormant, no caller, no operator role members). A P3 run would apply **0080-0084** and leave the ledger at **85**, not 84. D6 was framed for 0080-0083 and must be re-ruled for 0084; P3 and the P2 recovery steps must be re-prepared first. The 0080-0083 and "ledger 84" wording below predates 0084. D1, D2, D3 and D6 remain open.
+> **Update (D2-R8):** `main` now also contains **migrations 0084** (D2-R1 onboarding-event erasure function; dormant, no caller, no operator role members) **and 0085** (database-enforced immutability of `audit_log`; behaviour change: any UPDATE or DELETE of an audit row, and TRUNCATE, now fails, except the FK `SET NULL` action). A P3 run would apply **0080-0085** and leave the ledger at **86**, not 84. D6 was framed for 0080-0083 and must be re-ruled for 0084 and 0085; P3 and the P2 recovery steps must be re-prepared first. The 0080-0083 and "ledger 84" wording below predates 0084/0085. D1, D2, D3 and D6 remain open. See `docs/architecture/builds/CASHIER/CASHIER-PROD-D2-R8-AUDIT-INTEGRITY.md`.
 
 Status: **PLAN ONLY. Nothing in this document has been executed in production.** Every step needs the Owner's explicit authorization, one gate at a time.
 This replaces the earlier plan (written for migrations 0069-0071 and an eight-route allow-list), which no longer matched the repository.
