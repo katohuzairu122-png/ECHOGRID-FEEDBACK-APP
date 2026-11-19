@@ -219,6 +219,23 @@ export class RefreshTokenRepository extends BaseRepository {
     return rows[0] ?? null;
   }
 
+  /** SEC-CASHIER-02D-R2: revokes the live cashier sessions of one business that are bound to one branch (a removed branch). */
+  async revokeCashierSessionsForBranch(businessId: string, branchId: string): Promise<number> {
+    const rows = await this.db
+      .update(refreshTokens)
+      .set({ revokedAt: new Date() })
+      .where(
+        and(
+          eq(refreshTokens.client, 'cashier'),
+          eq(refreshTokens.businessId, businessId),
+          eq(refreshTokens.branchId, branchId),
+          isNull(refreshTokens.revokedAt),
+        ),
+      )
+      .returning({ id: refreshTokens.id });
+    return rows.length;
+  }
+
   /** Revokes every live cashier session of one business (and only cashier sessions: web sessions are never touched). */
   async revokeAllCashierSessionsForBusiness(businessId: string): Promise<number> {
     const rows = await this.db

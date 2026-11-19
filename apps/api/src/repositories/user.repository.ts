@@ -25,6 +25,23 @@ export class UserRepository extends BaseRepository {
     return row;
   }
 
+  /**
+   * SEC-CASHIER-02D-R2: takes FOR UPDATE on every user who could be issued a session on `branchId` (a grant on that branch or a
+   * business-wide grant) or who already holds a live cashier session there, in ascending id order. Issuers hold the user row FOR SHARE
+   * (lockForSessionIssue), so a branch deletion and a session issuance on that branch serialise exactly like an assignment removal.
+   * Only meaningful inside a transaction.
+   */
+  async lockForBranchRemoval(businessId: string, branchId: string): Promise<string[]> {
+    const result = await this.db.execute(sql`
+      SELECT u.id FROM users u
+      WHERE u.id IN (SELECT r.user_id FROM user_business_roles r
+                     WHERE r.business_id = ${businessId} AND r.deleted_at IS NULL AND (r.branch_id = ${branchId} OR r.branch_id IS NULL))
+         OR u.id IN (SELECT t.user_id FROM refresh_tokens t
+                     WHERE t.client = 'cashier' AND t.business_id = ${businessId} AND t.branch_id = ${branchId} AND t.revoked_at IS NULL)
+      ORDER BY u.id FOR UPDATE OF u`);
+    return (result.rows as { id: string }[]).map((r) => r.id);
+  }
+
   async findById(id: string): Promise<User | undefined> {
     return this.db.query.users.findFirst({
       where: and(eq(users.id, id), eq(users.isDeleted, false)),

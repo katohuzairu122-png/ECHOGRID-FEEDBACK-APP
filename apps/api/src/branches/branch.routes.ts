@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import type { Bindings } from '../config/env';
 import { createDb } from '../db/client';
 import { createRepositories } from '../repositories';
+import { deleteBranchEndingSessions } from './branch-deletion';
 import { authenticate, type AuthVariables } from '../middleware/authenticate';
 import { resolveTenantContext, type TenantVariables } from '../middleware/tenant-context';
 import { requirePermission } from '../middleware/require-permission';
@@ -115,8 +116,10 @@ branchRoutes.delete('/:id', requireAuthorizedBranchParam(), requirePermission('b
   const id = c.req.param('id');
   const { db, close } = await createDb(c.env.HYPERDRIVE);
   try {
-    const service = new BranchService(createRepositories(db));
-    await service.deleteBranch(id, c.get('businessId'), c.get('userId'));
+    // One transaction: lock the affected users, soft-delete the branch, end the sessions bound to it (SEC-CASHIER-02D-R2).
+    await db.transaction((tx) =>
+      deleteBranchEndingSessions(createRepositories(tx), id, c.get('businessId'), c.get('userId')),
+    );
 
     c.set('auditMetadata', {
       action: 'branch.deleted',
