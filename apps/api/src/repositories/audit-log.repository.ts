@@ -29,6 +29,13 @@ export class AuditLogRepository extends BaseRepository {
     await this.db.insert(auditLog).values(entry);
   }
 
+  /** Same insert, returning the new row's id so a caller in the same transaction can reference it (CASHIER-AUTH-02D). */
+  async recordReturningId(entry: NewAuditLogEntry): Promise<string> {
+    const [row] = await this.db.insert(auditLog).values(entry).returning({ id: auditLog.id });
+    if (!row) throw new Error('Audit entry was not recorded');
+    return row.id;
+  }
+
   /** Rows of one action since a time, optionally for one business and one actor. Used for rolling limits. */
   async countSince(input: {
     action: string;

@@ -25,6 +25,7 @@ export * from './fraud-signals';
 export * from './customers';
 export * from './customer-sanctions';
 export * from './business-customer-memberships';
+export * from './customer-onboarding-events';
 export * from './consent-grants';
 export * from './customer-action-authorizations';
 export * from './otp-codes';

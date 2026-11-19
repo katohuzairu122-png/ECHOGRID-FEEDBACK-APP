@@ -582,6 +582,13 @@
       "when": 1795007523559,
       "tag": "0082_cashier_managed_identity",
       "breakpoints": true
+    },
+    {
+      "idx": 83,
+      "version": "7",
+      "when": 1795026929598,
+      "tag": "0083_customer_onboarding_events",
+      "breakpoints": true
     }
   ]
 }

@@ -1,5 +1,5 @@
 import { Hono, type Context } from 'hono';
-import { joinCustomerMembershipSchema } from '@echo-grid-feedback/shared-types';
+import { joinAssistedMembershipSchema, joinCustomerMembershipSchema } from '@echo-grid-feedback/shared-types';
 import type { Bindings } from '../config/env';
 import { createDb, type Database } from '../db/client';
 import { createRepositories } from '../repositories';
@@ -12,6 +12,7 @@ import { isUuid } from '../lib/uuid';
 import { QrCodeService } from '../qr/qr-code.service';
 import { CustomerMembershipService } from './customer-membership.service';
 import { toCustomerMembershipDto, toJoinMembershipResultDto } from './membership-dto';
+import { verifyOnboardingInvite } from './onboarding-attribution';
 
 type Env = { Bindings: Bindings; Variables: CustomerAuthVariables };
 
@@ -69,10 +70,34 @@ customerMembershipRoutes.post('/join', async (c) => {
       businessId: qrCode.businessId,
       onboardingSource: 'business_qr',
       onboardingReference: qrCode.id,
+      // The branch is the one this QR code belongs to, read from the server's own row, never from the request.
+      attribution: { source: 'business_qr', branchId: qrCode.branchId, reference: qrCode.id },
       consentVersion: body.consentVersion,
       ...(body.idempotencyKey !== undefined ? { idempotencyKey: body.idempotencyKey } : {}),
     });
 
+    return ok(c, toJoinMembershipResultDto(result), 201);
+  });
+});
+
+// CASHIER-AUTH-02D: the customer accepts a one-time invitation a cashier issued at the counter. The signed invitation, not the
+// request, decides the business, branch and cashier; the join itself is the same consented, idempotent, serialised workflow.
+customerMembershipRoutes.post('/join-assisted', async (c) => {
+  const body = await parseJsonBody(c.req.raw, joinAssistedMembershipSchema);
+  const invite = await verifyOnboardingInvite(body.inviteToken, c.env.JWT_ACCESS_SECRET);
+  return withDb(c, async (db) => {
+    const result = await new CustomerMembershipService(db).join({
+      customerId: c.get('customerId'),
+      businessId: invite.businessId,
+      onboardingSource: 'cashier_assisted',
+      onboardingReference: invite.inviteId,
+      attribution: {
+        source: 'cashier_assisted', branchId: invite.branchId, reference: invite.inviteId,
+        cashier: { userId: invite.cashierUserId, sessionId: invite.sessionId },
+      },
+      consentVersion: body.consentVersion,
+      ...(body.idempotencyKey !== undefined ? { idempotencyKey: body.idempotencyKey } : {}),
+    });
     return ok(c, toJoinMembershipResultDto(result), 201);
   });
 });
