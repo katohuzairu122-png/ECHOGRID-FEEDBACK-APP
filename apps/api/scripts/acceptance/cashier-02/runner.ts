@@ -1,7 +1,7 @@
 import { ResultBook, createJournal, exitCodeFor, writeReport, findInterruptedRuns, type RunReport, type RunState } from './result';
 import { HarnessRefusal } from './guard';
 import { redactString } from './redact';
-import { SCENARIOS, buildWorld, type Context, type Recorder, type Scenario } from './scenarios';
+import { SCENARIOS, buildWorld, firstMissing, type Context, type Recorder, type Scenario } from './scenarios';
 
 export interface RunOptions {
   ctx: Context;
@@ -52,7 +52,7 @@ export async function runAcceptance(opts: RunOptions): Promise<RunOutcome> {
         await rec.notRun(`${scenario.id}.0`, scenario.title, `setup failed: ${redactString(setupError)}`);
         return;
       }
-      const unavailable = scenario.unavailable?.(ctx, world) ?? null;
+      const unavailable = firstMissing(scenario, ctx, world);
       if (unavailable) {
         await rec.notRun(`${scenario.id}.0`, scenario.title, unavailable);
         return;
