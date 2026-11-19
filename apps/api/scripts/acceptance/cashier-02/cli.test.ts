@@ -99,4 +99,3 @@ describe('E2 wiring: approvals, provisioner, mailbox and browser evidence', () =
     expect(asked).toBe(false);
   });
 });
-});
