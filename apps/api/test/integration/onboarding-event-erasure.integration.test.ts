@@ -610,6 +610,18 @@ describe.skipIf(!databaseUrl)('D2-R1 controlled onboarding-event erasure (real P
       expect(back.customer_id).toBe(c.id);
     });
 
+    it('even WITHOUT membershipId, the audit row re-identifies the customer by timing: its exact time matches the membership row that still exists (so removing the field alone would not anonymize)', async () => {
+      const w = await world('timing');
+      const c = await customer();
+      await joinQr(w, c.id, w.b1);
+      const eventId = (await events(w.biz, c.id))[0].id as string;
+      await operatorErase(w.biz, c.id);
+      const audit = (await q(`SELECT id, created_at FROM audit_log WHERE entity_type = 'customer_onboarding_event' AND entity_id = $1`, [eventId]))[0];
+      const matches = await q(
+        `SELECT customer_id FROM business_customer_memberships WHERE business_id = $1 AND abs(extract(epoch FROM (joined_at - $2::timestamptz))) < 1`, [w.biz, audit.created_at]);
+      expect(matches).toEqual([{ customer_id: c.id }]); // a single membership joined at that moment: the timing correlation alone identifies the customer
+    });
+
     it('the erasure roles can read neither audit_log, memberships nor customers; audit_log is now guarded by the 0085 immutability triggers, which do NOT redact or unlink anything', async () => {
       for (const role of ['onboarding_erasure_operator', 'onboarding_erasure_owner']) {
         for (const table of ['audit_log', 'business_customer_memberships', 'customers']) {
