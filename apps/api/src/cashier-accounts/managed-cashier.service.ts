@@ -348,7 +348,10 @@ export class ManagedCashierService {
 
   async revokeSessions(input: { businessId: string; accountId: string; actorUserId: string }): Promise<{ revoked: number }> {
     return this.db.transaction(async (tx) => {
-      const account = await createRepositories(tx).users.findManagedById(input.businessId, input.accountId);
+      // SEC-CASHIER-02C-R1: the account row first, like every other revoking path, so a session being issued right now is either
+      // committed (and revoked below) or refused after this commits; it can never slip past this statement.
+      const [account] = await tx.select().from(users)
+        .where(and(eq(users.id, input.accountId), eq(users.managedBusinessId, input.businessId), eq(users.isDeleted, false))).for('update');
       if (!account) throw notFound();
       const revoked = await createRepositories(tx).refreshTokens.revokeAllForUser(input.accountId);
       await tx.insert(auditLog).values({

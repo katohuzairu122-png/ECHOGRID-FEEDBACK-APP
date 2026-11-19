@@ -12,6 +12,19 @@ export type NewUser = typeof users.$inferInsert;
  * not assume how its callers will use the data.
  */
 export class UserRepository extends BaseRepository {
+  /**
+   * SEC-CASHIER-02C-R1: takes a SHARE lock on the user row (held until the surrounding transaction ends) and returns it. Everything that
+   * creates a branch-bound cashier session takes this FIRST, then re-checks authority, then inserts. Every administrator path that
+   * revokes access (branch removal, disable, revoke, credential reset, revoke-sessions) takes a conflicting lock on the same row
+   * first, so the two sides can only run one after the other: either the issuer commits and the revocation then sees (and ends) its
+   * session, or the revocation commits and the issuer then sees the removed authority and refuses. SHARE locks do not block each
+   * other, so concurrent sessions of different cashiers (or of one cashier) are not serialised. Only meaningful inside a transaction.
+   */
+  async lockForSessionIssue(id: string): Promise<User | undefined> {
+    const [row] = await this.db.select().from(users).where(and(eq(users.id, id), eq(users.isDeleted, false))).for('share');
+    return row;
+  }
+
   async findById(id: string): Promise<User | undefined> {
     return this.db.query.users.findFirst({
       where: and(eq(users.id, id), eq(users.isDeleted, false)),

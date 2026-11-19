@@ -83,6 +83,8 @@ async function withCashierService<T>(
     createRepositories(db),
     { JWT_ACCESS_SECRET: c.env.JWT_ACCESS_SECRET, JWT_REFRESH_SECRET: c.env.JWT_REFRESH_SECRET },
     createDurableObjectPbkdf2Worker(c.env.PASSWORD_HASHER),
+    // SEC-CASHIER-02C-R1: a new session is issued under the user-row lock in one transaction (the slow password hashing is done before it).
+    (work) => db.transaction((tx) => work(createRepositories(tx))),
   );
   try {
     return await fn(service);

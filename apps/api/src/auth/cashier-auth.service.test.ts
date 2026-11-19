@@ -68,6 +68,8 @@ function world() {
     users: {
       findByEmail: async (email: string) => [...users.values()].find((u) => u.email === email),
       findById: async (id: string) => users.get(id),
+      // SEC-CASHIER-02C-R1: the user-row lock is a no-op in this in-memory fake (the real ordering is proven on PostgreSQL)
+      lockForSessionIssue: async (id: string) => users.get(id),
       touchLastLogin: async () => undefined,
     },
     refreshTokens: {
