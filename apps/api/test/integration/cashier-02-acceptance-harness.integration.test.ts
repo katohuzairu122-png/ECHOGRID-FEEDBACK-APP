@@ -26,6 +26,7 @@ import type { Context, CustomerProvisioner } from '../../scripts/acceptance/cash
 import { LiveCustomerProvisioner, type SignupDriver } from '../../scripts/acceptance/cashier-02/provisioner';
 import { FixtureMessageSource, RestrictedVerificationMailbox } from '../../scripts/acceptance/cashier-02/verification-mailbox';
 import { parseTargetsConfig } from '../../scripts/acceptance/cashier-02/guard';
+import { buildRegistrationProofLink } from '../../src/customer-auth/customer-email-auth.delivery';
 import stagingTargets from '../../scripts/acceptance/cashier-02/staging-targets.json';
 
 /**
@@ -174,7 +175,7 @@ describe.skipIf(!databaseUrl)('CASHIER-AUTH-02E E1 acceptance scenarios against 
     const mailbox = new RestrictedVerificationMailbox({ runId, config: config.mailbox, webHost: config.targets.web.host, source, attempts: 1, sleep: async () => {} });
     const byEmail = new Map<string, string>();
     const driver: SignupDriver = {
-      async requestSignup(email) { source.set([{ to: email, receivedAtMs: Date.now(), text: `https://${config.targets.web.host}/loyalty/signup/verify?token=fixture` }]); },
+      async requestSignup(email) { source.set([{ to: email, receivedAtMs: Date.now(), text: buildRegistrationProofLink(`https://${config.targets.web.host}`, '8142403d-073a-4ff9-9d4d-4f7a07b5c550', 'ab12'.repeat(16)) }]); },
       async completeSignup() {},
       async signIn(email) {
         let id = byEmail.get(email);
@@ -186,7 +187,7 @@ describe.skipIf(!databaseUrl)('CASHIER-AUTH-02E E1 acceptance scenarios against 
     const out = await runAcceptance({ ctx: { ...ctx, provisioner: live, runId }, mode: 'local', commit: 'abcdef0', only: ['S04', 'S05', 'S15'] });
     expect(out.report.checks.filter((c) => c.status !== 'PASS'), JSON.stringify(out.report.checks.filter((c) => c.status !== 'PASS'))).toEqual([]);
     expect(out.report.counts.pass).toBeGreaterThanOrEqual(10);
-    expect(JSON.stringify(out.report)).not.toMatch(/fixture|loyalty\/signup\/verify/);
+    expect(JSON.stringify(out.report)).not.toMatch(/ab12ab12|loyalty\/signup\/verify|8142403d/);
   });
 
   describe('the scenarios discriminate: a faulty application is caught, not passed', () => {

@@ -1,3 +1,4 @@
+import { REGISTRATION_VERIFY_PATH } from '../../../src/customer-auth/customer-email-auth.delivery';
 import { HarnessRefusal, type MailboxConfig } from './guard';
 
 /**
@@ -9,7 +10,7 @@ import { HarnessRefusal, type MailboxConfig } from './guard';
  *  - the adapter is asked about ONE exact recipient (`acc-<runId>-<label>@<approved domain>`), never to list or search an inbox;
  *  - the adapter may only return messages addressed to that recipient: anything else is a refusal, not silently ignored;
  *  - only messages that arrived at or after the instant this run asked for them count; a stale message is never used;
- *  - a link is accepted only if it is https, on the approved WEB host, on the sign-up verification path; a code only if exactly six digits;
+ *  - a link is accepted only if it is https, on the approved WEB host, on the sign-up verification path, with the exact `#c=<id>.<proof>` fragment and no query; a code only if exactly six digits;
  *  - the value goes to the caller only and is never part of a message, an error, a log line or a result.
  */
 export type VerificationPurpose = 'customer-signup-link' | 'customer-sms-code';
@@ -39,7 +40,10 @@ export const NullVerificationMailbox: VerificationMailbox = {
   },
 };
 
-export const SIGNUP_VERIFY_PATH = '/loyalty/signup/verify';
+/** Single source of truth with the code that BUILDS the link (customer-email-auth.delivery.ts). */
+export const SIGNUP_VERIFY_PATH = REGISTRATION_VERIFY_PATH;
+/** The real link is `<web>/loyalty/signup/verify#c=<challengeId>.<proof>`: the proof travels in the fragment and there is no query. */
+const SIGNUP_FRAGMENT = /^#c=[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.[0-9a-f]{64}$/i;
 const MAX_MESSAGES = 25;
 const MAX_TEXT = 20_000;
 const CLOCK_SKEW_MS = 60_000;
@@ -128,7 +132,7 @@ function extract(text: string, purpose: VerificationPurpose, webHost: string): V
   });
   if (links.length !== 1) throw new HarnessRefusal('OTP_REFUSED', 'The message did not contain exactly one verification link.');
   const url = new URL(links[0] as string);
-  if (url.protocol !== 'https:' || url.username !== '' || url.password !== '' || url.port !== '' || url.search === '' || url.hash !== '') {
+  if (url.protocol !== 'https:' || url.username !== '' || url.password !== '' || url.port !== '' || url.search !== '' || !SIGNUP_FRAGMENT.test(url.hash)) {
     throw new HarnessRefusal('OTP_REFUSED', 'The verification link is not acceptable.');
   }
   return { kind: 'link', url: url.toString() };

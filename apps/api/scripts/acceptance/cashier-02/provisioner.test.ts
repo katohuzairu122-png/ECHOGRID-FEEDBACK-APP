@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { buildRegistrationProofLink } from '../../../src/customer-auth/customer-email-auth.delivery';
 import { parseTargetsConfig, type TargetsConfig } from './guard';
 import { LiveCustomerProvisioner, missingApprovals, type SignupDriver } from './provisioner';
 import { FixtureMessageSource, RestrictedVerificationMailbox, NullVerificationMailbox } from './verification-mailbox';
@@ -22,8 +23,8 @@ function setup(over: { config?: TargetsConfig; driver?: Partial<SignupDriver> } 
   const source = new FixtureMessageSource([]);
   const mailbox = new RestrictedVerificationMailbox({ runId: 'abc123', config: config.mailbox, webHost: WEB, source, now: () => NOW, sleep: async () => {}, attempts: 1 });
   const driver: SignupDriver = {
-    async requestSignup(email) { calls.push(`request:${email}`); source.set([{ to: email, receivedAtMs: NOW, text: `https://${WEB}/loyalty/signup/verify?token=LINKTOKEN` }]); },
-    async completeSignup(url, email, password) { calls.push(`complete:${url.includes('LINKTOKEN')}:${email.startsWith('acc-abc123-')}:${password.length > 12}`); },
+    async requestSignup(email) { calls.push(`request:${email}`); source.set([{ to: email, receivedAtMs: NOW, text: buildRegistrationProofLink(`https://${WEB}`, '8142403d-073a-4ff9-9d4d-4f7a07b5c550', 'ab12'.repeat(16)) }]); },
+    async completeSignup(url, email, password) { calls.push(`complete:${url.includes('ab12ab12')}:${email.startsWith('acc-abc123-')}:${password.length > 12}`); },
     async signIn(email) { calls.push(`signin:${email}`); return { customerId: `id-${email.split('@')[0]}`, accessToken: `token-${calls.length}` }; },
     ...over.driver,
   };
@@ -84,7 +85,7 @@ describe('provisioning flow', () => {
     expect(calls).toEqual([]);
   });
   it('a failing step stops the flow, names only the step, and carries no cause', async () => {
-    const { provisioner } = setup({ driver: { completeSignup: async () => { throw new Error('boom https://x/verify?token=LINKTOKEN pw=hunter2'); } } });
+    const { provisioner } = setup({ driver: { completeSignup: async () => { throw new Error('boom https://x/verify#c=SECRETPROOF pw=hunter2'); } } });
     try { await provisioner.create('fail1'); } catch (e) { expect((e as Error).message).toBe('customer provisioning failed at step "complete sign-up"'); return; }
     throw new Error('expected a failure');
   });
@@ -103,6 +104,6 @@ describe('what the provisioner cannot do', () => {
   it('never exposes the password or the link in anything it returns', async () => {
     const { provisioner } = setup();
     const out = JSON.stringify(await provisioner.create('safe1'));
-    expect(out).not.toMatch(/LINKTOKEN|Acc-/);
+    expect(out).not.toMatch(/ab12ab12|8142403d|Acc-/);
   });
 });
