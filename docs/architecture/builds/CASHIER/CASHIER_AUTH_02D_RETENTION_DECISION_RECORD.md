@@ -55,3 +55,30 @@ Security-relevant evidence (audit rows for issuance, revocation and authority ch
 4. Retention for refresh-token and security rows.
 
 **No production activation of 02D until these are decided.** Staging is unaffected.
+
+## 7. Evaluation of Options A to D (added 2026-11-19; no option is approved)
+
+Criteria: privacy, consent, append-only events, audit integrity, RESTRICT keys, erasure workflows, retention expiry, security investigations, consistency.
+
+| Criterion | A. Keep permanently | B. Anonymise after a period or on request | C. Delete after a period | D. Anonymise on request only |
+|---|---|---|---|---|
+| Customer privacy | Weakest: personal link is permanent | Strong: link removed, counts kept | Strongest | Strong only for those who ask |
+| Consent records | Consent and event stay paired | Consent evidence must be kept or anonymised in step (decision needed) | Consent link broken or also deleted | As B, per request |
+| Append-only guard | Unchanged | Needs a narrow, audited exception to the guard and a reviewed migration (nullable `customer_id` / `cashier_user_id`, adjusted CHECKs) | Same exception, plus deletion | Same as B |
+| Audit integrity | Intact | Audit rows kept; event-to-audit link stays valid (the audit row holds no customer data) | The audit row would point at a removed event | As B |
+| RESTRICT foreign keys | Block hard delete of customer, cashier, branch or business while events exist | Anonymised rows no longer reference the person, so deletion unblocks | Deletion unblocks | Unblocks only after anonymisation |
+| Erasure workflow | Cannot be met by deletion | Can be met | Can be met | Can be met, but needs an erasure flow that does not exist today |
+| Retention expiry | None | Automatic after the owner's period | Automatic after the period | None |
+| Security investigations | Best | Keeps branch, source, timestamps and counts; loses who | Worst | As B for those erased |
+| Database consistency | No change | Higher risk (guard exception, nullable columns, tests) | Highest (history gaps) | As B |
+
+**Recommendation:** Option B as the mechanism, with the owner choosing the trigger (request only, a fixed period, or both). It is the only option that serves erasure and keeps the attribution counts the feature exists for. Option A is acceptable only if the owner documents a legal basis and
+confirms that no erasure obligation applies to this data. No period is proposed here and none should be assumed.
+
+**Exact decision required from the owner** (answer each):
+1. Which option (A, B, C or D)?
+2. If B, C or D: the trigger and any period, set by the owner with legal input (or "on request only").
+3. The documented legal basis for recording branch, cashier and source, and confirmation that the consent wording covers it.
+4. Which fields an anonymisation clears (recommended: `customer_id` and `cashier_user_id`; keep business, branch, source, timestamps) and whether consent evidence is anonymised with it.
+5. Who runs it, and approval for a separate, reviewed migration (number to be allocated at that time) and tests.
+Until answered, no deletion, anonymisation or retention job is implemented.

@@ -1,7 +1,8 @@
 # CASHIER-AUTH-02D production-readiness report (2026-11-19)
 
 Verdict: **NO-GO for production activation** (owner-controlled blockers, section 13). A GO would not be deployment authorization either; production needs a separate explicit owner directive.
-Production was not inspected, migrated, deployed or mutated for this report.
+Production was not migrated, deployed or mutated for this report. **Addendum 2026-11-19 (final readiness remediation):** a read-only production metadata and SELECT preflight was done under a later directive; its results are in
+`CASHIER-AUTH-02D_FINAL_READINESS_REMEDIATION_REPORT.md` and supersede the statements below that production was not inspected. The sections below are the original audit evidence and are kept as written (no result was re-run).
 
 ## 1. Authoritative repository identity and SHA
 
@@ -84,7 +85,7 @@ Shared-bucket 429s during shift changes if the attribution secret is absent. No 
 | 1 | Confirm `CLIENT_ATTRIBUTION_SECRET` presence by name (staging, production) and approve rollout order | Before production |
 | 2 | Retention basis and period, erasure treatment (options A to D) | Before production |
 | 3 | Lockout mitigation: Option A, C, D, or B (policy change) | Before production |
-| 4 | Merge the 02D-R2 draft PR (branch deletion revokes sessions) | Before production |
+| 4 | ~~Merge the 02D-R2 draft PR~~ DONE: PR #525 was merged by the owner (merge commit `1735ad2`) | Closed |
 | 5 | Optional: keep customer pages off the cashier host; separate invitation signing key | Optional |
 | 6 | Production-readiness gate: separate directive to inspect the production ledger and to deploy | Before production |
 | 7 | Cleanup authorization for synthetic staging data and drill branches | Housekeeping |
@@ -93,11 +94,12 @@ Shared-bucket 429s during shift changes if the attribution secret is absent. No 
 
 ## 12. Remediation PRs
 
-Draft PR for `fix/sec-cashier-02d-r2-branch-delete-session-revocation` (no migration, no schema change, not merged). Exact-head CI result: see the PR; recorded in the completion report.
+PR #525 (`fix/sec-cashier-02d-r2-branch-delete-session-revocation`, no migration, no schema change) was **merged by the owner** as `1735ad2`; the R2-1 correction is present on `main` (`apps/api/src/branches/branch-deletion.ts`, used by the branch delete route).
+Hosted CI on the exact head `2c4db47`: 25 of 25 checks succeeded. Production remains untouched by this change.
 
 ## 13. Production GO/NO-GO
 
-**NO-GO.** Blocking: decision 1 (secret unverified), decision 2 (retention and erasure), decision 3 (D-5 lockout mitigation not realized), decision 4 (merge R2), and a separate directive for any production action.
+**NO-GO.** Blocking: decision 1 (secret unverified), decision 2 (retention and erasure), decision 3 (D-5 lockout mitigation not realized), and a separate directive for any production action. See the final remediation report for the production preflight, which adds measurable blockers (four pending migrations, no production cashier Worker).
 Not blocking: MFA, the optional hardening items, the Stripe environmental failures.
 
 ## 14. Test evidence (this task)

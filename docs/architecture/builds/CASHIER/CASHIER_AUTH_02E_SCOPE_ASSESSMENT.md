@@ -60,3 +60,18 @@ None required. Production still needs 0082 and 0083 applied in order under the e
 
 The cashier app shares the web Worker and rate-limit namespace with staff and customer sign-in (shared-egress bucket if the attribution secret is absent); other workstreams (for example B2B, which owns 0080 and 0081) also add migrations, so the journal order must be re-confirmed before any production run;
 the loyalty purchase and redemption paths are shared with the customer app.
+
+## 11. Proposed Definition of Done for 02E (for owner review; nothing is implemented)
+
+Assuming 02E means "full acceptance of CASHIER-AUTH-02A to 02D" (decision D8). 02E is DONE when all of the following have evidence:
+
+1. A repeatable acceptance suite for the series runs from the repository on a fresh database and, separately, on staging; results are recorded with exact counts and the commit SHA.
+2. It covers the matrix in section 8 plus: branch deletion, lockout scope, invitation expiry boundary, phone-required path (disposable SMS fixture or documented NOT RUN), email-provider regression with a test mailbox (or documented NOT RUN), four languages and RTL at 375 px.
+3. Every owner decision D1 to D7 is answered in writing, and any approved mitigation (for example lockout Option A) has shipped with tests, or is explicitly deferred.
+4. A production release runbook exists: bundle definition (including 0080 and 0081 or an explicit separation), snapshot and recovery steps, migration order, Worker order including the cashier Worker, verification queries, rollback limits. It is reviewed, not executed.
+5. The attribution secret presence is confirmed by name for every Worker in the target environment.
+6. No open Critical or High finding; Medium findings are fixed or accepted by the owner in writing.
+7. No weakening of hashing, rate limits, the nine-route allow-list or tenant isolation; no migration without its own authorization.
+8. A final completion report states GO or NO-GO. A GO is still not deployment authorization.
+
+Proposed sequence (each its own authorization): E1 acceptance harness into the repository (no migration); E2 gap closure; E3 owner-selected mitigations; E4 production runbook. Database implications: none for E1, E2, E4; E3 may touch only existing tables (audit rows) and is confirmed before any migration is considered.
