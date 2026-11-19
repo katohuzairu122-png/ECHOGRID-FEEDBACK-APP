@@ -582,6 +582,46 @@ describe.skipIf(!databaseUrl)('D2-R1 controlled onboarding-event erasure (real P
     });
   });
 
+  describe('residual linkage through audit_log (characterization of a KNOWN limitation; R6 and the audit governance decision are open)', () => {
+    // These tests document what erasure does NOT remove. They assert the CURRENT residual so that the limitation cannot be forgotten
+    // or silently widened; if audit metadata is ever minimized under an approved policy, they must be updated deliberately.
+    it('an erased event is still joined to its immutable customer.onboarded audit row by id, and that row names the membership and the exact time', async () => {
+      const w = await world('auditlink');
+      const c = await customer();
+      const { membership } = await joinQr(w, c.id, w.b1);
+      const eventId = (await events(w.biz, c.id))[0].id as string;
+      await operatorErase(w.biz, c.id);
+
+      const erased = await eventById(eventId);
+      expect(erased.customer_id).toBeNull();
+      expect(erased.membership_id).toBeNull();
+      expect(erased.audit_log_id).toBeNull(); // the event's own pointer IS severed ...
+
+      // ... but the audit row points at the event (entity_id = event id) and carries the membership id and the exact creation time
+      const audit = (await q(`SELECT * FROM audit_log WHERE entity_type = 'customer_onboarding_event' AND entity_id = $1`, [eventId]))[0];
+      expect(audit).toBeDefined();
+      expect(audit.action).toBe('customer.onboarded');
+      expect(audit.metadata.membershipId).toBe(membership.id);
+      const exact = (await q(`SELECT created_at <> date_trunc('day', created_at) AS exact FROM audit_log WHERE id = $1`, [audit.id]))[0];
+      expect(exact.exact).toBe(true); // sub-day precision survives in the audit table
+
+      // and the membership still resolves to the customer, so event-level anonymization alone does not prevent re-identification
+      const back = (await q(`SELECT customer_id FROM business_customer_memberships WHERE id = $1`, [audit.metadata.membershipId]))[0];
+      expect(back.customer_id).toBe(c.id);
+    });
+
+    it('the erasure roles can read neither audit_log, memberships nor customers; audit_log immutability is by application convention, NOT enforced by the database', async () => {
+      for (const role of ['onboarding_erasure_operator', 'onboarding_erasure_owner']) {
+        for (const table of ['audit_log', 'business_customer_memberships', 'customers']) {
+          expect(await q(`SELECT has_table_privilege($1, $2, 'SELECT') AS ok`, [role, table])).toEqual([{ ok: false }]);
+        }
+      }
+      // Characterization: audit_log carries no database trigger, so it is NOT database-enforced append-only (unlike customer_onboarding_events).
+      // Redacting or protecting it is therefore a governance decision, not something this block may assume. Update deliberately if that changes.
+      expect(await q(`SELECT tgname FROM pg_trigger WHERE tgrelid = 'public.audit_log'::regclass AND NOT tgisinternal`)).toEqual([]);
+    });
+  });
+
   describe('the audit table', () => {
     it('is append-only and holds counts, never identifiers', async () => {
       const w = await world('audit');

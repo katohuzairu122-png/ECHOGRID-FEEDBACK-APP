@@ -1,6 +1,6 @@
 # CASHIER-PROD-D2-R1: controlled onboarding-event anonymization, technical foundation (2026-11-19)
 
-Status: **TECHNICAL FOUNDATION IMPLEMENTED AND TESTED LOCALLY. NOT APPLIED to any shared database. NOT a policy, legal or retention approval.** Migration `0084_d2r1_onboarding_event_erasure.sql`. Baseline: `main` @ `91aa915`. Depends on the proposed decision record in PR #534 (`CASHIER-PROD-D2-RETENTION-ERASURE-DECISION.md`, still open, not modified here). Production ledger is at 0079; staging, production and the retained recovery branch were not touched.
+Status: **TECHNICAL FOUNDATION (merged to `main` in #535; hosted CI green on its head). NOT APPLIED to any shared database. NOT a policy, legal or retention approval. EVENT-LEVEL severing only: it does NOT make a customer unidentifiable, see section 9 and `CASHIER-PROD-D2-R1-V1-AUDIT-LINKAGE-ASSESSMENT.md` (correction: the audit path re-links an erased event to its customer).** Migration `0084_d2r1_onboarding_event_erasure.sql`. Baseline: `main` @ `91aa915`. Depends on the proposed decision record in PR #534 (`CASHIER-PROD-D2-RETENTION-ERASURE-DECISION.md`, still open, not modified here). Production ledger is at 0079; staging, production and the retained recovery branch were not touched.
 
 ## 1. What this adds, in one paragraph
 
@@ -59,11 +59,13 @@ Event, branch, source and rejoin totals are unchanged by erasure. `uniqueCustome
 
 ## 8. Re-identification: tested, not assumed
 
+Scope note: the checks below cover the `customer_onboarding_events` table only. They do not cover the audit path in section 9 item 1, which defeats them for readers of `audit_log`.
+
 The function returns and records `residual_singletons`: erased events whose remaining attributes (business, branch, source, cashier if kept, UTC day, verification state, rejoin) are unique among erased events of the business. Tests show a lone event in a small business is flagged (1), and that the flag clears as more events share the bucket; day-level time alone is therefore **not** sufficient in low-volume businesses, and the operator is told. Whether to also drop the branch or generalize further is a policy decision (R4).
 
 ## 9. Residual personal-data paths that this block does NOT close (dependencies, not shortcuts)
 
-1. `audit_log` row `customer.onboarded` keeps `membershipId` in its metadata; the membership row still references the customer. Until the membership is deleted or anonymized (customer-level deletion, R6) the event is unlinked but an audit row can still lead to the customer. `audit_log` is append-only and was not changed.
+1. **Material (corrected in D2-R1-V1):** the `customer.onboarded` audit row has `entity_id` = the event id (unchanged by erasure), `metadata.membershipId`, branch, source, cashier (as actor) and the exact creation time. Joining `audit_log.entity_id = customer_onboarding_events.id` re-links an erased event to its membership and therefore its customer, with sub-day precision. The platform audit API (roles support, billing, admin) and the business audit API (`audit:view`) return that metadata. `audit_log` immutability is application convention only (no database trigger, no REVOKE); it was not changed here. Until the audit governance decision and customer-level handling (R6) are made, erased events remain re-identifiable by anyone who can read `audit_log` and memberships.
 2. `consent_grants.metadata` stores the membership id and onboarding reference; `business_customer_memberships.onboarding_*` summary columns hold the current relationship's reference.
 3. `customers`, memberships, consent grants and loyalty records still hold the customer's data. Erasing event links removes the RESTRICT blocker for those deletes; deleting them (and the loyalty-ledger consequences) is a separate block.
 4. The cashier link is retained by default: it identifies staff, not the customer, and is an R3 decision.
