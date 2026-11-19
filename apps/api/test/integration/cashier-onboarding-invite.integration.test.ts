@@ -324,6 +324,39 @@ describe.skipIf(!databaseUrl)('CASHIER-AUTH-02D onboarding invitation issuer (re
       });
     }
 
+    it('the branch is soft-deleted or archived after issuing (independent review M-1): the invitation is refused and nothing is attributed to it', async () => {
+      for (const change of [`UPDATE branches SET is_deleted = true, deleted_at = now() WHERE id = $1`, `UPDATE branches SET status = 'archived' WHERE id = $1`]) {
+        const branch = (await repos.branches.create({ businessId: bizA, name: `Gone ${++seq}`, slug: `gone${run.slice(0, 4)}${seq}` })).id;
+        const u = await newCashier('single', [branch]);
+        const s = await sessionOn(u.username, branch);
+        const invite = (await issue(s.accessToken)).data.inviteToken as string;
+        await q(change, [branch]);
+        const customer = await newCustomer();
+        const res = await accept(customer.token, invite);
+        expect(res.status, `${change}: ${JSON.stringify(res)}`).toBe(409);
+        expect(res.error?.code).toBe('ONBOARDING_INVITE_INVALID');
+        expect(await memberships(customer.id)).toHaveLength(0);
+        expect(await events(customer.id)).toHaveLength(0);
+      }
+    });
+
+    it('a soft-deleted cashier user, or a session row that does not belong to the invitation\'s business, is refused (independent review L-3)', async () => {
+      const u1 = await newCashier('single', [a1]);
+      const s1 = await sessionOn(u1.username, a1);
+      const invite1 = (await issue(s1.accessToken)).data.inviteToken as string;
+      await q(`UPDATE users SET is_deleted = true WHERE id = $1`, [u1.id]);
+      const c1 = await newCustomer();
+      expect((await accept(c1.token, invite1)).status).toBe(409);
+      expect(await events(c1.id)).toHaveLength(0);
+      const u2 = await newCashier('single', [a1]);
+      const s2 = await sessionOn(u2.username, a1);
+      const invite2 = (await issue(s2.accessToken)).data.inviteToken as string;
+      await q(`UPDATE refresh_tokens SET business_id = $2 WHERE user_id = $1 AND client = 'cashier' AND revoked_at IS NULL`, [u2.id, bizB]);
+      const c2 = await newCustomer();
+      expect((await accept(c2.token, invite2)).status).toBe(409);
+      expect(await events(c2.id)).toHaveLength(0);
+    });
+
     it('after a switch the cashier issues a NEW invitation from the new branch, attributed to it; the old token, now stale, still works for no one', async () => {
       const u = await newCashier('multiple', [a1, a2]);
       const s = await sessionOn(u.username, a1);
@@ -395,6 +428,28 @@ describe.skipIf(!databaseUrl)('CASHIER-AUTH-02D onboarding invitation issuer (re
       expect(rows[0].metadata).toMatchObject({ client: 'cashier' });
       expect(JSON.stringify(rows[0])).not.toContain(res.data.inviteToken);
       expect(JSON.stringify(rows[0].metadata)).not.toMatch(/phone|email|password|refresh|eyJ/i);
+    });
+
+    it('the audit row is written BEFORE the token is returned and fails closed: if it cannot be written, no invitation is returned (independent review L-2)', async () => {
+      const u = await newCashier('single', [a1]);
+      const s = await sessionOn(u.username, a1);
+      await q(`CREATE OR REPLACE FUNCTION iv_fail() RETURNS trigger LANGUAGE plpgsql AS $f$ BEGIN IF NEW.action = 'loyalty.onboarding_invite_issued' THEN RAISE EXCEPTION 'injected'; END IF; RETURN NEW; END $f$`);
+      await q(`CREATE TRIGGER iv_fail_trg BEFORE INSERT ON audit_log FOR EACH ROW EXECUTE FUNCTION iv_fail()`);
+      try {
+        const res = await issue(s.accessToken);
+        expect(res.status).toBe(500);
+        expect(JSON.stringify(res)).not.toContain('eyJ'); // no token in the failure body
+        expect(res.data).toBeUndefined();
+      } finally {
+        await q(`DROP TRIGGER iv_fail_trg ON audit_log`);
+      }
+      expect(await q(`SELECT 1 FROM audit_log WHERE action = 'loyalty.onboarding_invite_issued' AND actor_user_id = $1`, [u.id])).toHaveLength(0);
+      // and when it works the row is there already when the response arrives, exactly once, with the cashier marker and the client details
+      const ok = await issue(s.accessToken);
+      expect(ok.status).toBe(200);
+      const rows = await q(`SELECT * FROM audit_log WHERE action = 'loyalty.onboarding_invite_issued' AND actor_user_id = $1`, [u.id]);
+      expect(rows).toHaveLength(1);
+      expect(rows[0].metadata).toMatchObject({ client: 'cashier', outcome: 'success', branchId: a1 });
     });
 
     it('a refused request (no branch, wrong credential) issues no invitation and records no issuance', async () => {

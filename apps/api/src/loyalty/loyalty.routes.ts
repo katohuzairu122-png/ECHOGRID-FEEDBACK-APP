@@ -32,6 +32,7 @@ import { NotificationService } from '../notifications/notification.service';
 import { LoyaltyActionResolver } from './loyalty-action-resolver';
 import { CustomerLookupService, LOOKUP_PURCHASE_AUDIT } from './customer-lookup.service';
 import { AppError } from '../lib/errors';
+import { resolveClient } from '../lib/client-attribution';
 import { signOnboardingInvite } from '../customer-relationships/onboarding-attribution';
 
 type Env = {
@@ -101,12 +102,25 @@ loyaltyRoutes.post('/actions/onboarding-invite', requirePermission('loyalty:serv
     { cashierUserId: userId, sessionId: cashier.sessionId, businessId, branchId: cashier.branchId },
     c.env.JWT_ACCESS_SECRET,
   );
-  c.set('auditMetadata', {
-    action: 'loyalty.onboarding_invite_issued',
-    entityType: 'onboarding_invite',
-    entityId: invite.inviteId,
-    details: { branchId: cashier.branchId },
-  });
+  // The audit row is written HERE, before the token is returned, and a failure to write it refuses the request: an invitation must
+  // never exist without its `issued` row (the generic post-response audit is fail-open, which is not good enough for issuance).
+  const client = await resolveClient(c.req.raw.headers, c.env.CLIENT_ATTRIBUTION_SECRET, Date.now(), c.env.CLIENT_ATTRIBUTION_SECRET_PREVIOUS);
+  await withDb(c, (db) =>
+    createRepositories(db).auditLog.record({
+      businessId,
+      actorUserId: userId,
+      action: 'loyalty.onboarding_invite_issued',
+      entityType: 'onboarding_invite',
+      entityId: invite.inviteId,
+      metadata: {
+        client: 'cashier', branchId: cashier.branchId, outcome: 'success', requestId: c.req.header('cf-ray') ?? null,
+        ...(client.trusted ? { ipSource: 'signed' } : {}),
+      },
+      ipAddress: client.ip ?? null,
+      userAgent: client.userAgent ?? null,
+    }),
+  );
+  c.set('auditAlreadyRecorded', true);
   return ok(c, { inviteToken: invite.token, expiresAt: invite.expiresAt.toISOString(), branchId: cashier.branchId });
 });
 

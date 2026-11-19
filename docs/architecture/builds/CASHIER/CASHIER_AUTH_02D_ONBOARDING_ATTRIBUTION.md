@@ -86,9 +86,27 @@ allow-list addition. Refresh tokens are never used to issue invitations.
 | Single use | enforced by the database when accepted (unique `(business_id, reference)` for assisted events); a second customer gets `409 ONBOARDING_INVITE_USED` |
 | Invalidation | acceptance re-checks inside its own transaction under the 02C session lock: sign-out, branch switch, branch removal, session revocation, disable, credential reset and business suspension all make it unusable (tested for each) |
 | Rate limiting | the existing lookup limiter binding on its own key `onboarding-invite:<business>:<user>` (10 per minute, separate from lookups); no new binding or configuration |
-| Audit | `loyalty.onboarding_invite_issued`, cashier-marked, entity = the invitation id; never the token or customer data |
+| Audit | `loyalty.onboarding_invite_issued`, cashier-marked, entity = the invitation id; never the token or customer data. Written synchronously before the token is returned; fail-closed |
 
 Tests: `test/integration/cashier-onboarding-invite.integration.test.ts` (23, real PostgreSQL, real customer acceptance), plus the exact-route pins.
+
+### Independent security review of the allow-list change (2026-11-19)
+
+A reviewer with no context from the implementation (fresh agent, read-only, instructed to attack the change) reviewed commit `d22939e`. Verdict: **APPROVE WITH CONDITIONS**; no critical or high findings; every one of the owner's eleven required controls PASS.
+Confirmed: the allow-list grew by exactly one fully anchored route (no wildcard; trailing slash, double slash, case, encoding, HEAD/OPTIONS and method-override variants are all refused); only a verified live cashier access token reaches the handler
+(refresh, invitation, customer, impersonation and staff web tokens are refused); business, branch, cashier and session come only from signed claims; single use is database-enforced and a rolled-back attempt consumes nothing.
+
+| Finding | Severity | Disposition |
+|---|---|---|
+| M-1 soft-deleted or archived branch did not end outstanding invitations | medium | **FIXED** (acceptance now requires an existing, active branch of that business) + test |
+| L-3 acceptance omitted `users.is_deleted` and the session row's business | low | **FIXED** + test |
+| L-2 audit row written after the response by fail-open middleware | low | **FIXED**: written in the handler before the token is returned; failure refuses the request (tested with an injected failure); the middleware row is suppressed |
+| L-1 invitation signed with the shared `JWT_ACCESS_SECRET` (type check enforced in every verifier read) | low | deferred, defence in depth: a dedicated `ONBOARDING_INVITE_SECRET` or `aud`/`iss` claims in a later hardening block |
+| I-1 the rate limiter is a per-location, eventually consistent Cloudflare binding (soft limit) | info | accepted; same as every other limiter here |
+| I-2 an invitation is a bearer credential for 10 minutes (not bound to a customer) | info | by design; short TTL, single use |
+| I-3 a malicious cashier could mass-attribute onboardings (about 10 invitations per minute) | info, speculative | matters only if attribution later feeds incentives: add a daily cap per cashier, an issued-versus-accepted anomaly report and exclusion of re-join events before any such use |
+| I-4 no test of acceptance racing revocation | info | the 02D suite races a switch against acceptance for 6 rounds and 02C-R1 covers revocation ordering; a dedicated looped acceptance-versus-revocation test is a possible follow-up |
+| `BranchService.deleteBranch` does not revoke sessions bound to the deleted branch (pre-existing; also affects purchases and redemptions, which the per-request tenant check already refuses) | medium, pre-existing | **not changed here** (outside this change); recommended as a separate reviewed block |
 
 ## Reporting foundation
 

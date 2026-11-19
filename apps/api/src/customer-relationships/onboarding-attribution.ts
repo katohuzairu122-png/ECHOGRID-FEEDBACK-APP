@@ -98,7 +98,15 @@ export async function assertInviteCashierAuthorized(tx: Db, claims: { cashierUse
     SELECT 1 AS ok
     FROM users u
     JOIN businesses b ON b.id = ${claims.businessId}
-    WHERE u.id = ${claims.cashierUserId} AND u.status = 'active' AND (u.locked_until IS NULL OR u.locked_until <= now())
+    -- the branch must STILL exist and be active in THIS business (a deleted or archived branch ends its invitations)
+    JOIN branches br ON br.id = ${claims.branchId} AND br.business_id = ${claims.businessId} AND br.is_deleted = false AND br.status = 'active'
+    WHERE u.id = ${claims.cashierUserId} AND u.is_deleted = false AND u.status = 'active' AND (u.locked_until IS NULL OR u.locked_until <= now())
+      -- the live session row must belong to this business as well as this branch (belt and braces next to the signed claims)
+      AND EXISTS (
+        SELECT 1 FROM refresh_tokens rt
+        WHERE rt.user_id = u.id AND rt.session_id = ${claims.sessionId} AND rt.client = 'cashier' AND rt.business_id = ${claims.businessId}
+          AND rt.branch_id = ${claims.branchId} AND rt.revoked_at IS NULL AND rt.expires_at > now()
+      )
       AND (u.managed_business_id IS NULL OR u.managed_business_id = ${claims.businessId}) AND b.status = 'active'
       AND EXISTS (
         SELECT 1 FROM user_business_roles ubr
