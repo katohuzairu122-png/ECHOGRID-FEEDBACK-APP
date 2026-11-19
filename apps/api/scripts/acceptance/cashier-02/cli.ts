@@ -30,7 +30,7 @@ export interface CliIo {
   commit(): string;
   signal?: AbortSignal;
   /** E2-A: the real sign-up driver (a browser). Only consulted when all three approvals are recorded. */
-  signupDriver?: () => Promise<SignupDriver>;
+  signupDriver?: (target: { webHost: string }) => Promise<SignupDriver>;
   /** E2-B: mailbox adapters available in this build. None ships; tests inject fixtures. */
   mailboxAdapters?: Readonly<Record<string, MessageSourceFactory>>;
   /** E2-D: reads the Playwright JSON report named by --browser-results. */
@@ -47,6 +47,12 @@ export const defaultIo = (signal?: AbortSignal): CliIo => ({
     try { return execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim(); } catch { return process.env.GITHUB_SHA ?? 'unknown'; }
   },
   readReport: (file) => JSON.parse(readFileSync(file, 'utf8')) as unknown,
+  // The real sign-up driver is a browser and lives in the web package's browser tier. Loaded only when all three approvals are recorded.
+  signupDriver: async ({ webHost }) => {
+    const modulePath = new URL('../../../../web/e2e/acceptance/signup-driver.ts', import.meta.url).href;
+    const mod = (await import(modulePath)) as { createSignupDriver(opts: { webHost: string }): SignupDriver };
+    return mod.createSignupDriver({ webHost });
+  },
   ...(signal ? { signal } : {}),
 });
 
@@ -87,10 +93,12 @@ export async function runCli(argv: readonly string[], env: Readonly<Record<strin
     const runId = `${Date.now().toString(36).slice(-5)}${randomBytes(2).toString('hex')}`.slice(0, 9);
     // E2-A/E2-B: customers exist only when ALL three approvals are recorded; an approved mailbox with no adapter in this build is refused.
     let provisioner: LiveCustomerProvisioner | null = null;
+    let driverToClose: SignupDriver | undefined;
     if (missingApprovals(config).length === 0) {
       const mailbox = createVerificationMailbox(config.mailbox, { runId, webHost: config.targets.web.host, ...(io.mailboxAdapters ? { adapters: io.mailboxAdapters } : {}), env });
-      const driver = await io.signupDriver?.();
+      const driver = await io.signupDriver?.({ webHost: config.targets.web.host });
       if (!driver) throw new HarnessRefusal('PROVISIONER_REFUSED', 'No sign-up driver is available in this build.');
+      driverToClose = driver;
       provisioner = new LiveCustomerProvisioner({ runId, config, mailbox, driver });
     }
     // E2-D: browser evidence is accepted only in the mode of this run (staging).
@@ -103,9 +111,15 @@ export async function runCli(argv: readonly string[], env: Readonly<Record<strin
     const pacer = createPacer();
     const ctx: Context = { api: createLiveClient(targets, { fetch: io.fetch, pacer }), runId, ownerA, ownerB, provisioner, ...(browser ? { browser } : {}) };
     const only = value('--scenarios')?.split(',').filter(Boolean);
-    const { report, file, interruptedEarlier } = await runAcceptance({
-      ctx, mode: 'staging', commit: io.commit(), outDir: value('--out') ?? path.join(process.cwd(), 'acceptance-results', 'cashier-02'), only, signal: io.signal,
-    });
+    let outcome: Awaited<ReturnType<typeof runAcceptance>>;
+    try {
+      outcome = await runAcceptance({
+        ctx, mode: 'staging', commit: io.commit(), outDir: value('--out') ?? path.join(process.cwd(), 'acceptance-results', 'cashier-02'), only, signal: io.signal,
+      });
+    } finally {
+      await driverToClose?.close?.().catch(() => undefined);
+    }
+    const { report, file, interruptedEarlier } = outcome;
     if (interruptedEarlier.length > 0) io.log(`note: ${interruptedEarlier.length} earlier run(s) have a journal but no final report (not touched).`);
     for (const c of report.checks) io.log(`${c.status} ${c.id} ${c.title}${c.status === 'PASS' ? '' : ` :: ${c.detail}`}`);
     io.log(`PASS ${report.counts.pass}  FAIL ${report.counts.fail}  NOT RUN ${report.counts.notRun}  state ${report.state}  hash ${report.reportHash.slice(0, 12)}`);

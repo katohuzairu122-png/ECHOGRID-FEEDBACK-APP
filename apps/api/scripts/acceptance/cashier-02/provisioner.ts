@@ -16,10 +16,12 @@ import type { CustomerProvisioner, Provisioned } from './scenarios';
 export interface SignupDriver {
   /** Asks the real sign-up page to send a confirmation link to this address. */
   requestSignup(email: string): Promise<void>;
-  /** Opens the confirmation link and sets the password. */
-  completeSignup(verifyUrl: string, password: string): Promise<void>;
+  /** Opens the confirmation link, confirms the address and sets the password. */
+  completeSignup(verifyUrl: string, email: string, password: string): Promise<void>;
   /** Signs in through the real sign-in page and returns the customer's identity and access token. */
   signIn(email: string, password: string): Promise<{ customerId: string; accessToken: string }>;
+  /** Releases the browser. Optional: a driver that holds nothing has nothing to release. */
+  close?(): Promise<void>;
 }
 
 export interface ProvisionerOptions {
@@ -92,7 +94,7 @@ export class LiveCustomerProvisioner implements CustomerProvisioner {
     await step('request sign-up', () => this.opts.driver.requestSignup(email));
     const verification = await this.opts.mailbox.fetchVerification({ recipient: email, purpose: 'customer-signup-link', sinceMs });
     if (verification.kind !== 'link') throw new HarnessRefusal('PROVISIONER_REFUSED', 'The mailbox did not return a verification link.');
-    await step('complete sign-up', () => this.opts.driver.completeSignup(verification.url, password));
+    await step('complete sign-up', () => this.opts.driver.completeSignup(verification.url, email, password));
     const session = await step('sign in', () => this.opts.driver.signIn(email, password));
     this.known.set(label, { email, password, id: session.customerId });
     return { id: session.customerId, token: session.accessToken };

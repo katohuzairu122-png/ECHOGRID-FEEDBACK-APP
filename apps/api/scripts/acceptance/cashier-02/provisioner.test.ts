@@ -23,7 +23,7 @@ function setup(over: { config?: TargetsConfig; driver?: Partial<SignupDriver> } 
   const mailbox = new RestrictedVerificationMailbox({ runId: 'abc123', config: config.mailbox, webHost: WEB, source, now: () => NOW, sleep: async () => {}, attempts: 1 });
   const driver: SignupDriver = {
     async requestSignup(email) { calls.push(`request:${email}`); source.set([{ to: email, receivedAtMs: NOW, text: `https://${WEB}/loyalty/signup/verify?token=LINKTOKEN` }]); },
-    async completeSignup(url, password) { calls.push(`complete:${url.includes('LINKTOKEN')}:${password.length > 12}`); },
+    async completeSignup(url, email, password) { calls.push(`complete:${url.includes('LINKTOKEN')}:${email.startsWith('acc-abc123-')}:${password.length > 12}`); },
     async signIn(email) { calls.push(`signin:${email}`); return { customerId: `id-${email.split('@')[0]}`, accessToken: `token-${calls.length}` }; },
     ...over.driver,
   };
@@ -54,7 +54,7 @@ describe('provisioning flow', () => {
     const c = await provisioner.create('new1');
     expect(calls.map((x) => x.split(':')[0])).toEqual(['request', 'complete', 'signin']);
     expect(calls[0]).toBe('request:acc-abc123-new1@mail.example.test');
-    expect(calls[1]).toBe('complete:true:true');
+    expect(calls[1]).toBe('complete:true:true:true');
     expect(c.id).toBe('id-acc-abc123-new1');
   });
   it('asking for the same label again creates nothing new: it signs the same customer in again (a returning customer)', async () => {
