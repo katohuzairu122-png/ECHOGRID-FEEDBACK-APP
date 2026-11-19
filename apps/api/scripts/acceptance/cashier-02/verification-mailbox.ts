@@ -1,4 +1,5 @@
 import { REGISTRATION_VERIFY_PATH } from '../../../src/customer-auth/customer-email-auth.delivery';
+import { createHash } from 'node:crypto';
 import { HarnessRefusal, type MailboxConfig } from './guard';
 
 /**
@@ -28,9 +29,20 @@ export interface MessageSource {
 
 export type Verification = { kind: 'link'; url: string } | { kind: 'code'; value: string };
 
+/** What is kept as proof that a verification was retrieved. Deliberately contains NO message, link, token or code: only hashes, a kind and an age. */
+export interface EvidenceRecord {
+  at: string;
+  recipient: string;
+  purpose: VerificationPurpose;
+  kind: 'link' | 'code';
+  ageMs: number;
+  adapter: string;
+}
+
 export interface VerificationMailbox {
   readonly kind: string;
   fetchVerification(request: { recipient: string; purpose: VerificationPurpose; sinceMs: number }): Promise<Verification>;
+  evidence?(): readonly EvidenceRecord[];
 }
 
 export const NullVerificationMailbox: VerificationMailbox = {
@@ -66,6 +78,11 @@ export interface RestrictedVerificationOptions {
 export class RestrictedVerificationMailbox implements VerificationMailbox {
   readonly kind: string;
   private readonly opts: RestrictedVerificationOptions;
+  private readonly records: EvidenceRecord[] = [];
+
+  evidence(): readonly EvidenceRecord[] {
+    return this.records;
+  }
 
   constructor(opts: RestrictedVerificationOptions) {
     if (!RUN_ID.test(opts.runId)) throw new HarnessRefusal('OTP_REFUSED', 'The run identifier is not valid.');
@@ -105,7 +122,18 @@ export class RestrictedVerificationMailbox implements VerificationMailbox {
         .filter((m) => Number.isFinite(m.receivedAtMs) && m.receivedAtMs >= request.sinceMs && m.receivedAtMs <= now() + CLOCK_SKEW_MS)
         .sort((a, b) => b.receivedAtMs - a.receivedAtMs);
       const newest = fresh[0];
-      if (newest) return extract(newest.text, request.purpose, webHost);
+      if (newest) {
+        const verification = extract(newest.text, request.purpose, webHost);
+        this.records.push({
+          at: new Date(now()).toISOString(),
+          recipient: createHash('sha256').update(recipient).digest('hex').slice(0, 12),
+          purpose: request.purpose,
+          kind: verification.kind,
+          ageMs: Math.max(0, now() - newest.receivedAtMs),
+          adapter: this.kind,
+        });
+        return verification;
+      }
       if (i < attempts - 1) await sleep(this.opts.pollMs ?? 5000);
     }
     throw new HarnessRefusal('OTP_REFUSED', 'No verification arrived in time.');
