@@ -49,6 +49,17 @@ export const joinAssistedMembershipSchema = z.object({
   consentVersion: z.enum(JOIN_LOYALTY_CONSENT_VERSIONS).default(CURRENT_JOIN_LOYALTY_CONSENT_VERSION),
   idempotencyKey: z.string().trim().min(8).max(200).optional(),
 });
+/** CASHIER-AUTH-02D: what the customer sees about an invitation BEFORE consenting. Never anything about the cashier. */
+export const previewAssistedMembershipSchema = z.object({ inviteToken: z.string().min(1).max(2048) });
+export const ASSISTED_INVITE_PREVIEW_STATUSES = ['ready', 'already_member', 'used'] as const;
+export type AssistedInvitePreviewStatus = (typeof ASSISTED_INVITE_PREVIEW_STATUSES)[number];
+export interface AssistedInvitePreviewDto {
+  status: AssistedInvitePreviewStatus;
+  businessName: string;
+  branchName: string;
+  businessId: string;
+  expiresAt: string;
+}
 export type JoinAssistedMembershipInput = z.infer<typeof joinAssistedMembershipSchema>;
 
 export type CustomerMembershipDto = z.infer<typeof customerMembershipSchema>;

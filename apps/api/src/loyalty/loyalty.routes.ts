@@ -121,7 +121,10 @@ loyaltyRoutes.post('/actions/onboarding-invite', requirePermission('loyalty:serv
     }),
   );
   c.set('auditAlreadyRecorded', true);
-  return ok(c, { inviteToken: invite.token, expiresAt: invite.expiresAt.toISOString(), branchId: cashier.branchId });
+  // The customer-facing link, built from the operator-configured WEB_BASE_URL plus the signed token (nothing from the request), so the
+  // cashier app needs no knowledge of the customer site's address.
+  const inviteUrl = new URL(`/loyalty/invite/${invite.token}`, c.env.WEB_BASE_URL).toString();
+  return ok(c, { inviteToken: invite.token, inviteUrl, expiresAt: invite.expiresAt.toISOString(), branchId: cashier.branchId });
 });
 
 // ---- Accounts & points engine (Block 3) ---------------------------------

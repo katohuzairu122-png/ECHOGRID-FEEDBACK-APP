@@ -108,6 +108,22 @@ Confirmed: the allow-list grew by exactly one fully anchored route (no wildcard;
 | I-4 no test of acceptance racing revocation | info | the 02D suite races a switch against acceptance for 6 rounds and 02C-R1 covers revocation ordering; a dedicated looped acceptance-versus-revocation test is a possible follow-up |
 | `BranchService.deleteBranch` does not revoke sessions bound to the deleted branch (pre-existing; also affects purchases and redemptions, which the per-request tenant check already refuses) | medium, pre-existing | **not changed here** (outside this change); recommended as a separate reviewed block |
 
+## Invitation interfaces (owner-authorised, stacked on the issuer)
+
+**Cashier PWA, `/cashier/invite`** (an "Invite" tab, offered only to a session bound to a branch): a button creates one invitation; the screen shows a QR code of the customer link, a live countdown, "copy link" and "create a new invitation";
+when it expires the code is removed and the screen says so. It is keyed by branch and its action is bound to the branch it was drawn for, so a branch switch discards the code and a stale window is redirected. The cashier never enters or sees a customer detail.
+Server action `cashierIssueInviteAction` calls only `POST /loyalty/actions/onboarding-invite` under the cashier credential; refusals map to rate-limited, branch-required and unavailable; an ended session returns to sign-in. The web-side conformance test pins the cashier app to the nine allowed routes.
+
+**Customer page, `/loyalty/invite/<token>`** (customer host): signed-out visitors see only sign-in and create-account links that return to the same page (nothing about the invitation is revealed before authentication). A signed-in customer sees the business and branch and the same
+`JOIN_LOYALTY` consent as every other way of joining; **Join** stays disabled until it is ticked, and `joinAssistedAction` sends only the invitation, the consent and the consent version (the invitation decides business, branch and cashier). Handled states: ready, already enrolled, already used,
+expired or invalid, no longer valid at acceptance, phone verification required for an additional business, generic failure. A cashier cannot create a customer identity: the customer authenticates as themselves and consents.
+
+API additions for these screens: `POST /customer-memberships/join-assisted/preview` (customer-authenticated, read-only: business and branch names, `ready | already_member | used`, expiry; nothing about the cashier; a deleted or archived branch is refused) and the issuer response gains `inviteUrl`,
+built from the operator-configured `WEB_BASE_URL` and the signed token only, so the cashier app needs no knowledge of the customer site's address.
+
+Languages: English, French, Spanish, Arabic (`cashier.invite`, `cashier.header.invite`, `loyalty.customer.invite`), with a key and placeholder parity test; layouts use logical (RTL-safe) spacing, 48 px touch targets and a single-column card for 375 px screens.
+Browser verification of RTL and 375 px layouts is part of the staging acceptance gate.
+
 ## Reporting foundation
 
 `GET /analytics/onboarding?from&to&branchId` (existing `analytics:view` permission, existing tenant and branch scoping): events vs unique customers, re-join events,
@@ -124,7 +140,7 @@ breakdown. Cashier tokens cannot reach it (outside the allow-list).
 
 ## Not done / out of scope
 
-Cashier PWA screen to show the invitation and customer web screen to accept it (separate UI block); `remote_invitation` workflow; any backfill;
+`remote_invitation` workflow; any backfill;
 staging/production deployment; rate-limit, secrets, consent or verification policy changes; MFA.
 
 ## Tests

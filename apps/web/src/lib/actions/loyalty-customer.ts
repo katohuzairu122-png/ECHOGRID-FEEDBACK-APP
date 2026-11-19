@@ -47,6 +47,37 @@ export async function joinLoyaltyAction(qrToken: string, consentAccepted: boolea
   return result.loyaltyAccount;
 }
 
+/**
+ * CASHIER-AUTH-02D: the customer accepts a cashier-issued one-time invitation, signed in as themselves and with explicit consent. The
+ * invitation (not this request) decides the business and branch; nothing the browser sends can choose them. Failures become serialisable
+ * state so the screen can say what to do (ask the cashier for a new one, verify a phone) instead of a generic server-action error.
+ */
+export interface JoinAssistedResult {
+  error?: string;
+  code?: string;
+  account?: LoyaltyAccountDto;
+}
+
+export async function joinAssistedAction(inviteToken: string, consentAccepted: boolean): Promise<JoinAssistedResult> {
+  if (consentAccepted !== true) return { error: 'Accept the loyalty program consent to join.', code: 'CONSENT_REQUIRED' };
+  if (typeof inviteToken !== 'string' || inviteToken.length === 0 || inviteToken.length > 2048) {
+    return { error: 'This invitation is not valid.', code: 'ONBOARDING_INVITE_INVALID' };
+  }
+  try {
+    const result = await customerApiFetch<JoinCustomerMembershipResultDto>(
+      '/customer-memberships/join-assisted',
+      { method: 'POST', body: JSON.stringify({ inviteToken, consentAccepted: true, consentVersion: CURRENT_JOIN_LOYALTY_CONSENT_VERSION }) },
+      `/loyalty/invite/${inviteToken}`,
+    );
+    revalidatePath('/loyalty/dashboard');
+    return { account: result.loyaltyAccount };
+  } catch (err) {
+    rethrowControlFlow(err);
+    if (err instanceof ApiError) return { error: err.message, ...(err.code !== undefined ? { code: err.code } : {}) };
+    return { error: 'Something went wrong. Please try again.' };
+  }
+}
+
 /** Scanning a branch's QR code while signed in as a customer -- reuses the
  * same token feedback's public form uses (one QR code, two possible
  * destinations depending on which link the customer taps). */

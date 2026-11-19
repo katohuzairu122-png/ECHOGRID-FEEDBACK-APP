@@ -279,3 +279,19 @@ describe('CASHIER-AUTH-02C: the header offers a branch switch only to an account
     expect(screen.queryByTestId('branch-switcher')).not.toBeInTheDocument();
   });
 });
+
+describe('CASHIER-AUTH-02D: the Invite tab', () => {
+  const ctx = (over: Record<string, unknown>) => m.ctx.mockResolvedValue({ businessId: 'b', businessName: 'Cafe', branchId: 'b1', branchName: 'Main', deviceLabel: null, canSwitchBranch: false, ...over });
+
+  it('a session bound to a branch is offered the Invite tab, linking to the invitation screen', async () => {
+    ctx({});
+    render(await CashierAppLayout({ children: null }));
+    expect(screen.getByRole('link', { name: 'header.invite' })).toHaveAttribute('href', '/cashier/invite');
+  });
+
+  it('a session with no branch is not offered it (an invitation is bound to a branch; none is guessed)', async () => {
+    ctx({ branchId: null, branchName: null });
+    render(await CashierAppLayout({ children: null }));
+    expect(screen.queryByRole('link', { name: 'header.invite' })).not.toBeInTheDocument();
+  });
+});

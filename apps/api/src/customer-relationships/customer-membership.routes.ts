@@ -1,5 +1,5 @@
 import { Hono, type Context } from 'hono';
-import { joinAssistedMembershipSchema, joinCustomerMembershipSchema } from '@echo-grid-feedback/shared-types';
+import { joinAssistedMembershipSchema, joinCustomerMembershipSchema, previewAssistedMembershipSchema } from '@echo-grid-feedback/shared-types';
 import type { Bindings } from '../config/env';
 import { createDb, type Database } from '../db/client';
 import { createRepositories } from '../repositories';
@@ -99,6 +99,31 @@ customerMembershipRoutes.post('/join-assisted', async (c) => {
       ...(body.idempotencyKey !== undefined ? { idempotencyKey: body.idempotencyKey } : {}),
     });
     return ok(c, toJoinMembershipResultDto(result), 201);
+  });
+});
+
+// CASHIER-AUTH-02D: what an invitation is, shown to the customer BEFORE they consent. Read-only and customer-authenticated. It reveals the
+// business and branch names (already public through the business QR) and whether the customer can still use it; never anything about the cashier.
+// An invalid or expired token, or one whose business or branch is gone, is the same generic refusal as at acceptance.
+customerMembershipRoutes.post('/join-assisted/preview', async (c) => {
+  const body = await parseJsonBody(c.req.raw, previewAssistedMembershipSchema);
+  const invite = await verifyOnboardingInvite(body.inviteToken, c.env.JWT_ACCESS_SECRET);
+  return withDb(c, async (db) => {
+    const repos = createRepositories(db);
+    const business = await repos.businesses.findById(invite.businessId);
+    const branch = await repos.branches.findById(invite.branchId, invite.businessId);
+    if (!business || business.status !== 'active' || !branch || branch.status !== 'active') {
+      throw new AppError('This invitation is not valid or has expired. Ask the cashier for a new one.', 400, 'ONBOARDING_INVITE_INVALID');
+    }
+    const membership = await repos.customerMemberships.findByCustomerAndBusiness(c.get('customerId'), invite.businessId);
+    const used = membership?.status === 'active' ? false : await repos.customerOnboardingEvents.assistedInviteUsed(invite.businessId, invite.inviteId);
+    return ok(c, {
+      status: membership?.status === 'active' ? 'already_member' : used ? 'used' : 'ready',
+      businessName: business.name,
+      branchName: branch.name,
+      businessId: business.id,
+      expiresAt: invite.expiresAt.toISOString(),
+    });
   });
 });
 

@@ -1,4 +1,4 @@
-import { asc, eq, sql } from 'drizzle-orm';
+import { and, asc, eq, sql } from 'drizzle-orm';
 import { customerOnboardingEvents } from '../db/schema';
 import type { CustomerOnboardingEvent, NewCustomerOnboardingEvent } from '../db/schema';
 import { BaseRepository } from './base.repository';
@@ -35,6 +35,16 @@ export class CustomerOnboardingEventRepository extends BaseRepository {
     const [row] = await this.db.insert(customerOnboardingEvents).values(event).returning();
     if (!row) throw new Error('Onboarding event was not recorded');
     return row;
+  }
+
+  /** True when a one-time invitation of this business has already onboarded someone (read-only, for the customer's preview). */
+  async assistedInviteUsed(businessId: string, reference: string): Promise<boolean> {
+    const rows = await this.db
+      .select({ id: customerOnboardingEvents.id })
+      .from(customerOnboardingEvents)
+      .where(and(eq(customerOnboardingEvents.businessId, businessId), eq(customerOnboardingEvents.source, 'cashier_assisted'), eq(customerOnboardingEvents.reference, reference)))
+      .limit(1);
+    return rows.length > 0;
   }
 
   async listForMembership(membershipId: string): Promise<CustomerOnboardingEvent[]> {
