@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import type { ApiClient } from './client';
 import { runAcceptance } from './runner';
@@ -70,5 +72,14 @@ describe('browser evidence in the report', () => {
     const browser = [{ id: 'B01', title: 'cashier login', status: 'PASS' as const, detail: '' }, { id: 'B02', title: 'overflow', status: 'FAIL' as const, detail: 'scrollWidth 400 > 375' }, { id: 'B03', title: 'customer join', status: 'NOT_RUN' as const, detail: 'no customer session' }];
     const out = await runAcceptance({ ctx: { ...ctx(null), api: api2, browser }, mode: 'local', commit: 'abcdef0', only: ['S14'] });
     expect(out.report.checks.map((c) => [c.id, c.status])).toEqual([['S14.B01', 'PASS'], ['S14.B02', 'FAIL'], ['S14.B03', 'NOT_RUN']]);
+  });
+});
+
+describe('scenario labels are valid for the live provisioner', () => {
+  it('every customer label used by a scenario can form a synthetic address', () => {
+    const source = readFileSync(path.join(__dirname, 'scenarios.ts'), 'utf8');
+    const labels = [...source.matchAll(/customer\(ctx, w, '([^']*)'/g)].map((m) => m[1] as string);
+    expect(labels.length).toBeGreaterThan(8);
+    for (const label of labels) expect(label, label).toMatch(/^[a-z0-9]{1,16}$/);
   });
 });

@@ -324,8 +324,8 @@ export const SCENARIOS: Scenario[] = [
       const c = await w.makeCashier('u', w.branchesA.slice(0, 2));
       const s = await w.signIn(c, w.branchesA[0] as string);
       const inv = (await invite(ctx, s.accessToken)).data?.inviteToken as string;
-      const first = await customer(ctx, w, 'single-a');
-      const second = await customer(ctx, w, 'single-b');
+      const first = await customer(ctx, w, 'singlea');
+      const second = await customer(ctx, w, 'singleb');
       const a = await accept(ctx, first.token, inv);
       await rec.check('S05.1', 'the first acceptance succeeds', a.status === 200 || a.status === 201, `${a.status}`);
       const b = await accept(ctx, second.token, inv);
