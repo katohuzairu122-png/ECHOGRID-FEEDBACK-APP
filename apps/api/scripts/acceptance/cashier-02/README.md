@@ -30,6 +30,15 @@ Exit codes: `0` every runnable check passed; `1` a check failed (or NOT RUN with
 Environment variables (names only; values are never read into output): `ACCEPTANCE_OWNER_A_EMAIL`, `ACCEPTANCE_OWNER_A_PASSWORD`, `ACCEPTANCE_OWNER_A_BUSINESS_ID`, and the same three with `B`.
 Business A needs at least three branches (the harness never creates branches) and business B at least one.
 
+## Readiness preflight
+
+```bash
+pnpm --filter @echo-grid-feedback/api acceptance:cashier-02 -- --preflight            # offline: every prerequisite as PASS / BLOCKED / NOT VERIFIED
+pnpm --filter @echo-grid-feedback/api acceptance:cashier-02 -- --preflight --online   # also probes the three staging hosts, only if hostnames AND live execution are approved
+```
+
+A live run additionally needs `liveExecution.authorized` (separate from the hostname approval). Mailbox adapters: `local-spool` (provider-neutral; one file per recipient in `ACCEPTANCE_MAILBOX_SPOOL_DIR`). See `docs/architecture/builds/CASHIER/CASHIER_AUTH_02E_E2_MAILBOX_AND_READINESS.md`.
+
 ## E2: what was added (and what is still blocked)
 
 | Part | What it is | Evidence |
