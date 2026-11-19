@@ -24,6 +24,8 @@ export interface CustomerProvisioner {
   readonly kind: string;
   readonly canSetPhoneVerified: boolean;
   create(label: string, opts?: { phoneVerified?: boolean }): Promise<Provisioned>;
+  /** E2-A: a customer created earlier in this run signs in again (a returning customer). Absent when the provisioner cannot. */
+  returning?(label: string): Promise<Provisioned>;
 }
 
 export interface Context {
