@@ -1,0 +1,30 @@
+# CASHIER-AUTH-02E E2D: TEST-ONLY acceptance mail receiver. NOT deployed by any workflow, and NOT deployable as-is:
+#  - ALLOWED_RECIPIENT_DOMAIN, ALLOWED_SENDER_DOMAINS and CONFIRMATION_LINK_HOSTS are deliberately empty, so the Worker refuses all mail
+#    and all retrieval (fail closed) until the owner approves a domain and a later, separately authorized infrastructure block sets them;
+#  - no route, no Email Routing `addresses`, no workers.dev exposure and no secret is declared here (see docs/.../E2D for the procedure);
+#  - nothing in this file points at an Echo Grid production resource.
+name = "echo-grid-acceptance-mail-receiver"
+main = "src/index.ts"
+compatibility_date = "2026-07-08"
+workers_dev = false
+preview_urls = false
+
+[vars]
+RECEIVER_ENVIRONMENT = "acceptance-test"
+ALLOWED_RECIPIENT_DOMAIN = ""
+ALLOWED_SENDER_DOMAINS = ""
+CONFIRMATION_LINK_HOSTS = ""
+
+[[durable_objects.bindings]]
+name = "MAILBOX"
+class_name = "MailboxDurableObject"
+
+[[durable_objects.bindings]]
+name = "INGEST_LIMITER"
+class_name = "IngestLimiterDurableObject"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["MailboxDurableObject", "IngestLimiterDurableObject"]
+
+# Secrets (set only by the authorized infrastructure block, never committed): ACCEPTANCE_MAILBOX_DELIVERY_KEY, ACCEPTANCE_RECEIVER_RETRIEVAL_KEY.

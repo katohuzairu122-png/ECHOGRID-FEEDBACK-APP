@@ -172,6 +172,10 @@ jobs:
       - name: Typecheck web
         run: pnpm --filter @echo-grid-feedback/web typecheck
 
+      # CASHIER-AUTH-02E E2D: the test-only acceptance mail receiver. Verification only: this job never deploys it, and no workflow does.
+      - name: Typecheck mail receiver (E2D, test-only)
+        run: pnpm --filter @echo-grid-feedback/mail-receiver typecheck
+
       - name: Unit tests -- API
         # Fast tier (fake repositories, no external deps) -- runs before the
         # integration tier below so a logic error reports in seconds rather
@@ -201,6 +205,12 @@ jobs:
 
       - name: Unit tests -- web
         run: pnpm --filter @echo-grid-feedback/web test
+
+      # Offline: pure-logic tests, then the real Workers runtime (workerd) with real Durable Objects. No network, no Cloudflare account.
+      - name: Unit and Workers-runtime tests -- mail receiver (E2D, test-only)
+        run: |
+          pnpm --filter @echo-grid-feedback/mail-receiver test
+          pnpm --filter @echo-grid-feedback/mail-receiver test:workers
 
       - name: Build operator-only secure-file native dependency
         run: pnpm --filter @echo-grid-feedback/secure-file build:native
@@ -273,6 +283,10 @@ jobs:
       # above is already more likely to surface first.
       - name: Build API (wrangler dry run)
         run: pnpm --filter @echo-grid-feedback/api build
+
+      # Dry run only: bundles the receiver to prove it compiles. Nothing is uploaded; no Cloudflare credential is used.
+      - name: Build mail receiver (E2D wrangler dry run, test-only, not deployed)
+        run: pnpm --filter @echo-grid-feedback/mail-receiver build
 
       # `next build`, which is what apps/web's build script runs. Worth being
       # precise about the residual gap: deploy-web runs
