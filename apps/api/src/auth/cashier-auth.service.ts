@@ -87,6 +87,11 @@ export class CashierAuthService {
     private readonly repos: CashierRepos,
     private readonly secrets: Pick<Bindings, 'JWT_ACCESS_SECRET' | 'JWT_REFRESH_SECRET'>,
     private readonly hasher: Pbkdf2Worker,
+    /**
+     * SEC-CASHIER-02C-R1: how to run a unit of work in ONE database transaction, given by the route for the paths that are not already
+     * transactional (sign-in). Absent when the caller is already inside a transaction (the branch switch) or has none (unit tests).
+     */
+    private readonly transact?: <T>(work: (repos: CashierRepos) => Promise<T>) => Promise<T>,
   ) {}
 
   /** Step 1: the same credential check as the web login (constant cost, one error for unknown user or wrong password). */
@@ -162,7 +167,7 @@ export class CashierAuthService {
     ) {
       const branchId = only.branches[0]?.id ?? null;
       // Exactly one branch (or none): there is nothing to switch to.
-      const session = await this.openSession(user.id, only.businessId, branchId, deviceLabel, meta, false);
+      const session = await this.openGuardedSession(user.id, only.businessId, branchId, deviceLabel, meta, false);
       return { status: 'authenticated', ...session, userId: user.id };
     }
     const ticket = await signCashierSelectionTicket(
@@ -222,7 +227,7 @@ export class CashierAuthService {
       expiresAt: ticket.expiresAt,
     });
     if (!spent) throw new AuthError('This sign-in has already been used. Sign in again.', 'CASHIER_SELECTION_INVALID');
-    const session = await this.openSession(
+    const session = await this.openGuardedSession(
       user.id,
       choice.businessId,
       branchId,
@@ -335,6 +340,10 @@ export class CashierAuthService {
     onIdentified?.({ userId: first.userId, businessId: first.businessId, branchId: first.branchId });
 
     const previousSessionId = first.sessionId;
+    // SEC-CASHIER-02C-R1: the user row FIRST, then the session rows. Taking it before the eligibility read below is what makes a
+    // concurrent branch removal, disable or credential reset strictly ordered against this switch (see lockForSessionIssue). The order
+    // (user row, then session rows) is the same on every path, and administrators take the user row before touching session rows.
+    await this.repos.users.lockForSessionIssue(first.userId);
     await this.repos.refreshTokens.lockSessionForUpdate(first.userId, previousSessionId);
     const stored = await this.repos.refreshTokens.findById(first.id); // re-read UNDER the lock
     if (!stored || !stored.businessId) throw invalid();
@@ -549,6 +558,42 @@ export class CashierAuthService {
     return (
       await this.repos.permissions.findEffectiveKeys(userId, businessId, branchId ?? undefined)
     ).has(SERVE);
+  }
+
+  /**
+   * SEC-CASHIER-02C-R1: runs `work` under the SHARE lock on the user row, inside one transaction when the route supplied one.
+   * The account must be active under the lock, so a disable or revoke that committed first refuses the issuance.
+   */
+  private async underUserLock<T>(userId: string, work: (service: CashierAuthService) => Promise<T>): Promise<T> {
+    const run = async (service: CashierAuthService) => {
+      const user = await service.repos.users.lockForSessionIssue(userId);
+      if (!user || user.status !== 'active') throw new AuthError('This account is not active.', 'ACCOUNT_INACTIVE');
+      return work(service);
+    };
+    if (!this.transact) return run(this);
+    return this.transact((repos) => run(new CashierAuthService(repos, this.secrets, this.hasher)));
+  }
+
+  /**
+   * Opens a NEW branch-bound session (sign-in) with authority re-checked AFTER the user-row lock and BEFORE the insert, in the same
+   * transaction. The eligibility computed earlier in the request may be stale by the time we get here (a branch removal can commit
+   * in between); this is the check that counts. The lock is held until the new session row commits, so a removal that starts later
+   * waits, then revokes the row this call created.
+   */
+  private async openGuardedSession(
+    userId: string,
+    businessId: string,
+    branchId: string | null,
+    deviceLabel: string | undefined,
+    meta: Meta,
+    canSwitchBranch = false,
+  ): Promise<CashierSession> {
+    return this.underUserLock(userId, async (service) => {
+      if (!(await service.stillEligible(userId, businessId, branchId))) {
+        throw new AuthError('This account cannot use the cashier app at that branch.', 'CASHIER_ACCESS_DENIED');
+      }
+      return service.openSession(userId, businessId, branchId, deviceLabel, meta, canSwitchBranch);
+    });
   }
 
   private async openSession(
