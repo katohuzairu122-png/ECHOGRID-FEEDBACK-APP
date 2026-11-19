@@ -684,7 +684,7 @@ describe.skipIf(!databaseUrl)('CASHIER-AUTH-02D customer onboarding attribution 
       const ownerCToken = await signAccessToken(ownerCId, SECRET);
       const res = await http('GET', '/analytics/onboarding', { token: ownerCToken, businessId: bizC });
       expect(res.status, JSON.stringify(res)).toBe(200);
-      expect(res.data.totals).toEqual({ events: 4, uniqueCustomers: 3, rejoinEvents: 1, withoutBranch: 0 });
+      expect(res.data.totals).toEqual({ events: 4, uniqueCustomers: 3, rejoinEvents: 1, withoutBranch: 0, erasedEvents: 0 });
       expect(res.data.bySource).toEqual([{ source: 'business_qr', events: 4, uniqueCustomers: 3 }]);
       const byBranch = Object.fromEntries(res.data.byBranch.map((b: { branchName: string; events: number; uniqueCustomers: number }) => [b.branchName, [b.events, b.uniqueCustomers]]));
       expect(byBranch).toEqual({ C1: [2, 2], C2: [2, 2] });

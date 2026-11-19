@@ -1,5 +1,6 @@
 import { sql } from 'drizzle-orm';
-import { pgTable, uuid, text, timestamp, boolean, index, uniqueIndex, check } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, text, timestamp, boolean, integer, index, uniqueIndex, check } from 'drizzle-orm/pg-core';
+import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 import { auditLog } from './audit-log';
 import { businessCustomerMemberships } from './business-customer-memberships';
 import { branches } from './branches';
@@ -39,9 +40,10 @@ export const customerOnboardingEvents = pgTable(
   'customer_onboarding_events',
   {
     id: uuid('id').primaryKey().defaultRandom(),
-    membershipId: uuid('membership_id').notNull().references(() => businessCustomerMemberships.id, { onDelete: 'restrict' }),
+    /** NULL only after a controlled erasure (D2-R1): the personal links are severed, never rewritten to another value. */
+    membershipId: uuid('membership_id').references(() => businessCustomerMemberships.id, { onDelete: 'restrict' }),
     businessId: uuid('business_id').notNull().references(() => businesses.id, { onDelete: 'restrict' }),
-    customerId: uuid('customer_id').notNull().references(() => customers.id, { onDelete: 'restrict' }),
+    customerId: uuid('customer_id').references(() => customers.id, { onDelete: 'restrict' }),
     /** NULL when no physical branch was involved or none could be established reliably. Never guessed. */
     branchId: uuid('branch_id').references(() => branches.id, { onDelete: 'restrict' }),
     /** The cashier who issued the invitation; only for cashier_assisted. Never chosen by a client. */
@@ -56,6 +58,10 @@ export const customerOnboardingEvents = pgTable(
     occurredAt: timestamp('occurred_at', { withTimezone: true }).notNull(),
     recordedAt: timestamp('recorded_at', { withTimezone: true }).notNull().defaultNow(),
     auditLogId: uuid('audit_log_id').references(() => auditLog.id, { onDelete: 'restrict' }),
+    /** D2-R1: set once, by the restricted erasure function only. NULL for every event that still carries its personal links. */
+    erasedAt: timestamp('erased_at', { withTimezone: true }),
+    /** D2-R1: the erasure operation (onboarding_erasure_operations.id) that severed this event's links. No customer data in either. */
+    erasureOperationId: uuid('erasure_operation_id').references((): AnyPgColumn => onboardingErasureOperations.id, { onDelete: 'restrict' }),
   },
   (table) => [
     index('customer_onboarding_events_business_occurred_idx').on(table.businessId, table.occurredAt),
@@ -73,9 +79,18 @@ export const customerOnboardingEvents = pgTable(
       sql`${table.verificationState} IN ('unverified','phone_verified','email_verified','phone_and_email_verified')`,
     ),
     // Attribution shape: a cashier is recorded exactly when the onboarding was cashier-assisted, and that always has a branch.
+    // D2-R1: an event is either fully linked (never erased) or fully severed (erased by the controlled function). A cashier is recorded
+    // exactly when the onboarding was cashier-assisted, except that a staff-subject erasure may sever the cashier of an assisted event.
     check(
       'customer_onboarding_events_cashier_shape_check',
-      sql`(${table.source} = 'cashier_assisted') = (${table.cashierUserId} IS NOT NULL)`,
+      sql`(${table.erasedAt} IS NULL AND (${table.source} = 'cashier_assisted') = (${table.cashierUserId} IS NOT NULL))
+        OR (${table.erasedAt} IS NOT NULL AND (${table.source} = 'cashier_assisted' OR ${table.cashierUserId} IS NULL))`,
+    ),
+    check(
+      'customer_onboarding_events_erasure_shape_check',
+      sql`(${table.erasedAt} IS NULL AND ${table.erasureOperationId} IS NULL AND ${table.customerId} IS NOT NULL AND ${table.membershipId} IS NOT NULL)
+        OR (${table.erasedAt} IS NOT NULL AND ${table.erasureOperationId} IS NOT NULL AND ${table.customerId} IS NULL AND ${table.membershipId} IS NULL
+            AND ${table.consentGrantId} IS NULL AND ${table.auditLogId} IS NULL AND ${table.reference} IS NULL)`,
     ),
     check(
       'customer_onboarding_events_assisted_branch_check',
@@ -83,10 +98,47 @@ export const customerOnboardingEvents = pgTable(
     ),
     check(
       'customer_onboarding_events_assisted_reference_check',
-      sql`${table.source} <> 'cashier_assisted' OR ${table.reference} IS NOT NULL`,
+      sql`${table.source} <> 'cashier_assisted' OR ${table.reference} IS NOT NULL OR ${table.erasedAt} IS NOT NULL`,
     ),
   ],
 );
 
+/**
+ * D2-R1: the minimal audit of one controlled erasure operation. It records WHAT happened (scope, counts, outcome, the database role that
+ * ran it, an operator-chosen request reference) and never WHO the customer was: no customer, membership or contact identifier is stored,
+ * so proving that an erasure happened does not keep the personal data it removed. Append-only at the database; written only by the
+ * erasure function. `business_id` is SET NULL like audit_log so the record outlives the business.
+ */
+export const onboardingErasureOperations = pgTable(
+  'onboarding_erasure_operations',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    businessId: uuid('business_id').references(() => businesses.id, { onDelete: 'set null' }),
+    /** Operator-chosen reference to the verified erasure request (pattern-checked, no free text). */
+    requestRef: text('request_ref').notNull(),
+    /** session_user of the database login that invoked the function (evidence of who ran it; never supplied by the caller). */
+    operatorRole: text('operator_role').notNull(),
+    eventsErased: integer('events_erased').notNull(),
+    /** Events left untouched because an assisted invitation could still be valid (they are erased by a later run). */
+    eventsDeferred: integer('events_deferred').notNull(),
+    /** Erased events whose remaining attributes (business, branch, source, cashier, day, verification state, re-join) are unique in this operation. */
+    residualSingletons: integer('residual_singletons').notNull(),
+    cashierSevered: boolean('cashier_severed').notNull(),
+    outcome: text('outcome').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index('onboarding_erasure_operations_business_created_idx').on(table.businessId, table.createdAt),
+    check('onboarding_erasure_operations_outcome_check', sql`${table.outcome} IN ('completed','partial','noop')`),
+    check('onboarding_erasure_operations_counts_check', sql`${table.eventsErased} >= 0 AND ${table.eventsDeferred} >= 0 AND ${table.residualSingletons} >= 0`),
+    check('onboarding_erasure_operations_request_ref_check', sql`${table.requestRef} ~ '^[A-Za-z0-9._:-]{1,64}$'`),
+  ],
+);
+
 export type CustomerOnboardingEvent = typeof customerOnboardingEvents.$inferSelect;
-export type NewCustomerOnboardingEvent = typeof customerOnboardingEvents.$inferInsert;
+/** The application can only ever INSERT a fully linked, never-erased event: erasure fields and nullable links are not part of an insert. */
+export type NewCustomerOnboardingEvent = Omit<
+  typeof customerOnboardingEvents.$inferInsert,
+  'customerId' | 'membershipId' | 'erasedAt' | 'erasureOperationId'
+> & { customerId: string; membershipId: string };
+export type OnboardingErasureOperation = typeof onboardingErasureOperations.$inferSelect;
