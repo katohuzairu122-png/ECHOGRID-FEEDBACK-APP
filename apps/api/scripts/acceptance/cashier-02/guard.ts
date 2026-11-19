@@ -17,7 +17,9 @@ export type RefusalCode =
   | 'STAGING_IDENTITY'
   | 'MAILBOX_NOT_APPROVED'
   | 'RECIPIENT_NOT_ALLOWED'
-  | 'OTP_REFUSED';
+  | 'OTP_REFUSED'
+  | 'IDENTITY_NOT_APPROVED'
+  | 'PROVISIONER_REFUSED';
 
 /** A refusal is a safe, expected stop: nothing was sent. Messages never contain secrets or user-supplied values verbatim. */
 export class HarnessRefusal extends Error {
@@ -36,6 +38,12 @@ export interface MailboxConfig {
   allowedRecipientDomains: string[];
 }
 
+/** E2-A: the owner's authorization to create synthetic customers through the real sign-up flow. Absent means not approved. */
+export interface CustomerProvisioningConfig {
+  approved: boolean;
+  approvedBy: string | null;
+}
+
 export interface TargetsConfig {
   version: 1;
   approved: boolean;
@@ -43,6 +51,7 @@ export interface TargetsConfig {
   approvedAt: string | null;
   targets: { api: { host: string }; web: { host: string }; cashier: { host: string } };
   mailbox: MailboxConfig;
+  customerProvisioning: CustomerProvisioningConfig;
 }
 
 const HOST_PATTERN = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/;
@@ -107,6 +116,12 @@ export function parseTargetsConfig(raw: unknown): TargetsConfig {
   if (mailbox.approved && (mailbox.adapter === 'none' || domains.length === 0 || approver(mailbox.approvedBy, 'mailbox.approvedBy') === null)) {
     throw new HarnessRefusal('CONFIG_INVALID', 'An approved mailbox needs an adapter, allowed domains and an approver.');
   }
+  const provisioning = root.customerProvisioning === undefined ? { approved: false, approvedBy: null } : asRecord(root.customerProvisioning, 'customerProvisioning');
+  if (typeof provisioning.approved !== 'boolean') throw new HarnessRefusal('CONFIG_INVALID', 'customerProvisioning.approved must be a boolean.');
+  const provisioningApprover = approver(provisioning.approvedBy ?? null, 'customerProvisioning.approvedBy');
+  if (provisioning.approved && provisioningApprover === null) {
+    throw new HarnessRefusal('CONFIG_INVALID', 'An approved customer provisioning authorization records who approved it.');
+  }
   const approvedBy = approver(root.approvedBy, 'approvedBy');
   const approvedAt = approver(root.approvedAt, 'approvedAt');
   if (root.approved && (approvedBy === null || approvedAt === null)) {
@@ -124,6 +139,7 @@ export function parseTargetsConfig(raw: unknown): TargetsConfig {
       adapter: mailbox.adapter,
       allowedRecipientDomains: [...(domains as string[])],
     },
+    customerProvisioning: { approved: provisioning.approved, approvedBy: provisioningApprover },
   };
 }
 

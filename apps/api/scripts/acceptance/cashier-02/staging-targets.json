@@ -13,5 +13,9 @@
     "approvedBy": null,
     "adapter": "none",
     "allowedRecipientDomains": []
+  },
+  "customerProvisioning": {
+    "approved": false,
+    "approvedBy": null
   }
 }

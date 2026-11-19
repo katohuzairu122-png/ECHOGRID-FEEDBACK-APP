@@ -23,6 +23,10 @@ import { pbkdf2Hash, pbkdf2Verify } from '../../src/auth/password';
 import { createInProcessClient, type ApiResult, type CallOptions } from '../../scripts/acceptance/cashier-02/client';
 import { runAcceptance } from '../../scripts/acceptance/cashier-02/runner';
 import type { Context, CustomerProvisioner } from '../../scripts/acceptance/cashier-02/scenarios';
+import { LiveCustomerProvisioner, type SignupDriver } from '../../scripts/acceptance/cashier-02/provisioner';
+import { FixtureMessageSource, RestrictedVerificationMailbox } from '../../scripts/acceptance/cashier-02/verification-mailbox';
+import { parseTargetsConfig } from '../../scripts/acceptance/cashier-02/guard';
+import stagingTargets from '../../scripts/acceptance/cashier-02/staging-targets.json';
 
 /**
  * CASHIER-AUTH-02E E1: the acceptance scenarios, run against the REAL application (real middleware, routes, services) and a real local
@@ -90,13 +94,20 @@ describe.skipIf(!databaseUrl)('CASHIER-AUTH-02E E1 acceptance scenarios against 
   const PW = 'a-strong-owner-password-1';
   let phoneSeq = 0;
 
+  const made = new Map<string, string>();
   const provisioner: CustomerProvisioner = {
     kind: 'local-fixture',
     canSetPhoneVerified: true,
-    async create(_label, opts) {
+    async create(label, opts) {
       const phone = `+1559${run.replace(/\D/g, '').padEnd(8, '3').slice(0, 5)}${String(++phoneSeq).padStart(2, '0')}`;
       const c = await repos.customers.create({ phone, ...(opts?.phoneVerified ? { phoneVerifiedAt: new Date() } : {}) });
+      made.set(label, c.id);
       return { id: c.id, token: await signCustomerAccessToken(c.id, CUSTOMER_SECRET) };
+    },
+    async returning(label) {
+      const id = made.get(label);
+      if (!id) throw new Error('unknown customer');
+      return { id, token: await signCustomerAccessToken(id, CUSTOMER_SECRET) };
     },
   };
 
@@ -123,15 +134,15 @@ describe.skipIf(!databaseUrl)('CASHIER-AUTH-02E E1 acceptance scenarios against 
   });
   afterAll(async () => { await client?.end(); });
 
-  it('every scenario runs, every check passes, nothing is skipped except the browser scenario', async () => {
+  it('every scenario runs, every check passes, nothing is skipped except the browser scenario (no browser report supplied)', async () => {
     const out = await runAcceptance({ ctx, mode: 'local', commit: 'abcdef0' });
     const failing = out.report.checks.filter((c) => c.status === 'FAIL');
     expect(failing, JSON.stringify(failing, null, 1)).toEqual([]);
     expect(out.report.state).toBe('COMPLETE');
     const notRun = out.report.checks.filter((c) => c.status === 'NOT_RUN').map((c) => c.id);
     expect(notRun).toEqual(['S14.1']);
-    expect(out.report.counts.pass).toBeGreaterThanOrEqual(50);
-    expect(new Set(out.report.checks.map((c) => c.scenario)).size).toBe(14);
+    expect(out.report.counts.pass).toBeGreaterThanOrEqual(53);
+    expect(new Set(out.report.checks.map((c) => c.scenario)).size).toBe(15);
   });
 
   it('the report is redacted: no token, password, email, phone, code or identifier appears in it', async () => {
@@ -146,10 +157,36 @@ describe.skipIf(!databaseUrl)('CASHIER-AUTH-02E E1 acceptance scenarios against 
     const out = await runAcceptance({ ctx: { ...ctx, provisioner: null, runId: 'loc' + randomUUID().replace(/[^a-z0-9]/g, '').slice(0, 6) }, mode: 'local', commit: 'abcdef0' });
     expect(out.report.counts.fail).toBe(0);
     const byScenario = (id: string) => out.report.checks.filter((c) => c.scenario === id).map((c) => c.status);
-    for (const id of ['S04', 'S05', 'S07', 'S10', 'S11', 'S12', 'S13']) expect(byScenario(id), id).toEqual(['NOT_RUN']);
+    for (const id of ['S04', 'S05', 'S07', 'S10', 'S11', 'S12', 'S13', 'S15']) expect(byScenario(id), id).toEqual(['NOT_RUN']);
     for (const id of ['S01', 'S02', 'S09']) expect(byScenario(id).every((s) => s === 'PASS'), id).toBe(true);
     expect(byScenario('S08').filter((s) => s === 'FAIL')).toEqual([]);
     expect(out.report.checks.find((c) => c.id === 'S08.5')?.status).toBe('NOT_RUN');
+  });
+
+  it('MOCK-BACKED: scenarios that need customers run through the live provisioner abstraction (fixture mailbox + fixture sign-up driver), not through the real web sign-up', async () => {
+    const config = parseTargetsConfig({
+      ...stagingTargets, approved: true, approvedBy: 'owner', approvedAt: 'test',
+      mailbox: { approved: true, approvedBy: 'owner', adapter: 'fixture', allowedRecipientDomains: ['mail.example.test'] },
+      customerProvisioning: { approved: true, approvedBy: 'owner' },
+    });
+    const runId = 'mock' + randomUUID().replace(/[^a-z0-9]/g, '').slice(0, 5);
+    const source = new FixtureMessageSource([]);
+    const mailbox = new RestrictedVerificationMailbox({ runId, config: config.mailbox, webHost: config.targets.web.host, source, attempts: 1, sleep: async () => {} });
+    const byEmail = new Map<string, string>();
+    const driver: SignupDriver = {
+      async requestSignup(email) { source.set([{ to: email, receivedAtMs: Date.now(), text: `https://${config.targets.web.host}/loyalty/signup/verify?token=fixture` }]); },
+      async completeSignup() {},
+      async signIn(email) {
+        let id = byEmail.get(email);
+        if (!id) { id = (await provisioner.create(`m${byEmail.size}`)).id; byEmail.set(email, id); }
+        return { customerId: id, accessToken: await signCustomerAccessToken(id, CUSTOMER_SECRET) };
+      },
+    };
+    const live = new LiveCustomerProvisioner({ runId, config, mailbox, driver });
+    const out = await runAcceptance({ ctx: { ...ctx, provisioner: live, runId }, mode: 'local', commit: 'abcdef0', only: ['S04', 'S05', 'S15'] });
+    expect(out.report.checks.filter((c) => c.status !== 'PASS'), JSON.stringify(out.report.checks.filter((c) => c.status !== 'PASS'))).toEqual([]);
+    expect(out.report.counts.pass).toBeGreaterThanOrEqual(10);
+    expect(JSON.stringify(out.report)).not.toMatch(/fixture|loyalty\/signup\/verify/);
   });
 
   describe('the scenarios discriminate: a faulty application is caught, not passed', () => {

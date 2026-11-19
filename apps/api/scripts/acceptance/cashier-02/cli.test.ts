@@ -68,3 +68,34 @@ describe('command line entry point', () => {
     expect(await runCli([], {}, io({ ...shipped, targets: { api: { host: 'echo-grid-feedback-api.katohuzairu122.workers.dev' }, web: { host: 'a-staging.x.dev' }, cashier: { host: 'b-staging.x.dev' } } }).impl)).toBe(2);
   });
 });
+
+describe('E2 wiring: approvals, provisioner, mailbox and browser evidence', () => {
+  const all = { ...shipped, approved: true, approvedBy: 'owner', approvedAt: 'now',
+    mailbox: { approved: true, approvedBy: 'owner', adapter: 'fixture', allowedRecipientDomains: ['mail.example.test'] },
+    customerProvisioning: { approved: true, approvedBy: 'owner' } };
+  const stagingHealth = async (url: string) => new Response(JSON.stringify(url.endsWith('/health') ? { status: 'ok', service: 'echo-grid-feedback-api', environment: 'staging' } : { data: {} }), { status: 200 });
+  const live = (config: unknown, extra: Partial<CliIo> = {}) => { const t = io(config); t.impl.fetch = stagingHealth; Object.assign(t.impl, extra); return t; };
+
+  it('the self-check names the missing approvals', async () => {
+    const t = io();
+    await runCli([], {}, t.impl);
+    expect(t.lines.join('\n')).toMatch(/customer provisioning approved: NO/);
+    expect(t.lines.join('\n')).toMatch(/missing approvals: staging hostnames, test mailbox, customer provisioning/);
+  });
+  it('an approved mailbox with no adapter in this build is a blocked run (CONFIG_INVALID), not a crash', async () => {
+    const t = live(all);
+    expect(await runCli(['--env', 'staging'], creds, t.impl)).toBe(2);
+    expect(t.lines.join('\n')).toMatch(/CONFIG_INVALID.*adapter/);
+  });
+  it('all approvals but no sign-up driver is blocked (PROVISIONER_REFUSED)', async () => {
+    const t = live(all, { mailboxAdapters: { fixture: () => ({ listMessages: async () => [] }) } });
+    expect(await runCli(['--env', 'staging'], creds, t.impl)).toBe(2);
+    expect(t.lines.join('\n')).toMatch(/PROVISIONER_REFUSED/);
+  });
+  it('partial approvals never build a provisioner: the driver is not even asked for', async () => {
+    let asked = false;
+    const t = live({ ...all, customerProvisioning: { approved: false, approvedBy: null } }, { signupDriver: async () => { asked = true; return {} as never; }, mailboxAdapters: { fixture: () => ({ listMessages: async () => [] }) } });
+    await runCli(['--env', 'staging'], creds, t.impl);
+    expect(asked).toBe(false);
+  });
+});

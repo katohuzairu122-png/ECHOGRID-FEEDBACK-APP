@@ -1,5 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import type { ApiClient, ApiResult } from './client';
+import type { BrowserCheck } from './browser-results';
 
 /**
  * CASHIER-AUTH-02E E1: the acceptance scenarios for CASHIER-AUTH-02A to 02D.
@@ -24,6 +25,8 @@ export interface CustomerProvisioner {
   readonly kind: string;
   readonly canSetPhoneVerified: boolean;
   create(label: string, opts?: { phoneVerified?: boolean }): Promise<Provisioned>;
+  /** E2-A: a customer created earlier in this run signs in again (a returning customer). Absent when the provisioner cannot. */
+  returning?(label: string): Promise<Provisioned>;
 }
 
 export interface Context {
@@ -34,6 +37,8 @@ export interface Context {
   provisioner: CustomerProvisioner | null;
   /** Local tests only: signs an invitation with chosen claims. Never available to a live run (no secret is ever read). */
   forgeInvite?: ((claims: Record<string, unknown>) => Promise<string>) | undefined;
+  /** E2-C: checks ingested from a browser-tier report of the SAME mode as this run. Absent means no browser evidence was supplied. */
+  browser?: readonly BrowserCheck[] | undefined;
 }
 
 export interface Recorder {
@@ -41,13 +46,36 @@ export interface Recorder {
   notRun(id: string, title: string, reason: string): Promise<void>;
 }
 
+/** What a scenario depends on. A missing capability makes it NOT RUN with a stated reason; it can never make it pass or fail. */
+export type Capability = 'branches-2' | 'branches-3' | 'customers' | 'returning-customers' | 'phone-verified-customers' | 'second-business';
+
 export interface Scenario {
   id: string;
   area: string;
   title: string;
-  /** Set when the scenario cannot run in this context; it is then reported NOT RUN with this reason. */
-  unavailable?: (ctx: Context, world: World) => string | null;
+  requires?: readonly Capability[];
   run(ctx: Context, world: World, rec: Recorder): Promise<void>;
+}
+
+/** Why a capability is unavailable in this context, or null when it is available. The single place the dependencies are decided. */
+export function missingCapability(capability: Capability, ctx: Context, world: World): string | null {
+  switch (capability) {
+    case 'branches-2': return world.branchesA.length < 2 ? `business A needs at least 2 branches (has ${world.branchesA.length})` : null;
+    case 'branches-3': return world.branchesA.length < 3 ? `business A needs at least 3 branches (has ${world.branchesA.length})` : null;
+    case 'customers': return ctx.provisioner === null ? 'no customer provisioner is available (live sign-up needs the approved staging hostnames, test mailbox and customer provisioning)' : null;
+    case 'returning-customers': return ctx.provisioner && typeof ctx.provisioner.returning !== 'function' ? 'the customer provisioner cannot sign a customer in again' : null;
+    case 'phone-verified-customers': return ctx.provisioner && !ctx.provisioner.canSetPhoneVerified ? 'the provisioner cannot create a phone-verified customer (needs a real SMS code)' : null;
+    case 'second-business': return world.branchesB.length < 1 ? 'business B needs a branch' : null;
+  }
+}
+
+/** The first missing dependency of a scenario, in declared order, or null. */
+export function firstMissing(scenario: Scenario, ctx: Context, world: World): string | null {
+  for (const cap of scenario.requires ?? []) {
+    const reason = missingCapability(cap, ctx, world);
+    if (reason) return reason;
+  }
+  return null;
 }
 
 interface Cashier {
@@ -191,12 +219,6 @@ const accept = (ctx: Context, customerToken: string, inviteToken: string, extra:
 const preview = (ctx: Context, customerToken: string, inviteToken: string) =>
   ctx.api.request('POST', '/customer-memberships/join-assisted/preview', { token: customerToken, body: { inviteToken } });
 
-const needsCustomers = (ctx: Context) => (ctx.provisioner === null ? 'no customer provisioner is available (live OTP sign-up needs an approved mailbox and E2)' : null);
-const needsBranches = (n: number) => (_: Context, w: World) => (w.branchesA.length < n ? `business A needs at least ${n} branches (has ${w.branchesA.length})` : null);
-const both = (...fns: Array<(c: Context, w: World) => string | null>) => (c: Context, w: World) => {
-  for (const fn of fns) { const r = fn(c, w); if (r) return r; }
-  return null;
-};
 
 /** Pulls a customer from the provisioner once per label. */
 async function customer(ctx: Context, world: World, label: string, opts?: { phoneVerified?: boolean }): Promise<Provisioned> {
@@ -217,7 +239,7 @@ const pointsOf = async (ctx: Context, token: string, businessId: string): Promis
 export const SCENARIOS: Scenario[] = [
   {
     id: 'S01', area: 'Cashier authentication and session context', title: 'managed sign-in, generic failures, session bound by the server',
-    unavailable: needsBranches(2),
+    requires: ['branches-2'],
     async run(ctx, w, rec) {
       const c = await w.makeCashier('a', w.branchesA.slice(0, 2));
       const wrong = await ctx.api.request('POST', '/auth/cashier/managed-login', { body: { businessCode: w.codeA, username: c.username, password: 'definitely-wrong-1' } });
@@ -238,7 +260,7 @@ export const SCENARIOS: Scenario[] = [
   },
   {
     id: 'S02', area: 'Role restrictions and protected routes', title: 'cashier, customer and anonymous callers cannot reach administration or reports',
-    unavailable: needsBranches(2),
+    requires: ['branches-2'],
     async run(ctx, w, rec) {
       const c = await w.makeCashier('r', w.branchesA.slice(0, 2));
       const s = await w.signIn(c, w.branchesA[0] as string);
@@ -259,7 +281,7 @@ export const SCENARIOS: Scenario[] = [
   },
   {
     id: 'S03', area: 'Cashier invitation issue and validation', title: 'invitations are short-lived, signed, bound to the session branch, free of personal data',
-    unavailable: needsBranches(2),
+    requires: ['branches-2'],
     async run(ctx, w, rec) {
       const c = await w.makeCashier('i', w.branchesA.slice(0, 2));
       const branch = w.branchesA[0] as string;
@@ -279,7 +301,7 @@ export const SCENARIOS: Scenario[] = [
   },
   {
     id: 'S04', area: 'Customer onboarding and explicit consent', title: 'consent is required, versioned and enforced before any membership exists',
-    unavailable: both(needsBranches(2), (c) => needsCustomers(c)),
+    requires: ['branches-2', 'customers'],
     async run(ctx, w, rec) {
       const c = await w.makeCashier('o', w.branchesA.slice(0, 2));
       const s = await w.signIn(c, w.branchesA[0] as string);
@@ -297,13 +319,13 @@ export const SCENARIOS: Scenario[] = [
   },
   {
     id: 'S05', area: 'Single-use invitations and replay', title: 'an invitation works once; replays, tampering and garbage are refused',
-    unavailable: both(needsBranches(2), (c) => needsCustomers(c)),
+    requires: ['branches-2', 'customers'],
     async run(ctx, w, rec) {
       const c = await w.makeCashier('u', w.branchesA.slice(0, 2));
       const s = await w.signIn(c, w.branchesA[0] as string);
       const inv = (await invite(ctx, s.accessToken)).data?.inviteToken as string;
-      const first = await customer(ctx, w, 'single-a');
-      const second = await customer(ctx, w, 'single-b');
+      const first = await customer(ctx, w, 'singlea');
+      const second = await customer(ctx, w, 'singleb');
       const a = await accept(ctx, first.token, inv);
       await rec.check('S05.1', 'the first acceptance succeeds', a.status === 200 || a.status === 201, `${a.status}`);
       const b = await accept(ctx, second.token, inv);
@@ -322,7 +344,7 @@ export const SCENARIOS: Scenario[] = [
   },
   {
     id: 'S06', area: 'Attribution evidence and protected reports', title: 'the owner report counts attribution and holds no personal data',
-    unavailable: needsBranches(2),
+    requires: ['branches-2'],
     async run(ctx, w, rec) {
       const r = await w.ownerCall('GET', '/analytics/onboarding');
       const text = JSON.stringify(r.data ?? {});
@@ -336,7 +358,7 @@ export const SCENARIOS: Scenario[] = [
   },
   {
     id: 'S07', area: 'Rejoin attribution', title: 'leaving and rejoining through a new invitation is recorded as a rejoin',
-    unavailable: both(needsBranches(2), (c) => needsCustomers(c)),
+    requires: ['branches-2', 'customers'],
     async run(ctx, w, rec) {
       const cust = await customer(ctx, w, 'rejoin');
       const c = await w.makeCashier('j', w.branchesA.slice(0, 2));
@@ -352,7 +374,7 @@ export const SCENARIOS: Scenario[] = [
   },
   {
     id: 'S08', area: 'Branch-switch authorization', title: 'switching needs an assigned branch and ends the previous session and its invitations',
-    unavailable: needsBranches(3),
+    requires: ['branches-3'],
     async run(ctx, w, rec) {
       const [a1, a2, a3] = w.branchesA as [string, string, string];
       const c = await w.makeCashier('s', [a1, a2]);
@@ -375,7 +397,7 @@ export const SCENARIOS: Scenario[] = [
   },
   {
     id: 'S09', area: 'Cross-business tenant isolation', title: 'another business\'s owner and cashier context cannot touch this business',
-    unavailable: needsBranches(2),
+    requires: ['branches-2'],
     async run(ctx, w, rec) {
       const issued = await ctx.api.request('POST', '/loyalty/actions/onboarding-invite', { token: w.tokenB, businessId: ctx.ownerA.businessId });
       await rec.check('S09.1', 'the owner of business B cannot issue an invitation for business A', issued.status === 403, `${issued.status}`);
@@ -390,7 +412,7 @@ export const SCENARIOS: Scenario[] = [
   },
   {
     id: 'S10', area: 'Purchase idempotency', title: 'one idempotency key earns points once, even when submitted in parallel',
-    unavailable: both(needsBranches(2), (c) => needsCustomers(c)),
+    requires: ['branches-2', 'customers'],
     async run(ctx, w, rec) {
       const cust = await customer(ctx, w, 'buyer');
       const c = await w.makeCashier('p', w.branchesA.slice(0, 2));
@@ -419,7 +441,7 @@ export const SCENARIOS: Scenario[] = [
   },
   {
     id: 'S11', area: 'Redemption concurrency', title: 'a redemption code is confirmed exactly once under parallel confirmation',
-    unavailable: both(needsBranches(2), (c) => needsCustomers(c)),
+    requires: ['branches-2', 'customers'],
     async run(ctx, w, rec) {
       const st = world_state.get(w);
       if (!st) { await rec.notRun('S11.1', 'redemption concurrency', 'S10 did not establish a member with points'); return; }
@@ -444,7 +466,7 @@ export const SCENARIOS: Scenario[] = [
   },
   {
     id: 'S12', area: 'Expired, revoked and invalid invitations', title: 'invitations die with the session, the assignment and the clock',
-    unavailable: both(needsBranches(3), (c) => needsCustomers(c)),
+    requires: ['branches-3', 'customers'],
     async run(ctx, w, rec) {
       const [a1, a2, a3] = w.branchesA as [string, string, string];
       const rev = await w.makeCashier('v', [a1, a2]);
@@ -474,7 +496,7 @@ export const SCENARIOS: Scenario[] = [
   },
   {
     id: 'S13', area: 'Verification requirement for an additional business', title: 'an unverified customer cannot join a second business; a verified one can',
-    unavailable: both(needsBranches(2), (c) => needsCustomers(c), (c) => (c.provisioner && !c.provisioner.canSetPhoneVerified ? 'the provisioner cannot create a phone-verified customer (needs an SMS fixture)' : null), (_c, w) => (w.branchesB.length < 1 ? 'business B needs a branch' : null)),
+    requires: ['branches-2', 'customers', 'phone-verified-customers', 'second-business'],
     async run(ctx, w, rec) {
       const cb = await w.makeCashierB('q', w.branchesB[0] as string);
       const sb = await w.signIn(cb, w.branchesB[0] as string, 'B');
@@ -492,9 +514,35 @@ export const SCENARIOS: Scenario[] = [
     },
   },
   {
-    id: 'S14', area: 'Arabic and right-to-left interfaces', title: 'Arabic and RTL screens at 375 px',
-    async run(_ctx, _w, rec) {
-      await rec.notRun('S14.1', 'Arabic / RTL interface acceptance', 'browser-based; not part of the API harness. Covered by the web render tests and the staging browser run of 2026-11-19; a repeatable browser step belongs to E2');
+    id: 'S14', area: 'Arabic and right-to-left interfaces, 375 px, cashier and customer screens (browser tier)', title: 'browser acceptance of the cashier and customer interfaces',
+    async run(ctx, _w, rec) {
+      if (!ctx.browser) {
+        await rec.notRun('S14.1', 'browser acceptance (cashier login, invitation, customer join, consent, Arabic, RTL, 375 px)', 'no browser results were supplied: run the Playwright tier (apps/web, e2e/acceptance) and pass its JSON report with --browser-results');
+        return;
+      }
+      for (const c of ctx.browser) {
+        if (c.status === 'NOT_RUN') await rec.notRun(`S14.${c.id}`, c.title, c.detail);
+        else await rec.check(`S14.${c.id}`, c.title, c.status === 'PASS', c.detail);
+      }
+    },
+  },
+  {
+    id: 'S15', area: 'Returning customer', title: 'a customer who signs in again keeps their membership and is not attributed twice',
+    requires: ['branches-2', 'customers', 'returning-customers'],
+    async run(ctx, w, rec) {
+      const first = await customer(ctx, w, 'returning1');
+      const c = await w.makeCashier('g', w.branchesA.slice(0, 2));
+      const s = await w.signIn(c, w.branchesA[0] as string);
+      const joined = await accept(ctx, first.token, (await invite(ctx, s.accessToken)).data?.inviteToken as string);
+      await rec.check('S15.1', 'a new customer joins through a cashier invitation', joined.status === 200 || joined.status === 201, `${joined.status}`);
+      const again = await ctx.provisioner?.returning?.('returning1');
+      if (!again) { await rec.check('S15.2', 'the returning customer signs in again', false, 'no session'); return; }
+      const account = await ctx.api.request('GET', `/loyalty/me/accounts/${ctx.ownerA.businessId}`, { token: again.token });
+      await rec.check('S15.2', 'the returning customer is the same customer and still has the membership', again.id === first.id && account.status === 200, `${account.status}`);
+      const eventsOf = async () => Number((await w.ownerCall('GET', '/analytics/onboarding')).data?.totals?.events ?? Number.NaN);
+      const before = await eventsOf();
+      const replay = await accept(ctx, again.token, (await invite(ctx, s.accessToken)).data?.inviteToken as string);
+      await rec.check('S15.3', 'a second invitation for the same returning customer is harmless: no second attribution event', replay.status < 500 && (await eventsOf()) === before, `${replay.status}`);
     },
   },
 ];
