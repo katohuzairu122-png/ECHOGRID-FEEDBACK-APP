@@ -48,7 +48,7 @@ describe('preflight: the shipped state', () => {
     expect(r.verdict).toBe('NOT READY');
     expect(r.exitCode).toBe(2);
     expect(Object.fromEntries(r.items.map((i) => [i.id, i.status]))).toMatchObject({
-      P01: 'BLOCKED', P02: 'PASS', P03: 'PASS', P04: 'BLOCKED', P05: 'BLOCKED', P06: 'NOT VERIFIED', P07: 'NOT VERIFIED', P08: 'BLOCKED', P09: 'BLOCKED', P10: 'PASS', P12: 'PASS', P13: 'NOT VERIFIED', P14: 'NOT VERIFIED', P15: 'NOT VERIFIED',
+      P01: 'BLOCKED', P02: 'PASS', P03: 'PASS', P04: 'BLOCKED', P05: 'BLOCKED', P06: 'NOT VERIFIED', P07: 'NOT VERIFIED', P08: 'BLOCKED', P09: 'BLOCKED', P10: 'PASS', P12: 'PASS', P13: 'NOT VERIFIED', P14: 'NOT VERIFIED', P15: 'NOT VERIFIED', P16: 'NOT VERIFIED', P17: 'NOT VERIFIED',
     });
     expect(r.items.find((i) => i.id === 'P01')?.detail).toContain('echo-grid-feedback-cashier-staging');
   });
@@ -66,7 +66,7 @@ describe('preflight: fully approved', () => {
   it('is READY when every prerequisite passes; the unverifiable secret presence is advisory and does not block', async () => {
     const { deps: d, requests } = await deps();
     const r = await runPreflight(fullyApproved(), d, { online: true });
-    expect(r.items.filter((i) => i.required).map((i) => i.status)).toEqual(Array(14).fill('PASS'));
+    expect(r.items.filter((i) => i.required).map((i) => i.status)).toEqual(Array(16).fill('PASS'));
     expect(status(r, 'P15')).toBe('NOT VERIFIED');
     expect(r.verdict).toBe('READY');
     expect(r.exitCode).toBe(0);
@@ -142,5 +142,53 @@ describe('preflight: mailbox, hosts and tooling', () => {
     const c = parseTargetsConfig({ ...(fullyApproved() as unknown as Record<string, unknown>), mailbox: { approved: true, approvedBy: 'owner', adapter: 'local-spool', allowedRecipientDomains: ['mail.example.test'] } });
     expect(status(await runPreflight(c, (await deps()).deps, { online: false }), 'P08')).toBe('PASS');
     expect(status(await runPreflight(shipped, (await deps()).deps, { online: false }), 'P08')).toBe('BLOCKED');
+  });
+});
+
+describe('preflight: receiver-backed mailbox (E2D)', () => {
+  const RECEIVER_HOST = 'receiver.acc-test.example';
+  const receiverCfg = (over: Record<string, unknown> = {}, mailbox: Record<string, unknown> = {}): TargetsConfig => parseTargetsConfig({
+    ...shippedJson, approved: true, approvedBy: 'owner', approvedAt: '2026-11-20',
+    mailbox: { approved: true, approvedBy: 'owner', adapter: 'cloudflare-receiver', allowedRecipientDomains: ['acc-test.example'], receiverHost: RECEIVER_HOST, ...mailbox },
+    customerProvisioning: { approved: true, approvedBy: 'owner' },
+    liveExecution: { authorized: true, authorizedBy: 'owner', reference: 'directive' },
+    ...over,
+  });
+  const receiverEnv = { ACCEPTANCE_MAILBOX_RECEIVER_HOST: RECEIVER_HOST, ACCEPTANCE_RECEIVER_RETRIEVAL_KEY: 'r'.repeat(40), [DELIVERY_KEY_ENV]: 'k'.repeat(40) };
+
+  it('is READY offline-wise only when the receiver host, domain, credentials and every other approval are present; no request is made', async () => {
+    const { deps: d, requests } = await deps({}, receiverEnv);
+    const r = await runPreflight(receiverCfg(), d, { online: false });
+    expect(['P05', 'P06', 'P07', 'P08', 'P16', 'P17'].map((id) => status(r, id))).toEqual(['PASS', 'PASS', 'PASS', 'PASS', 'PASS', 'PASS']);
+    expect(requests).toEqual([]);
+  });
+  it('the adapter is BLOCKED by credential NAME when the receiver host or a key is missing', async () => {
+    const missing = await runPreflight(receiverCfg(), (await deps({}, { ...receiverEnv, ACCEPTANCE_RECEIVER_RETRIEVAL_KEY: undefined })).deps, { online: false });
+    expect(status(missing, 'P07')).toBe('BLOCKED');
+    expect(missing.items.find((i) => i.id === 'P07')?.detail).toContain('ACCEPTANCE_RECEIVER_RETRIEVAL_KEY');
+    expect(JSON.stringify(missing)).not.toContain('r'.repeat(40));
+  });
+  it('an environment host that differs from the approved receiver host is BLOCKED', async () => {
+    const r = await runPreflight(receiverCfg(), (await deps({}, { ...receiverEnv, ACCEPTANCE_MAILBOX_RECEIVER_HOST: 'other.acc-test.example' })).deps, { online: false });
+    expect(status(r, 'P07')).toBe('BLOCKED');
+  });
+  it('approving the mailbox does not approve a receiver host: P16 is BLOCKED while the config guard refuses the combination', async () => {
+    expect(() => receiverCfg({}, { receiverHost: null })).toThrow(/receiverHost/);
+    const unapproved = parseTargetsConfig({ ...shippedJson, mailbox: { approved: false, approvedBy: null, adapter: 'cloudflare-receiver', allowedRecipientDomains: [], receiverHost: null } });
+    expect(status(await runPreflight(unapproved, (await deps()).deps, { online: false }), 'P16')).toBe('NOT VERIFIED');
+  });
+  it('P16 is not applicable to the local spool, and a recipient domain that equals an application or receiver host fails P17', async () => {
+    const local = await runPreflight(fullyApproved(), (await deps()).deps, { online: false });
+    expect(status(local, 'P16')).toBe('PASS');
+    const collide = receiverCfg({}, { allowedRecipientDomains: [RECEIVER_HOST] });
+    expect(status(await runPreflight(collide, (await deps({}, receiverEnv)).deps, { online: false }), 'P17')).toBe('BLOCKED');
+    const prod = receiverCfg({}, { allowedRecipientDomains: ['mail.echo-grid.uk'] });
+    expect(status(await runPreflight(prod, (await deps({}, receiverEnv)).deps, { online: false }), 'P17')).toBe('BLOCKED');
+  });
+  it('never turns an approval on: the shipped file still has every flag false, no receiver host and no adapter', () => {
+    expect(shipped.approved).toBe(false);
+    expect(shipped.mailbox).toMatchObject({ approved: false, approvedBy: null, adapter: 'none', allowedRecipientDomains: [], receiverHost: null });
+    expect(shipped.customerProvisioning.approved).toBe(false);
+    expect(shipped.liveExecution).toMatchObject({ authorized: false, authorizedBy: null, reference: null });
   });
 });

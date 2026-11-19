@@ -75,7 +75,7 @@ export async function runPreflight(config: TargetsConfig, deps: PreflightDeps, o
     add('P07', 'mailbox configuration and credentials present (names only)', 'NOT VERIFIED', 'depends on P05 and P06');
   } else {
     try {
-      factory(deps.env);
+      factory(deps.env, mb);
       add('P07', 'mailbox configuration and credentials present (names only)', 'PASS', 'the adapter accepted its configuration');
     } catch (error) {
       add('P07', 'mailbox configuration and credentials present (names only)', 'BLOCKED', error instanceof HarnessRefusal ? error.message : 'the adapter could not be configured');
@@ -84,6 +84,23 @@ export async function runPreflight(config: TargetsConfig, deps: PreflightDeps, o
   const domainOk = mailboxApproved && mb.allowedRecipientDomains.length > 0;
   add('P08', 'synthetic recipient identity authorized (approved domain for acc-<run>-<label>@domain)', domainOk ? 'PASS' : 'BLOCKED', domainOk ? `${mb.allowedRecipientDomains.length} approved domain(s)` : 'no approved synthetic recipient domain');
   const provOk = config.customerProvisioning.approved && config.customerProvisioning.approvedBy !== null;
+  // ---- E2D: receiver-backed adapters. Approving a mailbox does not approve a receiver host; each is its own recorded value. ----
+  const receiverAdapter = mb.adapter === 'cloudflare-receiver';
+  const appHosts = [config.targets.api.host, config.targets.web.host, config.targets.cashier.host];
+  if (!mailboxApproved) {
+    add('P16', 'receiver host approved and not production (receiver-backed adapters)', 'NOT VERIFIED', 'depends on P05');
+  } else if (!receiverAdapter) {
+    add('P16', 'receiver host approved and not production (receiver-backed adapters)', 'PASS', `not applicable: adapter "${mb.adapter}" uses no receiver host`);
+  } else if (!mb.receiverHost) {
+    add('P16', 'receiver host approved and not production (receiver-backed adapters)', 'BLOCKED', 'no receiver host is approved in mailbox.receiverHost');
+  } else if (isProductionHost(mb.receiverHost) || appHosts.includes(mb.receiverHost)) {
+    add('P16', 'receiver host approved and not production (receiver-backed adapters)', 'BLOCKED', 'the receiver host is a production host or an application host');
+  } else {
+    add('P16', 'receiver host approved and not production (receiver-backed adapters)', 'PASS', 'an approved test receiver host is recorded');
+  }
+  const domainsBad = mb.allowedRecipientDomains.filter((d) => isProductionHost(d) || appHosts.includes(d) || d === mb.receiverHost);
+  add('P17', 'recipient isolation configured (synthetic domain is not a production, application or receiver host)', mb.allowedRecipientDomains.length === 0 ? 'NOT VERIFIED' : domainsBad.length === 0 ? 'PASS' : 'BLOCKED',
+    mb.allowedRecipientDomains.length === 0 ? 'no recipient domain recorded yet' : domainsBad.length === 0 ? 'only acc-<run>-<label>@<approved domain> can be read' : 'an approved recipient domain collides with a production, application or receiver host');
   add('P09', 'customer provisioning (creating synthetic customers) approved by the owner', provOk ? 'PASS' : 'BLOCKED', provOk ? 'recorded in staging-targets.json' : 'not approved');
 
   // ---- credentials, tooling ----

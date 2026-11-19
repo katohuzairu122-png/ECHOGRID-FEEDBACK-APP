@@ -230,7 +230,8 @@ export function requireCredentials(env: Readonly<Record<string, string | undefin
   return Object.fromEntries(names.map((n) => [n, env[n] as string]));
 }
 
-export type MessageSourceFactory = (credentials: Readonly<Record<string, string | undefined>>) => MessageSource;
+/** A factory gets the credentials (names only in documents) and the committed mailbox configuration (for approved hosts). */
+export type MessageSourceFactory = (credentials: Readonly<Record<string, string | undefined>>, config?: MailboxConfig) => MessageSource;
 
 /** Without a recorded approval (the shipped state) this is the null mailbox; an approved configuration with no adapter in this build is refused. */
 export function createVerificationMailbox(
@@ -240,5 +241,5 @@ export function createVerificationMailbox(
   if (!config.approved) return NullVerificationMailbox;
   const factory = opts.adapters?.[config.adapter];
   if (!factory) throw new HarnessRefusal('CONFIG_INVALID', 'The configured mailbox adapter is not available in this build.');
-  return new RestrictedVerificationMailbox({ runId: opts.runId, config, webHost: opts.webHost, source: factory(opts.env ?? {}) });
+  return new RestrictedVerificationMailbox({ runId: opts.runId, config, webHost: opts.webHost, source: factory(opts.env ?? {}, config) });
 }
