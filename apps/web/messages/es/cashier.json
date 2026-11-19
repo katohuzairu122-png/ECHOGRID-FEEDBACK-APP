@@ -37,7 +37,8 @@
     "nav": "Navegación de cajero",
     "serve": "Atender clientes",
     "redeem": "Canjear código",
-    "account": "Este dispositivo"
+    "account": "Este dispositivo",
+    "invite": "Invitar"
   },
   "redeem": {
     "title": "Canjear un código de recompensa",
@@ -284,5 +285,23 @@
     "conflict": "La sucursal cambió en otra ventana. Se actualizó la lista.",
     "unavailable": "El cambio no está disponible ahora. Inténtelo de nuevo en un momento.",
     "close": "Cerrar"
+  },
+  "invite": {
+    "title": "Invitar a un cliente",
+    "intro": "Cree un código de un solo uso. El cliente lo escanea con su propio teléfono, inicia sesión y acepta unirse. Usted nunca introduce ni ve sus datos.",
+    "create": "Crear invitación",
+    "creating": "Creando…",
+    "another": "Crear una nueva invitación",
+    "qrLabel": "Código QR para invitar a un cliente a unirse",
+    "scanHint": "Pida al cliente que escanee este código con la cámara de su teléfono.",
+    "validFor": "Válido durante {time}",
+    "expiredTitle": "Esta invitación ha caducado",
+    "expiredBody": "Cree una nueva para el cliente.",
+    "copy": "Copiar enlace",
+    "copied": "Enlace copiado",
+    "copyFailed": "No se pudo copiar el enlace.",
+    "rateLimited": "Demasiadas invitaciones. Inténtelo de nuevo en un minuto.",
+    "branchRequired": "Elija la sucursal en la que atiende antes de invitar a un cliente.",
+    "unavailable": "No se pudo crear la invitación. Inténtelo de nuevo."
   }
 }

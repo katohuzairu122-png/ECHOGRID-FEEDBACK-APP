@@ -37,7 +37,8 @@
     "nav": "Cashier navigation",
     "serve": "Serve customers",
     "redeem": "Redeem code",
-    "account": "This device"
+    "account": "This device",
+    "invite": "Invite"
   },
   "redeem": {
     "title": "Redeem a reward code",
@@ -284,5 +285,23 @@
     "conflict": "The branch changed in another window. The list has been updated.",
     "unavailable": "Switching is not available right now. Try again in a moment.",
     "close": "Close"
+  },
+  "invite": {
+    "title": "Invite a customer",
+    "intro": "Create a one-time code. The customer scans it with their own phone, signs in and agrees to join. You never enter or see their details.",
+    "create": "Create invitation",
+    "creating": "Creating…",
+    "another": "Create a new invitation",
+    "qrLabel": "QR code that invites a customer to join",
+    "scanHint": "Ask the customer to scan this with their phone camera.",
+    "validFor": "Valid for {time}",
+    "expiredTitle": "This invitation has expired",
+    "expiredBody": "Create a new one for the customer.",
+    "copy": "Copy link",
+    "copied": "Link copied",
+    "copyFailed": "The link could not be copied.",
+    "rateLimited": "Too many invitations. Try again in a minute.",
+    "branchRequired": "Choose the branch you are serving at before inviting a customer.",
+    "unavailable": "An invitation could not be created. Try again."
   }
 }

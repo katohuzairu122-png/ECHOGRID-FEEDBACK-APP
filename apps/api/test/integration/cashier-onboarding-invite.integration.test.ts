@@ -71,7 +71,7 @@ async function http(method: string, path: string, call: Call = {}): Promise<{ st
   if (call.body !== undefined) headers.set('Content-Type', 'application/json');
   const env = {
     HYPERDRIVE: { connectionString: databaseUrl }, JWT_ACCESS_SECRET: SECRET, JWT_REFRESH_SECRET: REFRESH_SECRET,
-    CUSTOMER_JWT_SECRET: CUSTOMER_SECRET, QR_TOKEN_SECRET: QR_SECRET,
+    CUSTOMER_JWT_SECRET: CUSTOMER_SECRET, QR_TOKEN_SECRET: QR_SECRET, WEB_BASE_URL: 'https://web.example.test',
     PASSWORD_HASHER: hasherNamespace, AUTH_RATE_LIMITER: allow, API_RATE_LIMITER: allow, PUBLIC_RATE_LIMITER: allow,
     LOOKUP_RATE_LIMITER: { limit: async (o: { key: string }) => { limiterKeys.push(o.key); return lookupLimiter.limit(o); } },
     CUSTOMER_API_RATE_LIMITER: allow, JOBS: { send: async () => {}, sendBatch: async () => {} },
@@ -168,7 +168,8 @@ describe.skipIf(!databaseUrl)('CASHIER-AUTH-02D onboarding invitation issuer (re
       const s = await sessionOn(u.username, a2);
       const res = await issue(s.accessToken);
       expect(res.status, JSON.stringify(res)).toBe(200);
-      expect(Object.keys(res.data).sort()).toEqual(['branchId', 'expiresAt', 'inviteToken']);
+      expect(Object.keys(res.data).sort()).toEqual(['branchId', 'expiresAt', 'inviteToken', 'inviteUrl']);
+      expect(res.data.inviteUrl).toBe(`https://web.example.test/loyalty/invite/${res.data.inviteToken}`);
       expect(res.data.branchId).toBe(a2);
       const ttl = (new Date(res.data.expiresAt).getTime() - Date.now()) / 1000;
       expect(ttl).toBeGreaterThan(590); expect(ttl).toBeLessThanOrEqual(600);
@@ -392,6 +393,61 @@ describe.skipIf(!databaseUrl)('CASHIER-AUTH-02D onboarding invitation issuer (re
       const s = await sessionOn(u.username, a1);
       expect((await issue(s.accessToken, { businessId: bizB })).status).toBe(403);
       void ownerBId;
+    });
+  });
+
+  describe('the customer preview (what is shown before consenting)', () => {
+    const preview = (customerToken: string, inviteToken: string) =>
+      http('POST', '/customer-memberships/join-assisted/preview', { token: customerToken, body: { inviteToken } });
+
+    it('shows the business and branch and a ready state, nothing about the cashier, and consumes nothing', async () => {
+      const u = await newCashier('single', [a1]);
+      const s = await sessionOn(u.username, a1);
+      const invite = (await issue(s.accessToken)).data.inviteToken as string;
+      const customer = await newCustomer();
+      const res = await preview(customer.token, invite);
+      expect(res.status, JSON.stringify(res)).toBe(200);
+      expect(res.data).toMatchObject({ status: 'ready', businessName: 'Invite A', branchName: 'A1', businessId: bizA });
+      expect(Object.keys(res.data).sort()).toEqual(['branchName', 'businessId', 'businessName', 'expiresAt', 'status']);
+      expect(JSON.stringify(res)).not.toContain(u.id);
+      expect(JSON.stringify(res)).not.toContain(u.username);
+      expect(await memberships(customer.id)).toHaveLength(0); // previewing is read-only
+      expect(await events(customer.id)).toHaveLength(0);
+      expect((await accept(customer.token, invite)).status).toBe(201); // and the invitation is still usable afterwards
+    });
+
+    it('reports already_member for a current member and used once another customer has accepted it', async () => {
+      const u = await newCashier('single', [a1]);
+      const s = await sessionOn(u.username, a1);
+      const invite = (await issue(s.accessToken)).data.inviteToken as string;
+      const first = await newCustomer(); const second = await newCustomer();
+      expect((await accept(first.token, invite)).status).toBe(201);
+      expect((await preview(first.token, invite)).data.status).toBe('already_member');
+      expect((await preview(second.token, invite)).data.status).toBe('used');
+    });
+
+    it('refuses an invalid, expired or foreign token with the same generic error, and requires customer authentication', async () => {
+      const customer = await newCustomer();
+      for (const bad of ['not-a-token', 'a.b.c']) {
+        const res = await preview(customer.token, bad);
+        expect(res.status).toBe(400);
+        expect(res.error?.code).toBe('ONBOARDING_INVITE_INVALID');
+      }
+      const u = await newCashier('single', [a1]);
+      const s = await sessionOn(u.username, a1);
+      expect([401, 403]).toContain((await http('POST', '/customer-memberships/join-assisted/preview', { body: { inviteToken: 'x' } })).status);
+      expect([401, 403]).toContain((await http('POST', '/customer-memberships/join-assisted/preview', { token: s.accessToken, body: { inviteToken: 'x' } })).status);
+    });
+
+    it('a branch that was deleted or archived after issuing is refused at preview as well', async () => {
+      const branch = (await repos.branches.create({ businessId: bizA, name: `Pv ${++seq}`, slug: `pv${run.slice(0, 4)}${seq}` })).id;
+      const u = await newCashier('single', [branch]);
+      const s = await sessionOn(u.username, branch);
+      const invite = (await issue(s.accessToken)).data.inviteToken as string;
+      await q(`UPDATE branches SET status = 'archived' WHERE id = $1`, [branch]);
+      const res = await preview((await newCustomer()).token, invite);
+      expect(res.status).toBe(400);
+      expect(res.error?.code).toBe('ONBOARDING_INVITE_INVALID');
     });
   });
 

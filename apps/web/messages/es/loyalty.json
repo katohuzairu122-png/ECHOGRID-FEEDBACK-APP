@@ -532,6 +532,31 @@
         "change_unsupported": "Cambiar un número verificado aún no está disponible.",
         "unavailable": "No disponible por ahora. Inténtalo más tarde."
       }
+    },
+    "invite": {
+      "signInTitle": "Inicie sesión para unirse",
+      "signInBody": "Le invitaron a unirse a un programa de fidelidad. Inicie sesión o cree una cuenta para continuar.",
+      "signIn": "Iniciar sesión",
+      "createAccount": "Crear una cuenta",
+      "title": "Unirse a {businessName}",
+      "subtitle": "Le invitaron en {branchName}.",
+      "join": "Unirme",
+      "joining": "Uniéndome…",
+      "joinedTitle": "Listo",
+      "joinedBody": "Se ha unido a {businessName}.",
+      "joinedBodyGeneric": "Se ha unido al programa de fidelidad.",
+      "viewRewards": "Ver sus recompensas",
+      "alreadyMemberTitle": "Ya es miembro de {businessName}",
+      "alreadyMemberBody": "No hay nada más que hacer.",
+      "invalidTitle": "Esta invitación no es válida",
+      "invalidBody": "Puede que haya caducado. Pida una nueva al cajero.",
+      "usedTitle": "Esta invitación ya se usó",
+      "used": "Pida una nueva al cajero.",
+      "noLongerValid": "Esta invitación ya no es válida. Pida una nueva al cajero.",
+      "consentRequired": "Acepte el consentimiento para unirse.",
+      "genericError": "Algo salió mal. Inténtelo de nuevo.",
+      "phoneRequired": "Para unirse a otro negocio, verifique primero su número de teléfono.",
+      "verifyPhone": "Verificar mi teléfono"
     }
   }
 }

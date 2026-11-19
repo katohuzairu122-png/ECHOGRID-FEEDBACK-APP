@@ -532,6 +532,31 @@
         "change_unsupported": "Modifier un numéro vérifié n’est pas encore possible.",
         "unavailable": "Indisponible pour le moment. Veuillez réessayer plus tard."
       }
+    },
+    "invite": {
+      "signInTitle": "Connectez-vous pour rejoindre",
+      "signInBody": "Vous avez été invité à rejoindre un programme de fidélité. Connectez-vous ou créez un compte pour continuer.",
+      "signIn": "Se connecter",
+      "createAccount": "Créer un compte",
+      "title": "Rejoindre {businessName}",
+      "subtitle": "Vous avez été invité à {branchName}.",
+      "join": "Rejoindre",
+      "joining": "Inscription…",
+      "joinedTitle": "C'est fait",
+      "joinedBody": "Vous avez rejoint {businessName}.",
+      "joinedBodyGeneric": "Vous avez rejoint le programme de fidélité.",
+      "viewRewards": "Voir vos récompenses",
+      "alreadyMemberTitle": "Vous êtes déjà membre de {businessName}",
+      "alreadyMemberBody": "Il n'y a rien d'autre à faire.",
+      "invalidTitle": "Cette invitation n'est pas valide",
+      "invalidBody": "Elle a peut-être expiré. Demandez-en une nouvelle au caissier.",
+      "usedTitle": "Cette invitation a déjà été utilisée",
+      "used": "Demandez-en une nouvelle au caissier.",
+      "noLongerValid": "Cette invitation n'est plus valide. Demandez-en une nouvelle au caissier.",
+      "consentRequired": "Veuillez accepter le consentement pour rejoindre.",
+      "genericError": "Une erreur s'est produite. Veuillez réessayer.",
+      "phoneRequired": "Pour rejoindre un autre commerce, vérifiez d'abord votre numéro de téléphone.",
+      "verifyPhone": "Vérifier mon téléphone"
     }
   }
 }

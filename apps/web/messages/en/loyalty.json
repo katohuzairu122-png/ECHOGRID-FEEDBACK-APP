@@ -532,6 +532,31 @@
         "change_unsupported": "Changing a verified phone number is not available yet.",
         "unavailable": "This is not available right now. Please try again later."
       }
+    },
+    "invite": {
+      "signInTitle": "Sign in to join",
+      "signInBody": "You were invited to join a loyalty program. Sign in, or create an account, to continue.",
+      "signIn": "Sign in",
+      "createAccount": "Create an account",
+      "title": "Join {businessName}",
+      "subtitle": "You were invited at {branchName}.",
+      "join": "Join",
+      "joining": "Joining…",
+      "joinedTitle": "You're in",
+      "joinedBody": "You have joined {businessName}.",
+      "joinedBodyGeneric": "You have joined the loyalty program.",
+      "viewRewards": "View your rewards",
+      "alreadyMemberTitle": "You're already a member of {businessName}",
+      "alreadyMemberBody": "Nothing more to do.",
+      "invalidTitle": "This invitation is not valid",
+      "invalidBody": "It may have expired. Ask the cashier for a new one.",
+      "usedTitle": "This invitation was already used",
+      "used": "Ask the cashier for a new one.",
+      "noLongerValid": "This invitation is no longer valid. Ask the cashier for a new one.",
+      "consentRequired": "Please accept the consent to join.",
+      "genericError": "Something went wrong. Please try again.",
+      "phoneRequired": "To join another business, verify your phone number first.",
+      "verifyPhone": "Verify my phone"
     }
   }
 }

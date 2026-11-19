@@ -37,7 +37,8 @@
     "nav": "Navigation caissier",
     "serve": "Servir les clients",
     "redeem": "Valider un code",
-    "account": "Cet appareil"
+    "account": "Cet appareil",
+    "invite": "Inviter"
   },
   "redeem": {
     "title": "Valider un code de récompense",
@@ -284,5 +285,23 @@
     "conflict": "La succursale a changé dans une autre fenêtre. La liste a été mise à jour.",
     "unavailable": "Le changement n'est pas disponible pour le moment. Réessayez dans un instant.",
     "close": "Fermer"
+  },
+  "invite": {
+    "title": "Inviter un client",
+    "intro": "Créez un code à usage unique. Le client le scanne avec son propre téléphone, se connecte et accepte de rejoindre. Vous ne saisissez ni ne voyez jamais ses informations.",
+    "create": "Créer une invitation",
+    "creating": "Création…",
+    "another": "Créer une nouvelle invitation",
+    "qrLabel": "Code QR pour inviter un client à rejoindre",
+    "scanHint": "Demandez au client de scanner ce code avec la caméra de son téléphone.",
+    "validFor": "Valable {time}",
+    "expiredTitle": "Cette invitation a expiré",
+    "expiredBody": "Créez-en une nouvelle pour le client.",
+    "copy": "Copier le lien",
+    "copied": "Lien copié",
+    "copyFailed": "Le lien n'a pas pu être copié.",
+    "rateLimited": "Trop d'invitations. Réessayez dans une minute.",
+    "branchRequired": "Choisissez le site où vous servez avant d'inviter un client.",
+    "unavailable": "Impossible de créer l'invitation. Réessayez."
   }
 }
