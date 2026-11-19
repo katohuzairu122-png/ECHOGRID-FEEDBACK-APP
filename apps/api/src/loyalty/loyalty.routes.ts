@@ -32,6 +32,7 @@ import { NotificationService } from '../notifications/notification.service';
 import { LoyaltyActionResolver } from './loyalty-action-resolver';
 import { CustomerLookupService, LOOKUP_PURCHASE_AUDIT } from './customer-lookup.service';
 import { AppError } from '../lib/errors';
+import { signOnboardingInvite } from '../customer-relationships/onboarding-attribution';
 
 type Env = {
   Bindings: Bindings;
@@ -72,6 +73,41 @@ loyaltyRoutes.post('/actions/resolve-customer', requirePermission('loyalty:serve
     });
     return ok(c, result);
   });
+});
+
+// ---- CASHIER-AUTH-02D: one-time onboarding invitation (the issuer) -------------------------------------------------------
+// A cashier at the counter asks for a short-lived invitation that the CUSTOMER then accepts while signed in as themselves, with their
+// own explicit consent. Business, branch, cashier and session come ONLY from the verified cashier access token and its live session;
+// nothing in the request is read. The invitation holds no customer data and is single-use (enforced by the database when it is
+// accepted). It stops working when the session ends, the branch changes or is removed, or the cashier is disabled: the acceptance
+// re-checks all of that inside its own transaction (customer-relationships/onboarding-attribution.ts).
+loyaltyRoutes.post('/actions/onboarding-invite', requirePermission('loyalty:serve'), async (c) => {
+  const cashier = c.get('cashier');
+  // Only a cashier session can issue one: that is what binds the invitation to a branch and a session that can be revoked.
+  if (!cashier?.sessionId) {
+    throw new AppError('Onboarding invitations are issued from the cashier app.', 403, 'ONBOARDING_INVITE_CASHIER_ONLY');
+  }
+  if (!cashier.branchId) {
+    // A business-wide sign-in with no branch: attributing an onboarding to "no branch" here would be a guess, so refuse.
+    throw new AppError('Choose the branch you are serving at before inviting a customer.', 409, 'ONBOARDING_INVITE_BRANCH_REQUIRED');
+  }
+  const businessId = c.get('businessId');
+  const userId = c.get('userId');
+  // Own bucket on the existing lookup limiter binding (keyed apart from lookups, so issuing cannot exhaust a cashier's lookups).
+  const { success } = await c.env.LOOKUP_RATE_LIMITER.limit({ key: `onboarding-invite:${businessId}:${userId}` });
+  if (!success) throw new AppError('Too many invitations. Please try again shortly.', 429, 'RATE_LIMITED');
+
+  const invite = await signOnboardingInvite(
+    { cashierUserId: userId, sessionId: cashier.sessionId, businessId, branchId: cashier.branchId },
+    c.env.JWT_ACCESS_SECRET,
+  );
+  c.set('auditMetadata', {
+    action: 'loyalty.onboarding_invite_issued',
+    entityType: 'onboarding_invite',
+    entityId: invite.inviteId,
+    details: { branchId: cashier.branchId },
+  });
+  return ok(c, { inviteToken: invite.token, expiresAt: invite.expiresAt.toISOString(), branchId: cashier.branchId });
 });
 
 // ---- Accounts & points engine (Block 3) ---------------------------------
