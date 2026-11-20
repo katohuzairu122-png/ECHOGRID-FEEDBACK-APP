@@ -453,6 +453,11 @@
    ],
    "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
   },
+  "legal_holds": {
+   "class": "NO_ACCESS",
+   "verbs": [],
+   "reason": "privacy-operator only (0086); the application runtime must never read or write the privacy workflow, holds or retention registry"
+  },
   "loyalty_accounts": {
    "class": "RUNTIME",
    "verbs": [
@@ -736,6 +741,16 @@
    ],
    "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
   },
+  "privacy_request_transitions": {
+   "class": "NO_ACCESS",
+   "verbs": [],
+   "reason": "privacy-operator only (0086); the application runtime must never read or write the privacy workflow, holds or retention registry"
+  },
+  "privacy_requests": {
+   "class": "NO_ACCESS",
+   "verbs": [],
+   "reason": "privacy-operator only (0086); the application runtime must never read or write the privacy workflow, holds or retention registry"
+  },
   "qr_codes": {
    "class": "RUNTIME",
    "verbs": [
@@ -762,6 +777,16 @@
     "UPDATE"
    ],
    "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
+  },
+  "retention_policies": {
+   "class": "NO_ACCESS",
+   "verbs": [],
+   "reason": "privacy-operator only (0086); the application runtime must never read or write the privacy workflow, holds or retention registry"
+  },
+  "retention_runs": {
+   "class": "NO_ACCESS",
+   "verbs": [],
+   "reason": "privacy-operator only (0086); the application runtime must never read or write the privacy workflow, holds or retention registry"
   },
   "role_permissions": {
    "class": "RUNTIME",

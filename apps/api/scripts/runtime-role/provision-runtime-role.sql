@@ -148,7 +148,7 @@ $$;
 DO $$
 DECLARE t text;
 BEGIN
-  FOREACH t IN ARRAY ARRAY['business_category_translations', 'onboarding_erasure_operations', 'partner_credit_multiunit_lot_allocations', 'partner_credit_multiunit_movements', 'partner_credit_settlement_authorizations', 'settlement_custody_authorization_links', 'signed_evidence_events', 'signed_evidence_records', 'stripe_read_authorization_events', 'stripe_read_authorization_policy', 'stripe_read_authorizations', 'stripe_read_policy_changes', 'stripe_read_policy_events'] LOOP
+  FOREACH t IN ARRAY ARRAY['business_category_translations', 'legal_holds', 'onboarding_erasure_operations', 'partner_credit_multiunit_lot_allocations', 'partner_credit_multiunit_movements', 'partner_credit_settlement_authorizations', 'privacy_request_transitions', 'privacy_requests', 'retention_policies', 'retention_runs', 'settlement_custody_authorization_links', 'signed_evidence_events', 'signed_evidence_records', 'stripe_read_authorization_events', 'stripe_read_authorization_policy', 'stripe_read_authorizations', 'stripe_read_policy_changes', 'stripe_read_policy_events'] LOOP
     IF to_regclass('public.' || t) IS NOT NULL THEN
       EXECUTE format('REVOKE ALL ON TABLE public.%I FROM echogrid_app_runtime', t);
     END IF;
