@@ -80,7 +80,7 @@ async function handle(method: string, path: string, call: CallOptions): Promise<
   if (call.branchId) headers.set('X-Branch-Id', call.branchId);
   if (call.body !== undefined) headers.set('Content-Type', 'application/json');
   const env = {
-    HYPERDRIVE: { connectionString: databaseUrl }, JWT_ACCESS_SECRET: SECRET, JWT_REFRESH_SECRET: 'harness-refresh-secret',
+    HYPERDRIVE: { connectionString: process.env.APP_RUNTIME_DATABASE_URL ?? databaseUrl }, JWT_ACCESS_SECRET: SECRET, JWT_REFRESH_SECRET: 'harness-refresh-secret',
     CUSTOMER_JWT_SECRET: CUSTOMER_SECRET, QR_TOKEN_SECRET: 'harness-qr-secret', WEB_BASE_URL: 'https://web.example.test',
     PASSWORD_HASHER: hasherNamespace, AUTH_RATE_LIMITER: allow, API_RATE_LIMITER: allow, PUBLIC_RATE_LIMITER: allow,
     LOOKUP_RATE_LIMITER: allow, CUSTOMER_API_RATE_LIMITER: allow, JOBS: { send: async () => {}, sendBatch: async () => {} },

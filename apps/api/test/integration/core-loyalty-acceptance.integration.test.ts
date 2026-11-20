@@ -46,7 +46,7 @@ async function request<T = unknown>(actor: Actor, path: string, body?: unknown) 
   if (actor.branchId) headers.set('X-Branch-Id', actor.branchId);
   if (body !== undefined) headers.set('Content-Type', 'application/json');
   const env = {
-    HYPERDRIVE: { connectionString: databaseUrl },
+    HYPERDRIVE: { connectionString: process.env.APP_RUNTIME_DATABASE_URL ?? databaseUrl },
     JWT_ACCESS_SECRET: staffSecret,
     CUSTOMER_JWT_SECRET: customerSecret,
     QR_TOKEN_SECRET: 'synthetic-phone-lookup-signing-secret',

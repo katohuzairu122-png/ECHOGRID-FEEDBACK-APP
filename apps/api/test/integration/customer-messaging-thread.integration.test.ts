@@ -151,7 +151,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
     const limiter = { limit: async () => ({ success: true }) };
     const env = () =>
       ({
-        HYPERDRIVE: { connectionString: process.env.DATABASE_URL! },
+        HYPERDRIVE: { connectionString: process.env.APP_RUNTIME_DATABASE_URL ?? process.env.DATABASE_URL! },
         CUSTOMER_JWT_SECRET: SECRET,
         JWT_ACCESS_SECRET: 'unused-access-secret',
         QR_TOKEN_SECRET: 'unused-qr-secret',

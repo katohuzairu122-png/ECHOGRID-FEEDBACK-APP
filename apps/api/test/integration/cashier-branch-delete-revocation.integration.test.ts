@@ -72,7 +72,7 @@ async function http(method: string, path: string, call: Call = {}): Promise<{ st
   if (call.branchId) headers.set('X-Branch-Id', call.branchId);
   if (call.body !== undefined) headers.set('Content-Type', 'application/json');
   const env = {
-    HYPERDRIVE: { connectionString: databaseUrl }, JWT_ACCESS_SECRET: SECRET, JWT_REFRESH_SECRET: REFRESH_SECRET, CUSTOMER_JWT_SECRET: 'branch-delete-customer-secret', QR_TOKEN_SECRET: 'branch-delete-qr-secret', WEB_BASE_URL: 'https://web.example.test',
+    HYPERDRIVE: { connectionString: process.env.APP_RUNTIME_DATABASE_URL ?? databaseUrl }, JWT_ACCESS_SECRET: SECRET, JWT_REFRESH_SECRET: REFRESH_SECRET, CUSTOMER_JWT_SECRET: 'branch-delete-customer-secret', QR_TOKEN_SECRET: 'branch-delete-qr-secret', WEB_BASE_URL: 'https://web.example.test',
     PASSWORD_HASHER: hasherNamespace, AUTH_RATE_LIMITER: allow, API_RATE_LIMITER: allow, LOOKUP_RATE_LIMITER: allow,
     PUBLIC_RATE_LIMITER: allow, CUSTOMER_API_RATE_LIMITER: allow, JOBS: { send: async () => {}, sendBatch: async () => {} },
   } as unknown as Bindings;
