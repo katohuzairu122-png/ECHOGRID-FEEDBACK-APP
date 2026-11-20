@@ -5,7 +5,7 @@ test('Business Overview uses empty API data honestly and keeps navigation respon
   page,
 }, testInfo) => {
   const unique = Date.now();
-  await page.goto('/signup');
+  await page.goto('/signup?role=business');
   await page.getByLabel('Full name').fill('Workspace UI Test');
   await page.getByLabel('Email').fill(`workspace-${unique}@example.test`);
   await page.getByLabel('Password', { exact: true }).fill('a-strong-test-password');

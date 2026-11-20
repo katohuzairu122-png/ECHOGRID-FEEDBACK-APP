@@ -67,7 +67,7 @@ for (const locale of ['en', 'ar'] as const) {
     const slug = 'w4-' + randomUUID();
     await context.addCookies([{ name: 'ff_locale', value: locale, url: origin }]);
     await test.step('F1–F3 signup watermark, layout, labels, and keyboard', async () => {
-      await page.goto('/signup');
+      await page.goto('/signup?role=business');
       await expect(page.locator('html')).toHaveAttribute('dir', rtl ? 'rtl' : 'ltr');
       const name = page.getByLabel(auth.fullNameLabel, { exact: true });
       await expect(name).toBeVisible();

@@ -23,7 +23,7 @@ test.describe('Community hub access', () => {
 
   test('does not accept a staff session as customer authentication', async ({ page }) => {
     const unique = Date.now();
-    await page.goto('/signup');
+    await page.goto('/signup?role=business');
     await page.getByLabel('Full name').fill('Community Access Test');
     await page.getByLabel('Email').fill(`community-access-${unique}@example.test`);
     await page.getByLabel('Password', { exact: true }).fill('a-strong-test-password');

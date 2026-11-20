@@ -5,7 +5,7 @@ test('dialogs in the dark workspace have a dark surface and readable title text'
   page,
 }) => {
   const unique = Date.now();
-  await page.goto('/signup');
+  await page.goto('/signup?role=business');
   await page.getByLabel('Full name').fill('Dialog Theme Test');
   await page.getByLabel('Email').fill(`dialog-theme-${unique}@example.test`);
   await page.getByLabel('Password', { exact: true }).fill('a-strong-test-password');

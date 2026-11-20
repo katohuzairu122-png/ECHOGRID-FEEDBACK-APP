@@ -4,7 +4,7 @@ test('Feedback Inbox: honest empty state, keyboard access and responsive layout'
   page,
 }) => {
   const unique = Date.now();
-  await page.goto('/signup');
+  await page.goto('/signup?role=business');
   await page.getByLabel('Full name').fill('Inbox UI Test');
   await page.getByLabel('Email').fill(`inbox-ui-${unique}@example.test`);
   await page.getByLabel('Password', { exact: true }).fill('a-strong-test-password');

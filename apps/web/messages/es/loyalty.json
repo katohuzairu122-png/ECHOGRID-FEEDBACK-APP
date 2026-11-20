@@ -557,6 +557,22 @@
       "genericError": "Algo salió mal. Inténtelo de nuevo.",
       "phoneRequired": "Para unirse a otro negocio, verifique primero su número de teléfono.",
       "verifyPhone": "Verificar mi teléfono"
+    },
+    "joinHub": {
+      "title": "Únete como cliente de fidelidad",
+      "description": "Únete al programa de fidelidad de cualquier negocio registrado en Echo Grid. Te unes a un negocio escaneando su código QR.",
+      "scanTitle": "Escanea el código QR de un negocio",
+      "scanBody": "Abre la cámara de tu teléfono y apunta al código QR de Echo Grid del negocio. El enlace se abre aquí y crearás o abrirás tu cuenta de cliente.",
+      "findTitle": "O busca un negocio registrado",
+      "selectLabel": "Negocios registrados",
+      "selectPlaceholder": "Elige un negocio…",
+      "empty": "Aún no hay negocios para elegir. Escanea en su lugar el código QR de un negocio.",
+      "loadError": "No pudimos cargar la lista ahora. Aún puedes escanear el código QR de un negocio.",
+      "chosenTitle": "Únete a {name}",
+      "chosenBody": "Escanea el código QR de Echo Grid en {name} o pídeselo. Crea o abre tu cuenta de cliente ahora para estar listo.",
+      "accountCta": "Crear o abrir mi cuenta de cliente",
+      "accountNote": "Verificarás tu teléfono con un código de un solo uso.",
+      "back": "Volver a elegir cómo participar"
     }
   }
 }
