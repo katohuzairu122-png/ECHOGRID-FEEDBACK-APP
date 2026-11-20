@@ -90,6 +90,22 @@ ALTER TABLE public.customer_credentials ENABLE ALWAYS TRIGGER customer_not_anony
 ALTER TABLE public.customer_sessions ENABLE ALWAYS TRIGGER customer_not_anonymized_guard_trg;--> statement-breakpoint
 ALTER TABLE public.customer_onboarding_events ENABLE ALWAYS TRIGGER customer_not_anonymized_guard_trg;--> statement-breakpoint
 
+-- TRUNCATE is denied on every table this migration put a row guard on (repository rule: a row-guarded table also denies TRUNCATE); the runtime role
+-- never held TRUNCATE, and a cascade from a parent now fails as a whole instead of emptying customer identity tables.
+CREATE OR REPLACE FUNCTION public.customer_identity_truncate_denied() RETURNS trigger LANGUAGE plpgsql SET search_path = pg_catalog, public AS $fn$
+BEGIN
+  RAISE EXCEPTION 'CUSTOMER_IDENTITY_TRUNCATE_DENIED (%.%)', TG_TABLE_SCHEMA, TG_TABLE_NAME USING ERRCODE = 'integrity_constraint_violation';
+END
+$fn$;--> statement-breakpoint
+CREATE TRIGGER customers_no_truncate BEFORE TRUNCATE ON public.customers FOR EACH STATEMENT EXECUTE FUNCTION public.customer_identity_truncate_denied();--> statement-breakpoint
+CREATE TRIGGER business_customer_memberships_no_truncate BEFORE TRUNCATE ON public.business_customer_memberships FOR EACH STATEMENT EXECUTE FUNCTION public.customer_identity_truncate_denied();--> statement-breakpoint
+CREATE TRIGGER customer_credentials_no_truncate BEFORE TRUNCATE ON public.customer_credentials FOR EACH STATEMENT EXECUTE FUNCTION public.customer_identity_truncate_denied();--> statement-breakpoint
+CREATE TRIGGER customer_sessions_no_truncate BEFORE TRUNCATE ON public.customer_sessions FOR EACH STATEMENT EXECUTE FUNCTION public.customer_identity_truncate_denied();--> statement-breakpoint
+ALTER TABLE public.customers ENABLE ALWAYS TRIGGER customers_no_truncate;--> statement-breakpoint
+ALTER TABLE public.business_customer_memberships ENABLE ALWAYS TRIGGER business_customer_memberships_no_truncate;--> statement-breakpoint
+ALTER TABLE public.customer_credentials ENABLE ALWAYS TRIGGER customer_credentials_no_truncate;--> statement-breakpoint
+ALTER TABLE public.customer_sessions ENABLE ALWAYS TRIGGER customer_sessions_no_truncate;--> statement-breakpoint
+
 -- ---------------------------------------------------------------------------------------------------------------------------------
 -- 2. Tables. No personal data beyond the pseudonymous customer id; no free text (codes and reference patterns only).
 -- ---------------------------------------------------------------------------------------------------------------------------------

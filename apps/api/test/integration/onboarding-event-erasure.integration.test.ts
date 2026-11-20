@@ -120,7 +120,7 @@ describe.skipIf(!databaseUrl)('D2-R1 controlled onboarding-event erasure (real P
   describe('schema, privileges and the unchanged append-only guarantee', () => {
     it('keeps the guard triggers ENABLE ALWAYS and the audit table append-only', async () => {
       const t = await q(`SELECT tgname, tgenabled FROM pg_trigger WHERE NOT tgisinternal AND tgrelid IN ('customer_onboarding_events'::regclass, 'onboarding_erasure_operations'::regclass) ORDER BY tgname`);
-      expect(t.map((r) => r.tgname)).toEqual(['customer_onboarding_event_guard_trg', 'customer_onboarding_events_no_truncate', 'onboarding_erasure_operation_guard_trg', 'onboarding_erasure_operations_no_truncate']);
+      expect(t.map((r) => r.tgname)).toEqual(['customer_not_anonymized_guard_trg', 'customer_onboarding_event_guard_trg', 'customer_onboarding_events_no_truncate', 'onboarding_erasure_operation_guard_trg', 'onboarding_erasure_operations_no_truncate']);
       expect(t.every((r) => r.tgenabled === 'A')).toBe(true);
     });
 

@@ -158,6 +158,19 @@ describe.skipIf(!databaseUrl)('D2-FINAL privacy lifecycle (real PostgreSQL)', ()
       expect((await q(`SELECT anonymized_at FROM customers WHERE id = $1`, [cust.id]))[0].anonymized_at).toBeNull();
     });
 
+    it('TRUNCATE is denied on every table 0086 guards (customers, memberships, credentials, sessions), directly and through a parent CASCADE, and the guards are ENABLE ALWAYS', async () => {
+      for (const t of ['customers', 'business_customer_memberships', 'customer_credentials', 'customer_sessions']) {
+        const trg = await q(`SELECT tgenabled FROM pg_trigger WHERE tgrelid = $1::regclass AND tgname = $2`, [`public.${t}`, `${t}_no_truncate`]);
+        expect(trg.map((r) => r.tgenabled), t).toEqual(['A']);
+      }
+      expect(await msg(admin.query(`TRUNCATE customers CASCADE`))).toMatch(/TRUNCATE_DENIED/);
+      await admin.query('BEGIN');
+      try {
+        await admin.query(`SET LOCAL session_replication_role = replica`);
+        expect(await msg(admin.query(`TRUNCATE customer_sessions, customer_refresh_tokens`))).toMatch(/CUSTOMER_IDENTITY_TRUNCATE_DENIED/); // with its referencing table listed, only the trigger can deny it
+      } finally { await admin.query('ROLLBACK'); }
+    });
+
     it('the superuser test connection is refused too (the guards trust current_user, not privilege), triggers are ENABLE ALWAYS and replica role does not skip them', async () => {
       const t = await q(`SELECT tgrelid::regclass::text AS tbl, tgname, tgenabled FROM pg_trigger WHERE NOT tgisinternal AND tgname IN
         ('customer_anonymization_guard_trg','privacy_request_guard_trg','privacy_requests_no_truncate','privacy_request_transitions_guard_trg','privacy_request_transitions_no_truncate','retention_runs_guard_trg','retention_runs_no_truncate','legal_holds_guard_trg','legal_holds_no_truncate','retention_policies_guard_trg','retention_policies_no_truncate','customer_not_anonymized_guard_trg')`);
