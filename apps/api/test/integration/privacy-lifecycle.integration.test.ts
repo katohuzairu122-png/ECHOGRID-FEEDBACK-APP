@@ -4,6 +4,7 @@ import { randomBytes, randomUUID } from 'node:crypto';
 import { buildDb } from '../../src/db/client';
 import { createRepositories } from '../../src/repositories';
 import { CustomerMembershipService } from '../../src/customer-relationships/customer-membership.service';
+import { appDbOf } from '../helpers/runtime-db';
 
 /**
  * D2-FINAL (migration 0086) against REAL PostgreSQL: verified privacy-request workflow, customer shell anonymization, legal holds and the
@@ -87,7 +88,7 @@ describe.skipIf(!databaseUrl)('D2-FINAL privacy lifecycle (real PostgreSQL)', ()
     await admin.connect();
     const db = buildDb(admin);
     repos = createRepositories(db);
-    service = new CustomerMembershipService(db);
+    service = new CustomerMembershipService(appDbOf(db));
     await admin.query(`CREATE ROLE ${OP} NOLOGIN`);
     await admin.query(`GRANT customer_privacy_operator TO ${OP}`);
     await admin.query(`GRANT USAGE ON SCHEMA public TO ${OP}`);
@@ -202,6 +203,34 @@ describe.skipIf(!databaseUrl)('D2-FINAL privacy lifecycle (real PostgreSQL)', ()
       expect(trail.every((t) => t.actor_role === sessionUser)).toBe(true); // session_user of the connection that really ran it, never a caller-supplied name (the test connection runs SET ROLE, so session_user is the login)
       const r = await reqRow(id);
       expect([r.state, r.decision_code, r.verification_method]).toEqual(['completed', 'approved', 'out_of_band_platform_verified']);
+    });
+
+    it('an unverified, unapproved or forged request can NEVER start anonymization: every pre-approval state refuses, and the customer is untouched', async () => {
+      const w = await world('forged');
+      const c = await customer();
+      await join(w, c.id);
+      const before = JSON.stringify((await q(`SELECT * FROM customers WHERE id = $1`, [c.id]))[0]);
+      const id = (await call(`SELECT public.privacy_request_submit($1, $2, 'platform_assisted') AS id`, [c.id, `fg-${run}-${++seq}`]))[0].id as string;
+      const attempt = async (label: string) => {
+        expect(await msg(anonymize(id)), label).toMatch(/PRIVACY_REQUEST_NOT_APPROVED/);
+        expect(JSON.stringify((await q(`SELECT * FROM customers WHERE id = $1`, [c.id]))[0]), `${label}: customer changed`).toBe(before);
+      };
+      await attempt('submitted');
+      await call(`SELECT public.privacy_request_advance($1, 'identity_verification_required', $2)`, [id, support]);
+      await attempt('identity_verification_required');
+      await call(`SELECT public.privacy_request_record_verification($1, 'out_of_band_platform_verified', $2, $3)`, [id, `ev-${run}-${++seq}`, support]);
+      await attempt('identity_verified');
+      await call(`SELECT public.privacy_request_advance($1, 'scope_assessment', $2)`, [id, support]);
+      await attempt('scope_assessment');
+      await call(`SELECT public.privacy_request_advance($1, 'retention_assessment', $2)`, [id, support]);
+      await attempt('retention_assessment');
+      // a forged shortcut: forcing the state directly is refused for every role, including the superuser test connection
+      expect(await msg(admin.query(`UPDATE privacy_requests SET state = 'approved', approved_by = $2, approved_at = now() WHERE id = $1`, [id, admin1]))).toMatch(/PRIVACY_REQUEST_RESTRICTED/);
+      // a rejected request is terminal and can never be processed
+      const rej = (await call(`SELECT public.privacy_request_submit($1, $2, 'platform_assisted') AS id`, [c.id, `fg2-${run}-${++seq}`]))[0].id as string;
+      await call(`SELECT public.privacy_request_reject($1, $2, 'rejected_unverified')`, [rej, support]);
+      expect(await msg(anonymize(rej))).toMatch(/PRIVACY_REQUEST_NOT_APPROVED/);
+      expect((await q(`SELECT anonymized_at FROM customers WHERE id = $1`, [c.id]))[0].anonymized_at).toBeNull();
     });
 
     it('refuses skipped, backward and terminal transitions, and the dedicated-function states via the generic advance', async () => {
@@ -521,6 +550,33 @@ describe.skipIf(!databaseUrl)('D2-FINAL privacy lifecycle (real PostgreSQL)', ()
       }
     });
 
+    it('concurrent loyalty ledger writes while a customer is anonymized: no deadlock, no lost write, the balance and every ledger row are preserved', async () => {
+      for (let round = 0; round < 3; round++) {
+        const w = await world(`loyalty-${round}`);
+        const c = await customer();
+        await join(w, c.id);
+        const acct = (await q(`SELECT id FROM loyalty_accounts WHERE customer_id = $1 AND business_id = $2`, [c.id, w.biz]))[0].id as string;
+        await q(`UPDATE loyalty_accounts SET points = 100 WHERE id = $1`, [acct]);
+        await q(`INSERT INTO loyalty_transactions (loyalty_account_id, type, points) VALUES ($1, 'adjustment', 100)`, [acct]);
+        const id = await approved(c.id);
+        const writers = await Promise.all(Array.from({ length: 6 }, () => connect()));
+        const work = writers.map(async (wc) => {
+          for (let i = 0; i < 8; i++) {
+            await wc.query('BEGIN');
+            await wc.query(`INSERT INTO loyalty_transactions (loyalty_account_id, type, points) VALUES ($1, 'adjustment', 1)`, [acct]);
+            await wc.query(`UPDATE loyalty_accounts SET points = points + 1 WHERE id = $1`, [acct]);
+            await wc.query('COMMIT');
+          }
+        });
+        const [anon, ...rest] = await Promise.allSettled([anonymize(id), ...work]);
+        expect(anon.status, `round ${round}: ${anon.status === 'rejected' ? String((anon.reason as Error).message) : ''}`).toBe('fulfilled');
+        for (const r of rest) expect(r.status, `round ${round} writer: ${r.status === 'rejected' ? String((r.reason as Error).message) : ''}`).toBe('fulfilled');
+        expect((await q(`SELECT points FROM loyalty_accounts WHERE id = $1`, [acct]))[0].points, `round ${round}`).toBe(100 + 6 * 8);
+        expect((await q(`SELECT coalesce(sum(points), 0)::int AS s, count(*)::int AS n FROM loyalty_transactions WHERE loyalty_account_id = $1`, [acct]))[0]).toEqual({ s: 100 + 6 * 8, n: 1 + 6 * 8 });
+        expect((await q(`SELECT anonymized_at FROM customers WHERE id = $1`, [c.id]))[0].anonymized_at).not.toBeNull();
+      }
+    });
+
     it('a legal hold racing the anonymization is never lost: either the hold wins (restricted, nothing changed) or the anonymization wins before the hold exists', async () => {
       for (let round = 0; round < 6; round++) {
         const c = await customer();
@@ -568,6 +624,46 @@ describe.skipIf(!databaseUrl)('D2-FINAL privacy lifecycle (real PostgreSQL)', ()
       expect((await q(`SELECT count(*)::int AS n FROM customer_onboarding_events WHERE erased_at IS NULL`))[0].n).toBe(before);
       expect((await q(`SELECT mode, operator_role FROM retention_runs ORDER BY created_at DESC LIMIT 1`))[0]).toMatchObject({ mode: 'dry_run' });
       for (const bad of [0, -1, 40000]) expect(await msg(call(`SELECT * FROM public.retention_preview_onboarding_events($1)`, [bad]))).toMatch(/RETENTION_PERIOD_INVALID/);
+    });
+
+    it('two retention runs racing each other neither deadlock nor double-count, and every eligible pair ends erased', async () => {
+      const w = await world('retrace');
+      const people = await Promise.all([customer(), customer(), customer(), customer()]);
+      for (const p of people) { await join(w, p.id); await q(`UPDATE customers SET phone_verified_at = now() WHERE id = $1`, [p.id]); }
+      const evs = [] as string[];
+      for (const p of people) evs.push(await oldEvent(w, p.id, 1200));
+      const pid = (await call(`SELECT public.retention_policy_register('customer_onboarding_events', $1, 365, false) AS id`, [freshVersion()]))[0].id as string;
+      await call(`SELECT public.retention_policy_approve($1, $2, $3)`, [pid, admin1, `race-${run}-${++seq}`]);
+      const runs = await Promise.allSettled([call(`SELECT * FROM public.retention_execute_onboarding_events($1, 500)`, [pid]), call(`SELECT * FROM public.retention_execute_onboarding_events($1, 500)`, [pid])]);
+      for (const r of runs) expect(r.status, r.status === 'rejected' ? String((r.reason as Error).message) : '').toBe('fulfilled');
+      for (const r of runs) expect((r as PromiseFulfilledResult<Array<{ out_failed_pairs: number }>>).value[0]!.out_failed_pairs).toBe(0);
+      for (const e of evs) expect((await q(`SELECT erased_at FROM customer_onboarding_events WHERE id = $1`, [e]))[0].erased_at).not.toBeNull();
+    });
+
+    it('a failure in ONE pair is isolated: the other pair is still erased, the failure is counted, the failed pair is untouched and is retried by the next run', async () => {
+      const wA = await world('retfail-a');
+      const wB = await world('retfail-b');
+      const a = await customer(); const b = await customer();
+      await join(wA, a.id); await join(wB, b.id);
+      const evA = await oldEvent(wA, a.id, 1500); const evB = await oldEvent(wB, b.id, 1500);
+      const pid = (await call(`SELECT public.retention_policy_register('customer_onboarding_events', $1, 365, false) AS id`, [freshVersion()]))[0].id as string;
+      await call(`SELECT public.retention_policy_approve($1, $2, $3)`, [pid, admin1, `pf-${run}-${++seq}`]);
+      await q(`CREATE OR REPLACE FUNCTION public.d2f_failpair_${run}() RETURNS trigger LANGUAGE plpgsql AS $f$ BEGIN IF NEW.business_id = '${wA.biz}'::uuid THEN RAISE EXCEPTION 'D2F_INJECTED_PAIR_FAILURE'; END IF; RETURN NEW; END $f$`);
+      await q(`CREATE TRIGGER d2f_failpair_trg BEFORE INSERT ON onboarding_erasure_operations FOR EACH ROW EXECUTE FUNCTION public.d2f_failpair_${run}()`);
+      let first: Record<string, number>;
+      try {
+        first = (await call(`SELECT * FROM public.retention_execute_onboarding_events($1, 500)`, [pid]))[0] as Record<string, number>;
+      } finally {
+        await q(`DROP TRIGGER d2f_failpair_trg ON onboarding_erasure_operations`);
+        await q(`DROP FUNCTION public.d2f_failpair_${run}()`);
+      }
+      expect(first.out_failed_pairs).toBe(1);
+      expect((await q(`SELECT erased_at FROM customer_onboarding_events WHERE id = $1`, [evA]))[0].erased_at).toBeNull(); // the failed pair rolled back completely
+      expect((await q(`SELECT customer_id FROM customer_onboarding_events WHERE id = $1`, [evA]))[0].customer_id).toBe(a.id);
+      expect((await q(`SELECT erased_at FROM customer_onboarding_events WHERE id = $1`, [evB]))[0].erased_at).not.toBeNull(); // the other pair still ran
+      const second = (await call(`SELECT * FROM public.retention_execute_onboarding_events($1, 500)`, [pid]))[0] as Record<string, number>;
+      expect(second.out_failed_pairs).toBe(0);
+      expect((await q(`SELECT erased_at FROM customer_onboarding_events WHERE id = $1`, [evA]))[0].erased_at).not.toBeNull(); // retried and completed
     });
 
     it('an approved FIXTURE policy erases only eligible, un-held pairs in bounded batches, is idempotent, records the run, and never touches recent events', async () => {

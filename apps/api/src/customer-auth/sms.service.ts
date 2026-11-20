@@ -43,12 +43,23 @@ export class TwilioSmsService implements SmsService {
   }
 }
 
+/** Shows only the last four digits of a phone number ("+1•••••••4567"). Used where a log line must stay readable for a tester without
+ * writing the whole number to retained logs. */
+export function maskPhone(phone: string): string {
+  const digits = phone.replace(/\D/g, '');
+  if (digits.length <= 4) return '••••';
+  return `${phone.trim().startsWith('+') ? '+' : ''}${'•'.repeat(digits.length - 4)}${digits.slice(-4)}`;
+}
+
 /** Dev/staging fallback -- logs instead of sending, so OTP codes are visible
  * in `wrangler dev` output for manual testing without a real phone/Twilio
- * account. Never selected when ENVIRONMENT === 'production'. */
+ * account. Never selected when ENVIRONMENT === 'production'.
+ * D2-FINAL: on STAGING (where Workers Logs are retained) the recipient is masked to its last four digits; the message body (the code) is
+ * unchanged so staging testing still works. Local development is unchanged. */
 export class ConsoleSmsService implements SmsService {
+  constructor(private readonly options: { maskRecipient?: boolean } = {}) {}
   async send(toPhone: string, body: string): Promise<void> {
-    console.log(`[ConsoleSmsService] would send to ${toPhone}: ${body}`);
+    console.log(`[ConsoleSmsService] would send to ${this.options.maskRecipient ? maskPhone(toPhone) : toPhone}: ${body}`);
   }
 }
 
@@ -56,5 +67,6 @@ export function createSmsService(
   environment: 'development' | 'staging' | 'production',
   credentials: TwilioCredentials,
 ): SmsService {
-  return environment === 'production' ? new TwilioSmsService(credentials) : new ConsoleSmsService();
+  if (environment === 'production') return new TwilioSmsService(credentials);
+  return new ConsoleSmsService({ maskRecipient: environment === 'staging' });
 }
