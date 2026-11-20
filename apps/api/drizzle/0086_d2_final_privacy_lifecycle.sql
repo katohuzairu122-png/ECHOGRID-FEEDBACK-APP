@@ -242,6 +242,8 @@ CREATE OR REPLACE FUNCTION public.privacy_transition_allowed(p_from text, p_to t
     ('failed','processing')
   )
 $fn$;--> statement-breakpoint
+REVOKE EXECUTE ON FUNCTION public.privacy_transition_allowed(text, text) FROM PUBLIC;--> statement-breakpoint
+GRANT EXECUTE ON FUNCTION public.privacy_transition_allowed(text, text) TO customer_privacy_owner;--> statement-breakpoint
 CREATE OR REPLACE FUNCTION public.privacy_request_guard() RETURNS trigger LANGUAGE plpgsql SET search_path = pg_catalog, public AS $fn$
 BEGIN
   IF TG_OP IN ('DELETE', 'TRUNCATE') THEN
