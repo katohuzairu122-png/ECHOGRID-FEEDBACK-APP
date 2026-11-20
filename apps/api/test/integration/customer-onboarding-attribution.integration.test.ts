@@ -61,7 +61,7 @@ app.onError(errorHandler);
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Envelope = { data?: any; error?: { code: string; message: string } };
-interface Call { token?: string; businessId?: string; branchId?: string; body?: unknown; headers?: Record<string, string> }
+interface Call { token?: string; businessId?: string; branchId?: string; body?: unknown; headers?: Record<string, string>; env?: Record<string, string> }
 
 async function http(method: string, path: string, call: Call = {}): Promise<{ status: number } & Envelope> {
   const pending: Promise<unknown>[] = [];
@@ -75,6 +75,7 @@ async function http(method: string, path: string, call: Call = {}): Promise<{ st
     CUSTOMER_JWT_SECRET: CUSTOMER_SECRET, QR_TOKEN_SECRET: QR_SECRET,
     PASSWORD_HASHER: hasherNamespace, AUTH_RATE_LIMITER: allow, API_RATE_LIMITER: allow, LOOKUP_RATE_LIMITER: allow,
     PUBLIC_RATE_LIMITER: allow, CUSTOMER_API_RATE_LIMITER: allow, JOBS: { send: async () => {}, sendBatch: async () => {} },
+    ...(call.env ?? {}),
   } as unknown as Bindings;
   const response = await app.request(`/api/v1${path}`, {
     method, headers, ...(call.body === undefined ? {} : { body: JSON.stringify(call.body) }),
@@ -204,7 +205,9 @@ describe.skipIf(!databaseUrl)('CASHIER-AUTH-02D customer onboarding attribution 
       expect(m.id).toBe(ev[0].membership_id);
       const audit = await q(`SELECT * FROM audit_log WHERE id = $1`, [ev[0].audit_log_id]);
       expect(audit[0]).toMatchObject({ action: 'customer.onboarded', entity_type: 'customer_onboarding_event', entity_id: ev[0].id, business_id: bizA, actor_user_id: null });
-      expect(audit[0].metadata).toMatchObject({ source: 'business_qr', branchId: a1, membershipId: m.id, rejoin: false, verificationState: 'unverified' });
+      expect(audit[0].metadata).toMatchObject({ source: 'business_qr', branchId: a1, rejoin: false, verificationState: 'unverified' });
+      // D2-FINAL forward minimization: the audit row no longer embeds the membership id (the personal link lives only in the erasable event row)
+      expect(audit[0].metadata).not.toHaveProperty('membershipId');
     });
 
     it('uses the branch of whichever branch QR was scanned (A2) and never a client-supplied branch', async () => {
@@ -700,6 +703,26 @@ describe.skipIf(!databaseUrl)('CASHIER-AUTH-02D customer onboarding attribution 
       expect(onlyC1.data.totals).toMatchObject({ events: 2, uniqueCustomers: 2 });
       expect((await http('GET', '/analytics/onboarding?branchId=nope', { token: ownerCToken, businessId: bizC })).status).toBe(400);
       expect((await http('GET', '/analytics/onboarding?from=bad', { token: ownerCToken, businessId: bizC })).status).toBe(400);
+
+      // D2-FINAL small-group privacy through the REAL route: opt-in by configuration, no threshold chosen by the repository.
+      // bizC is a small business: 4 events, 3 customers, two branches of 2 events each.
+      const k5 = await http('GET', '/analytics/onboarding', { token: ownerCToken, businessId: bizC, env: { ONBOARDING_ANALYTICS_MIN_GROUP_SIZE: '5' } });
+      expect(k5.status, JSON.stringify(k5)).toBe(200);
+      expect(k5.data.policy).toEqual({ minGroupSize: 5, suppressCashierBreakdown: false });
+      expect(k5.data.totals).toMatchObject({ events: null, uniqueCustomers: null }); // the whole business is below 5: not even the total is disclosed
+      expect(k5.data.bySource).toEqual([{ suppressed: true, events: null, uniqueCustomers: null }]);
+      expect(k5.data.byBranch).toEqual([{ suppressed: true, events: null, uniqueCustomers: null }]);
+      const k3 = await http('GET', '/analytics/onboarding', { token: ownerCToken, businessId: bizC, env: { ONBOARDING_ANALYTICS_MIN_GROUP_SIZE: '3' } });
+      expect(k3.data.totals).toMatchObject({ events: 4, uniqueCustomers: 3 });
+      expect(k3.data.byBranch).toEqual([{ suppressed: true, events: 4, uniqueCustomers: null }]); // two branches of 2 are each below 3 and are folded together
+      expect(JSON.stringify(k3.data)).not.toContain('C1'); // no branch name is disclosed for a hidden cell
+      // unset keeps today's exact behaviour, and a set-but-invalid value FAILS CLOSED instead of silently disclosing
+      const unset = await http('GET', '/analytics/onboarding', { token: ownerCToken, businessId: bizC, env: { ONBOARDING_ANALYTICS_MIN_GROUP_SIZE: '' } });
+      expect(unset.data.totals).toEqual({ events: 4, uniqueCustomers: 3, rejoinEvents: 1, withoutBranch: 0, erasedEvents: 0 });
+      for (const bad of ['abc', '1', '0', '-3', '2.5', '99999']) {
+        const r = await http('GET', '/analytics/onboarding', { token: ownerCToken, businessId: bizC, env: { ONBOARDING_ANALYTICS_MIN_GROUP_SIZE: bad } });
+        expect([bad, r.status, r.error?.code]).toEqual([bad, 500, 'ANALYTICS_PRIVACY_CONFIG_INVALID']);
+      }
     });
 
     it('includes cashier-assisted counts per cashier and events without a branch in their own bucket', async () => {

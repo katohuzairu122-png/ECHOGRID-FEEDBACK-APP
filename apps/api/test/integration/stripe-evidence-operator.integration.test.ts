@@ -12,6 +12,7 @@ import {
   recordKekGenerated, rewrapCohort, verifyRemovalSafe, runAttestation, handleEnforcedCapture, DEFAULT_REQUIRED_EVENT_TYPES,
   type AttestationObservation, type CaptureEnv, type KeyringEntryJson,
 } from '../../src/billing/stripe-evidence';
+import { appDbOf } from '../helpers/runtime-db';
 
 /**
  * HETA-01-F1 operator tooling against a DISPOSABLE PostgreSQL: L2 attestation recording feeding Class S, end-to-end
@@ -139,7 +140,7 @@ describe.skipIf(!process.env.DATABASE_URL)('stripe evidence operator tooling (in
 
     const CTX = { actor: 'test', reason: 'rotation drill' };
     const readerFor = async (ringJson: string, db: Database) => new ForensicReader(db, await loadKeyring(ringJson, NOW));
-    const storeFor = async (ringJson: string, db: Database) => new StripeEvidenceStore(db, { receivingAccountId: receiving, keyring: await loadKeyring(ringJson, NOW), now: () => NOW });
+    const storeFor = async (ringJson: string, db: Database) => new StripeEvidenceStore(appDbOf(db), { receivingAccountId: receiving, keyring: await loadKeyring(ringJson, NOW), now: () => NOW });
 
     it('captures under v1, then phase 1 adds v2 inactive and the Worker still reads and writes', async () => {
       const db = await newDb();

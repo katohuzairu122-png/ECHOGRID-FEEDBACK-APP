@@ -5,6 +5,7 @@ import { buildDb } from '../../src/db/client';
 import {
   StripeEvidenceStore, ForensicReader, loadKeyring, classifyEnvelope, cohortOf, EvidenceStoreError, type LoadedKeyring, type WellFormedCapture, type MalformedCapture,
 } from '../../src/billing/stripe-evidence';
+import { appDbOf } from '../helpers/runtime-db';
 
 /**
  * HETA-01-F1 IMPL-1 capture and claim logic against a real, DISPOSABLE PostgreSQL (T01-T12, T38, T39, T35 parts).
@@ -40,7 +41,7 @@ describe.skipIf(!process.env.DATABASE_URL)('stripe evidence store (integration, 
     const c = new Client({ connectionString: process.env.DATABASE_URL });
     await c.connect();
     clients.push(c);
-    return new StripeEvidenceStore(buildDb(c), { receivingAccountId: RECEIVING, keyring: kr, now });
+    return new StripeEvidenceStore(appDbOf(buildDb(c)), { receivingAccountId: RECEIVING, keyring: kr, now });
   };
   const CTX = { actor: 'test', reason: 'integration test' };
   const readerFor = async (kr = keyring) => {

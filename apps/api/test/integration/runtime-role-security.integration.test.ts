@@ -64,11 +64,28 @@ describe.skipIf(!databaseUrl)('R8-G non-owner application runtime role (real Pos
     await admin?.query(`DROP OWNED BY ${LOGIN}`).catch(() => undefined);
     await admin?.query(`DROP ROLE IF EXISTS ${LOGIN}`).catch(() => undefined);
     await admin?.end();
-  });
+    }, 60_000);
 
   describe('provisioning and the manifest', () => {
     it('the committed SQL equals what the manifest generates (no drift), and the generator is deterministic', () => {
       execFileSync(process.execPath, [resolve(dir, 'generate.mjs'), '--check'], { cwd: api, stdio: 'pipe' });
+    });
+
+    it('the provisioning SQL works for a NON-SUPERUSER owner (the production migrator): it never ALTERs a superuser-class attribute, and it refuses a pre-existing role with unsafe attributes', async () => {
+      const sql = readFileSync(resolve(dir, 'provision-runtime-role.sql'), 'utf8');
+      const code = sql.split('\n').filter((l) => !l.trim().startsWith('--')).join('\n');
+      // PostgreSQL forbids a non-superuser from ALTER ROLE ... NOSUPERUSER / NOBYPASSRLS / NOREPLICATION even to restate a value (found in rehearsal)
+      expect(code).not.toMatch(/ALTER\s+ROLE/i);
+      expect(code).toMatch(/refusing to continue/);
+      // behavioural proof, rolled back: the same script stops when the existing group role has a dangerous attribute
+      await admin.query('BEGIN');
+      try {
+        await admin.query(`ALTER ROLE ${GROUP} CREATEDB`);
+        expect(await msg(admin.query(code.replaceAll('REPLACE_WITH_RUNTIME_LOGIN', LOGIN)))).toMatch(/unsafe attributes/);
+      } finally {
+        await admin.query('ROLLBACK');
+      }
+      expect((await q(`SELECT rolcreatedb FROM pg_roles WHERE rolname = $1`, [GROUP]))[0].rolcreatedb).toBe(false);
     });
 
     it('every table in the database is classified in the manifest, and every manifest table exists (a new table cannot silently gain or miss access)', async () => {

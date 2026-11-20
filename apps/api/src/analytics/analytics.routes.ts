@@ -143,14 +143,28 @@ analyticsRoutes.get('/onboarding', requirePermission('analytics:view'), async (c
   const requested = url.searchParams.get('branchId') ?? undefined;
   if (requested !== undefined && !isUuid(requested)) throw new AppError('Invalid branch.', 400, 'INVALID_BRANCH');
   const branchId = authorizedBranchId(c.var, requested);
+  // D2-FINAL small-group privacy, OPT-IN by configuration. Unset: unchanged behaviour. A valid integer >= 2: small groups are suppressed (the
+  // number is the Owner's decision, R4; none is chosen here). A set but invalid value FAILS CLOSED rather than silently disclosing.
+  const rawThreshold = c.env.ONBOARDING_ANALYTICS_MIN_GROUP_SIZE;
+  let minGroupSize: number | undefined;
+  if (rawThreshold !== undefined && rawThreshold !== '') {
+    minGroupSize = /^\d{1,4}$/.test(rawThreshold) ? Number(rawThreshold) : Number.NaN;
+    if (!Number.isInteger(minGroupSize) || minGroupSize < 2) throw new AppError('Onboarding analytics privacy is misconfigured.', 500, 'ANALYTICS_PRIVACY_CONFIG_INVALID');
+  }
   const { db, close } = await createDb(c.env.HYPERDRIVE);
   try {
-    const summary = await createRepositories(db).customerOnboardingEvents.summarize({
+    const filter = {
       businessId: c.get('businessId'),
       ...(from ? { from } : {}),
       ...(to ? { to } : {}),
       ...(branchId ? { branchId } : {}),
-    });
+    };
+    const repository = createRepositories(db).customerOnboardingEvents;
+    if (minGroupSize !== undefined) {
+      // the per-cashier breakdown is withheld entirely from branch-restricted roles (as before) and is itself small-group suppressed otherwise
+      return ok(c, await repository.summarizeWithPrivacy(filter, { minGroupSize, suppressCashierBreakdown: !c.get('businessWideAccess') }));
+    }
+    const summary = await repository.summarize(filter);
     return ok(c, { ...summary, byCashier: c.get('businessWideAccess') ? summary.byCashier : [] });
   } finally {
     c.executionCtx.waitUntil(close());

@@ -7,6 +7,7 @@ import {
   ReconcileError, deriveUcw, loadStreamEvents, coverageStateAt, slotOf, SLOT_SECONDS,
   type ProviderEventSource, type ProviderListedEvent, type ReconcileParams,
 } from '../../src/billing/stripe-evidence';
+import { appDbOf } from '../helpers/runtime-db';
 
 /**
  * HETA-01-F1 windowed reconciliation and backfill (T18, T19) against a DISPOSABLE PostgreSQL with a fake provider.
@@ -61,7 +62,7 @@ describe.skipIf(!process.env.DATABASE_URL)('stripe evidence reconciliation (inte
     const a = acct();
     const db = await newDb();
     const keyring = await loadKeyring(ring(), new Date());
-    const store = new StripeEvidenceStore(db, { receivingAccountId: a, keyring });
+    const store = new StripeEvidenceStore(appDbOf(db), { receivingAccountId: a, keyring });
     const stream = `${a}:false`;
     const attestationId = opts.attest === false ? null : (await rows(`insert into stripe_evidence_control_events(event_kind,actor,stream,details) values ('account_provenance_verified','test',$1,'{"result":"passed"}') returning id`, [stream]))[0].id as string;
     return { a, db, store, stream, keyring, attestationId };
@@ -229,7 +230,7 @@ describe.skipIf(!process.env.DATABASE_URL)('stripe evidence reconciliation (inte
   it('concurrent reconcilers over the same window write one api_retrieval row per event', async () => {
     const a = acct();
     const keyring = await loadKeyring(ring(), new Date());
-    const mk = async () => { const db = await newDb(); return { a, db, store: new StripeEvidenceStore(db, { receivingAccountId: a, keyring }), stream: `${a}:false`, keyring, attestationId: null }; };
+    const mk = async () => { const db = await newDb(); return { a, db, store: new StripeEvidenceStore(appDbOf(db), { receivingAccountId: a, keyring }), stream: `${a}:false`, keyring, attestationId: null }; };
     const s1 = await mk();
     await rows(`insert into stripe_evidence_control_events(event_kind,actor,stream,details) values ('account_provenance_verified','test',$1,'{"result":"passed"}')`, [s1.stream]);
     const s2 = await mk();

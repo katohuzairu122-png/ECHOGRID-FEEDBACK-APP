@@ -603,6 +603,13 @@
       "when": 1795113465132,
       "tag": "0085_audit_integrity_foundation",
       "breakpoints": true
+    },
+    {
+      "idx": 86,
+      "version": "7",
+      "when": 1795154649004,
+      "tag": "0086_d2_final_privacy_lifecycle",
+      "breakpoints": true
     }
   ]
 }

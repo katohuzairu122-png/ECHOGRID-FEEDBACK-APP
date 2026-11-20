@@ -33,6 +33,10 @@ export interface Bindings {
    * Keep optional to preserve old environments; absent means disabled. */
   PLATFORM_IMPERSONATION_ENABLED?: string | undefined;
 
+  /** D2-FINAL (R4): OPTIONAL. When set to an integer >= 2, the onboarding analytics route suppresses groups smaller than this. Unset keeps the
+   * existing behaviour. No value is chosen by the repository: the threshold is an Owner decision. An invalid value makes the route fail closed. */
+  ONBOARDING_ANALYTICS_MIN_GROUP_SIZE?: string | undefined;
+
   /**
    * DEV-12 deployment restrictions for the internal Stripe-read administrator API (internal/stripe-read-admin.routes.ts). BOTH must be set for the routes to exist at all; otherwise every
    * request answers 404. Neither value grants any capability: they only decide whether the already-authenticated administrator surface is reachable on this deployment. Intentionally NOT in
