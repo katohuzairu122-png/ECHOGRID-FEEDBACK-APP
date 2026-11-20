@@ -9,6 +9,7 @@ import { buildDb, type Database } from '../../src/db/client';
 import {
   StripeEvidenceStore, ForensicReader, ForensicAccessError, loadKeyring, classifyEnvelope, cohortOf, assembleKeyring, generateKekEntry, listEventRecords,
 } from '../../src/billing/stripe-evidence';
+import { appDbOf } from '../helpers/runtime-db';
 
 /**
  * HETA-01-F1 forensic reader (B5, C.6) against a DISPOSABLE PostgreSQL: audited, fail-closed decryption of events,
@@ -35,7 +36,7 @@ describe.skipIf(!process.env.DATABASE_URL)('forensic reader (integration, dispos
     const a = `acct_F${randomBytes(6).toString('hex')}`;
     const db = await newDb();
     const keyring = await loadKeyring(ring(), new Date());
-    const store = new StripeEvidenceStore(db, { receivingAccountId: a, keyring });
+    const store = new StripeEvidenceStore(appDbOf(db), { receivingAccountId: a, keyring });
     const att = (await rows(`insert into stripe_evidence_control_events(event_kind,actor,stream,details) values ('account_provenance_verified','t',$1,'{"result":"passed"}') returning id`, [`${a}:false`]))[0].id as string;
     const body = JSON.stringify({ id: `evt_f${randomBytes(6).toString('hex')}`, type: 'customer.subscription.updated', created: 1700000000, livemode: false, data: { object: { id: 'sub_f', object: 'subscription' } } });
     const shape = classifyEnvelope(body);
