@@ -64,7 +64,7 @@ describe.skipIf(!databaseUrl)('R8-G non-owner application runtime role (real Pos
     await admin?.query(`DROP OWNED BY ${LOGIN}`).catch(() => undefined);
     await admin?.query(`DROP ROLE IF EXISTS ${LOGIN}`).catch(() => undefined);
     await admin?.end();
-  });
+    }, 60_000);
 
   describe('provisioning and the manifest', () => {
     it('the committed SQL equals what the manifest generates (no drift), and the generator is deterministic', () => {

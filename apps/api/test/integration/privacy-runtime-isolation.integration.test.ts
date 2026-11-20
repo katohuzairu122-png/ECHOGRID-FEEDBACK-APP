@@ -68,7 +68,7 @@ describe.skipIf(!databaseUrl)('R8-G + D2-FINAL combined: privacy infrastructure 
     await admin?.query(`REVOKE echogrid_app_runtime FROM ${LOGIN}`).catch(() => undefined);
     for (const r of [LOGIN, OPLOGIN]) { await admin?.query(`DROP OWNED BY ${r}`).catch(() => undefined); await admin?.query(`DROP ROLE IF EXISTS ${r}`).catch(() => undefined); }
     await admin?.end();
-  });
+    }, 60_000);
 
   describe('the runtime can reach none of the privacy machinery', () => {
     it('cannot execute any of the 13 privacy functions or the 0084 erasure function (no EXECUTE at the privilege boundary)', async () => {

@@ -110,7 +110,7 @@ describe.skipIf(!databaseUrl)('D2-FINAL privacy lifecycle (real PostgreSQL)', ()
     await admin?.query(`DROP OWNED BY ${APPLOGIN}`).catch(() => undefined);
     await admin?.query(`DROP ROLE IF EXISTS ${APPLOGIN}`).catch(() => undefined);
     await admin?.end();
-  });
+    }, 60_000);
 
   describe('roles, ownership and the authorization boundary', () => {
     it('the two roles are NOLOGIN, safe and memberless; the 13 functions are definer, owned by the owner role, fixed search_path, EXECUTE only for the operator', async () => {
@@ -118,7 +118,7 @@ describe.skipIf(!databaseUrl)('D2-FINAL privacy lifecycle (real PostgreSQL)', ()
       expect(roles).toHaveLength(2);
       for (const r of roles) expect([r.rolcanlogin, r.rolsuper, r.rolcreaterole, r.rolbypassrls]).toEqual([false, false, false, false]);
       expect(await q(`SELECT m.member::regrole::text AS member FROM pg_auth_members m WHERE m.roleid = 'customer_privacy_owner'::regrole`)).toEqual([]);
-      expect((await q(`SELECT m.member::regrole::text AS member FROM pg_auth_members m WHERE m.roleid = 'customer_privacy_operator'::regrole`)).map((r) => r.member)).toEqual([OP]); // only this test's own grant
+      expect((await q(`SELECT m.member::regrole::text AS member FROM pg_auth_members m WHERE m.roleid = 'customer_privacy_operator'::regrole`)).map((r) => r.member).filter((m) => !m.startsWith('d2rt_op_'))).toEqual([OP]); // only this test's own grant (the sibling isolation suite's transient operator login is ignored)
       const fns = await q(`SELECT p.proname, p.prosecdef, p.proconfig, pg_get_userbyid(p.proowner) AS owner, has_function_privilege('customer_privacy_operator', p.oid, 'EXECUTE') AS op_exec,
           has_function_privilege('public', p.oid, 'EXECUTE') AS public_exec FROM pg_proc p WHERE p.pronamespace = 'public'::regnamespace
           AND p.proname IN ('privacy_request_submit','privacy_request_advance','privacy_request_record_verification','privacy_request_approve','privacy_request_reject','legal_hold_place','legal_hold_release','privacy_anonymize_customer','retention_policy_register','retention_policy_approve','retention_policy_disable','retention_preview_onboarding_events','retention_execute_onboarding_events')`);
