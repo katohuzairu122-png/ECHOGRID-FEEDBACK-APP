@@ -203,7 +203,9 @@ describe.skipIf(!databaseUrl)('CASHIER-AUTH-02D customer onboarding attribution 
       expect(m.id).toBe(ev[0].membership_id);
       const audit = await q(`SELECT * FROM audit_log WHERE id = $1`, [ev[0].audit_log_id]);
       expect(audit[0]).toMatchObject({ action: 'customer.onboarded', entity_type: 'customer_onboarding_event', entity_id: ev[0].id, business_id: bizA, actor_user_id: null });
-      expect(audit[0].metadata).toMatchObject({ source: 'business_qr', branchId: a1, membershipId: m.id, rejoin: false, verificationState: 'unverified' });
+      expect(audit[0].metadata).toMatchObject({ source: 'business_qr', branchId: a1, rejoin: false, verificationState: 'unverified' });
+      // D2-FINAL forward minimization: the audit row no longer embeds the membership id (the personal link lives only in the erasable event row)
+      expect(audit[0].metadata).not.toHaveProperty('membershipId');
     });
 
     it('uses the branch of whichever branch QR was scanned (A2) and never a client-supplied branch', async () => {
