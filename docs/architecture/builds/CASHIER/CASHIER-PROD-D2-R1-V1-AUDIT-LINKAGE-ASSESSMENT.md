@@ -2,6 +2,8 @@
 
 Status: **ASSESSMENT AND CHARACTERIZATION ONLY. No audit data, schema or privilege was changed.** Baseline: `main` @ `addf75b` (#534 and #535 merged by the Owner). Not legal advice; no R1-R7 ruling is made here.
 
+> **Superseded in part by D2-R8** (`CASHIER-PROD-D2-R8-AUDIT-INTEGRITY.md`): migration 0085 adds database-enforced immutability to `audit_log` (section 3's "not database-enforced" is true only up to 0084). The linkage findings below are unchanged: 0085 protects audit rows, it does not minimize them. A second path (timing correlation with the membership row) was also found.
+
 ## 1. Finding (verified on a real PostgreSQL database)
 
 D2-R1 severs links inside `customer_onboarding_events`. It does **not** make an erased event unidentifiable, because the join path writes a second record:
