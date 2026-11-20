@@ -26,7 +26,8 @@ vi.mock('../../src/db/client', async (original) => {
   return {
     ...actual,
     createDb: async () => {
-      const client = new Client({ connectionString: process.env.DATABASE_URL });
+      // R8-G: the application's own connection can be switched to the restricted runtime login (fixtures keep the admin connection)
+      const client = new Client({ connectionString: process.env.APP_RUNTIME_DATABASE_URL ?? process.env.DATABASE_URL });
       await client.connect();
       return { db: actual.buildDb(client), close: () => client.end() };
     },
