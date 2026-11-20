@@ -17,6 +17,7 @@ import { PartnerCreditReservationService } from '../../src/partner-credits/partn
 import { PartnerCreditTerminalEvidenceReader } from '../../src/billing/partner-credit-terminal-evidence.reader';
 import { Split08Ce1TenantIntegrityVerifier } from '../../src/billing/ce1-tenant-integrity.verifier';
 import type { OrphanSettlementCompletionEvidence } from '@echo-grid-feedback/shared-types';
+import { appDbOf } from '../helpers/runtime-db';
 
 /**
  * EXPLICIT ISOLATION REQUIRED: this test intentionally disables 0041 triggers
@@ -76,18 +77,18 @@ describe.skipIf(!url)('Split 07 positive/concurrent provisional awards — isola
       loyaltyAccountId:account.id,type:'redemption',points:-20,
       relatedRewardId:reward.id,redemptionCode:'S07-'+suffix,issuanceStatus:'issued',
     });
-    const qualified = await new OrphanQualificationService(db).qualify({
+    const qualified = await new OrphanQualificationService(appDbOf(db)).qualify({
       sourceTransactionId:redemption.id,customerId:customer.id,
       originBusinessId:originId,orphanReason:'origin_business_archived',
     });
-    const proposal = await new CustomerOrphanAccessService(db).authorizeAccess(
+    const proposal = await new CustomerOrphanAccessService(appDbOf(db)).authorizeAccess(
       customer.id,qualified.claim.id,{
         receivingBusinessId:receiverId,consentVersion:'settlement-v1',
         correlationId:'s07-access-'+suffix,idempotencyKey:'s07-proposal-'+suffix,
       },
     );
     const reference='s07-fulfillment-'+suffix;
-    const accepted = await new ReceivingBusinessSettlementService(db).acceptAndReserve({
+    const accepted = await new ReceivingBusinessSettlementService(appDbOf(db)).acceptAndReserve({
       businessId:receiverId,branchId,actorUserId:actorId,
       settlementId:proposal.settlement.id,
       acceptance:{authorizationId:proposal.authorization.id,fulfillment:{
@@ -95,14 +96,14 @@ describe.skipIf(!url)('Split 07 positive/concurrent provisional awards — isola
         description:'Replacement for verified settlement',reference,
       }},
     });
-    await new CustomerSettlementCompletionService(db).authorizeCompletion(
+    await new CustomerSettlementCompletionService(appDbOf(db)).authorizeCompletion(
       customer.id,accepted.settlement.id,{
         correlationId:'s07-completion-'+suffix,idempotencyKey:'s07-complete-'+suffix,
         fulfillmentPolicyVersion:ORPHAN_SETTLEMENT_FULFILLMENT_POLICY_VERSION,
         fulfillmentReference:reference,
       },
     );
-    const fulfilled = await new OrphanSettlementFulfillmentService(db).fulfill({
+    const fulfilled = await new OrphanSettlementFulfillmentService(appDbOf(db)).fulfill({
       businessId:receiverId,branchId,actorUserId:actorId,
       settlementId:accepted.settlement.id,
     });
@@ -161,7 +162,7 @@ describe.skipIf(!url)('Split 07 positive/concurrent provisional awards — isola
   it('awards one provisional noncash unit and exact replay without duplicate history', async () => {
     const evidence=await fixture(branchIds[0]!);
     const db=await newDb();
-    const service=new PartnerProvisionalAwardService(db);
+    const service=new PartnerProvisionalAwardService(appDbOf(db));
     const first=await service.decide(evidence);
     expect(first).toMatchObject({state:'provisional',units:1,replay:false});
     expect(await service.decide(evidence)).toMatchObject({state:'provisional',units:1,replay:true,decisionId:first.decisionId});
@@ -185,7 +186,7 @@ describe.skipIf(!url)('Split 07 positive/concurrent provisional awards — isola
       "INSERT INTO partner_credit_ledger(account_id,entry_type,units,idempotency_key) VALUES($1,'provisional',1,$2)",
       [accountId,key]);
     const db=await newDb();
-    await expect(new PartnerProvisionalAwardService(db).decide(evidence)).rejects.toBeDefined();
+    await expect(new PartnerProvisionalAwardService(appDbOf(db)).decide(evidence)).rejects.toBeDefined();
     const state=await query<{decisions:string,lots:string}>(
       `SELECT (SELECT count(*)::text FROM partner_credit_award_decisions WHERE settlement_ref=$1) decisions,
         (SELECT count(*)::text FROM partner_credit_lots l JOIN partner_credit_award_decisions d ON d.id=l.decision_id WHERE d.settlement_ref=$1) lots`,
@@ -216,7 +217,7 @@ describe.skipIf(!url)('Split 07 positive/concurrent provisional awards — isola
     try {
     const evidence=await fixture(branchIds[0]!);
     const db=await newDb();
-    const award=await new PartnerProvisionalAwardService(db).decide(evidence);
+    const award=await new PartnerProvisionalAwardService(appDbOf(db)).decide(evidence);
     expect(award.state).toBe('provisional');
     const lot=(await query<{lot_id:string;account_id:string}>(`
       SELECT id AS lot_id,account_id FROM partner_credit_lots WHERE decision_id=$1`,
@@ -292,7 +293,7 @@ describe.skipIf(!url)('Split 07 positive/concurrent provisional awards — isola
     await resetReceivingBusinessForReversalTests();
     const evidence=await fixture(branchIds[0]!);
     const db=await newDb();
-    const awarded=await new PartnerProvisionalAwardService(db).decide(evidence);
+    const awarded=await new PartnerProvisionalAwardService(appDbOf(db)).decide(evidence);
     expect(awarded.state).toBe('provisional');
     const lot=(await query<{id:string;account_id:string}>(
       'SELECT id,account_id FROM partner_credit_lots WHERE decision_id=$1',
@@ -404,9 +405,9 @@ describe.skipIf(!url)('Split 07 positive/concurrent provisional awards — isola
     await resetReceivingBusinessForReversalTests();
     const evidence=await fixture(branchIds[0]!);
     const db=await newDb();
-    const award=await new PartnerProvisionalAwardService(db).decide(evidence);
+    const award=await new PartnerProvisionalAwardService(appDbOf(db)).decide(evidence);
     expect(award.state).toBe('provisional');
-    const lifecycle=new PartnerCreditLifecycleService(db);
+    const lifecycle=new PartnerCreditLifecycleService(appDbOf(db));
     await expect(lifecycle.vest(award.decisionId,new Date()))
       .rejects.toThrow('PARTNER_VEST_NOT_ELIGIBLE');
     await expect(lifecycle.expire(award.decisionId,new Date()))
@@ -421,9 +422,9 @@ describe.skipIf(!url)('Split 07 positive/concurrent provisional awards — isola
     await resetReceivingBusinessForReversalTests();
     const evidence=await fixture(branchIds[0]!);
     const db=await newDb();
-    const award=await new PartnerProvisionalAwardService(db).decide(evidence);
+    const award=await new PartnerProvisionalAwardService(appDbOf(db)).decide(evidence);
     expect(award.state).toBe('provisional');
-    const lifecycle=new PartnerCreditLifecycleService(db);
+    const lifecycle=new PartnerCreditLifecycleService(appDbOf(db));
     const vestNow=new Date(Date.parse(evidence.fulfilledAt)+15*86400_000);
     expect(await lifecycle.vest(award.decisionId,vestNow)).toBe('vested');
     expect(await lifecycle.vest(award.decisionId,vestNow)).toBe('already_vested');
@@ -452,7 +453,7 @@ describe.skipIf(!url)('Split 07 positive/concurrent provisional awards — isola
     await resetReceivingBusinessForReversalTests();
     const evidence=await fixture(branchIds[0]!);
     const db=await newDb();
-    const award=await new PartnerProvisionalAwardService(db).decide(evidence);
+    const award=await new PartnerProvisionalAwardService(appDbOf(db)).decide(evidence);
     expect(award.state).toBe('provisional');
     const [account]= (await query<{id:string}>(
       'SELECT id FROM partner_credit_accounts WHERE business_id=$1',[receiverId])).rows;
@@ -464,7 +465,7 @@ describe.skipIf(!url)('Split 07 positive/concurrent provisional awards — isola
       [account!.id,reversalRef]);
     await query('UPDATE partner_credit_accounts SET recovery_due=1 WHERE id=$1',[account!.id]);
     const at=new Date(Date.parse(evidence.fulfilledAt)+15*86400_000);
-    const service=new PartnerCreditLifecycleService(db);
+    const service=new PartnerCreditLifecycleService(appDbOf(db));
     expect(await service.vest(award.decisionId,at)).toBe('vested');
     expect(await service.vest(award.decisionId,at)).toBe('already_vested');
     const result=await query<{
@@ -487,9 +488,9 @@ describe.skipIf(!url)('Split 07 positive/concurrent provisional awards — isola
     await resetReceivingBusinessForReversalTests();
     const evidence=await fixture(branchIds[0]!);
     const db=await newDb();
-    const awarded=await new PartnerProvisionalAwardService(db).decide(evidence);
+    const awarded=await new PartnerProvisionalAwardService(appDbOf(db)).decide(evidence);
     expect(awarded.state).toBe('provisional');
-    const result=await new OrphanSettlementReversalService(db).reverse(evidence.settlementRef,{
+    const result=await new OrphanSettlementReversalService(appDbOf(db)).reverse(evidence.settlementRef,{
       reasonCode:'verified-fraud', evidenceReference:'s07-prior-award-'+crypto.randomUUID(),
       idempotencyKey:'s07-compensate-'+crypto.randomUUID(),
     },{actorUserId:platformAdminId});
@@ -513,14 +514,14 @@ describe.skipIf(!url)('Split 07 positive/concurrent provisional awards — isola
   it('compensates an unencumbered vested lot without negative available balance', async () => {
     const evidence=await fixture(branchIds[0]!);
     const db=await newDb();
-    const award=await new PartnerProvisionalAwardService(db).decide(evidence);
+    const award=await new PartnerProvisionalAwardService(appDbOf(db)).decide(evidence);
     expect(award.state).toBe('provisional');
     // The vesting worker does not exist yet; create its exact projection
     // preconditions only in this disposable test database.
     await query("UPDATE partner_credit_award_decisions SET state='vested' WHERE id=$1",[award.decisionId]);
     await query("UPDATE partner_credit_lots SET status='available',available_units=1 WHERE decision_id=$1",[award.decisionId]);
     await query("UPDATE partner_credit_accounts SET provisional=provisional-1,available=available+1 WHERE business_id=$1",[receiverId]);
-    const reversed=await new OrphanSettlementReversalService(db).reverse(evidence.settlementRef,{
+    const reversed=await new OrphanSettlementReversalService(appDbOf(db)).reverse(evidence.settlementRef,{
       reasonCode:'verified-fraud',evidenceReference:'vested-'+crypto.randomUUID(),
       idempotencyKey:'s07-vested-'+crypto.randomUUID(),
     },{actorUserId:platformAdminId});
@@ -540,7 +541,7 @@ describe.skipIf(!url)('Split 07 positive/concurrent provisional awards — isola
   it('fails closed on consumed lot and atomically rolls back Split 06 reversal', async () => {
     const evidence=await fixture(branchIds[1]!);
     const db=await newDb();
-    const award=await new PartnerProvisionalAwardService(db).decide(evidence);
+    const award=await new PartnerProvisionalAwardService(appDbOf(db)).decide(evidence);
     expect(award.state).toBe('provisional');
     // Simulates the immutable consumption precondition; there is no active
     // Split 08 application writer or authorized consumption evidence yet.
@@ -552,7 +553,7 @@ describe.skipIf(!url)('Split 07 positive/concurrent provisional awards — isola
     const obligationCountBefore = (await query<{count:string}>(
       'SELECT count(*)::text AS count FROM partner_credit_recovery_obligations'
     )).rows[0]!.count;
-    await expect(new OrphanSettlementReversalService(db).reverse(evidence.settlementRef,{
+    await expect(new OrphanSettlementReversalService(appDbOf(db)).reverse(evidence.settlementRef,{
       reasonCode:'verified-fraud',evidenceReference:'consumed-'+crypto.randomUUID(),
       idempotencyKey:'s07-consumed-'+crypto.randomUUID(),
     },{actorUserId:platformAdminId})).rejects.toThrow('PARTNER_REVERSAL_LOT_STATE_UNSUPPORTED');
@@ -599,11 +600,11 @@ describe.skipIf(!url)('Split 07 positive/concurrent provisional awards — isola
   it('rejects authoritative reversal before awarding any credits', async () => {
     const evidence=await fixture(branchIds[1]!);
     const db=await newDb();
-    await new OrphanSettlementReversalService(db).reverse(evidence.settlementRef,{
+    await new OrphanSettlementReversalService(appDbOf(db)).reverse(evidence.settlementRef,{
       reasonCode:'verified-fraud',evidenceReference:'test-'+crypto.randomUUID(),
       idempotencyKey:'s07-reverse-'+crypto.randomUUID(),
     },{actorUserId:platformAdminId});
-    await expect(new PartnerProvisionalAwardService(db).decide(evidence))
+    await expect(new PartnerProvisionalAwardService(appDbOf(db)).decide(evidence))
       .rejects.toThrow('PARTNER_AWARD_SETTLEMENT_EVIDENCE_INVALID');
     const result=await query<{count:string}>(
       'SELECT count(*)::text AS count FROM partner_credit_award_decisions WHERE settlement_ref=$1',
@@ -682,17 +683,17 @@ describe.skipIf(!url)('Split 07 positive/concurrent provisional awards — isola
     await resetReceivingBusinessForReversalTests();
     const evidence=await fixture(branchIds[0]!);
     const db=await newDb();
-    const award=await new PartnerProvisionalAwardService(db).decide(evidence);
+    const award=await new PartnerProvisionalAwardService(appDbOf(db)).decide(evidence);
     expect(award.state).toBe('provisional');
     const vestAt=new Date(Date.parse(evidence.fulfilledAt)+15*86400_000);
-    expect(await new PartnerCreditLifecycleService(db).vest(award.decisionId,vestAt)).toBe('vested');
+    expect(await new PartnerCreditLifecycleService(appDbOf(db)).vest(award.decisionId,vestAt)).toBe('vested');
     const input={
       settlementRef:evidence.settlementRef,businessId:receiverId,decisionId:award.decisionId,
       invoiceIntentRef:'s08-authorized-test-intent-'+crypto.randomUUID(),
       idempotencyKey:'s08-test-reserve-'+crypto.randomUUID(),
       now:vestAt,expiresAt:new Date(vestAt.getTime()+86400_000),
     };
-    const service=new PartnerCreditReservationService(db);
+    const service=new PartnerCreditReservationService(appDbOf(db));
     // Drizzle wraps PostgreSQL trigger messages as a query error. Direct
     // SQL denial is independently checked by the CE-1 persistence test.
     await expect(service.reserve(input)).rejects.toBeDefined();
@@ -782,9 +783,9 @@ describe.skipIf(!url)('Split 07 positive/concurrent provisional awards — isola
     await resetReceivingBusinessForReversalTests();
     const evidence=await fixture(branchIds[0]!);
     const db=await newDb();
-    const award=await new PartnerProvisionalAwardService(db).decide(evidence);
-    const lifecycle=new PartnerCreditLifecycleService(db);
-    const disputes=new PartnerCreditDisputeService(db);
+    const award=await new PartnerProvisionalAwardService(appDbOf(db)).decide(evidence);
+    const lifecycle=new PartnerCreditLifecycleService(appDbOf(db));
+    const disputes=new PartnerCreditDisputeService(appDbOf(db));
     const secondAdmin=(await query<{id:string}>("INSERT INTO users(email,password_hash,full_name,status,platform_role) VALUES($1,'x','Second Admin','active','admin') RETURNING id",['s07-admin2-'+crypto.randomUUID()+'@example.test'])).rows[0]!.id;
     const snapshot=async()=>JSON.stringify((await query(`SELECT a.available,a.provisional,a.reserved,l.status,d.state,(SELECT count(*) FROM partner_credit_ledger WHERE decision_id=d.id) ledger
       FROM partner_credit_award_decisions d JOIN partner_credit_lots l ON l.decision_id=d.id JOIN partner_credit_accounts a ON a.id=l.account_id WHERE d.id=$1`,[award.decisionId])).rows);
@@ -807,13 +808,13 @@ describe.skipIf(!url)('Split 07 positive/concurrent provisional awards — isola
       const lot=(await query<{expires_at:Date}>('SELECT expires_at FROM partner_credit_lots WHERE decision_id=$1',[award.decisionId])).rows[0]!;
       await expect(lifecycle.expire(award.decisionId,lot.expires_at)).rejects.toThrow('PARTNER_EXPIRY_DISPUTE_HOLD');
       const reserveInput={settlementRef:evidence.settlementRef,businessId:receiverId,decisionId:award.decisionId,invoiceIntentRef:'s07-held-intent-'+crypto.randomUUID(),idempotencyKey:'s07-held-'+crypto.randomUUID(),now:vestAt,expiresAt:new Date(vestAt.getTime()+86400_000)};
-      await expect(new PartnerCreditReservationService(db).reserve(reserveInput)).rejects.toThrow('PARTNER_RESERVE_DISPUTE_HOLD');
+      await expect(new PartnerCreditReservationService(appDbOf(db)).reserve(reserveInput)).rejects.toThrow('PARTNER_RESERVE_DISPUTE_HOLD');
       expect(await snapshot()).toBe(held);
       // 4. revoked (dual control) KEEPS the hold: still no reservation, no ledger/award mutation
       const {correctionId}=await disputes.proposeRevocation({disputeId:d2.disputeId,actorId:platformAdminId});
       await disputes.decideCorrection({correctionId,actorId:secondAdmin,approve:true});
       await disputes.resolve({disputeId:d2.disputeId,actorId:platformAdminId,outcome:'revoked',evidenceRef:'final',dedupeKey:'s07-r2-'+crypto.randomUUID()});
-      await expect(new PartnerCreditReservationService(db).reserve(reserveInput)).rejects.toThrow('PARTNER_RESERVE_DISPUTE_HOLD');
+      await expect(new PartnerCreditReservationService(appDbOf(db)).reserve(reserveInput)).rejects.toThrow('PARTNER_RESERVE_DISPUTE_HOLD');
       expect(await snapshot()).toBe(held);
       expect((await query('SELECT 1 FROM partner_credit_reservations WHERE decision_id=$1',[award.decisionId])).rowCount).toBe(0);
     } finally {

@@ -10,6 +10,7 @@ import {
 } from '../../src/customer-auth/customer-session.service';
 import { signCustomerAccessToken } from '../../src/customer-auth/customer-jwt';
 import { signCustomerSessionAccessToken } from '../../src/customer-auth/session-tokens';
+import { appDbOf } from '../helpers/runtime-db';
 
 /**
  * CUSTOMER-AUTH-01D-3: the session service against REAL Postgres. Not wired to
@@ -69,8 +70,8 @@ describe.skipIf(!process.env.DATABASE_URL)('customer session service (integratio
     client2 = new Client({ connectionString: process.env.DATABASE_URL });
     await Promise.all([client.connect(), client2.connect()]);
     customers = new CustomerRepository(buildDb(client));
-    svc = new CustomerSessionService(buildDb(client), config());
-    svc2 = new CustomerSessionService(buildDb(client2), config());
+    svc = new CustomerSessionService(appDbOf(buildDb(client)), config());
+    svc2 = new CustomerSessionService(appDbOf(buildDb(client2)), config());
   });
 
   afterEach(() => {
@@ -87,15 +88,15 @@ describe.skipIf(!process.env.DATABASE_URL)('customer session service (integratio
   describe('construction', () => {
     it('refuses missing lifetimes, a missing secret, or identical secrets', () => {
       const db = buildDb(client);
-      expect(() => new CustomerSessionService(db, { ...config(), idleTtlSeconds: 0 })).toThrow();
+      expect(() => new CustomerSessionService(appDbOf(db), { ...config(), idleTtlSeconds: 0 })).toThrow();
       expect(
-        () => new CustomerSessionService(db, { ...config(), stepUpWindowSeconds: 1.5 }),
+        () => new CustomerSessionService(appDbOf(db), { ...config(), stepUpWindowSeconds: 1.5 }),
       ).toThrow();
       expect(
-        () => new CustomerSessionService(db, { ...config(), sessionSigningSecret: '' }),
+        () => new CustomerSessionService(appDbOf(db), { ...config(), sessionSigningSecret: '' }),
       ).toThrow();
       expect(
-        () => new CustomerSessionService(db, { ...config(), legacySigningSecret: SESSION_SECRET }),
+        () => new CustomerSessionService(appDbOf(db), { ...config(), legacySigningSecret: SESSION_SECRET }),
       ).toThrow(/differ/);
     });
   });

@@ -9,6 +9,7 @@ import {
   ReceivingBusinessSettlementService,
 } from '../../src/orphan-settlement/receiving-business-settlement.service';
 import { CustomerSettlementCompletionService } from '../../src/orphan-settlement/customer-settlement-completion.service';
+import { appDbOf } from '../helpers/runtime-db';
 
 describe.skipIf(!process.env.DATABASE_URL)(
   'Split 06 customer completion authorization (integration)',
@@ -104,14 +105,14 @@ describe.skipIf(!process.env.DATABASE_URL)(
         issuanceStatus: 'issued',
       });
 
-      const qualified = await new OrphanQualificationService(db).qualify({
+      const qualified = await new OrphanQualificationService(appDbOf(db)).qualify({
         sourceTransactionId: source.id,
         customerId: customer.id,
         originBusinessId,
         orphanReason: 'origin_business_archived',
       });
 
-      const proposal = await new CustomerOrphanAccessService(db).authorizeAccess(
+      const proposal = await new CustomerOrphanAccessService(appDbOf(db)).authorizeAccess(
         customer.id,
         qualified.claim.id,
         {
@@ -130,7 +131,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         reference: `offer-${crypto.randomUUID()}`,
       };
 
-      const accepted = await new ReceivingBusinessSettlementService(db).acceptAndReserve({
+      const accepted = await new ReceivingBusinessSettlementService(appDbOf(db)).acceptAndReserve({
         businessId: receivingBusinessId,
         branchId: receivingBranchId,
         actorUserId,
@@ -162,7 +163,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
     it('shows the owning customer the exact reserved fulfillment contract and hides another customer', async () => {
       const fixture = await createReservedSettlement();
-      const service = new CustomerSettlementCompletionService(db);
+      const service = new CustomerSettlementCompletionService(appDbOf(db));
 
       const review = await service.getReview(fixture.customerId, fixture.accepted.settlement.id);
 
@@ -193,7 +194,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
     it('issues a settlement-scoped single-use completion authorization without consuming it and appends completion_authorized exactly once', async () => {
       const fixture = await createReservedSettlement();
-      const service = new CustomerSettlementCompletionService(db);
+      const service = new CustomerSettlementCompletionService(appDbOf(db));
       const input = completionInput(fixture.fulfillment.reference);
 
       const result = await service.authorizeCompletion(
@@ -240,7 +241,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
     it('rejects stale fulfillment acknowledgement and revoked settlement access consent', async () => {
       const stale = await createReservedSettlement();
-      const service = new CustomerSettlementCompletionService(db);
+      const service = new CustomerSettlementCompletionService(appDbOf(db));
 
       await expect(
         service.authorizeCompletion(stale.customerId, stale.accepted.settlement.id, {
@@ -273,7 +274,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
     it('will not overwrite a live completion authorization but permits explicit reauthorization after revocation', async () => {
       const fixture = await createReservedSettlement();
-      const service = new CustomerSettlementCompletionService(db);
+      const service = new CustomerSettlementCompletionService(appDbOf(db));
       const firstInput = completionInput(fixture.fulfillment.reference);
       const first = await service.authorizeCompletion(
         fixture.customerId,
@@ -318,7 +319,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
     it('cannot reuse one completion idempotency key across another settlement or claim', async () => {
       const first = await createReservedSettlement();
       const second = await createReservedSettlement();
-      const service = new CustomerSettlementCompletionService(db);
+      const service = new CustomerSettlementCompletionService(appDbOf(db));
       const sharedInput = completionInput(first.fulfillment.reference);
 
       await service.authorizeCompletion(
@@ -353,7 +354,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
       expect(rows.map((row) => row.id)).not.toContain(other.accepted.settlement.id);
       expect(rows.every((row) => row.customerId === first.customerId)).toBe(true);
       await expect(
-        new CustomerSettlementCompletionService(db).getReview(
+        new CustomerSettlementCompletionService(appDbOf(db)).getReview(
           first.customerId,
           other.accepted.settlement.id,
         ),
@@ -370,7 +371,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         ? await repos.communityPointTransactions.listForAccount(communityAccount.id)
         : [];
 
-      await new CustomerSettlementCompletionService(db).authorizeCompletion(
+      await new CustomerSettlementCompletionService(appDbOf(db)).authorizeCompletion(
         fixture.customerId,
         fixture.accepted.settlement.id,
         completionInput(fixture.fulfillment.reference),

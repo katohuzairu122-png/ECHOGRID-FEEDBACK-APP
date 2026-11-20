@@ -4,6 +4,7 @@ import { buildDb } from '../../src/db/client';
 import { createRepositories } from '../../src/repositories';
 import { RoleProvisioningService } from '../../src/rbac/role-provisioning.service';
 import { B2bParticipationService } from '../../src/b2b/b2b-participation.service';
+import { appDbOf } from '../helpers/runtime-db';
 
 const DIGEST = 'a'.repeat(64);
 
@@ -28,7 +29,7 @@ describe.skipIf(!process.env.DATABASE_URL)('B2B participation foundation (integr
     await client.connect();
     const db = buildDb(client);
     repos = createRepositories(db);
-    svc = new B2bParticipationService(db);
+    svc = new B2bParticipationService(appDbOf(db));
     ids.admin = await user('admin', 'admin');
     ids.support = await user('support', 'support');
     ids.bizA = await business('a');

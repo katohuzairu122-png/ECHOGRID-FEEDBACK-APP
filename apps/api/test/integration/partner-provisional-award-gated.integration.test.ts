@@ -3,6 +3,7 @@ import { Client } from 'pg';
 import { buildDb } from '../../src/db/client';
 import { PartnerProvisionalAwardService } from '../../src/partner-credits/partner-provisional-award.service';
 import type { OrphanSettlementCompletionEvidence } from '@echo-grid-feedback/shared-types';
+import { appDbOf } from '../helpers/runtime-db';
 
 describe.skipIf(!process.env.DATABASE_URL)('Split 07 atomic award fail-closed gates (PostgreSQL)', () => {
   let client: Client;
@@ -10,7 +11,7 @@ describe.skipIf(!process.env.DATABASE_URL)('Split 07 atomic award fail-closed ga
   beforeAll(async () => {
     client = new Client({ connectionString: process.env.DATABASE_URL });
     await client.connect();
-    service = new PartnerProvisionalAwardService(buildDb(client));
+    service = new PartnerProvisionalAwardService(appDbOf(buildDb(client)));
   });
   afterAll(async () => { if (client) await client.end(); });
 

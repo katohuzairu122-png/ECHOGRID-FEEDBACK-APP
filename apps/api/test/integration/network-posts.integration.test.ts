@@ -3,6 +3,7 @@ import { Client } from 'pg';
 import { buildDb } from '../../src/db/client';
 import { NetworkPostService } from '../../src/network/network-post.service';
 import { createNetworkFeedSource } from '../../src/network/network-feed-source';
+import { appDbOf } from '../helpers/runtime-db';
 
 /**
  * NETWORK-01 against REAL Postgres: the official-post lifecycle, the database triggers that must hold even for a
@@ -52,7 +53,7 @@ describe.skipIf(!process.env.DATABASE_URL)('network official posts (integration)
     other = new Client({ connectionString: process.env.DATABASE_URL });
     await client.connect();
     await other.connect();
-    service = new NetworkPostService(buildDb(client));
+    service = new NetworkPostService(appDbOf(buildDb(client)));
     feed = createNetworkFeedSource(buildDb(client));
     // Isolate this run's visibility: nothing else in the table may be published while these tests count items.
     await client.query("UPDATE network_posts SET state = 'withdrawn' WHERE state IN ('published','suspended') AND handle NOT LIKE 'zzzz%'").catch(() => undefined);
@@ -281,7 +282,7 @@ describe.skipIf(!process.env.DATABASE_URL)('network official posts (integration)
       const { post, revision } = await service.createDraft(author, content('Race to publish.'));
       await service.submit(post.id, author);
       await service.approve(revision.id, admin1);
-      const racing = new NetworkPostService(buildDb(other));
+      const racing = new NetworkPostService(appDbOf(buildDb(other)));
       const results = await Promise.allSettled([service.approve(revision.id, admin2), racing.approve(revision.id, admin3)]);
       const published = results.filter((r) => r.status === 'fulfilled' && r.value.status === 'published');
       expect(published).toHaveLength(1);

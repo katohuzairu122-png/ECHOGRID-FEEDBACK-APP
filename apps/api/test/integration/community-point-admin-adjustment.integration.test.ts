@@ -4,6 +4,7 @@ import { buildDb } from '../../src/db/client';
 import { createRepositories } from '../../src/repositories';
 import { CommunityMembershipService } from '../../src/community/community-membership.service';
 import { CommunityPointAdminAdjustmentService } from '../../src/community/community-point-admin-adjustment.service';
+import { appDbOf } from '../helpers/runtime-db';
 
 describe.skipIf(!process.env.DATABASE_URL)(
   'Split 05 platform Community Point adjustments (integration)',
@@ -36,7 +37,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
       });
       customerId = customer.id;
 
-      const joined = await new CommunityMembershipService(db).join(
+      const joined = await new CommunityMembershipService(appDbOf(db)).join(
         customerId,
         'community-policy-v1',
       );
@@ -54,7 +55,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
     });
 
     it('applies a signed adjustment atomically, audits it, and replays exactly once', async () => {
-      const service = new CommunityPointAdminAdjustmentService(db);
+      const service = new CommunityPointAdminAdjustmentService(appDbOf(db));
       const idempotencyKey = `community-adjust-${crypto.randomUUID()}`;
 
       const first = await service.adjust(
@@ -96,7 +97,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
     });
 
     it('rejects materially different reuse of an adjustment idempotency key', async () => {
-      const service = new CommunityPointAdminAdjustmentService(db);
+      const service = new CommunityPointAdminAdjustmentService(appDbOf(db));
       const idempotencyKey = `community-adjust-conflict-${crypto.randomUUID()}`;
 
       await service.adjust(
@@ -126,7 +127,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
     });
 
     it('uses one opposite-signed compensating admin adjustment for a platform adjustment', async () => {
-      const service = new CommunityPointAdminAdjustmentService(db);
+      const service = new CommunityPointAdminAdjustmentService(appDbOf(db));
       const original = await service.adjust(
         customerId,
         {
@@ -175,7 +176,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
     });
 
     it('can compensate a negative admin adjustment without misusing the negative-only reverse type', async () => {
-      const service = new CommunityPointAdminAdjustmentService(db);
+      const service = new CommunityPointAdminAdjustmentService(appDbOf(db));
       const original = await service.adjust(
         customerId,
         {
@@ -217,7 +218,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
       await repos.communityPointAccounts.incrementBalance(accountId, 7);
 
       await expect(
-        new CommunityPointAdminAdjustmentService(db).reverseAdjustment(
+        new CommunityPointAdminAdjustmentService(appDbOf(db)).reverseAdjustment(
           earn.transaction.id,
           {
             reason: 'This must remain evidence-owned.',
@@ -241,7 +242,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
       const idempotencyKey = `community-audit-rollback-${crypto.randomUUID()}`;
 
       await expect(
-        new CommunityPointAdminAdjustmentService(db).adjust(
+        new CommunityPointAdminAdjustmentService(appDbOf(db)).adjust(
           customerId,
           {
             points: 33,

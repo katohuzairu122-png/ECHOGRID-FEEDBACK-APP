@@ -5,6 +5,7 @@ import { createRepositories } from '../../src/repositories';
 import { CommunityMembershipService } from '../../src/community/community-membership.service';
 import { CommunityPointAwardService } from '../../src/community/community-point-award.service';
 import { CustomerMembershipService } from '../../src/customer-relationships/customer-membership.service';
+import { appDbOf } from '../helpers/runtime-db';
 
 describe.skipIf(!process.env.DATABASE_URL)(
   'Split 05 Community Point award evaluator (integration)',
@@ -37,7 +38,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
       });
       businessId = business.id;
 
-      const businessMembership = await new CustomerMembershipService(db).join({
+      const businessMembership = await new CustomerMembershipService(appDbOf(db)).join({
         customerId,
         businessId,
         onboardingSource: 'split05-isolation-test',
@@ -123,7 +124,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
     });
 
     it('holds valid evidence pending until explicit Community membership exists', async () => {
-      const service = new CommunityPointAwardService(db);
+      const service = new CommunityPointAwardService(appDbOf(db));
       const result = await service.evaluateSurveyCompletion(completionRef);
 
       expect(result.awarded).toBe(false);
@@ -139,13 +140,13 @@ describe.skipIf(!process.env.DATABASE_URL)(
     });
 
     it('releases the pending decision after explicit join exactly once', async () => {
-      const membership = await new CommunityMembershipService(db).join(
+      const membership = await new CommunityMembershipService(appDbOf(db)).join(
         customerId,
         'community-policy-v1',
       );
       expect(membership.account.pointsBalance).toBe(0);
 
-      const service = new CommunityPointAwardService(db);
+      const service = new CommunityPointAwardService(appDbOf(db));
       const released = await service.reevaluatePendingMembership(customerId);
       expect(released).toHaveLength(1);
       expect(released[0]!.awarded).toBe(true);
@@ -190,7 +191,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
     it('rejects nonexistent completion evidence', async () => {
       await expect(
-        new CommunityPointAwardService(db).evaluateSurveyCompletion(
+        new CommunityPointAwardService(appDbOf(db)).evaluateSurveyCompletion(
           crypto.randomUUID(),
         ),
       ).rejects.toMatchObject({
@@ -257,7 +258,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
       });
       try {
         await expect(
-          new CommunityPointAwardService(db).evaluateSurveyCompletion(
+          new CommunityPointAwardService(appDbOf(db)).evaluateSurveyCompletion(
             completed.id,
           ),
         ).rejects.toMatchObject({
@@ -322,7 +323,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
       });
 
       await expect(
-        new CommunityPointAwardService(db).evaluateSurveyCompletion(
+        new CommunityPointAwardService(appDbOf(db)).evaluateSurveyCompletion(
           started.participation.id,
         ),
       ).rejects.toMatchObject({

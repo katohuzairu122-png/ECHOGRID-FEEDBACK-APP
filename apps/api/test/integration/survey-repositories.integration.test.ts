@@ -5,6 +5,7 @@ import { createRepositories } from '../../src/repositories';
 import { SurveyManagementService } from '../../src/surveys/survey-management.service';
 import { SurveyParticipationService } from '../../src/surveys/survey-participation.service';
 import { SurveyCompletionEvidenceService } from '../../src/surveys/survey-completion-evidence.service';
+import { appDbOf } from '../helpers/runtime-db';
 
 describe.skipIf(!process.env.DATABASE_URL)('Split 04 survey repositories (integration)', () => {
   let client: Client;
@@ -317,7 +318,7 @@ describe.skipIf(!process.env.DATABASE_URL)('Split 04 survey repositories (integr
 
   it('enforces participant eligibility, consent, and idempotent submission', async () => {
     const management = new SurveyManagementService(repos);
-    const participationService = new SurveyParticipationService(db);
+    const participationService = new SurveyParticipationService(appDbOf(db));
     const actorId = crypto.randomUUID();
 
     const survey = await management.createSurvey(
@@ -444,7 +445,7 @@ describe.skipIf(!process.env.DATABASE_URL)('Split 04 survey repositories (integr
 
   it('fails closed for membership and Community audience eligibility', async () => {
     const management = new SurveyManagementService(repos);
-    const participationService = new SurveyParticipationService(db);
+    const participationService = new SurveyParticipationService(appDbOf(db));
     const actorId = crypto.randomUUID();
 
     const survey = await management.createSurvey(

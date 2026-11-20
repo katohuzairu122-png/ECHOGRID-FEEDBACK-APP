@@ -11,6 +11,7 @@ import {
 import { CustomerSettlementCompletionService } from '../../src/orphan-settlement/customer-settlement-completion.service';
 import { OrphanSettlementFulfillmentService } from '../../src/orphan-settlement/orphan-settlement-fulfillment.service';
 import { OrphanSettlementReversalService } from '../../src/orphan-settlement/orphan-settlement-reversal.service';
+import { appDbOf } from '../helpers/runtime-db';
 
 describe.skipIf(!process.env.DATABASE_URL)(
   'Split 06 fulfilled settlement reversal and evidence invalidation (integration)',
@@ -128,14 +129,14 @@ describe.skipIf(!process.env.DATABASE_URL)(
         issuanceStatus: 'issued',
       });
 
-      const qualified = await new OrphanQualificationService(db).qualify({
+      const qualified = await new OrphanQualificationService(appDbOf(db)).qualify({
         sourceTransactionId: source.id,
         customerId: customer.id,
         originBusinessId,
         orphanReason: 'origin_business_archived',
       });
 
-      const proposal = await new CustomerOrphanAccessService(db).authorizeAccess(
+      const proposal = await new CustomerOrphanAccessService(appDbOf(db)).authorizeAccess(
         customer.id,
         qualified.claim.id,
         {
@@ -155,7 +156,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
       };
 
       const accepted =
-        await new ReceivingBusinessSettlementService(db).acceptAndReserve({
+        await new ReceivingBusinessSettlementService(appDbOf(db)).acceptAndReserve({
           businessId: receivingBusinessId,
           branchId: receivingBranchId,
           actorUserId: managerUserId,
@@ -167,7 +168,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         });
 
       const completion =
-        await new CustomerSettlementCompletionService(db).authorizeCompletion(
+        await new CustomerSettlementCompletionService(appDbOf(db)).authorizeCompletion(
           customer.id,
           accepted.settlement.id,
           {
@@ -179,7 +180,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
           },
         );
 
-      const fulfilled = await new OrphanSettlementFulfillmentService(db).fulfill({
+      const fulfilled = await new OrphanSettlementFulfillmentService(appDbOf(db)).fulfill({
         businessId: receivingBusinessId,
         branchId: receivingBranchId,
         actorUserId: managerUserId,
@@ -209,7 +210,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
       const fixture = await createFulfilledSettlement();
 
       await expect(
-        new OrphanSettlementReversalService(db).reverse(
+        new OrphanSettlementReversalService(appDbOf(db)).reverse(
           fixture.settlement.id,
           reversalInput(),
           { actorUserId: supportUserId },
@@ -230,7 +231,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
     it('reverses only fulfilled settlement/settled claim, preserves fulfilled history, writes semantic audit, and emits deterministic reversal evidence', async () => {
       const fixture = await createFulfilledSettlement();
       const input = reversalInput();
-      const service = new OrphanSettlementReversalService(db);
+      const service = new OrphanSettlementReversalService(appDbOf(db));
 
       const result = await service.reverse(
         fixture.settlement.id,
@@ -290,8 +291,8 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
     it('invalidates completion evidence after reversal while leaving reversal evidence resolvable', async () => {
       const fixture = await createFulfilledSettlement();
-      const fulfillmentService = new OrphanSettlementFulfillmentService(db);
-      const reversalService = new OrphanSettlementReversalService(db);
+      const fulfillmentService = new OrphanSettlementFulfillmentService(appDbOf(db));
+      const reversalService = new OrphanSettlementReversalService(appDbOf(db));
 
       const before = await fulfillmentService.getCompletionEvidence(
         fixture.settlement.id,
@@ -318,7 +319,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
     it('is exact-replay safe and rejects a different reversal key/evidence after reversal', async () => {
       const fixture = await createFulfilledSettlement();
-      const service = new OrphanSettlementReversalService(db);
+      const service = new OrphanSettlementReversalService(appDbOf(db));
       const input = reversalInput();
 
       const first = await service.reverse(
@@ -387,13 +388,13 @@ describe.skipIf(!process.env.DATABASE_URL)(
         redemptionCode: `S06PRE-${crypto.randomUUID()}`,
         issuanceStatus: 'issued',
       });
-      const claim = await new OrphanQualificationService(db).qualify({
+      const claim = await new OrphanQualificationService(appDbOf(db)).qualify({
         sourceTransactionId: source.id,
         customerId: customer.id,
         originBusinessId,
         orphanReason: 'origin_business_archived',
       });
-      const proposal = await new CustomerOrphanAccessService(db).authorizeAccess(
+      const proposal = await new CustomerOrphanAccessService(appDbOf(db)).authorizeAccess(
         customer.id,
         claim.claim.id,
         {
@@ -405,7 +406,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
       );
 
       await expect(
-        new OrphanSettlementReversalService(db).reverse(
+        new OrphanSettlementReversalService(appDbOf(db)).reverse(
           proposal.settlement.id,
           reversalInput(),
           { actorUserId: adminUserId },
@@ -439,7 +440,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
       });
 
       await expect(
-        new OrphanSettlementReversalService(db).reverse(
+        new OrphanSettlementReversalService(appDbOf(db)).reverse(
           fixture.settlement.id,
           input,
           { actorUserId: adminUserId },
@@ -477,7 +478,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
           )
         : [];
 
-      await new OrphanSettlementReversalService(db).reverse(
+      await new OrphanSettlementReversalService(appDbOf(db)).reverse(
         fixture.settlement.id,
         reversalInput(),
         { actorUserId: adminUserId },

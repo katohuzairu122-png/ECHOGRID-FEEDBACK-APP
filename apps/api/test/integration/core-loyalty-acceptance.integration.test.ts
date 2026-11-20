@@ -15,6 +15,7 @@ import { auditTrail } from '../../src/middleware/audit';
 import { cashierScopeGuard } from '../../src/middleware/cashier-scope';
 import { RoleProvisioningService } from '../../src/rbac/role-provisioning.service';
 import { createRepositories } from '../../src/repositories';
+import { appDbOf } from '../helpers/runtime-db';
 
 const databaseUrl = process.env.DATABASE_URL;
 if (databaseUrl) {
@@ -105,7 +106,7 @@ describe.skipIf(!databaseUrl)('Core loyalty acceptance (real HTTP and disposable
     await dbClient.connect();
     const db = buildDb(dbClient);
     repos = createRepositories(db);
-    membershipService = new CustomerMembershipService(db);
+    membershipService = new CustomerMembershipService(appDbOf(db));
     const user = async (name: string) => (await repos.users.create({
       email: `core-${name}-${run}@example.test`, fullName: name, passwordHash: 'test-fixture', status: 'active',
     })).id;

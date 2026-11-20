@@ -4,6 +4,7 @@ import { buildDb } from '../../src/db/client';
 import { createRepositories } from '../../src/repositories';
 import { CustomerMembershipService } from '../../src/customer-relationships/customer-membership.service';
 import { CommunityMembershipService } from '../../src/community/community-membership.service';
+import { appDbOf } from '../helpers/runtime-db';
 
 /**
  * CUSTOMER-PHONE-01: a phone number given at registration is a claim, not proof. Verification is required ONLY for
@@ -26,7 +27,7 @@ describe.skipIf(!process.env.DATABASE_URL)('Verified-phone gates (real Postgres)
     await client.connect();
     db = buildDb(client);
     repos = createRepositories(db);
-    membership = new CustomerMembershipService(db);
+    membership = new CustomerMembershipService(appDbOf(db));
     const suffix = crypto.randomUUID();
     businessA = (await repos.businesses.create({ name: 'Gate A', slug: `gate-a-${suffix}` })).id;
     businessB = (await repos.businesses.create({ name: 'Gate B', slug: `gate-b-${suffix}` })).id;
@@ -97,7 +98,7 @@ describe.skipIf(!process.env.DATABASE_URL)('Verified-phone gates (real Postgres)
   });
 
   it('Community participation requires a verified phone', async () => {
-    const community = new CommunityMembershipService(db);
+    const community = new CommunityMembershipService(appDbOf(db));
     await expect(community.join(await unverified(), 'policy-v1')).rejects.toMatchObject({
       status: 403,
       code: 'PHONE_VERIFICATION_REQUIRED',

@@ -10,6 +10,7 @@ import {
 } from '../../src/orphan-settlement/receiving-business-settlement.service';
 import { CustomerSettlementCompletionService } from '../../src/orphan-settlement/customer-settlement-completion.service';
 import { OrphanSettlementTerminationService } from '../../src/orphan-settlement/orphan-settlement-termination.service';
+import { appDbOf } from '../helpers/runtime-db';
 
 describe.skipIf(!process.env.DATABASE_URL)(
   'Split 06 reservation expiry and cancellation (integration)',
@@ -105,14 +106,14 @@ describe.skipIf(!process.env.DATABASE_URL)(
         issuanceStatus: 'issued',
       });
 
-      const qualified = await new OrphanQualificationService(db).qualify({
+      const qualified = await new OrphanQualificationService(appDbOf(db)).qualify({
         sourceTransactionId: source.id,
         customerId: customer.id,
         originBusinessId,
         orphanReason: 'origin_business_archived',
       });
 
-      const proposal = await new CustomerOrphanAccessService(db).authorizeAccess(
+      const proposal = await new CustomerOrphanAccessService(appDbOf(db)).authorizeAccess(
         customer.id,
         qualified.claim.id,
         {
@@ -144,7 +145,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
       };
 
       const accepted =
-        await new ReceivingBusinessSettlementService(db).acceptAndReserve({
+        await new ReceivingBusinessSettlementService(appDbOf(db)).acceptAndReserve({
           businessId: receivingBusinessId,
           branchId: receivingBranchId,
           actorUserId,
@@ -162,7 +163,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
       fixture: Awaited<ReturnType<typeof reserve>>,
     ) {
       const completion =
-        await new CustomerSettlementCompletionService(db).authorizeCompletion(
+        await new CustomerSettlementCompletionService(appDbOf(db)).authorizeCompletion(
           fixture.customerId,
           fixture.accepted.settlement.id,
           {
@@ -179,7 +180,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
     it('cancels a proposed settlement without reserving the claim and revokes active access authorization', async () => {
       const fixture = await createProposal();
-      const service = new OrphanSettlementTerminationService(db);
+      const service = new OrphanSettlementTerminationService(appDbOf(db));
 
       const result = await service.cancelForCustomer(
         fixture.customerId,
@@ -203,7 +204,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
     it('cancels a reserved settlement and releases the still-valid claim', async () => {
       const fixture = await reserve(await createProposal());
-      const service = new OrphanSettlementTerminationService(db);
+      const service = new OrphanSettlementTerminationService(appDbOf(db));
 
       const result = await service.cancelForCustomer(
         fixture.customerId,
@@ -226,7 +227,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
       const fixture = await authorizeCompletion(
         await reserve(await createProposal()),
       );
-      const service = new OrphanSettlementTerminationService(db);
+      const service = new OrphanSettlementTerminationService(appDbOf(db));
 
       const result = await service.cancelForCustomer(
         fixture.customerId,
@@ -247,7 +248,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
     it('expires a due reserved settlement, releases the valid claim, and is exactly replay-safe', async () => {
       const fixture = await reserve(await createProposal());
-      const service = new OrphanSettlementTerminationService(db);
+      const service = new OrphanSettlementTerminationService(appDbOf(db));
       const afterExpiry = new Date(
         fixture.accepted.settlement.expiresAt.getTime() + 1,
       );
@@ -281,7 +282,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
       const fixture = await reserve(await createProposal());
 
       await expect(
-        new OrphanSettlementTerminationService(db).expireSettlement(
+        new OrphanSettlementTerminationService(appDbOf(db)).expireSettlement(
           fixture.accepted.settlement.id,
           new Date(fixture.accepted.settlement.expiresAt.getTime() - 1),
         ),
@@ -296,7 +297,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
       await repos.loyaltyTransactions.confirmRedemption(fixture.source.id);
 
       await expect(
-        new OrphanSettlementTerminationService(db).cancelForCustomer(
+        new OrphanSettlementTerminationService(appDbOf(db)).cancelForCustomer(
           fixture.customerId,
           fixture.accepted.settlement.id,
         ),
@@ -323,7 +324,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         phone: `+1593${Math.floor(Math.random() * 9_000_000 + 1_000_000)}`,
         phoneVerifiedAt: new Date(),
       });
-      const service = new OrphanSettlementTerminationService(db);
+      const service = new OrphanSettlementTerminationService(appDbOf(db));
 
       await expect(
         service.cancelForCustomer(
@@ -382,7 +383,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         '../../src/orphan-settlement/orphan-settlement-fulfillment.service'
       );
 
-      await new OrphanSettlementFulfillmentService(db).fulfill({
+      await new OrphanSettlementFulfillmentService(appDbOf(db)).fulfill({
         businessId: receivingBusinessId,
         branchId: receivingBranchId,
         actorUserId,
@@ -390,7 +391,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
       });
 
       await expect(
-        new OrphanSettlementTerminationService(db).cancelForCustomer(
+        new OrphanSettlementTerminationService(appDbOf(db)).cancelForCustomer(
           fixture.customerId,
           fixture.accepted.settlement.id,
         ),
@@ -415,7 +416,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
           )
         : [];
 
-      await new OrphanSettlementTerminationService(db).cancelForCustomer(
+      await new OrphanSettlementTerminationService(appDbOf(db)).cancelForCustomer(
         fixture.customerId,
         fixture.accepted.settlement.id,
       );

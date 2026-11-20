@@ -5,6 +5,7 @@ import { buildDb } from '../../src/db/client';
 import { createRepositories } from '../../src/repositories';
 import { CustomerMembershipService } from '../../src/customer-relationships/customer-membership.service';
 import { ONBOARDING_INVITE_TTL_SECONDS } from '../../src/customer-relationships/onboarding-attribution';
+import { appDbOf } from '../helpers/runtime-db';
 
 /**
  * CASHIER-PROD-D2-R1 against REAL PostgreSQL: controlled anonymization of onboarding events (migration 0084).
@@ -100,7 +101,7 @@ describe.skipIf(!databaseUrl)('D2-R1 controlled onboarding-event erasure (real P
     await admin.connect();
     db = buildDb(admin);
     repos = createRepositories(db);
-    service = new CustomerMembershipService(db);
+    service = new CustomerMembershipService(appDbOf(db));
     // Ordinary roles for the denial tests (NOLOGIN; the SET ROLE is done by the superuser test connection). The "application" role has full
     // DML on every table, exactly what an application session has, and is not a member of any erasure role.
     for (const r of ['d2r1_app_sim', 'd2r1_operator']) {

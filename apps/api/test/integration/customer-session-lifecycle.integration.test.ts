@@ -8,6 +8,7 @@ import { resolveEmailAuthConfig } from '../../src/customer-auth/customer-email-a
 import { createEmailAuthDependencies } from '../../src/customer-auth/customer-email-auth.composition';
 import { CustomerSessionService } from '../../src/customer-auth/customer-session.service';
 import { createCustomerSessionLifecycleComposition } from '../../src/customer-auth/customer-session-lifecycle.composition';
+import { appDbOf } from '../helpers/runtime-db';
 
 /** CUSTOMER-AUTH-S5-03 against real Postgres: login, refresh rotation, reuse detection and logout. */
 describe.skipIf(!process.env.DATABASE_URL)('Rotating session lifecycle (real Postgres)', () => {
@@ -48,7 +49,7 @@ describe.skipIf(!process.env.DATABASE_URL)('Rotating session lifecycle (real Pos
     } as unknown as Bindings;
     const resolved = resolveEmailAuthConfig(env);
     if (!resolved.ok) throw new Error(resolved.missing.join(','));
-    sessions = new CustomerSessionService(db, resolved.config.session);
+    sessions = new CustomerSessionService(appDbOf(db), resolved.config.session);
     deps = createEmailAuthDependencies(resolved.config, {
       withDb: (fn) => fn(db), hasher: createDirectPbkdf2Worker(), deliver: async (m) => { delivered.push(m); },
       limit: async () => true, resolveTrustedSource: async () => 'trusted',
