@@ -21,7 +21,7 @@ import { test, expect } from '@playwright/test';
 test('staff sets up a loyalty tier, reward, and earning rates, end to end', async ({ page }) => {
   const unique = Date.now();
 
-  await page.goto('/signup');
+  await page.goto('/signup?role=business');
   await page.getByLabel('Full name').fill('Loyalty E2E Test User');
   await page.getByLabel('Email').fill(`loyalty-e2e-${unique}@example.test`);
   await page.getByLabel('Password', { exact: true }).fill('a-strong-test-password');

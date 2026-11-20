@@ -15,7 +15,7 @@ import { test, expect } from '@playwright/test';
 test('signup, create a business, create a branch, see it listed', async ({ page }) => {
   const unique = Date.now();
 
-  await page.goto('/signup');
+  await page.goto('/signup?role=business');
   await page.getByLabel('Full name').fill('E2E Test User');
   await page.getByLabel('Email').fill(`e2e-${unique}@example.test`);
   await page.getByLabel('Password', { exact: true }).fill('a-strong-test-password');
