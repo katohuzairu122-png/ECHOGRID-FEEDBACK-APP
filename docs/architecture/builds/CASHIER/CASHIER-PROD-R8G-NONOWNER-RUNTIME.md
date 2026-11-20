@@ -34,7 +34,7 @@ Method: a test seam (`test/helpers/runtime-db.ts`, `appDbOf`) connects the **app
 
 | Area | Evidence under the runtime login |
 |---|---|
-| Full integration, all 129 files, services redirected in ~56 suites plus the real-HTTP suites | **1528 passed / 0 failed / 35 skipped** (same count as the default run) |
+| Full integration, all 129 files, services redirected in about 60 suites including the real-HTTP suites | **1528 passed / 0 failed / 35 skipped** (same count as the default run) |
 | Customer registration, email/password/recovery/session auth, phone gates, QR rotation, messaging, notifications preferences | covered (customer-* and messaging suites) |
 | Business, branch, cashier accounts, branch switching, revocation, onboarding invites, onboarding attribution | covered (HTTP and service suites) |
 | Loyalty earning, redemption, points engine, membership join/leave/consent, check-in gate | covered |
