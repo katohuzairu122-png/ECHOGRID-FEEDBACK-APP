@@ -39,6 +39,11 @@ BEGIN
       GRANT CREATE ON SCHEMA public TO customer_privacy_owner;
       PERFORM set_config('d2f.schema_create_granted', 'on', false);
     END IF;
+    -- Needed only to GRANT EXECUTE on the 0084 erasure function (owned by onboarding_erasure_owner) to customer_privacy_owner; removed at the end.
+    IF NOT pg_has_role(current_user, 'onboarding_erasure_owner', 'USAGE') THEN
+      GRANT onboarding_erasure_owner TO CURRENT_USER;
+      PERFORM set_config('d2f.erasure_owner_membership_granted', 'on', false);
+    END IF;
   END IF;
 END $$;--> statement-breakpoint
 
@@ -692,6 +697,8 @@ DO $$
 BEGIN
   IF current_setting('d2f.schema_create_granted', true) = 'on' THEN REVOKE CREATE ON SCHEMA public FROM customer_privacy_owner; END IF;
   IF current_setting('d2f.membership_granted', true) = 'on' THEN REVOKE customer_privacy_owner FROM CURRENT_USER; END IF;
+  IF current_setting('d2f.erasure_owner_membership_granted', true) = 'on' THEN REVOKE onboarding_erasure_owner FROM CURRENT_USER; END IF;
   PERFORM set_config('d2f.schema_create_granted', '', false);
   PERFORM set_config('d2f.membership_granted', '', false);
+  PERFORM set_config('d2f.erasure_owner_membership_granted', '', false);
 END $$;
