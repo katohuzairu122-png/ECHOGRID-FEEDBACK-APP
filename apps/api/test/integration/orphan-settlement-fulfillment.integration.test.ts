@@ -10,6 +10,7 @@ import {
 } from '../../src/orphan-settlement/receiving-business-settlement.service';
 import { CustomerSettlementCompletionService } from '../../src/orphan-settlement/customer-settlement-completion.service';
 import { OrphanSettlementFulfillmentService } from '../../src/orphan-settlement/orphan-settlement-fulfillment.service';
+import { appDbOf } from '../helpers/runtime-db';
 
 describe.skipIf(!process.env.DATABASE_URL)(
   'Split 06 terminal settlement fulfillment and evidence (integration)',
@@ -123,14 +124,14 @@ describe.skipIf(!process.env.DATABASE_URL)(
         issuanceStatus: 'issued',
       });
 
-      const qualified = await new OrphanQualificationService(db).qualify({
+      const qualified = await new OrphanQualificationService(appDbOf(db)).qualify({
         sourceTransactionId: source.id,
         customerId: customer.id,
         originBusinessId,
         orphanReason: 'origin_business_archived',
       });
 
-      const proposal = await new CustomerOrphanAccessService(db).authorizeAccess(
+      const proposal = await new CustomerOrphanAccessService(appDbOf(db)).authorizeAccess(
         customer.id,
         qualified.claim.id,
         {
@@ -150,7 +151,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
       };
 
       const accepted =
-        await new ReceivingBusinessSettlementService(db).acceptAndReserve({
+        await new ReceivingBusinessSettlementService(appDbOf(db)).acceptAndReserve({
           businessId: receivingBusinessId,
           branchId: receivingBranchId,
           actorUserId,
@@ -174,7 +175,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
     async function authorizeCompletion(
       fixture: Awaited<ReturnType<typeof createReservedSettlement>>,
     ) {
-      return new CustomerSettlementCompletionService(db).authorizeCompletion(
+      return new CustomerSettlementCompletionService(appDbOf(db)).authorizeCompletion(
         fixture.customerId,
         fixture.accepted.settlement.id,
         {
@@ -191,7 +192,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
       const fixture = await createReservedSettlement();
 
       await expect(
-        new OrphanSettlementFulfillmentService(db).fulfill({
+        new OrphanSettlementFulfillmentService(appDbOf(db)).fulfill({
           businessId: receivingBusinessId,
           branchId: receivingBranchId,
           actorUserId,
@@ -215,7 +216,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
     it('consumes the exact completion authorization, settles both projections, appends terminal history, and emits value-neutral evidence', async () => {
       const fixture = await createReservedSettlement();
       const completion = await authorizeCompletion(fixture);
-      const service = new OrphanSettlementFulfillmentService(db);
+      const service = new OrphanSettlementFulfillmentService(appDbOf(db));
 
       const result = await service.fulfill({
         businessId: receivingBusinessId,
@@ -276,7 +277,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
     it('is exactly replay-safe after terminal fulfillment and does not append a second fulfilled event', async () => {
       const fixture = await createReservedSettlement();
       await authorizeCompletion(fixture);
-      const service = new OrphanSettlementFulfillmentService(db);
+      const service = new OrphanSettlementFulfillmentService(appDbOf(db));
 
       const first = await service.fulfill({
         businessId: receivingBusinessId,
@@ -316,7 +317,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
       );
 
       await expect(
-        new OrphanSettlementFulfillmentService(db).fulfill({
+        new OrphanSettlementFulfillmentService(appDbOf(db)).fulfill({
           businessId: receivingBusinessId,
           branchId: receivingBranchId,
           actorUserId,
@@ -340,7 +341,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
     it('enforces receiving business and exact trusted branch binding at fulfillment', async () => {
       const fixture = await createReservedSettlement();
       await authorizeCompletion(fixture);
-      const service = new OrphanSettlementFulfillmentService(db);
+      const service = new OrphanSettlementFulfillmentService(appDbOf(db));
 
       await expect(
         service.fulfill({
@@ -383,7 +384,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
       });
 
       await expect(
-        new OrphanSettlementFulfillmentService(db).fulfill({
+        new OrphanSettlementFulfillmentService(appDbOf(db)).fulfill({
           businessId: receivingBusinessId,
           branchId: receivingBranchId,
           actorUserId,
@@ -432,7 +433,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
           )
         : [];
 
-      await new OrphanSettlementFulfillmentService(db).fulfill({
+      await new OrphanSettlementFulfillmentService(appDbOf(db)).fulfill({
         businessId: receivingBusinessId,
         branchId: receivingBranchId,
         actorUserId,

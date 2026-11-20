@@ -20,6 +20,7 @@ import { pbkdf2Hash, pbkdf2Verify } from '../../src/auth/password';
 import { QrCodeService } from '../../src/qr/qr-code.service';
 import { CustomerMembershipService } from '../../src/customer-relationships/customer-membership.service';
 import { signOnboardingInvite } from '../../src/customer-relationships/onboarding-attribution';
+import { appDbOf } from '../helpers/runtime-db';
 
 /**
  * CASHIER-AUTH-02D against REAL Postgres, the REAL middleware and the REAL join service: append-only onboarding attribution.
@@ -70,7 +71,7 @@ async function http(method: string, path: string, call: Call = {}): Promise<{ st
   if (call.branchId) headers.set('X-Branch-Id', call.branchId);
   if (call.body !== undefined) headers.set('Content-Type', 'application/json');
   const env = {
-    HYPERDRIVE: { connectionString: databaseUrl }, JWT_ACCESS_SECRET: SECRET, JWT_REFRESH_SECRET: REFRESH_SECRET,
+    HYPERDRIVE: { connectionString: process.env.APP_RUNTIME_DATABASE_URL ?? databaseUrl }, JWT_ACCESS_SECRET: SECRET, JWT_REFRESH_SECRET: REFRESH_SECRET,
     CUSTOMER_JWT_SECRET: CUSTOMER_SECRET, QR_TOKEN_SECRET: QR_SECRET,
     PASSWORD_HASHER: hasherNamespace, AUTH_RATE_LIMITER: allow, API_RATE_LIMITER: allow, LOOKUP_RATE_LIMITER: allow,
     PUBLIC_RATE_LIMITER: allow, CUSTOMER_API_RATE_LIMITER: allow, JOBS: { send: async () => {}, sendBatch: async () => {} },
@@ -646,7 +647,7 @@ describe.skipIf(!databaseUrl)('CASHIER-AUTH-02D customer onboarding attribution 
   describe('historical attribution is never invented', () => {
     it('a membership created before attribution existed has no event; the migration created none', async () => {
       const c = await newCustomer(true);
-      await new CustomerMembershipService(db).join({ customerId: c.id, businessId: bizA, onboardingSource: 'legacy_import', onboardingReference: 'x', consentVersion: 'v1' });
+      await new CustomerMembershipService(appDbOf(db)).join({ customerId: c.id, businessId: bizA, onboardingSource: 'legacy_import', onboardingReference: 'x', consentVersion: 'v1' });
       expect(await memberships(c.id)).toHaveLength(1);
       expect(await events(c.id)).toHaveLength(0);
       expect(await q(`SELECT 1 FROM customer_onboarding_events WHERE source = 'remote_invitation' AND business_id = $1`, [bizA])).toHaveLength(0);
@@ -654,7 +655,7 @@ describe.skipIf(!databaseUrl)('CASHIER-AUTH-02D customer onboarding attribution 
 
     it('when a legacy member leaves and re-joins, only the NEW onboarding is recorded, flagged as a re-join; nothing is backfilled for the old one', async () => {
       const c = await newCustomer(true);
-      await new CustomerMembershipService(db).join({ customerId: c.id, businessId: bizA, onboardingSource: 'legacy_import', onboardingReference: 'x', consentVersion: 'v1' });
+      await new CustomerMembershipService(appDbOf(db)).join({ customerId: c.id, businessId: bizA, onboardingSource: 'legacy_import', onboardingReference: 'x', consentVersion: 'v1' });
       await leave(c.token, bizA);
       expect((await joinQr(c.token, qrA2)).status).toBe(201);
       const ev = await events(c.id);
@@ -715,7 +716,7 @@ describe.skipIf(!databaseUrl)('CASHIER-AUTH-02D customer onboarding attribution 
       expect(res.data.bySource.map((s: { source: string }) => s.source)).toEqual(expect.arrayContaining(['business_qr', 'cashier_assisted']));
       // an event with no branch (a source with no physical branch) is counted separately, not hidden or guessed
       const c = await newCustomer(false);
-      await new CustomerMembershipService(db).join({ customerId: c.id, businessId: bizA, onboardingSource: 'x', onboardingReference: 'x', consentVersion: 'v1' });
+      await new CustomerMembershipService(appDbOf(db)).join({ customerId: c.id, businessId: bizA, onboardingSource: 'x', onboardingReference: 'x', consentVersion: 'v1' });
       const [m] = await memberships(c.id);
       await q(`INSERT INTO customer_onboarding_events (membership_id, business_id, customer_id, branch_id, source, verification_state, reference, is_rejoin, occurred_at)
                VALUES ($1,$2,$3,NULL,'remote_invitation','unverified','fixture',false, now())`, [m.id, bizA, c.id]);

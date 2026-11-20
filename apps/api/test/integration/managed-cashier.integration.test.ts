@@ -68,7 +68,7 @@ async function http(method: string, path: string, call: Call = {}): Promise<{ st
   if (call.businessId) headers.set('X-Business-Id', call.businessId);
   if (call.body !== undefined) headers.set('Content-Type', 'application/json');
   const env = {
-    HYPERDRIVE: { connectionString: databaseUrl },
+    HYPERDRIVE: { connectionString: process.env.APP_RUNTIME_DATABASE_URL ?? databaseUrl },
     JWT_ACCESS_SECRET: SECRET,
     JWT_REFRESH_SECRET: REFRESH_SECRET,
     PASSWORD_HASHER: hasherNamespace,

@@ -4,6 +4,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { buildDb } from '../../src/db/client';
 import { createRepositories } from '../../src/repositories';
 import { CustomerMembershipService } from '../../src/customer-relationships/customer-membership.service';
+import { appDbOf } from '../helpers/runtime-db';
 
 /**
  * CASHIER-PROD-D2-R8 against REAL PostgreSQL: database-enforced immutability of audit_log (migration 0085).
@@ -72,7 +73,7 @@ describe.skipIf(!databaseUrl)('D2-R8 audit_log immutability (real PostgreSQL)', 
     await admin.connect();
     db = buildDb(admin);
     repos = createRepositories(db);
-    service = new CustomerMembershipService(db);
+    service = new CustomerMembershipService(appDbOf(db));
     await admin.query(`CREATE ROLE ${APP} LOGIN PASSWORD '${APP_PASSWORD}'`);
     await admin.query(`CREATE ROLE ${OP} NOLOGIN`);
     await admin.query(`GRANT onboarding_erasure_operator TO ${OP}`);

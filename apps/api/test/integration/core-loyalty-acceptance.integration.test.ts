@@ -15,6 +15,7 @@ import { auditTrail } from '../../src/middleware/audit';
 import { cashierScopeGuard } from '../../src/middleware/cashier-scope';
 import { RoleProvisioningService } from '../../src/rbac/role-provisioning.service';
 import { createRepositories } from '../../src/repositories';
+import { appDbOf } from '../helpers/runtime-db';
 
 const databaseUrl = process.env.DATABASE_URL;
 if (databaseUrl) {
@@ -46,7 +47,7 @@ async function request<T = unknown>(actor: Actor, path: string, body?: unknown) 
   if (actor.branchId) headers.set('X-Branch-Id', actor.branchId);
   if (body !== undefined) headers.set('Content-Type', 'application/json');
   const env = {
-    HYPERDRIVE: { connectionString: databaseUrl },
+    HYPERDRIVE: { connectionString: process.env.APP_RUNTIME_DATABASE_URL ?? databaseUrl },
     JWT_ACCESS_SECRET: staffSecret,
     CUSTOMER_JWT_SECRET: customerSecret,
     QR_TOKEN_SECRET: 'synthetic-phone-lookup-signing-secret',
@@ -105,7 +106,7 @@ describe.skipIf(!databaseUrl)('Core loyalty acceptance (real HTTP and disposable
     await dbClient.connect();
     const db = buildDb(dbClient);
     repos = createRepositories(db);
-    membershipService = new CustomerMembershipService(db);
+    membershipService = new CustomerMembershipService(appDbOf(db));
     const user = async (name: string) => (await repos.users.create({
       email: `core-${name}-${run}@example.test`, fullName: name, passwordHash: 'test-fixture', status: 'active',
     })).id;

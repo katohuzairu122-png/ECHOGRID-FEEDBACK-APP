@@ -3,6 +3,7 @@ import { Client } from 'pg';
 import { buildDb } from '../../src/db/client';
 import { PartnerEnrollmentService } from '../../src/partner-credits/partner-enrollment.service';
 import { PartnerProvisionalAwardPlanner } from '../../src/partner-credits/partner-provisional-award.planner';
+import { appDbOf } from '../helpers/runtime-db';
 
 describe.skipIf(!process.env.DATABASE_URL)('Split 07 authenticated Partner enrollment lifecycle (PostgreSQL)', () => {
   let client: Client;
@@ -21,7 +22,7 @@ describe.skipIf(!process.env.DATABASE_URL)('Split 07 authenticated Partner enrol
     const roleId = (await client.query<{ id: string }>('INSERT INTO roles(business_id,name) VALUES($1,$2) RETURNING id', [businessId,'Partner Lifecycle Owner'])).rows[0]!.id;
     await client.query('INSERT INTO user_business_roles(user_id,business_id,role_id) VALUES($1,$2,$3)', [actorId,businessId,roleId]);
     await client.query("INSERT INTO role_permissions(role_id,permission_id) SELECT $1,id FROM permissions WHERE key='billing:manage'", [roleId]);
-    service = new PartnerEnrollmentService(buildDb(client));
+    service = new PartnerEnrollmentService(appDbOf(buildDb(client)));
     planner = new PartnerProvisionalAwardPlanner(buildDb(client));
   });
   afterAll(async () => { if (client) await client.end(); });

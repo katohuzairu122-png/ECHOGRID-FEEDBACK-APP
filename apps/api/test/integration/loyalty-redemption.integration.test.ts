@@ -8,6 +8,7 @@ import { LoyaltyRedemptionService } from '../../src/loyalty/loyalty-redemption.s
 import { LoyaltyRewardService } from '../../src/loyalty/loyalty-reward.service';
 import { generateRedemptionCode } from '../../src/loyalty/redemption-code';
 import { VisitSessionService } from '../../src/visits/visit-session.service';
+import { appDbOf } from '../helpers/runtime-db';
 
 // createdBy/actor columns are `uuid` at the schema level -- a placeholder
 // string like STAFF_ACTOR_ID fails at the database, not just in spirit; these
@@ -69,9 +70,9 @@ describe.skipIf(!process.env.DATABASE_URL)('LoyaltyRedemptionService (integratio
     await client.connect();
     const db = buildDb(client);
     repos = createRepositories(db);
-    accountService = new LoyaltyAccountService(db);
-    membershipService = new CustomerMembershipService(db);
-    redemptionService = new LoyaltyRedemptionService(db);
+    accountService = new LoyaltyAccountService(appDbOf(db));
+    membershipService = new CustomerMembershipService(appDbOf(db));
+    redemptionService = new LoyaltyRedemptionService(appDbOf(db));
     rewardService = new LoyaltyRewardService(repos);
 
     const bizA = await repos.businesses.create({

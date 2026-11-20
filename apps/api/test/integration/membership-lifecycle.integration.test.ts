@@ -13,6 +13,7 @@ import {
   createFakeKv,
   customerRequest,
 } from './helpers/customer-http';
+import { appDbOf } from '../helpers/runtime-db';
 
 /**
  * Split 01 lifecycle, over real HTTP and a disposable PostgreSQL database:
@@ -170,7 +171,7 @@ describe.skipIf(!databaseUrl)('Membership lifecycle (real HTTP and disposable Po
     await client.connect();
     const db = buildDb(client);
     repos = createRepositories(db);
-    accounts = new LoyaltyAccountService(db);
+    accounts = new LoyaltyAccountService(appDbOf(db));
     staffId = (
       await repos.users.create({
         email: `lifecycle-${run}@example.test`,

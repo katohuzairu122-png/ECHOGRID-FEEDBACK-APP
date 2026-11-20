@@ -12,6 +12,7 @@ import {
   businesses,
 } from '../../src/db/schema';
 import { AppError } from '../../src/lib/errors';
+import { appDbOf } from '../helpers/runtime-db';
 
 /**
  * The customer side of messaging, against a real database. Until this file existed the only customer-messaging
@@ -35,7 +36,7 @@ describe.skipIf(!process.env.DATABASE_URL)('customer messaging thread (integrati
     client = new Client({ connectionString: process.env.DATABASE_URL });
     await client.connect();
     db = buildDb(client);
-    service = new ConversationService(db);
+    service = new ConversationService(appDbOf(db));
     const repos = createRepositories(db);
 
     const business = await repos.businesses.create({
@@ -151,7 +152,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
     const limiter = { limit: async () => ({ success: true }) };
     const env = () =>
       ({
-        HYPERDRIVE: { connectionString: process.env.DATABASE_URL! },
+        HYPERDRIVE: { connectionString: process.env.APP_RUNTIME_DATABASE_URL ?? process.env.DATABASE_URL! },
         CUSTOMER_JWT_SECRET: SECRET,
         JWT_ACCESS_SECRET: 'unused-access-secret',
         QR_TOKEN_SECRET: 'unused-qr-secret',
@@ -201,7 +202,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
       });
       customerId = customer.id;
       await repos.loyaltyAccounts.create({ customerId, businessId });
-      const service = new ConversationService(db);
+      const service = new ConversationService(appDbOf(db));
       const conversation = await service.getOrCreateForCustomer(
         businessId,
         customerId,

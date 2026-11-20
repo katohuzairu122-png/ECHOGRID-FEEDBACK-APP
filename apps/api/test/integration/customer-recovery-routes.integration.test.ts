@@ -12,6 +12,7 @@ import {
   type RecoveryNotifier,
 } from '../../src/customer-auth/customer-recovery-attempt.service';
 import { createCustomerRecoveryRoutes } from '../../src/customer-auth/customer-recovery.routes';
+import { appDbOf } from '../helpers/runtime-db';
 
 /**
  * CUSTOMER-AUTH-S4-03: the recovery HTTP surface, the phone-OTP binding and the delivery
@@ -34,13 +35,13 @@ describe.skipIf(!process.env.DATABASE_URL)('customer recovery routes (integratio
 
   const build = (c: Client) => {
     const db = buildDb(c);
-    const sessions = new CustomerSessionService(db, {
+    const sessions = new CustomerSessionService(appDbOf(db), {
       sessionSigningSecret: 'integration-session-secret-not-for-production',
       legacySigningSecret: 'integration-legacy-secret-not-for-production',
       legacyAccepted: () => true, accessTtlSeconds: 900, refreshTtlSeconds: 30 * 86400,
       absoluteTtlSeconds: 30 * 86400, idleTtlSeconds: 7 * 86400, stepUpWindowSeconds: 300,
     });
-    const auth = new CustomerPasswordAuthService(db, sessions, createDirectPbkdf2Worker(), {
+    const auth = new CustomerPasswordAuthService(appDbOf(db), sessions, createDirectPbkdf2Worker(), {
       passwordMinLength: 10, phoneProofMaxAgeSeconds: 300, passwordIterations: 1000,
     });
     return { db, sessions, auth, codes: createCustomerRecoveryCodeService({ db, hmacSecret: SECRET, stepUpWindowSeconds: 300 }) };

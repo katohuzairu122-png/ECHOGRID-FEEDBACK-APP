@@ -4,6 +4,7 @@ import { buildDb } from '../../src/db/client';
 import { createRepositories } from '../../src/repositories';
 import { BusinessService } from '../../src/businesses/business.service';
 import { BranchService } from '../../src/branches/branch.service';
+import { appDbOf } from '../helpers/runtime-db';
 
 /**
  * ONBOARDING-UX-01 against REAL Postgres: generated slugs, deterministic duplicate handling, retry / double-submit
@@ -28,7 +29,7 @@ describe.skipIf(!process.env.DATABASE_URL)('onboarding slug generation (integrat
     return id;
   };
   const business = (client: Client, owner: string, name: string, slug?: string) =>
-    new BusinessService(buildDb(client)).createBusiness(slug ? { name, slug } : { name }, owner);
+    new BusinessService(appDbOf(buildDb(client))).createBusiness(slug ? { name, slug } : { name }, owner);
   const branch = (client: Client, businessId: string, owner: string, name: string, slug?: string) => {
     const db = buildDb(client);
     return db.transaction((tx) =>

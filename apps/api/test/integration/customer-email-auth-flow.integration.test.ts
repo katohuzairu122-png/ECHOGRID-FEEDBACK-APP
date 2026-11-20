@@ -15,6 +15,7 @@ import { CustomerSessionService } from '../../src/customer-auth/customer-session
 import { CustomerCredentialRepository } from '../../src/repositories/customer-credential.repository';
 import { PASSWORD_ITERATIONS } from '../../src/auth/password';
 import { normalizePassword } from '../../src/customer-auth/customer-password-policy';
+import { appDbOf } from '../helpers/runtime-db';
 
 /**
  * CUSTOMER-AUTH-S5-01 end to end against real Postgres: email proof -> registration -> login -> rotating session,
@@ -68,7 +69,7 @@ describe.skipIf(!process.env.DATABASE_URL)('Email registration and login flow (r
     } as unknown as Bindings;
     const resolved = resolveEmailAuthConfig(env);
     if (!resolved.ok) throw new Error(`test config invalid: ${resolved.missing.join(', ')}`);
-    sessions = new CustomerSessionService(db, resolved.config.session);
+    sessions = new CustomerSessionService(appDbOf(db), resolved.config.session);
     const dependencies = createEmailAuthDependencies(resolved.config, {
       withDb: (fn) => fn(db),
       hasher: createDirectPbkdf2Worker(),

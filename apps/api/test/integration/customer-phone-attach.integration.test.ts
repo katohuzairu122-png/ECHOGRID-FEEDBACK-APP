@@ -10,6 +10,7 @@ import { CustomerPhoneAttachService, createLocalPhoneProof, PHONE_ATTACH_MAX_REQ
 import { CustomerMembershipService } from '../../src/customer-relationships/customer-membership.service';
 import { createEmailRegistrationService } from '../../src/customer-auth/customer-email-auth.service';
 import { CustomerCredentialRepository } from '../../src/repositories/customer-credential.repository';
+import { appDbOf } from '../helpers/runtime-db';
 
 /**
  * CUSTOMER-PHONE-01 stage 4 against real Postgres, with the real OTP rows and hasher. Only the SMS transport is faked (it
@@ -66,7 +67,7 @@ describe.skipIf(!process.env.DATABASE_URL)('Phone attach (real Postgres)', () =>
     const suffix = crypto.randomUUID();
     const a = (await repos.businesses.create({ name: 'Attach A', slug: `attach-a-${suffix}` })).id;
     const b = (await repos.businesses.create({ name: 'Attach B', slug: `attach-b-${suffix}` })).id;
-    const memberships = new CustomerMembershipService(db);
+    const memberships = new CustomerMembershipService(appDbOf(db));
     const id = await emailCustomer();
     const join = (businessId: string) =>
       memberships.join({ customerId: id, businessId, onboardingSource: 'business_qr', onboardingReference: 'attach-test', consentVersion: 'v1' });

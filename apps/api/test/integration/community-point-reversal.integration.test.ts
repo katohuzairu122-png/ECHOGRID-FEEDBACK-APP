@@ -5,6 +5,7 @@ import { createRepositories } from '../../src/repositories';
 import { CommunityMembershipService } from '../../src/community/community-membership.service';
 import { CommunityPointAwardService } from '../../src/community/community-point-award.service';
 import { CommunityPointReversalService } from '../../src/community/community-point-reversal.service';
+import { appDbOf } from '../helpers/runtime-db';
 
 describe.skipIf(!process.env.DATABASE_URL)(
   'Split 05 Community Point reversal (integration)',
@@ -90,13 +91,13 @@ describe.skipIf(!process.env.DATABASE_URL)(
         activatedAt: new Date(),
       });
 
-      const joined = await new CommunityMembershipService(db).join(
+      const joined = await new CommunityMembershipService(appDbOf(db)).join(
         customerId,
         'community-policy-v1',
       );
       accountId = joined.account.id;
 
-      const awarded = await new CommunityPointAwardService(db).evaluateSurveyCompletion(
+      const awarded = await new CommunityPointAwardService(appDbOf(db)).evaluateSurveyCompletion(
         completionRef,
       );
       expect(awarded.awarded).toBe(true);
@@ -111,7 +112,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
     it('requires authoritative invalidated survey evidence before reversal', async () => {
       await expect(
-        new CommunityPointReversalService(db).reverseInvalidatedSurveyCompletion(
+        new CommunityPointReversalService(appDbOf(db)).reverseInvalidatedSurveyCompletion(
           completionRef,
         ),
       ).rejects.toMatchObject({
@@ -141,7 +142,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
       await repos.surveyParticipations.invalidate(completionRef);
 
-      const service = new CommunityPointReversalService(db);
+      const service = new CommunityPointReversalService(appDbOf(db));
       const first = await service.reverseInvalidatedSurveyCompletion(completionRef);
       expect(first).toHaveLength(1);
       expect(first[0]!.reversed).toBe(true);

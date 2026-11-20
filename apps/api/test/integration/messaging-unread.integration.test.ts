@@ -11,6 +11,7 @@ import {
   loyaltyAccounts,
   messages,
 } from '../../src/db/schema';
+import { appDbOf } from '../helpers/runtime-db';
 
 /**
  * Unread counts for the menu badge, against a real database. "Unread" means sent by the other party and not yet
@@ -33,7 +34,7 @@ describe.skipIf(!process.env.DATABASE_URL)('messaging unread summaries (integrat
     client = new Client({ connectionString: process.env.DATABASE_URL });
     await client.connect();
     db = buildDb(client);
-    service = new ConversationService(db);
+    service = new ConversationService(appDbOf(db));
     const repos = createRepositories(db);
     bizA = (await repos.businesses.create({ name: `Unread A ${suffix}`, slug: `unr-a-${suffix}` }))
       .id;

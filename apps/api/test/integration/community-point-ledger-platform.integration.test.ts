@@ -3,6 +3,7 @@ import { Client } from 'pg';
 import { buildDb } from '../../src/db/client';
 import { createRepositories } from '../../src/repositories';
 import { CommunityMembershipService } from '../../src/community/community-membership.service';
+import { appDbOf } from '../helpers/runtime-db';
 
 describe.skipIf(!process.env.DATABASE_URL)(
   'Split 05 platform Community Point ledger inspection (integration)',
@@ -30,11 +31,11 @@ describe.skipIf(!process.env.DATABASE_URL)(
       customerAId = customerA.id;
       customerBId = customerB.id;
 
-      const joinedA = await new CommunityMembershipService(db).join(
+      const joinedA = await new CommunityMembershipService(appDbOf(db)).join(
         customerAId,
         'community-policy-v1',
       );
-      const joinedB = await new CommunityMembershipService(db).join(
+      const joinedB = await new CommunityMembershipService(appDbOf(db)).join(
         customerBId,
         'community-policy-v1',
       );

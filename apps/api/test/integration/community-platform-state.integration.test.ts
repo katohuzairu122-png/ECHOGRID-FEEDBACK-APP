@@ -6,6 +6,7 @@ import { CommunityMembershipService } from '../../src/community/community-member
 import { CommunityPointAwardService } from '../../src/community/community-point-award.service';
 import { CommunityPointAdminAdjustmentService } from '../../src/community/community-point-admin-adjustment.service';
 import { CommunityPlatformStateService } from '../../src/community/community-platform-state.service';
+import { appDbOf } from '../helpers/runtime-db';
 
 describe.skipIf(!process.env.DATABASE_URL)(
   'Split 05 platform Community suspension/restoration (integration)',
@@ -41,14 +42,14 @@ describe.skipIf(!process.env.DATABASE_URL)(
       });
       customerId = customer.id;
 
-      const joined = await new CommunityMembershipService(db).join(
+      const joined = await new CommunityMembershipService(appDbOf(db)).join(
         customerId,
         'community-policy-v1',
       );
       membershipId = joined.membership.id;
       accountId = joined.account.id;
 
-      const adjusted = await new CommunityPointAdminAdjustmentService(db).adjust(
+      const adjusted = await new CommunityPointAdminAdjustmentService(appDbOf(db)).adjust(
         customerId,
         {
           points: 50,
@@ -134,7 +135,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
     });
 
     it('suspends membership/account atomically while preserving balance and history', async () => {
-      const service = new CommunityPlatformStateService(db);
+      const service = new CommunityPlatformStateService(appDbOf(db));
       const result = await service.suspend(
         customerId,
         { reason: 'Platform policy investigation.' },
@@ -180,7 +181,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
           accountId,
         );
 
-      const result = await new CommunityPointAwardService(db).evaluateSurveyCompletion(
+      const result = await new CommunityPointAwardService(appDbOf(db)).evaluateSurveyCompletion(
         completionRef,
       );
 
@@ -196,7 +197,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
     });
 
     it('prevents customer self-service from overriding platform suspension', async () => {
-      const service = new CommunityMembershipService(db);
+      const service = new CommunityMembershipService(appDbOf(db));
       await expect(
         service.join(customerId, 'community-policy-v2'),
       ).rejects.toMatchObject({
@@ -210,7 +211,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
     });
 
     it('restores the paired state and allows pending evidence to earn again', async () => {
-      const state = new CommunityPlatformStateService(db);
+      const state = new CommunityPlatformStateService(appDbOf(db));
       const restored = await state.restore(
         customerId,
         { reason: 'Platform investigation cleared.' },
@@ -224,7 +225,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
       expect(restored.account.pointsBalance).toBe(50);
 
       const awards =
-        await new CommunityPointAwardService(db).reevaluatePendingMembership(
+        await new CommunityPointAwardService(appDbOf(db)).reevaluatePendingMembership(
           customerId,
         );
       expect(awards).toHaveLength(1);
@@ -256,7 +257,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
       await repos.communityPointAccounts.updateStatus(accountId, 'suspended');
 
       await expect(
-        new CommunityPlatformStateService(db).suspend(
+        new CommunityPlatformStateService(appDbOf(db)).suspend(
           customerId,
           { reason: 'Must fail on state mismatch.' },
           audit(),
@@ -270,7 +271,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
     });
 
     it('rolls back both state changes when required semantic audit insertion fails', async () => {
-      const service = new CommunityPlatformStateService(db);
+      const service = new CommunityPlatformStateService(appDbOf(db));
 
       await expect(
         service.suspend(
@@ -284,7 +285,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         ),
       ).rejects.toBeDefined();
 
-      const status = await new CommunityMembershipService(db).getStatus(customerId);
+      const status = await new CommunityMembershipService(appDbOf(db)).getStatus(customerId);
       expect(status.membership?.status).toBe('active');
       expect(status.account?.status).toBe('active');
       expect(status.account?.pointsBalance).toBe(75);

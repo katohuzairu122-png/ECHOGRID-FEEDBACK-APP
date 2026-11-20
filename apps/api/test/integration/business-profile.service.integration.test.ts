@@ -5,6 +5,7 @@ import { AppError } from '../../src/lib/errors';
 import { BusinessProfileService, type ProfileActor } from '../../src/business-profile/business-profile.service';
 import { validateProfileContent, type ProfileContentInput } from '../../src/business-profile/profile-content';
 import { computeProfileDigest } from '../../src/business-profile/profile-digest';
+import { appDbOf } from '../helpers/runtime-db';
 
 /**
  * BDPN-01B part 3 against REAL Postgres: the transition service over the 0080 tables. Every lifecycle step, every
@@ -79,8 +80,8 @@ describe.skipIf(!process.env.DATABASE_URL)('business profile transition service 
     other = new Client({ connectionString: process.env.DATABASE_URL });
     await client.connect();
     await other.connect();
-    service = new BusinessProfileService(buildDb(client));
-    racer = new BusinessProfileService(buildDb(other));
+    service = new BusinessProfileService(appDbOf(buildDb(client)));
+    racer = new BusinessProfileService(appDbOf(buildDb(other)));
     categoryId = (await q<{ id: string }>('SELECT id FROM business_categories LIMIT 1'))[0]!.id;
     ownerUser = await user('owner');
     modA = await user('modA');
