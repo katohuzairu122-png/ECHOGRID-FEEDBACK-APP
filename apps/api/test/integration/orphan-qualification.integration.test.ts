@@ -3,6 +3,7 @@ import { Client } from 'pg';
 import { buildDb } from '../../src/db/client';
 import { createRepositories } from '../../src/repositories';
 import { OrphanQualificationService } from '../../src/orphan-settlement/orphan-qualification.service';
+import { appDbOf } from '../helpers/runtime-db';
 
 describe.skipIf(!process.env.DATABASE_URL)(
   'Split 06 authoritative orphan qualification (integration)',
@@ -168,7 +169,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
     it('qualifies an outstanding issued non-points entitlement exactly once and appends orphan_created atomically', async () => {
       const { transaction } = await issuedEntitlement();
-      const service = new OrphanQualificationService(db);
+      const service = new OrphanQualificationService(appDbOf(db));
       const input = {
         sourceTransactionId: transaction.id,
         customerId,
@@ -199,7 +200,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
     it('does not let inactive catalog state erase an already-issued entitlement', async () => {
       const { transaction } = await issuedEntitlement({ rewardStatus: 'inactive' });
 
-      const result = await new OrphanQualificationService(db).qualify({
+      const result = await new OrphanQualificationService(appDbOf(db)).qualify({
         sourceTransactionId: transaction.id,
         customerId,
         originBusinessId: archivedBusinessId,
@@ -211,7 +212,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
     });
 
     it('rejects nonexistent, redeemed, confirmed, expired and points-only source entitlements', async () => {
-      const service = new OrphanQualificationService(db);
+      const service = new OrphanQualificationService(appDbOf(db));
 
       await expect(
         service.qualify({
@@ -279,7 +280,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
     it('rejects asserted customer/business mappings that do not own the source', async () => {
       const { transaction } = await issuedEntitlement();
-      const service = new OrphanQualificationService(db);
+      const service = new OrphanQualificationService(appDbOf(db));
 
       await expect(
         service.qualify({
@@ -312,7 +313,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
       });
 
       await expect(
-        new OrphanQualificationService(db).qualify({
+        new OrphanQualificationService(appDbOf(db)).qualify({
           sourceTransactionId: transaction.id,
           customerId,
           originBusinessId: activeBusinessId,
@@ -334,7 +335,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
       const denied = await issuedEntitlement({
         businessId: activeBusinessId,
       });
-      const service = new OrphanQualificationService(db);
+      const service = new OrphanQualificationService(appDbOf(db));
 
       await expect(
         service.qualify({
@@ -390,7 +391,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
       });
 
       await expect(
-        new OrphanQualificationService(db).qualify({
+        new OrphanQualificationService(appDbOf(db)).qualify({
           sourceTransactionId: target.transaction.id,
           customerId,
           originBusinessId: archivedBusinessId,
@@ -419,7 +420,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
           )
         : [];
 
-      await new OrphanQualificationService(db).qualify({
+      await new OrphanQualificationService(appDbOf(db)).qualify({
         sourceTransactionId: transaction.id,
         customerId,
         originBusinessId: archivedBusinessId,

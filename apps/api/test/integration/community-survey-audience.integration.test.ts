@@ -4,6 +4,7 @@ import { buildDb } from '../../src/db/client';
 import { createRepositories } from '../../src/repositories';
 import { CommunityMembershipService } from '../../src/community/community-membership.service';
 import { assertSurveyAudienceEligible } from '../../src/surveys/survey-participation.service';
+import { appDbOf } from '../helpers/runtime-db';
 
 describe.skipIf(!process.env.DATABASE_URL)(
   'Split 05 Community survey audiences (integration)',
@@ -106,7 +107,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
     it('resolves community_member only for active membership and excludes active members from candidate campaigns', async () => {
       const repos = createRepositories(db);
-      await new CommunityMembershipService(db).join(
+      await new CommunityMembershipService(appDbOf(db)).join(
         customerId,
         'community-policy-v1',
       );
@@ -133,7 +134,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
     it('stops resolving community_member after leave and permits candidate participation again', async () => {
       const repos = createRepositories(db);
-      await new CommunityMembershipService(db).leave(customerId);
+      await new CommunityMembershipService(appDbOf(db)).leave(customerId);
 
       await expect(
         assertSurveyAudienceEligible(

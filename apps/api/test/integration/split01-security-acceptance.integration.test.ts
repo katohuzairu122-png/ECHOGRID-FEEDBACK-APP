@@ -6,6 +6,7 @@ import { createRepositories } from '../../src/repositories';
 import { LoyaltyAccountService } from '../../src/loyalty/loyalty-account.service';
 import { LoyaltyRedemptionService } from '../../src/loyalty/loyalty-redemption.service';
 import { CustomerMembershipService } from '../../src/customer-relationships/customer-membership.service';
+import { appDbOf } from '../helpers/runtime-db';
 
 const url = process.env.DATABASE_URL;
 if (
@@ -28,7 +29,7 @@ describe.skipIf(!url)('Split 01 security acceptance with real transaction races'
   beforeAll(async () => {
     await client.connect();
     repos = createRepositories(buildDb(client));
-    accounts = new LoyaltyAccountService(buildDb(client));
+    accounts = new LoyaltyAccountService(appDbOf(buildDb(client)));
     const tag = randomUUID();
     businessId = (
       await repos.businesses.create({ name: 'Split 01 security', slug: 's01-security-' + tag })
@@ -68,7 +69,7 @@ describe.skipIf(!url)('Split 01 security acceptance with real transaction races'
         phoneVerifiedAt: new Date(),
       })
     ).id;
-    const joined = await new CustomerMembershipService(buildDb(client)).join({
+    const joined = await new CustomerMembershipService(appDbOf(buildDb(client))).join({
       customerId,
       businessId,
       onboardingSource: 'business_qr',

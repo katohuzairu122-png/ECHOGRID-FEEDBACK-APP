@@ -4,6 +4,7 @@ import { buildDb } from '../../src/db/client';
 import { createRepositories } from '../../src/repositories';
 import { LoyaltyAccountService } from '../../src/loyalty/loyalty-account.service';
 import { VisitSessionService } from '../../src/visits/visit-session.service';
+import { appDbOf } from '../helpers/runtime-db';
 
 // createdBy/actor columns are `uuid` at the schema level -- a placeholder
 // string like 'staff-actor' fails at the database, not just in spirit; these
@@ -33,7 +34,7 @@ describe.skipIf(!process.env.DATABASE_URL)('LoyaltyAccountService points engine 
     await client.connect();
     const db = buildDb(client);
     repos = createRepositories(db);
-    service = new LoyaltyAccountService(db);
+    service = new LoyaltyAccountService(appDbOf(db));
 
     const business = await repos.businesses.create({
       name: 'Loyalty Points Engine Test Business',

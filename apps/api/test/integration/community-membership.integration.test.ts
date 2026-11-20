@@ -3,6 +3,7 @@ import { Client } from 'pg';
 import { buildDb } from '../../src/db/client';
 import { createRepositories } from '../../src/repositories';
 import { CommunityMembershipService } from '../../src/community/community-membership.service';
+import { appDbOf } from '../helpers/runtime-db';
 
 describe.skipIf(!process.env.DATABASE_URL)('Split 05 Community membership service (integration)', () => {
   let client: Client;
@@ -26,7 +27,7 @@ describe.skipIf(!process.env.DATABASE_URL)('Split 05 Community membership servic
   });
 
   it('creates membership and account only after explicit join, then preserves identity across leave/rejoin', async () => {
-    const service = new CommunityMembershipService(db);
+    const service = new CommunityMembershipService(appDbOf(db));
 
     const before = await service.getStatus(customerId);
     expect(before).toEqual({ membership: null, account: null });
@@ -69,7 +70,7 @@ describe.skipIf(!process.env.DATABASE_URL)('Split 05 Community membership servic
     });
     expect(membership?.status).toBe('suspended');
 
-    const service = new CommunityMembershipService(db);
+    const service = new CommunityMembershipService(appDbOf(db));
     await expect(service.join(customerId, 'community-policy-v3')).rejects.toMatchObject({
       status: 409,
       code: 'COMMUNITY_MEMBERSHIP_SUSPENDED',

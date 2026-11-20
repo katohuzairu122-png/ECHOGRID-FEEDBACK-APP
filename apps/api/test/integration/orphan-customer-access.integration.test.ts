@@ -4,6 +4,7 @@ import { buildDb } from '../../src/db/client';
 import { createRepositories } from '../../src/repositories';
 import { OrphanQualificationService } from '../../src/orphan-settlement/orphan-qualification.service';
 import { CustomerOrphanAccessService } from '../../src/orphan-settlement/customer-orphan-access.service';
+import { appDbOf } from '../helpers/runtime-db';
 
 describe.skipIf(!process.env.DATABASE_URL)(
   'Split 06 customer orphan access (integration)',
@@ -104,7 +105,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         issuanceStatus: 'issued',
       });
 
-      const result = await new OrphanQualificationService(db).qualify({
+      const result = await new OrphanQualificationService(appDbOf(db)).qualify({
         sourceTransactionId: source.id,
         customerId: targetCustomerId,
         originBusinessId,
@@ -114,7 +115,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
     }
 
     it('lists and reads only claims owned by the authenticated customer identity', async () => {
-      const service = new CustomerOrphanAccessService(db);
+      const service = new CustomerOrphanAccessService(appDbOf(db));
       const rows = await service.listClaims(customerId);
 
       expect(rows.some((row) => row.id === claimId)).toBe(true);
@@ -130,7 +131,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
     });
 
     it('atomically grants scoped consent, issues short-lived access authority, creates a proposal, and appends partner_selected', async () => {
-      const service = new CustomerOrphanAccessService(db);
+      const service = new CustomerOrphanAccessService(appDbOf(db));
       const before = await repos.orphanSettlements.listForClaim(claimId);
       expect(before).toHaveLength(0);
 
@@ -175,7 +176,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
     });
 
     it('replays the exact request without duplicating consent, authorization, proposal, or event', async () => {
-      const service = new CustomerOrphanAccessService(db);
+      const service = new CustomerOrphanAccessService(appDbOf(db));
       const input = {
         receivingBusinessId: otherReceivingBusinessId,
         consentVersion: 'settlement-v1',
@@ -195,7 +196,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
     });
 
     it('rejects material reuse of the same idempotency key for another business', async () => {
-      const service = new CustomerOrphanAccessService(db);
+      const service = new CustomerOrphanAccessService(appDbOf(db));
       const key = `access-conflict-${crypto.randomUUID()}`;
       const correlationId = `corr-${crypto.randomUUID()}`;
 
@@ -220,7 +221,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
     });
 
     it('rejects access for another customer, the origin business, and non-active receiving businesses', async () => {
-      const service = new CustomerOrphanAccessService(db);
+      const service = new CustomerOrphanAccessService(appDbOf(db));
       const base = {
         consentVersion: 'settlement-v1',
         correlationId: `corr-${crypto.randomUUID()}`,
@@ -273,7 +274,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         ? await repos.communityPointTransactions.listForAccount(communityAccount.id)
         : [];
 
-      await new CustomerOrphanAccessService(db).authorizeAccess(customerId, claimId, {
+      await new CustomerOrphanAccessService(appDbOf(db)).authorizeAccess(customerId, claimId, {
         receivingBusinessId,
         consentVersion: 'settlement-v1',
         correlationId: `corr-${crypto.randomUUID()}`,

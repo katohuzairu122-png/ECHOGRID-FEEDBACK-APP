@@ -8,6 +8,7 @@ import {
   ORPHAN_SETTLEMENT_FULFILLMENT_POLICY_VERSION,
   ReceivingBusinessSettlementService,
 } from '../../src/orphan-settlement/receiving-business-settlement.service';
+import { appDbOf } from '../helpers/runtime-db';
 
 describe.skipIf(!process.env.DATABASE_URL)(
   'Split 06 receiving-business acceptance and reservation (integration)',
@@ -121,7 +122,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         issuanceStatus: 'issued',
       });
 
-      const qualified = await new OrphanQualificationService(db).qualify({
+      const qualified = await new OrphanQualificationService(appDbOf(db)).qualify({
         sourceTransactionId: source.id,
         customerId: customer.id,
         originBusinessId,
@@ -141,7 +142,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
       claimId: string,
       receivingBusiness: string,
     ) {
-      return new CustomerOrphanAccessService(db).authorizeAccess(
+      return new CustomerOrphanAccessService(appDbOf(db)).authorizeAccess(
         customerId,
         claimId,
         {
@@ -190,7 +191,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
       expect('originLoyaltyTransactionId' in view.claim).toBe(false);
 
       await expect(
-        new ReceivingBusinessSettlementService(db).inspectAuthorizedClaim({
+        new ReceivingBusinessSettlementService(appDbOf(db)).inspectAuthorizedClaim({
           businessId: competingBusinessId,
           access: {
             settlementId: proposal.settlement.id,
@@ -216,7 +217,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
       );
 
       await expect(
-        new ReceivingBusinessSettlementService(db).inspectAuthorizedClaim({
+        new ReceivingBusinessSettlementService(appDbOf(db)).inspectAuthorizedClaim({
           businessId: receivingBusinessId,
           branchId: receivingBranchId,
           access: {
@@ -254,7 +255,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
       });
 
       await expect(
-        new ReceivingBusinessSettlementService(db).inspectAuthorizedClaim({
+        new ReceivingBusinessSettlementService(appDbOf(db)).inspectAuthorizedClaim({
           businessId: receivingBusinessId,
           branchId: receivingBranchId,
           access: {
@@ -276,7 +277,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         receivingBusinessId,
       );
 
-      const service = new ReceivingBusinessSettlementService(db);
+      const service = new ReceivingBusinessSettlementService(appDbOf(db));
       const result = await service.acceptAndReserve({
         businessId: receivingBusinessId,
         branchId: receivingBranchId,
@@ -350,7 +351,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         created.claim.id,
         receivingBusinessId,
       );
-      const service = new ReceivingBusinessSettlementService(db);
+      const service = new ReceivingBusinessSettlementService(appDbOf(db));
 
       await service.acceptAndReserve({
         businessId: receivingBusinessId,
@@ -393,7 +394,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         competingBusinessId,
       );
 
-      await new ReceivingBusinessSettlementService(db).acceptAndReserve({
+      await new ReceivingBusinessSettlementService(appDbOf(db)).acceptAndReserve({
         businessId: receivingBusinessId,
         branchId: receivingBranchId,
         actorUserId,
@@ -405,7 +406,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
       });
 
       await expect(
-        new ReceivingBusinessSettlementService(db).acceptAndReserve({
+        new ReceivingBusinessSettlementService(appDbOf(db)).acceptAndReserve({
           businessId: competingBusinessId,
           actorUserId,
           settlementId: second.settlement.id,
@@ -448,7 +449,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
       });
 
       await expect(
-        new ReceivingBusinessSettlementService(db).acceptAndReserve({
+        new ReceivingBusinessSettlementService(appDbOf(db)).acceptAndReserve({
           businessId: receivingBusinessId,
           branchId: receivingBranchId,
           actorUserId,
@@ -562,7 +563,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
           )
         : [];
 
-      await new ReceivingBusinessSettlementService(db).acceptAndReserve({
+      await new ReceivingBusinessSettlementService(appDbOf(db)).acceptAndReserve({
         businessId: receivingBusinessId,
         branchId: receivingBranchId,
         actorUserId,

@@ -21,6 +21,7 @@ import { pbkdf2Hash, pbkdf2Verify } from '../../src/auth/password';
 import { CustomerMembershipService } from '../../src/customer-relationships/customer-membership.service';
 import { LoyaltyAccountService } from '../../src/loyalty/loyalty-account.service';
 import { LoyaltyRedemptionService } from '../../src/loyalty/loyalty-redemption.service';
+import { appDbOf } from '../helpers/runtime-db';
 
 /**
  * CASHIER-AUTH-02C against REAL Postgres and the REAL middleware and loyalty services: in-session branch switching for managed
@@ -158,7 +159,7 @@ describe.skipIf(!databaseUrl)('CASHIER-AUTH-02C in-session branch switching (rea
     staffWebRefresh = staffLogin.data.refreshToken;
     // a customer with an active membership and loyalty account at business A, and a branch-restricted voucher
     customerId = (await repos.customers.create({ phone: `+1557${run.replace(/\D/g, '').padEnd(8, '1').slice(0, 7)}`, phoneVerifiedAt: new Date() })).id;
-    const joined = await new CustomerMembershipService(db).join({
+    const joined = await new CustomerMembershipService(appDbOf(db)).join({
       customerId, businessId: bizA, onboardingSource: 'integration_test', onboardingReference: a1, consentVersion: 'v1',
     });
     accountA = joined.loyaltyAccount.id;
@@ -501,7 +502,7 @@ describe.skipIf(!databaseUrl)('CASHIER-AUTH-02C in-session branch switching (rea
       const sessionId = (await liveSessions(u.id))[0].session_id as string;
       expect((await switchTo(s.refreshToken, a2)).status).toBe(200);
       const key = `stale-guard-${run}`;
-      await expect(new LoyaltyAccountService(db).recordPurchase({
+      await expect(new LoyaltyAccountService(appDbOf(db)).recordPurchase({
         businessId: bizA, branchId: a1, accountId: accountA, purchaseAmount: 10, idempotencyKey: key, channel: 'other', staffUserId: u.id,
         cashierSession: { userId: u.id, sessionId, branchId: a1 },
       })).rejects.toMatchObject({ code: 'CASHIER_SESSION_CHANGED', status: 409 });
@@ -557,7 +558,7 @@ describe.skipIf(!databaseUrl)('CASHIER-AUTH-02C in-session branch switching (rea
       // the in-transaction guard also protects a confirmation that raced a switch
       const stale = await q(`SELECT id FROM users WHERE id = $1`, [u.id]);
       expect(stale).toHaveLength(1);
-      await expect(new LoyaltyRedemptionService(db).confirmRedemption(bizA, 'ZZZZZZZZ', a1, {
+      await expect(new LoyaltyRedemptionService(appDbOf(db)).confirmRedemption(bizA, 'ZZZZZZZZ', a1, {
         userId: u.id, sessionId: (await q(`SELECT session_id FROM refresh_tokens WHERE user_id = $1 ORDER BY issued_at ASC LIMIT 1`, [u.id]))[0].session_id, branchId: a1,
       })).rejects.toMatchObject({ code: 'CASHIER_SESSION_CHANGED' });
     });

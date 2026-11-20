@@ -14,6 +14,7 @@ import { createRepositories } from '../../src/repositories';
 import { CustomerCredentialRepository } from '../../src/repositories/customer-credential.repository';
 import { errorHandler } from '../../src/lib/error-handler';
 import { createFlagAwareCustomerAuthenticate } from '../../src/middleware/customer-authenticate';
+import { appDbOf } from '../helpers/runtime-db';
 
 /**
  * CUSTOMER-AUTH-S5-02 against real Postgres: rotating sessions are accepted beside the legacy 90-day token, a session is
@@ -72,7 +73,7 @@ describe.skipIf(!process.env.DATABASE_URL)('Rotating customer sessions in the cu
     } as unknown as Bindings;
     const resolved = resolveEmailAuthConfig(env);
     if (!resolved.ok) throw new Error(`test config invalid: ${resolved.missing.join(', ')}`);
-    sessions = new CustomerSessionService(db, resolved.config.session);
+    sessions = new CustomerSessionService(appDbOf(db), resolved.config.session);
     loginDeps = createEmailAuthDependencies(resolved.config, {
       withDb: (fn) => fn(db),
       hasher: createDirectPbkdf2Worker(),
@@ -91,7 +92,7 @@ describe.skipIf(!process.env.DATABASE_URL)('Rotating customer sessions in the cu
     };
     app = build(sessions);
     // The legacy kill switch (KS-2) off: sessions still work, legacy tokens do not.
-    appLegacyOff = build(new CustomerSessionService(db, { ...resolved.config.session, legacyAccepted: () => false }));
+    appLegacyOff = build(new CustomerSessionService(appDbOf(db), { ...resolved.config.session, legacyAccepted: () => false }));
   });
   afterAll(async () => {
     await client.end();

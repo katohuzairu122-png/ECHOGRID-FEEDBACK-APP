@@ -21,6 +21,7 @@ import {
   CustomerPasswordAuthService,
   type VerifiedPhoneProof,
 } from '../../src/customer-auth/customer-password-auth.service';
+import { appDbOf } from '../helpers/runtime-db';
 
 /**
  * CUSTOMER-AUTH-01D-4a: password registration, sign-in, recovery, enrollment and
@@ -58,7 +59,7 @@ describe.skipIf(!process.env.DATABASE_URL)('customer password auth (integration)
 
   const build = (c: Client) => {
     const db = buildDb(c);
-    const sessions = new CustomerSessionService(db, {
+    const sessions = new CustomerSessionService(appDbOf(db), {
       sessionSigningSecret: SESSION_SECRET,
       legacySigningSecret: LEGACY_SECRET,
       legacyAccepted: () => true,
@@ -69,7 +70,7 @@ describe.skipIf(!process.env.DATABASE_URL)('customer password auth (integration)
       stepUpWindowSeconds: 300,
       now: () => new Date(clockMs),
     });
-    const auth = new CustomerPasswordAuthService(db, sessions, countingHasher(), {
+    const auth = new CustomerPasswordAuthService(appDbOf(db), sessions, countingHasher(), {
       passwordMinLength: 10,
       phoneProofMaxAgeSeconds: 300,
       passwordIterations: 1000,
@@ -123,7 +124,7 @@ describe.skipIf(!process.env.DATABASE_URL)('customer password auth (integration)
     it('refuses to invent the owner-decided values', () => {
       const db = buildDb(client);
       const mk = (over: object) => () =>
-        new CustomerPasswordAuthService(db, a.sessions, countingHasher(), {
+        new CustomerPasswordAuthService(appDbOf(db), a.sessions, countingHasher(), {
           passwordMinLength: 10,
           phoneProofMaxAgeSeconds: 300,
           ...over,

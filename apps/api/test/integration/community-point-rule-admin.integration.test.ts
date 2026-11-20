@@ -3,6 +3,7 @@ import { Client } from 'pg';
 import { buildDb } from '../../src/db/client';
 import { createRepositories } from '../../src/repositories';
 import { CommunityPointRuleAdminService } from '../../src/community/community-point-rule-admin.service';
+import { appDbOf } from '../helpers/runtime-db';
 
 describe.skipIf(!process.env.DATABASE_URL)(
   'Split 05 Community Point rule administration (integration)',
@@ -70,7 +71,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
     });
 
     it('allocates versions, enforces one active rule per scope, and audits lifecycle changes', async () => {
-      const service = new CommunityPointRuleAdminService(db);
+      const service = new CommunityPointRuleAdminService(appDbOf(db));
 
       const v1 = await service.create(
         {
@@ -162,7 +163,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
       );
 
       await expect(
-        new CommunityPointRuleAdminService(db).create(
+        new CommunityPointRuleAdminService(appDbOf(db)).create(
           {
             sourceType: 'survey_completion',
             resourceType: 'survey_campaign',

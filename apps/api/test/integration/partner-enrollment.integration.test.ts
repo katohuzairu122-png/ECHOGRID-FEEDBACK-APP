@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { Client } from 'pg';
 import { buildDb } from '../../src/db/client';
 import { PartnerEnrollmentService } from '../../src/partner-credits/partner-enrollment.service';
+import { appDbOf } from '../helpers/runtime-db';
 
 describe.skipIf(!process.env.DATABASE_URL)('Split 07 Block 2 enrollment authority (PostgreSQL)', () => {
   let client: Client;
@@ -11,7 +12,7 @@ describe.skipIf(!process.env.DATABASE_URL)('Split 07 Block 2 enrollment authorit
   beforeAll(async () => {
     client = new Client({ connectionString: process.env.DATABASE_URL });
     await client.connect();
-    service = new PartnerEnrollmentService(buildDb(client));
+    service = new PartnerEnrollmentService(appDbOf(buildDb(client)));
     const suffix = crypto.randomUUID();
     const b = await client.query<{id:string}>('INSERT INTO businesses(name,slug) VALUES($1,$2) RETURNING id', ['Partner Enrollment Neg Test', 's07-enrollment-'+suffix]);
     businessId = b.rows[0]!.id;

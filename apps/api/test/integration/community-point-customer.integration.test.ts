@@ -4,6 +4,7 @@ import { buildDb } from '../../src/db/client';
 import { createRepositories } from '../../src/repositories';
 import { CommunityMembershipService } from '../../src/community/community-membership.service';
 import { CommunityPointCustomerService } from '../../src/community/community-point-customer.service';
+import { appDbOf } from '../helpers/runtime-db';
 
 describe.skipIf(!process.env.DATABASE_URL)(
   'Split 05 Community Point customer reads (integration)',
@@ -30,11 +31,11 @@ describe.skipIf(!process.env.DATABASE_URL)(
       customerAId = customerA.id;
       customerBId = customerB.id;
 
-      const joinedA = await new CommunityMembershipService(db).join(
+      const joinedA = await new CommunityMembershipService(appDbOf(db)).join(
         customerAId,
         'community-policy-v1',
       );
-      const joinedB = await new CommunityMembershipService(db).join(
+      const joinedB = await new CommunityMembershipService(appDbOf(db)).join(
         customerBId,
         'community-policy-v1',
       );
@@ -69,7 +70,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
     });
 
     it('returns only the requested global customer account and ledger history', async () => {
-      const service = new CommunityPointCustomerService(db);
+      const service = new CommunityPointCustomerService(appDbOf(db));
 
       const summaryA = await service.getSummary(customerAId);
       const summaryB = await service.getSummary(customerBId);
@@ -97,9 +98,9 @@ describe.skipIf(!process.env.DATABASE_URL)(
     });
 
     it('keeps a closed account and its history readable after Community leave', async () => {
-      await new CommunityMembershipService(db).leave(customerAId);
+      await new CommunityMembershipService(appDbOf(db)).leave(customerAId);
 
-      const service = new CommunityPointCustomerService(db);
+      const service = new CommunityPointCustomerService(appDbOf(db));
       const summary = await service.getSummary(customerAId);
       const history = await service.listTransactions(customerAId, {
         limit: 100,
@@ -118,7 +119,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         phoneVerifiedAt: new Date(),
       });
 
-      const service = new CommunityPointCustomerService(db);
+      const service = new CommunityPointCustomerService(appDbOf(db));
       expect(await service.getSummary(customer.id)).toEqual({ account: null });
       expect(
         await service.listTransactions(customer.id, { limit: 100, offset: 0 }),

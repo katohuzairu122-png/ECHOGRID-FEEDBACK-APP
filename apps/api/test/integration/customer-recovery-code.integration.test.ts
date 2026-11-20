@@ -7,6 +7,7 @@ import { CustomerSessionService } from '../../src/customer-auth/customer-session
 import { CustomerPasswordAuthService, type VerifiedPhoneProof } from '../../src/customer-auth/customer-password-auth.service';
 import { createCustomerRecoveryCodeService } from '../../src/customer-auth/customer-recovery-code.service';
 import { normalizeRecoveryCode } from '../../src/customer-auth/customer-recovery-code';
+import { appDbOf } from '../helpers/runtime-db';
 
 /**
  * CUSTOMER-AUTH-S4-01 recovery-code foundation against REAL Postgres. Internal
@@ -26,14 +27,14 @@ describe.skipIf(!process.env.DATABASE_URL)('customer recovery codes (integration
 
   const build = (c: Client) => {
     const db = buildDb(c);
-    const sessions = new CustomerSessionService(db, {
+    const sessions = new CustomerSessionService(appDbOf(db), {
       sessionSigningSecret: 'integration-session-secret-not-for-production',
       legacySigningSecret: 'integration-legacy-secret-not-for-production',
       legacyAccepted: () => true, accessTtlSeconds: 900, refreshTtlSeconds: 30 * 86400,
       absoluteTtlSeconds: 30 * 86400, idleTtlSeconds: 7 * 86400, stepUpWindowSeconds: 300,
       now: () => new Date(clockMs),
     });
-    const auth = new CustomerPasswordAuthService(db, sessions, createDirectPbkdf2Worker(), {
+    const auth = new CustomerPasswordAuthService(appDbOf(db), sessions, createDirectPbkdf2Worker(), {
       passwordMinLength: 10, phoneProofMaxAgeSeconds: 300, passwordIterations: 1000, now: () => new Date(clockMs),
     });
     const codes = createCustomerRecoveryCodeService({
