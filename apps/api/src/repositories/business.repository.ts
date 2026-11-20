@@ -1,5 +1,5 @@
 import { eq, and, or, ilike, sql } from 'drizzle-orm';
-import { businesses } from '../db/schema';
+import { businesses, qrCodes } from '../db/schema';
 import { BaseRepository } from './base.repository';
 import type { Patch } from '../lib/types';
 
@@ -67,6 +67,32 @@ export class BusinessRepository extends BaseRepository {
       offset,
       orderBy: (b, { desc }) => [desc(b.createdAt)],
     });
+  }
+
+  /**
+   * LANDING-ROLE-01: the names a prospective loyalty customer may pick from. NAME ONLY (no id, slug, address, owner or contact), for
+   * businesses that are active, not deleted and already have an active loyalty QR code (their name is shown on that QR page anyway).
+   * Optional case-insensitive substring filter; the limit is capped so the public endpoint stays cheap.
+   */
+  async listNamesForCustomerDirectory(options: { search?: string | undefined; limit?: number | undefined } = {}): Promise<string[]> {
+    const limit = Math.min(Math.max(options.limit ?? 100, 1), 100);
+    const term = options.search?.trim();
+    const pattern = term ? `%${term.replace(/[\\%_]/g, (ch) => `\\${ch}`)}%` : undefined;
+    const rows = await this.db
+      .selectDistinct({ name: businesses.name })
+      .from(businesses)
+      .innerJoin(qrCodes, eq(qrCodes.businessId, businesses.id))
+      .where(
+        and(
+          eq(businesses.isDeleted, false),
+          eq(businesses.status, 'active'),
+          eq(qrCodes.status, 'active'),
+          pattern ? ilike(businesses.name, pattern) : undefined,
+        ),
+      )
+      .orderBy(businesses.name)
+      .limit(limit);
+    return rows.map((row) => row.name);
   }
 
   /**

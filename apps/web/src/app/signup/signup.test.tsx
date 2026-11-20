@@ -1,7 +1,7 @@
 import { screen } from '@testing-library/react';
 import { expect, it, vi } from 'vitest';
 import { renderWithIntl } from '@/test-utils';
-import SignupPage from './page';
+import { SignupForm as SignupPage } from './signup-form';
 
 vi.mock('@/lib/actions/auth', () => ({ signupAction: vi.fn() }));
 

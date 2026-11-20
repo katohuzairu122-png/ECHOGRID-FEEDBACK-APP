@@ -557,6 +557,22 @@
       "genericError": "Une erreur s'est produite. Veuillez réessayer.",
       "phoneRequired": "Pour rejoindre un autre commerce, vérifiez d'abord votre numéro de téléphone.",
       "verifyPhone": "Vérifier mon téléphone"
+    },
+    "joinHub": {
+      "title": "Rejoindre en tant que client fidélité",
+      "description": "Rejoignez le programme de fidélité de toute entreprise inscrite sur Echo Grid. Vous rejoignez une entreprise en scannant son code QR.",
+      "scanTitle": "Scannez le code QR d'une entreprise",
+      "scanBody": "Ouvrez l'appareil photo de votre téléphone et pointez-le vers le code QR Echo Grid de l'entreprise. Le lien s'ouvre ici et vous créerez ou ouvrirez votre compte client.",
+      "findTitle": "Ou trouvez une entreprise inscrite",
+      "selectLabel": "Entreprises inscrites",
+      "selectPlaceholder": "Choisissez une entreprise…",
+      "empty": "Aucune entreprise à choisir pour le moment. Scannez plutôt le code QR d'une entreprise.",
+      "loadError": "Nous n'avons pas pu charger la liste pour le moment. Vous pouvez toujours scanner le code QR d'une entreprise.",
+      "chosenTitle": "Rejoindre {name}",
+      "chosenBody": "Scannez le code QR Echo Grid chez {name} ou demandez-le. Créez ou ouvrez votre compte client dès maintenant pour être prêt.",
+      "accountCta": "Créer ou ouvrir mon compte client",
+      "accountNote": "Vous vérifierez votre téléphone avec un code à usage unique.",
+      "back": "Retour au choix de participation"
     }
   }
 }

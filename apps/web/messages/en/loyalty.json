@@ -557,6 +557,22 @@
       "genericError": "Something went wrong. Please try again.",
       "phoneRequired": "To join another business, verify your phone number first.",
       "verifyPhone": "Verify my phone"
+    },
+    "joinHub": {
+      "title": "Join as a loyalty customer",
+      "description": "Join the loyalty program of any business registered with Echo Grid. You join a business by scanning its QR code.",
+      "scanTitle": "Scan a business QR code",
+      "scanBody": "Open your phone's camera and point it at the business's Echo Grid QR code. The link opens here and you'll create or open your customer account.",
+      "findTitle": "Or find a registered business",
+      "selectLabel": "Registered businesses",
+      "selectPlaceholder": "Choose a business…",
+      "empty": "No businesses are available to choose yet. Scan a business's QR code instead.",
+      "loadError": "We couldn't load the list right now. You can still scan a business's QR code.",
+      "chosenTitle": "Join {name}",
+      "chosenBody": "Scan the Echo Grid QR code at {name}, or ask them for it. Create or open your customer account now so you're ready.",
+      "accountCta": "Create or open my customer account",
+      "accountNote": "You'll verify your phone with a one-time code.",
+      "back": "Back to choose how to participate"
     }
   }
 }
