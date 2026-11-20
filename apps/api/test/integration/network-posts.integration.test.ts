@@ -268,6 +268,41 @@ describe.skipIf(!process.env.DATABASE_URL)('network official posts (integration)
       expect(bodies).toHaveLength(5);
     });
 
+    it('does not lose posts when publication times share a millisecond or the exact microsecond', async () => {
+      await client.query("UPDATE network_posts SET state='withdrawn' WHERE state IN ('published','suspended')");
+      const posts = [];
+      for (let i = 0; i < 6; i++) {
+        const { post } = await publish(`Precise page ${i}`);
+        posts.push(post);
+        // PostgreSQL now() retains microseconds; JS Date does not. Two pairs also
+        // have exactly equal times, so the existing UUID tie-break must survive.
+        await client.query('UPDATE network_posts SET published_at=$2::timestamptz WHERE id=$1', [
+          post.id, `2026-01-01T12:00:00.${i < 3 ? '123456' : '123789'}Z`,
+        ]);
+      }
+      await service.pin(posts[0]!.id);
+      const expected = (await client.query<{ handle: string }>(
+        'SELECT handle FROM network_posts WHERE state=\'published\' ORDER BY pinned DESC, published_at DESC, id DESC',
+      )).rows.map((row) => row.handle);
+      const seen: string[] = [];
+      let cursor: string | null = null;
+      for (let i = 0; i < 10; i++) {
+        const page = await feed.listVisible({ customerId: customer, cursor, limit: 1 });
+        seen.push(...page.items.map((item) => item.handle));
+        if (!page.nextCursor) break;
+        cursor = page.nextCursor;
+      }
+      expect(seen).toEqual(expected);
+      expect(new Set(seen).size).toBe(posts.length);
+    });
+
+    it('refuses malformed cursor UUIDs without sending them to PostgreSQL', async () => {
+      const cursor = btoa(JSON.stringify({ p: 0, t: '2026-01-01T12:00:00.123Z', i: '-'.repeat(36) }))
+        .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+      await expect(feed.listVisible({ customerId: customer, cursor, limit: 2 }))
+        .resolves.toEqual({ items: [], nextCursor: null });
+    });
+
     it('exposes only the closed DTO: no internal ids, author, reviewers or moderation data', async () => {
       const [item] = await visible(1);
       expect(Object.keys(item!).sort()).toEqual(['body', 'businessName', 'contentClass', 'contentLocale', 'handle', 'linkUrl', 'publishedAt']);
