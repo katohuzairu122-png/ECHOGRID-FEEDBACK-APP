@@ -3,6 +3,7 @@ import { Client } from 'pg';
 import { buildDb } from '../../src/db/client';
 import { createRepositories } from '../../src/repositories';
 import { FeedbackService } from '../../src/feedback/feedback.service';
+import { appDbOf } from '../helpers/runtime-db';
 
 /**
  * Verifies that a feedback row and its critical_incidents row are written
@@ -56,7 +57,7 @@ describe.skipIf(!process.env.DATABASE_URL)('critical-incident write atomicity (i
   beforeAll(async () => {
     client = new Client({ connectionString: process.env.DATABASE_URL });
     await client.connect();
-    db = buildDb(client);
+    db = appDbOf(buildDb(client));
     repos = createRepositories(db);
 
     const business = await repos.businesses.create({

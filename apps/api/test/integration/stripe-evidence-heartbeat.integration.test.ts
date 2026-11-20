@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { Client } from 'pg';
 import { createHash, randomBytes } from 'node:crypto';
 import { buildDb, type Database } from '../../src/db/client';
+import { appDbOf } from '../helpers/runtime-db';
 import {
   cohortOf, writeHeartbeat, recordModeChange, materializeUcw, loadStreamEvents, deriveUcw, evaluateWatchdog, coverageStateAt, coverageReport,
   heartbeatKey, SLOT_SECONDS, slotOf, type CaptureEnv,
@@ -24,7 +25,7 @@ describe.skipIf(!process.env.DATABASE_URL)('heartbeat, UCW materialization and w
     const c = new Client({ connectionString: process.env.DATABASE_URL });
     await c.connect();
     clients.push(c);
-    return buildDb(c);
+    return appDbOf(buildDb(c));
   };
   beforeAll(async () => { q = new Client({ connectionString: process.env.DATABASE_URL }); await q.connect(); });
   afterAll(async () => { await q.end(); await Promise.all(clients.map(c => c.end().catch(() => undefined))); });
