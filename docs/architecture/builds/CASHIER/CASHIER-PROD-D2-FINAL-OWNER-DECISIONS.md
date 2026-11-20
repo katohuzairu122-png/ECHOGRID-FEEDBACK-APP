@@ -23,10 +23,10 @@
 
 | ID | Decision | Notes |
 |---|---|---|
-| D1 | Client attribution secret configured on API, web and cashier Workers | open |
+| D1 | Client attribution secret configured on API, web and cashier Workers | open. Secret name `CLIENT_ATTRIBUTION_SECRET`, identical value on the API, web **and cashier** Workers (web first, then API; optional `CLIENT_ATTRIBUTION_SECRET_PREVIOUS` on the API for rotation). Presence NOT VERIFIED; values are never read: verify names with `wrangler secret list --name <worker>` |
 | D2 | Retention and erasure approval | the technical foundation is delivered; R1-R8 above are what remain |
-| D3 | Cashier lockout pilot | open |
-| D6 | Production release bundle | now **0080-0086, ledger 87** if both PRs merge; D6 was framed for 0080-0083 and must be re-ruled |
+| D3 | Cashier lockout pilot | open. Policy as built: 5 failures in 15 min lock the identity for 15 min; an admin reset clears it. Proposed 7-day pilot acceptance (P1 record section 8): one dedicated test cashier, one branch, no real customers; Owner tests the reset path once first; daily read-only check of `users.locked_until` and `auth.cashier_login` failure counts; strict-limiter 429s watched in API logs; exit criteria and incident steps as written there. Accept, amend or defer |
+| D6 | Production release bundle | now **0080-0086, ledger 87** once the D2 PR merges to `main` (0086 is NOT on `main` today: #539 merged into the stale R8-G branch); the application delta also includes the R8-G test/provisioning files (no runtime change), the opt-in analytics privacy route, the staging SMS log masking and #540 (Community feed cursor). D6 was framed for 0080-0083 and must be re-ruled |
 | P3 | Production migration | **not authorized**; needs a re-prepared plan, a valid snapshot and green exact-head CI |
 | Backups | Retention/deletion of the recovery branch and snapshot; an out-of-band ledger of completed erasure references to re-apply after any restore | see section 9 of the D2-FINAL record; not executed |
 
