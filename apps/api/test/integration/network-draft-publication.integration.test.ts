@@ -1357,4 +1357,61 @@ describe.skipIf(!process.env.DATABASE_URL)('NETWORK-05 real HTTP-to-Postgres lif
     },
     120000,
   );
+
+  it.skipIf(!browserEnabled)(
+    'browser preserves precise Feed pagination at mobile and desktop widths (NETWORK-12)',
+    async () =>
+      withModerationBrowser(moderatorB, async (page, context, webUrl, browserExpect) => {
+        await context.addCookies([
+          { name: 'ff_customer_token', value: customerToken, url: webUrl, httpOnly: true },
+        ]);
+        expect((await client.query('SELECT handle FROM network_posts WHERE pinned')).rows)
+          .toHaveLength(0);
+        const handles: string[] = [];
+        for (let i = 0; i < 21; i++) {
+          const draft = await prepareSubmitted(`NETWORK-12 precise pagination ${i}`);
+          await action(moderatorA, `/revisions/${draft.revisionId}/approve`);
+          await action(moderatorB, `/revisions/${draft.revisionId}/approve`);
+          handles.push(draft.handle);
+        }
+        // Synthetic fixture only: all posts share an exact PostgreSQL microsecond,
+        // exercising both timestamp precision and the existing UUID tie-break.
+        const time = (await client.query<{ t: string }>(`
+          SELECT to_char((date_trunc('milliseconds', now()) + interval '456 microseconds')
+            AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS t
+        `)).rows[0]!.t;
+        await client.query(
+          'UPDATE network_posts SET published_at=$1::timestamptz WHERE handle=ANY($2::text[])',
+          [time, handles],
+        );
+        const expected = (await client.query<{ body: string }>(`
+          SELECT r.body FROM network_posts p
+          JOIN network_post_revisions r ON r.id=p.live_revision_id
+          WHERE p.handle=ANY($1::text[]) ORDER BY p.published_at DESC, p.id DESC
+        `, [handles])).rows.map((row) => row.body);
+        for (const width of [375, 1280]) {
+          await page.setViewportSize({ width, height: 900 });
+          await page.goto(webUrl + '/loyalty/dashboard/community/feed');
+          const bodies = page.locator('section[aria-labelledby="community-feed-title"] article p');
+          await browserExpect(bodies).toHaveCount(20);
+          await browserExpect(bodies).toHaveText(expected.slice(0, 20));
+          expect(await page.locator('html').evaluate((element: { scrollWidth: number }) => element.scrollWidth))
+            .toBeLessThanOrEqual(width);
+          const more = page.getByRole('link', { name: 'Load more', exact: true });
+          await more.focus();
+          await browserExpect(more).toBeFocused();
+          expect((await more.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+          await more.click();
+          await browserExpect(page).toHaveURL(/cursor=/);
+          await browserExpect(page.getByText(expected[20]!, { exact: true })).toBeVisible();
+          const remaining = await bodies.allTextContents();
+          expect(remaining.filter((body) => body.startsWith('NETWORK-12 precise pagination')))
+            .toEqual(expected.slice(20));
+          await page.getByRole('link', { name: 'Latest updates', exact: true }).click();
+          await browserExpect(bodies).toHaveCount(20);
+          await browserExpect(bodies).toHaveText(expected.slice(0, 20));
+        }
+      }),
+    120000,
+  );
 });

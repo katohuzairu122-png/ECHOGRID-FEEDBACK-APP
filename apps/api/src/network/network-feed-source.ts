@@ -2,6 +2,7 @@ import { and, desc, eq, gt, lt, or, sql } from 'drizzle-orm';
 import type { Database } from '../db/client';
 import { networkPosts, networkPostRevisions } from '../db/schema/network-posts';
 import type { FeedItemDto, FeedListInput, FeedPageDto, FeedSource } from '../community/community-feed';
+import { isUuid } from '../lib/uuid';
 
 /**
  * The restricted, read-only FeedSource over `network_*` (NETWORK-00 section 4 visibility predicate, official posts):
@@ -13,6 +14,10 @@ const CURSOR = /^[A-Za-z0-9_-]{1,200}$/;
 
 type Position = { p: 0 | 1; t: string; i: string };
 
+// Existing cursors contain ISO milliseconds; new ones retain PostgreSQL's six
+// fractional digits. Never let Date normalize invalid dates into SQL inputs.
+const CURSOR_TIME = /^(?!0000)\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}(?:\d{3})?Z$/;
+
 export function encodeFeedCursor(pos: Position): string {
   return btoa(JSON.stringify(pos)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
@@ -22,8 +27,11 @@ export function decodeFeedCursor(cursor: string): Position | null {
   try {
     const padded = cursor.replace(/-/g, '+').replace(/_/g, '/');
     const value = JSON.parse(atob(padded.padEnd(Math.ceil(padded.length / 4) * 4, '='))) as Partial<Position>;
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
     if ((value.p !== 0 && value.p !== 1) || typeof value.t !== 'string' || typeof value.i !== 'string') return null;
-    if (Number.isNaN(Date.parse(value.t)) || !/^[0-9a-f-]{36}$/.test(value.i)) return null;
+    if (!CURSOR_TIME.test(value.t) || !isUuid(value.i)) return null;
+    const time = new Date(value.t);
+    if (Number.isNaN(time.getTime()) || time.toISOString() !== `${value.t.slice(0, 23)}Z`) return null;
     return { p: value.p, t: value.t, i: value.i };
   } catch {
     return null;
@@ -48,8 +56,8 @@ export function createNetworkFeedSource(db: Database): FeedSource {
             and(
               sql`${pinnedRank} = ${position.p}`,
               or(
-                lt(networkPosts.publishedAt, new Date(position.t)),
-                and(eq(networkPosts.publishedAt, new Date(position.t)), lt(networkPosts.id, position.i)),
+                sql`${networkPosts.publishedAt} < ${position.t}::timestamptz`,
+                and(sql`${networkPosts.publishedAt} = ${position.t}::timestamptz`, lt(networkPosts.id, position.i)),
               ),
             ),
           )
@@ -60,6 +68,9 @@ export function createNetworkFeedSource(db: Database): FeedSource {
         handle: networkPosts.handle,
         pinned: networkPosts.pinned,
         publishedAt: networkPosts.publishedAt,
+        // Keep this internal cursor value out of the customer item DTO. JS Date
+        // truncates microseconds and cannot represent the keyset boundary.
+        cursorTime: sql<string>`to_char(${networkPosts.publishedAt} AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')`,
         body: networkPostRevisions.body,
         linkUrl: networkPostRevisions.linkUrl,
         contentLocale: networkPostRevisions.contentLocale,
@@ -82,7 +93,7 @@ export function createNetworkFeedSource(db: Database): FeedSource {
       }));
       const last = page[page.length - 1];
       const nextCursor = rows.length > input.limit && last
-        ? encodeFeedCursor({ p: last.pinned ? 1 : 0, t: last.publishedAt!.toISOString(), i: last.id })
+        ? encodeFeedCursor({ p: last.pinned ? 1 : 0, t: last.cursorTime, i: last.id })
         : null;
       return { items, nextCursor };
     },
