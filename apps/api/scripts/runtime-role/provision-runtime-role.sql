@@ -14,7 +14,15 @@ BEGIN
   END IF;
 END
 $$;
-ALTER ROLE echogrid_app_runtime NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS;
+-- A non-superuser owner (the production migrator) may not run ALTER ROLE with NOSUPERUSER / NOBYPASSRLS / NOREPLICATION even to restate a value, so
+-- the attributes are VERIFIED, not altered: a pre-existing role with any dangerous attribute stops the script.
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'echogrid_app_runtime' AND (rolsuper OR rolbypassrls OR rolcreaterole OR rolcreatedb OR rolreplication OR rolcanlogin)) THEN
+    RAISE EXCEPTION 'R8G: role echogrid_app_runtime exists with unsafe attributes (superuser, BYPASSRLS, CREATEROLE, CREATEDB, REPLICATION or LOGIN); refusing to continue';
+  END IF;
+END
+$$;
 
 -- No ownership and no object creation: usage only.
 REVOKE ALL ON SCHEMA public FROM echogrid_app_runtime;
