@@ -1364,11 +1364,8 @@ describe.skipIf(!process.env.DATABASE_URL)('NETWORK-05 real HTTP-to-Postgres lif
         await context.addCookies([
           { name: 'ff_customer_token', value: customerToken, url: webUrl, httpOnly: true },
         ]);
-        for (const row of (await client.query<{ handle: string }>(
-          'SELECT handle FROM network_posts WHERE pinned',
-        )).rows) {
-          await action(moderatorB, `/posts/${row.handle}/unpin`);
-        }
+        expect((await client.query('SELECT handle FROM network_posts WHERE pinned')).rows)
+          .toHaveLength(0);
         const handles: string[] = [];
         for (let i = 0; i < 21; i++) {
           const draft = await prepareSubmitted(`NETWORK-12 precise pagination ${i}`);
@@ -1396,7 +1393,7 @@ describe.skipIf(!process.env.DATABASE_URL)('NETWORK-05 real HTTP-to-Postgres lif
           await page.goto(webUrl + '/loyalty/dashboard/community/feed');
           const bodies = page.locator('section[aria-labelledby="community-feed-title"] article p');
           await browserExpect(bodies).toHaveCount(20);
-          expect(await bodies.allTextContents()).toEqual(expected.slice(0, 20));
+          await browserExpect(bodies).toHaveText(expected.slice(0, 20));
           expect(await page.locator('html').evaluate((element: { scrollWidth: number }) => element.scrollWidth))
             .toBeLessThanOrEqual(width);
           const more = page.getByRole('link', { name: 'Load more', exact: true });
@@ -1411,7 +1408,7 @@ describe.skipIf(!process.env.DATABASE_URL)('NETWORK-05 real HTTP-to-Postgres lif
             .toEqual(expected.slice(20));
           await page.getByRole('link', { name: 'Latest updates', exact: true }).click();
           await browserExpect(bodies).toHaveCount(20);
-          expect(await bodies.allTextContents()).toEqual(expected.slice(0, 20));
+          await browserExpect(bodies).toHaveText(expected.slice(0, 20));
         }
       }),
     120000,

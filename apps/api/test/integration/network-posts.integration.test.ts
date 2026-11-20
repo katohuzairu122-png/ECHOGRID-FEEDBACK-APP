@@ -281,19 +281,23 @@ describe.skipIf(!process.env.DATABASE_URL)('network official posts (integration)
         ]);
       }
       await service.pin(posts[0]!.id);
-      const expected = (await client.query<{ handle: string }>(
-        'SELECT handle FROM network_posts WHERE state=\'published\' ORDER BY pinned DESC, published_at DESC, id DESC',
-      )).rows.map((row) => row.handle);
-      const seen: string[] = [];
-      let cursor: string | null = null;
-      for (let i = 0; i < 10; i++) {
-        const page = await feed.listVisible({ customerId: customer, cursor, limit: 1 });
-        seen.push(...page.items.map((item) => item.handle));
-        if (!page.nextCursor) break;
-        cursor = page.nextCursor;
+      try {
+        const expected = (await client.query<{ handle: string }>(
+          'SELECT handle FROM network_posts WHERE state=\'published\' ORDER BY pinned DESC, published_at DESC, id DESC',
+        )).rows.map((row) => row.handle);
+        const seen: string[] = [];
+        let cursor: string | null = null;
+        for (let i = 0; i < 10; i++) {
+          const page = await feed.listVisible({ customerId: customer, cursor, limit: 1 });
+          seen.push(...page.items.map((item) => item.handle));
+          if (!page.nextCursor) break;
+          cursor = page.nextCursor;
+        }
+        expect(seen).toEqual(expected);
+        expect(new Set(seen).size).toBe(posts.length);
+      } finally {
+        await service.unpin(posts[0]!.id);
       }
-      expect(seen).toEqual(expected);
-      expect(new Set(seen).size).toBe(posts.length);
     });
 
     it('refuses malformed cursor UUIDs without sending them to PostgreSQL', async () => {
