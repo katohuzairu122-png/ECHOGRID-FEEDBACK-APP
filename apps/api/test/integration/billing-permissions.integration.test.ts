@@ -3,6 +3,7 @@ import { Client } from 'pg';
 import { buildDb } from '../../src/db/client';
 import { createRepositories } from '../../src/repositories';
 import { RoleProvisioningService } from '../../src/rbac/role-provisioning.service';
+import { appDbOf } from '../helpers/runtime-db';
 
 type RoleName = 'Owner' | 'Admin' | 'Manager' | 'Staff';
 const ROLE_NAMES: RoleName[] = ['Owner', 'Admin', 'Manager', 'Staff'];
@@ -32,7 +33,7 @@ describe.skipIf(!process.env.DATABASE_URL)('billing permission resolution (integ
   beforeAll(async () => {
     client = new Client({ connectionString: process.env.DATABASE_URL });
     await client.connect();
-    repos = createRepositories(buildDb(client));
+    repos = createRepositories(appDbOf(buildDb(client)));
 
     const business = await repos.businesses.create({
       name: 'Billing Permission Test Business',

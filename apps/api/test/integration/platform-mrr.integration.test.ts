@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import { Client } from 'pg';
 import { buildDb } from '../../src/db/client';
 import { createRepositories } from '../../src/repositories';
+import { appDbOf } from '../helpers/runtime-db';
 
 /**
  * BusinessSubscriptionRepository.calculateMrr against real Postgres
@@ -48,7 +49,7 @@ describe.skipIf(!process.env.DATABASE_URL)('platform MRR (integration)', () => {
   beforeAll(async () => {
     client = new Client({ connectionString: process.env.DATABASE_URL });
     await client.connect();
-    repos = createRepositories(buildDb(client));
+    repos = createRepositories(appDbOf(buildDb(client)));
   });
 
   afterAll(async () => {
