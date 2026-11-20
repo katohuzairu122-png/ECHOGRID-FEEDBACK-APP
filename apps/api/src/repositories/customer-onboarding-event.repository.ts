@@ -2,6 +2,7 @@ import { and, asc, eq, sql } from 'drizzle-orm';
 import { customerOnboardingEvents } from '../db/schema';
 import type { CustomerOnboardingEvent, NewCustomerOnboardingEvent } from '../db/schema';
 import { BaseRepository } from './base.repository';
+import { applySmallGroupSuppression, type PrivateOnboardingSummary, type SmallGroupPolicy } from '../customer-relationships/onboarding-small-group-privacy';
 
 export type { CustomerOnboardingEvent, NewCustomerOnboardingEvent };
 
@@ -36,6 +37,11 @@ const n = (v: unknown): number => Number(v ?? 0);
  * with two events.
  */
 export class CustomerOnboardingEventRepository extends BaseRepository {
+  /** Same figures as `summarize`, with small groups suppressed under a caller-supplied policy (D2-FINAL). The threshold is an Owner decision (R4). */
+  async summarizeWithPrivacy(filter: OnboardingSummaryFilter, policy: SmallGroupPolicy): Promise<PrivateOnboardingSummary> {
+    return applySmallGroupSuppression(await this.summarize(filter), policy);
+  }
+
   async append(event: NewCustomerOnboardingEvent): Promise<CustomerOnboardingEvent> {
     const [row] = await this.db.insert(customerOnboardingEvents).values(event).returning();
     if (!row) throw new Error('Onboarding event was not recorded');

@@ -188,8 +188,10 @@ export class CustomerMembershipService {
           action: 'customer.onboarded',
           entityType: 'customer_onboarding_event',
           entityId: eventId,
+          // D2-FINAL forward minimization: the audit row names the EVENT (entity_id) but no longer embeds the membership id. The personal link
+          // lives only in the erasable event row, so an erased event cannot be re-linked to a customer through audit metadata. No reader needs it.
           metadata: {
-            source: attribution.source, branchId: attribution.branchId, membershipId: membership.id, rejoin: isRejoin,
+            source: attribution.source, branchId: attribution.branchId, rejoin: isRejoin,
             verificationState,
           },
         });
