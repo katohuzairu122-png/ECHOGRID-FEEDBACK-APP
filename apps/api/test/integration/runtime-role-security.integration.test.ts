@@ -173,7 +173,8 @@ describe.skipIf(!databaseUrl)('R8-G non-owner application runtime role (real Pos
     it('cannot assume the owner, the migrator, the erasure owner or the erasure operator, nor any role', async () => {
       const c = await runtimeClient();
       const owner = (await q(`SELECT tableowner FROM pg_tables WHERE tablename = 'audit_log'`))[0].tableowner as string;
-      for (const role of [owner, 'postgres', 'onboarding_erasure_owner', 'onboarding_erasure_operator', 'settlement_recorder', 'stripe_read_auth_lifecycle', 'signed_evidence_lifecycle']) {
+      const superuser = (await q(`SELECT current_user AS u`))[0].u as string; // CI's superuser is not named postgres
+      for (const role of [owner, superuser, 'onboarding_erasure_owner', 'onboarding_erasure_operator', 'settlement_recorder', 'stripe_read_auth_lifecycle', 'signed_evidence_lifecycle']) {
         expect(await msg(c.query(`SET ROLE "${role}"`)), role).toMatch(/permission denied to set role/i);
       }
       expect(await msg(c.query(`SET SESSION AUTHORIZATION "${owner}"`))).toMatch(/permission denied/i);
@@ -186,7 +187,7 @@ describe.skipIf(!databaseUrl)('R8-G non-owner application runtime role (real Pos
       expect(await msg(c.query(`CREATE ROLE r8g_evil_${run}`))).toMatch(/permission denied/i);
       expect(await msg(c.query(`ALTER ROLE ${LOGIN} SUPERUSER`))).toMatch(/permission denied|must be/i);
       expect(await msg(c.query(`ALTER ROLE ${LOGIN} BYPASSRLS`))).toMatch(/permission denied|must be/i);
-      expect(await msg(c.query(`GRANT postgres TO ${LOGIN}`))).toMatch(/permission denied|must have|grant option|ADMIN/i);
+      expect(await msg(c.query(`GRANT "${(await q(`SELECT current_user AS u`))[0].u}" TO ${LOGIN}`))).toMatch(/permission denied|must have|grant option|ADMIN/i);
       expect(await msg(c.query(`GRANT onboarding_erasure_operator TO ${LOGIN}`))).toMatch(/permission denied|must have|grant option|ADMIN/i);
       // a GRANT without grant option is only a warning in PostgreSQL: the assertion that matters is that nothing was gained
       await msg(c.query(`GRANT ALL ON TABLE audit_log TO ${LOGIN}`));
