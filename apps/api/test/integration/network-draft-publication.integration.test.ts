@@ -1397,7 +1397,7 @@ describe.skipIf(!process.env.DATABASE_URL)('NETWORK-05 real HTTP-to-Postgres lif
           const bodies = page.locator('section[aria-labelledby="community-feed-title"] article p');
           await browserExpect(bodies).toHaveCount(20);
           expect(await bodies.allTextContents()).toEqual(expected.slice(0, 20));
-          expect(await page.evaluate(() => document.documentElement.scrollWidth))
+          expect(await page.locator('html').evaluate((element: { scrollWidth: number }) => element.scrollWidth))
             .toBeLessThanOrEqual(width);
           const more = page.getByRole('link', { name: 'Load more', exact: true });
           await more.focus();
