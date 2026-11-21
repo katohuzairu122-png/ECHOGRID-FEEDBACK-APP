@@ -26,6 +26,17 @@ describe('getCommunityFeed (GET /network/feed only)', () => {
     expect(customer.mock.calls[0]![0]).toBe(`/network/feed?limit=${COMMUNITY_FEED_PAGE_SIZE}&cursor=abc_1`);
   });
 
+  it.each([
+    null,
+    { items: null, nextCursor: null },
+    { items: [], nextCursor: { private: 'not a cursor' } },
+    { items: [{ handle: 'abcdefghijklmnopqrstuv', contentClass: 'official', businessName: null,
+      body: 'Approved update', linkUrl: null, contentLocale: 'en', publishedAt: 'not-a-date' }], nextCursor: null },
+  ])('recovers a malformed success response instead of passing it to rendering: %j', async (payload) => {
+    customer.mockResolvedValue(payload as never);
+    await expect(getCommunityFeed('current_cursor')).resolves.toEqual({ status: 'unavailable' });
+  });
+
   it('maps 403 to forbidden and any other failure to unavailable, never to an empty feed', async () => {
     customer.mockRejectedValueOnce(new ApiError('no', 403, 'FORBIDDEN'));
     expect(await getCommunityFeed()).toEqual({ status: 'forbidden' });
