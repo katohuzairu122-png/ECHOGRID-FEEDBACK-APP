@@ -49,6 +49,7 @@ describe('isolated customer email HTTP', () => {
     expect(emailPasswordLoginSchema.safeParse({ ...loginInput, role: 'staff' }).success).toBe(false);
     expect(emailRegistrationCompleteSchema.safeParse(loginInput).success).toBe(false);
     expect(emailRegistrationRequestSchema.safeParse({ email: address, next: 'https://evil.example' }).success).toBe(false);
+    expect(emailRegistrationRequestSchema.safeParse({ email: address, next: '/loyalty/test\n' }).success).toBe(false);
     expect(emailRegistrationRequestSchema.safeParse({ email: address, next: '/loyalty/invite/token' }).success).toBe(true);
   });
 

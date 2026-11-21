@@ -9,7 +9,8 @@ import type { EmailRegistrationResult } from './customer-email-registration.serv
 const email = z.string().trim().toLowerCase().pipe(z.email().max(254));
 const password = z.string().min(1).max(1024);
 const customerDestination = z.string().max(2048).refine((value) =>
-  value.startsWith('/loyalty/') && !value.startsWith('//') && !value.includes('\\') && !/[\u0000-\u001f]/.test(value),
+  value.startsWith('/loyalty/') && !value.startsWith('//') && !value.includes('\\') &&
+  ![...value].some((character) => character.charCodeAt(0) < 0x20),
 );
 export const emailRegistrationRequestSchema = z.object({ email, next: customerDestination.optional() }).strict();
 export const emailRegistrationCompleteSchema = z.object({
