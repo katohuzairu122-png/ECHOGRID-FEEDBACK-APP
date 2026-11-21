@@ -55,7 +55,7 @@ export type IsolatedEmailAuthDependencies = {
   completeRegistration(input: z.infer<typeof emailRegistrationCompleteSchema>): Promise<EmailRegistrationResult & { session?: IssuedSession }>;
   login(input: z.infer<typeof emailPasswordLoginSchema>): Promise<PasswordLoginResult>;
   changePassword(accessToken: string, input: z.infer<typeof emailPasswordChangeSchema>): Promise<boolean>;
-  requestLink?: (accessToken: string, email: string) => Promise<void>;
+  requestLink?: (accessToken: string, email: string) => Promise<boolean>;
   completeLink?: (accessToken: string, input: { email: string; challengeId: string; proof: string; password: string }) => Promise<boolean>;
   transportSession(session: IssuedSession): Response;
 };
@@ -190,8 +190,7 @@ export function createIsolatedCustomerEmailAuthRoutes(dependencies: IsolatedEmai
     if (!bearer) return invalid();
     // The link service enforces fresh rotating OTP ownership; return a generic acceptance
     // for authenticated requests, including suppressed conflicting-email claims.
-    await dependencies.requestLink(bearer, dto.data.email);
-    return accepted();
+    return await dependencies.requestLink(bearer, dto.data.email) ? accepted() : invalid();
   });
   routes.post(paths.linkComplete, async (c) => {
     const dto = emailLinkCompleteSchema.safeParse(await c.req.json().catch(() => null));
