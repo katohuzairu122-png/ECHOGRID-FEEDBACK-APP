@@ -178,13 +178,14 @@ export function createIsolatedCustomerEmailAuthRoutes(dependencies: IsolatedEmai
     if (!dto.success) return badRequest();
     const decision = await limitEmailAuthRequest(dependencies, c.req.raw, 'login', dto.data.phone);
     if (decision !== 'allowed') return deny(decision);
-    if (!dependencies.legacyOtpSession) return unavailable();
+    if (!dependencies.legacyOtpSession) return Response.json({ error: 'Not Found' }, { status: 404 });
     const session = await dependencies.legacyOtpSession(dto.data.phone, dto.data.code);
     return session ? dependencies.transportSession(session) : invalid();
   });
   routes.post(paths.linkRequest, async (c) => {
     const dto = emailLinkRequestSchema.safeParse(await c.req.json().catch(() => null));
-    if (!dto.success || !dependencies.requestLink) return badRequest();
+    if (!dependencies.requestLink) return Response.json({ error: 'Not Found' }, { status: 404 });
+    if (!dto.success) return badRequest();
     const decision = await limitEmailAuthRequest(dependencies, c.req.raw, 'delivery', dto.data.email);
     if (decision !== 'allowed') return deny(decision);
     const bearer = c.req.header('authorization')?.match(/^Bearer ([^\s]+)$/)?.[1];
@@ -195,7 +196,8 @@ export function createIsolatedCustomerEmailAuthRoutes(dependencies: IsolatedEmai
   });
   routes.post(paths.linkComplete, async (c) => {
     const dto = emailLinkCompleteSchema.safeParse(await c.req.json().catch(() => null));
-    if (!dto.success || !dependencies.completeLink) return badRequest();
+    if (!dependencies.completeLink) return Response.json({ error: 'Not Found' }, { status: 404 });
+    if (!dto.success) return badRequest();
     const decision = await limitEmailAuthRequest(dependencies, c.req.raw, 'login', dto.data.email);
     if (decision !== 'allowed') return deny(decision);
     const bearer = c.req.header('authorization')?.match(/^Bearer ([^\s]+)$/)?.[1];
