@@ -221,6 +221,13 @@ describe('CustomerAuthService', () => {
     expect(await repos.customers.resolveExistingPhoneForCredentialUpgrade(PHONE)).toBeUndefined();
   });
 
+  it('does not reclassify unexpected identity repository failures as an invalid OTP', async () => {
+    const databaseFailure = new Error('synthetic database failure');
+    vi.spyOn(repos.customers, 'resolveExistingPhoneForCredentialUpgrade').mockRejectedValueOnce(databaseFailure);
+
+    await expect(service.completeVerifiedPhoneForRotatingSession(PHONE)).rejects.toBe(databaseFailure);
+  });
+
   it('verifying twice with the same code fails the second time -- a code is single-use', async () => {
     await service.requestOtp(PHONE);
     const code = extractCode(sms.lastMessage!);
