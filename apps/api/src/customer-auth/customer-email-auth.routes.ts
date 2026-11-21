@@ -27,7 +27,7 @@ export const emailRegistrationCompleteSchema = z.object({
 }).strict();
 export const emailPasswordLoginSchema = z.object({ email, password }).strict();
 export const legacyOtpSessionSchema = z.object({
-  phone: z.string().regex(/^+[1-9][0-9]{6,14}$/),
+  phone: z.string().regex(/^\+[1-9][0-9]{6,14}$/),
   code: z.string().min(4).max(10).regex(/^[0-9]+$/),
 }).strict();
 export const emailLinkCompleteSchema = z.object({
