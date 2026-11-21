@@ -31,7 +31,7 @@ function request(fields: Record<string, string>, pendingPhone: string | null = p
 }
 
 describe('loyalty OTP verification route', () => {
-  beforeEach(() => { vi.resetAllMocks(); delete process.env.CUSTOMER_EMAIL_AUTH_ENABLED; });
+  beforeEach(() => { vi.resetAllMocks(); delete process.env.CUSTOMER_EMAIL_AUTH_ENABLED; delete process.env.CUSTOMER_LEGACY_UPGRADE_ENABLED; });
 
   it('verifies the server-bound phone and writes only the login cookie on the QR redirect', async () => {
     vi.mocked(publicApiFetch).mockResolvedValue({ accessToken: 'customer-token' });
@@ -87,6 +87,7 @@ describe('loyalty OTP verification route', () => {
   );
   it('upgrades a fresh phone OTP to a rotating session when email auth is enabled', async () => {
     process.env.CUSTOMER_EMAIL_AUTH_ENABLED = 'true';
+    process.env.CUSTOMER_LEGACY_UPGRADE_ENABLED = 'true';
     vi.mocked(callCustomerAuthApi).mockResolvedValue({
       status: 200,
       body: {
@@ -109,6 +110,7 @@ describe('loyalty OTP verification route', () => {
 
   it('never issues any session after a wrong OTP or malformed rotating-credential reply', async () => {
     process.env.CUSTOMER_EMAIL_AUTH_ENABLED = 'true';
+    process.env.CUSTOMER_LEGACY_UPGRADE_ENABLED = 'true';
     vi.mocked(callCustomerAuthApi).mockResolvedValueOnce({ status: 401, body: null })
       .mockResolvedValueOnce({ status: 200, body: { accessToken: 'partial-only' } });
     const wrong = await POST(request({ code: '000000', next }));
