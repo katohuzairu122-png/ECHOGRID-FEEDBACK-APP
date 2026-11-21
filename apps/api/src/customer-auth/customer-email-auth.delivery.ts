@@ -32,3 +32,24 @@ export function createRegistrationProofDelivery(config: { email: EmailService; w
     });
   };
 }
+
+/** Existing customer identity upgrade: the proof points to Settings, never customer signup. */
+export const EMAIL_LINK_VERIFY_PATH = '/loyalty/dashboard/settings/email/verify';
+
+export function createEmailLinkProofDelivery(config: { email: EmailService; webBaseUrl: string }): RegistrationProofDelivery {
+  return async ({ recipient, challengeId, proof }) => {
+    const link = config.webBaseUrl.replace(/\/+$/, '') + EMAIL_LINK_VERIFY_PATH
+      + '#c=' + encodeURIComponent(challengeId + '.' + proof);
+    await config.email.send({
+      to: recipient,
+      subject: 'Confirm your email to secure your existing Echo Grid account',
+      html:
+        '<div style="font-family:Arial,Helvetica,sans-serif;max-width:520px;margin:0 auto;padding:24px;color:#111827;">'
+        + '<p style="font-size:20px;font-weight:700">Echo Grid</p>'
+        + '<p>Confirm this address to attach email/password sign-in to your existing account. '
+        + 'This proof expires in 15 minutes. Open it on the device where you just verified your phone.</p>'
+        + '<p><a href="' + escapeHtml(link) + '">Confirm my email</a></p>'
+        + '<p>If you did not request this, ignore the email. Never share your verification link.</p></div>',
+    });
+  };
+}
