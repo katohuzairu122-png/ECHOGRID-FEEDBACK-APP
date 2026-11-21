@@ -190,6 +190,37 @@ export class CustomerRepository extends BaseRepository {
     return { customer: winner, created: false };
   }
 
+  /**
+   * An OTP-to-email upgrade is for EXISTING phone-only identities, not new signups.
+   * A phone proof may establish ownership, but it must never create a new customer
+   * through this restricted bridge. A uniquely held old phone-only claim can be
+   * verified in place; an email identity that merely typed the phone is not eligible.
+   */
+  async resolveExistingPhoneForCredentialUpgrade(phone: string): Promise<Customer | undefined> {
+    const verified = await this.findVerifiedByPhone(phone);
+    if (verified) return verified;
+
+    const legacy = await this.soleLegacyPhoneOnlyHolder(phone);
+    if (!legacy) return undefined;
+    try {
+      // The match remains bound to this exact number and unverified state at
+      // UPDATE time. The partial verified-phone unique index arbitrates races.
+      const [claimed] = await this.db.update(customers).set({
+        phoneVerifiedAt: new Date(), updatedAt: new Date(),
+      }).where(and(
+        eq(customers.id, legacy.id), eq(customers.phone, phone),
+        isNull(customers.phoneVerifiedAt), eq(customers.isDeleted, false),
+      )).returning();
+      if (!claimed) return undefined;
+      await this.releaseUnverifiedClaims(phone, claimed.id);
+      return claimed;
+    } catch {
+      // Any uniqueness or concurrent identity conflict fails closed. The
+      // caller must never fall back to createIfAbsent in an upgrade flow.
+      return undefined;
+    }
+  }
+
   /** The only non-deleted UNVERIFIED holder of the number that has no credentials of its own, if exactly one. */
   private async soleLegacyPhoneOnlyHolder(phone: string): Promise<Customer | undefined> {
     const rows = await this.db
