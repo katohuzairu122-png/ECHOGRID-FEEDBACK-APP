@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { z } from 'zod';
 import { logEmailAuthUnavailable } from './customer-email-auth.diagnostics';
+import { CustomerAuthError } from './customer-auth.service';
 import type { IssuedSession } from './customer-session.service';
 import type { PasswordLoginResult } from './customer-password-auth.service';
 import type { EmailRegistrationResult } from './customer-email-registration.service';
@@ -129,6 +130,10 @@ export function createIsolatedCustomerEmailAuthRoutes(dependencies: IsolatedEmai
     onError: () => Response.json({ error: 'Invalid request' }, { status: 413 }),
   }));
   routes.onError((error) => {
+    if (error instanceof CustomerAuthError) {
+      if (error.status === 401) return invalid();
+      if (error.status === 429) return Response.json({ error: 'Too many requests' }, { status: 429 });
+    }
     logEmailAuthUnavailable('unhandled_error', { surface: 'runtime', error });
     return unavailable();
   });
