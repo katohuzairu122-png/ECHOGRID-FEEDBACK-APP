@@ -1,5 +1,6 @@
 import type { PasswordLoginResult } from './customer-password-auth.service';
 import { describe, expect, it, vi } from 'vitest';
+import { CustomerAuthError } from './customer-auth.service';
 import {
   createIsolatedCustomerEmailAuthRoutes,
   customerEmailAuthRoutes,
@@ -200,6 +201,16 @@ describe('legacy phone OTP upgrade HTTP boundaries', () => {
     expect(response.status).toBe(401);
     expect(transportSession).not.toHaveBeenCalled();
     expect(resolver).toHaveBeenCalledExactlyOnceWith(phone, code);
+  });
+
+  it('maps expected OTP identity denial to the generic authentication response', async () => {
+    const resolver = vi.fn(async () => { throw new CustomerAuthError('Code is invalid or has expired.', 'OTP_INVALID'); });
+    const { router, transportSession } = make({ legacyOtpSession: resolver });
+    const response = await router.request(request('legacy/otp-login', { phone, code }));
+
+    expect(response.status).toBe(401);
+    expect(await response.text()).toBe(JSON.stringify({ error: 'Invalid credentials or proof' }));
+    expect(transportSession).not.toHaveBeenCalled();
   });
 
   it('sanitizes operational upgrade errors and does not issue a session', async () => {
