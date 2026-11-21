@@ -16,44 +16,51 @@ The independently safe correction distinguishes the existing server error
 account-verification handoff. It does not change the underlying eligibility
 policy. No API, permission, feature flag, schema or OTP implementation is added.
 
-## Pending Owner ruling N14-READ-01 — NOT APPROVED / NOT ACTIVATED
+## Owner ruling N14-READ-01 — REJECTED (2026-11-21)
 
-Recommended, pending explicit approval: allow an active authenticated customer
-without a verified phone to read permitted published official Feed content.
-Keep authentication, feature gates, publication/expiry filtering, audience and
-tenant boundaries, moderation and all independently approved participation
-requirements in force. Phone verification must not grant publishing/moderator
-permissions or replace normal authentication.
+**Owner decision:** REJECT the proposed exemption allowing an authenticated
+customer without a verified phone to read Community Feed content. **Retain
+verified-phone eligibility for all customer Feed reads**, including published
+official announcements. A valid customer session alone is insufficient.
 
-This assignment explicitly says the exemption is a recommendation subject to
-policy reconciliation. Main has no approval of this precise exemption:
+**Enforcement:** Keep the existing server-side
+`assertVerifiedPhone(..., 'network')` requirement on every Feed request, in
+addition to the current session, Feed feature gate, publication/expiry,
+audience and tenant restrictions. The exact `PHONE_VERIFICATION_REQUIRED`
+response and explicit account-verification handoff introduced in NETWORK-14
+remain valid. Opening the verification page does not send SMS, join a business,
+or grant Feed access; authoritative verification must be completed separately.
+
+**Scope of this ruling:** It settles only Community **read** eligibility. A
+verified phone does not grant platform publishing, moderation, new customer
+engagement permissions, membership or other privileges. Ordinary customer
+account authentication remains independent of phone verification. No exemption
+switch, client-controlled flag or alternative Feed endpoint is authorized.
+
+**Repository evidence and preserved contracts:**
 
 - `CUSTOMER_AUTH_S5_01_EMAIL_AUTH_API.md`, stage 4, and
-  `lib/customer-verification.ts` govern existing verification gates.
-- `NETWORK_08_FEED_ACCESS_VERIFICATION.md` verifies phone-revocation denial.
+  `lib/customer-verification.ts` describe existing verification controls.
+- `NETWORK_08_FEED_ACCESS_VERIFICATION.md` covers verification revocation.
 - `NETWORK_12_FEED_CURSOR_RELIABILITY.md` records the active/verified reader rule.
-- `NETWORK_13_FEED_RESPONSE_RECOVERY.md` explicitly defers this policy issue.
-- NETWORK-00 reserves customer posting and engagement pending further decisions.
+- `NETWORK_13_FEED_RESPONSE_RECOVERY.md` preserves current Feed permissions.
+- NETWORK-00 reserves further participation/publishing pending separate decisions.
 
-Consequently the production `communityFeedRoutes` still calls the existing
-server-side `assertVerifiedPhone(..., 'network')` on every Feed request. There
-is no dormant runtime switch, client query, return flag or alternative endpoint
-that activates the proposed exemption. NETWORK-14 as a whole remains BLOCKED on
-N14-READ-01; passing CI on this bounded correction does not resolve that ruling.
-
-Smallest next action: Owner explicitly approves or rejects N14-READ-01. Approval
-requires a separately reviewed Community enforcement change and positive
-unverified-reader HTTP/PostgreSQL/browser acceptance; this PR does not claim
-that behavior is enabled.
+**Disposition:** N14-READ-01 is **CLOSED — REJECTED**, not pending. The existing
+API guard already matches this decision; NETWORK-14's verification handoff
+(#547) is merged. No enforcement change, migration, feature flag, deployment or
+new verification flow is required by this decision record. A future change to
+read eligibility requires a new explicit Owner ruling and independently verified
+server-side/security/browser acceptance.
 
 ## Eligibility matrix
 
-| Action | Classification | Main/current behavior | Proposed change / dependency |
+| Action | Classification | Main/current behavior | Owner ruling / dependency |
 | --- | --- | --- | --- |
 | Public landing information | Public information | Existing public route | None |
 | Customer dashboard | Authentication | Valid current customer session; existing auth feature configuration | Normal password registration/login remains authentication-owned |
 | Own business memberships | Business membership authorization | Session customer scope and existing membership rules | None; no balance/history changes |
-| Read permitted published Feed | Viewing eligibility | Active authenticated customer AND authoritative verified phone AND Feed flag | Session-only viewing pending N14-READ-01 |
+| Read permitted published Feed | Viewing eligibility | Active authenticated customer AND authoritative verified phone AND Feed flag | **N14-READ-01 rejected: retain verified-phone requirement; no exemption** |
 | Read official announcement | Viewing eligibility | Same Feed contract; published/live-approved/nonexpired only | No new detail endpoint |
 | Community join | Participation eligibility | Existing authenticated `POST /community/me/join`; verified phone and existing policy-version/membership rules | No new UI or policy |
 | Customer content / reactions / comments / reporting | Participation | NOT IMPLEMENTED / NOT AUTHORIZED in v1 | No new capabilities in this block |
@@ -115,8 +122,8 @@ quorum, concurrent approvals, pinning, expiry and cursor regressions.
 Chromium acceptance covers English/Arabic, 375px/1280px, RTL, keyboard activation,
 44px handoff target, no overflow, explicit navigation without SMS or mutation,
 return-without-verification denial, authoritative status re-evaluation, and
-verified-customer moderator denial. Positive unverified viewing remains BLOCKED
-by the pending ruling; no test result is represented as approval.
+verified-customer moderator denial. Unverified-phone Feed viewing remains **DENIED** under the Owner's rejected
+exemption; no test result is represented as permission to bypass verification.
 
 No database migration, migration journal change, shared database access, customer
 identity mutation outside synthetic fixtures, loyalty/Community ledger change,
