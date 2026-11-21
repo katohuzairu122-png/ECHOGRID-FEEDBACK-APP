@@ -5,6 +5,6 @@ import { CustomerEmailUpgradeVerifyForm } from './upgrade-verify-form';
 export const dynamic = 'force-dynamic';
 
 export default function CustomerEmailUpgradeVerifyPage() {
-  if (!isCustomerEmailAuthWebEnabled()) notFound();
+  if (!isCustomerEmailAuthWebEnabled() || process.env.CUSTOMER_LEGACY_UPGRADE_ENABLED !== 'true') notFound();
   return <CustomerEmailUpgradeVerifyForm />;
 }
