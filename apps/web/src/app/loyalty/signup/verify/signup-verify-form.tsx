@@ -4,7 +4,7 @@ import { useActionState, useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import Link from 'next/link';
 import { completeEmailRegistrationAction, type EmailAuthState } from '@/lib/actions/customer-email-auth';
-import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Input, Label } from '@/components/ui';
+import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui';
 import { Logo } from '@/components/brand';
 import { LanguageSelector } from '@/components/language-selector';
 
@@ -22,11 +22,10 @@ export function readChallengeFromHash(hash: string): string | null {
   }
 }
 
-export function SignupVerifyForm({ next, minLength }: { next: string; minLength?: number | undefined }) {
+export function SignupVerifyForm({ next }: { next: string; minLength?: number | undefined }) {
   const [state, formAction, pending] = useActionState(completeEmailRegistrationAction, initial);
   const t = useTranslations('loyalty.customer.emailAuth');
   const [challenge, setChallenge] = useState<string | null | undefined>(undefined);
-  const [fields, setFields] = useState({ name: '', email: '', phone: '', password: '', passwordConfirmation: '' });
 
   useEffect(() => {
     setChallenge(readChallengeFromHash(window.location.hash));
@@ -52,36 +51,17 @@ export function SignupVerifyForm({ next, minLength }: { next: string; minLength?
             <form action={formAction} className="flex flex-col gap-4">
               <input type="hidden" name="challenge" value={challenge} />
               <input type="hidden" name="next" value={next} />
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="name">{t('nameLabel')}</Label>
-                <Input id="name" name="name" type="text" autoComplete="name" maxLength={120} required value={fields.name} onChange={(e) => setFields((current) => ({ ...current, name: e.target.value }))} />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="email">{t('confirmEmailLabel')}</Label>
-                <Input id="email" name="email" type="email" autoComplete="email" required value={fields.email} onChange={(e) => setFields((current) => ({ ...current, email: e.target.value }))} />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="phone">{t('phoneOptionalLabel')}</Label>
-                <Input id="phone" name="phone" type="tel" inputMode="tel" autoComplete="tel" placeholder="+96566904591" value={fields.phone} onChange={(e) => setFields((current) => ({ ...current, phone: e.target.value }))} />
-                <p className="text-xs text-neutral-500">{t('phoneOptionalHint')}</p>
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="password">{t('createPasswordLabel')}</Label>
-                <Input id="password" name="password" type="password" autoComplete="new-password" required value={fields.password} onChange={(e) => setFields((current) => ({ ...current, password: e.target.value }))} {...(minLength ? { minLength } : {})} />
-                {minLength ? <p className="text-xs text-neutral-500">{t('passwordHint', { min: minLength })}</p> : null}
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="passwordConfirmation">{t('confirmPasswordLabel')}</Label>
-                <Input id="passwordConfirmation" name="passwordConfirmation" type="password" autoComplete="new-password" required value={fields.passwordConfirmation} onChange={(e) => setFields((current) => ({ ...current, passwordConfirmation: e.target.value }))} {...(minLength ? { minLength } : {})} />
-              </div>
               {state.error && (
                 <p role="alert" className="text-sm text-danger">
-                  {t(`errors.${state.error}`, { min: state.minLength ?? minLength ?? 0 })}
+                  {t(`errors.${state.error}`, { min: state.minLength ?? 0 })}
                 </p>
               )}
               <Button type="submit" disabled={pending || state.success === true} className="w-full">
                 {pending ? t('creating') : t('createAccountButton')}
               </Button>
+              <Link href={`/loyalty/signup?next=${encodeURIComponent(next)}`} className="text-center text-sm font-medium text-brand-700 hover:underline">
+                {t('requestNewLink')}
+              </Link>
             </form>
           ) : (
             <Link href={`/loyalty/signup?next=${encodeURIComponent(next)}`} className="text-sm font-medium text-brand-700 hover:underline">
