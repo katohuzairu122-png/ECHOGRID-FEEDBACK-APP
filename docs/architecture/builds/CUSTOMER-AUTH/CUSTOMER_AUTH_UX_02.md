@@ -33,6 +33,23 @@ Existing phone-OTP login previously minted only a nonrotating 90-day token. The 
 
 The new feature-gated, attribution-protected `/customer-auth/email/legacy/otp-login` validates the actual phone code through Twilio Verify in production or the existing one-time database OTP service in test/development. It then resolves the **verified phone owner** through the established `CustomerRepository.createIfAbsent` and establishes a rotating OTP session. Accounts that already have verified email cannot use OTP after the existing retirement rule.
 
+### Existing-identity-only OTP upgrade hardening (follow-up)
+
+The credential-upgrade OTP bridge now uses
+`CustomerRepository.resolveExistingPhoneForCredentialUpgrade` rather than
+unrestricted `createIfAbsent`. A newly verified but previously unknown number
+must **not create a new customer identity through an upgrade endpoint**.
+Existing verified-phone owners are resolved by their original customer ID.
+A uniquely held legacy phone-only row without credentials may be verified in
+place, but an email customer who merely typed an unverified number cannot
+claim another identity. Conflicts fail closed; the ordinary legacy OTP
+signup/login path is unchanged.
+
+New unit regressions reject unknown-phone upgrades and verify same-ID reuse;
+real PostgreSQL regressions confirm that unknown numbers produce no customer
+row and existing verified numbers resolve to their original ID. Tests remain
+subject to exact-head hosted CI; no browser or live proof is claimed here.
+
 The customer Settings upgrade prototype is designed to use that rotating session to request and complete the pre-existing independent email-link challenge through `/customer-auth/email/link/request` and `/customer-auth/email/link/complete`. The pre-existing service checks customer ID, session ID, fresh OTP step-up, verified phone ownership, proof expiry and one-time usage, email uniqueness and credential conflicts. Linking occurs transactionally with session revocation and legacy-token cutoff; customer ID, memberships, rewards, loyalty history and Community history are never moved to a new customer.
 
 No new automatic account merge, password reset, altered points rule or weaker phone-verification gate is introduced.
