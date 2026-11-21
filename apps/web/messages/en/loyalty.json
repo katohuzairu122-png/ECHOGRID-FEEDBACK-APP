@@ -489,7 +489,7 @@
       "sentDescription": "If this address can be used, we have sent a confirmation link. It expires in 15 minutes.",
       "haveAccountLink": "Already have an account? Sign in",
       "verifyTitle": "Confirm your email",
-      "verifyDescription": "Enter the email address you used and choose a password to finish creating your account.",
+      "verifyDescription": "Your email has been confirmed. Complete account activation without re-entering the name or password you already provided.",
       "confirmEmailLabel": "Confirm your email",
       "createPasswordLabel": "Choose a password",
       "createAccountButton": "Create account",
@@ -499,7 +499,7 @@
       "errors": {
         "invalid_input": "Check the details you entered and try again.",
         "invalid_credentials": "The email or password is not correct.",
-        "invalid_proof": "This link has expired or was already used, or the password was not accepted. Request a new link and try again.",
+        "invalid_proof": "This confirmation link is invalid, expired or already used. Request a new link.",
         "rate_limited": "Too many attempts. Please wait a few minutes and try again.",
         "unavailable": "This is not available right now. Please try again later.",
         "password_too_short": "Your password must be at least {min} characters.",
@@ -564,7 +564,11 @@
       "save": "Save name",
       "saving": "Saving…",
       "saved": "Your name was updated.",
-      "errors": { "invalid_name": "Enter a name up to 120 characters.", "invalid": "Check your password entries and try again.", "unavailable": "We could not save this change. Please try again." }
+      "errors": {
+        "invalid_name": "Enter a name up to 120 characters.",
+        "invalid": "Check your password entries and try again.",
+        "unavailable": "We could not save this change. Please try again."
+      }
     },
     "invite": {
       "signInTitle": "Sign in to join",
