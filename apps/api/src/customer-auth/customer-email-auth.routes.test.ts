@@ -1,5 +1,6 @@
 import type { PasswordLoginResult } from './customer-password-auth.service';
 import { describe, expect, it, vi } from 'vitest';
+import { CustomerAuthError } from './customer-auth.service';
 import {
   createIsolatedCustomerEmailAuthRoutes,
   customerEmailAuthRoutes,
@@ -190,6 +191,39 @@ describe('legacy phone OTP upgrade HTTP boundaries', () => {
     expect(transportSession).toHaveBeenCalledTimes(1);
     expect((await router.request(request('legacy/otp-login', { phone: '15551234567', code }))).status).toBe(400);
     expect(legacyOtpSession).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not transport or issue a session when upgrade identity resolution denies', async () => {
+    const resolver = vi.fn(async () => null);
+    const { router, transportSession } = make({ legacyOtpSession: resolver });
+    const response = await router.request(request('legacy/otp-login', { phone, code }));
+
+    expect(response.status).toBe(401);
+    expect(transportSession).not.toHaveBeenCalled();
+    expect(resolver).toHaveBeenCalledExactlyOnceWith(phone, code);
+  });
+
+  it('maps expected OTP identity denial to the generic authentication response', async () => {
+    const resolver = vi.fn(async () => { throw new CustomerAuthError('Code is invalid or has expired.', 'OTP_INVALID'); });
+    const { router, transportSession } = make({ legacyOtpSession: resolver });
+    const response = await router.request(request('legacy/otp-login', { phone, code }));
+
+    expect(response.status).toBe(401);
+    expect(await response.text()).toBe(JSON.stringify({ error: 'Invalid credentials or proof' }));
+    expect(transportSession).not.toHaveBeenCalled();
+  });
+
+  it('sanitizes operational upgrade errors and does not issue a session', async () => {
+    const secretDetail = 'synthetic SQL connection detail';
+    const resolver = vi.fn(async () => { throw new Error(secretDetail); });
+    const { router, transportSession } = make({ legacyOtpSession: resolver });
+    const response = await router.request(request('legacy/otp-login', { phone, code }));
+    const body = await response.text();
+
+    expect(response.status).toBe(503);
+    expect(body).not.toContain(secretDetail);
+    expect(transportSession).not.toHaveBeenCalled();
+    expect(resolver).toHaveBeenCalledExactlyOnceWith(phone, code);
   });
 
   it('rejects untrusted sources before phone or link service execution', async () => {

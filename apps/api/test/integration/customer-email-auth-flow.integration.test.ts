@@ -14,17 +14,30 @@ import {
 import { CustomerSessionService } from '../../src/customer-auth/customer-session.service';
 import { CustomerCredentialRepository } from '../../src/repositories/customer-credential.repository';
 import { CustomerRepository } from '../../src/repositories/customer.repository';
+import { createRepositories } from '../../src/repositories';
 import { PASSWORD_ITERATIONS } from '../../src/auth/password';
 import { normalizePassword } from '../../src/customer-auth/customer-password-policy';
 import { appDbOf } from '../helpers/runtime-db';
+
+const databaseUrl = process.env.DATABASE_URL;
+if (databaseUrl) {
+  const target = new URL(databaseUrl);
+  if (
+    !['localhost', '127.0.0.1'].includes(target.hostname) ||
+    !['/echogrid_test', '/echogrid_ci_pg18'].includes(target.pathname)
+  ) {
+    throw new Error('Customer email-auth integration tests require a disposable loopback PostgreSQL database.');
+  }
+}
 
 /**
  * CUSTOMER-AUTH-S5-01 end to end against real Postgres: email proof -> registration -> login -> rotating session,
  * driven through the HTTP composition mounted exactly as the API mounts it. Only the transport edges are faked
  * (mail delivery, the shared limiter, the Web Worker signature check); the wiring and every database step are real.
  */
-describe.skipIf(!process.env.DATABASE_URL)('Email registration and login flow (real Postgres)', () => {
+describe.skipIf(!databaseUrl)('Email registration and login flow (real Postgres)', () => {
   let client: Client;
+  const concurrentClients: Client[] = [];
   let db: ReturnType<typeof buildDb>;
   let app: Hono<{ Bindings: Bindings }>;
   let sessions: CustomerSessionService;
@@ -50,6 +63,12 @@ describe.skipIf(!process.env.DATABASE_URL)('Email registration and login flow (r
     );
   const password = 'correct horse battery staple 42';
   const newEmail = () => `flow-${crypto.randomUUID()}@example.test`;
+  const newRepository = async () => {
+    const concurrentClient = new Client({ connectionString: databaseUrl });
+    await concurrentClient.connect();
+    concurrentClients.push(concurrentClient);
+    return new CustomerRepository(buildDb(concurrentClient));
+  };
 
   async function register(email: string, pw = password) {
     delivered.length = 0;
@@ -95,7 +114,7 @@ describe.skipIf(!process.env.DATABASE_URL)('Email registration and login flow (r
     }));
   });
   afterAll(async () => {
-    await client.end();
+    await Promise.all([client.end(), ...concurrentClients.map((concurrentClient) => concurrentClient.end())]);
   });
 
   it('registers an email-only customer (no phone), then logs in and receives a working rotating session', async () => {
@@ -142,6 +161,37 @@ describe.skipIf(!process.env.DATABASE_URL)('Email registration and login flow (r
     expect(rows.map((row) => row.id)).toEqual([existing.id]);
   });
 
+  it('keeps the original customer ID, membership and loyalty balance attached during upgrade resolution', async () => {
+    const phone = '+1555' + String(Math.floor(Math.random() * 10_000_000)).padStart(7, '0');
+    const repositories = createRepositories(db);
+    const original = await repositories.customers.create({ phone, phoneVerifiedAt: null });
+    const business = await repositories.businesses.create({
+      name: 'Customer auth identity preservation',
+      slug: `customer-auth-preserve-${crypto.randomUUID()}`,
+    });
+    const membership = await repositories.customerMemberships.create({
+      customerId: original.id,
+      businessId: business.id,
+      status: 'active',
+      onboardingSource: 'legacy_import',
+      onboardingReference: `auth-upgrade-preserve-${crypto.randomUUID()}`,
+    });
+    const account = await repositories.loyaltyAccounts.create({
+      customerId: original.id,
+      businessId: business.id,
+      membershipId: membership.id,
+      points: 73,
+    });
+
+    const resolved = await repositories.customers.resolveExistingPhoneForCredentialUpgrade(phone);
+    const retainedMembership = await repositories.customerMemberships.findByCustomerAndBusiness(original.id, business.id);
+    const retainedAccount = await repositories.loyaltyAccounts.findByCustomerAndBusiness(original.id, business.id);
+
+    expect(resolved?.id).toBe(original.id);
+    expect(retainedMembership?.id).toBe(membership.id);
+    expect(retainedAccount).toMatchObject({ id: account.id, customerId: original.id, points: 73 });
+  });
+
   it('OTP upgrade claims an unverified legacy phone-only row in place without identity duplication', async () => {
     const phone = '+1555' + String(Math.floor(Math.random() * 10_000_000)).padStart(7, '0');
     const repository = new CustomerRepository(db);
@@ -151,6 +201,86 @@ describe.skipIf(!process.env.DATABASE_URL)('Email registration and login flow (r
     expect(upgraded?.phoneVerifiedAt).not.toBeNull();
     const rows = await db.select({ id: customers.id }).from(customers).where(eq(customers.phone, phone));
     expect(rows.map((row) => row.id)).toEqual([existing.id]);
+  });
+
+  it('two concurrent OTP upgrades converge on the same legacy customer ID', async () => {
+    const phone = '+1555' + String(Math.floor(Math.random() * 10_000_000)).padStart(7, '0');
+    const original = await new CustomerRepository(db).create({ phone, phoneVerifiedAt: null });
+    const [first, second] = await Promise.all([newRepository(), newRepository()]);
+
+    const results = await Promise.all([
+      first.resolveExistingPhoneForCredentialUpgrade(phone),
+      second.resolveExistingPhoneForCredentialUpgrade(phone),
+    ]);
+
+    expect(results.every((row) => row === undefined || row.id === original.id)).toBe(true);
+    expect(results.some((row) => row?.id === original.id)).toBe(true);
+    const rows = await db.select({ id: customers.id }).from(customers).where(eq(customers.phone, phone));
+    expect(rows.map((row) => row.id)).toEqual([original.id]);
+  });
+
+  it('concurrent legacy OTP upgrade and ordinary phone login retain one original identity', async () => {
+    const phone = '+1555' + String(Math.floor(Math.random() * 10_000_000)).padStart(7, '0');
+    const original = await new CustomerRepository(db).create({ phone, phoneVerifiedAt: null });
+    const [upgradeRepository, loginRepository] = await Promise.all([newRepository(), newRepository()]);
+
+    const [upgraded, signedIn] = await Promise.all([
+      upgradeRepository.resolveExistingPhoneForCredentialUpgrade(phone),
+      loginRepository.createIfAbsent({ phone, phoneVerifiedAt: new Date() }),
+    ]);
+
+    expect(upgraded === undefined || upgraded.id === original.id).toBe(true);
+    expect(signedIn.customer?.id).toBe(original.id);
+    const rows = await db.select({ id: customers.id }).from(customers).where(eq(customers.phone, phone));
+    expect(rows.map((row) => row.id)).toEqual([original.id]);
+  });
+
+  it('maps only the verified-phone uniqueness conflict to a generic identity denial', async () => {
+    const phone = '+1555' + String(Math.floor(Math.random() * 10_000_000)).padStart(7, '0');
+    const original = await new CustomerRepository(db).create({ phone, phoneVerifiedAt: null });
+    const suffix = crypto.randomUUID().replaceAll('-', '');
+    const functionName = `auth_upgrade_unique_${suffix}`;
+    const triggerName = `auth_upgrade_unique_trg_${suffix}`;
+    await client.query(`CREATE FUNCTION public.${functionName}() RETURNS trigger LANGUAGE plpgsql AS $$
+      BEGIN
+        RAISE EXCEPTION USING ERRCODE = '23505', MESSAGE = 'synthetic ownership race', CONSTRAINT = 'customers_phone_verified_unique';
+      END
+    $$`);
+    await client.query(`CREATE TRIGGER ${triggerName} BEFORE UPDATE ON customers
+      FOR EACH ROW WHEN (OLD.id = '${original.id}'::uuid) EXECUTE FUNCTION public.${functionName}()`);
+    try {
+      expect(await new CustomerRepository(db).resolveExistingPhoneForCredentialUpgrade(phone)).toBeUndefined();
+      const rows = await db.select({ id: customers.id, verified: customers.phoneVerifiedAt })
+        .from(customers).where(eq(customers.phone, phone));
+      expect(rows).toHaveLength(1);
+      expect(rows[0]).toMatchObject({ id: original.id, verified: null });
+    } finally {
+      await client.query(`DROP TRIGGER IF EXISTS ${triggerName} ON customers`);
+      await client.query(`DROP FUNCTION IF EXISTS public.${functionName}()`);
+    }
+  });
+
+  it('propagates unexpected database errors instead of treating them as identity absence', async () => {
+    const phone = '+1555' + String(Math.floor(Math.random() * 10_000_000)).padStart(7, '0');
+    const original = await new CustomerRepository(db).create({ phone, phoneVerifiedAt: null });
+    const suffix = crypto.randomUUID().replaceAll('-', '');
+    const functionName = `auth_upgrade_failure_${suffix}`;
+    const triggerName = `auth_upgrade_failure_trg_${suffix}`;
+    await client.query(`CREATE FUNCTION public.${functionName}() RETURNS trigger LANGUAGE plpgsql AS $$
+      BEGIN
+        RAISE EXCEPTION USING ERRCODE = '40001', MESSAGE = 'synthetic operational failure';
+      END
+    $$`);
+    await client.query(`CREATE TRIGGER ${triggerName} BEFORE UPDATE ON customers
+      FOR EACH ROW WHEN (OLD.id = '${original.id}'::uuid) EXECUTE FUNCTION public.${functionName}()`);
+    try {
+      await expect(new CustomerRepository(db).resolveExistingPhoneForCredentialUpgrade(phone)).rejects.toMatchObject({
+        cause: expect.objectContaining({ code: '40001' }),
+      });
+    } finally {
+      await client.query(`DROP TRIGGER IF EXISTS ${triggerName} ON customers`);
+      await client.query(`DROP FUNCTION IF EXISTS public.${functionName}()`);
+    }
   });
 
   it('OTP upgrade refuses to claim an email credential identity that merely typed an unverified phone', async () => {
