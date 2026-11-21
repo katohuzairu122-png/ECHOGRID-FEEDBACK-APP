@@ -144,8 +144,8 @@ describe.skipIf(!process.env.DATABASE_URL)('E2D receiver, end to end (isolated l
 
     // the APPLICATION still independently enforces its own challenge: the mailbox claim did not consume it, the first completion works, the replay does not
     const reg = registration([]);
-    expect((await reg.completeRegistration({ email: to, challengeId, proof, password: 'a strong synthetic password' })).ok).toBe(true);
-    expect((await reg.completeRegistration({ email: to, challengeId, proof, password: 'a strong synthetic password' })).ok).toBe(false);
+    expect((await reg.completeRegistration({ email: to, challengeId, proof, name: 'Synthetic Customer', password: 'a strong synthetic password' })).ok).toBe(true);
+    expect((await reg.completeRegistration({ email: to, challengeId, proof, name: 'Synthetic Customer', password: 'a strong synthetic password' })).ok).toBe(false);
 
     // evidence and the receiver's own log never contain the proof, link, key or address
     const evidence = JSON.stringify(mailbox.evidence());
@@ -168,7 +168,7 @@ describe.skipIf(!process.env.DATABASE_URL)('E2D receiver, end to end (isolated l
     const got = await mailboxFor(runId).fetchVerification({ recipient: to, purpose: 'customer-signup-link', sinceMs: before });
     if (got.kind !== 'link') throw new Error('expected a link');
     const { challengeId } = fragmentOf(got.url);
-    const bad = await registration([]).completeRegistration({ email: to, challengeId, proof: 'f'.repeat(64), password: 'a strong synthetic password' });
+    const bad = await registration([]).completeRegistration({ email: to, challengeId, proof: 'f'.repeat(64), name: 'Synthetic Customer', password: 'a strong synthetic password' });
     expect(bad.ok).toBe(false);
   }, 30_000);
 

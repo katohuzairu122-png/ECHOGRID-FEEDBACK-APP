@@ -27,6 +27,7 @@ import { SignupRequestForm } from '../../signup/signup-request-form';
 import { SignupVerifyForm, readChallengeFromHash } from '../../signup/verify/signup-verify-form';
 import { OtpLoginForm } from '../otp-login-form';
 import EmailLoginPage from './page';
+import CustomerLoginPage from '../page';
 import SignupPage from '../../signup/page';
 import VerifyPage from '../../signup/verify/page';
 
@@ -68,7 +69,7 @@ describe('EmailLoginForm', () => {
   it('offers sign-up and the phone alternative, both keeping next', () => {
     render(<EmailLoginForm next="/loyalty/dashboard/qr" />);
     expect(screen.getByRole('link', { name: /Create an account with email/ })).toHaveAttribute('href', '/loyalty/signup?next=%2Floyalty%2Fdashboard%2Fqr');
-    expect(screen.getByRole('link', { name: /phone number instead/ })).toHaveAttribute('href', '/loyalty/login?next=%2Floyalty%2Fdashboard%2Fqr');
+    expect(screen.getByRole('link', { name: /phone number instead/ })).toHaveAttribute('href', '/loyalty/login?method=phone&next=%2Floyalty%2Fdashboard%2Fqr');
   });
 });
 
@@ -76,7 +77,10 @@ describe('SignupRequestForm', () => {
   it('shows the same "check your email" confirmation whatever the address', async () => {
     h.request.mockResolvedValue({ sent: true });
     render(<SignupRequestForm next="/loyalty/dashboard" />);
+    await userEvent.type(screen.getByLabelText('Name'), 'Synthetic Customer');
     await userEvent.type(screen.getByLabelText('Email'), 'anyone@example.test');
+    await userEvent.type(screen.getByLabelText('Choose a password'), 'a long enough password 42');
+    await userEvent.type(screen.getByLabelText('Confirm password'), 'a long enough password 42');
     await userEvent.click(screen.getByRole('button', { name: 'Send confirmation link' }));
     expect(await screen.findByText('Check your email')).toBeInTheDocument();
     expect(screen.queryByLabelText('Email')).not.toBeInTheDocument();
@@ -84,7 +88,10 @@ describe('SignupRequestForm', () => {
   it('translates rate limiting and unavailability', async () => {
     h.request.mockResolvedValue({ error: 'rate_limited' });
     render(<SignupRequestForm next="/loyalty/dashboard" />);
+    await userEvent.type(screen.getByLabelText('Name'), 'Synthetic Customer');
     await userEvent.type(screen.getByLabelText('Email'), 'a@example.test');
+    await userEvent.type(screen.getByLabelText('Choose a password'), 'a long enough password 42');
+    await userEvent.type(screen.getByLabelText('Confirm password'), 'a long enough password 42');
     await userEvent.click(screen.getByRole('button', { name: 'Send confirmation link' }));
     expect(await screen.findByRole('alert')).toHaveTextContent('Too many attempts.');
   });
@@ -99,8 +106,10 @@ describe('SignupVerifyForm', () => {
     expect(await screen.findByLabelText('Confirm your email')).toBeInTheDocument();
     expect(replace).toHaveBeenCalledWith(null, '', '/loyalty/signup/verify');
     expect((container.querySelector('input[name="challenge"]') as HTMLInputElement).value).toBe(CHALLENGE);
+    await userEvent.type(screen.getByLabelText('Name'), 'Synthetic Customer');
     await userEvent.type(screen.getByLabelText('Confirm your email'), 'a@example.test');
     await userEvent.type(screen.getByLabelText('Choose a password'), 'a long enough password 42');
+    await userEvent.type(screen.getByLabelText('Confirm password'), 'a long enough password 42');
     await userEvent.click(screen.getByRole('button', { name: 'Create account' }));
     await waitFor(() => expect(assign).toHaveBeenCalledWith('/loyalty/dashboard'));
   });
@@ -115,17 +124,26 @@ describe('SignupVerifyForm', () => {
     window.location.hash = `#c=${encodeURIComponent(CHALLENGE)}`;
     h.complete.mockResolvedValue({ error: 'invalid_proof' });
     render(<SignupVerifyForm next="/loyalty/dashboard" />);
+    await userEvent.type(await screen.findByLabelText('Name'), 'Synthetic Customer');
     await userEvent.type(await screen.findByLabelText('Confirm your email'), 'a@example.test');
     await userEvent.type(screen.getByLabelText('Choose a password'), 'x');
+    await userEvent.type(screen.getByLabelText('Confirm password'), 'x');
     await userEvent.click(screen.getByRole('button', { name: 'Create account' }));
     expect(await screen.findByRole('alert')).toHaveTextContent(/expired or was already used/);
   });
 });
 
 describe('entry points', () => {
+  it('routes the primary customer sign-in to email/password when enabled and keeps OTP as an explicit alternate', async () => {
+    process.env.CUSTOMER_EMAIL_AUTH_ENABLED = 'true';
+    const emailPrimary = await CustomerLoginPage({ searchParams: Promise.resolve({}) }) as { type: unknown };
+    const phoneAlternate = await CustomerLoginPage({ searchParams: Promise.resolve({ method: 'phone' }) }) as { type: unknown };
+    expect(emailPrimary.type).toBe(EmailLoginForm);
+    expect(phoneAlternate.type).toBe(OtpLoginForm);
+  });
   it('the phone sign-in page links to email sign-in only when the feature is on', () => {
     const { rerender } = render(<OtpLoginForm next="/loyalty/dashboard" emailEnabled />);
-    expect(screen.getByRole('link', { name: 'Sign in with email' })).toHaveAttribute('href', '/loyalty/login/email?next=%2Floyalty%2Fdashboard');
+    expect(screen.getByRole('link', { name: 'Sign in with email' })).toHaveAttribute('href', '/loyalty/login?next=%2Floyalty%2Fdashboard');
     rerender(<OtpLoginForm next="/loyalty/dashboard" />);
     expect(screen.queryByRole('link', { name: 'Sign in with email' })).not.toBeInTheDocument();
   });
@@ -160,8 +178,10 @@ describe('SignupVerifyForm password minimum (configured, approved 8)', () => {
     window.location.hash = `#c=${encodeURIComponent(CHALLENGE)}`;
     h.complete.mockResolvedValue({ error: 'password_too_short', minLength: 8 });
     render(<SignupVerifyForm next="/loyalty/dashboard" minLength={8} />);
+    await userEvent.type(await screen.findByLabelText('Name'), 'Synthetic Customer');
     await userEvent.type(await screen.findByLabelText('Confirm your email'), 'a@example.test');
     await userEvent.type(screen.getByLabelText('Choose a password'), 'abc');
+    await userEvent.type(screen.getByLabelText('Confirm password'), 'abc');
     await userEvent.click(screen.getByRole('button', { name: 'Create account' }));
     expect(await screen.findByRole('alert')).toHaveTextContent('Your password must be at least 8 characters.');
   });

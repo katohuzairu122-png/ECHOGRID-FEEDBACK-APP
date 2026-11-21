@@ -16,6 +16,7 @@ function runtime(over: Partial<EmailAuthRuntime['dependencies']> = {}) {
     requestProof: vi.fn(async () => {}),
     completeRegistration: vi.fn(async () => ({ ok: true as const, customerId: 'c1' })),
     login: vi.fn(async () => ({ ok: false as const, kind: 'invalid' as const })),
+    changePassword: vi.fn(async () => true),
     transportSession: vi.fn(() => new Response(null, { status: 200 })),
     ...over,
   };

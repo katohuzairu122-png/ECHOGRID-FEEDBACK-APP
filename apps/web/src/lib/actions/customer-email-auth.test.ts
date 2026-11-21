@@ -27,6 +27,9 @@ const form = (fields: Record<string, string>) => {
   for (const [k, v] of Object.entries(fields)) f.set(k, v);
   return f;
 };
+const signupForm = (fields: Record<string, string>) => form({
+  name: 'Synthetic Customer', password: 'a long enough password 42', passwordConfirmation: 'a long enough password 42', ...fields,
+});
 const session = { accessToken: 'a', refreshCredential: 'r'.repeat(43), accessExpiresAt: '2026-12-01T00:15:00Z', refreshExpiresAt: '2026-12-31T00:00:00Z' };
 
 beforeEach(() => {
@@ -38,33 +41,46 @@ beforeEach(() => {
 describe('email sign-up request', () => {
   it('is unavailable (and calls nothing) when the web flag is off', async () => {
     process.env.CUSTOMER_EMAIL_AUTH_ENABLED = '';
-    expect(await requestEmailRegistrationAction({}, form({ email: 'a@example.test' }))).toEqual({ error: 'unavailable' });
+    expect(await requestEmailRegistrationAction({}, signupForm({ email: 'a@example.test' }))).toEqual({ error: 'unavailable' });
     expect(h.api).not.toHaveBeenCalled();
   });
   it('rejects a malformed address before calling the API, and normalizes a good one', async () => {
-    expect(await requestEmailRegistrationAction({}, form({ email: 'not-an-email' }))).toEqual({ error: 'invalid_input' });
+    expect(await requestEmailRegistrationAction({}, signupForm({ email: 'not-an-email' }))).toEqual({ error: 'invalid_input' });
     h.api.mockResolvedValue({ status: 202, body: { accepted: true } });
-    expect(await requestEmailRegistrationAction({}, form({ email: '  New@Example.Test ' }))).toEqual({ sent: true });
-    expect(h.api).toHaveBeenCalledWith('/customer-auth/email/register/request', { body: { email: 'new@example.test' } });
+    expect(await requestEmailRegistrationAction({}, signupForm({ email: '  New@Example.Test ' }))).toEqual({ sent: true });
+    expect(h.api).toHaveBeenCalledWith('/customer-auth/email/register/request', { body: { email: 'new@example.test', next: '/loyalty/dashboard' } });
+  });
+  it('checks matching passwords and sends no profile fields or password before email proof', async () => {
+    expect(await requestEmailRegistrationAction({}, form({
+      name: 'Synthetic Customer', email: 'a@example.test', password: 'a long enough password 42', passwordConfirmation: 'different',
+    }))).toEqual({ error: 'password_mismatch' });
+    expect(h.api).not.toHaveBeenCalled();
+    h.api.mockResolvedValue({ status: 202, body: { accepted: true } });
+    expect(await requestEmailRegistrationAction({}, signupForm({ email: 'a@example.test', next: '/loyalty/invite/invite-token' }))).toEqual({ sent: true });
+    expect(h.api).toHaveBeenCalledWith('/customer-auth/email/register/request', {
+      body: { email: 'a@example.test', next: '/loyalty/invite/invite-token' },
+    });
+    expect(JSON.stringify(h.api.mock.calls)).not.toContain('a long enough password 42');
+    expect(JSON.stringify(h.api.mock.calls)).not.toContain('Synthetic Customer');
   });
   it('maps rate limits and failures to codes without echoing anything from the API', async () => {
     h.api.mockResolvedValue({ status: 429, body: { error: 'Too many requests' } });
-    expect(await requestEmailRegistrationAction({}, form({ email: 'a@example.test' }))).toEqual({ error: 'rate_limited' });
+    expect(await requestEmailRegistrationAction({}, signupForm({ email: 'a@example.test' }))).toEqual({ error: 'rate_limited' });
     h.api.mockResolvedValue({ status: 503, body: null });
-    expect(await requestEmailRegistrationAction({}, form({ email: 'a@example.test' }))).toEqual({ error: 'unavailable' });
+    expect(await requestEmailRegistrationAction({}, signupForm({ email: 'a@example.test' }))).toEqual({ error: 'unavailable' });
     h.api.mockRejectedValue(new Error('network detail'));
-    expect(await requestEmailRegistrationAction({}, form({ email: 'a@example.test' }))).toEqual({ error: 'unavailable' });
+    expect(await requestEmailRegistrationAction({}, signupForm({ email: 'a@example.test' }))).toEqual({ error: 'unavailable' });
   });
 });
 
 describe('email sign-up completion', () => {
-  const good = { email: 'a@example.test', password: 'a long enough password 42', challenge: 'chal-1.proof-1', next: '/loyalty/dashboard' };
+  const good = { email: 'a@example.test', name: 'Synthetic Customer', password: 'a long enough password 42', passwordConfirmation: 'a long enough password 42', challenge: 'chal-1.proof-1', next: '/loyalty/dashboard' };
   it('completes registration then signs in: cookies set, success returned with a safe next, no credential in the result', async () => {
     h.api.mockResolvedValueOnce({ status: 201, body: { registered: true } }).mockResolvedValueOnce({ status: 200, body: session });
     const result = await completeEmailRegistrationAction({}, form(good));
     expect(result).toEqual({ success: true, next: '/loyalty/dashboard' });
     expect(h.api).toHaveBeenNthCalledWith(1, '/customer-auth/email/register/complete', {
-      body: { email: 'a@example.test', challengeId: 'chal-1', proof: 'proof-1', password: good.password },
+      body: { email: 'a@example.test', challengeId: 'chal-1', proof: 'proof-1', name: good.name, password: good.password },
     });
     expect(h.setRotating).toHaveBeenCalledTimes(1);
     expect(JSON.stringify(result)).not.toContain('r'.repeat(43));
@@ -73,7 +89,7 @@ describe('email sign-up completion', () => {
     h.api.mockResolvedValueOnce({ status: 201, body: {} }).mockResolvedValueOnce({ status: 200, body: session });
     await completeEmailRegistrationAction({}, form({ ...good, phone: ' +965 6690 4591 ' }));
     expect(h.api).toHaveBeenNthCalledWith(1, '/customer-auth/email/register/complete', {
-      body: { email: 'a@example.test', challengeId: 'chal-1', proof: 'proof-1', password: good.password, phone: '+965 6690 4591' },
+      body: { email: 'a@example.test', challengeId: 'chal-1', proof: 'proof-1', name: good.name, password: good.password, phone: '+965 6690 4591' },
     });
     expect(h.api).toHaveBeenNthCalledWith(2, '/customer-auth/email/login', { body: { email: 'a@example.test', password: good.password } });
     h.api.mockClear();
@@ -129,11 +145,11 @@ describe('ending a session', () => {
 });
 
 describe('password minimum on the web (CUSTOMER-EMAIL-AUTH-POLICY-01: configured, approved 8)', () => {
-  const base = { email: 'a@example.test', challenge: 'chal-1.proof-1', next: '/loyalty/dashboard' };
+  const base = { email: 'a@example.test', name: 'Synthetic Customer', challenge: 'chal-1.proof-1', next: '/loyalty/dashboard' };
 
   it('with the minimum configured, a 7-character password is refused BEFORE any API call, so the proof is not spent', async () => {
     process.env.CUSTOMER_PASSWORD_MIN_LENGTH = '8';
-    expect(await completeEmailRegistrationAction({}, form({ ...base, password: 'rBq4nZx' }))).toEqual({ error: 'password_too_short', minLength: 8 });
+    expect(await completeEmailRegistrationAction({}, form({ ...base, password: 'rBq4nZx', passwordConfirmation: 'rBq4nZx' }))).toEqual({ error: 'password_too_short', minLength: 8 });
     expect(h.api).not.toHaveBeenCalled();
   });
   it('an 8-character password goes through, and so do longer ones', async () => {
@@ -141,25 +157,25 @@ describe('password minimum on the web (CUSTOMER-EMAIL-AUTH-POLICY-01: configured
     for (const password of ['rBq4nZxk', 'a much longer passphrase than the minimum 2026']) {
       h.api.mockClear();
       h.api.mockResolvedValueOnce({ status: 201, body: {} }).mockResolvedValueOnce({ status: 200, body: session });
-      expect(await completeEmailRegistrationAction({}, form({ ...base, password }))).toEqual({ success: true, next: '/loyalty/dashboard' });
+      expect(await completeEmailRegistrationAction({}, form({ ...base, password, passwordConfirmation: password }))).toEqual({ success: true, next: '/loyalty/dashboard' });
       expect(h.api).toHaveBeenCalledTimes(2);
     }
   });
   it('counts characters the way the API does (code points): eight emoji pass, seven do not', async () => {
     process.env.CUSTOMER_PASSWORD_MIN_LENGTH = '8';
-    expect((await completeEmailRegistrationAction({}, form({ ...base, password: '🔐🔑🌟🚀🎯🔔🧩' }))).error).toBe('password_too_short');
+    expect((await completeEmailRegistrationAction({}, form({ ...base, password: '🔐🔑🌟🚀🎯🔔🧩', passwordConfirmation: '🔐🔑🌟🚀🎯🔔🧩' }))).error).toBe('password_too_short');
     h.api.mockResolvedValueOnce({ status: 201, body: {} }).mockResolvedValueOnce({ status: 200, body: session });
-    expect((await completeEmailRegistrationAction({}, form({ ...base, password: '🔐🔑🌟🚀🎯🔔🧩🍀' }))).success).toBe(true);
+    expect((await completeEmailRegistrationAction({}, form({ ...base, password: '🔐🔑🌟🚀🎯🔔🧩🍀', passwordConfirmation: '🔐🔑🌟🚀🎯🔔🧩🍀' }))).success).toBe(true);
   });
   it('is configuration, not a hardcoded number: a configured 12 refuses 8, and an unset or malformed value skips the early check', async () => {
     process.env.CUSTOMER_PASSWORD_MIN_LENGTH = '12';
-    expect((await completeEmailRegistrationAction({}, form({ ...base, password: 'rBq4nZxk' }))).error).toBe('password_too_short');
+    expect((await completeEmailRegistrationAction({}, form({ ...base, password: 'rBq4nZxk', passwordConfirmation: 'rBq4nZxk' }))).error).toBe('password_too_short');
     for (const unset of [undefined, '', '0', 'eight', '8.5', ' 8']) {
       if (unset === undefined) delete process.env.CUSTOMER_PASSWORD_MIN_LENGTH; else process.env.CUSTOMER_PASSWORD_MIN_LENGTH = unset;
       h.api.mockClear();
       h.api.mockResolvedValue({ status: 401, body: {} });
       // No assumption is made when the web has no usable setting: the API (authoritative, fail-closed) decides.
-      expect((await completeEmailRegistrationAction({}, form({ ...base, password: 'abc' }))).error).toBe('invalid_proof');
+      expect((await completeEmailRegistrationAction({}, form({ ...base, password: 'abc', passwordConfirmation: 'abc' }))).error).toBe('invalid_proof');
       expect(h.api).toHaveBeenCalledTimes(1);
     }
   });

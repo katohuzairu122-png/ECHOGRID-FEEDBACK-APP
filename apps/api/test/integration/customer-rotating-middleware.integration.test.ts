@@ -44,7 +44,7 @@ describe.skipIf(!process.env.DATABASE_URL)('Rotating customer sessions in the cu
     delivered.length = 0;
     await loginDeps.requestProof(email);
     const message = delivered.find((d) => d.recipient === email)!;
-    const registered = await loginDeps.completeRegistration({ email, challengeId: message.challengeId, proof: message.proof, password });
+    const registered = await loginDeps.completeRegistration({ email, challengeId: message.challengeId, proof: message.proof, name: 'Synthetic Customer', password });
     if (!registered.ok) throw new Error('registration failed');
     const login = await loginDeps.login({ email, password });
     if (!login.ok) throw new Error('login failed');

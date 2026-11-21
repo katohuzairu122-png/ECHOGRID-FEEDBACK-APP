@@ -8,6 +8,7 @@ import {
   CUSTOMER_NOTIFICATION_EVENT_TYPES,
   resolveBusinessQrActionsSchema,
 } from '@echo-grid-feedback/shared-types';
+import { z } from 'zod';
 import type { Bindings } from '../config/env';
 import { createDb, type Database } from '../db/client';
 import { createRepositories } from '../repositories';
@@ -35,6 +36,9 @@ import { CustomerMembershipService } from '../customer-relationships/customer-me
 import { toCustomerLoyaltyAccountDto } from '../customer-relationships/membership-dto';
 import { signCustomerQrToken, CUSTOMER_QR_TOKEN_TTL_SECONDS } from '../qr/customer-qr-token';
 import { LoyaltyActionResolver } from './loyalty-action-resolver';
+import { CustomerRepository } from '../repositories/customer.repository';
+import { CustomerCredentialRepository } from '../repositories/customer-credential.repository';
+import { maskPhone } from './customer-lookup.service';
 
 type Env = { Bindings: Bindings; Variables: CustomerAuthVariables };
 
@@ -51,6 +55,34 @@ loyaltyCustomerRoutes.use('*', customerAuthenticate, rateLimitByCustomer());
 
 // Phone verification for the signed-in customer (CUSTOMER-PHONE-01 stage 4): /loyalty/me/phone/*
 loyaltyCustomerRoutes.route('/phone', customerPhoneRoutes);
+
+const profileSchema = z.object({ name: z.string().trim().min(1).max(120) }).strict();
+
+/** Customer-owned profile and security summary. Identity is always taken from the authenticated session. */
+loyaltyCustomerRoutes.get('/profile', async (c) => withDb(c, async (db) => {
+  c.header('Cache-Control', 'private, no-store');
+  const customerId = c.get('customerId');
+  const customer = await new CustomerRepository(db).findById(customerId);
+  if (!customer) throw new AppError('Customer not found.', 404, 'NOT_FOUND');
+  const credential = await new CustomerCredentialRepository(db).findByCustomerId(customerId);
+  return ok(c, {
+    name: customer.fullName,
+    email: credential?.loginEmail ?? customer.email,
+    emailVerified: Boolean(credential?.loginEmailVerifiedAt),
+    phoneMasked: customer.phone ? maskPhone(customer.phone) : null,
+    phoneVerified: Boolean(customer.phone && customer.phoneVerifiedAt),
+  });
+}));
+
+loyaltyCustomerRoutes.patch('/profile', async (c) => {
+  const body = await parseJsonBody(c.req.raw, profileSchema);
+  return withDb(c, async (db) => {
+    const customer = await new CustomerRepository(db).updateProfile(c.get('customerId'), { fullName: body.name });
+    if (!customer) throw new AppError('Customer not found.', 404, 'NOT_FOUND');
+    c.header('Cache-Control', 'private, no-store');
+    return ok(c, { name: customer.fullName });
+  });
+});
 
 async function withDb<T>(c: Context<Env>, fn: (db: Database) => Promise<T>): Promise<T> {
   const { db, close } = await createDb(c.env.HYPERDRIVE);

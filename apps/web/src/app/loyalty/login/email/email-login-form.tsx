@@ -50,7 +50,7 @@ export function EmailLoginForm({ next }: { next: string }) {
             <Link href={`/loyalty/signup?next=${encodeURIComponent(next)}`} className="text-center text-sm font-medium text-brand-700 hover:underline">
               {t('createAccountLink')}
             </Link>
-            <Link href={`/loyalty/login?next=${encodeURIComponent(next)}`} className="text-center text-sm font-medium text-brand-700 hover:underline">
+            <Link href={`/loyalty/login?method=phone&next=${encodeURIComponent(next)}`} className="text-center text-sm font-medium text-brand-700 hover:underline">
               {t('usePhoneInstead')}
             </Link>
           </form>

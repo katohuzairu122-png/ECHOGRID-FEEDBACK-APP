@@ -14,6 +14,7 @@ function runtime(over: Partial<SessionLifecycleRuntime> = {}) {
     refresh: vi.fn(async () => ({ ok: true as const, session: { accessToken: 'a', accessExpiresAt: new Date(0), refreshCredential: 'r', refreshExpiresAt: new Date(0) } })),
     authenticateSessionToken: vi.fn(async () => ({ assurance: 'session' as const, customerId: 'c', sessionId: 's' })),
     revokeSession: vi.fn(async () => true),
+    logoutAll: vi.fn(async () => ({ revoked: 2 })),
   };
   return { rt: { sessions, resolveTrustedSource: vi.fn(async () => 'trusted'), close, ...over } as unknown as SessionLifecycleRuntime, sessions, close };
 }
@@ -26,7 +27,7 @@ const appWith = (enabled: boolean, open: () => Promise<SessionLifecycleRuntime |
 describe('session lifecycle composition (S5-03)', () => {
   it('flag off: a generic 404, nothing opened', async () => {
     const open = vi.fn();
-    for (const path of ['/refresh', '/logout']) expect((await appWith(false, open).fetch(post(path), {} as Bindings, ctx())).status).toBe(404);
+    for (const path of ['/refresh', '/logout', '/logout-all']) expect((await appWith(false, open).fetch(post(path), {} as Bindings, ctx())).status).toBe(404);
     expect(open).not.toHaveBeenCalled();
   });
 
@@ -65,7 +66,10 @@ describe('session lifecycle composition (S5-03)', () => {
     const out = await app.fetch(post('/logout'), {} as Bindings, ctx());
     expect(out.status).toBe(204);
     expect(sessions.revokeSession).toHaveBeenCalledWith({ customerId: 'c', sessionId: 's' });
-    expect(close).toHaveBeenCalledTimes(2);
+    const all = await app.fetch(post('/logout-all'), {} as Bindings, ctx());
+    expect(all.status).toBe(204);
+    expect(sessions.logoutAll).toHaveBeenCalledWith({ customerId: 'c' });
+    expect(close).toHaveBeenCalledTimes(3);
   });
 
   it('a malformed credential is one generic 401 and exposes no other path', async () => {

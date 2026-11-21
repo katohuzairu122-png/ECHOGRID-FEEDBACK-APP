@@ -77,10 +77,15 @@ export function OtpLoginForm({ next, emailEnabled, initialPhone, verifyError }: 
               </Button>
               {emailEnabled ? (
                 <Link
-                  href={`/loyalty/login/email?next=${encodeURIComponent(next)}`}
+                  href={`/loyalty/login?next=${encodeURIComponent(next)}`}
                   className="text-center text-sm font-medium text-brand-700 hover:underline"
                 >
                   {emailT('signInTitle')}
+                </Link>
+              ) : null}
+              {emailEnabled ? (
+                <Link href={`/loyalty/signup?next=${encodeURIComponent(next)}`} className="text-center text-sm font-medium text-brand-700 hover:underline">
+                  {emailT('createAccountLink')}
                 </Link>
               ) : null}
             </form>

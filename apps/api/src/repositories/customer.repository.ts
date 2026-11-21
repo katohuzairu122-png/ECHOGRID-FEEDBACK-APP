@@ -256,7 +256,7 @@ export class CustomerRepository extends BaseRepository {
     const [row] = await this.db
       .update(customers)
       .set({ ...patch, updatedAt: new Date() })
-      .where(eq(customers.id, id))
+      .where(and(eq(customers.id, id), eq(customers.isDeleted, false)))
       .returning();
     return row;
   }

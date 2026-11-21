@@ -87,7 +87,7 @@ export function createEmailAuthDependencies(config: ResolvedEmailAuthConfig, par
     keyForIdentifier: (address) =>
       customerChallengeDigest({ secret: config.hmacSecret, purpose: 'email_registration', field: 'subject', value: address }),
     limit: parts.limit,
-    requestProof: (address) => parts.withDb((db) => registration(db).requestProof(address)),
+    requestProof: (address, next) => parts.withDb((db) => registration(db).requestProof(address, next)),
     completeRegistration: (input) => parts.withDb((db) => registration(db).completeRegistration(input)),
     login: (input) =>
       parts.withDb((db) => {
@@ -97,6 +97,21 @@ export function createEmailAuthDependencies(config: ResolvedEmailAuthConfig, par
           phoneProofMaxAgeSeconds: 300,
         }).loginWithVerifiedEmailPassword({ email: input.email, password: input.password });
       }),
+    changePassword: async (accessToken, input) => parts.withDb(async (db) => {
+      const sessions = new CustomerSessionService(db, config.session);
+      const identity = await sessions.authenticateSessionToken(accessToken);
+      if (!identity || identity.assurance !== 'session') return false;
+      const result = await new CustomerPasswordAuthService(db, sessions, parts.hasher, {
+        passwordMinLength: config.passwordMinLength,
+        phoneProofMaxAgeSeconds: 300,
+      }).changePassword({
+        customerId: identity.customerId,
+        sessionId: identity.sessionId,
+        currentPassword: input.currentPassword,
+        newPassword: input.newPassword,
+      });
+      return result.ok;
+    }),
     transportSession: (session) =>
       Response.json(
         {

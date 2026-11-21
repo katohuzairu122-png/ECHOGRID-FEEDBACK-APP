@@ -15,6 +15,7 @@ export type RegistrationProofDelivery = (message: {
   recipient: string;
   challengeId: string;
   proof: string;
+  next?: string;
 }) => Promise<void>;
 
 /** Isolated composition only. The delivery adapter must never log its message. */
@@ -30,7 +31,7 @@ export function createEmailRegistrationService(config: {
   const keyForIdentifier = (value: string) => customerChallengeDigest({
     secret: config.hmacSecret, purpose, field: 'subject', value,
   });
-  const requestProof = async (address: string) => {
+  const requestProof = async (address: string, next?: string) => {
     const email = normalizeLoginEmail(address);
     if (!email || typeof config.deliver !== 'function') return;
     const subjectDigest = await keyForIdentifier(email);
@@ -57,17 +58,20 @@ export function createEmailRegistrationService(config: {
         now: timestamp,
       });
     });
-    if (challengeId) await config.deliver({ recipient: email, challengeId, proof });
+    if (challengeId) await config.deliver({ recipient: email, challengeId, proof, ...(next ? { next } : {}) });
   };
   return {
     keyForIdentifier,
     requestProof,
-    completeRegistration: async (input: { email: string; challengeId: string; proof: string; password: string; phone?: string | undefined }) => {
+    completeRegistration: async (input: { email: string; challengeId: string; proof: string; name: string; password: string; phone?: string | undefined }) => {
+      const name = input.name.trim();
+      if (!name || name.length > 120) return { ok: false, kind: 'invalid' } as const;
       if (!checkPasswordPolicy(input.password, { phone: input.phone ?? null }, config.passwordPolicy).ok) {
         return { ok: false, kind: 'invalid' } as const;
       }
       return completeEmailRegistration({
         ...input,
+        name,
         db: config.db,
         hmacSecret: config.hmacSecret,
         passwordHash: () => config.hasher.hash(normalizePassword(input.password), PASSWORD_ITERATIONS),
