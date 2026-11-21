@@ -191,6 +191,15 @@ describe('CustomerAuthService', () => {
     expect(result.customer.phoneVerifiedAt).not.toBeNull();
   });
 
+  it('the rotating-session OTP proof path resolves the same customer without minting a legacy bearer token', async () => {
+    await service.requestOtp(PHONE);
+    const customer = await service.verifyOtpForRotatingSession(PHONE, extractCode(sms.lastMessage!));
+
+    expect(customer.phone).toBe(PHONE);
+    expect(customer.phoneVerifiedAt).not.toBeNull();
+    expect(customer).not.toHaveProperty('accessToken');
+  });
+
   it('verifying twice with the same code fails the second time -- a code is single-use', async () => {
     await service.requestOtp(PHONE);
     const code = extractCode(sms.lastMessage!);

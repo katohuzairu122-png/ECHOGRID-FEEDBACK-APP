@@ -94,18 +94,34 @@ export class CustomerAuthService {
    * validating its locally generated code in development and tests.
    */
   async completeVerifiedPhone(phone: string): Promise<CustomerAuthResult> {
-    // The caller has just proven the phone. Identity is the VERIFIED owner of the number (never an account that
-    // only typed it); a first-time number becomes a new verified customer.
-    const { customer } = await this.repos.customers.createIfAbsent({ phone, phoneVerifiedAt: new Date() });
-    if (!customer || customer.status !== 'active') {
-      throw new CustomerAuthError('This account is not active.', 'CUSTOMER_SUSPENDED');
-    }
+    const customer = await this.resolveVerifiedPhone(phone);
 
     const accessToken = await signCustomerAccessToken(
       customer.id,
       this.secrets.CUSTOMER_JWT_SECRET,
     );
     return { accessToken, customer };
+  }
+
+  /** Resolves a proven phone owner without minting a legacy bearer token. */
+  async completeVerifiedPhoneForRotatingSession(phone: string): Promise<Customer> {
+    return this.resolveVerifiedPhone(phone);
+  }
+
+  /** Consumes the repository OTP proof, then resolves the identity without issuing a legacy token. */
+  async verifyOtpForRotatingSession(phone: string, code: string): Promise<Customer> {
+    await this.consumeOtp(phone, code);
+    return this.resolveVerifiedPhone(phone);
+  }
+
+  private async resolveVerifiedPhone(phone: string): Promise<Customer> {
+    // The caller has just proven the phone. Identity is the VERIFIED owner of the number (never an account that
+    // only typed it); a first-time number becomes a new verified customer.
+    const { customer } = await this.repos.customers.createIfAbsent({ phone, phoneVerifiedAt: new Date() });
+    if (!customer || customer.status !== 'active') {
+      throw new CustomerAuthError('This account is not active.', 'CUSTOMER_SUSPENDED');
+    }
+    return customer;
   }
 
   async verifyOtp(phone: string, code: string): Promise<CustomerAuthResult> {

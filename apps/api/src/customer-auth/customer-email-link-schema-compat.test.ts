@@ -53,6 +53,7 @@ describe('S3 schema dependencies (migration 0072 / 0073)', () => {
 describe('S3 stays unreachable from the deployed Worker until activation', () => {
   it('only the isolated email-link composition imports the link service or routes', () => {
     expect(referencing(/customer-email-link\.(service|routes)/)).toEqual([
+      'src/customer-auth/customer-email-link.composition.ts',
       'src/customer-auth/customer-email-link.routes.ts',
     ]);
   });
@@ -63,6 +64,7 @@ describe('S3 stays unreachable from the deployed Worker until activation', () =>
     // middleware (verifies them).
     expect(referencing(/new CustomerSessionService\(/)).toEqual([
       'src/customer-auth/customer-email-auth.composition.ts',
+      'src/customer-auth/customer-email-link.composition.ts',
       'src/customer-auth/customer-session-lifecycle.composition.ts',
       'src/middleware/customer-authenticate.ts',
     ]);
@@ -77,6 +79,10 @@ describe('S3 stays unreachable from the deployed Worker until activation', () =>
     const index = read('src/index.ts');
     expect(index.match(/customerEmailAuthComposition/g)?.length).toBe(2); // import + mount
     expect(index).toMatch(/api\.route\('\/customer-auth', customerEmailAuthComposition\);/);
+    expect(index.match(/customerEmailLinkComposition/g)?.length).toBe(2); // import + isolated mount
+    expect(index).toMatch(/api\.route\('\/customer-auth', customerEmailLinkComposition\);/);
+    const emailLinkComposition = read('src/customer-auth/customer-email-link.composition.ts');
+    expect(emailLinkComposition).toMatch(/env\.CUSTOMER_EMAIL_AUTH_ENABLED === 'true' && env\.CUSTOMER_LEGACY_UPGRADE_ENABLED === 'true'/);
     // The legacy-only verifier is preserved verbatim and is what runs whenever the flag is off.
     expect(read('src/middleware/customer-authenticate.ts')).toContain('if (!options.isEnabled(c)) return legacyCustomerAuthenticate(c, next);');
   });
@@ -89,8 +95,12 @@ describe('S3 stays unreachable from the deployed Worker until activation', () =>
     ]);
   });
 
-  it('the deployed entry point and legacy middleware default do not reference the link flow', () => {
-    expect(read('src/index.ts')).not.toMatch(/email-link|EmailLink/);
+  it('the link route is isolated behind its own exact-string upgrade gate', () => {
+    const index = read('src/index.ts');
+    expect(index).toMatch(/customerEmailLinkComposition/);
+    const link = read('src/customer-auth/customer-email-link.composition.ts');
+    expect(link).toMatch(/CUSTOMER_EMAIL_AUTH_ENABLED === 'true' && env\.CUSTOMER_LEGACY_UPGRADE_ENABLED === 'true'/);
+    expect(link).toMatch(/if \(!options\.isEnabled\(c\)\) return c\.json\(\{ error: 'Not Found' \}, 404\)/);
     const middleware = read('src/middleware/customer-authenticate.ts');
     expect(middleware).toContain('export const legacyCustomerAuthenticate = createCustomerAuthenticate();');
   });

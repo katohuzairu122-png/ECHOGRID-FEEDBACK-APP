@@ -37,27 +37,29 @@ The customer Settings upgrade prototype is designed to use that rotating session
 
 No new automatic account merge, password reset, altered points rule or weaker phone-verification gate is introduced.
 
-### Architecture isolation gate — CURRENT BLOCKER
+### Isolated legacy-upgrade composition — IMPLEMENTED, OFF BY DEFAULT
 
-Hosted CI identified `customer-email-link-schema-compat.test.ts`, a locked
-security contract that allows the pre-existing email-link service to be imported
-ONLY by its isolated `customer-email-link.routes.ts` module; the deployed
-`customer-email-auth.composition.ts` must not import it or reach it without a
-separate activation block. The initial implementation violated that contract.
+The API now mounts `customer-email-link.composition.ts` as a separate Hono
+composition. It is the only runtime composition that constructs the existing
+link service. The existing email-auth composition does not import or reach it.
+The routes return generic 404 unless **both**
+`CUSTOMER_EMAIL_AUTH_ENABLED === 'true'` and
+`CUSTOMER_LEGACY_UPGRADE_ENABLED === 'true'`. The latter is typed but is not
+configured or activated in any environment. The static compatibility test pins
+this separation and the flag checks.
 
-The correction removes that import and all runtime link-service wiring from
-the deployed email-auth composition, preserves the original assertion unchanged,
-and returns generic 404 responses for unactivated link operations. On the Web,
-the new OTP-to-rotating bridge and Settings link UI are restricted behind an
-additional **deny-by-default** exact-string gate
-`CUSTOMER_LEGACY_UPGRADE_ENABLED === 'true'`; this flag is NOT configured,
-approved, or activated in any environment.
+The OTP-to-rotating bridge verifies the existing database OTP or Twilio Verify
+proof, resolves the proven phone owner, and establishes the revocable OTP
+session without minting a legacy bearer. Settings then uses the isolated link
+composition and existing owner/session/step-up/proof checks. Successful linking
+retains the same customer id, verifies email ownership, revokes prior sessions,
+and advances the legacy-token cutoff. No identity merge is performed.
 
-**Legacy credential linking is therefore a development scaffold, NOT a live,
-fully functional feature on this branch.** A separate authorized activation
-must implement the isolated service composition, preserve its security
-gate, validate identity/step-up proof and run full browser integration.
-Do not set the new gate to true until those safeguards are verified.
+**Code for the legacy upgrade is implemented but inactive.** Its feature flag
+must remain off until the rate-limit budgets in 01D-5 are approved, the target
+environment's migration/provider readiness is verified, and full browser
+acceptance is reviewed. The explicit user authorization in this block does not
+authorize production or staging configuration changes.
 
 ### Identity and UX caveats
 
@@ -81,4 +83,4 @@ New unit tests cover AES-GCM roundtrip/tampering, signup proof-only actions, ser
 
 ## Release and rollback
 
-Do not merge before exact-head CI, migration-security acceptance and reviewed cleanup/legacy-identity browser evidence. The legacy-upgrade activation is blocked by the isolated S3 security boundary and requires a separately authorized implementation. The development branch may be abandoned without operational effect. Applying 0087 to a shared environment or enabling the email-auth flag needs new explicit authorization. No automatic advancement.
+Do not merge before exact-head CI, migration-security acceptance, pending-registration retention review and customer-auth Chromium evidence. The legacy-upgrade code remains gated until 01D-5 budgets and target-environment prerequisites are approved and verified. The development branch may be abandoned without operational effect. Applying 0087 to a shared environment or enabling either feature flag needs new explicit authorization. No automatic advancement.
