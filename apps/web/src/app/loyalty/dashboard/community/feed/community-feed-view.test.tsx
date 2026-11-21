@@ -116,6 +116,25 @@ describe('CommunityFeedView', () => {
     );
   });
 
+  it('offers an explicit account verification handoff, preserving the Feed cursor without redirecting', () => {
+    renderWithIntl(<CommunityFeedView result={{ status: 'verification_required' }} cursor="older_page-2" />);
+    expect(screen.getByRole('status')).toHaveTextContent('Current Community policy requires a verified phone to view the feed.');
+    expect(screen.getByRole('link', { name: 'Verify phone in your account' })).toHaveAttribute(
+      'href', '/loyalty/dashboard/phone?next=%2Floyalty%2Fdashboard%2Fcommunity%2Ffeed%3Fcursor%3Dolder_page-2',
+    );
+    expect(screen.getByRole('link', { name: 'Points & Membership' })).toHaveAttribute('href', '/loyalty/dashboard/community');
+    expect(screen.queryByRole('article')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button')).not.toBeInTheDocument();
+    expect(refresh).not.toHaveBeenCalled();
+  });
+
+  it('does not trust a return target or verification flag in a cursor', () => {
+    renderWithIntl(<CommunityFeedView result={{ status: 'verification_required' }} cursor="//evil.test?verified=true" />);
+    expect(screen.getByRole('link', { name: 'Verify phone in your account' })).toHaveAttribute(
+      'href', '/loyalty/dashboard/phone?next=%2Floyalty%2Fdashboard%2Fcommunity%2Ffeed',
+    );
+  });
+
   it('reports forbidden without a retry action', () => {
     renderWithIntl(<CommunityFeedView result={{ status: 'forbidden' }} cursor="older" />);
     expect(screen.getByRole('status')).toHaveTextContent('not available with your current access');
