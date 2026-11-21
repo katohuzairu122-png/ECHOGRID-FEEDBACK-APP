@@ -3,7 +3,7 @@ import { test, expect, type Page } from '@playwright/test';
 /**
  * CUSTOMER EMAIL SIGN-UP (Option A) ACCEPTANCE SPECIFICATION - staging only, opt-in.
  *
- * STATUS: written, NOT yet exercised against a live stack. Email authentication is OFF in every deployed
+ * STATUS: development-only; new single-pass registration cases need exact-head browser acceptance. Email authentication is OFF in every deployed
  * environment (CUSTOMER_EMAIL_AUTH_ENABLED=false). These tests are skipped unless explicitly enabled, so the default
  * CI run and local `playwright test` are unaffected. Enable only against a disposable/staging stack where an
  * authorised operator has turned the flag on for BOTH Workers (see docs/runbooks/CUSTOMER_EMAIL_AUTH_STAGING.md).
@@ -15,7 +15,7 @@ import { test, expect, type Page } from '@playwright/test';
  * the link out of band for the one test that needs it:
  *   E2E_CUSTOMER_VERIFY_URL   the full /loyalty/signup/verify?... link from the delivered email
  *   E2E_CUSTOMER_EMAIL        the address the link was requested for (must be an @example.test-style test address)
- *   E2E_CUSTOMER_PASSWORD     an acceptable password of >= the configured minimum (8) characters
+ *   E2E_CUSTOMER_PASSWORD     the password submitted at the original signup step
  * Optional phone attachment needs a staging phone number and the code read from the Worker logs (the console SMS service logs it):
  *   E2E_CUSTOMER_PHONE, E2E_CUSTOMER_PHONE_CODE
  * Legacy compatibility needs an already-issued legacy customer session token for a customer WITHOUT a verified login
@@ -41,7 +41,10 @@ test.describe.configure({ mode: 'serial' });
 test.describe('registration', () => {
   test('requesting a link is non-enumerating: the same confirmation is shown for any address', async ({ page }) => {
     await page.goto('/loyalty/signup');
+    await page.getByLabel('Name').fill('Synthetic E2E Customer');
     await page.getByLabel('Email').fill(`e2e-reg-${Date.now()}@example.test`);
+    await page.getByLabel('Choose a password').fill('secure-e2e-password-42');
+    await page.getByLabel('Confirm password').fill('secure-e2e-password-42');
     await page.getByRole('button', { name: 'Send confirmation link' }).click();
     await expect(page.getByText('Check your email')).toBeVisible();
     await expect(page.getByLabel('Email')).toHaveCount(0);
@@ -54,44 +57,37 @@ test.describe('registration', () => {
   });
 });
 
-test.describe('verification and password policy (minimum 8)', () => {
-  test.skip(!verifyUrl || !email, 'needs E2E_CUSTOMER_VERIFY_URL and E2E_CUSTOMER_EMAIL supplied from the delivered email');
+test.describe('one-time signup verification and session activation', () => {
+  test.skip(!verifyUrl || !email, 'needs E2E_CUSTOMER_VERIFY_URL and the matching synthetic email from the delivered message');
 
-  test('the form states the configured minimum and rejects a 7-character password before submitting', async ({ page }) => {
+  test('requires no repeated name, email or password on the verification page', async ({ page }) => {
     await page.goto(verifyUrl);
-    await expect(page.getByText('At least 8 characters.')).toBeVisible();
-    await page.getByLabel('Confirm your email').fill(email);
-    const password = page.getByLabel('Choose a password');
-    await password.fill('rBq4nZx'); // 7 characters
-    // The input carries the configured minimum natively, so a real browser refuses the submit before any server call. (The
-    // server-side message for non-browser clients is covered by the unit and integration tests.)
-    expect(await password.evaluate((el: HTMLInputElement) => el.validity.tooShort)).toBe(true);
-    await page.getByRole('button', { name: 'Create account' }).click();
-    await expect(page).toHaveURL(/\/loyalty\/signup\/verify/); // not signed in; the link is not consumed
+    await expect(page.getByLabel('Name')).toHaveCount(0);
+    await expect(page.getByLabel('Email')).toHaveCount(0);
+    await expect(page.getByLabel('Choose a password')).toHaveCount(0);
+    await expect(page.getByLabel('Confirm password')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Create account' })).toBeVisible();
   });
 
-  test('an 8+ character password completes registration and signs the customer in', async ({ page, context }) => {
-    test.skip(password.length < 8, 'E2E_CUSTOMER_PASSWORD must be at least 8 characters');
+  test('a single-use email proof activates the account and starts a rotating session', async ({ page, context }) => {
     await page.goto(verifyUrl);
-    await page.getByLabel('Confirm your email').fill(email);
-    await page.getByLabel('Choose a password').fill(password);
     await page.getByRole('button', { name: 'Create account' }).click();
     await expect(page).toHaveURL(/\/loyalty\/dashboard/);
     const cookies = await context.cookies();
-    const session = cookies.filter((c) => c.name.startsWith('__Host-'));
-    expect(session.length).toBeGreaterThan(0);
+    const session = cookies.filter((c) => c.name.startsWith('__Host-ff_customer_'));
+    expect(session.length).toBeGreaterThanOrEqual(2);
     for (const c of session) {
       expect(c.httpOnly).toBe(true);
       expect(c.secure).toBe(true);
     }
   });
 
-  test('the same link cannot be used twice', async ({ page }) => {
+  test('the same proof cannot be used again, and cannot establish a new session', async ({ page, context }) => {
+    await context.clearCookies();
     await page.goto(verifyUrl);
-    await page.getByLabel('Confirm your email').fill(email);
-    await page.getByLabel('Choose a password').fill(password);
     await page.getByRole('button', { name: 'Create account' }).click();
-    await expect(page.getByText(/expired or was already used/i)).toBeVisible();
+    await expect(page.getByText(/invalid|expired|already used/i)).toBeVisible();
+    expect((await context.cookies()).filter((c) => c.name.startsWith('__Host-ff_customer_'))).toHaveLength(0);
   });
 });
 

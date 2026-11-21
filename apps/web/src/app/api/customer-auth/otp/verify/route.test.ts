@@ -4,9 +4,17 @@ import { NextRequest } from 'next/server';
 import { ApiError } from '@/lib/api-error';
 import { CUSTOMER_PENDING_PHONE_COOKIE, CUSTOMER_TOKEN_COOKIE } from '@/lib/customer-cookies';
 import { publicApiFetch } from '@/lib/public-api-client';
+import { callCustomerAuthApi } from '@/lib/customer-email-auth-client';
+import { setRotatingCustomerSession } from '@/lib/customer-session';
 import { POST } from './route';
 
+vi.mock('server-only', () => ({}));
 vi.mock('@/lib/public-api-client', () => ({ publicApiFetch: vi.fn() }));
+vi.mock('@/lib/customer-email-auth-client', () => ({
+  callCustomerAuthApi: vi.fn(),
+  isCustomerEmailAuthWebEnabled: () => process.env.CUSTOMER_EMAIL_AUTH_ENABLED === 'true',
+}));
+vi.mock('@/lib/customer-session', () => ({ setRotatingCustomerSession: vi.fn(async () => {}) }));
 vi.mock('@/lib/api-client', () => ({ ApiError }));
 
 const phone = '+15551234567';
@@ -24,7 +32,7 @@ function request(fields: Record<string, string>, pendingPhone: string | null = p
 }
 
 describe('loyalty OTP verification route', () => {
-  beforeEach(() => vi.resetAllMocks());
+  beforeEach(() => { vi.resetAllMocks(); delete process.env.CUSTOMER_EMAIL_AUTH_ENABLED; delete process.env.CUSTOMER_LEGACY_UPGRADE_ENABLED; });
 
   it('verifies the server-bound phone and writes only the login cookie on the QR redirect', async () => {
     vi.mocked(publicApiFetch).mockResolvedValue({ accessToken: 'customer-token' });
@@ -78,4 +86,40 @@ describe('loyalty OTP verification route', () => {
       expect(response.headers.get('location')).toBe('https://echo-grid.uk/loyalty/dashboard');
     },
   );
+  it('upgrades a fresh phone OTP to a rotating session when email auth is enabled', async () => {
+    process.env.CUSTOMER_EMAIL_AUTH_ENABLED = 'true';
+    process.env.CUSTOMER_LEGACY_UPGRADE_ENABLED = 'true';
+    vi.mocked(callCustomerAuthApi).mockResolvedValue({
+      status: 200,
+      body: {
+        accessToken: 'rotating-access',
+        refreshCredential: 'r'.repeat(43),
+        accessExpiresAt: '2026-12-01T12:15:00.000Z',
+        refreshExpiresAt: '2026-12-31T12:15:00.000Z',
+      },
+    });
+    const response = await POST(request({ code: '123456', next }));
+    expect(response.status).toBe(303);
+    expect(response.headers.get('location')).toBe('https://echo-grid.uk' + next);
+    expect(callCustomerAuthApi).toHaveBeenCalledExactlyOnceWith('/customer-auth/email/legacy/otp-login', {
+      body: { phone, code: '123456' },
+    });
+    expect(setRotatingCustomerSession).toHaveBeenCalledTimes(1);
+    expect(publicApiFetch).not.toHaveBeenCalled();
+    expect(response.cookies.get(CUSTOMER_TOKEN_COOKIE)).toBeUndefined();
+  });
+
+  it('never issues any session after a wrong OTP or malformed rotating-credential reply', async () => {
+    process.env.CUSTOMER_EMAIL_AUTH_ENABLED = 'true';
+    process.env.CUSTOMER_LEGACY_UPGRADE_ENABLED = 'true';
+    vi.mocked(callCustomerAuthApi).mockResolvedValueOnce({ status: 401, body: null })
+      .mockResolvedValueOnce({ status: 200, body: { accessToken: 'partial-only' } });
+    const wrong = await POST(request({ code: '000000', next }));
+    expect(new URL(wrong.headers.get('location')!).pathname).toBe('/loyalty/login');
+    const malformed = await POST(request({ code: '000000', next }));
+    expect(new URL(malformed.headers.get('location')!).pathname).toBe('/loyalty/login');
+    expect(setRotatingCustomerSession).not.toHaveBeenCalled();
+    expect(publicApiFetch).not.toHaveBeenCalled();
+  });
+
 });

@@ -1,8 +1,12 @@
 import { Hono, type Context } from 'hono';
 import type { Bindings } from '../config/env';
 import { createDb, type Database } from '../db/client';
+import { createRepositories } from '../repositories';
 import { createDurableObjectPbkdf2Worker } from '../auth/pbkdf2-worker';
 import { createAccountSecurityEmailService } from '../notifications/email.service';
+import { CustomerAuthService } from './customer-auth.service';
+import { createSmsService } from './sms.service';
+import { TwilioVerifyService } from './twilio-verify.service';
 import { createCustomerEmailTrustedSource } from './customer-email-trusted-source';
 import { createSharedEmailAuthLimiter } from './customer-email-rate-limit';
 import { createEmailRegistrationService } from './customer-email-auth.service';
@@ -70,6 +74,7 @@ export type EmailAuthParts = {
   deliver: Parameters<typeof createEmailRegistrationService>[0]['deliver'];
   limit: IsolatedEmailAuthDependencies['limit'];
   resolveTrustedSource: IsolatedEmailAuthDependencies['resolveTrustedSource'];
+  legacyOtpSession?: IsolatedEmailAuthDependencies['legacyOtpSession'];
 };
 
 /** The one place that turns validated config and parts into the isolated routes' dependencies. */
@@ -87,8 +92,15 @@ export function createEmailAuthDependencies(config: ResolvedEmailAuthConfig, par
     keyForIdentifier: (address) =>
       customerChallengeDigest({ secret: config.hmacSecret, purpose: 'email_registration', field: 'subject', value: address }),
     limit: parts.limit,
-    requestProof: (address, next) => parts.withDb((db) => registration(db).requestProof(address, next)),
-    completeRegistration: (input) => parts.withDb((db) => registration(db).completeRegistration(input)),
+    requestProof: (address, next, signup) => parts.withDb((db) => registration(db).requestProof(address, next, signup)),
+    completeRegistration: (input) => parts.withDb(async (db) => {
+      const completed = await registration(db).completeRegistration(input);
+      if (!completed.ok) return completed;
+      // A verified proof creates an account and an immediately usable rotating session.
+      const sessions = new CustomerSessionService(db, config.session);
+      const established = await sessions.establishSession({ customerId: completed.customerId, authMethod: 'password' });
+      return established.ok ? { ...completed, session: established.session } : completed;
+    }),
     login: (input) =>
       parts.withDb((db) => {
         const sessions = new CustomerSessionService(db, config.session);
@@ -112,6 +124,7 @@ export function createEmailAuthDependencies(config: ResolvedEmailAuthConfig, par
       });
       return result.ok;
     }),
+    ...(parts.legacyOtpSession ? { legacyOtpSession: parts.legacyOtpSession } : {}),
     transportSession: (session) =>
       Response.json(
         {
@@ -134,6 +147,17 @@ export async function openEmailAuthRuntime(c: Context): Promise<EmailAuthRuntime
     return null;
   }
   const { config } = resolved;
+  const hasher = createDurableObjectPbkdf2Worker(env.PASSWORD_HASHER);
+  const sms = createSmsService(env.ENVIRONMENT, {
+    accountSid: env.TWILIO_ACCOUNT_SID,
+    authToken: env.TWILIO_AUTH_TOKEN,
+    fromNumber: env.TWILIO_FROM_NUMBER,
+  });
+  const verify = new TwilioVerifyService({
+    accountSid: env.TWILIO_ACCOUNT_SID,
+    authToken: env.TWILIO_AUTH_TOKEN,
+    serviceSid: env.TWILIO_VERIFY_SERVICE_SID,
+  });
 
   const closers: Array<() => Promise<void>> = [];
   const withDb = async <T>(fn: (db: Database) => Promise<T>): Promise<T> => {
@@ -147,7 +171,7 @@ export async function openEmailAuthRuntime(c: Context): Promise<EmailAuthRuntime
   });
   const dependencies = createEmailAuthDependencies(config, {
     withDb,
-    hasher: createDurableObjectPbkdf2Worker(env.PASSWORD_HASHER),
+    hasher,
     deliver: createRegistrationProofDelivery({ email, webBaseUrl: config.webBaseUrl }),
     limit: createSharedEmailAuthLimiter(env.CUSTOMER_AUTH_RATE_LIMIT),
     resolveTrustedSource: createCustomerEmailTrustedSource({
@@ -155,6 +179,24 @@ export async function openEmailAuthRuntime(c: Context): Promise<EmailAuthRuntime
       ...(env.CLIENT_ATTRIBUTION_SECRET_PREVIOUS ? { previousAttributionSecret: env.CLIENT_ATTRIBUTION_SECRET_PREVIOUS } : {}),
       sourceKeySecret: await deriveEmailAuthSourceKey(config.hmacSecret),
     }),
+    ...(env.CUSTOMER_LEGACY_UPGRADE_ENABLED === 'true' ? { legacyOtpSession: async (phone: string, code: string) => withDb(async (db) => {
+      const auth = new CustomerAuthService(
+        createRepositories(db), sms,
+        { CUSTOMER_JWT_SECRET: env.CUSTOMER_JWT_SECRET },
+        hasher,
+      );
+      const customer = env.ENVIRONMENT === 'production'
+        ? await verify.check(phone, code)
+          ? await auth.completeVerifiedPhoneForRotatingSession(phone)
+          : null
+        : await auth.verifyOtpForRotatingSession(phone, code);
+      if (!customer) return null;
+      const session = await new CustomerSessionService(db, config.session).establishSession({
+        customerId: customer.id,
+        authMethod: 'otp',
+      });
+      return session.ok ? session.session : null;
+    }) } : {}),
   });
   return { dependencies, close: async () => { await Promise.allSettled(closers.map((close) => close())); } };
 }

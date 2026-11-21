@@ -12,14 +12,28 @@ const customerDestination = z.string().max(2048).refine((value) =>
   value.startsWith('/loyalty/') && !value.startsWith('//') && !value.includes('\\') &&
   ![...value].some((character) => character.charCodeAt(0) < 0x20),
 );
-export const emailRegistrationRequestSchema = z.object({ email, next: customerDestination.optional() }).strict();
+export const emailRegistrationRequestSchema = z.object({
+  email, next: customerDestination.optional(),
+  // Optional only for in-flight pre-migration registration challenge tests/compatibility.
+  name: z.string().trim().min(1).max(120).optional(),
+  password: password.optional(),
+}).strict().refine((value) => (value.name === undefined) === (value.password === undefined));
 export const emailRegistrationCompleteSchema = z.object({
-  email, challengeId: z.uuid(), proof: z.string().min(6).max(256),
-  name: z.string().trim().min(1).max(120), password,
+  challengeId: z.uuid(), proof: z.string().min(6).max(256),
+  // Old unsealed challenges may still supply their signup fields.
+  email: email.optional(), name: z.string().trim().min(1).max(120).optional(), password: password.optional(),
   /** Optional, stored unverified; proven later through /loyalty/me/phone. */
   phone: z.string().trim().min(1).max(40).optional(),
 }).strict();
 export const emailPasswordLoginSchema = z.object({ email, password }).strict();
+export const legacyOtpSessionSchema = z.object({
+  phone: z.string().regex(/^\+[1-9][0-9]{6,14}$/),
+  code: z.string().min(4).max(10).regex(/^[0-9]+$/),
+}).strict();
+export const emailLinkRequestSchema = z.object({ email }).strict();
+export const emailLinkCompleteSchema = z.object({
+  email, challengeId: z.uuid(), proof: z.string().min(6).max(256), password,
+}).strict();
 export const emailPasswordChangeSchema = z.object({
   currentPassword: password,
   newPassword: password,
@@ -36,10 +50,14 @@ export type IsolatedEmailAuthDependencies = {
   resolveTrustedSource(request: Request): Promise<string | null>;
   keyForIdentifier(email: string): Promise<string>;
   limit: EmailAuthLimiter;
-  requestProof(email: string, next?: string): Promise<void>;
-  completeRegistration(input: z.infer<typeof emailRegistrationCompleteSchema>): Promise<EmailRegistrationResult>;
+  requestProof(email: string, next?: string, signup?: { name: string; password: string }): Promise<void>;
+  /** Signed Web Worker-only phone proof -> revocable OTP session for existing phone-only customers. */
+  legacyOtpSession?: (phone: string, code: string) => Promise<IssuedSession | null>;
+  completeRegistration(input: z.infer<typeof emailRegistrationCompleteSchema>): Promise<EmailRegistrationResult & { session?: IssuedSession }>;
   login(input: z.infer<typeof emailPasswordLoginSchema>): Promise<PasswordLoginResult>;
   changePassword(accessToken: string, input: z.infer<typeof emailPasswordChangeSchema>): Promise<boolean>;
+  requestLink?: (accessToken: string, email: string) => Promise<boolean>;
+  completeLink?: (accessToken: string, input: { email: string; challengeId: string; proof: string; password: string }) => Promise<boolean>;
   transportSession(session: IssuedSession): Response;
 };
 
@@ -54,6 +72,9 @@ const paths = {
   complete: '/email/register/complete',
   login: '/email/login',
   changePassword: '/email/password/change',
+  legacyOtpLogin: '/email/legacy/otp-login',
+  linkRequest: '/email/link/request',
+  linkComplete: '/email/link/complete',
 };
 
 for (const path of Object.values(paths)) {
@@ -116,10 +137,16 @@ export function createIsolatedCustomerEmailAuthRoutes(dependencies: IsolatedEmai
     if (!dto.success) return badRequest();
     const decision = await limitEmailAuthRequest(dependencies, c.req.raw, 'delivery', dto.data.email);
     if (decision !== 'allowed') return deny(decision);
-    // Delivery errors and suppressions share the same response.
-    await (dto.data.next === undefined
-      ? dependencies.requestProof(dto.data.email)
-      : dependencies.requestProof(dto.data.email, dto.data.next)).catch(() => undefined);
+    // Account credentials travel only from the Web BFF to this attribution-protected API.
+    // The service hashes then AES-GCM seals them before issuing the email challenge.
+    const signup = dto.data.name && dto.data.password
+      ? { name: dto.data.name, password: dto.data.password } : undefined;
+    // Preserve old email-only request calls for unexpired legacy links and existing tests.
+    await (signup
+      ? dependencies.requestProof(dto.data.email, dto.data.next, signup)
+      : dto.data.next === undefined
+        ? dependencies.requestProof(dto.data.email)
+        : dependencies.requestProof(dto.data.email, dto.data.next)).catch(() => undefined);
     return accepted();
   });
   routes.post(paths.complete, async (c) => {
@@ -130,7 +157,13 @@ export function createIsolatedCustomerEmailAuthRoutes(dependencies: IsolatedEmai
       return unavailable();
     }
     const result = await dependencies.completeRegistration(dto.data);
-    return result.ok ? c.json({ registered: true }, 201) : invalid();
+    if (!result.ok) return invalid();
+    if (!result.session) return c.json({ registered: true }, 201); // Pre-migration proof compatibility.
+    // Transport the freshly issued session to the Web Worker only, never a browser response.
+    const transported = dependencies.transportSession(result.session);
+    return new Response(transported.body, { status: 201, headers: {
+      'Cache-Control': 'no-store', 'Content-Type': transported.headers.get('Content-Type') ?? 'application/json',
+    } });
   });
   routes.post(paths.login, async (c) => {
     const dto = emailPasswordLoginSchema.safeParse(await c.req.json().catch(() => null));
@@ -139,6 +172,38 @@ export function createIsolatedCustomerEmailAuthRoutes(dependencies: IsolatedEmai
     if (decision !== 'allowed') return deny(decision);
     const result = await dependencies.login(dto.data);
     return result.ok ? dependencies.transportSession(result.session) : invalid();
+  });
+  routes.post(paths.legacyOtpLogin, async (c) => {
+    const dto = legacyOtpSessionSchema.safeParse(await c.req.json().catch(() => null));
+    if (!dto.success) return badRequest();
+    const decision = await limitEmailAuthRequest(dependencies, c.req.raw, 'login', dto.data.phone);
+    if (decision !== 'allowed') return deny(decision);
+    if (!dependencies.legacyOtpSession) return Response.json({ error: 'Not Found' }, { status: 404 });
+    const session = await dependencies.legacyOtpSession(dto.data.phone, dto.data.code);
+    return session ? dependencies.transportSession(session) : invalid();
+  });
+  routes.post(paths.linkRequest, async (c) => {
+    const dto = emailLinkRequestSchema.safeParse(await c.req.json().catch(() => null));
+    if (!dependencies.requestLink) return Response.json({ error: 'Not Found' }, { status: 404 });
+    if (!dto.success) return badRequest();
+    const decision = await limitEmailAuthRequest(dependencies, c.req.raw, 'delivery', dto.data.email);
+    if (decision !== 'allowed') return deny(decision);
+    const bearer = c.req.header('authorization')?.match(/^Bearer ([^\s]+)$/)?.[1];
+    if (!bearer) return invalid();
+    // The link service enforces fresh rotating OTP ownership; return a generic acceptance
+    // for authenticated requests, including suppressed conflicting-email claims.
+    return await dependencies.requestLink(bearer, dto.data.email) ? accepted() : invalid();
+  });
+  routes.post(paths.linkComplete, async (c) => {
+    const dto = emailLinkCompleteSchema.safeParse(await c.req.json().catch(() => null));
+    if (!dependencies.completeLink) return Response.json({ error: 'Not Found' }, { status: 404 });
+    if (!dto.success) return badRequest();
+    const decision = await limitEmailAuthRequest(dependencies, c.req.raw, 'login', dto.data.email);
+    if (decision !== 'allowed') return deny(decision);
+    const bearer = c.req.header('authorization')?.match(/^Bearer ([^\s]+)$/)?.[1];
+    if (!bearer) return invalid();
+    const completed = await dependencies.completeLink(bearer, dto.data);
+    return completed ? new Response(null, { status: 204, headers: { 'Cache-Control': 'no-store' } }) : invalid();
   });
   routes.post(paths.changePassword, async (c) => {
     if (!await dependencies.resolveTrustedSource(c.req.raw)) return unavailable();

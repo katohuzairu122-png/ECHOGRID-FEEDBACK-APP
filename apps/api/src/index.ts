@@ -27,6 +27,7 @@ import { feedbackFormRoutes } from './feedback/feedback-form.routes';
 import { customerAuthRoutes } from './customer-auth/customer-auth.routes';
 import { customerRecoveryRoutes } from './customer-auth/customer-recovery.composition';
 import { customerEmailAuthComposition } from './customer-auth/customer-email-auth.composition';
+import { customerEmailLinkComposition } from './customer-auth/customer-email-link.composition';
 import { customerSessionLifecycleComposition } from './customer-auth/customer-session-lifecycle.composition';
 import { customerMembershipRoutes } from './customer-relationships/customer-membership.routes';
 import { customerLanguageRoutes } from './customer-language/customer-language.routes';
@@ -176,6 +177,8 @@ api.route('/public/businesses', publicBusinessDirectoryRoutes);
 api.route('/feedback', feedbackRoutes);
 api.route('/feedback-forms', feedbackFormRoutes);
 api.route('/customer-auth', customerAuthRoutes);
+// Existing phone-only customer credential linking stays isolated and is generic 404 unless both auth gates are exactly true.
+api.route('/customer-auth', customerEmailLinkComposition);
 // S5-01: email registration and login. DISABLED BY DEFAULT: every /customer-auth/email/* path is a generic 404 unless
 // CUSTOMER_EMAIL_AUTH_ENABLED is exactly "true"; when on, any missing setting answers 503 (no defaults, no fallback).
 api.route('/customer-auth', customerEmailAuthComposition);

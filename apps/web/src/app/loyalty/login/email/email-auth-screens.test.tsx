@@ -98,20 +98,20 @@ describe('SignupRequestForm', () => {
 });
 
 describe('SignupVerifyForm', () => {
-  it('reads the proof from the fragment, removes it from the address bar, and submits it with the password', async () => {
+  it('reads the proof from the fragment, removes it from the address bar, and confirms without asking for credentials again', async () => {
     window.location.hash = `#c=${encodeURIComponent(CHALLENGE)}`;
     const replace = vi.spyOn(window.history, 'replaceState');
     h.complete.mockResolvedValue({ success: true, next: '/loyalty/dashboard' });
     const { container } = render(<SignupVerifyForm next="/loyalty/dashboard" />);
-    expect(await screen.findByLabelText('Confirm your email')).toBeInTheDocument();
+    expect(await screen.findByText('Confirm your email')).toBeInTheDocument();
     expect(replace).toHaveBeenCalledWith(null, '', '/loyalty/signup/verify');
     expect((container.querySelector('input[name="challenge"]') as HTMLInputElement).value).toBe(CHALLENGE);
-    await userEvent.type(screen.getByLabelText('Name'), 'Synthetic Customer');
-    await userEvent.type(screen.getByLabelText('Confirm your email'), 'a@example.test');
-    await userEvent.type(screen.getByLabelText('Choose a password'), 'a long enough password 42');
-    await userEvent.type(screen.getByLabelText('Confirm password'), 'a long enough password 42');
     await userEvent.click(screen.getByRole('button', { name: 'Create account' }));
+    expect(h.complete).toHaveBeenCalled();
     await waitFor(() => expect(assign).toHaveBeenCalledWith('/loyalty/dashboard'));
+    expect(screen.queryByLabelText('Name')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Choose a password')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Confirm password')).not.toBeInTheDocument();
   });
   it('an incomplete or tampered link shows a plain message and a way to request a new one, with no form', async () => {
     window.location.hash = '#c=garbage';
@@ -124,12 +124,8 @@ describe('SignupVerifyForm', () => {
     window.location.hash = `#c=${encodeURIComponent(CHALLENGE)}`;
     h.complete.mockResolvedValue({ error: 'invalid_proof' });
     render(<SignupVerifyForm next="/loyalty/dashboard" />);
-    await userEvent.type(await screen.findByLabelText('Name'), 'Synthetic Customer');
-    await userEvent.type(await screen.findByLabelText('Confirm your email'), 'a@example.test');
-    await userEvent.type(screen.getByLabelText('Choose a password'), 'x');
-    await userEvent.type(screen.getByLabelText('Confirm password'), 'x');
     await userEvent.click(screen.getByRole('button', { name: 'Create account' }));
-    expect(await screen.findByRole('alert')).toHaveTextContent(/expired or was already used/);
+    expect(await screen.findByRole('alert')).toHaveTextContent(/invalid, expired or already used/);
   });
 });
 
@@ -159,38 +155,32 @@ describe('entry points', () => {
   });
 });
 
-describe('SignupVerifyForm password minimum (configured, approved 8)', () => {
+describe('SignupRequestForm password minimum (configured, approved 8)', () => {
   it('shows the configured minimum as a hint and as the input constraint', async () => {
-    window.location.hash = `#c=${encodeURIComponent(CHALLENGE)}`;
-    render(<SignupVerifyForm next="/loyalty/dashboard" minLength={8} />);
-    const input = await screen.findByLabelText('Choose a password');
+    render(<SignupRequestForm next="/loyalty/dashboard" minLength={8} />);
+    const input = screen.getByLabelText('Choose a password');
     expect(input).toHaveAttribute('minlength', '8');
     expect(screen.getByText('At least 8 characters.')).toBeInTheDocument();
   });
   it('shows no number when none is configured (nothing is assumed on the screen)', async () => {
-    window.location.hash = `#c=${encodeURIComponent(CHALLENGE)}`;
-    render(<SignupVerifyForm next="/loyalty/dashboard" />);
-    const input = await screen.findByLabelText('Choose a password');
+    render(<SignupRequestForm next="/loyalty/dashboard" />);
+    const input = screen.getByLabelText('Choose a password');
     expect(input).not.toHaveAttribute('minlength');
     expect(screen.queryByText(/At least/)).not.toBeInTheDocument();
   });
-  it('a too-short password shows a translated error naming the configured minimum', async () => {
-    window.location.hash = `#c=${encodeURIComponent(CHALLENGE)}`;
-    h.complete.mockResolvedValue({ error: 'password_too_short', minLength: 8 });
-    render(<SignupVerifyForm next="/loyalty/dashboard" minLength={8} />);
-    await userEvent.type(await screen.findByLabelText('Name'), 'Synthetic Customer');
-    await userEvent.type(await screen.findByLabelText('Confirm your email'), 'a@example.test');
-    await userEvent.type(screen.getByLabelText('Choose a password'), 'abc');
-    await userEvent.type(screen.getByLabelText('Confirm password'), 'abc');
-    await userEvent.click(screen.getByRole('button', { name: 'Create account' }));
-    expect(await screen.findByRole('alert')).toHaveTextContent('Your password must be at least 8 characters.');
+  it('keeps credentials on the initial account-setup screen', () => {
+    render(<SignupRequestForm next="/loyalty/dashboard" minLength={8} />);
+    expect(screen.getByLabelText('Name')).toBeInTheDocument();
+    expect(screen.getByLabelText('Email')).toBeInTheDocument();
+    expect(screen.getByLabelText('Choose a password')).toHaveAttribute('minlength', '8');
+    expect(screen.getByLabelText('Confirm password')).toHaveAttribute('minlength', '8');
   });
-  it('the verify page passes the configured minimum to the screen', async () => {
+  it('the signup page passes the configured minimum to the screen', async () => {
     process.env.CUSTOMER_PASSWORD_MIN_LENGTH = '8';
-    const element = (await VerifyPage({ searchParams: Promise.resolve({}) })) as { props: { minLength?: number } };
+    const element = (await SignupPage({ searchParams: Promise.resolve({}) })) as { props: { minLength?: number } };
     expect(element.props.minLength).toBe(8);
     delete process.env.CUSTOMER_PASSWORD_MIN_LENGTH;
-    const without = (await VerifyPage({ searchParams: Promise.resolve({}) })) as { props: { minLength?: number } };
+    const without = (await SignupPage({ searchParams: Promise.resolve({}) })) as { props: { minLength?: number } };
     expect(without.props.minLength).toBeUndefined();
   });
 });

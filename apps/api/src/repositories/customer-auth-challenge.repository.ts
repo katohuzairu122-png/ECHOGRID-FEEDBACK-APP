@@ -16,6 +16,7 @@ export class CustomerAuthChallengeRepository extends BaseRepository {
     proofDigest: string;
     expiresAt: Date;
     now: Date;
+    registrationSealedData?: string;
   }): Promise<string> {
     const [row] = await this.db.insert(customerAuthChallenges).values({
       customerId: input.customerId ?? null,
@@ -24,6 +25,7 @@ export class CustomerAuthChallengeRepository extends BaseRepository {
       proofDigest: input.proofDigest,
       createdAt: input.now,
       expiresAt: input.expiresAt,
+      registrationSealedData: input.registrationSealedData ?? null,
     }).returning({ id: customerAuthChallenges.id });
     if (!row) throw new Error('Challenge insert returned no row');
     return row.id;
@@ -46,7 +48,7 @@ export class CustomerAuthChallengeRepository extends BaseRepository {
       ? isNull(customerAuthChallenges.customerId)
       : eq(customerAuthChallenges.customerId, input.customerId);
     const rows = await this.db.update(customerAuthChallenges)
-      .set({ consumedAt: input.now })
+      .set({ consumedAt: input.now, ...(input.purpose === 'email_registration' ? { registrationSealedData: null } : {}) })
       .where(and(
         eq(customerAuthChallenges.id, input.id),
         owner,

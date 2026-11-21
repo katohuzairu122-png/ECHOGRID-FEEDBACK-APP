@@ -518,7 +518,7 @@
       "sentDescription": "Si esta dirección puede usarse, hemos enviado un enlace de confirmación. Caduca en 15 minutos.",
       "haveAccountLink": "¿Ya tienes una cuenta? Inicia sesión",
       "verifyTitle": "Confirma tu correo",
-      "verifyDescription": "Ingresa el correo que usaste y elige una contraseña para terminar de crear tu cuenta.",
+      "verifyDescription": "Se ha confirmado tu correo. Termina de activar tu cuenta sin volver a ingresar tu nombre ni tu contraseña.",
       "confirmEmailLabel": "Confirma tu correo",
       "createPasswordLabel": "Elige una contraseña",
       "createAccountButton": "Crear cuenta",
@@ -528,7 +528,7 @@
       "errors": {
         "invalid_input": "Revisa los datos ingresados e inténtalo de nuevo.",
         "invalid_credentials": "El correo o la contraseña no son correctos.",
-        "invalid_proof": "Este enlace caducó o ya se usó, o la contraseña no fue aceptada. Solicita un enlace nuevo e inténtalo de nuevo.",
+        "invalid_proof": "Este enlace de confirmación no es válido, ha caducado o ya se utilizó. Solicita uno nuevo.",
         "rate_limited": "Demasiados intentos. Espera unos minutos e inténtalo de nuevo.",
         "unavailable": "No disponible por ahora. Inténtalo más tarde.",
         "password_too_short": "Tu contraseña debe tener al menos {min} caracteres.",
@@ -593,7 +593,29 @@
       "save": "Guardar nombre",
       "saving": "Guardando…",
       "saved": "Se actualizó tu nombre.",
-      "errors": { "invalid_name": "Ingresa un nombre de hasta 120 caracteres.", "invalid": "Comprueba las contraseñas y vuelve a intentarlo.", "unavailable": "No se pudo guardar el cambio. Inténtalo de nuevo." }
+      "errors": {
+        "invalid_name": "Ingresa un nombre de hasta 120 caracteres.",
+        "invalid": "Comprueba las contraseñas y vuelve a intentarlo.",
+        "unavailable": "No se pudo guardar el cambio. Inténtalo de nuevo."
+      },
+      "upgradeDescription": "Agrega correo y contraseña a tu cuenta de teléfono actual sin perder membresías ni puntos. Primero vuelve a verificar tu teléfono.",
+      "upgradeVerifyPhone": "Verificar el teléfono de nuevo",
+      "upgradeEmailLabel": "Correo para vincular",
+      "upgradeRequest": "Enviar confirmación por correo",
+      "upgradeSent": "Si la dirección es apta, se envió un enlace. Ábrelo en este mismo dispositivo dentro de 10 minutos.",
+      "upgradeConfirmTitle": "Confirmar correo y establecer contraseña",
+      "upgradeConfirmDescription": "Abre el enlace mientras tu sesión de verificación telefónica siga vigente. Conservarás tu cuenta actual.",
+      "upgradeComplete": "Proteger mi cuenta actual",
+      "upgradeBack": "Volver a Configuración",
+      "upgradeMissingLink": "El enlace de confirmación está incompleto o caducó. Solicita uno nuevo.",
+      "upgradeErrors": {
+        "invalid": "No se aceptó el enlace, correo o contraseña. Vuelve a verificar el teléfono si es necesario.",
+        "password_mismatch": "Las contraseñas no coinciden.",
+        "password_too_short": "La contraseña debe tener al menos {min} caracteres.",
+        "verify_phone_again": "Se requiere una nueva verificación del teléfono. Inicia sesión de nuevo con un código.",
+        "unavailable": "No se puede vincular la cuenta ahora. Inténtalo de nuevo.",
+        "rate_limited": "Demasiados intentos. Espera antes de reintentar."
+      }
     },
     "invite": {
       "signInTitle": "Inicie sesión para unirse",

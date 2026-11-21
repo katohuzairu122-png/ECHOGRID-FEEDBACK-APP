@@ -3,7 +3,7 @@ import { Client } from 'pg';
 import { Hono } from 'hono';
 import { eq } from 'drizzle-orm';
 import { buildDb } from '../../src/db/client';
-import { customers } from '../../src/db/schema';
+import { customerAuthChallenges, customers } from '../../src/db/schema';
 import type { Bindings } from '../../src/config/env';
 import { createDirectPbkdf2Worker } from '../../src/auth/pbkdf2-worker';
 import { resolveEmailAuthConfig } from '../../src/customer-auth/customer-email-auth.config';
@@ -13,6 +13,7 @@ import {
 } from '../../src/customer-auth/customer-email-auth.composition';
 import { CustomerSessionService } from '../../src/customer-auth/customer-session.service';
 import { CustomerCredentialRepository } from '../../src/repositories/customer-credential.repository';
+import { CustomerRepository } from '../../src/repositories/customer.repository';
 import { PASSWORD_ITERATIONS } from '../../src/auth/password';
 import { normalizePassword } from '../../src/customer-auth/customer-password-policy';
 import { appDbOf } from '../helpers/runtime-db';
@@ -31,6 +32,12 @@ describe.skipIf(!process.env.DATABASE_URL)('Email registration and login flow (r
   let limitAllowed = true;
   let trusted: string | null = 'trusted-source';
   const ctx = () => ({ waitUntil: vi.fn(), passThroughOnException: vi.fn() }) as unknown as ExecutionContext;
+  const callExact = (path: string, body: unknown) =>
+    app.fetch(
+      new Request(`https://api.test/customer-auth${path}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }),
+      {} as Bindings,
+      ctx(),
+    );
   const call = (path: string, body: unknown) =>
     app.fetch(
       new Request(`https://api.test/customer-auth${path}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(
@@ -46,10 +53,10 @@ describe.skipIf(!process.env.DATABASE_URL)('Email registration and login flow (r
 
   async function register(email: string, pw = password) {
     delivered.length = 0;
-    expect((await call('/email/register/request', { email })).status).toBe(202);
+    expect((await callExact('/email/register/request', { email, name: 'Synthetic Flow Customer', password: pw })).status).toBe(202);
     const message = delivered.find((d) => d.recipient === email);
     expect(message).toBeDefined();
-    return call('/email/register/complete', { email, challengeId: message!.challengeId, proof: message!.proof, password: pw });
+    return callExact('/email/register/complete', { challengeId: message!.challengeId, proof: message!.proof });
   }
 
   beforeAll(async () => {
@@ -95,13 +102,18 @@ describe.skipIf(!process.env.DATABASE_URL)('Email registration and login flow (r
     const email = newEmail();
     const registered = await register(email);
     expect(registered.status).toBe(201);
-    expect(await registered.json()).toEqual({ registered: true });
+    expect(registered.headers.get('cache-control')).toBe('no-store');
+    const registrationSession = (await registered.json()) as { accessToken: string; refreshCredential: string; accessExpiresAt: string; refreshExpiresAt: string };
+    expect(Object.keys(registrationSession).sort()).toEqual(['accessExpiresAt', 'accessToken', 'refreshCredential', 'refreshExpiresAt']);
 
     const credential = await new CustomerCredentialRepository(db).findByLoginEmail(email);
     expect(credential?.loginEmailVerifiedAt).toBeTruthy();
     const [customer] = await db.select().from(customers).where(eq(customers.id, credential!.customerId));
     expect(customer!.phone).toBeNull(); // email-first identity: no phone yet
     expect(customer!.phoneVerifiedAt).toBeNull();
+
+    const registrationIdentity = await sessions.authenticateSessionToken(registrationSession.accessToken);
+    expect(registrationIdentity).toMatchObject({ assurance: 'session', customerId: credential!.customerId });
 
     const login = await call('/email/login', { email, password });
     expect(login.status).toBe(200);
@@ -110,6 +122,67 @@ describe.skipIf(!process.env.DATABASE_URL)('Email registration and login flow (r
     expect(Object.keys(body).sort()).toEqual(['accessExpiresAt', 'accessToken', 'refreshCredential', 'refreshExpiresAt']);
     const identity = await sessions.authenticateSessionToken(body.accessToken);
     expect(identity).toMatchObject({ assurance: 'session', customerId: credential!.customerId });
+  });
+
+  it('OTP upgrade lookup never creates an identity for an unknown but provable phone', async () => {
+    const phone = '+1555' + String(Math.floor(Math.random() * 10_000_000)).padStart(7, '0');
+    const repository = new CustomerRepository(db);
+    expect(await repository.resolveExistingPhoneForCredentialUpgrade(phone)).toBeUndefined();
+    const rows = await db.select({ id: customers.id }).from(customers).where(eq(customers.phone, phone));
+    expect(rows).toHaveLength(0);
+  });
+
+  it('OTP upgrade resolves the original verified customer instead of creating another row', async () => {
+    const phone = '+1555' + String(Math.floor(Math.random() * 10_000_000)).padStart(7, '0');
+    const repository = new CustomerRepository(db);
+    const existing = await repository.create({ phone, phoneVerifiedAt: new Date() });
+    const upgraded = await repository.resolveExistingPhoneForCredentialUpgrade(phone);
+    expect(upgraded?.id).toBe(existing.id);
+    const rows = await db.select({ id: customers.id }).from(customers).where(eq(customers.phone, phone));
+    expect(rows.map((row) => row.id)).toEqual([existing.id]);
+  });
+
+  it('OTP upgrade claims an unverified legacy phone-only row in place without identity duplication', async () => {
+    const phone = '+1555' + String(Math.floor(Math.random() * 10_000_000)).padStart(7, '0');
+    const repository = new CustomerRepository(db);
+    const existing = await repository.create({ phone, phoneVerifiedAt: null });
+    const upgraded = await repository.resolveExistingPhoneForCredentialUpgrade(phone);
+    expect(upgraded?.id).toBe(existing.id);
+    expect(upgraded?.phoneVerifiedAt).not.toBeNull();
+    const rows = await db.select({ id: customers.id }).from(customers).where(eq(customers.phone, phone));
+    expect(rows.map((row) => row.id)).toEqual([existing.id]);
+  });
+
+  it('OTP upgrade refuses to claim an email credential identity that merely typed an unverified phone', async () => {
+    const phone = '+1555' + String(Math.floor(Math.random() * 10_000_000)).padStart(7, '0');
+    const repository = new CustomerRepository(db);
+    const claimant = await repository.create({ phone, phoneVerifiedAt: null });
+    const hashed = await createDirectPbkdf2Worker().hash(normalizePassword('synthetic-password-42'), PASSWORD_ITERATIONS);
+    expect(await new CustomerCredentialRepository(db).create({
+      customerId: claimant.id, passwordHash: hashed, now: new Date(),
+    })).toBe(true);
+    expect(await repository.resolveExistingPhoneForCredentialUpgrade(phone)).toBeUndefined();
+    const rows = await db.select({ id: customers.id, verified: customers.phoneVerifiedAt })
+      .from(customers).where(eq(customers.phone, phone));
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.id).toBe(claimant.id);
+    expect(rows[0]?.verified).toBeNull();
+  });
+
+  it('keeps pending setup credentials sealed until the email proof is completed', async () => {
+    const email = newEmail();
+    const name = 'Pending Secret Name';
+    const pw = 'pending secret password 42';
+    delivered.length = 0;
+    expect((await callExact('/email/register/request', { email, name, password: pw })).status).toBe(202);
+    const proof = delivered.find((item) => item.recipient === email)!;
+    const [challenge] = await db.select({ sealed: customerAuthChallenges.registrationSealedData })
+      .from(customerAuthChallenges).where(eq(customerAuthChallenges.id, proof.challengeId));
+    expect(challenge?.sealed).toBeTruthy();
+    expect(challenge!.sealed).not.toContain(email);
+    expect(challenge!.sealed).not.toContain(name);
+    expect(challenge!.sealed).not.toContain(pw);
+    expect(await new CustomerCredentialRepository(db).findByLoginEmail(email)).toBeUndefined();
   });
 
   it('a wrong password, an unknown email and an unverified email are the same generic 401', async () => {

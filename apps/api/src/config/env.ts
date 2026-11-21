@@ -306,6 +306,8 @@ export interface Bindings {
    * Session lifetimes are the owner decision CA-02, the password minimum CA-05.
    */
   CUSTOMER_EMAIL_AUTH_ENABLED?: string;
+  /** Existing phone-only account upgrade; OFF unless separately enabled in both API and Web Workers. */
+  CUSTOMER_LEGACY_UPGRADE_ENABLED?: string;
   CUSTOMER_EMAIL_AUTH_HMAC_SECRET?: string;
   CUSTOMER_SESSION_SIGNING_SECRET?: string;
   CUSTOMER_SESSION_ACCESS_TTL_SECONDS?: string;

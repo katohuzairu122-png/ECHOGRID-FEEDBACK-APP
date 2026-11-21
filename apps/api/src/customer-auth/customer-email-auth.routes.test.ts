@@ -134,3 +134,103 @@ describe('isolated customer email HTTP', () => {
     expect(second.changePassword).not.toHaveBeenCalled();
   });
 });
+
+
+describe('legacy phone OTP upgrade HTTP boundaries', () => {
+  const phone = '+15551234567';
+  const code = '123456';
+  const address = 'legacy-upgrade@example.test';
+  const source = async () => 'trusted-edge';
+  const budget = async () => true;
+  const make = (over: Record<string, unknown> = {}) => {
+    const legacyOtpSession = vi.fn(async () => ({
+      customerId: 'existing-customer', sessionId: 'session-1',
+      accessToken: 'access', accessExpiresAt: new Date(),
+      refreshCredential: 'r'.repeat(43), refreshExpiresAt: new Date(),
+      sessionAbsoluteExpiresAt: new Date(),
+    }));
+    const requestLink = vi.fn(async () => true);
+    const completeLink = vi.fn(async () => true);
+    const transportSession = vi.fn(() => Response.json({ accessToken: 'synthetic-access' }, { status: 200 }));
+    const router = createIsolatedCustomerEmailAuthRoutes({
+      resolveTrustedSource: source,
+      keyForIdentifier: async () => 'digest',
+      limit: budget,
+      requestProof: async () => {},
+      completeRegistration: async () => ({ ok: false as const, kind: 'invalid' as const }),
+      login: async () => ({ ok: false as const, kind: 'invalid' as const }),
+      changePassword: async () => false,
+      legacyOtpSession,
+      requestLink,
+      completeLink,
+      transportSession,
+      ...over,
+    });
+    return { router, legacyOtpSession, requestLink, completeLink, transportSession };
+  };
+  const request = (path: string, body: unknown, bearer?: string) => new Request('http://localhost/email/' + path, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', ...(bearer ? { authorization: 'Bearer ' + bearer } : {}) },
+    body: JSON.stringify(body),
+  });
+
+  it('cannot issue legacy upgrade sessions when the route is flag-off', async () => {
+    expect((await customerEmailAuthRoutes.request(request('legacy/otp-login', { phone, code }))).status).toBe(404);
+    expect((await customerEmailAuthRoutes.request(request('link/request', { email: address }))).status).toBe(404);
+    expect((await customerEmailAuthRoutes.request(request('link/complete', {
+      email: address, challengeId: completion.challengeId, proof: completion.proof, password: completion.password,
+    }))).status).toBe(404);
+  });
+
+  it('uses only the server-verified phone proof for a rotating OTP session', async () => {
+    const { router, legacyOtpSession, transportSession } = make();
+    const response = await router.request(request('legacy/otp-login', { phone, code }));
+    expect(response.status).toBe(200);
+    expect(legacyOtpSession).toHaveBeenCalledExactlyOnceWith(phone, code);
+    expect(transportSession).toHaveBeenCalledTimes(1);
+    expect((await router.request(request('legacy/otp-login', { phone: '15551234567', code }))).status).toBe(400);
+    expect(legacyOtpSession).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects untrusted sources before phone or link service execution', async () => {
+    const { router, legacyOtpSession, requestLink, completeLink } = make({
+      resolveTrustedSource: async () => null,
+    });
+    expect((await router.request(request('legacy/otp-login', { phone, code }))).status).toBe(503);
+    expect((await router.request(request('link/request', { email: address }, 'otp-access'))).status).toBe(503);
+    expect((await router.request(request('link/complete', {
+      email: address, challengeId: completion.challengeId, proof: completion.proof, password: completion.password,
+    }, 'otp-access'))).status).toBe(503);
+    expect(legacyOtpSession).not.toHaveBeenCalled();
+    expect(requestLink).not.toHaveBeenCalled();
+    expect(completeLink).not.toHaveBeenCalled();
+  });
+
+  it('requires an authenticated rotating bearer for both link operations', async () => {
+    const { router, requestLink, completeLink } = make();
+    expect((await router.request(request('link/request', { email: address }))).status).toBe(401);
+    expect((await router.request(request('link/complete', {
+      email: address, challengeId: completion.challengeId, proof: completion.proof, password: completion.password,
+    }))).status).toBe(401);
+    expect(requestLink).not.toHaveBeenCalled();
+    expect(completeLink).not.toHaveBeenCalled();
+  });
+
+  it('keeps the proof request generic and authorizes completion through the injected identity service', async () => {
+    const { router, requestLink, completeLink } = make();
+    expect((await router.request(request('link/request', { email: address }, 'otp-access'))).status).toBe(202);
+    expect(requestLink).toHaveBeenCalledExactlyOnceWith('otp-access', address);
+    const input = { email: address, challengeId: completion.challengeId, proof: completion.proof, password: completion.password };
+    expect((await router.request(request('link/complete', input, 'otp-access'))).status).toBe(204);
+    expect(completeLink).toHaveBeenCalledExactlyOnceWith('otp-access', input);
+  });
+
+  it('never grants an upgrade when the security service denies it', async () => {
+    const { router, completeLink } = make({ requestLink: async () => false, completeLink: async () => false });
+    expect((await router.request(request('link/request', { email: address }, 'old-bearer'))).status).toBe(401);
+    expect((await router.request(request('link/complete', {
+      email: address, challengeId: completion.challengeId, proof: completion.proof, password: completion.password,
+    }, 'old-bearer'))).status).toBe(401);
+    expect(completeLink).not.toHaveBeenCalled();
+  });
+});

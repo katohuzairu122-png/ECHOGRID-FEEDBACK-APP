@@ -518,7 +518,7 @@
       "sentDescription": "Si cette adresse peut être utilisée, nous avons envoyé un lien de confirmation. Il expire dans 15 minutes.",
       "haveAccountLink": "Vous avez déjà un compte ? Se connecter",
       "verifyTitle": "Confirmer votre e-mail",
-      "verifyDescription": "Saisissez l’adresse e-mail utilisée et choisissez un mot de passe pour terminer la création de votre compte.",
+      "verifyDescription": "Votre adresse e-mail est confirmée. Terminez l’activation du compte sans saisir à nouveau votre nom ni votre mot de passe.",
       "confirmEmailLabel": "Confirmez votre e-mail",
       "createPasswordLabel": "Choisissez un mot de passe",
       "createAccountButton": "Créer le compte",
@@ -528,7 +528,7 @@
       "errors": {
         "invalid_input": "Vérifiez les informations saisies et réessayez.",
         "invalid_credentials": "L’e-mail ou le mot de passe est incorrect.",
-        "invalid_proof": "Ce lien a expiré ou a déjà été utilisé, ou le mot de passe n’a pas été accepté. Demandez un nouveau lien et réessayez.",
+        "invalid_proof": "Ce lien de confirmation est invalide, expiré ou déjà utilisé. Demandez un nouveau lien.",
         "rate_limited": "Trop de tentatives. Veuillez patienter quelques minutes puis réessayer.",
         "unavailable": "Indisponible pour le moment. Veuillez réessayer plus tard.",
         "password_too_short": "Votre mot de passe doit contenir au moins {min} caractères.",
@@ -593,7 +593,29 @@
       "save": "Enregistrer le nom",
       "saving": "Enregistrement…",
       "saved": "Votre nom a été mis à jour.",
-      "errors": { "invalid_name": "Saisissez un nom de 120 caractères maximum.", "invalid": "Vérifiez les mots de passe saisis et réessayez.", "unavailable": "Impossible d’enregistrer cette modification. Réessayez." }
+      "errors": {
+        "invalid_name": "Saisissez un nom de 120 caractères maximum.",
+        "invalid": "Vérifiez les mots de passe saisis et réessayez.",
+        "unavailable": "Impossible d’enregistrer cette modification. Réessayez."
+      },
+      "upgradeDescription": "Ajoutez une connexion par e-mail et mot de passe à votre compte téléphonique existant sans perdre vos adhésions ni vos points. Vérifiez d'abord votre téléphone.",
+      "upgradeVerifyPhone": "Vérifier à nouveau mon téléphone",
+      "upgradeEmailLabel": "E-mail à associer",
+      "upgradeRequest": "Envoyer le lien de confirmation",
+      "upgradeSent": "Si cette adresse est éligible, un lien a été envoyé. Ouvrez-le sur cet appareil dans les 10 minutes.",
+      "upgradeConfirmTitle": "Confirmer l'e-mail et créer un mot de passe",
+      "upgradeConfirmDescription": "Ouvrez le lien de confirmation pendant que votre session de vérification téléphonique est valide. Le compte existant sera conservé.",
+      "upgradeComplete": "Sécuriser mon compte existant",
+      "upgradeBack": "Retour aux paramètres",
+      "upgradeMissingLink": "Le lien de confirmation est incomplet ou expiré. Demandez-en un nouveau.",
+      "upgradeErrors": {
+        "invalid": "Le lien, l'e-mail ou le mot de passe n'a pas été accepté. Recommencez après vérification si nécessaire.",
+        "password_mismatch": "Les mots de passe ne correspondent pas.",
+        "password_too_short": "Le mot de passe doit comporter au moins {min} caractères.",
+        "verify_phone_again": "Une nouvelle vérification du téléphone est nécessaire. Reconnectez-vous avec un code.",
+        "unavailable": "L'association du compte est indisponible. Réessayez.",
+        "rate_limited": "Trop de tentatives. Attendez avant de réessayer."
+      }
     },
     "invite": {
       "signInTitle": "Connectez-vous pour rejoindre",
