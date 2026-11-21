@@ -1,13 +1,20 @@
 import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
+import { z } from 'zod';
 import {
-  emailRegistrationCompleteSchema,
   emailRegistrationRequestSchema,
   limitEmailAuthRequest,
   type IsolatedEmailAuthDependencies,
 } from './customer-email-auth.routes';
 import type { CustomerSessionService } from './customer-session.service';
 import type { createCustomerEmailLinkService } from './customer-email-link.service';
+
+const emailLinkCompleteSchema = z.object({
+  email: z.string().trim().toLowerCase().pipe(z.email().max(254)),
+  challengeId: z.uuid(),
+  proof: z.string().min(6).max(256),
+  password: z.string().min(1).max(1024),
+}).strict();
 
 /** Isolated composition. The application router does not mount these handlers. */
 export function createIsolatedCustomerEmailLinkRoutes(config: {
@@ -44,7 +51,7 @@ export function createIsolatedCustomerEmailLinkRoutes(config: {
   router.post('/email/link/complete', async (c) => {
     const identity = await owner(c.req.raw);
     if (!identity) return response(401);
-    const dto = emailRegistrationCompleteSchema.safeParse(await c.req.json().catch(() => null));
+    const dto = emailLinkCompleteSchema.safeParse(await c.req.json().catch(() => null));
     if (!dto.success) return response(400);
     // Completion verifies an existing password or hashes the first one. It
     // shares the approved password-work budget with verified email login.

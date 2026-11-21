@@ -185,6 +185,7 @@ describe.skipIf(!process.env.DATABASE_URL)('customer password auth (integration)
       requestProof: async () => {},
       completeRegistration: async () => ({ ok: false, kind: 'invalid' }),
       login: (input) => a.auth.loginWithVerifiedEmailPassword(input),
+      changePassword: async () => false,
       // Test-only client transport until the rotating-session Web contract is approved.
       transportSession(session) {
         const headers = new Headers();

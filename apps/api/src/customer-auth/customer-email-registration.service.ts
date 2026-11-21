@@ -21,6 +21,7 @@ export async function completeEmailRegistration(input: {
   hmacSecret: string;
   challengeId: string;
   email: string;
+  name: string;
   proof: string;
   passwordHash: string | (() => Promise<string>);
   /**
@@ -34,8 +35,10 @@ export async function completeEmailRegistration(input: {
   const phone = input.phone === undefined ? null : normalizeE164(input.phone);
   if (input.phone !== undefined && phone === null) return invalid;
   const email = normalizeLoginEmail(input.email);
+  const name = typeof input.name === 'string' ? input.name.trim() : '';
   if (
     !email ||
+    !name || name.length > 120 ||
     typeof input.proof !== 'string' ||
     input.proof.length < 6 ||
     input.proof.length > 256 ||
@@ -74,6 +77,7 @@ export async function completeEmailRegistration(input: {
         throw new Error('Invalid password hash');
       }
       const [customer] = await tx.insert(customers).values({
+        fullName: name,
         phone,
         phoneVerifiedAt: null,
         createdAt: input.now,

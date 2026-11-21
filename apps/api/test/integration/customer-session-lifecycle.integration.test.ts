@@ -29,7 +29,7 @@ describe.skipIf(!process.env.DATABASE_URL)('Rotating session lifecycle (real Pos
     delivered.length = 0;
     await deps.requestProof(email);
     const m = delivered.find((d) => d.recipient === email)!;
-    const reg = await deps.completeRegistration({ email, challengeId: m.challengeId, proof: m.proof, password });
+    const reg = await deps.completeRegistration({ email, challengeId: m.challengeId, proof: m.proof, name: 'Synthetic Customer', password });
     if (!reg.ok) throw new Error('registration failed');
     const result = await deps.login({ email, password });
     if (!result.ok) throw new Error('login failed');

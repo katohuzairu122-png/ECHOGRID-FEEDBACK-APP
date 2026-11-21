@@ -36,17 +36,18 @@ describe.skipIf(!process.env.DATABASE_URL)('S2 email registration transaction (P
     });
     challengeIds.push(challengeId);
     const passwordHash = await pbkdf2Hash('correct horse battery staple', 1000);
-    const input = { db, hmacSecret: secret, challengeId, email, proof, passwordHash, now };
+    const input = { db, hmacSecret: secret, challengeId, email, name: 'Synthetic Customer', proof, passwordHash, now };
     const first = await completeEmailRegistration(input);
     expect(first.ok).toBe(true);
     if (!first.ok) throw new Error('Registration did not complete');
     const rows = await client.query(
-      'SELECT c.phone, c.phone_verified_at, cc.login_email_verified_at FROM customers c JOIN customer_credentials cc ON cc.customer_id=c.id WHERE c.id=$1',
+      'SELECT c.phone, c.phone_verified_at, c.full_name, cc.login_email_verified_at FROM customers c JOIN customer_credentials cc ON cc.customer_id=c.id WHERE c.id=$1',
       [first.customerId],
     );
     expect(rows.rows).toHaveLength(1);
     expect(rows.rows[0].phone).toBeNull();
     expect(rows.rows[0].phone_verified_at).toBeNull();
+    expect(rows.rows[0].full_name).toBe('Synthetic Customer');
     expect(rows.rows[0].login_email_verified_at).not.toBeNull();
     expect(await completeEmailRegistration(input)).toEqual({ ok: false, kind: 'invalid' });
     expect((await client.query('SELECT count(*)::int AS n FROM customer_credentials WHERE login_email=$1', [email])).rows[0].n).toBe(1);
@@ -67,7 +68,7 @@ describe.skipIf(!process.env.DATABASE_URL)('S2 email registration transaction (P
     });
     challengeIds.push(challengeId);
     const passwordHash = await pbkdf2Hash('correct horse battery staple', 1000);
-    const input = { db, hmacSecret: secret, challengeId, email: address, proof, passwordHash, now };
+    const input = { db, hmacSecret: secret, challengeId, email: address, name: 'Synthetic Customer', proof, passwordHash, now };
     const invalid = { ok: false, kind: 'invalid' };
     const readChallenge = async () => (await client.query(
       'SELECT attempts, consumed_at FROM customer_auth_challenges WHERE id = $1',
@@ -111,7 +112,7 @@ describe.skipIf(!process.env.DATABASE_URL)('S2 email registration transaction (P
     expect(rows[0].expires_at.getTime() - timestamp.getTime()).toBe(900_000);
     expect((await registration.completeRegistration({
       email: message.recipient, challengeId: message.challengeId, proof: message.proof,
-      password: 'a strong synthetic password',
+      name: 'Synthetic Customer', password: 'a strong synthetic password',
     })).ok).toBe(true);
   });
 });

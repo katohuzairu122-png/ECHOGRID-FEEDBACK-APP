@@ -13,6 +13,13 @@ describe('registration proof delivery', () => {
     expect(decodeURIComponent(url.hash.slice(3))).toBe('chal-1.p/r+o=o f');
   });
 
+  it('preserves only a validated internal loyalty destination beside the proof fragment', () => {
+    const next = '/loyalty/invite/synthetic-token';
+    const url = new URL(buildRegistrationProofLink('https://app.example.test', 'chal-1', 'proof', next));
+    expect(url.searchParams.get('next')).toBe(next);
+    expect(url.hash).toBe(`#c=${encodeURIComponent('chal-1.proof')}`);
+  });
+
   it('the link path is a page that exists in the web app (a 404 link silently breaks sign-up)', () => {
     const pathname = new URL(buildRegistrationProofLink('https://app.example.test', 'c', 'p')).pathname;
     expect(existsSync(join(__dirname, '../../../web/src/app', pathname, 'page.tsx'))).toBe(true);

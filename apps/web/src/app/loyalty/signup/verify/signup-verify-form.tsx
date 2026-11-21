@@ -26,6 +26,7 @@ export function SignupVerifyForm({ next, minLength }: { next: string; minLength?
   const [state, formAction, pending] = useActionState(completeEmailRegistrationAction, initial);
   const t = useTranslations('loyalty.customer.emailAuth');
   const [challenge, setChallenge] = useState<string | null | undefined>(undefined);
+  const [fields, setFields] = useState({ name: '', email: '', phone: '', password: '', passwordConfirmation: '' });
 
   useEffect(() => {
     setChallenge(readChallengeFromHash(window.location.hash));
@@ -52,18 +53,26 @@ export function SignupVerifyForm({ next, minLength }: { next: string; minLength?
               <input type="hidden" name="challenge" value={challenge} />
               <input type="hidden" name="next" value={next} />
               <div className="flex flex-col gap-1.5">
+                <Label htmlFor="name">{t('nameLabel')}</Label>
+                <Input id="name" name="name" type="text" autoComplete="name" maxLength={120} required value={fields.name} onChange={(e) => setFields((current) => ({ ...current, name: e.target.value }))} />
+              </div>
+              <div className="flex flex-col gap-1.5">
                 <Label htmlFor="email">{t('confirmEmailLabel')}</Label>
-                <Input id="email" name="email" type="email" autoComplete="email" required />
+                <Input id="email" name="email" type="email" autoComplete="email" required value={fields.email} onChange={(e) => setFields((current) => ({ ...current, email: e.target.value }))} />
               </div>
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="phone">{t('phoneOptionalLabel')}</Label>
-                <Input id="phone" name="phone" type="tel" inputMode="tel" autoComplete="tel" placeholder="+96566904591" />
+                <Input id="phone" name="phone" type="tel" inputMode="tel" autoComplete="tel" placeholder="+96566904591" value={fields.phone} onChange={(e) => setFields((current) => ({ ...current, phone: e.target.value }))} />
                 <p className="text-xs text-neutral-500">{t('phoneOptionalHint')}</p>
               </div>
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="password">{t('createPasswordLabel')}</Label>
-                <Input id="password" name="password" type="password" autoComplete="new-password" required {...(minLength ? { minLength } : {})} />
+                <Input id="password" name="password" type="password" autoComplete="new-password" required value={fields.password} onChange={(e) => setFields((current) => ({ ...current, password: e.target.value }))} {...(minLength ? { minLength } : {})} />
                 {minLength ? <p className="text-xs text-neutral-500">{t('passwordHint', { min: minLength })}</p> : null}
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="passwordConfirmation">{t('confirmPasswordLabel')}</Label>
+                <Input id="passwordConfirmation" name="passwordConfirmation" type="password" autoComplete="new-password" required value={fields.passwordConfirmation} onChange={(e) => setFields((current) => ({ ...current, passwordConfirmation: e.target.value }))} {...(minLength ? { minLength } : {})} />
               </div>
               {state.error && (
                 <p role="alert" className="text-sm text-danger">

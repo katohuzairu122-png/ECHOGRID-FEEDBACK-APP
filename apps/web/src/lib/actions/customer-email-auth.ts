@@ -15,7 +15,7 @@ import { logEmailAuthWebUnavailable, type EmailAuthWebAction } from '@/lib/custo
  * "sent". Credentials returned by the API go straight into HttpOnly host-only cookies and never into a response body.
  */
 export type EmailAuthErrorCode =
-  | 'invalid_input' | 'invalid_credentials' | 'invalid_proof' | 'password_too_short' | 'rate_limited' | 'unavailable';
+  | 'invalid_input' | 'invalid_credentials' | 'invalid_proof' | 'password_too_short' | 'password_mismatch' | 'rate_limited' | 'unavailable';
 
 export interface EmailAuthState {
   error?: EmailAuthErrorCode;
@@ -46,9 +46,18 @@ export async function requestEmailRegistrationAction(_prev: EmailAuthState, form
     return { error: 'unavailable' };
   }
   const email = text(formData, 'email').toLowerCase();
-  if (!EMAIL.test(email) || email.length > 254) return { error: 'invalid_input' };
+  const name = text(formData, 'name');
+  const password = String(formData.get('password') ?? '');
+  const passwordConfirmation = String(formData.get('passwordConfirmation') ?? '');
+  if (!EMAIL.test(email) || email.length > 254 || !name || name.length > 120 || password.length === 0) return { error: 'invalid_input' };
+  if (password !== passwordConfirmation) return { error: 'password_mismatch' };
+  const minLength = getCustomerPasswordMinLength();
+  if (minLength !== null && passwordLength(password) < minLength) return { error: 'password_too_short', minLength };
+  const next = safeInternalPath(String(formData.get('next') ?? '/loyalty/dashboard'), '/loyalty/dashboard');
   try {
-    const reply = await callCustomerAuthApi('/customer-auth/email/register/request', { body: { email } });
+    // The registration request only sends the email. The name and raw password are never sent before proof,
+    // persisted, logged, put in a URL, or included in the confirmation email.
+    const reply = await callCustomerAuthApi('/customer-auth/email/register/request', { body: { email, next } });
     if (reply.status === 202) return { sent: true };
     return { error: unmappedLogged(codeFor(reply.status, {}), 'register_request', reply.status) };
   } catch (error) {
@@ -80,19 +89,22 @@ export async function completeEmailRegistrationAction(_prev: EmailAuthState, for
     return { error: 'unavailable' };
   }
   const email = text(formData, 'email').toLowerCase();
+  const name = text(formData, 'name');
   const password = String(formData.get('password') ?? '');
+  const passwordConfirmation = String(formData.get('passwordConfirmation') ?? '');
   const [challengeId = '', proof = ''] = text(formData, 'challenge').split('.');
   // Optional, stored by the API as an UNVERIFIED claim; it gates nothing until the phone-verification flow proves it.
   const phone = text(formData, 'phone');
   const next = safeInternalPath(String(formData.get('next') ?? '/loyalty/dashboard'), '/loyalty/dashboard');
-  if (!EMAIL.test(email) || !challengeId || !proof || password.length === 0) return { error: 'invalid_input' };
+  if (!EMAIL.test(email) || !challengeId || !proof || !name || name.length > 120 || password.length === 0) return { error: 'invalid_input' };
+  if (password !== passwordConfirmation) return { error: 'password_mismatch' };
   // Refuse an obviously short password before the proof is spent. The configured minimum only; the API remains authoritative
   // (and fails closed if it has no minimum of its own), so an unset value here simply skips this early, friendlier check.
   const minLength = getCustomerPasswordMinLength();
   if (minLength !== null && passwordLength(password) < minLength) return { error: 'password_too_short', minLength };
   try {
     const reply = await callCustomerAuthApi('/customer-auth/email/register/complete', {
-      body: { email, challengeId, proof, password, ...(phone ? { phone } : {}) },
+      body: { email, challengeId, proof, name, password, ...(phone ? { phone } : {}) },
     });
     if (reply.status !== 201) return { error: unmappedLogged(codeFor(reply.status, { 401: 'invalid_proof' }), 'register_complete', reply.status) };
     const failure = await signIn(email, password, 'register_complete');

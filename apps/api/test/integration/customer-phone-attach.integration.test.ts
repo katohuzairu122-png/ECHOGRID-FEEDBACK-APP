@@ -152,7 +152,7 @@ describe.skipIf(!process.env.DATABASE_URL)('Phone captured at registration (real
     delivered.length = 0;
     await register.requestProof(email);
     const m = delivered.find((d) => d.recipient === email)!;
-    const result = await register.completeRegistration({ email, challengeId: m.challengeId, proof: m.proof, password, phone });
+    const result = await register.completeRegistration({ email, challengeId: m.challengeId, proof: m.proof, name: 'Synthetic Customer', password, phone });
     return { email, result };
   }
 

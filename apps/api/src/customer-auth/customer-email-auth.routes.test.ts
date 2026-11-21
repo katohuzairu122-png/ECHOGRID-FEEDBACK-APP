@@ -17,7 +17,7 @@ const post = (path: string, body: unknown) => new Request(`http://localhost/emai
 const completion = {
   email: address,
   challengeId: '141664f8-1ef4-4872-b445-fca151ba65aa',
-  proof: 'synthetic-proof', password: 'synthetic-password',
+  proof: 'synthetic-proof', name: 'Synthetic Customer', password: 'synthetic-password',
 };
 const loginInput = { email: address, password: completion.password };
 
@@ -27,17 +27,18 @@ function setup() {
   const requestProof = vi.fn(async (_email: string) => {});
   const completeRegistration = vi.fn(async () => ({ ok: true, customerId: 'internal-id' }) as const);
   const login = vi.fn(async (): Promise<PasswordLoginResult> => ({ ok: false, kind: 'invalid' }));
+  const changePassword = vi.fn(async () => true);
   const transportSession = vi.fn(() => new Response(null, { status: 204 }));
   const routes = createIsolatedCustomerEmailAuthRoutes({
-    resolveTrustedSource, limit, requestProof, completeRegistration, login, transportSession,
+    resolveTrustedSource, limit, requestProof, completeRegistration, login, changePassword, transportSession,
     keyForIdentifier: async () => 'opaque-email',
   });
-  return { routes, resolveTrustedSource, limit, requestProof, completeRegistration, login, transportSession };
+  return { routes, resolveTrustedSource, limit, requestProof, completeRegistration, login, changePassword, transportSession };
 }
 
 describe('isolated customer email HTTP', () => {
   it('keeps every endpoint unavailable through the disabled router', async () => {
-    for (const path of ['register/request', 'register/complete', 'login']) {
+    for (const path of ['register/request', 'register/complete', 'login', 'password/change']) {
       expect((await customerEmailAuthRoutes.request(post(path, loginInput))).status).toBe(404);
     }
   });
@@ -47,6 +48,9 @@ describe('isolated customer email HTTP', () => {
     expect(emailRegistrationRequestSchema.safeParse({ email: 'bad' }).success).toBe(false);
     expect(emailPasswordLoginSchema.safeParse({ ...loginInput, role: 'staff' }).success).toBe(false);
     expect(emailRegistrationCompleteSchema.safeParse(loginInput).success).toBe(false);
+    expect(emailRegistrationRequestSchema.safeParse({ email: address, next: 'https://evil.example' }).success).toBe(false);
+    expect(emailRegistrationRequestSchema.safeParse({ email: address, next: '/loyalty/test\n' }).success).toBe(false);
+    expect(emailRegistrationRequestSchema.safeParse({ email: address, next: '/loyalty/invite/token' }).success).toBe(true);
   });
 
   it('enforces both delivery budgets before sending and hides delivery failures', async () => {
@@ -99,5 +103,34 @@ describe('isolated customer email HTTP', () => {
     expect(rejected.status).toBe(401);
     expect(limit.mock.calls.map(([call]) => [call.limit, call.windowSeconds])).toEqual([[5, 900], [5, 900]]);
     expect(transportSession).not.toHaveBeenCalled();
+  });
+
+  it('changes a password only through a trusted, rate-limited request with a rotating-session bearer', async () => {
+    const { routes, changePassword, limit } = setup();
+    const req = new Request('http://localhost/email/password/change', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', authorization: 'Bearer rotating-access' },
+      body: JSON.stringify({ currentPassword: 'current-secret', newPassword: 'next-secret' }),
+    });
+    const response = await routes.request(req);
+    expect(response.status).toBe(204);
+    expect(changePassword).toHaveBeenCalledExactlyOnceWith('rotating-access', {
+      currentPassword: 'current-secret', newPassword: 'next-secret',
+    });
+    expect(limit.mock.calls).toHaveLength(2);
+    expect(response.headers.get('cache-control')).toBe('no-store');
+  });
+
+  it('does not run a password change without trusted source or an access bearer', async () => {
+    const first = setup();
+    first.resolveTrustedSource.mockResolvedValueOnce(null);
+    expect((await first.routes.request(new Request('http://localhost/email/password/change', { method: 'POST' }))).status).toBe(503);
+    expect(first.changePassword).not.toHaveBeenCalled();
+    const second = setup();
+    const response = await second.routes.request(post('password/change', {
+      currentPassword: 'current-secret', newPassword: 'next-secret',
+    }));
+    expect(response.status).toBe(401);
+    expect(second.changePassword).not.toHaveBeenCalled();
   });
 });

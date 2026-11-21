@@ -8,13 +8,22 @@ import type { EmailRegistrationResult } from './customer-email-registration.serv
 
 const email = z.string().trim().toLowerCase().pipe(z.email().max(254));
 const password = z.string().min(1).max(1024);
-export const emailRegistrationRequestSchema = z.object({ email }).strict();
+const customerDestination = z.string().max(2048).refine((value) =>
+  value.startsWith('/loyalty/') && !value.startsWith('//') && !value.includes('\\') &&
+  ![...value].some((character) => character.charCodeAt(0) < 0x20),
+);
+export const emailRegistrationRequestSchema = z.object({ email, next: customerDestination.optional() }).strict();
 export const emailRegistrationCompleteSchema = z.object({
-  email, challengeId: z.uuid(), proof: z.string().min(6).max(256), password,
+  email, challengeId: z.uuid(), proof: z.string().min(6).max(256),
+  name: z.string().trim().min(1).max(120), password,
   /** Optional, stored unverified; proven later through /loyalty/me/phone. */
   phone: z.string().trim().min(1).max(40).optional(),
 }).strict();
 export const emailPasswordLoginSchema = z.object({ email, password }).strict();
+export const emailPasswordChangeSchema = z.object({
+  currentPassword: password,
+  newPassword: password,
+}).strict();
 
 type Surface = 'delivery' | 'login';
 export type EmailAuthLimiter = (input: {
@@ -27,9 +36,10 @@ export type IsolatedEmailAuthDependencies = {
   resolveTrustedSource(request: Request): Promise<string | null>;
   keyForIdentifier(email: string): Promise<string>;
   limit: EmailAuthLimiter;
-  requestProof(email: string): Promise<void>;
+  requestProof(email: string, next?: string): Promise<void>;
   completeRegistration(input: z.infer<typeof emailRegistrationCompleteSchema>): Promise<EmailRegistrationResult>;
   login(input: z.infer<typeof emailPasswordLoginSchema>): Promise<PasswordLoginResult>;
+  changePassword(accessToken: string, input: z.infer<typeof emailPasswordChangeSchema>): Promise<boolean>;
   transportSession(session: IssuedSession): Response;
 };
 
@@ -43,6 +53,7 @@ const paths = {
   request: '/email/register/request',
   complete: '/email/register/complete',
   login: '/email/login',
+  changePassword: '/email/password/change',
 };
 
 for (const path of Object.values(paths)) {
@@ -106,7 +117,9 @@ export function createIsolatedCustomerEmailAuthRoutes(dependencies: IsolatedEmai
     const decision = await limitEmailAuthRequest(dependencies, c.req.raw, 'delivery', dto.data.email);
     if (decision !== 'allowed') return deny(decision);
     // Delivery errors and suppressions share the same response.
-    await dependencies.requestProof(dto.data.email).catch(() => undefined);
+    await (dto.data.next === undefined
+      ? dependencies.requestProof(dto.data.email)
+      : dependencies.requestProof(dto.data.email, dto.data.next)).catch(() => undefined);
     return accepted();
   });
   routes.post(paths.complete, async (c) => {
@@ -126,6 +139,16 @@ export function createIsolatedCustomerEmailAuthRoutes(dependencies: IsolatedEmai
     if (decision !== 'allowed') return deny(decision);
     const result = await dependencies.login(dto.data);
     return result.ok ? dependencies.transportSession(result.session) : invalid();
+  });
+  routes.post(paths.changePassword, async (c) => {
+    if (!await dependencies.resolveTrustedSource(c.req.raw)) return unavailable();
+    const dto = emailPasswordChangeSchema.safeParse(await c.req.json().catch(() => null));
+    if (!dto.success) return badRequest();
+    const decision = await limitEmailAuthRequest(dependencies, c.req.raw, 'login', 'password-change');
+    if (decision !== 'allowed') return deny(decision);
+    const accessToken = c.req.header('authorization')?.match(/^Bearer ([^\s]+)$/)?.[1];
+    if (!accessToken || !await dependencies.changePassword(accessToken, dto.data)) return invalid();
+    return new Response(null, { status: 204, headers: { 'Cache-Control': 'no-store' } });
   });
   return routes;
 }

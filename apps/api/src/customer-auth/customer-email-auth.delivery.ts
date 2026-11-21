@@ -11,14 +11,15 @@ const escapeHtml = (value: string) => value
  */
 export const REGISTRATION_VERIFY_PATH = '/loyalty/signup/verify'; // apps/web/src/app/loyalty/signup/verify/page.tsx (the customer page, not the staff /signup)
 
-export function buildRegistrationProofLink(webBaseUrl: string, challengeId: string, proof: string): string {
-  return `${webBaseUrl.replace(/\/+$/, '')}${REGISTRATION_VERIFY_PATH}#c=${encodeURIComponent(`${challengeId}.${proof}`)}`;
+export function buildRegistrationProofLink(webBaseUrl: string, challengeId: string, proof: string, next?: string): string {
+  const query = next ? `?next=${encodeURIComponent(next)}` : '';
+  return `${webBaseUrl.replace(/\/+$/, '')}${REGISTRATION_VERIFY_PATH}${query}#c=${encodeURIComponent(`${challengeId}.${proof}`)}`;
 }
 
 /** Delivers the registration proof through the existing EmailService. Never logs the recipient, link or proof. */
 export function createRegistrationProofDelivery(config: { email: EmailService; webBaseUrl: string }): RegistrationProofDelivery {
-  return async ({ recipient, challengeId, proof }) => {
-    const link = buildRegistrationProofLink(config.webBaseUrl, challengeId, proof);
+  return async ({ recipient, challengeId, proof, next }) => {
+    const link = buildRegistrationProofLink(config.webBaseUrl, challengeId, proof, next);
     await config.email.send({
       to: recipient,
       subject: 'Confirm your email to create your Echo Grid account',

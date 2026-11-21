@@ -44,6 +44,7 @@ export default async function LoyaltyDashboardLayout({ children }: { children: R
             { href: '/loyalty/dashboard/surveys', label: shell('surveys'), icon: 'chart' },
             { href: '/loyalty/dashboard/qr', label: shell('qr'), icon: 'qr' },
             { href: '/loyalty/dashboard/settlements', label: shell('settlements'), icon: 'gift' },
+            { href: '/loyalty/dashboard/settings', label: shell('settings'), icon: 'settings' },
             { href: '/support', label: shell('support'), icon: 'chat' },
           ]}
           utilities={
