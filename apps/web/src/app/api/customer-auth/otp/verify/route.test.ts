@@ -8,6 +8,7 @@ import { callCustomerAuthApi } from '@/lib/customer-email-auth-client';
 import { setRotatingCustomerSession } from '@/lib/customer-session';
 import { POST } from './route';
 
+vi.mock('server-only', () => ({}));
 vi.mock('@/lib/public-api-client', () => ({ publicApiFetch: vi.fn() }));
 vi.mock('@/lib/customer-email-auth-client', () => ({
   callCustomerAuthApi: vi.fn(),
