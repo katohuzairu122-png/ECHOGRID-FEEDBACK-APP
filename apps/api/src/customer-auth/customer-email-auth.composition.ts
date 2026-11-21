@@ -6,12 +6,18 @@ import { createAccountSecurityEmailService } from '../notifications/email.servic
 import { createCustomerEmailTrustedSource } from './customer-email-trusted-source';
 import { createSharedEmailAuthLimiter } from './customer-email-rate-limit';
 import { createEmailRegistrationService } from './customer-email-auth.service';
-import { createRegistrationProofDelivery } from './customer-email-auth.delivery';
+import { createCustomerEmailLinkService } from './customer-email-link.service';
+import { createRegistrationProofDelivery, createEmailLinkProofDelivery } from './customer-email-auth.delivery';
 import { createIsolatedCustomerEmailAuthRoutes, type IsolatedEmailAuthDependencies } from './customer-email-auth.routes';
 import { customerChallengeDigest } from './customer-email-challenge-digest';
 import { CustomerSessionService } from './customer-session.service';
 import { logEmailAuthUnavailable } from './customer-email-auth.diagnostics';
 import { CustomerPasswordAuthService } from './customer-password-auth.service';
+import { CustomerRepository } from '../repositories/customer.repository';
+import { createRepositories } from '../repositories';
+import { CustomerAuthService } from './customer-auth.service';
+import { createSmsService } from './sms.service';
+import { TwilioVerifyService } from './twilio-verify.service';
 import {
   type ResolvedEmailAuthConfig,
   deriveEmailAuthSourceKey,
@@ -68,6 +74,8 @@ export type EmailAuthParts = {
   withDb: <T>(fn: (db: Database) => Promise<T>) => Promise<T>;
   hasher: Parameters<typeof createEmailRegistrationService>[0]['hasher'];
   deliver: Parameters<typeof createEmailRegistrationService>[0]['deliver'];
+  deliverLink?: Parameters<typeof createCustomerEmailLinkService>[0]['deliver'];
+  verifyPhoneOtp?: (db: Database, phone: string, code: string) => Promise<boolean>;
   limit: IsolatedEmailAuthDependencies['limit'];
   resolveTrustedSource: IsolatedEmailAuthDependencies['resolveTrustedSource'];
 };
@@ -104,6 +112,37 @@ export function createEmailAuthDependencies(config: ResolvedEmailAuthConfig, par
           phoneProofMaxAgeSeconds: 300,
         }).loginWithVerifiedEmailPassword({ email: input.email, password: input.password });
       }),
+    legacyOtpSession: (phone, code) => parts.withDb(async (db) => {
+      if (!parts.verifyPhoneOtp || !await parts.verifyPhoneOtp(db, phone, code)) return null;
+      // Only the verified phone owner can reuse the original customer ID.
+      const found = await new CustomerRepository(db).createIfAbsent({ phone, phoneVerifiedAt: new Date() });
+      if (!found.customer) return null;
+      const sessions = new CustomerSessionService(db, config.session);
+      const established = await sessions.establishSession({ customerId: found.customer.id, authMethod: 'otp' });
+      return established.ok ? established.session : null; // linked-email customers have OTP retired.
+    }),
+    requestLink: (token, email) => parts.withDb(async (db) => {
+      const sessions = new CustomerSessionService(db, config.session);
+      const identity = await sessions.authenticateSessionToken(token);
+      if (!identity || identity.assurance !== 'session' || identity.authMethod !== 'otp') return false;
+      const links = createCustomerEmailLinkService({
+        db, hmacSecret: config.hmacSecret, hasher: parts.hasher,
+        passwordPolicy: { minLength: config.passwordMinLength },
+        ...(parts.deliverLink ? { deliver: parts.deliverLink } : {}),
+      });
+      await links.requestProof({ customerId: identity.customerId, sessionId: identity.sessionId }, email);
+      return true;
+    }),
+    completeLink: (token, input) => parts.withDb(async (db) => {
+      const sessions = new CustomerSessionService(db, config.session);
+      const identity = await sessions.authenticateSessionToken(token);
+      if (!identity || identity.assurance !== 'session' || identity.authMethod !== 'otp') return false;
+      const links = createCustomerEmailLinkService({
+        db, hmacSecret: config.hmacSecret, hasher: parts.hasher,
+        passwordPolicy: { minLength: config.passwordMinLength },
+      });
+      return links.complete({ customerId: identity.customerId, sessionId: identity.sessionId }, input);
+    }),
     changePassword: async (accessToken, input) => parts.withDb(async (db) => {
       const sessions = new CustomerSessionService(db, config.session);
       const identity = await sessions.authenticateSessionToken(accessToken);
@@ -156,6 +195,26 @@ export async function openEmailAuthRuntime(c: Context): Promise<EmailAuthRuntime
     withDb,
     hasher: createDurableObjectPbkdf2Worker(env.PASSWORD_HASHER),
     deliver: createRegistrationProofDelivery({ email, webBaseUrl: config.webBaseUrl }),
+    deliverLink: createEmailLinkProofDelivery({ email, webBaseUrl: config.webBaseUrl }),
+    verifyPhoneOtp: async (db, phone, code) => {
+      if (env.ENVIRONMENT === 'production') {
+        return new TwilioVerifyService({
+          accountSid: env.TWILIO_ACCOUNT_SID,
+          authToken: env.TWILIO_AUTH_TOKEN,
+          serviceSid: env.TWILIO_VERIFY_SERVICE_SID,
+        }).check(phone, code);
+      }
+      const service = new CustomerAuthService(
+        createRepositories(db),
+        createSmsService(env.ENVIRONMENT, {
+          accountSid: env.TWILIO_ACCOUNT_SID, authToken: env.TWILIO_AUTH_TOKEN, fromNumber: env.TWILIO_FROM_NUMBER,
+        }),
+        { CUSTOMER_JWT_SECRET: env.CUSTOMER_JWT_SECRET },
+        createDurableObjectPbkdf2Worker(env.PASSWORD_HASHER),
+      );
+      await service.consumeOtp(phone, code);
+      return true;
+    },
     limit: createSharedEmailAuthLimiter(env.CUSTOMER_AUTH_RATE_LIMIT),
     resolveTrustedSource: createCustomerEmailTrustedSource({
       ...(env.CLIENT_ATTRIBUTION_SECRET ? { attributionSecret: env.CLIENT_ATTRIBUTION_SECRET } : {}),
