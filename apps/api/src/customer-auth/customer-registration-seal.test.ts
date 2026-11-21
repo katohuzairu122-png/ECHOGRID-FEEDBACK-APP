@@ -28,7 +28,7 @@ describe('challenge-bound encrypted pending registration', () => {
     const sealed = await sealPendingRegistration({ secret, subjectDigest, proofDigest, record });
     for (const override of [
       { subjectDigest: 'c'.repeat(64) }, { proofDigest: 'd'.repeat(64) }, { secret: secret + '-wrong' },
-      { sealed: sealed.slice(0, -1) + (sealed.endsWith('A') ? 'B' : 'A') },
+      { sealed: sealed.replace(/^v1\.([A-Za-z0-9_-]{16})\.([A-Za-z0-9_-])/, (_match, nonce: string, firstCipher: string) => 'v1.' + nonce + '.' + (firstCipher === 'A' ? 'B' : 'A')) },
     ]) {
       expect(await unsealPendingRegistration({ secret, subjectDigest, proofDigest, sealed, ...override })).toBeNull();
     }
