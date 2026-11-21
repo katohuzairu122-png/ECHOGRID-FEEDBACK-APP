@@ -1,8 +1,9 @@
 import 'server-only';
+import { networkFeedPageSchema } from '@echo-grid-feedback/shared-types';
 import { ApiError } from './api-error';
 import { customerApiFetch } from './customer-api-client';
 import { rethrowControlFlow } from './rethrow-control-flow';
-import type { CommunityFeedResult, CommunityFeedPage } from './community-feed-types';
+import type { CommunityFeedResult } from './community-feed-types';
 
 export const COMMUNITY_FEED_PAGE_SIZE = 20;
 const CURSOR = /^[A-Za-z0-9_-]{1,200}$/;
@@ -21,12 +22,16 @@ export async function getCommunityFeed(cursor: string | null = null): Promise<Co
   const query = new URLSearchParams({ limit: String(COMMUNITY_FEED_PAGE_SIZE) });
   if (cursor) query.set('cursor', cursor);
   try {
-    const data = await customerApiFetch<CommunityFeedPage>(`/network/feed?${query}`, {
+    const raw = await customerApiFetch<unknown>(`/network/feed?${query}`, {
       cache: 'no-store',
     });
+    const data = networkFeedPageSchema.parse(raw);
+    if (data.items.length > COMMUNITY_FEED_PAGE_SIZE) throw new Error('Invalid Feed page size');
     return { status: 'ready', data };
   } catch (error) {
     rethrowControlFlow(error);
-    return { status: error instanceof ApiError && error.status === 403 ? 'forbidden' : 'unavailable' };
+    return {
+      status: error instanceof ApiError && error.status === 403 ? 'forbidden' : 'unavailable',
+    };
   }
 }

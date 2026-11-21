@@ -1,5 +1,6 @@
 import { Hono, type Context } from 'hono';
 import { z } from 'zod';
+import { NETWORK_FEED_MAX_LIMIT, networkFeedPageSchema } from '@echo-grid-feedback/shared-types';
 import type { Bindings } from '../config/env';
 import {
   customerAuthenticate,
@@ -9,7 +10,7 @@ import { rateLimitByCustomer } from '../middleware/rate-limit';
 import { ok } from '../lib/response';
 import { AppError } from '../lib/errors';
 import { createDb } from '../db/client';
-import { toFeedItemDto, type FeedSource } from './community-feed';
+import type { FeedSource } from './community-feed';
 import { createNetworkFeedSource } from '../network/network-feed-source';
 import { isNetworkFeedEnabled } from '../network/network-flag';
 import { assertVerifiedPhone } from '../lib/customer-verification';
@@ -18,7 +19,7 @@ import { createRepositories } from '../repositories';
 type Env = { Bindings: Bindings; Variables: CustomerAuthVariables };
 
 export const FEED_DEFAULT_LIMIT = 20;
-export const FEED_MAX_LIMIT = 50;
+export const FEED_MAX_LIMIT = NETWORK_FEED_MAX_LIMIT;
 
 /** Strict: any unknown key (for example a client-supplied customerId or businessId) is rejected. */
 const feedQuerySchema = z
@@ -68,8 +69,8 @@ export function createCommunityFeedRoutes(options: {
         cursor: parsed.data.cursor ?? null,
         limit,
       });
-      if (!Array.isArray(raw.items) || raw.items.length > limit) throw new Error('feed source returned an invalid page');
-      page = { items: raw.items.map(toFeedItemDto), nextCursor: raw.nextCursor ?? null };
+      page = networkFeedPageSchema.parse(raw);
+      if (page.items.length > limit) throw new Error('feed source returned an invalid page');
     } catch {
       throw new AppError('The feed is unavailable.', 503, 'FEED_UNAVAILABLE');
     } finally {
