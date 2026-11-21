@@ -142,6 +142,33 @@ describe.skipIf(!process.env.DATABASE_URL)('Email registration and login flow (r
     expect(rows.map((row) => row.id)).toEqual([existing.id]);
   });
 
+  it('OTP upgrade claims an unverified legacy phone-only row in place without identity duplication', async () => {
+    const phone = '+1555' + String(Math.floor(Math.random() * 10_000_000)).padStart(7, '0');
+    const repository = new CustomerRepository(db);
+    const existing = await repository.create({ phone, phoneVerifiedAt: null });
+    const upgraded = await repository.resolveExistingPhoneForCredentialUpgrade(phone);
+    expect(upgraded?.id).toBe(existing.id);
+    expect(upgraded?.phoneVerifiedAt).not.toBeNull();
+    const rows = await db.select({ id: customers.id }).from(customers).where(eq(customers.phone, phone));
+    expect(rows.map((row) => row.id)).toEqual([existing.id]);
+  });
+
+  it('OTP upgrade refuses to claim an email credential identity that merely typed an unverified phone', async () => {
+    const phone = '+1555' + String(Math.floor(Math.random() * 10_000_000)).padStart(7, '0');
+    const repository = new CustomerRepository(db);
+    const claimant = await repository.create({ phone, phoneVerifiedAt: null });
+    const hashed = await createDirectPbkdf2Worker().hash(normalizePassword('synthetic-password-42'), PASSWORD_ITERATIONS);
+    expect(await new CustomerCredentialRepository(db).create({
+      customerId: claimant.id, passwordHash: hashed, now: new Date(),
+    })).toBe(true);
+    expect(await repository.resolveExistingPhoneForCredentialUpgrade(phone)).toBeUndefined();
+    const rows = await db.select({ id: customers.id, verified: customers.phoneVerifiedAt })
+      .from(customers).where(eq(customers.phone, phone));
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.id).toBe(claimant.id);
+    expect(rows[0]?.verified).toBeNull();
+  });
+
   it('keeps pending setup credentials sealed until the email proof is completed', async () => {
     const email = newEmail();
     const name = 'Pending Secret Name';
