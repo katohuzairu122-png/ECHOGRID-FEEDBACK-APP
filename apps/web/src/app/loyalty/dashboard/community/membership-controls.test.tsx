@@ -69,3 +69,11 @@ it('prevents duplicate submit and dismissal while authoritative leave is pending
   finish({ left: true });
   await waitFor(() => expect(h.router.refresh).toHaveBeenCalled());
 });
+it('never presents proposed Community terms or a legal acceptance checkbox as active enrollment', () => {
+  renderWithIntl(<CommunityMembershipControls status="absent" phone="verified" />);
+  expect(screen.getByRole('button', { name: 'Join Community' })).toBeDisabled();
+  expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+  expect(screen.queryByText('community-membership-v1.0')).not.toBeInTheDocument();
+  expect(screen.queryByRole('link', { name: /membership terms/i })).not.toBeInTheDocument();
+  expect(h.leave).not.toHaveBeenCalled();
+});
