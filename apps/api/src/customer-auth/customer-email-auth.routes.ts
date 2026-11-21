@@ -26,6 +26,13 @@ export const emailRegistrationCompleteSchema = z.object({
   phone: z.string().trim().min(1).max(40).optional(),
 }).strict();
 export const emailPasswordLoginSchema = z.object({ email, password }).strict();
+export const legacyOtpSessionSchema = z.object({
+  phone: z.string().regex(/^+[1-9][0-9]{6,14}$/),
+  code: z.string().min(4).max(10).regex(/^[0-9]+$/),
+}).strict();
+export const emailLinkCompleteSchema = z.object({
+  email, challengeId: z.uuid(), proof: z.string().min(6).max(256), password,
+}).strict();
 export const emailPasswordChangeSchema = z.object({
   currentPassword: password,
   newPassword: password,
@@ -43,9 +50,13 @@ export type IsolatedEmailAuthDependencies = {
   keyForIdentifier(email: string): Promise<string>;
   limit: EmailAuthLimiter;
   requestProof(email: string, next?: string, signup?: { name: string; password: string }): Promise<void>;
+  /** Signed Web Worker-only phone proof -> revocable OTP session for existing phone-only customers. */
+  legacyOtpSession?: (phone: string, code: string) => Promise<IssuedSession | null>;
   completeRegistration(input: z.infer<typeof emailRegistrationCompleteSchema>): Promise<EmailRegistrationResult & { session?: IssuedSession }>;
   login(input: z.infer<typeof emailPasswordLoginSchema>): Promise<PasswordLoginResult>;
   changePassword(accessToken: string, input: z.infer<typeof emailPasswordChangeSchema>): Promise<boolean>;
+  requestLink?: (accessToken: string, email: string) => Promise<void>;
+  completeLink?: (accessToken: string, input: { email: string; challengeId: string; proof: string; password: string }) => Promise<boolean>;
   transportSession(session: IssuedSession): Response;
 };
 
@@ -60,6 +71,9 @@ const paths = {
   complete: '/email/register/complete',
   login: '/email/login',
   changePassword: '/email/password/change',
+  legacyOtpLogin: '/email/legacy/otp-login',
+  linkRequest: '/email/link/request',
+  linkComplete: '/email/link/complete',
 };
 
 for (const path of Object.values(paths)) {
@@ -157,6 +171,37 @@ export function createIsolatedCustomerEmailAuthRoutes(dependencies: IsolatedEmai
     if (decision !== 'allowed') return deny(decision);
     const result = await dependencies.login(dto.data);
     return result.ok ? dependencies.transportSession(result.session) : invalid();
+  });
+  routes.post(paths.legacyOtpLogin, async (c) => {
+    const dto = legacyOtpSessionSchema.safeParse(await c.req.json().catch(() => null));
+    if (!dto.success) return badRequest();
+    const decision = await limitEmailAuthRequest(dependencies, c.req.raw, 'login', dto.data.phone);
+    if (decision !== 'allowed') return deny(decision);
+    if (!dependencies.legacyOtpSession) return unavailable();
+    const session = await dependencies.legacyOtpSession(dto.data.phone, dto.data.code);
+    return session ? dependencies.transportSession(session) : invalid();
+  });
+  routes.post(paths.linkRequest, async (c) => {
+    const dto = emailRegistrationRequestSchema.safeParse(await c.req.json().catch(() => null));
+    if (!dto.success || !dependencies.requestLink) return badRequest();
+    const decision = await limitEmailAuthRequest(dependencies, c.req.raw, 'delivery', dto.data.email);
+    if (decision !== 'allowed') return deny(decision);
+    const bearer = c.req.header('authorization')?.match(/^Bearer ([^\s]+)$/)?.[1];
+    if (!bearer) return invalid();
+    // The link service enforces fresh rotating OTP ownership; return a generic acceptance
+    // for authenticated requests, including suppressed conflicting-email claims.
+    await dependencies.requestLink(bearer, dto.data.email);
+    return accepted();
+  });
+  routes.post(paths.linkComplete, async (c) => {
+    const dto = emailLinkCompleteSchema.safeParse(await c.req.json().catch(() => null));
+    if (!dto.success || !dependencies.completeLink) return badRequest();
+    const decision = await limitEmailAuthRequest(dependencies, c.req.raw, 'login', dto.data.email);
+    if (decision !== 'allowed') return deny(decision);
+    const bearer = c.req.header('authorization')?.match(/^Bearer ([^\s]+)$/)?.[1];
+    if (!bearer) return invalid();
+    const completed = await dependencies.completeLink(bearer, dto.data);
+    return completed ? new Response(null, { status: 204, headers: { 'Cache-Control': 'no-store' } }) : invalid();
   });
   routes.post(paths.changePassword, async (c) => {
     if (!await dependencies.resolveTrustedSource(c.req.raw)) return unavailable();
