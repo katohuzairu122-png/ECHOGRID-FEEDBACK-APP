@@ -81,7 +81,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   // With password authentication enabled, a freshly verified legacy phone OTP
   // becomes a revocable OTP session instead of another 90-day bearer. The API
   // accepts this route only from the signed Web Worker, not from arbitrary callers.
-  if (isCustomerEmailAuthWebEnabled()) {
+  if (isCustomerEmailAuthWebEnabled() && process.env.CUSTOMER_LEGACY_UPGRADE_ENABLED === 'true') {
     try {
       const reply = await callCustomerAuthApi('/customer-auth/email/legacy/otp-login', {
         body: { phone, code },
