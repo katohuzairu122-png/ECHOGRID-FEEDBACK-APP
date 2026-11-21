@@ -101,7 +101,7 @@ describe('CommunityHubView', () => {
     expect(screen.queryByText('Active member')).not.toBeInTheDocument();
     expect(screen.queryByTestId('community-balance')).not.toBeInTheDocument();
     expect(screen.getByText(/No Community Points account has been recorded/)).toBeInTheDocument();
-    expect(screen.getByText(/Joining and leaving are not available/)).toBeInTheDocument();
+    expect(screen.getByText(/You have not joined the Community/)).toBeInTheDocument();
   });
 
   it('shows the left state with its recorded date', () => {

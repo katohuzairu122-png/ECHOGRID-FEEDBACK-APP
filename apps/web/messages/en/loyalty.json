@@ -317,6 +317,35 @@
         "suspended": "Suspended",
         "closed": "Closed"
       },
+      "selfService": {
+        "distinction": "Community membership and Community Points are separate from your customer account and each business’s loyalty membership and points.",
+        "suspended": "This membership is suspended. You cannot reactivate or leave it yourself.",
+        "leave": "Leave Community",
+        "confirmTitle": "Leave the Community?",
+        "confirmBody": "Your Community Points account will close. Your balance and accounting history are preserved. Your customer account and business loyalty memberships, points and rewards are unchanged.",
+        "confirmLabel": "I confirm that I want to leave the Community.",
+        "cancel": "Cancel",
+        "confirmLeave": "Confirm leave",
+        "leaving": "Leaving…",
+        "termsUnavailable": "Joining and rejoining are unavailable until approved Community membership terms are published.",
+        "termsRequired": "Joining requires approved terms, explicit acceptance and an eligible account. No membership is created by viewing this page.",
+        "join": "Join Community",
+        "rejoin": "Rejoin Community",
+        "phoneRequired": "A verified phone is required to join. Verification does not automatically enroll you.",
+        "verifyPhone": "Verify phone in your account",
+        "settings": "Account Settings",
+        "phoneUnavailable": "Phone verification status could not be loaded. Try again.",
+        "phoneVerified": "Your phone is verified. Joining still requires approved terms and a separate explicit action.",
+        "left": "You have left the Community. Your accounting history is preserved.",
+        "feedRule": "Community Feed viewing also requires a verified phone and the existing access rules.",
+        "retry": "Refresh status",
+        "errors": {
+          "confirmation": "Confirm your choice before leaving.",
+          "suspended": "This membership is suspended and cannot be changed here.",
+          "missing": "No Community membership was found. Refresh your status.",
+          "unavailable": "Leaving could not be confirmed. Try again or refresh your status."
+        }
+      },
       "membership": {
         "title": "Membership",
         "status": {
@@ -328,7 +357,7 @@
         "activeOn": "Member since {date}",
         "leftOn": "Left on {date}",
         "suspendedOn": "Suspended on {date}",
-        "absentHint": "You have not joined the Community. Joining and leaving are not available on this page yet.",
+        "absentHint": "You have not joined the Community.",
         "policyVersion": "Policy version {version}",
         "unavailable": "Your membership status could not be loaded right now.",
         "forbidden": "Your membership status is not available with your current access."

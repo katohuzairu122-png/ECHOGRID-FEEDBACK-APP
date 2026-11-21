@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import type { ReactNode } from 'react';
 import { useFormatter, useTranslations } from 'next-intl';
 import { LandingIcon } from '@/components/landing/landing-icon';
 import type {
@@ -35,9 +36,11 @@ function SectionNotice({
 
 export function CommunityHubView({
   data,
+  membershipControls,
   basePath = '/loyalty/dashboard/community',
 }: {
   data: CommunityHubData;
+  membershipControls?: ReactNode;
   basePath?: string;
 }) {
   const t = useTranslations('loyalty.customer.community');
@@ -160,6 +163,7 @@ export function CommunityHubView({
                 )}
               </>
             )}
+            {membershipSection.status === 'ready' && membershipControls}
           </div>
         </section>
       </div>
