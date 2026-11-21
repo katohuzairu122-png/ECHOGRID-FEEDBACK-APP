@@ -81,7 +81,7 @@ export function createEmailRegistrationService(config: {
     keyForIdentifier,
     requestProof,
     completeRegistration: async (input: {
-      email?: string; challengeId: string; proof: string; name?: string; password?: string; phone?: string | undefined;
+      email?: string | undefined; challengeId: string; proof: string; name?: string | undefined; password?: string | undefined; phone?: string | undefined;
     }) => {
       const invalid = { ok: false, kind: 'invalid' } as const;
       const [pending] = await config.db.select({
