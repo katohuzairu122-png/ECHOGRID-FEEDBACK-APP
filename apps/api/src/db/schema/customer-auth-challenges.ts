@@ -20,6 +20,8 @@ export const customerAuthChallenges = pgTable('customer_auth_challenges', {
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
   consumedAt: timestamp('consumed_at', { withTimezone: true }),
+  /** Challenge-bound AES-GCM state, cleared on successful activation. */
+  registrationSealedData: text('registration_sealed_data'),
 }, (table) => [
   index('customer_auth_challenges_subject_purpose_idx').on(table.subjectDigest, table.purpose, table.expiresAt),
   index('customer_auth_challenges_expiry_idx').on(table.expiresAt),
@@ -28,5 +30,6 @@ export const customerAuthChallenges = pgTable('customer_auth_challenges', {
   check('customer_auth_challenges_proof_digest_check', sql`${table.proofDigest} ~ '^[0-9a-f]{64}$'`),
   check('customer_auth_challenges_attempts_check', sql`${table.attempts} >= 0 AND ${table.maxAttempts} BETWEEN 1 AND 5 AND ${table.attempts} <= ${table.maxAttempts}`),
   check('customer_auth_challenges_expiry_check', sql`${table.expiresAt} > ${table.createdAt}`),
+  check('customer_auth_challenges_registration_sealed_check', sql`${table.registrationSealedData} IS NULL OR (${table.purpose} = 'email_registration' AND ${table.customerId} IS NULL AND length(${table.registrationSealedData}) <= 4096)`),
   check('customer_auth_challenges_consumption_check', sql`${table.consumedAt} IS NULL OR (${table.consumedAt} >= ${table.createdAt} AND ${table.consumedAt} <= ${table.expiresAt})`),
 ]);
