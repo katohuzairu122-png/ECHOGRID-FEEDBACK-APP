@@ -26,7 +26,7 @@ async function otpSessionAccessToken(): Promise<string | null> {
 export async function requestCustomerEmailUpgradeAction(
   _prev: CustomerEmailUpgradeState, data: FormData,
 ): Promise<CustomerEmailUpgradeState> {
-  if (!isCustomerEmailAuthWebEnabled()) return { error: 'unavailable' };
+  if (!isCustomerEmailAuthWebEnabled() || process.env.CUSTOMER_LEGACY_UPGRADE_ENABLED !== 'true') return { error: 'unavailable' };
   const email = input(data, 'email').toLowerCase();
   if (!emailPattern.test(email) || email.length > 254) return { error: 'invalid' };
   const token = await otpSessionAccessToken();
@@ -50,7 +50,7 @@ export async function requestCustomerEmailUpgradeAction(
 export async function completeCustomerEmailUpgradeAction(
   _prev: CustomerEmailUpgradeState, data: FormData,
 ): Promise<CustomerEmailUpgradeState> {
-  if (!isCustomerEmailAuthWebEnabled()) return { error: 'unavailable' };
+  if (!isCustomerEmailAuthWebEnabled() || process.env.CUSTOMER_LEGACY_UPGRADE_ENABLED !== 'true') return { error: 'unavailable' };
   const email = input(data, 'email').toLowerCase();
   const password = String(data.get('password') ?? '');
   const confirmation = String(data.get('passwordConfirmation') ?? '');
