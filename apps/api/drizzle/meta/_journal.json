@@ -610,6 +610,13 @@
       "when": 1795154649004,
       "tag": "0086_d2_final_privacy_lifecycle",
       "breakpoints": true
+    },
+    {
+      "idx": 87,
+      "version": "7",
+      "when": 1795250000000,
+      "tag": "0087_customer_pending_registration",
+      "breakpoints": true
     }
   ]
 }
