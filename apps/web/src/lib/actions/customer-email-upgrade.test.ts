@@ -28,6 +28,7 @@ const proof = '141664f8-1ef4-4872-b445-fca151ba65aa.synthetic-proof';
 beforeEach(() => {
   vi.clearAllMocks();
   process.env.CUSTOMER_EMAIL_AUTH_ENABLED = 'true';
+  process.env.CUSTOMER_LEGACY_UPGRADE_ENABLED = 'true';
   delete process.env.CUSTOMER_PASSWORD_MIN_LENGTH;
   h.current.mockResolvedValue({ kind: 'legacy', accessToken: 'legacy-token' });
 });
