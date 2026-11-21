@@ -2,10 +2,10 @@
 
 **Status: DRAFT — NOT APPROVED — NOT EFFECTIVE — NOT SERVED TO CUSTOMERS.**
 
-Proposed version: `community-membership-v1.0`  
-Approved version: none  
-Effective date: none  
-Activation: disabled  
+- Proposed version: `community-membership-v1.0`
+- Approved version: none
+- Effective date: none
+- Activation: disabled
 Operator identified in the existing product: INFINICUS LLC, Echo Grid.
 
 Everything below is proposed membership wording for review, not a statement of
