@@ -9,4 +9,4 @@ export type CommunityFeedPage = NetworkFeedPageDto;
 
 /** A feed either has a real page or says honestly why it does not; a failure is never rendered as "empty". */
 export type CommunityFeedResult =
-  { status: 'ready'; data: CommunityFeedPage } | { status: 'forbidden' | 'unavailable' };
+  { status: 'ready'; data: CommunityFeedPage } | { status: 'forbidden' | 'unavailable' | 'verification_required' };
