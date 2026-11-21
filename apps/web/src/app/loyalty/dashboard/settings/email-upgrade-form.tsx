@@ -24,7 +24,7 @@ export function CustomerEmailUpgradeForm({ canUpgrade }: { canUpgrade: boolean }
         <form action={formAction} className="flex flex-col gap-3">
           <Label htmlFor="upgrade-email">{t('upgradeEmailLabel')}</Label>
           <Input id="upgrade-email" name="email" type="email" autoComplete="email" required />
-          {state.error && <p role="alert" className="text-sm text-danger">{t('upgradeErrors.' + state.error)}</p>}
+          {state.error && <p role="alert" className="text-sm text-danger">{t(`upgradeErrors.${state.error}`)}</p>}
           <Button type="submit" disabled={pending}>{pending ? t('saving') : t('upgradeRequest')}</Button>
         </form>
       )}
