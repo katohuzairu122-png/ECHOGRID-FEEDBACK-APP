@@ -55,9 +55,11 @@ export async function requestEmailRegistrationAction(_prev: EmailAuthState, form
   if (minLength !== null && passwordLength(password) < minLength) return { error: 'password_too_short', minLength };
   const next = safeInternalPath(String(formData.get('next') ?? '/loyalty/dashboard'), '/loyalty/dashboard');
   try {
-    // The registration request only sends the email. The name and raw password are never sent before proof,
-    // persisted, logged, put in a URL, or included in the confirmation email.
-    const reply = await callCustomerAuthApi('/customer-auth/email/register/request', { body: { email, next } });
+    // Transmit signup fields only to the attribution-protected API. The API hashes and
+    // encrypts them before emailing the confirmation; no raw password is persisted.
+    const reply = await callCustomerAuthApi('/customer-auth/email/register/request', {
+      body: { email, name, password, next },
+    });
     if (reply.status === 202) return { sent: true };
     return { error: unmappedLogged(codeFor(reply.status, {}), 'register_request', reply.status) };
   } catch (error) {
@@ -88,27 +90,21 @@ export async function completeEmailRegistrationAction(_prev: EmailAuthState, for
     logEmailAuthWebUnavailable('web_flag_disabled', { action: 'register_complete' });
     return { error: 'unavailable' };
   }
-  const email = text(formData, 'email').toLowerCase();
-  const name = text(formData, 'name');
-  const password = String(formData.get('password') ?? '');
-  const passwordConfirmation = String(formData.get('passwordConfirmation') ?? '');
   const [challengeId = '', proof = ''] = text(formData, 'challenge').split('.');
-  // Optional, stored by the API as an UNVERIFIED claim; it gates nothing until the phone-verification flow proves it.
-  const phone = text(formData, 'phone');
   const next = safeInternalPath(String(formData.get('next') ?? '/loyalty/dashboard'), '/loyalty/dashboard');
-  if (!EMAIL.test(email) || !challengeId || !proof || !name || name.length > 120 || password.length === 0) return { error: 'invalid_input' };
-  if (password !== passwordConfirmation) return { error: 'password_mismatch' };
-  // Refuse an obviously short password before the proof is spent. The configured minimum only; the API remains authoritative
-  // (and fails closed if it has no minimum of its own), so an unset value here simply skips this early, friendlier check.
-  const minLength = getCustomerPasswordMinLength();
-  if (minLength !== null && passwordLength(password) < minLength) return { error: 'password_too_short', minLength };
+  if (!challengeId || !proof) return { error: 'invalid_input' };
   try {
+    // The original signup fields are sealed in the challenge. Confirmation never resubmits a password.
     const reply = await callCustomerAuthApi('/customer-auth/email/register/complete', {
-      body: { email, challengeId, proof, name, password, ...(phone ? { phone } : {}) },
+      body: { challengeId, proof },
     });
-    if (reply.status !== 201) return { error: unmappedLogged(codeFor(reply.status, { 401: 'invalid_proof' }), 'register_complete', reply.status) };
-    const failure = await signIn(email, password, 'register_complete');
-    return failure ? { error: failure } : { success: true, next };
+    if (reply.status !== 201) return {
+      error: unmappedLogged(codeFor(reply.status, { 401: 'invalid_proof' }), 'register_complete', reply.status),
+    };
+    const credentials = readRefreshResponse(reply.body);
+    if (!credentials) return { error: 'unavailable' };
+    await setRotatingCustomerSession(credentials);
+    return { success: true, next };
   } catch (error) {
     logEmailAuthWebUnavailable('api_fetch_failed', { action: 'register_complete', error });
     return { error: 'unavailable' };
