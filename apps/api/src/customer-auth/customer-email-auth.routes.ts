@@ -12,10 +12,16 @@ const customerDestination = z.string().max(2048).refine((value) =>
   value.startsWith('/loyalty/') && !value.startsWith('//') && !value.includes('\\') &&
   ![...value].some((character) => character.charCodeAt(0) < 0x20),
 );
-export const emailRegistrationRequestSchema = z.object({ email, next: customerDestination.optional() }).strict();
+export const emailRegistrationRequestSchema = z.object({
+  email, next: customerDestination.optional(),
+  // Optional only for in-flight pre-migration registration challenge tests/compatibility.
+  name: z.string().trim().min(1).max(120).optional(),
+  password: password.optional(),
+}).strict().refine((value) => (value.name === undefined) === (value.password === undefined));
 export const emailRegistrationCompleteSchema = z.object({
-  email, challengeId: z.uuid(), proof: z.string().min(6).max(256),
-  name: z.string().trim().min(1).max(120), password,
+  challengeId: z.uuid(), proof: z.string().min(6).max(256),
+  // Old unsealed challenges may still supply their signup fields.
+  email: email.optional(), name: z.string().trim().min(1).max(120).optional(), password: password.optional(),
   /** Optional, stored unverified; proven later through /loyalty/me/phone. */
   phone: z.string().trim().min(1).max(40).optional(),
 }).strict();
@@ -36,8 +42,8 @@ export type IsolatedEmailAuthDependencies = {
   resolveTrustedSource(request: Request): Promise<string | null>;
   keyForIdentifier(email: string): Promise<string>;
   limit: EmailAuthLimiter;
-  requestProof(email: string, next?: string): Promise<void>;
-  completeRegistration(input: z.infer<typeof emailRegistrationCompleteSchema>): Promise<EmailRegistrationResult>;
+  requestProof(email: string, next?: string, signup?: { name: string; password: string }): Promise<void>;
+  completeRegistration(input: z.infer<typeof emailRegistrationCompleteSchema>): Promise<EmailRegistrationResult & { session?: IssuedSession }>;
   login(input: z.infer<typeof emailPasswordLoginSchema>): Promise<PasswordLoginResult>;
   changePassword(accessToken: string, input: z.infer<typeof emailPasswordChangeSchema>): Promise<boolean>;
   transportSession(session: IssuedSession): Response;
@@ -116,10 +122,11 @@ export function createIsolatedCustomerEmailAuthRoutes(dependencies: IsolatedEmai
     if (!dto.success) return badRequest();
     const decision = await limitEmailAuthRequest(dependencies, c.req.raw, 'delivery', dto.data.email);
     if (decision !== 'allowed') return deny(decision);
-    // Delivery errors and suppressions share the same response.
-    await (dto.data.next === undefined
-      ? dependencies.requestProof(dto.data.email)
-      : dependencies.requestProof(dto.data.email, dto.data.next)).catch(() => undefined);
+    // Account credentials travel only from the Web BFF to this attribution-protected API.
+    // The service hashes then AES-GCM seals them before issuing the email challenge.
+    const signup = dto.data.name && dto.data.password
+      ? { name: dto.data.name, password: dto.data.password } : undefined;
+    await dependencies.requestProof(dto.data.email, dto.data.next, signup).catch(() => undefined);
     return accepted();
   });
   routes.post(paths.complete, async (c) => {
@@ -130,7 +137,13 @@ export function createIsolatedCustomerEmailAuthRoutes(dependencies: IsolatedEmai
       return unavailable();
     }
     const result = await dependencies.completeRegistration(dto.data);
-    return result.ok ? c.json({ registered: true }, 201) : invalid();
+    if (!result.ok) return invalid();
+    if (!result.session) return c.json({ registered: true }, 201); // Pre-migration proof compatibility.
+    // Transport the freshly issued session to the Web Worker only, never a browser response.
+    const transported = dependencies.transportSession(result.session);
+    return new Response(transported.body, { status: 201, headers: {
+      'Cache-Control': 'no-store', 'Content-Type': transported.headers.get('Content-Type') ?? 'application/json',
+    } });
   });
   routes.post(paths.login, async (c) => {
     const dto = emailPasswordLoginSchema.safeParse(await c.req.json().catch(() => null));
