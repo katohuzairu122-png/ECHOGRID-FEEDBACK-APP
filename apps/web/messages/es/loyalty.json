@@ -568,6 +568,24 @@
         "invalid_name": "Ingresa un nombre de hasta 120 caracteres.",
         "invalid": "Comprueba las contraseñas y vuelve a intentarlo.",
         "unavailable": "No se pudo guardar el cambio. Inténtalo de nuevo."
+      },
+      "upgradeDescription": "Agrega correo y contraseña a tu cuenta de teléfono actual sin perder membresías ni puntos. Primero vuelve a verificar tu teléfono.",
+      "upgradeVerifyPhone": "Verificar el teléfono de nuevo",
+      "upgradeEmailLabel": "Correo para vincular",
+      "upgradeRequest": "Enviar confirmación por correo",
+      "upgradeSent": "Si la dirección es apta, se envió un enlace. Ábrelo en este mismo dispositivo dentro de 10 minutos.",
+      "upgradeConfirmTitle": "Confirmar correo y establecer contraseña",
+      "upgradeConfirmDescription": "Abre el enlace mientras tu sesión de verificación telefónica siga vigente. Conservarás tu cuenta actual.",
+      "upgradeComplete": "Proteger mi cuenta actual",
+      "upgradeBack": "Volver a Configuración",
+      "upgradeMissingLink": "El enlace de confirmación está incompleto o caducó. Solicita uno nuevo.",
+      "upgradeErrors": {
+        "invalid": "No se aceptó el enlace, correo o contraseña. Vuelve a verificar el teléfono si es necesario.",
+        "password_mismatch": "Las contraseñas no coinciden.",
+        "password_too_short": "La contraseña debe tener al menos {min} caracteres.",
+        "verify_phone_again": "Se requiere una nueva verificación del teléfono. Inicia sesión de nuevo con un código.",
+        "unavailable": "No se puede vincular la cuenta ahora. Inténtalo de nuevo.",
+        "rate_limited": "Demasiados intentos. Espera antes de reintentar."
       }
     },
     "invite": {
