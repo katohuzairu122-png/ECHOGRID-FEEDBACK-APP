@@ -33,9 +33,31 @@ Existing phone-OTP login previously minted only a nonrotating 90-day token. The 
 
 The new feature-gated, attribution-protected `/customer-auth/email/legacy/otp-login` validates the actual phone code through Twilio Verify in production or the existing one-time database OTP service in test/development. It then resolves the **verified phone owner** through the established `CustomerRepository.createIfAbsent` and establishes a rotating OTP session. Accounts that already have verified email cannot use OTP after the existing retirement rule.
 
-The customer Settings upgrade flow uses that rotating session to request and complete the pre-existing independent email-link challenge through `/customer-auth/email/link/request` and `/customer-auth/email/link/complete`. The pre-existing service checks customer ID, session ID, fresh OTP step-up, verified phone ownership, proof expiry and one-time usage, email uniqueness and credential conflicts. Linking occurs transactionally with session revocation and legacy-token cutoff; customer ID, memberships, rewards, loyalty history and Community history are never moved to a new customer.
+The customer Settings upgrade prototype is designed to use that rotating session to request and complete the pre-existing independent email-link challenge through `/customer-auth/email/link/request` and `/customer-auth/email/link/complete`. The pre-existing service checks customer ID, session ID, fresh OTP step-up, verified phone ownership, proof expiry and one-time usage, email uniqueness and credential conflicts. Linking occurs transactionally with session revocation and legacy-token cutoff; customer ID, memberships, rewards, loyalty history and Community history are never moved to a new customer.
 
 No new automatic account merge, password reset, altered points rule or weaker phone-verification gate is introduced.
+
+### Architecture isolation gate — CURRENT BLOCKER
+
+Hosted CI identified `customer-email-link-schema-compat.test.ts`, a locked
+security contract that allows the pre-existing email-link service to be imported
+ONLY by its isolated `customer-email-link.routes.ts` module; the deployed
+`customer-email-auth.composition.ts` must not import it or reach it without a
+separate activation block. The initial implementation violated that contract.
+
+The correction removes that import and all runtime link-service wiring from
+the deployed email-auth composition, preserves the original assertion unchanged,
+and returns generic 404 responses for unactivated link operations. On the Web,
+the new OTP-to-rotating bridge and Settings link UI are restricted behind an
+additional **deny-by-default** exact-string gate
+`CUSTOMER_LEGACY_UPGRADE_ENABLED === 'true'`; this flag is NOT configured,
+approved, or activated in any environment.
+
+**Legacy credential linking is therefore a development scaffold, NOT a live,
+fully functional feature on this branch.** A separate authorized activation
+must implement the isolated service composition, preserve its security
+gate, validate identity/step-up proof and run full browser integration.
+Do not set the new gate to true until those safeguards are verified.
 
 ### Identity and UX caveats
 
@@ -59,4 +81,4 @@ New unit tests cover AES-GCM roundtrip/tampering, signup proof-only actions, ser
 
 ## Release and rollback
 
-Do not merge before exact-head CI, migration-security acceptance and reviewed cleanup/legacy-identity browser evidence. The development branch may be abandoned without operational effect. Applying 0087 to a shared environment or enabling the email-auth flag needs new explicit authorization. No automatic advancement.
+Do not merge before exact-head CI, migration-security acceptance and reviewed cleanup/legacy-identity browser evidence. The legacy-upgrade activation is blocked by the isolated S3 security boundary and requires a separately authorized implementation. The development branch may be abandoned without operational effect. Applying 0087 to a shared environment or enabling the email-auth flag needs new explicit authorization. No automatic advancement.
