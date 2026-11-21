@@ -14,6 +14,12 @@ import { logEmailAuthWebUnavailable } from './customer-email-auth-diagnostics';
 import { loginWithEmailAction, requestEmailRegistrationAction } from './actions/customer-email-auth';
 
 const SENTINELS = ['victim@example.test', 'hunter2-password-sentinel', 'secret-detail-should-not-leak'];
+const registrationFields = {
+  name: 'Synthetic Customer',
+  email: 'victim@example.test',
+  password: 'hunter2-password-sentinel',
+  passwordConfirmation: 'hunter2-password-sentinel',
+};
 const form = (fields: Record<string, string>) => {
   const f = new FormData();
   for (const [k, v] of Object.entries(fields)) f.set(k, v);
@@ -33,7 +39,7 @@ afterEach(() => vi.restoreAllMocks());
 describe('web reason codes for the generic "not available" screen', () => {
   it('flag off at action time: logged as web_flag_disabled, answer unchanged, API never called', async () => {
     process.env.CUSTOMER_EMAIL_AUTH_ENABLED = '';
-    expect(await requestEmailRegistrationAction({}, form({ email: 'victim@example.test' }))).toEqual({ error: 'unavailable' });
+    expect(await requestEmailRegistrationAction({}, form(registrationFields))).toEqual({ error: 'unavailable' });
     expect(h.api).not.toHaveBeenCalled();
     expect(lines(warn)).toEqual([{ event: 'customer_email_auth_web_unavailable', reason: 'web_flag_disabled', action: 'register_request' }]);
     clean(lines(warn));
@@ -41,14 +47,14 @@ describe('web reason codes for the generic "not available" screen', () => {
 
   it('the call throwing: logged as api_fetch_failed with the error CLASS only', async () => {
     h.api.mockRejectedValue(new Error('secret-detail-should-not-leak victim@example.test'));
-    expect(await requestEmailRegistrationAction({}, form({ email: 'victim@example.test' }))).toEqual({ error: 'unavailable' });
+    expect(await requestEmailRegistrationAction({}, form(registrationFields))).toEqual({ error: 'unavailable' });
     expect(lines(warn)).toEqual([{ event: 'customer_email_auth_web_unavailable', reason: 'api_fetch_failed', action: 'register_request', errorName: 'Error' }]);
     clean(lines(warn));
   });
 
   it('an unmapped API status (503) is logged with the status number; the screen answer is unchanged', async () => {
     h.api.mockResolvedValue({ status: 503, body: { error: 'Service unavailable' } });
-    expect(await requestEmailRegistrationAction({}, form({ email: 'victim@example.test' }))).toEqual({ error: 'unavailable' });
+    expect(await requestEmailRegistrationAction({}, form(registrationFields))).toEqual({ error: 'unavailable' });
     expect(lines(warn)).toEqual([{ event: 'customer_email_auth_web_unavailable', reason: 'api_unexpected_status', action: 'register_request', status: 503 }]);
     clean(lines(warn));
   });
@@ -74,7 +80,7 @@ describe('web reason codes for the generic "not available" screen', () => {
 
   it('a successful request logs nothing', async () => {
     h.api.mockResolvedValue({ status: 202, body: { accepted: true } });
-    expect(await requestEmailRegistrationAction({}, form({ email: 'victim@example.test' }))).toEqual({ sent: true });
+    expect(await requestEmailRegistrationAction({}, form(registrationFields))).toEqual({ sent: true });
     expect(warn).not.toHaveBeenCalled();
   });
 
