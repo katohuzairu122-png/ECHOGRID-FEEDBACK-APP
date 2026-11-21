@@ -126,7 +126,12 @@ export function createIsolatedCustomerEmailAuthRoutes(dependencies: IsolatedEmai
     // The service hashes then AES-GCM seals them before issuing the email challenge.
     const signup = dto.data.name && dto.data.password
       ? { name: dto.data.name, password: dto.data.password } : undefined;
-    await dependencies.requestProof(dto.data.email, dto.data.next, signup).catch(() => undefined);
+    // Preserve old email-only request calls for unexpired legacy links and existing tests.
+    await (signup
+      ? dependencies.requestProof(dto.data.email, dto.data.next, signup)
+      : dto.data.next === undefined
+        ? dependencies.requestProof(dto.data.email)
+        : dependencies.requestProof(dto.data.email, dto.data.next)).catch(() => undefined);
     return accepted();
   });
   routes.post(paths.complete, async (c) => {
