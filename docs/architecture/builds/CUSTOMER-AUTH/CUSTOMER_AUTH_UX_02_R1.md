@@ -27,11 +27,16 @@ No fallback to `createIfAbsent()` is introduced in the upgrade resolver. Ordinar
 - If another allowed phone-login path wins first, the upgrade can resolve the same verified owner or safely deny when its legacy-row predicate no longer matches. It cannot create or select another identity through the upgrade-only path.
 - Regression tests use separate PostgreSQL clients to race two upgrades and an upgrade against ordinary phone login. They assert only the original ID can resolve and that one phone does not produce duplicate identity rows.
 
-## Regression evidence to collect
+## Regression evidence
 
-- Unit: unexpected repository errors are not rewritten as `OTP_INVALID`; expected unknown identity remains the existing generic denial; upgrade does not mint a legacy bearer token; OTP replay stays rejected.
-- Disposable PostgreSQL: unknown phone creates no row; verified and eligible legacy phone cases preserve ID; an unverified phone on an email-credential identity cannot claim it; concurrent upgrade paths converge without duplicate identities; membership and loyalty balance stay attached to the same ID; only the exact unique-index conflict is denied; an injected operational SQLSTATE propagates.
-- API typecheck, focused unit tests, full API tests, integration tests, and exact-head hosted CI must be recorded with actual results. Until CI completes, this document does not claim merge readiness.
+- Exact R1 branch head: `db9340bc0c562a4b6c00ae522dea5d0237b74209`.
+- Focused API auth, route and PostgreSQL error-classifier tests: 40 passed.
+- Full API unit suite: 263 files and 4,152 tests passed.
+- API typecheck (application and test TypeScript projects): passed.
+- ESLint on all changed TypeScript files: passed.
+- Customer email-auth real-PostgreSQL integration file: 23 tests passed on PostgreSQL 16 and 23 passed on PostgreSQL 18. This includes unknown-phone no-create, same-ID resolution, no takeover of an unverified email-customer claim, parallel upgrades, upgrade vs ordinary phone login, preservation of customer ID/membership/loyalty balance, expected unique-index denial, and propagation of injected SQLSTATE `40001`.
+- Exact-head hosted CI: 25/25 workflow runs passed, including main CI/CD and PG18 disposable compatibility. Hosted API integration reported 1,605 passed and 39 skipped; the separate R1 integration file ran all 23 tests. General Block14 Chromium reported 11 passed; this is not the customer-auth A–H suite.
+- Local PostgreSQL was unavailable. The R1 PostgreSQL runs above used hosted disposable CI databases; no shared database was used.
 
 ## Security invariants
 
@@ -50,4 +55,4 @@ These earlier issues remain separate and incomplete: R2 — pending-registration
 
 ## Release status
 
-R1 is not merge-ready until the required local disposable-PostgreSQL tests, test counts, typecheck, and exact-head hosted CI are verified. Draft PR review is for this R1 scope only. Do not merge or deploy automatically.
+R1 implementation and required exact-head CI are merge-ready for review. PR #551 remains a draft under the requested workflow; no merge or deployment is authorized. Customer-auth Chromium A–H and the R2/R3/R4 matters listed above remain separate blocks and are not claimed complete here.
