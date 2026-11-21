@@ -35,6 +35,11 @@ vi.mock('../../src/db/client', async (original) => {
 });
 
 import { authRoutes } from '../../src/auth/auth.routes';
+import { buildDb } from '../../src/db/client';
+import { appDbOf } from '../helpers/runtime-db';
+import { resolveEmailAuthConfig } from '../../src/customer-auth/customer-email-auth.config';
+import { CustomerSessionService } from '../../src/customer-auth/customer-session.service';
+import { loyaltyCustomerRoutes } from '../../src/loyalty/loyalty-customer.routes';
 import { communityFeedRoutes } from '../../src/community/community-feed.routes';
 import { communityCustomerRoutes } from '../../src/community/community-customer.routes';
 import { communityPointCustomerRoutes } from '../../src/community/community-point-customer.routes';
@@ -73,6 +78,7 @@ describe.skipIf(!process.env.DATABASE_URL)('NETWORK-05 real HTTP-to-Postgres lif
   app.route(base, platformNetworkModerationRoutes);
   app.route('/api/v1/auth', authRoutes);
   app.route('/api/v1/network', communityFeedRoutes);
+  app.route('/api/v1/loyalty/me', loyaltyCustomerRoutes);
   app.route('/api/v1/community/me', communityCustomerRoutes);
   app.route('/api/v1/community-points/me', communityPointCustomerRoutes);
   let author: string;
@@ -88,6 +94,7 @@ describe.skipIf(!process.env.DATABASE_URL)('NETWORK-05 real HTTP-to-Postgres lif
     method = 'GET',
     body?: unknown,
     flag = 'true',
+    testEnv: Partial<Bindings> = {},
   ) {
     const pending: Promise<unknown>[] = [];
     const response = await app.request(
@@ -97,7 +104,7 @@ describe.skipIf(!process.env.DATABASE_URL)('NETWORK-05 real HTTP-to-Postgres lif
         headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
         ...(body === undefined ? {} : { body: JSON.stringify(body) }),
       },
-      { ...env, NETWORK_FEED_ENABLED: flag },
+      { ...env, NETWORK_FEED_ENABLED: flag, ...testEnv },
       {
         waitUntil: (promise: Promise<unknown>) => pending.push(promise),
       } as unknown as ExecutionContext,
@@ -383,6 +390,89 @@ describe.skipIf(!process.env.DATABASE_URL)('NETWORK-05 real HTTP-to-Postgres lif
     ).toBe(404);
     expect((await request(base + '/queue', token, 'GET', undefined, 'false')).status).toBe(404);
   });
+
+  it.each([
+    { phone: null, verified: false },
+    { phone: '+999140000001', verified: false },
+    { phone: null, verified: true },
+  ])('NETWORK-14 keeps the unapproved read exemption disabled for $phone / $verified', async ({ phone, verified }) => {
+    const id = (await client.query<{ id: string }>(
+      "insert into customers(phone,phone_verified_at,status) values ($1,$2,'active') returning id",
+      [phone, verified ? new Date() : null],
+    )).rows[0]!.id;
+    const token = await signCustomerAccessToken(id, customerSecret);
+    const response = await request('/api/v1/network/feed', token);
+    expect(response.status).toBe(403);
+    const denied = await response.json() as { error: { code: string; details: unknown } };
+    expect(denied.error.code).toBe('PHONE_VERIFICATION_REQUIRED');
+    expect(JSON.stringify(denied)).not.toMatch(/phone_verified_at|reviewerId|password|token/);
+    // A visit to the account route neither sends OTP nor changes authoritative verification status.
+    const before = (await client.query('select phone,phone_verified_at from customers where id=$1', [id])).rows[0];
+    const status = await request('/api/v1/loyalty/me/phone', token);
+    expect(status.status).toBe(200);
+    expect(Object.keys((await status.json() as { data: object }).data).sort()).toEqual(['phoneMasked', 'verified']);
+    expect((await client.query('select phone,phone_verified_at from customers where id=$1', [id])).rows[0]).toEqual(before);
+    expect((await request('/api/v1/network/feed', token)).status).toBe(403);
+    expect((await request('/api/v1/community/me', token)).status).toBe(200);
+    const join = await request('/api/v1/community/me/join', token, 'POST', { policyVersion: 'network14-test' });
+    expect(join.status).toBe(403);
+    expect(await join.text()).toContain('PHONE_VERIFICATION_REQUIRED');
+    expect((await client.query('select count(*)::int n from community_memberships where customer_id=$1', [id])).rows[0].n).toBe(0);
+  });
+
+  it('NETWORK-14 preserves customer scope and independently gates participation and moderation', async () => {
+    const id = (await client.query<{ id: string }>(
+      "insert into customers(phone,phone_verified_at,status) values ('+999140000002',now(),'active') returning id",
+    )).rows[0]!.id;
+    const token = await signCustomerAccessToken(id, customerSecret);
+    expect((await request('/api/v1/network/feed?verified=true', token)).status).toBe(400);
+    expect((await request(`/api/v1/network/feed?customerId=${customer}`, token)).status).toBe(400);
+    expect((await request(`/api/v1/network/feed?businessId=${business}`, token)).status).toBe(400);
+    const join = await request('/api/v1/community/me/join', token, 'POST', { policyVersion: 'network14-test' });
+    expect(join.status).toBe(201);
+    expect((await join.json() as { data: { membership: { customerId: string } } }).data.membership.customerId).toBe(id);
+    expect((await request(base + '/posts', token, 'POST', { body: 'not permitted', contentLocale: 'en' })).status).toBe(401);
+    expect((await request(base + '/history', token)).status).toBe(401);
+    const feed = await request('/api/v1/network/feed?limit=1', token);
+    expect(feed.status).toBe(200);
+    const page = (await feed.json() as { data: { items: object[] } }).data;
+    for (const item of page.items) expect(Object.keys(item).sort()).toEqual(
+      ['body', 'businessName', 'contentClass', 'contentLocale', 'handle', 'linkUrl', 'publishedAt'].sort(),
+    );
+    await client.query("update community_memberships set status='left',left_at=now() where customer_id=$1", [id]);
+    // Feed reading does not borrow another customer's membership or create a new one.
+    expect((await request('/api/v1/network/feed', token)).status).toBe(200);
+    expect((await client.query('select status from community_memberships where customer_id=$1', [id])).rows[0].status).toBe('left');
+  });
+
+  it.each(['revoked', 'expired', 'suspended'] as const)(
+    'NETWORK-14 denies a %s rotating customer session through the actual Feed middleware', async (state) => {
+      const testEnv = {
+        CUSTOMER_EMAIL_AUTH_ENABLED: 'true', CUSTOMER_EMAIL_AUTH_HMAC_SECRET: 'h'.repeat(40), CUSTOMER_SESSION_SIGNING_SECRET: 's'.repeat(40),
+        CUSTOMER_SESSION_ACCESS_TTL_SECONDS: '900', CUSTOMER_SESSION_REFRESH_TTL_SECONDS: '2592000', CUSTOMER_SESSION_ABSOLUTE_TTL_SECONDS: '2592000',
+        CUSTOMER_SESSION_IDLE_TTL_SECONDS: '1209600', CUSTOMER_STEP_UP_WINDOW_SECONDS: '300', CUSTOMER_PASSWORD_MIN_LENGTH: '8',
+        CLIENT_ATTRIBUTION_SECRET: 'attribution-secret-value-0123456789', WEB_BASE_URL: 'https://app.example.test',
+        HYPERDRIVE: {}, PASSWORD_HASHER: {}, CUSTOMER_AUTH_RATE_LIMIT: {},
+      } as unknown as Partial<Bindings>;
+      const resolved = resolveEmailAuthConfig({ ...env, ...testEnv });
+      if (!resolved.ok) throw new Error(resolved.missing.join(','));
+      const sessions = new CustomerSessionService(appDbOf(buildDb(client)), resolved.config.session);
+      const id = (await client.query<{ id: string }>(
+        "insert into customers(phone,phone_verified_at,status) values ($1,now(),'active') returning id",
+        ['+99914' + String(Date.now()).slice(-8)],
+      )).rows[0]!.id;
+      const issued = await sessions.establishSession({ customerId: id, authMethod: 'password' });
+      if (!issued.ok) throw new Error('synthetic session failed');
+      const token = issued.session.accessToken;
+      expect((await request('/api/v1/network/feed', token, 'GET', undefined, 'true', testEnv)).status).toBe(200);
+      if (state === 'revoked') await sessions.revokeSession({ customerId: id, sessionId: issued.session.sessionId });
+      else if (state === 'expired') await client.query("update customer_sessions set absolute_expires_at=now()-interval '1 second' where id=$1", [issued.session.sessionId]);
+      else await client.query("update customers set status='suspended' where id=$1", [id]);
+      const denied = await request('/api/v1/network/feed', token, 'GET', undefined, 'true', testEnv);
+      expect(denied.status).toBe(401);
+      expect((await denied.json() as { error: { code: string } }).error.code).toBe('UNAUTHENTICATED');
+    },
+  );
 
   async function withModerationBrowser(
     moderator: string,
@@ -831,7 +921,7 @@ describe.skipIf(!process.env.DATABASE_URL)('NETWORK-05 real HTTP-to-Postgres lif
           expect(await denied.text()).not.toContain(body);
           await page.getByRole('button', { name: 'Refresh feed', exact: true }).click();
           await browserExpect(page.getByRole('status')).toContainText(
-            'not available with your current access',
+            'Current Community policy requires a verified phone',
           );
           await browserExpect(page.getByText(body, { exact: true })).toHaveCount(0);
           await browserExpect(
@@ -1424,6 +1514,68 @@ describe.skipIf(!process.env.DATABASE_URL)('NETWORK-05 real HTTP-to-Postgres lif
           await browserExpect(bodies).toHaveText(expected.slice(0, 20));
         }
       }),
+    120000,
+  );
+
+  it.skipIf(!browserEnabled)(
+    'browser explains current phone eligibility and revalidates account handoff without OTP loops (NETWORK-14)',
+    async () => withModerationBrowser(moderatorB, async (page, context, webUrl, browserExpect) => {
+      const original = (await client.query('select phone_verified_at from customers where id=$1', [customer])).rows[0];
+      const body = 'NETWORK-14 authorized published update';
+      const draft = await prepareSubmitted(body);
+      await action(moderatorA, `/revisions/${draft.revisionId}/approve`);
+      await action(moderatorB, `/revisions/${draft.revisionId}/approve`);
+      const target = '/loyalty/dashboard/community/feed';
+      await context.clearCookies();
+      await context.addCookies([{ name: 'ff_customer_token', value: customerToken, url: webUrl, httpOnly: true }]);
+      const mutations: string[] = [];
+      page.on('request', (r) => { if (r.method() !== 'GET' && r.url().startsWith(webUrl)) mutations.push(r.url()); });
+      try {
+        for (const locale of ['en', 'ar'] as const) {
+          const messages = requireWeb(`./messages/${locale}/loyalty.json`) as {
+            customer: { community: { sections: { points: string }; feed: { verificationRequired: string; verifyPhone: string } };
+              phoneVerify: { title: string; verifiedTitle: string; continue: string } };
+          };
+          const labels = messages.customer;
+          await context.addCookies([{ name: 'ff_locale', value: locale, url: webUrl }]);
+          for (const width of [375, 1280]) {
+            await client.query('update customers set phone_verified_at=null where id=$1', [customer]);
+            await page.setViewportSize({ width, height: 900 });
+            await page.goto(webUrl + target);
+            await browserExpect(page.locator('html')).toHaveAttribute('dir', locale === 'ar' ? 'rtl' : 'ltr');
+            const feed = page.locator('section[aria-labelledby="community-feed-title"]');
+            await browserExpect(feed.getByRole('status')).toContainText(labels.community.feed.verificationRequired);
+            await browserExpect(feed.getByRole('article')).toHaveCount(0);
+            const link = feed.getByRole('link', { name: labels.community.feed.verifyPhone, exact: true });
+            await link.focus();
+            await browserExpect(link).toBeFocused();
+            expect((await link.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+            expect(await page.locator('html').evaluate((el: { scrollWidth: number }) => el.scrollWidth)).toBeLessThanOrEqual(width);
+            await link.press('Enter');
+            await browserExpect(page).toHaveURL(webUrl + '/loyalty/dashboard/phone?next=' + encodeURIComponent(target));
+            await browserExpect(page.getByText(labels.phoneVerify.title, { exact: true })).toBeVisible();
+            // Returning, including a forged client verification flag, proves nothing.
+            await page.goto(webUrl + target + '?verified=true');
+            await browserExpect(feed.getByRole('status')).toContainText(labels.community.feed.verificationRequired);
+            await feed.getByRole('link', { name: labels.community.sections.points, exact: true }).click();
+            await browserExpect(page).toHaveURL(webUrl + '/loyalty/dashboard/community');
+            expect((await request('/api/v1/network/feed', customerToken)).status).toBe(403);
+            // Simulate the separate account workstream completing verification in authoritative persistence.
+            // No SMS/OTP is sent or implemented by this Community acceptance test.
+            await client.query('update customers set phone_verified_at=$2 where id=$1', [customer, original.phone_verified_at]);
+            await page.goto(webUrl + '/loyalty/dashboard/phone?next=' + encodeURIComponent(target));
+            await browserExpect(page.getByText(labels.phoneVerify.verifiedTitle, { exact: true })).toBeVisible();
+            await page.getByRole('link', { name: labels.phoneVerify.continue, exact: true }).click();
+            await browserExpect(page).toHaveURL(webUrl + target);
+            await browserExpect(page.getByText(body, { exact: true })).toBeVisible();
+            expect((await request(base + '/posts', customerToken, 'POST', { body: 'not a moderator', contentLocale: 'en' })).status).toBe(401);
+          }
+        }
+        expect(mutations).toEqual([]);
+      } finally {
+        await client.query('update customers set phone_verified_at=$2 where id=$1', [customer, original.phone_verified_at]);
+      }
+    }),
     120000,
   );
 
