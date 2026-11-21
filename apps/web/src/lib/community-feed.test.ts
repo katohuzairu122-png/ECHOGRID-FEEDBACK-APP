@@ -51,6 +51,26 @@ describe('getCommunityFeed (GET /network/feed only)', () => {
     customer.mockRejectedValueOnce(redirect);
     await expect(getCommunityFeed()).rejects.toBe(redirect);
   });
+
+  it('rejects more items than the requested page size', async () => {
+    const item = { handle: 'abcdefghijklmnopqrstuv', contentClass: 'official', businessName: null,
+      body: 'Approved update', linkUrl: null, contentLocale: 'en', publishedAt: '2026-11-21T10:00:00Z' };
+    customer.mockResolvedValue({ items: Array.from({ length: 21 }, () => item), nextCursor: null } as never);
+    expect(await getCommunityFeed()).toEqual({ status: 'unavailable' });
+  });
+
+  it('projects away internal fields and retries the same read after malformed data', async () => {
+    const item = { handle: 'abcdefghijklmnopqrstuv', contentClass: 'official', businessName: null,
+      body: 'Approved update', linkUrl: null, contentLocale: 'ar', publishedAt: '2026-11-21T10:00:00Z' };
+    customer.mockResolvedValueOnce({ items: null, nextCursor: null } as never);
+    expect(await getCommunityFeed('same_cursor')).toEqual({ status: 'unavailable' });
+    customer.mockResolvedValueOnce({ items: [{ ...item, reviewerId: 'private' }], nextCursor: null, metadata: 'private' } as never);
+    expect(await getCommunityFeed('same_cursor'))
+      .toEqual({ status: 'ready', data: { items: [item], nextCursor: null } });
+    expect(customer.mock.calls.map(([path]) => path))
+      .toEqual(Array(2).fill(`/network/feed?limit=20&cursor=same_cursor`));
+    expect(customer.mock.calls.every(([, init]) => (init?.method ?? 'GET') === 'GET')).toBe(true);
+  });
 });
 
 describe('sanitizeFeedCursor', () => {
