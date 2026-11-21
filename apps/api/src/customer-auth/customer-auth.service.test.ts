@@ -15,6 +15,11 @@ function createFakeRepos() {
   return {
     customers: {
       /** Mirrors the real repository: identity is the VERIFIED owner of the number, created on first proof. */
+      async resolveExistingPhoneForCredentialUpgrade(phone: string) {
+        return [...customers.values()].find(
+          (c) => c.phone === phone && c.phoneVerifiedAt && !c.isDeleted,
+        );
+      },
       async createIfAbsent(input: { phone: string; phoneVerifiedAt: Date }) {
         const verified = [...customers.values()].find(
           (c) => c.phone === input.phone && c.phoneVerifiedAt && !c.isDeleted,
@@ -191,13 +196,29 @@ describe('CustomerAuthService', () => {
     expect(result.customer.phoneVerifiedAt).not.toBeNull();
   });
 
-  it('the rotating-session OTP proof path resolves the same customer without minting a legacy bearer token', async () => {
+  it('the rotating-session OTP upgrade preserves an EXISTING customer without minting a legacy bearer token', async () => {
+    await service.requestOtp(PHONE);
+    const original = await service.verifyOtp(PHONE, extractCode(sms.lastMessage!));
     await service.requestOtp(PHONE);
     const customer = await service.verifyOtpForRotatingSession(PHONE, extractCode(sms.lastMessage!));
 
+    expect(customer.id).toBe(original.customer.id);
     expect(customer.phone).toBe(PHONE);
     expect(customer.phoneVerifiedAt).not.toBeNull();
     expect(customer).not.toHaveProperty('accessToken');
+  });
+
+  it('OTP-to-email upgrade refuses an unknown phone without creating a customer', async () => {
+    await service.requestOtp(PHONE);
+    await expect(service.verifyOtpForRotatingSession(PHONE, extractCode(sms.lastMessage!)))
+      .rejects.toMatchObject({ code: 'OTP_INVALID' });
+    expect(await repos.customers.resolveExistingPhoneForCredentialUpgrade(PHONE)).toBeUndefined();
+  });
+
+  it('a trusted provider approval for upgrade still cannot create a fresh customer', async () => {
+    await expect(service.completeVerifiedPhoneForRotatingSession(PHONE))
+      .rejects.toMatchObject({ code: 'OTP_INVALID' });
+    expect(await repos.customers.resolveExistingPhoneForCredentialUpgrade(PHONE)).toBeUndefined();
   });
 
   it('verifying twice with the same code fails the second time -- a code is single-use', async () => {
