@@ -568,6 +568,24 @@
         "invalid_name": "Enter a name up to 120 characters.",
         "invalid": "Check your password entries and try again.",
         "unavailable": "We could not save this change. Please try again."
+      },
+      "upgradeDescription": "Add email and password sign-in to this existing phone account without losing your memberships or points. First verify your phone using a new code.",
+      "upgradeVerifyPhone": "Verify your phone again to continue",
+      "upgradeEmailLabel": "Email to link",
+      "upgradeRequest": "Send email confirmation",
+      "upgradeSent": "If this address is eligible, a confirmation link has been sent. Open it on this same device within 10 minutes.",
+      "upgradeConfirmTitle": "Confirm email and set password",
+      "upgradeConfirmDescription": "Use your new email confirmation link while your fresh phone-verification session is still active. The existing customer account will be preserved.",
+      "upgradeComplete": "Secure my existing account",
+      "upgradeBack": "Back to Settings",
+      "upgradeMissingLink": "This email confirmation link is incomplete or expired. Request a fresh link.",
+      "upgradeErrors": {
+        "invalid": "The proof, email or password was not accepted. Start again with a fresh phone verification if needed.",
+        "password_mismatch": "The passwords do not match.",
+        "password_too_short": "The password must be at least {min} characters.",
+        "verify_phone_again": "A fresh phone verification is required. Sign in again with a code and retry.",
+        "unavailable": "Account linking is unavailable. Please try again.",
+        "rate_limited": "Too many attempts. Please wait before retrying."
       }
     },
     "invite": {
