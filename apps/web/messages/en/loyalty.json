@@ -383,6 +383,8 @@
         },
         "error": "The feed could not be loaded right now.",
         "forbidden": "The feed is not available with your current access.",
+        "verificationRequired": "Current Community policy requires a verified phone to view the feed. You can verify in your account or return to Points & Membership.",
+        "verifyPhone": "Verify phone in your account",
         "retry": "Try again",
         "loadMore": "Load more",
         "refresh": "Refresh feed",

@@ -46,6 +46,15 @@ describe('getCommunityFeed (GET /network/feed only)', () => {
     expect(await getCommunityFeed()).toEqual({ status: 'unavailable' });
   });
 
+  it('distinguishes the authoritative phone requirement from unrelated access denial', async () => {
+    customer.mockRejectedValueOnce(new ApiError('private upstream detail', 403, 'PHONE_VERIFICATION_REQUIRED'));
+    expect(await getCommunityFeed('same_cursor')).toEqual({ status: 'verification_required' });
+    customer.mockRejectedValueOnce(new ApiError('Verify your phone number', 403, 'FORBIDDEN'));
+    expect(await getCommunityFeed()).toEqual({ status: 'forbidden' });
+    customer.mockRejectedValueOnce(new ApiError('not a permission response', 503, 'PHONE_VERIFICATION_REQUIRED'));
+    expect(await getCommunityFeed()).toEqual({ status: 'unavailable' });
+  });
+
   it('re-throws the login redirect (control flow) instead of swallowing it', async () => {
     const redirect = Object.assign(new Error('NEXT_REDIRECT'), { digest: 'NEXT_REDIRECT;replace;/loyalty/login;307;' });
     customer.mockRejectedValueOnce(redirect);

@@ -27,6 +27,11 @@ export function CommunityFeedView({
   const t = useTranslations('loyalty.customer.community');
   const format = useFormatter();
 
+  // Fixed account route and Feed-only return path. Never accept a client-supplied destination or verification flag.
+  const returnPath = cursor && /^[A-Za-z0-9_-]{1,200}$/.test(cursor)
+    ? `${FEED_PATH}?cursor=${encodeURIComponent(cursor)}` : FEED_PATH;
+  const verificationHref = `/loyalty/dashboard/phone?next=${encodeURIComponent(returnPath)}`;
+
   return (
     <section className={styles.feed} aria-labelledby="community-feed-title">
       <header>
@@ -35,7 +40,7 @@ export function CommunityFeedView({
         <p>{t('feed.description')}</p>
       </header>
 
-      {result.status !== 'forbidden' && (
+      {(result.status === 'ready' || result.status === 'unavailable') && (
         <div className={styles.feedActions}>
           <FeedRefreshButton retry={result.status === 'unavailable'} />
           {cursor && (
@@ -48,7 +53,15 @@ export function CommunityFeedView({
 
       {result.status !== 'ready' ? (
         <div className={styles.state} role="status" data-state={result.status}>
-          <p>{result.status === 'forbidden' ? t('feed.forbidden') : t('feed.error')}</p>
+          <p>{result.status === 'verification_required'
+            ? t('feed.verificationRequired')
+            : result.status === 'forbidden' ? t('feed.forbidden') : t('feed.error')}</p>
+          {result.status === 'verification_required' && (
+            <>
+              <Link className={styles.action} href={verificationHref}>{t('feed.verifyPhone')}</Link>
+              <Link className={styles.action} href="/loyalty/dashboard/community">{t('sections.points')}</Link>
+            </>
+          )}
         </div>
       ) : result.data.items.length === 0 ? (
         <div className={styles.state} data-state="empty">

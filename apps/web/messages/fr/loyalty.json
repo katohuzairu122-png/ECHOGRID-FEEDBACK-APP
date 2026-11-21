@@ -383,6 +383,8 @@
         },
         "error": "Le fil n’a pas pu être chargé pour le moment.",
         "forbidden": "Le fil n’est pas disponible avec votre accès actuel.",
+        "verificationRequired": "La politique actuelle de la Communauté exige un numéro de téléphone vérifié pour consulter le fil. Vous pouvez le vérifier dans votre compte ou revenir aux Points et adhésion.",
+        "verifyPhone": "Vérifier le téléphone dans votre compte",
         "retry": "Réessayer",
         "loadMore": "Charger plus",
         "refresh": "Actualiser le fil",

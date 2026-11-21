@@ -383,6 +383,8 @@
         },
         "error": "No se pudo cargar el contenido en este momento.",
         "forbidden": "Las novedades no están disponibles con tu acceso actual.",
+        "verificationRequired": "La política actual de la Comunidad requiere un teléfono verificado para ver el feed. Puedes verificarlo en tu cuenta o volver a Puntos y membresía.",
+        "verifyPhone": "Verificar el teléfono en tu cuenta",
         "retry": "Reintentar",
         "loadMore": "Cargar más",
         "refresh": "Actualizar el feed",

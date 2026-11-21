@@ -16,7 +16,7 @@ export function sanitizeFeedCursor(raw: string | string[] | undefined): string |
 
 /**
  * One read of the customer feed. customerApiFetch redirects to the customer login on a 401 (control flow,
- * re-thrown); 403 -> `forbidden`; anything else -> `unavailable`. A failure is never turned into an empty feed.
+ * re-thrown); an explicit phone requirement is distinct from other 403 denials; anything else -> `unavailable`. A failure is never turned into an empty feed.
  */
 export async function getCommunityFeed(cursor: string | null = null): Promise<CommunityFeedResult> {
   const query = new URLSearchParams({ limit: String(COMMUNITY_FEED_PAGE_SIZE) });
@@ -30,6 +30,9 @@ export async function getCommunityFeed(cursor: string | null = null): Promise<Co
     return { status: 'ready', data };
   } catch (error) {
     rethrowControlFlow(error);
+    if (error instanceof ApiError && error.status === 403 && error.code === 'PHONE_VERIFICATION_REQUIRED') {
+      return { status: 'verification_required' };
+    }
     return {
       status: error instanceof ApiError && error.status === 403 ? 'forbidden' : 'unavailable',
     };
