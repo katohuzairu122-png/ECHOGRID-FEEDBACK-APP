@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { Client } from 'pg';
 import { buildDb } from '../../src/db/client';
 import { createRepositories } from '../../src/repositories';
@@ -137,6 +137,39 @@ describe.skipIf(!process.env.DATABASE_URL)(
       const repos = createRepositories(db);
       expect(await repos.communityPointAccounts.findByCustomerId(customerId)).toBeUndefined();
       expect(await repos.communityPointTransactions.listForCustomer(customerId)).toHaveLength(0);
+    });
+
+    it('does not release pending awards after a leave wins the account-lock race (NETWORK-15)', async () => {
+      const member = await new CommunityMembershipService(appDbOf(db)).join(customerId, 'synthetic-race-fixture');
+      const pid = (await client.query('select pg_backend_pid() pid')).rows[0].pid;
+      const blocker = new Client({ connectionString: process.env.DATABASE_URL });
+      await blocker.connect();
+      let outcome: Promise<{ ok: true } | { ok: false; error: unknown }> | undefined;
+      try {
+        await blocker.query('begin');
+        await blocker.query('select id from community_point_accounts where id=$1 for update', [member.account.id]);
+        outcome = new CommunityPointAwardService(appDbOf(db)).evaluateSurveyCompletion(completionRef)
+          .then(() => ({ ok: true as const }), (error: unknown) => ({ ok: false as const, error }));
+        await vi.waitFor(async () => {
+          await blocker.query('select pg_stat_clear_snapshot()');
+          expect((await blocker.query('select wait_event_type from pg_stat_activity where pid=$1', [pid])).rows[0].wait_event_type).toBe('Lock');
+        }, { timeout: 5000, interval: 20 });
+        // Finish the same state changes as leave while the award waits after its initial active read.
+        await blocker.query("update community_memberships set status='left',left_at=now() where customer_id=$1", [customerId]);
+        await blocker.query("update community_point_accounts set status='closed' where id=$1", [member.account.id]);
+        await blocker.query('commit');
+        const result = await outcome;
+        expect(result.ok).toBe(false);
+        if (!result.ok) expect(result.error).toMatchObject({ code: 'COMMUNITY_ACCOUNT_NOT_READY' });
+        expect((await client.query('select points_balance,status from community_point_accounts where id=$1', [member.account.id])).rows[0])
+          .toEqual({ points_balance: 0, status: 'closed' });
+        expect((await client.query('select count(*)::int n from community_point_transactions where customer_id=$1', [customerId])).rows[0].n).toBe(0);
+        expect((await client.query('select status from community_point_award_decisions where customer_id=$1', [customerId])).rows[0].status).toBe('pending_membership');
+      } finally {
+        await blocker.query('rollback');
+        await outcome;
+        await blocker.end();
+      }
     });
 
     it('releases the pending decision after explicit join exactly once', async () => {

@@ -22,7 +22,7 @@ closes the Community Points account, and retains its balance and append-only
 history. Repeated leave is idempotent. Business loyalty is not touched.
 The existing join route invokes `reevaluatePendingMembership` after membership
 commit; pending-award releases are real ledger effects under existing rules,
-not values the UI may calculate. That implementation is unchanged.
+not values the UI may calculate. The join-route reevaluation call, award rules and amounts remain unchanged.
 
 Customer controls are nested in **Community > Points & Membership**. The status,
 dates, existing Community Points and history are still read from existing APIs.
@@ -41,6 +41,20 @@ Its response is validated before success; the UI refreshes authoritative
 membership and points data. Session redirects propagate. Failures remain
 recoverable and do not become optimistic success. Suspended memberships expose
 no self-reactivation/leave control; the API also denies such changes.
+
+## Verified concurrency correction
+
+A deterministic real-PostgreSQL regression blocked an award on the account row
+lock after its initial active-status read, then committed a concurrent leave's
+left/closed state. Before correction the award still succeeded and credited 80
+synthetic fixture points into the closed account (the regression and subsequent
+expected-pending-release assertion both failed). The smallest correction re-reads
+and requires an active account after acquiring the existing account lock, before
+writing any decision/ledger/balance change. A closed/suspended/missing account
+returns the existing `COMMUNITY_ACCOUNT_NOT_READY`; the pending decision and
+ledger remain unchanged. No lock is added, no lock order changes, and valid
+later rejoin/release retains its existing exactly-once behavior. This is an
+eligibility-race correction, not a new earning rule or ledger rewrite.
 
 ## Terms prerequisite — BLOCKED, no fabricated consent
 

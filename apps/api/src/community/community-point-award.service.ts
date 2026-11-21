@@ -281,7 +281,17 @@ export class CommunityPointAwardService {
     await db.execute(
       sql`select id from ${communityPointAccounts} where ${communityPointAccounts.id} = ${account.id} for update`,
     );
-    account = (await repos.communityPointAccounts.findById(account.id)) ?? account;
+    // A concurrent leave/suspension can commit while this transaction waits for the account lock.
+    // The earlier active read is not authority to award into a now-closed or suspended account.
+    const lockedAccount = await repos.communityPointAccounts.findById(account.id);
+    if (!lockedAccount || lockedAccount.status !== 'active') {
+      throw new AppError(
+        'An active Community Point account is required before points can be awarded.',
+        409,
+        'COMMUNITY_ACCOUNT_NOT_READY',
+      );
+    }
+    account = lockedAccount;
 
     const decisionResult = input.existingDecision
       ? { decision: input.existingDecision, inserted: false }
