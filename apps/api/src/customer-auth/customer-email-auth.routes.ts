@@ -30,6 +30,7 @@ export const legacyOtpSessionSchema = z.object({
   phone: z.string().regex(/^\+[1-9][0-9]{6,14}$/),
   code: z.string().min(4).max(10).regex(/^[0-9]+$/),
 }).strict();
+export const emailLinkRequestSchema = z.object({ email }).strict();
 export const emailLinkCompleteSchema = z.object({
   email, challengeId: z.uuid(), proof: z.string().min(6).max(256), password,
 }).strict();
@@ -182,7 +183,7 @@ export function createIsolatedCustomerEmailAuthRoutes(dependencies: IsolatedEmai
     return session ? dependencies.transportSession(session) : invalid();
   });
   routes.post(paths.linkRequest, async (c) => {
-    const dto = emailRegistrationRequestSchema.safeParse(await c.req.json().catch(() => null));
+    const dto = emailLinkRequestSchema.safeParse(await c.req.json().catch(() => null));
     if (!dto.success || !dependencies.requestLink) return badRequest();
     const decision = await limitEmailAuthRequest(dependencies, c.req.raw, 'delivery', dto.data.email);
     if (decision !== 'allowed') return deny(decision);
