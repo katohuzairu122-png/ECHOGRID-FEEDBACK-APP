@@ -568,6 +568,24 @@
         "invalid_name": "Saisissez un nom de 120 caractères maximum.",
         "invalid": "Vérifiez les mots de passe saisis et réessayez.",
         "unavailable": "Impossible d’enregistrer cette modification. Réessayez."
+      },
+      "upgradeDescription": "Ajoutez une connexion par e-mail et mot de passe à votre compte téléphonique existant sans perdre vos adhésions ni vos points. Vérifiez d'abord votre téléphone.",
+      "upgradeVerifyPhone": "Vérifier à nouveau mon téléphone",
+      "upgradeEmailLabel": "E-mail à associer",
+      "upgradeRequest": "Envoyer le lien de confirmation",
+      "upgradeSent": "Si cette adresse est éligible, un lien a été envoyé. Ouvrez-le sur cet appareil dans les 10 minutes.",
+      "upgradeConfirmTitle": "Confirmer l'e-mail et créer un mot de passe",
+      "upgradeConfirmDescription": "Ouvrez le lien de confirmation pendant que votre session de vérification téléphonique est valide. Le compte existant sera conservé.",
+      "upgradeComplete": "Sécuriser mon compte existant",
+      "upgradeBack": "Retour aux paramètres",
+      "upgradeMissingLink": "Le lien de confirmation est incomplet ou expiré. Demandez-en un nouveau.",
+      "upgradeErrors": {
+        "invalid": "Le lien, l'e-mail ou le mot de passe n'a pas été accepté. Recommencez après vérification si nécessaire.",
+        "password_mismatch": "Les mots de passe ne correspondent pas.",
+        "password_too_short": "Le mot de passe doit comporter au moins {min} caractères.",
+        "verify_phone_again": "Une nouvelle vérification du téléphone est nécessaire. Reconnectez-vous avec un code.",
+        "unavailable": "L'association du compte est indisponible. Réessayez.",
+        "rate_limited": "Trop de tentatives. Attendez avant de réessayer."
       }
     },
     "invite": {
