@@ -51,7 +51,7 @@ export default async function CustomerSettingsPage() {
         <CardContent>
           {profile.emailVerified
             ? <CustomerSecurityForm canManageSessions={credentials.kind === 'rotating'} />
-            : isCustomerEmailAuthWebEnabled()
+            : isCustomerEmailAuthWebEnabled() && process.env.CUSTOMER_LEGACY_UPGRADE_ENABLED === 'true'
               ? <CustomerEmailUpgradeForm canUpgrade={credentials.kind === 'rotating'} />
               : <p className="text-sm text-neutral-600">{t('passwordNotAvailable')}</p>}
         </CardContent>
