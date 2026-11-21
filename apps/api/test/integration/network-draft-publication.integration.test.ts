@@ -392,7 +392,12 @@ describe.skipIf(!process.env.DATABASE_URL)('NETWORK-05 real HTTP-to-Postgres lif
       webUrl: string,
       browserExpect: typeof PlaywrightTest.expect,
     ) => Promise<void>,
-    options: { feedFlag?: () => string; failRead?: (path: string, method: string) => boolean } = {},
+    options: {
+      feedFlag?: () => string;
+      failRead?: (path: string, method: string) => boolean;
+      /** Test-only transport corruption AFTER the real authorized API has returned a successful Feed read. */
+      feedResponse?: (payload: unknown) => unknown;
+    } = {},
   ) {
     const { chromium, expect: browserExpect } = requireWeb('@playwright/test') as BrowserModule;
     let apiServer: Server | undefined;
@@ -426,8 +431,15 @@ describe.skipIf(!process.env.DATABASE_URL)('NETWORK-05 real HTTP-to-Postgres lif
             bytes.length ? JSON.parse(bytes.toString()) : undefined,
             options.feedFlag?.() ?? 'true',
           );
-          outgoing.writeHead(response.status, Object.fromEntries(response.headers));
-          outgoing.end(await response.text());
+          let text = await response.text();
+          if (response.status === 200 && incoming.method === 'GET' && options.feedResponse &&
+            new URL(incoming.url!, 'http://fixture.invalid').pathname === '/api/v1/network/feed') {
+            text = JSON.stringify(options.feedResponse(JSON.parse(text)));
+          }
+          const headers = new Headers(response.headers);
+          headers.delete('content-length');
+          outgoing.writeHead(response.status, Object.fromEntries(headers));
+          outgoing.end(text);
         } catch {
           outgoing.writeHead(500).end();
         }
@@ -1412,6 +1424,75 @@ describe.skipIf(!process.env.DATABASE_URL)('NETWORK-05 real HTTP-to-Postgres lif
           await browserExpect(bodies).toHaveText(expected.slice(0, 20));
         }
       }),
+    120000,
+  );
+
+  it.skipIf(!browserEnabled)(
+    'browser recovers malformed Feed success responses at the same cursor in English and Arabic (NETWORK-13)',
+    async () => {
+      const prefix = 'NETWORK-13 recoverable update';
+      for (let i = 0; i < 21; i++) {
+        const draft = await prepareSubmitted(`${prefix} ${i}`);
+        await action(moderatorA, `/revisions/${draft.revisionId}/approve`);
+        await action(moderatorB, `/revisions/${draft.revisionId}/approve`);
+      }
+      const first = await request('/api/v1/network/feed?limit=20', customerToken);
+      expect(first.status).toBe(200);
+      const firstData = (await first.json()) as { data: { nextCursor: string } };
+      expect(firstData.data.nextCursor).toBeTruthy();
+      const cursorPath = `/loyalty/dashboard/community/feed?cursor=${encodeURIComponent(firstData.data.nextCursor)}`;
+      let corruption: 'none' | 'items' | 'date' | 'cursor' = 'none';
+      const privateDetail = 'PRIVATE_NETWORK13_RESPONSE';
+      await withModerationBrowser(moderatorB, async (page, context, webUrl, browserExpect) => {
+        await context.clearCookies();
+        await context.addCookies([
+          { name: 'ff_customer_token', value: customerToken, url: webUrl, httpOnly: true },
+        ]);
+        for (const locale of ['en', 'ar'] as const) {
+          const messages = requireWeb(`./messages/${locale}/loyalty.json`) as {
+            customer: { community: { feed: { error: string; retry: string; latest: string; empty: { title: string } } } };
+          };
+          const labels = messages.customer.community.feed;
+          await context.addCookies([{ name: 'ff_locale', value: locale, url: webUrl }]);
+          for (const width of [375, 1280]) {
+            await page.setViewportSize({ width, height: 900 });
+            for (const mode of ['items', 'date', 'cursor'] as const) {
+              corruption = mode;
+              await page.goto(webUrl + cursorPath);
+              await browserExpect(page).toHaveURL(webUrl + cursorPath);
+              await browserExpect(page.locator('html')).toHaveAttribute('dir', locale === 'ar' ? 'rtl' : 'ltr');
+              const feed = page.locator('section[aria-labelledby="community-feed-title"]');
+              await browserExpect(feed.getByRole('status')).toContainText(labels.error);
+              await browserExpect(feed.getByRole('article')).toHaveCount(0);
+              await browserExpect(feed.getByText(labels.empty.title, { exact: true })).toHaveCount(0);
+              expect(await page.content()).not.toContain(privateDetail);
+              const retry = feed.getByRole('button', { name: labels.retry, exact: true });
+              await retry.focus();
+              await browserExpect(retry).toBeFocused();
+              expect((await retry.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+              expect(await page.locator('html').evaluate((el: { scrollWidth: number }) => el.scrollWidth))
+                .toBeLessThanOrEqual(width);
+              corruption = 'none';
+              await retry.click();
+              await browserExpect(page.getByText(`${prefix} 0`, { exact: true })).toBeVisible();
+              await browserExpect(page).toHaveURL(webUrl + cursorPath);
+              await browserExpect(feed.getByRole('status')).toHaveCount(0);
+              await browserExpect(feed.getByRole('link', { name: labels.latest, exact: true })).toBeVisible();
+            }
+          }
+        }
+      }, {
+        feedResponse: (payload) => {
+          if (corruption === 'none') return payload;
+          const envelope = payload as { data: { items: Record<string, unknown>[]; nextCursor: string | null } };
+          const data = envelope.data;
+          if (corruption === 'items') return { ...envelope, data: { items: null, nextCursor: null, privateDetail } };
+          if (corruption === 'cursor') return { ...envelope, data: { ...data, nextCursor: { privateDetail } } };
+          return { ...envelope, data: { ...data, items: data.items.map((item, index) =>
+            index === 0 ? { ...item, publishedAt: privateDetail } : item) } };
+        },
+      });
+    },
     120000,
   );
 });

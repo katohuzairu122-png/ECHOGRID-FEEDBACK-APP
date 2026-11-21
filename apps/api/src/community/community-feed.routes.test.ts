@@ -181,6 +181,13 @@ describe('GET /network/feed (COMMUNITY-01 foundation)', () => {
     expect((await get(appWith({ listVisible }), '?limit=1')).status).toBe(503);
   });
 
+  it.each([17, { private: 'internal detail' }, '../unsafe'])('fails closed on a malformed next cursor %j', async (cursor) => {
+    const listVisible = vi.fn(async () => ({ items: [item], nextCursor: cursor as never }));
+    const response = await get(appWith({ listVisible }));
+    expect(response.status).toBe(503);
+    expect(await response.text()).not.toContain('internal detail');
+  });
+
   it('exposes no write method: publishing is not available', async () => {
     const app = appWith({ listVisible: vi.fn() });
     for (const method of ['POST', 'PUT', 'PATCH', 'DELETE']) {
