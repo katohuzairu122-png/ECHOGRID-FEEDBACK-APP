@@ -1,5 +1,6 @@
 import { eq, and, sql, desc, lte, gt, isNotNull, isNull, ne } from 'drizzle-orm';
 import { customers, customerCredentials, customerSanctions, businessCustomerMemberships } from '../db/schema';
+import { isUniqueViolation } from '../lib/pg-errors';
 import { BaseRepository } from './base.repository';
 
 export type Customer = typeof customers.$inferSelect;
@@ -202,23 +203,31 @@ export class CustomerRepository extends BaseRepository {
 
     const legacy = await this.soleLegacyPhoneOnlyHolder(phone);
     if (!legacy) return undefined;
+    let claimed: Customer | undefined;
     try {
       // The match remains bound to this exact number and unverified state at
       // UPDATE time. The partial verified-phone unique index arbitrates races.
-      const [claimed] = await this.db.update(customers).set({
+      const [row] = await this.db.update(customers).set({
         phoneVerifiedAt: new Date(), updatedAt: new Date(),
       }).where(and(
         eq(customers.id, legacy.id), eq(customers.phone, phone),
         isNull(customers.phoneVerifiedAt), eq(customers.isDeleted, false),
       )).returning();
-      if (!claimed) return undefined;
-      await this.releaseUnverifiedClaims(phone, claimed.id);
-      return claimed;
-    } catch {
-      // Any uniqueness or concurrent identity conflict fails closed. The
-      // caller must never fall back to createIfAbsent in an upgrade flow.
-      return undefined;
+      claimed = row;
+    } catch (error) {
+      // Only the verified-phone unique index represents a competing ownership
+      // claim here. Do not hide connection, permission, timeout or schema
+      // failures as an identity miss; the global boundary sanitizes those.
+      if (isUniqueViolation(error, ['customers_phone_verified_unique'])) return undefined;
+      throw error;
     }
+    if (!claimed) return undefined;
+
+    // Keep post-claim cleanup outside the uniqueness catch: an operational
+    // failure after the claim must be visible and retried/handled, not
+    // misreported as a denied identity upgrade.
+    await this.releaseUnverifiedClaims(phone, claimed.id);
+    return claimed;
   }
 
   /** The only non-deleted UNVERIFIED holder of the number that has no credentials of its own, if exactly one. */
