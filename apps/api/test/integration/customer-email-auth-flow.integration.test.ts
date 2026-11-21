@@ -13,6 +13,7 @@ import {
 } from '../../src/customer-auth/customer-email-auth.composition';
 import { CustomerSessionService } from '../../src/customer-auth/customer-session.service';
 import { CustomerCredentialRepository } from '../../src/repositories/customer-credential.repository';
+import { CustomerRepository } from '../../src/repositories/customer.repository';
 import { PASSWORD_ITERATIONS } from '../../src/auth/password';
 import { normalizePassword } from '../../src/customer-auth/customer-password-policy';
 import { appDbOf } from '../helpers/runtime-db';
@@ -121,6 +122,24 @@ describe.skipIf(!process.env.DATABASE_URL)('Email registration and login flow (r
     expect(Object.keys(body).sort()).toEqual(['accessExpiresAt', 'accessToken', 'refreshCredential', 'refreshExpiresAt']);
     const identity = await sessions.authenticateSessionToken(body.accessToken);
     expect(identity).toMatchObject({ assurance: 'session', customerId: credential!.customerId });
+  });
+
+  it('OTP upgrade lookup never creates an identity for an unknown but provable phone', async () => {
+    const phone = '+1555' + String(Math.floor(Math.random() * 10_000_000)).padStart(7, '0');
+    const repository = new CustomerRepository(db);
+    expect(await repository.resolveExistingPhoneForCredentialUpgrade(phone)).toBeUndefined();
+    const rows = await db.select({ id: customers.id }).from(customers).where(eq(customers.phone, phone));
+    expect(rows).toHaveLength(0);
+  });
+
+  it('OTP upgrade resolves the original verified customer instead of creating another row', async () => {
+    const phone = '+1555' + String(Math.floor(Math.random() * 10_000_000)).padStart(7, '0');
+    const repository = new CustomerRepository(db);
+    const existing = await repository.create({ phone, phoneVerifiedAt: new Date() });
+    const upgraded = await repository.resolveExistingPhoneForCredentialUpgrade(phone);
+    expect(upgraded?.id).toBe(existing.id);
+    const rows = await db.select({ id: customers.id }).from(customers).where(eq(customers.phone, phone));
+    expect(rows.map((row) => row.id)).toEqual([existing.id]);
   });
 
   it('keeps pending setup credentials sealed until the email proof is completed', async () => {
