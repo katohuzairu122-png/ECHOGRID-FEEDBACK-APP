@@ -6,6 +6,9 @@ import {
   CUSTOMER_TOKEN_COOKIE,
 } from '@/lib/customer-cookies';
 import { publicApiFetch } from '@/lib/public-api-client';
+import { callCustomerAuthApi, isCustomerEmailAuthWebEnabled } from '@/lib/customer-email-auth-client';
+import { readRefreshResponse } from '@/lib/customer-session-bff';
+import { setRotatingCustomerSession } from '@/lib/customer-session';
 import { safeInternalPath } from '@/lib/safe-redirect';
 
 const CUSTOMER_TOKEN_MAX_AGE = 90 * 24 * 60 * 60;
@@ -73,6 +76,30 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     const error = 'Verification code is required.';
     if (isFormPost) return verificationErrorRedirect(request, next, phone, error);
     return NextResponse.json({ error }, { status: 400 });
+  }
+
+  // With password authentication enabled, a freshly verified legacy phone OTP
+  // becomes a revocable OTP session instead of another 90-day bearer. The API
+  // accepts this route only from the signed Web Worker, not from arbitrary callers.
+  if (isCustomerEmailAuthWebEnabled()) {
+    try {
+      const reply = await callCustomerAuthApi('/customer-auth/email/legacy/otp-login', {
+        body: { phone, code },
+      });
+      if (reply.status !== 200) {
+        const error = reply.status === 401 ? 'Code is invalid or has expired.' : 'Verification is unavailable. Please try again.';
+        if (isFormPost) return verificationErrorRedirect(request, next, phone, error);
+        return NextResponse.json({ error }, { status: reply.status === 401 ? 401 : 503 });
+      }
+      const credentials = readRefreshResponse(reply.body);
+      if (!credentials) throw new Error('Invalid rotating-session response');
+      await setRotatingCustomerSession(credentials);
+      return isFormPost ? NextResponse.redirect(new URL(next, request.url), 303) : NextResponse.json({ success: true });
+    } catch {
+      const error = 'Verification is unavailable. Please try again.';
+      if (isFormPost) return verificationErrorRedirect(request, next, phone, error);
+      return NextResponse.json({ error }, { status: 503 });
+    }
   }
 
   let result: CustomerAuthResponse;
