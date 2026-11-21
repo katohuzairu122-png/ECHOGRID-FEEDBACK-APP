@@ -33,7 +33,11 @@ describe.skipIf(!process.env.DATABASE_URL)('Email registration and login flow (r
   const ctx = () => ({ waitUntil: vi.fn(), passThroughOnException: vi.fn() }) as unknown as ExecutionContext;
   const call = (path: string, body: unknown) =>
     app.fetch(
-      new Request(`https://api.test/customer-auth${path}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }),
+      new Request(`https://api.test/customer-auth${path}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(
+        path === '/email/register/complete' && body && typeof body === 'object' && !('name' in body)
+          ? { name: 'Synthetic Flow Customer', ...body }
+          : body,
+      ) }),
       {} as Bindings,
       ctx(),
     );
