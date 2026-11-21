@@ -60,7 +60,9 @@ scope; they are not signatures approving these terms or a new consent purpose.
   remain unchanged; do not create new point rules, amounts, financial activation
   or business loyalty consent by accepting Community terms.
 
-Migration journal at inspection ends at `0086`; no number is reserved, no migration
+Migration journal at inspection ends at `0087_customer_pending_registration`
+(index 87, following the existing 0080–0086 security/privacy chain), already in
+merged authentication #550 on this baseline. No number is reserved, no migration
 is generated or executed on a shared database. A later authorized schema block
 must re-fetch the journal and competing PRs, review D2/runtime compatibility and
 apply only to disposable environments until separate release permission exists.
