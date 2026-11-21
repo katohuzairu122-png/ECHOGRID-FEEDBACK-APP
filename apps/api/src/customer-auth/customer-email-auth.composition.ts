@@ -87,8 +87,15 @@ export function createEmailAuthDependencies(config: ResolvedEmailAuthConfig, par
     keyForIdentifier: (address) =>
       customerChallengeDigest({ secret: config.hmacSecret, purpose: 'email_registration', field: 'subject', value: address }),
     limit: parts.limit,
-    requestProof: (address, next) => parts.withDb((db) => registration(db).requestProof(address, next)),
-    completeRegistration: (input) => parts.withDb((db) => registration(db).completeRegistration(input)),
+    requestProof: (address, next, signup) => parts.withDb((db) => registration(db).requestProof(address, next, signup)),
+    completeRegistration: (input) => parts.withDb(async (db) => {
+      const completed = await registration(db).completeRegistration(input);
+      if (!completed.ok) return completed;
+      // A verified proof creates an account and an immediately usable rotating session.
+      const sessions = new CustomerSessionService(db, config.session);
+      const established = await sessions.establishSession({ customerId: completed.customerId, authMethod: 'password' });
+      return established.ok ? { ...completed, session: established.session } : completed;
+    }),
     login: (input) =>
       parts.withDb((db) => {
         const sessions = new CustomerSessionService(db, config.session);
