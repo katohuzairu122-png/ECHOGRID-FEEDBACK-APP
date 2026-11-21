@@ -41,6 +41,8 @@ import { resolveEmailAuthConfig } from '../../src/customer-auth/customer-email-a
 import { CustomerSessionService } from '../../src/customer-auth/customer-session.service';
 import { loyaltyCustomerRoutes } from '../../src/loyalty/loyalty-customer.routes';
 import { communityFeedRoutes } from '../../src/community/community-feed.routes';
+import { CommunityPointAdminAdjustmentService } from '../../src/community/community-point-admin-adjustment.service';
+import { CommunityMembershipService } from '../../src/community/community-membership.service';
 import { communityCustomerRoutes } from '../../src/community/community-customer.routes';
 import { communityPointCustomerRoutes } from '../../src/community/community-point-customer.routes';
 import { platformNetworkModerationRoutes } from '../../src/platform/network-moderation.routes';
@@ -470,9 +472,109 @@ describe.skipIf(!process.env.DATABASE_URL)('NETWORK-05 real HTTP-to-Postgres lif
       else await client.query("update customers set status='suspended' where id=$1", [id]);
       const denied = await request('/api/v1/network/feed', token, 'GET', undefined, 'true', testEnv);
       expect(denied.status).toBe(401);
+      expect((await request('/api/v1/community/me/leave', token, 'POST', undefined, 'true', testEnv)).status).toBe(401);
       expect((await denied.json() as { error: { code: string } }).error.code).toBe('UNAUTHENTICATED');
     },
   );
+
+  async function membershipFixture(status: 'absent' | 'active' | 'suspended' = 'absent') {
+    const id = (await client.query<{ id: string }>(
+      "insert into customers(phone,phone_verified_at,status) values ($1,now(),'active') returning id",
+      ['+99915' + String(Date.now()).slice(-8) + String(Math.floor(Math.random() * 100)).padStart(2, '0')],
+    )).rows[0]!.id;
+    const token = await signCustomerAccessToken(id, customerSecret);
+    const service = new CommunityMembershipService(appDbOf(buildDb(client)));
+    // Synthetic service fixture only; this is NOT customer acceptance of approved membership terms.
+    if (status !== 'absent') await service.join(id, 'network15-synthetic-fixture-not-consent');
+    if (status === 'suspended') await client.query("update community_memberships set status='suspended',suspended_at=now() where customer_id=$1", [id]);
+    return { id, token, service };
+  }
+
+  async function membershipNonEffects() {
+    const tables = ['community_memberships', 'community_point_accounts', 'community_point_transactions',
+      'community_point_award_decisions', 'business_customer_memberships', 'loyalty_accounts', 'loyalty_transactions',
+      'consent_grants', 'notifications', 'messages', 'customer_auth_events'];
+    const counts: Record<string, number | string> = {};
+    for (const table of tables) counts[table] = (await client.query(`select count(*)::int n from ${table}`)).rows[0].n;
+    for (const table of tables.filter((t) => !['community_memberships', 'community_point_accounts'].includes(t))) {
+      counts[table + ':contents'] = (await client.query(`select md5(coalesce(jsonb_agg(to_jsonb(t) order by id)::text,'[]')) hash from ${table} t`)).rows[0].hash;
+    }
+    return counts;
+  }
+
+  it('NETWORK-15 status and phone reads create no enrollment, consent, award, notification or SMS evidence', async () => {
+    const f = await membershipFixture();
+    const before = await membershipNonEffects();
+    const phoneBefore = (await client.query('select phone,phone_verified_at from customers where id=$1', [f.id])).rows[0];
+    for (const path of ['/api/v1/community/me', '/api/v1/community-points/me/transactions', '/api/v1/loyalty/me/phone']) {
+      expect((await request(path, f.token)).status).toBe(200);
+    }
+    expect(await membershipNonEffects()).toEqual(before);
+    expect((await client.query('select phone,phone_verified_at from customers where id=$1', [f.id])).rows[0]).toEqual(phoneBefore);
+  });
+
+  it('NETWORK-15 rejects forged verification and malformed policy input without creating consent or awards', async () => {
+    const f = await membershipFixture();
+    await client.query('update customers set phone_verified_at=null where id=$1', [f.id]);
+    const before = await membershipNonEffects();
+    const denied = await request('/api/v1/community/me/join', f.token, 'POST',
+      { policyVersion: 'not-approved-negative-fixture', verified: true, customerId: customer });
+    expect(denied.status).toBe(403);
+    expect(await denied.text()).toContain('PHONE_VERIFICATION_REQUIRED');
+    expect((await request('/api/v1/community/me/join', f.token, 'POST', { policyVersion: '' })).status).toBe(400);
+    expect(await membershipNonEffects()).toEqual(before);
+  });
+
+  it('NETWORK-15 leave changes only the session customer and preserves independent accounting', async () => {
+    const own = await membershipFixture('active');
+    const other = await membershipFixture('active');
+    await new CommunityPointAdminAdjustmentService(appDbOf(buildDb(client))).adjust(own.id,
+      { points: 80, reason: 'NETWORK-15 synthetic preservation fixture', idempotencyKey: randomUUID() },
+      { actorUserId: moderatorA, ipAddress: null, userAgent: null });
+    const before = await membershipNonEffects();
+    const otherBefore = await other.service.getStatus(other.id);
+    const response = await request('/api/v1/community/me/leave', own.token, 'POST', { customerId: other.id, verified: true });
+    expect(response.status).toBe(200);
+    const state = await own.service.getStatus(own.id);
+    expect(state.membership?.status).toBe('left');
+    expect(state.account?.status).toBe('closed');
+    expect(state.account?.pointsBalance).toBe(80);
+    expect(await other.service.getStatus(other.id)).toEqual(otherBefore);
+    expect(await membershipNonEffects()).toEqual(before);
+    const replay = await request('/api/v1/community/me/leave', own.token, 'POST');
+    expect(replay.status).toBe(200);
+    expect(await own.service.getStatus(own.id)).toEqual(state);
+  });
+
+  it('NETWORK-15 denies anonymous, suspended-customer and suspended-membership leave', async () => {
+    expect((await request('/api/v1/community/me/leave', '', 'POST')).status).toBe(401);
+    const f = await membershipFixture('suspended');
+    const before = await f.service.getStatus(f.id);
+    const denied = await request('/api/v1/community/me/leave', f.token, 'POST');
+    expect(denied.status).toBe(409);
+    expect(await denied.text()).toContain('COMMUNITY_MEMBERSHIP_SUSPENDED');
+    expect(await f.service.getStatus(f.id)).toEqual(before);
+    await client.query("update customers set status='suspended' where id=$1", [f.id]);
+    expect((await request('/api/v1/community/me/leave', f.token, 'POST')).status).toBe(401);
+  });
+
+  it('NETWORK-15 serializes duplicate leaves and service-level synthetic rejoin races without duplicate accounts', async () => {
+    const f = await membershipFixture('active');
+    const initial = await f.service.getStatus(f.id);
+    const leaves = await Promise.all(Array.from({ length: 5 }, () => request('/api/v1/community/me/leave', f.token, 'POST')));
+    expect(leaves.map((r) => r.status)).toEqual(Array(5).fill(200));
+    expect((await f.service.getStatus(f.id)).membership?.status).toBe('left');
+    // Characterize the existing service under concurrency. No customer joining UI is enabled.
+    await Promise.all([f.service.join(f.id, 'network15-synthetic-fixture-not-consent'),
+      request('/api/v1/community/me/leave', f.token, 'POST'),
+      f.service.join(f.id, 'network15-synthetic-fixture-not-consent')]);
+    const final = await f.service.getStatus(f.id);
+    expect(final.membership?.id).toBe(initial.membership?.id);
+    expect(final.account?.id).toBe(initial.account?.id);
+    expect(final.account?.status).toBe(final.membership?.status === 'active' ? 'active' : 'closed');
+    expect((await client.query('select count(*)::int n from community_point_accounts where customer_id=$1', [f.id])).rows[0].n).toBe(1);
+    expect((await client.query('select count(*)::int n from community_point_transactions where customer_id=$1', [f.id])).rows[0].n).toBe(0);
+  });
 
   async function withModerationBrowser(
     moderator: string,
@@ -1574,6 +1676,78 @@ describe.skipIf(!process.env.DATABASE_URL)('NETWORK-05 real HTTP-to-Postgres lif
         expect(mutations).toEqual([]);
       } finally {
         await client.query('update customers set phone_verified_at=$2 where id=$1', [customer, original.phone_verified_at]);
+      }
+    }),
+    120000,
+  );
+
+  it.skipIf(!browserEnabled)(
+    'browser manages existing Community membership with confirmed leave and no implicit enrollment (NETWORK-15)',
+    async () => withModerationBrowser(moderatorB, async (page, context, webUrl, browserExpect) => {
+      const f = await membershipFixture();
+      await context.clearCookies();
+      await context.addCookies([{ name: 'ff_customer_token', value: f.token, url: webUrl, httpOnly: true }]);
+      const target = webUrl + '/loyalty/dashboard/community';
+      for (const locale of ['en', 'fr', 'es', 'ar'] as const) {
+        const messages = requireWeb(`./messages/${locale}/loyalty.json`) as {
+          customer: { community: { selfService: { join: string; rejoin: string; leave: string; confirmTitle: string;
+            confirmLeave: string; cancel: string; verifyPhone: string; suspended: string };
+            membership: { status: { absent: string; active: string; left: string; suspended: string } } };
+            phoneVerify: { title: string } };
+        };
+        const copy = messages.customer.community;
+        await context.addCookies([{ name: 'ff_locale', value: locale, url: webUrl }]);
+        for (const width of [375, 1280]) {
+          await page.setViewportSize({ width, height: 900 });
+          await client.query('delete from community_memberships where customer_id=$1', [f.id]);
+          await client.query('delete from community_point_accounts where customer_id=$1', [f.id]);
+          await client.query('update customers set phone_verified_at=null where id=$1', [f.id]);
+          const before = await membershipNonEffects();
+          await page.goto(target);
+          await browserExpect(page.locator('html')).toHaveAttribute('dir', locale === 'ar' ? 'rtl' : 'ltr');
+          await browserExpect(page.getByTestId('membership-status')).toHaveText(copy.membership.status.absent);
+          const controls = page.getByTestId('community-membership-controls');
+          await browserExpect(controls.getByRole('button', { name: copy.selfService.join, exact: true })).toBeDisabled();
+          expect(await membershipNonEffects()).toEqual(before);
+          const verify = controls.getByRole('link', { name: copy.selfService.verifyPhone, exact: true });
+          await verify.focus();
+          await browserExpect(verify).toBeFocused();
+          await verify.press('Enter');
+          await browserExpect(page).toHaveURL(webUrl + '/loyalty/dashboard/phone?next=%2Floyalty%2Fdashboard%2Fcommunity');
+          await browserExpect(page.getByText(messages.customer.phoneVerify.title, { exact: true })).toBeVisible();
+          expect(await membershipNonEffects()).toEqual(before);
+          await page.goto(target + '?verified=true');
+          await browserExpect(page.getByTestId('membership-status')).toHaveText(copy.membership.status.absent);
+          expect((await request('/api/v1/network/feed', f.token)).status).toBe(403);
+          // Preexisting member fixture, NOT UI terms acceptance. Joining/rejoining acceptance is policy-blocked.
+          await client.query('update customers set phone_verified_at=now() where id=$1', [f.id]);
+          await f.service.join(f.id, 'network15-synthetic-fixture-not-consent');
+          await page.goto(target);
+          await browserExpect(page.getByTestId('membership-status')).toHaveText(copy.membership.status.active);
+          const leave = controls.getByRole('button', { name: copy.selfService.leave, exact: true });
+          await leave.focus();
+          await browserExpect(leave).toBeFocused();
+          expect((await leave.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+          expect(await page.locator('html').evaluate((el: { scrollWidth: number }) => el.scrollWidth)).toBeLessThanOrEqual(width);
+          await leave.press('Enter');
+          const dialog = page.getByRole('dialog', { name: copy.selfService.confirmTitle });
+          await browserExpect(dialog).toBeVisible();
+          await browserExpect(dialog.getByRole('button', { name: copy.selfService.confirmLeave, exact: true })).toBeDisabled();
+          await dialog.getByRole('button', { name: copy.selfService.cancel, exact: true }).click();
+          expect((await f.service.getStatus(f.id)).membership?.status).toBe('active');
+          await leave.click();
+          await dialog.getByRole('checkbox').check();
+          await dialog.getByRole('button', { name: copy.selfService.confirmLeave, exact: true }).click();
+          await browserExpect(page.getByTestId('membership-status')).toHaveText(copy.membership.status.left);
+          await browserExpect(controls.getByRole('button', { name: copy.selfService.rejoin, exact: true })).toBeDisabled();
+          expect((await f.service.getStatus(f.id)).account?.status).toBe('closed');
+          await client.query("update community_memberships set status='suspended',suspended_at=now() where customer_id=$1", [f.id]);
+          await page.reload();
+          await browserExpect(page.getByTestId('membership-status')).toHaveText(copy.membership.status.suspended);
+          await browserExpect(controls.getByText(copy.selfService.suspended, { exact: true })).toBeVisible();
+          await browserExpect(controls.getByRole('button')).toHaveCount(0);
+          expect((await request('/api/v1/community/me/leave', f.token, 'POST')).status).toBe(409);
+        }
       }
     }),
     120000,

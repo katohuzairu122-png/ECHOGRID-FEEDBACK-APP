@@ -317,6 +317,35 @@
         "suspended": "Suspendu",
         "closed": "Fermé"
       },
+      "selfService": {
+        "distinction": "L’adhésion à la Communauté et les Points Communauté sont distincts de votre compte client et des adhésions et points de fidélité de chaque commerce.",
+        "suspended": "Cette adhésion est suspendue. Vous ne pouvez pas la réactiver ni la quitter vous-même.",
+        "leave": "Quitter la Communauté",
+        "confirmTitle": "Quitter la Communauté ?",
+        "confirmBody": "Votre compte de Points Communauté sera fermé. Le solde et l’historique comptable seront conservés. Votre compte client, vos adhésions, points et récompenses de fidélité restent inchangés.",
+        "confirmLabel": "Je confirme vouloir quitter la Communauté.",
+        "cancel": "Annuler",
+        "confirmLeave": "Confirmer le départ",
+        "leaving": "Départ en cours…",
+        "termsUnavailable": "L’adhésion et la réadhésion sont indisponibles tant que les conditions approuvées ne sont pas publiées.",
+        "termsRequired": "L’adhésion nécessite des conditions approuvées, une acceptation explicite et un compte éligible. Consulter cette page ne crée aucune adhésion.",
+        "join": "Rejoindre la Communauté",
+        "rejoin": "Rejoindre à nouveau",
+        "phoneRequired": "Un téléphone vérifié est requis pour adhérer. La vérification ne vous inscrit pas automatiquement.",
+        "verifyPhone": "Vérifier le téléphone dans votre compte",
+        "settings": "Paramètres du compte",
+        "phoneUnavailable": "Le statut de vérification du téléphone n’a pas pu être chargé. Réessayez.",
+        "phoneVerified": "Votre téléphone est vérifié. Des conditions approuvées et une action explicite restent nécessaires.",
+        "left": "Vous avez quitté la Communauté. Votre historique comptable est conservé.",
+        "feedRule": "Consulter le fil nécessite aussi un téléphone vérifié et le respect des règles d’accès.",
+        "retry": "Actualiser le statut",
+        "errors": {
+          "confirmation": "Confirmez votre choix avant de quitter.",
+          "suspended": "Cette adhésion est suspendue et ne peut pas être modifiée ici.",
+          "missing": "Aucune adhésion trouvée. Actualisez votre statut.",
+          "unavailable": "Le départ n’a pas pu être confirmé. Réessayez ou actualisez le statut."
+        }
+      },
       "membership": {
         "title": "Adhésion",
         "status": {
@@ -328,7 +357,7 @@
         "activeOn": "Membre depuis le {date}",
         "leftOn": "Parti le {date}",
         "suspendedOn": "Suspendu le {date}",
-        "absentHint": "Vous n’avez pas rejoint la Communauté. Rejoindre et quitter ne sont pas encore disponibles sur cette page.",
+        "absentHint": "Vous n’avez pas rejoint la Communauté.",
         "policyVersion": "Version de la politique {version}",
         "unavailable": "Votre statut d’adhésion n’a pas pu être chargé pour le moment.",
         "forbidden": "Votre statut d’adhésion n’est pas disponible avec votre accès actuel."

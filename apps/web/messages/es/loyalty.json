@@ -317,6 +317,35 @@
         "suspended": "Suspendida",
         "closed": "Cerrada"
       },
+      "selfService": {
+        "distinction": "La membresía y los Puntos de la Comunidad son independientes de tu cuenta y de las membresías y puntos de fidelidad de cada negocio.",
+        "suspended": "Esta membresía está suspendida. No puedes reactivarla ni abandonarla por tu cuenta.",
+        "leave": "Salir de la Comunidad",
+        "confirmTitle": "¿Salir de la Comunidad?",
+        "confirmBody": "Tu cuenta de Puntos de la Comunidad se cerrará. Se conservarán el saldo y el historial contable. Tu cuenta de cliente y las membresías, puntos y recompensas de los negocios no cambiarán.",
+        "confirmLabel": "Confirmo que quiero salir de la Comunidad.",
+        "cancel": "Cancelar",
+        "confirmLeave": "Confirmar salida",
+        "leaving": "Saliendo…",
+        "termsUnavailable": "Unirse y volver a unirse no está disponible hasta que se publiquen las condiciones aprobadas.",
+        "termsRequired": "Unirse requiere condiciones aprobadas, aceptación explícita y una cuenta elegible. Ver esta página no crea una membresía.",
+        "join": "Unirse a la Comunidad",
+        "rejoin": "Volver a unirse",
+        "phoneRequired": "Se requiere un teléfono verificado para unirse. La verificación no te inscribe automáticamente.",
+        "verifyPhone": "Verificar el teléfono en tu cuenta",
+        "settings": "Configuración de la cuenta",
+        "phoneUnavailable": "No se pudo cargar el estado de verificación del teléfono. Inténtalo de nuevo.",
+        "phoneVerified": "Tu teléfono está verificado. Aún se requieren condiciones aprobadas y una acción explícita.",
+        "left": "Has salido de la Comunidad. Se conserva tu historial contable.",
+        "feedRule": "Ver el feed también requiere un teléfono verificado y cumplir las reglas de acceso.",
+        "retry": "Actualizar estado",
+        "errors": {
+          "confirmation": "Confirma tu elección antes de salir.",
+          "suspended": "Esta membresía está suspendida y no se puede modificar aquí.",
+          "missing": "No se encontró una membresía. Actualiza el estado.",
+          "unavailable": "No se pudo confirmar la salida. Inténtalo de nuevo o actualiza el estado."
+        }
+      },
       "membership": {
         "title": "Membresía",
         "status": {
@@ -328,7 +357,7 @@
         "activeOn": "Miembro desde {date}",
         "leftOn": "Se fue el {date}",
         "suspendedOn": "Suspendida el {date}",
-        "absentHint": "No se ha unido a la Comunidad. Unirse y salir aún no están disponibles en esta página.",
+        "absentHint": "No te has unido a la Comunidad.",
         "policyVersion": "Versión de la política {version}",
         "unavailable": "No se pudo cargar el estado de su membresía en este momento.",
         "forbidden": "El estado de su membresía no está disponible con su acceso actual."
