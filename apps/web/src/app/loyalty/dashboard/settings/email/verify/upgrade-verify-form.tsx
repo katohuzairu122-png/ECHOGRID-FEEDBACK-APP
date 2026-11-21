@@ -50,7 +50,7 @@ export function CustomerEmailUpgradeVerifyForm() {
               <Label htmlFor="upgrade-confirm-password">{t('confirmPasswordLabel')}</Label>
               <Input id="upgrade-confirm-password" type="password" name="passwordConfirmation" autoComplete="new-password" required />
               {state.error && <p role="alert" className="text-sm text-danger">
-                {t('upgradeErrors.' + state.error, { min: state.minLength ?? 0 })}
+                {t(`upgradeErrors.${state.error}`, { min: state.minLength ?? 0 })}
               </p>}
               <Button type="submit" disabled={pending || !!state.success}>
                 {pending ? t('saving') : t('upgradeComplete')}
