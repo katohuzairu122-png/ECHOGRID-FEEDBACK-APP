@@ -105,13 +105,22 @@ export class CustomerAuthService {
 
   /** Resolves a proven phone owner without minting a legacy bearer token. */
   async completeVerifiedPhoneForRotatingSession(phone: string): Promise<Customer> {
-    return this.resolveVerifiedPhone(phone);
+    return this.resolveExistingPhoneForUpgrade(phone);
   }
 
   /** Consumes the repository OTP proof, then resolves the identity without issuing a legacy token. */
   async verifyOtpForRotatingSession(phone: string, code: string): Promise<Customer> {
     await this.consumeOtp(phone, code);
-    return this.resolveVerifiedPhone(phone);
+    return this.resolveExistingPhoneForUpgrade(phone);
+  }
+
+  private async resolveExistingPhoneForUpgrade(phone: string): Promise<Customer> {
+    const customer = await this.repos.customers.resolveExistingPhoneForCredentialUpgrade(phone);
+    if (!customer || customer.status !== 'active') {
+      // Never reveal whether this number belongs to a registered customer.
+      throw new CustomerAuthError('Code is invalid or has expired.', 'OTP_INVALID');
+    }
+    return customer;
   }
 
   private async resolveVerifiedPhone(phone: string): Promise<Customer> {
