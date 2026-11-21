@@ -7,6 +7,8 @@ import { buttonVariants, Card, CardContent, CardDescription, CardHeader, CardTit
 import { cn } from '@/lib/utils';
 import { getCompatibleCustomerCredentials } from '@/lib/customer-session';
 import { CustomerSecurityForm } from './security-form';
+import { CustomerEmailUpgradeForm } from './email-upgrade-form';
+import { isCustomerEmailAuthWebEnabled } from '@/lib/customer-email-auth-client';
 
 export const dynamic = 'force-dynamic';
 
@@ -49,7 +51,9 @@ export default async function CustomerSettingsPage() {
         <CardContent>
           {profile.emailVerified
             ? <CustomerSecurityForm canManageSessions={credentials.kind === 'rotating'} />
-            : <p className="text-sm text-neutral-600">{t('passwordNotAvailable')}</p>}
+            : isCustomerEmailAuthWebEnabled()
+              ? <CustomerEmailUpgradeForm canUpgrade={credentials.kind === 'rotating'} />
+              : <p className="text-sm text-neutral-600">{t('passwordNotAvailable')}</p>}
         </CardContent>
       </Card>
     </section>
