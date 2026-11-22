@@ -26,6 +26,10 @@ describe('/loyalty/join (LANDING-ROLE-01)', () => {
     expect(publicApiFetch).toHaveBeenCalledWith('/public/businesses');
     expect(screen.getByRole('heading', { name: 'Join as a loyalty customer' })).toBeInTheDocument();
     expect(screen.getByText('Scan a business QR code')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Join Echo Grid directly' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Create my Echo Grid account' })).toHaveAttribute('href', '/loyalty/signup');
+    expect(screen.getByRole('heading', { name: 'Search for a business to join' })).toBeInTheDocument();
+    expect(screen.getByRole('searchbox', { name: 'Search businesses' })).toBeInTheDocument();
     expect(screen.getAllByRole('option').map((o) => o.textContent)).toEqual(['Choose a business…', 'Blue Cafe', 'Zed Gym']);
     expect(screen.getByRole('link', { name: 'Back to choose how to participate' })).toHaveAttribute('href', '/signup');
   });
@@ -34,6 +38,7 @@ describe('/loyalty/join (LANDING-ROLE-01)', () => {
     vi.mocked(publicApiFetch).mockRejectedValue(new Error('down'));
     renderWithIntl(await LoyaltyJoinPage());
     expect(screen.getByText('Scan a business QR code')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Create my Echo Grid account' })).toHaveAttribute('href', '/loyalty/signup');
     expect(screen.getByText(/couldn't load the list/i)).toBeInTheDocument();
   });
 
