@@ -37,11 +37,11 @@ Project: `echo-grid-staging` (PostgreSQL 18). Inspected the project's default da
 
 The new single-pass email-registration code expects the missing column. With email auth enabled in staging, signup paths may fail at database execution. Do not claim staging customer signup or legacy upgrade ready.
 
-This audit does not establish whether the staging API Worker currently points to precisely this Neon branch through its Hyperdrive binding; that mapping must be independently verified before making a definitive runtime-outage claim. The finding is a confirmed schema/configuration mismatch **for the inspected staging project**, not proof that live requests failed.
+Additional read-only cross-provider verification matched the staging API Worker's `HYPERDRIVE` configuration to Neon endpoint `ep-sparkling-hall-au6p04ch` (the configured Hyperdrive origin uses the corresponding `-pooler` hostname). Neon lists that same endpoint on the inspected staging project default branch. Therefore the staging API is configured to use the inspected database **missing migration 0087**. This proves a configured schema/feature mismatch, but does not prove that a particular live request failed.
 
 ## Owner-controlled remediation gates
 
-1. Verify the actual staging API Hyperdrive target corresponds to the inspected Neon project and database branch, using metadata only and without exposing credentials.
+1. **VERIFIED:** The staging API Hyperdrive target matches the inspected Neon staging endpoint. Recheck the mapping only if a deployment or resource binding changes.
 2. Review and explicitly authorize the staging migration `0087` and backup/restore plan. Do not apply it automatically.
 3. Review the decision on whether email auth should remain enabled in staging before the schema and provider acceptance are confirmed. Do not change flags automatically.
 4. Validate real worker-to-database connection, registration proof delivery, mail-provider behavior, rate limits, session handling, and ownership boundaries using **authorized synthetic test identities only**.
