@@ -38,6 +38,8 @@ APP_URL = "https://echo-grid.uk"
 # relying on inlining behavior nobody's verified against this exact
 # OpenNext-Cloudflare build pipeline.
 NODE_ENV = "production"
+# PROD-AUTH-02: frontend password-policy hint; registration remains disabled.
+CUSTOMER_PASSWORD_MIN_LENGTH = "8"
 # TEMPORARY WORKAROUND for a confirmed open upstream bug: Next.js's
 # getMiddlewareManifest() dynamic-requires middleware-manifest.json, which
 # Workers' runtime doesn't support -- every route 500'd until this was set.
