@@ -2,7 +2,7 @@
 
 **Status: test foundation only. NOT customer-auth A–H acceptance and NOT deployment-ready.**
 
-This block adds six opt-in Playwright checks: after a customer logs in using email/password with a `next` destination of `/loyalty/dashboard/qr`, the authenticated browser returns to the requested QR screen instead of losing the destination; a foreign-origin `next` parameter is rejected before credential submission; and unknown-email versus incorrect-password logins produce the same generic denial without issuing customer-session cookies; and protocol-relative/encoded backslash return-target smuggling is denied; signed-out direct QR entry retains its destination on login; and staff cookies do not bypass customer login.
+This block adds six opt-in Playwright checks covering email/password return-login to QR, foreign-origin URL rejection, generic wrong-password/unknown-email denial without session issuance, encoded or protocol-relative redirect smuggling, signed-out direct QR entry with preserved destination, and staff-cookie isolation. Five additional middleware unit tests cover no-cookie redirects, staff/customer separation, existing customer-cookie boundaries, oversized return URL fallback, and preservation of public paths.
 
 ## Activation and isolation
 
@@ -19,7 +19,7 @@ This test only checks email/password return-login navigation and secure session 
 
 The following acceptance remains **NOT RUN** until an isolated stack and synthetic proof facilities are available: full registration and proof delivery; replay denial in a browser; session lifecycle; business-bound QR continuation; Settings phone verification; existing phone identity upgrade; cross-customer authorization denial.
 
-R2 inactive retention cleanup is separately tracked in draft PR #554. Its CI pass does not approve retention policy or an execution schedule.
+R2's inactive retention cleanup foundation was merged through PR #554. Its successful CI does not approve a retention policy or an execution schedule. The cleanup routine remains unwired.
 
 ## Release gates
 
