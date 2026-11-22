@@ -1,5 +1,5 @@
 import { createTranslator } from 'next-intl';
-import { screen } from '@testing-library/react';
+import { fireEvent, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { renderWithIntl } from '@/test-utils';
 import en from '../../../../messages/en/loyalty.json';
@@ -32,6 +32,16 @@ describe('/loyalty/join (LANDING-ROLE-01)', () => {
     expect(screen.getByRole('searchbox', { name: 'Search businesses' })).toBeInTheDocument();
     expect(screen.getAllByRole('option').map((o) => o.textContent)).toEqual(['Choose a business…', 'Blue Cafe', 'Zed Gym']);
     expect(screen.getByRole('link', { name: 'Back to choose how to participate' })).toHaveAttribute('href', '/signup');
+  });
+
+  it('filters registered business names without creating a membership', async () => {
+    vi.mocked(publicApiFetch).mockResolvedValue({ businesses: [{ name: 'Blue Cafe' }, { name: 'Zed Gym' }] });
+    renderWithIntl(await LoyaltyJoinPage());
+    fireEvent.change(screen.getByRole('searchbox', { name: 'Search businesses' }), { target: { value: 'gym' } });
+    expect(screen.getAllByRole('option').map((o) => o.textContent)).toEqual(['Choose a business…', 'Zed Gym']);
+    fireEvent.change(screen.getByRole('searchbox', { name: 'Search businesses' }), { target: { value: 'missing' } });
+    expect(screen.getByText('No registered businesses match your search.')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Create my Echo Grid account' })).toHaveAttribute('href', '/loyalty/signup');
   });
 
   it('still shows the QR path when the list cannot be loaded', async () => {
