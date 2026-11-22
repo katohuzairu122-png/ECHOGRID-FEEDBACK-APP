@@ -129,7 +129,7 @@ test('staff cookies cannot bypass customer QR login', async ({ page, context, ba
     'Refuses non-loopback browser targets');
 
   await context.clearCookies();
-  await context.addCookies([{ name: 'access_token', value: 'synthetic-not-a-customer-token',
+  await context.addCookies([{ name: 'ff_access_token', value: 'synthetic-not-a-customer-token',
     url: origin!.origin }]);
   await page.goto('/loyalty/dashboard/qr');
   await expect(page).toHaveURL(/\/loyalty\/login\?next=/);
