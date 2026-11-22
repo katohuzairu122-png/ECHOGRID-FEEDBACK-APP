@@ -2,7 +2,7 @@
 
 **Status: test foundation only. NOT customer-auth A–H acceptance and NOT deployment-ready.**
 
-This block adds four opt-in Playwright checks: after a customer logs in using email/password with a `next` destination of `/loyalty/dashboard/qr`, the authenticated browser returns to the requested QR screen instead of losing the destination; a foreign-origin `next` parameter is rejected before credential submission; and unknown-email versus incorrect-password logins produce the same generic denial without issuing customer-session cookies; and protocol-relative/encoded backslash return-target smuggling is denied.
+This block adds six opt-in Playwright checks: after a customer logs in using email/password with a `next` destination of `/loyalty/dashboard/qr`, the authenticated browser returns to the requested QR screen instead of losing the destination; a foreign-origin `next` parameter is rejected before credential submission; and unknown-email versus incorrect-password logins produce the same generic denial without issuing customer-session cookies; and protocol-relative/encoded backslash return-target smuggling is denied; signed-out direct QR entry retains its destination on login; and staff cookies do not bypass customer login.
 
 ## Activation and isolation
 
@@ -27,4 +27,4 @@ Require completed and recorded customer-auth A–H Chromium evidence, agreed ret
 
 ## Additional discovered acceptance gap — direct authenticated-page entry
 
-The existing customer dashboard layout redirects an unauthenticated direct request for `/loyalty/dashboard/qr` to `/loyalty/login` without carrying an explicit `next` destination. The new tests exercise **login URL supplied with a safe next target**, not an unauthenticated direct QR page entry. Therefore do not claim the latter preserves context. A separate product/redirect contract decision, implementation and regression test are needed before accepting direct-deep-link preservation. This PR does not change the layout or related auth middleware.
+The middleware now performs a narrowly scoped customer-cookie-presence preflight for direct `/loyalty/dashboard` entries. When there is no customer legacy, rotating-access or rotating-refresh cookie, the same-origin dashboard path and query are carried as a safe `next` parameter to `/loyalty/login`. This preflight does **not** assert authenticated identity; the dashboard layout still verifies customer-session presence, and its rejection of a stale or invalid existing cookie may still lose the original path. An explicitly isolated browser test covers the no-cookie case, not invalid-cookie recovery. No staff route or authorization policy was altered.
