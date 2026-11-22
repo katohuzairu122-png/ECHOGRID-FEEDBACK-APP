@@ -644,10 +644,10 @@
     },
     "joinHub": {
       "title": "Rejoindre en tant que client fidélité",
-      "description": "Rejoignez le programme de fidélité de toute entreprise inscrite sur Echo Grid. Vous rejoignez une entreprise en scannant son code QR.",
+      "description": "Créez directement votre compte Echo Grid ou rejoignez le programme de fidélité d'un commerce en scannant son code QR. Les adhésions sont distinctes.",
       "scanTitle": "Scannez le code QR d'une entreprise",
       "scanBody": "Ouvrez l'appareil photo de votre téléphone et pointez-le vers le code QR Echo Grid de l'entreprise. Le lien s'ouvre ici et vous créerez ou ouvrirez votre compte client.",
-      "findTitle": "Ou trouvez une entreprise inscrite",
+      "findTitle": "Rechercher un commerce à rejoindre",
       "selectLabel": "Entreprises inscrites",
       "selectPlaceholder": "Choisissez une entreprise…",
       "empty": "Aucune entreprise à choisir pour le moment. Scannez plutôt le code QR d'une entreprise.",
@@ -655,8 +655,15 @@
       "chosenTitle": "Rejoindre {name}",
       "chosenBody": "Scannez le code QR Echo Grid chez {name} ou demandez-le. Créez ou ouvrez votre compte client dès maintenant pour être prêt.",
       "accountCta": "Créer ou ouvrir mon compte client",
-      "accountNote": "Vous vérifierez votre téléphone avec un code à usage unique.",
-      "back": "Retour au choix de participation"
+      "accountNote": "Créer un compte Echo Grid ne vous inscrit pas automatiquement à ce commerce.",
+      "back": "Retour au choix de participation",
+      "platformTitle": "Rejoindre Echo Grid directement",
+      "platformBody": "Créez votre compte client sur la plateforme sans choisir de commerce. Vous pourrez rejoindre les programmes de fidélité plus tard en scannant leurs codes QR.",
+      "platformCta": "Créer mon compte Echo Grid",
+      "findBody": "Recherchez parmi les commerces inscrits. L'adhésion nécessite ensuite le scan du code QR du commerce et votre consentement.",
+      "searchLabel": "Rechercher des commerces",
+      "searchPlaceholder": "Saisissez un nom de commerce",
+      "noMatches": "Aucun commerce inscrit ne correspond à votre recherche."
     }
   }
 }
