@@ -509,8 +509,79 @@ describe.skipIf(!databaseUrl)('D2-FINAL privacy lifecycle (real PostgreSQL)', ()
         const shell = (await q(`SELECT anonymized_at FROM customers WHERE id = $1`, [c.id]))[0];
         expect(shell.anonymized_at, `round ${round}`).not.toBeNull();
         expect((await q(`SELECT count(*)::int AS n FROM customer_onboarding_events WHERE customer_id = $1 AND erased_at IS NULL`, [c.id]))[0].n, `round ${round} unsevered`).toBe(0);
-        if (joined.status === 'rejected') expect(String((joined.reason as Error).message)).toMatch(/CUSTOMER_ANONYMIZED_NO_NEW_ACTIVITY/);
+        if (joined.status === 'rejected') {
+          // The service can refuse before SQL, or PostgreSQL can refuse in its
+          // terminal-identity trigger. Drizzle wraps the latter in `cause`;
+          // neither path may be replaced by a generic database failure.
+          const error = joined.reason as Error & { cause?: Error };
+          expect(`${error.message} ${error.cause?.message ?? ''}`).toMatch(/CUSTOMER_ANONYMIZED_NO_NEW_ACTIVITY/);
+        }
         else expect((await q(`SELECT count(*)::int AS n FROM customer_onboarding_events WHERE business_id = $1 AND customer_id IS NULL`, [w2.biz]))[0].n).toBe(1); // the racing join was severed too
+      }
+    });
+
+    it('deterministically refuses a join paused after eligibility reads until anonymization commits (including the wrapped database cause)', async () => {
+      const w1 = await world('barrier-old');
+      const w2 = await world('barrier-new');
+      const c = await customer();
+      await join(w1, c.id);
+      const id = await approved(c.id);
+      const key = `d2f_insert_barrier:${run}`;
+      const trigger = `aaa_d2f_insert_barrier_${run}`;
+      const fn = `d2f_insert_barrier_${run}`;
+      const holder = await connect();
+      const joiningClient = await connect();
+      const joiningService = new CustomerMembershipService(appDbOf(buildDb(joiningClient)));
+      // Test-only trigger, restricted to this synthetic customer/business.
+      // Alphabetic order puts the barrier BEFORE the existing terminal guard.
+      // Never disable/replace a production guard or change a migration.
+      await q(`CREATE FUNCTION public.${fn}() RETURNS trigger LANGUAGE plpgsql AS $$
+        BEGIN
+          IF NEW.customer_id = '${c.id}'::uuid AND NEW.business_id = '${w2.biz}'::uuid THEN
+            PERFORM pg_advisory_xact_lock(hashtextextended('${key}', 0));
+          END IF;
+          RETURN NEW;
+        END $$`);
+      let pending: Promise<PromiseSettledResult<unknown>> | undefined;
+      try {
+        await q(`CREATE TRIGGER ${trigger} BEFORE INSERT ON public.business_customer_memberships FOR EACH ROW EXECUTE FUNCTION public.${fn}()`);
+        await holder.query('BEGIN');
+        await holder.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [key]);
+        pending = join(w2, c.id, joiningService).then(
+          (value): PromiseFulfilledResult<unknown> => ({ status: 'fulfilled', value }),
+          (reason: unknown): PromiseRejectedResult => ({ status: 'rejected', reason }),
+        );
+        // Wait for an observed database lock, not an arbitrary timing sleep.
+        const deadline = Date.now() + 5_000;
+        let waiting = 0;
+        do {
+          waiting = Number((await q(`SELECT count(*) AS n FROM pg_locks WHERE locktype = 'advisory' AND NOT granted
+            AND ((classid::bigint << 32) | objid::bigint) = hashtextextended($1, 0)`, [key]))[0].n);
+        } while (waiting === 0 && Date.now() < deadline);
+        expect(waiting, 'the actual membership INSERT must wait at the test barrier').toBe(1);
+        expect((await q('SELECT anonymized_at FROM customers WHERE id = $1', [c.id]))[0].anonymized_at).toBeNull();
+        expect((await anonymize(id)).out_outcome).toBe('completed');
+        await holder.query('COMMIT');
+        const result = await pending;
+        expect(result.status).toBe('rejected');
+        if (result.status !== 'rejected') throw new Error('The terminal identity guard did not reject the paused Join.');
+        const error = result.reason as Error & { cause?: Error & { code?: string } };
+        expect(error.message).toContain('Failed query:');
+        expect(error.cause?.message).toContain('CUSTOMER_ANONYMIZED_NO_NEW_ACTIVITY');
+        expect(error.cause?.code).toBe('23000');
+        expect((await q('SELECT anonymized_at FROM customers WHERE id = $1', [c.id]))[0].anonymized_at).not.toBeNull();
+        for (const table of ['business_customer_memberships', 'loyalty_accounts', 'consent_grants', 'customer_onboarding_events']) {
+          expect((await q(`SELECT count(*)::int AS n FROM ${table} WHERE customer_id = $1 AND business_id = $2`, [c.id, w2.biz]))[0].n, table).toBe(0);
+        }
+        expect((await q('SELECT count(*)::int AS n FROM customer_sessions WHERE customer_id = $1', [c.id]))[0].n).toBe(0);
+        expect((await q('SELECT count(*)::int AS n FROM customer_onboarding_events WHERE customer_id = $1 AND erased_at IS NULL', [c.id]))[0].n).toBe(0);
+      } finally {
+        await holder.query('ROLLBACK');
+        await pending;
+        await q(`DROP TRIGGER IF EXISTS ${trigger} ON public.business_customer_memberships`);
+        await q(`DROP FUNCTION IF EXISTS public.${fn}()`);
+        await holder.end();
+        await joiningClient.end();
       }
     });
 
