@@ -46,13 +46,13 @@ describe('customer email sign-up is enabled in STAGING only', () => {
       }
     }
   });
-  it('staging enables it on BOTH Workers together, and production sets nothing', () => {
+  it('staging enables the feature on BOTH Workers and production prepares policy without activation', () => {
     expect(apiStaging.CUSTOMER_EMAIL_AUTH_ENABLED).toBe('true');
     expect(webStaging.CUSTOMER_EMAIL_AUTH_ENABLED).toBe('true');
     for (const parsed of [api, web]) {
       for (const entry of parsed.get('vars') ?? []) {
         expect(entry).not.toHaveProperty('CUSTOMER_EMAIL_AUTH_ENABLED');
-        expect(entry).not.toHaveProperty('CUSTOMER_PASSWORD_MIN_LENGTH');
+        expect(entry.CUSTOMER_PASSWORD_MIN_LENGTH).toBe('8');
       }
     }
   });
@@ -60,6 +60,30 @@ describe('customer email sign-up is enabled in STAGING only', () => {
     const example = read('apps/api/.dev.vars.example');
     expect(example).not.toMatch(/^\s*CUSTOMER_EMAIL_AUTH_ENABLED\s*=\s*true/m);
     expect(example).not.toMatch(/^\s*CUSTOMER_(EMAIL_AUTH_HMAC|SESSION_SIGNING)_SECRET\s*=/m);
+  });
+});
+
+describe('PROD-AUTH-02 production policy ready, registration still disabled', () => {
+  const apiProduction = Object.assign({}, ...(api.get('vars') ?? []));
+  const webProduction = Object.assign({}, ...(web.get('vars') ?? []));
+  it('production matches the approved password minimum on API and Web', () => {
+    expect(apiProduction.CUSTOMER_PASSWORD_MIN_LENGTH).toBe('8');
+    expect(webProduction.CUSTOMER_PASSWORD_MIN_LENGTH).toBe('8');
+    expect(apiProduction).not.toHaveProperty('CUSTOMER_EMAIL_AUTH_ENABLED');
+    expect(webProduction).not.toHaveProperty('CUSTOMER_EMAIL_AUTH_ENABLED');
+  });
+  it('production session policies match the approved staging values and remain internally coherent', () => {
+    for (const name of [
+      'CUSTOMER_SESSION_ACCESS_TTL_SECONDS',
+      'CUSTOMER_SESSION_REFRESH_TTL_SECONDS',
+      'CUSTOMER_SESSION_ABSOLUTE_TTL_SECONDS',
+      'CUSTOMER_SESSION_IDLE_TTL_SECONDS',
+      'CUSTOMER_STEP_UP_WINDOW_SECONDS',
+    ]) {
+      expect(apiProduction[name]).toBe(apiStaging[name]);
+    }
+    expect(Number(apiProduction.CUSTOMER_SESSION_ACCESS_TTL_SECONDS)).toBeLessThan(Number(apiProduction.CUSTOMER_SESSION_REFRESH_TTL_SECONDS));
+    expect(Number(apiProduction.CUSTOMER_SESSION_IDLE_TTL_SECONDS)).toBeLessThanOrEqual(Number(apiProduction.CUSTOMER_SESSION_ABSOLUTE_TTL_SECONDS));
   });
 });
 
