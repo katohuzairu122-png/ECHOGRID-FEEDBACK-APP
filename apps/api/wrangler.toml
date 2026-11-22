@@ -27,6 +27,17 @@ class_name = "PasswordHasherDurableObject"
 tag = "v1"
 new_sqlite_classes = ["PasswordHasherDurableObject"]
 
+# PROD-AUTH-01: production customer email-auth brute-force and signup rate limiting.
+# The class is already implemented and is bound in the staging environment.
+# Register the production namespace on the next separately approved production deployment.
+[[durable_objects.bindings]]
+name = "CUSTOMER_AUTH_RATE_LIMIT"
+class_name = "CustomerEmailRateLimit"
+
+[[migrations]]
+tag = "v2"
+new_sqlite_classes = ["CustomerEmailRateLimit"]
+
 [vars]
 # Flipped to "production" 2026-08-05 -- Twilio and Resend now have real
 # credentials (see .dev.vars comments / memory), so ConsoleSmsService and
