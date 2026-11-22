@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
  * CUSTOMER-EMAIL-AUTH-POLICY-01: static guards over the deployment configuration TEMPLATES. They read files only (no Worker,
  * no network, no secret) and pin what the owner approved so it cannot drift unnoticed: email sign-up is disabled in every
  * template, the customer password minimum is 8 on both Workers, the approved session lifetimes are coherent, the two open owner
- * decisions are not silently filled in, and the staging-only rate-limit namespace never leaks into production.
+ * decisions are not silently filled in, and the approved customer rate-limit namespace is registered separately for production.
  */
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', '..');
 const read = (path: string) => readFileSync(join(ROOT, path), 'utf8');
@@ -81,7 +81,7 @@ describe('approved owner decisions in the staging templates', () => {
   });
 });
 
-describe('staging-only rate-limit Durable Object', () => {
+describe('customer email rate-limit Durable Object deployment configuration', () => {
   const stagingBindings = api.get('env.staging.durable_objects.bindings') ?? [];
   const stagingMigrations = api.get('env.staging.migrations') ?? [];
 
@@ -96,11 +96,18 @@ describe('staging-only rate-limit Durable Object', () => {
     expect(stagingMigrations[0]!.new_sqlite_classes).toContain('PasswordHasherDurableObject');
     expect(stagingMigrations[1]!.new_sqlite_classes).toContain('CustomerEmailRateLimit');
   });
-  it('the class is exported by the Worker entry, and production has neither the binding nor the migration', () => {
+  it('the class is exported and production registers the approved rate limiter without changing v1', () => {
     expect(read('apps/api/src/index.ts')).toMatch(/export \{ CustomerEmailRateLimit \} from/);
-    expect(api.get('durable_objects.bindings')!.map((b) => b.name)).toEqual(['PASSWORD_HASHER']);
-    expect(api.get('migrations')!.map((m) => m.tag)).toEqual(['v1']);
+    expect(api.get('durable_objects.bindings')).toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: 'PASSWORD_HASHER', class_name: 'PasswordHasherDurableObject' }),
+      expect.objectContaining({ name: 'CUSTOMER_AUTH_RATE_LIMIT', class_name: 'CustomerEmailRateLimit' }),
+    ]));
+    expect(api.get('durable_objects.bindings')!.map((b) => b.name)).toEqual(['PASSWORD_HASHER', 'CUSTOMER_AUTH_RATE_LIMIT']);
+    expect(api.get('migrations')!.map((m) => m.tag)).toEqual(['v1', 'v2']);
+    expect(api.get('migrations')![0]!.new_sqlite_classes).toContain('PasswordHasherDurableObject');
+    expect(api.get('migrations')![1]!.new_sqlite_classes).toContain('CustomerEmailRateLimit');
   });
+
   it('the new secrets are NOT in the staging required-secrets list: a missing secret would fail deploys before activation', () => {
     const required = read('apps/api/wrangler.toml');
     const block = /\[env\.staging\.secrets\]\s*required\s*=\s*\[([\s\S]*?)\]/.exec(required)![1]!;
