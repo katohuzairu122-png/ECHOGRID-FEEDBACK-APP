@@ -66,8 +66,8 @@ describe('PROD-AUTH-04 production registration activation and isolated environme
   });
   it('example vars never expose active flags or secret material', () => {
     const example = read('apps/api/.dev.vars.example');
-    expect(example).not.toMatch(/^\\s*CUSTOMER_EMAIL_AUTH_ENABLED\\s*=\\s*true/m);
-    expect(example).not.toMatch(/^\\s*CUSTOMER_(EMAIL_AUTH_HMAC|SESSION_SIGNING)_SECRET\\s*=/m);
+    expect(example).not.toMatch(/^\s*CUSTOMER_EMAIL_AUTH_ENABLED\s*=\s*true/m);
+    expect(example).not.toMatch(/^\s*CUSTOMER_(EMAIL_AUTH_HMAC|SESSION_SIGNING)_SECRET\s*=/m);
   });
 });
 
