@@ -131,3 +131,58 @@ and runtime privileges, all-gateway atomic enforcement, actual concurrency/brows
 proofs and separate deployment/activation authorization remain prerequisites.
 Merging this partial draft approves none of those gates. No shared database,
 secret, infrastructure, legal draft or live consent is modified.
+
+## 2026-11-22 continuation — D2 harness investigation
+
+Reconciled main: `0fce307478aaf67cf861cad683d6e60690b2580f` (through #559).
+PR #553 remains the same dedicated draft. Main's authentication/release changes
+are inherited, not reimplemented or changed by this Community diff. No authoritative
+approval of NETWORK-15-T2-D1 was found. The continuation again explicitly withholds
+D1 approval, so Restore semantics and activation integration remain blocked.
+
+The task separately authorizes a D2 **test-harness-only** correction after proving
+the cause. The previously failing test checks the expected terminal-identity error
+only in the outer message. There are two legitimate refusal paths: a service
+check before SQL, and PostgreSQL's terminal-identity trigger after eligibility
+reads. Drizzle wraps the latter in `cause` with a generic outer `Failed query`
+message. The test previously interpreted this successful database refusal as a
+failure. This is not a PostgreSQL-16-only invariant violation.
+
+The assertion now requires the same terminal-identity error in the outer or
+wrapped message, as the existing Rejoin regression already does. It does not
+accept arbitrary failures. All original terminal-state assertions remain.
+
+An additional deterministic real-database test forces the trigger-refusal path:
+
+1. Use separate Join, advisory-lock holder and monitoring connections.
+2. Install a test-only BEFORE INSERT barrier for one synthetic customer/business;
+   never disable/replace any existing guard or edit a migration.
+3. Observe Join blocked on the advisory lock after its service eligibility reads.
+4. Complete anonymization on the existing authorized operator path.
+5. Release the barrier and require the wrapped database error, SQLSTATE `23000`,
+   and `CUSTOMER_ANONYMIZED_NO_NEW_ACTIVITY`.
+6. Require no new business membership, loyalty account, consent or onboarding
+   event for the target business, no live customer session and no unsevered event.
+7. Drop the fixture trigger/function and close connections in cleanup.
+
+The barrier waits for observed database lock state, not an arbitrary sleep, retry
+or increased timeout. The existing six-round random race is retained. The first
+experimental probe was interrupted because its monitor shared the blocked Join
+connection; the corrected probe uses three connections and is the tested version.
+
+Before the retry, the unchanged-main PostgreSQL 16 reproducer failed four of five
+executions; the corrected full privacy suite passed 35/35 on PostgreSQL 16. The
+combined PostgreSQL 18 privacy/Community/Network run passed 130 tests, with 18
+browser-only cases skipped. The unchanged 54 actual-module terms tests and 20 T1
+model tests passed. These are distinct categories, not proof of full T2 activation.
+Final current-main reproductions and exact-head hosted counts are recorded in the
+PR and completion report. No D2 production implementation correction is indicated
+by this deterministic proof; none is included.
+
+The remaining atomic consent projection/audit persistence, current-pointer database
+adapter/locking, all activation gateways and approved-terms UI remain unimplemented.
+Closing only customer Join while retaining an unrestricted Restore activation
+path would not satisfy the requested all-gateway invariant. No partial runtime
+activation or undocumented moderation-state conversion is shipped to bridge that
+unapproved decision. This partial PR must never be reported as completed T2, even
+if the independent foundation and harness correction pass every hosted check.

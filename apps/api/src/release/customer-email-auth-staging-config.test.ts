@@ -5,9 +5,9 @@ import { fileURLToPath } from 'node:url';
 
 /**
  * CUSTOMER-EMAIL-AUTH-POLICY-01: static guards over the deployment configuration TEMPLATES. They read files only (no Worker,
- * no network, no secret) and pin what the owner approved so it cannot drift unnoticed: email sign-up is disabled in every
- * template, the customer password minimum is 8 on both Workers, the approved session lifetimes are coherent, the two open owner
- * decisions are not silently filled in, and the staging-only rate-limit namespace never leaks into production.
+ * no network, no secret) and pin what the owner approved so it cannot drift unnoticed: email sign-up is enabled for production and staging API/Web Workers only,
+ * the customer password minimum is 8 on both Workers, the approved session lifetimes are coherent, the two open owner
+ * decisions are not silently filled in, and the approved customer rate-limit namespace is registered separately for production.
  */
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', '..');
 const read = (path: string) => readFileSync(join(ROOT, path), 'utf8');
@@ -35,31 +35,63 @@ const web = sections(read('apps/web/wrangler.toml'));
 const apiStaging = Object.assign({}, ...(api.get('env.staging.vars') ?? []));
 const webStaging = Object.assign({}, ...(web.get('env.staging.vars') ?? []));
 
-describe('customer email sign-up is enabled in STAGING only', () => {
-  it('no section other than env.staging on either Worker enables it (production, cashier-staging and the top level stay off)', () => {
+describe('PROD-AUTH-04 production registration activation and isolated environments', () => {
+  const apiProduction = Object.assign({}, ...(api.get('vars') ?? []));
+  const webProduction = Object.assign({}, ...(web.get('vars') ?? []));
+
+  it('enables customer email registration on BOTH production Workers and staging Workers', () => {
+    for (const entry of [apiProduction, webProduction, apiStaging, webStaging]) {
+      expect(entry.CUSTOMER_EMAIL_AUTH_ENABLED).toBe('true');
+      expect(entry.CUSTOMER_PASSWORD_MIN_LENGTH).toBe('8');
+    }
+  });
+  it('does not activate customer email auth in cashier or other unrelated environments', () => {
     for (const [file, parsed] of [['api', api], ['web', web]] as const) {
       for (const [section, entries] of parsed) {
-        if (section === 'env.staging.vars') continue;
+        if (section === 'vars' || section === 'env.staging.vars') continue;
         for (const entry of entries) {
           expect(entry.CUSTOMER_EMAIL_AUTH_ENABLED, `${file} [${section}]`).not.toBe('true');
         }
       }
     }
   });
-  it('staging enables it on BOTH Workers together, and production sets nothing', () => {
-    expect(apiStaging.CUSTOMER_EMAIL_AUTH_ENABLED).toBe('true');
-    expect(webStaging.CUSTOMER_EMAIL_AUTH_ENABLED).toBe('true');
+  it('legacy credential upgrade remains disabled in every deployment template', () => {
     for (const parsed of [api, web]) {
-      for (const entry of parsed.get('vars') ?? []) {
-        expect(entry).not.toHaveProperty('CUSTOMER_EMAIL_AUTH_ENABLED');
-        expect(entry).not.toHaveProperty('CUSTOMER_PASSWORD_MIN_LENGTH');
+      for (const [section, entries] of parsed) {
+        for (const entry of entries) {
+          expect(entry.CUSTOMER_LEGACY_UPGRADE_ENABLED, section).not.toBe('true');
+        }
       }
     }
   });
-  it('the example vars file never ships the flag on or a real-looking secret', () => {
+  it('example vars never expose active flags or secret material', () => {
     const example = read('apps/api/.dev.vars.example');
     expect(example).not.toMatch(/^\s*CUSTOMER_EMAIL_AUTH_ENABLED\s*=\s*true/m);
     expect(example).not.toMatch(/^\s*CUSTOMER_(EMAIL_AUTH_HMAC|SESSION_SIGNING)_SECRET\s*=/m);
+  });
+});
+
+describe('PROD-AUTH-04 production policy remains coherent after activation', () => {
+  const apiProduction = Object.assign({}, ...(api.get('vars') ?? []));
+  const webProduction = Object.assign({}, ...(web.get('vars') ?? []));
+  it('production matches the approved password minimum on API and Web', () => {
+    expect(apiProduction.CUSTOMER_PASSWORD_MIN_LENGTH).toBe('8');
+    expect(webProduction.CUSTOMER_PASSWORD_MIN_LENGTH).toBe('8');
+    expect(apiProduction.CUSTOMER_EMAIL_AUTH_ENABLED).toBe('true');
+    expect(webProduction.CUSTOMER_EMAIL_AUTH_ENABLED).toBe('true');
+  });
+  it('production session policies match the approved staging values and remain internally coherent', () => {
+    for (const name of [
+      'CUSTOMER_SESSION_ACCESS_TTL_SECONDS',
+      'CUSTOMER_SESSION_REFRESH_TTL_SECONDS',
+      'CUSTOMER_SESSION_ABSOLUTE_TTL_SECONDS',
+      'CUSTOMER_SESSION_IDLE_TTL_SECONDS',
+      'CUSTOMER_STEP_UP_WINDOW_SECONDS',
+    ]) {
+      expect(apiProduction[name]).toBe(apiStaging[name]);
+    }
+    expect(Number(apiProduction.CUSTOMER_SESSION_ACCESS_TTL_SECONDS)).toBeLessThan(Number(apiProduction.CUSTOMER_SESSION_REFRESH_TTL_SECONDS));
+    expect(Number(apiProduction.CUSTOMER_SESSION_IDLE_TTL_SECONDS)).toBeLessThanOrEqual(Number(apiProduction.CUSTOMER_SESSION_ABSOLUTE_TTL_SECONDS));
   });
 });
 
@@ -81,7 +113,7 @@ describe('approved owner decisions in the staging templates', () => {
   });
 });
 
-describe('staging-only rate-limit Durable Object', () => {
+describe('customer email rate-limit Durable Object deployment configuration', () => {
   const stagingBindings = api.get('env.staging.durable_objects.bindings') ?? [];
   const stagingMigrations = api.get('env.staging.migrations') ?? [];
 
@@ -96,11 +128,18 @@ describe('staging-only rate-limit Durable Object', () => {
     expect(stagingMigrations[0]!.new_sqlite_classes).toContain('PasswordHasherDurableObject');
     expect(stagingMigrations[1]!.new_sqlite_classes).toContain('CustomerEmailRateLimit');
   });
-  it('the class is exported by the Worker entry, and production has neither the binding nor the migration', () => {
+  it('the class is exported and production registers the approved rate limiter without changing v1', () => {
     expect(read('apps/api/src/index.ts')).toMatch(/export \{ CustomerEmailRateLimit \} from/);
-    expect(api.get('durable_objects.bindings')!.map((b) => b.name)).toEqual(['PASSWORD_HASHER']);
-    expect(api.get('migrations')!.map((m) => m.tag)).toEqual(['v1']);
+    expect(api.get('durable_objects.bindings')).toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: 'PASSWORD_HASHER', class_name: 'PasswordHasherDurableObject' }),
+      expect.objectContaining({ name: 'CUSTOMER_AUTH_RATE_LIMIT', class_name: 'CustomerEmailRateLimit' }),
+    ]));
+    expect(api.get('durable_objects.bindings')!.map((b) => b.name)).toEqual(['PASSWORD_HASHER', 'CUSTOMER_AUTH_RATE_LIMIT']);
+    expect(api.get('migrations')!.map((m) => m.tag)).toEqual(['v1', 'v2']);
+    expect(api.get('migrations')![0]!.new_sqlite_classes).toContain('PasswordHasherDurableObject');
+    expect(api.get('migrations')![1]!.new_sqlite_classes).toContain('CustomerEmailRateLimit');
   });
+
   it('the new secrets are NOT in the staging required-secrets list: a missing secret would fail deploys before activation', () => {
     const required = read('apps/api/wrangler.toml');
     const block = /\[env\.staging\.secrets\]\s*required\s*=\s*\[([\s\S]*?)\]/.exec(required)![1]!;
