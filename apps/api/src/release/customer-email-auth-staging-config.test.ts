@@ -5,8 +5,8 @@ import { fileURLToPath } from 'node:url';
 
 /**
  * CUSTOMER-EMAIL-AUTH-POLICY-01: static guards over the deployment configuration TEMPLATES. They read files only (no Worker,
- * no network, no secret) and pin what the owner approved so it cannot drift unnoticed: email sign-up is disabled in every
- * template, the customer password minimum is 8 on both Workers, the approved session lifetimes are coherent, the two open owner
+ * no network, no secret) and pin what the owner approved so it cannot drift unnoticed: email sign-up is enabled for production and staging API/Web Workers only,
+ * the customer password minimum is 8 on both Workers, the approved session lifetimes are coherent, the two open owner
  * decisions are not silently filled in, and the approved customer rate-limit namespace is registered separately for production.
  */
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', '..');
@@ -35,42 +35,50 @@ const web = sections(read('apps/web/wrangler.toml'));
 const apiStaging = Object.assign({}, ...(api.get('env.staging.vars') ?? []));
 const webStaging = Object.assign({}, ...(web.get('env.staging.vars') ?? []));
 
-describe('customer email sign-up is enabled in STAGING only', () => {
-  it('no section other than env.staging on either Worker enables it (production, cashier-staging and the top level stay off)', () => {
+describe('PROD-AUTH-04 production registration activation and isolated environments', () => {
+  const apiProduction = Object.assign({}, ...(api.get('vars') ?? []));
+  const webProduction = Object.assign({}, ...(web.get('vars') ?? []));
+
+  it('enables customer email registration on BOTH production Workers and staging Workers', () => {
+    for (const entry of [apiProduction, webProduction, apiStaging, webStaging]) {
+      expect(entry.CUSTOMER_EMAIL_AUTH_ENABLED).toBe('true');
+      expect(entry.CUSTOMER_PASSWORD_MIN_LENGTH).toBe('8');
+    }
+  });
+  it('does not activate customer email auth in cashier or other unrelated environments', () => {
     for (const [file, parsed] of [['api', api], ['web', web]] as const) {
       for (const [section, entries] of parsed) {
-        if (section === 'env.staging.vars') continue;
+        if (section === 'vars' || section === 'env.staging.vars') continue;
         for (const entry of entries) {
           expect(entry.CUSTOMER_EMAIL_AUTH_ENABLED, `${file} [${section}]`).not.toBe('true');
         }
       }
     }
   });
-  it('staging enables the feature on BOTH Workers and production prepares policy without activation', () => {
-    expect(apiStaging.CUSTOMER_EMAIL_AUTH_ENABLED).toBe('true');
-    expect(webStaging.CUSTOMER_EMAIL_AUTH_ENABLED).toBe('true');
+  it('legacy credential upgrade remains disabled in every deployment template', () => {
     for (const parsed of [api, web]) {
-      for (const entry of parsed.get('vars') ?? []) {
-        expect(entry).not.toHaveProperty('CUSTOMER_EMAIL_AUTH_ENABLED');
-        expect(entry.CUSTOMER_PASSWORD_MIN_LENGTH).toBe('8');
+      for (const [section, entries] of parsed) {
+        for (const entry of entries) {
+          expect(entry.CUSTOMER_LEGACY_UPGRADE_ENABLED, section).not.toBe('true');
+        }
       }
     }
   });
-  it('the example vars file never ships the flag on or a real-looking secret', () => {
+  it('example vars never expose active flags or secret material', () => {
     const example = read('apps/api/.dev.vars.example');
     expect(example).not.toMatch(/^\s*CUSTOMER_EMAIL_AUTH_ENABLED\s*=\s*true/m);
     expect(example).not.toMatch(/^\s*CUSTOMER_(EMAIL_AUTH_HMAC|SESSION_SIGNING)_SECRET\s*=/m);
   });
 });
 
-describe('PROD-AUTH-02 production policy ready, registration still disabled', () => {
+describe('PROD-AUTH-04 production policy remains coherent after activation', () => {
   const apiProduction = Object.assign({}, ...(api.get('vars') ?? []));
   const webProduction = Object.assign({}, ...(web.get('vars') ?? []));
   it('production matches the approved password minimum on API and Web', () => {
     expect(apiProduction.CUSTOMER_PASSWORD_MIN_LENGTH).toBe('8');
     expect(webProduction.CUSTOMER_PASSWORD_MIN_LENGTH).toBe('8');
-    expect(apiProduction).not.toHaveProperty('CUSTOMER_EMAIL_AUTH_ENABLED');
-    expect(webProduction).not.toHaveProperty('CUSTOMER_EMAIL_AUTH_ENABLED');
+    expect(apiProduction.CUSTOMER_EMAIL_AUTH_ENABLED).toBe('true');
+    expect(webProduction.CUSTOMER_EMAIL_AUTH_ENABLED).toBe('true');
   });
   it('production session policies match the approved staging values and remain internally coherent', () => {
     for (const name of [
