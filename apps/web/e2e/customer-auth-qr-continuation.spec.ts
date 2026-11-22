@@ -102,3 +102,36 @@ test('email login rejects protocol-relative and encoded backslash return-target 
     await expect(page.locator('input[name="next"]')).toHaveValue('/loyalty/dashboard');
   }
 });
+
+
+test('signed-out direct QR visit retains its path through the customer login boundary', async ({
+  page, context, baseURL,
+}) => {
+  test.skip(process.env.E2E_CUSTOMER_AUTH_ISOLATED !== '1',
+    'Requires explicitly authorized isolated customer-auth acceptance');
+  const origin = baseURL ? new URL(baseURL) : null;
+  test.skip(!origin || !['localhost', '127.0.0.1'].includes(origin.hostname),
+    'Refuses non-loopback browser targets');
+
+  await context.clearCookies();
+  await page.goto('/loyalty/dashboard/qr');
+  await expect(page).toHaveURL(/\/loyalty\/login\?next=/);
+  const redirected = new URL(page.url());
+  expect(redirected.searchParams.get('next')).toBe('/loyalty/dashboard/qr');
+  expect(redirected.origin).toBe(origin!.origin);
+});
+
+test('staff cookies cannot bypass customer QR login', async ({ page, context, baseURL }) => {
+  test.skip(process.env.E2E_CUSTOMER_AUTH_ISOLATED !== '1',
+    'Requires explicitly authorized isolated customer-auth acceptance');
+  const origin = baseURL ? new URL(baseURL) : null;
+  test.skip(!origin || !['localhost', '127.0.0.1'].includes(origin.hostname),
+    'Refuses non-loopback browser targets');
+
+  await context.clearCookies();
+  await context.addCookies([{ name: 'access_token', value: 'synthetic-not-a-customer-token',
+    url: origin!.origin }]);
+  await page.goto('/loyalty/dashboard/qr');
+  await expect(page).toHaveURL(/\/loyalty\/login\?next=/);
+  expect(new URL(page.url()).searchParams.get('next')).toBe('/loyalty/dashboard/qr');
+});
