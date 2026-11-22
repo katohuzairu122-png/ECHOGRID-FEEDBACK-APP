@@ -2,7 +2,7 @@
 
 **Status: test foundation only. NOT customer-auth A–H acceptance and NOT deployment-ready.**
 
-This block adds three opt-in Playwright checks: after a customer logs in using email/password with a `next` destination of `/loyalty/dashboard/qr`, the authenticated browser returns to the requested QR screen instead of losing the destination; a foreign-origin `next` parameter is rejected before credential submission; and unknown-email versus incorrect-password logins produce the same generic denial without issuing customer-session cookies.
+This block adds four opt-in Playwright checks: after a customer logs in using email/password with a `next` destination of `/loyalty/dashboard/qr`, the authenticated browser returns to the requested QR screen instead of losing the destination; a foreign-origin `next` parameter is rejected before credential submission; and unknown-email versus incorrect-password logins produce the same generic denial without issuing customer-session cookies; and protocol-relative/encoded backslash return-target smuggling is denied.
 
 ## Activation and isolation
 
@@ -24,3 +24,7 @@ R2 inactive retention cleanup is separately tracked in draft PR #554. Its CI pas
 ## Release gates
 
 Require completed and recorded customer-auth A–H Chromium evidence, agreed retention and rate-limit policies, migration/provider readiness, environment reconciliation, security review and owner authorization. No merge, deployment or activation is authorized here.
+
+## Additional discovered acceptance gap — direct authenticated-page entry
+
+The existing customer dashboard layout redirects an unauthenticated direct request for `/loyalty/dashboard/qr` to `/loyalty/login` without carrying an explicit `next` destination. The new tests exercise **login URL supplied with a safe next target**, not an unauthenticated direct QR page entry. Therefore do not claim the latter preserves context. A separate product/redirect contract decision, implementation and regression test are needed before accepting direct-deep-link preservation. This PR does not change the layout or related auth middleware.
