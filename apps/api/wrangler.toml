@@ -54,6 +54,14 @@ ENVIRONMENT = "production"
 # Cloudflare dashboard. Setting this to anything but "true" turns it off, for
 # new tokens and for tokens already issued.
 PLATFORM_IMPERSONATION_ENABLED = "true"
+# PROD-AUTH-02: approved production password/session policies.
+# CUSTOMER_EMAIL_AUTH_ENABLED deliberately absent: activation requires a separate authorization.
+CUSTOMER_PASSWORD_MIN_LENGTH = "8"
+CUSTOMER_SESSION_ACCESS_TTL_SECONDS = "900"
+CUSTOMER_SESSION_REFRESH_TTL_SECONDS = "2592000"
+CUSTOMER_SESSION_ABSOLUTE_TTL_SECONDS = "2592000"
+CUSTOMER_SESSION_IDLE_TTL_SECONDS = "1800"
+CUSTOMER_STEP_UP_WINDOW_SECONDS = "300"
 # Anthropic model identifier -- non-secret, [vars] not [secrets] so it's
 # swappable without a deploy. claude-sonnet-5 confirmed as the current, real
 # model string via Anthropic's own docs (platform.claude.com/docs, checked
