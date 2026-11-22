@@ -141,3 +141,42 @@ describe('middleware — cashier app (CASHIER-PWA-01 C4)', () => {
     expect(redirectTarget(await middleware(request('/dashboard')))).toBe('/login');
   });
 });
+
+
+describe('middleware — customer QR deep-link continuity', () => {
+  it('keeps the direct QR destination for a signed-out customer', async () => {
+    const response = await middleware(request('/loyalty/dashboard/qr?ref=synthetic'));
+    const location = new URL(response.headers.get('location')!);
+    expect(location.pathname).toBe('/loyalty/login');
+    expect(location.searchParams.get('next')).toBe('/loyalty/dashboard/qr?ref=synthetic');
+  });
+
+  it('never treats staff cookies as a customer identity', async () => {
+    const response = await middleware(request('/loyalty/dashboard/qr', { signedIn: true }));
+    const location = new URL(response.headers.get('location')!);
+    expect(location.pathname).toBe('/loyalty/login');
+    expect(location.searchParams.get('next')).toBe('/loyalty/dashboard/qr');
+  });
+
+  it('leaves customer-session authorization to the existing dashboard layout', async () => {
+    const req = request('/loyalty/dashboard/qr');
+    req.cookies.set('ff_customer_token', 'legacy-token-present');
+    expect(redirectTarget(await middleware(req))).toBeNull();
+    const rotating = request('/loyalty/dashboard/qr');
+    rotating.cookies.set('__Host-ff_customer_refresh', 'refresh-present');
+    expect(redirectTarget(await middleware(rotating))).toBeNull();
+  });
+
+  it('bounds oversized customer deep-link return values before login', async () => {
+    const response = await middleware(request('/loyalty/dashboard/qr?ref=' + 'x'.repeat(2400)));
+    const location = new URL(response.headers.get('location')!);
+    expect(location.pathname).toBe('/loyalty/login');
+    expect(location.searchParams.get('next')).toBe('/loyalty/dashboard');
+  });
+
+  it('does not change anonymous login, signup, or feedback access', async () => {
+    for (const path of ['/loyalty/login', '/loyalty/signup', '/feedback']) {
+      expect(redirectTarget(await middleware(request(path)))).toBeNull();
+    }
+  });
+});

@@ -1,5 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { ACCESS_TOKEN_COOKIE, REFRESH_TOKEN_COOKIE } from '@/lib/cookies';
+import { CUSTOMER_TOKEN_COOKIE } from '@/lib/customer-cookies';
+import { safeInternalPath } from '@/lib/safe-redirect';
 
 const API_BASE_URL = process.env.API_BASE_URL ?? 'http://localhost:8787';
 const ACCESS_TOKEN_MAX_AGE = 15 * 60;
@@ -110,6 +112,22 @@ export async function middleware(request: NextRequest) {
     pathname === ROOT_PATH ||
     PUBLIC_INFORMATION_PATHS.has(pathname) ||
     PUBLIC_PATHS.some((path) => pathname.startsWith(path));
+  // Preserve direct customer dashboard deep links for signed-out visitors.
+  // This is only a cookie-presence preflight, NOT a substitute for the
+  // authenticated dashboard layout's server-side session check.
+  // Staff cookies must never establish a customer session.
+  if (
+    (pathname === '/loyalty/dashboard' || pathname.startsWith('/loyalty/dashboard/')) &&
+    !request.cookies.has(CUSTOMER_TOKEN_COOKIE) &&
+    !request.cookies.has('__Host-ff_customer_access') &&
+    !request.cookies.has('__Host-ff_customer_refresh')
+  ) {
+    const original = pathname + request.nextUrl.search;
+    const next = safeInternalPath(original, '/loyalty/dashboard');
+    const login = new URL('/loyalty/login', request.url);
+    login.searchParams.set('next', next);
+    return NextResponse.redirect(login);
+  }
   const isStaffAuthPath = STAFF_AUTH_PATHS.some((path) => pathname.startsWith(path));
   const hasAccessToken = request.cookies.has(ACCESS_TOKEN_COOKIE);
   const hasRefreshToken = request.cookies.has(REFRESH_TOKEN_COOKIE);
