@@ -76,3 +76,24 @@ R3 browser tests and direct QR deep-link safeguards are tracked separately in dr
 **Recovery rule:** This is a forward-only migration. Do not drop the column or overwrite the staging branch automatically; a rollback requiring data restoration must be separately risk-reviewed and authorized. Preserve the backup branch until the owner approves release validation and retention.
 
 No production database, Worker deployment, live identities, feature flags, customer consent, or retention scheduler was modified.
+
+
+## 2026-11-22 controlled staging Chromium smoke acceptance
+
+Read-only Chromium navigation executed through Cloudflare Browser Rendering against the existing staging Web Worker, after the authorized staging database migration. No customer account was created, no SMS/email proof requested, and no session or live identity was modified.
+
+| Check | Observed result |
+| --- | --- |
+| `/loyalty/signup` | HTTP 200, page/form loads |
+| `/loyalty/login/email` | HTTP 200 |
+| `/loyalty/signup/verify` with missing proof | HTTP 200, incomplete/missing-proof guidance shown |
+| Login `next=https://evil.example/steal` | Hidden `next` sanitized to `/loyalty/dashboard` |
+| Login `next=//evil.example/steal` | Hidden `next` sanitized to `/loyalty/dashboard` |
+| Login `next=/loyalty/dashboard/qr` | Hidden `next` preserved |
+| Signed-out direct `/loyalty/dashboard/qr` | Redirected to `/loyalty/login` **without a `next` parameter** |
+
+**Staging deployment drift:** PR #555 (QR deep-link preflight and its tests) was subsequently merged to main, but the currently observed staging Web Worker still exhibited the older signed-out redirect behavior. No staging deploy was authorized or performed during this session. Do not claim the PR #555 deep-link fix is live in staging.
+
+These are **partial read-only browser smoke checks, NOT complete A–H acceptance**. They do not verify signup proof delivery, registration completion, idempotence/replay, rotating session validity and revocation, verified-phone eligibility, legacy upgrade, business QR enrollment, or cross-customer authorization.
+
+**Outstanding operating decisions:** Stage the approved code under explicit deployment authorization; prepare a controlled synthetic mailbox/SMS verification mechanism; run full Chromium acceptance; determine retention cleanup schedule/policy and rate-limit budgets. Production remains untouched and email-auth feature activation there remains off.
