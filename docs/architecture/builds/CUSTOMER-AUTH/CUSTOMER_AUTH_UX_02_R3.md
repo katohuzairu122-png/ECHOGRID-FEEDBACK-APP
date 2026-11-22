@@ -2,7 +2,7 @@
 
 **Status: test foundation only. NOT customer-auth A–H acceptance and NOT deployment-ready.**
 
-This block adds two opt-in Playwright checks: after a customer logs in using email/password with a `next` destination of `/loyalty/dashboard/qr`, the authenticated browser returns to the requested QR screen instead of losing the destination; and a foreign-origin `next` parameter is rejected before credential submission.
+This block adds three opt-in Playwright checks: after a customer logs in using email/password with a `next` destination of `/loyalty/dashboard/qr`, the authenticated browser returns to the requested QR screen instead of losing the destination; a foreign-origin `next` parameter is rejected before credential submission; and unknown-email versus incorrect-password logins produce the same generic denial without issuing customer-session cookies.
 
 ## Activation and isolation
 
