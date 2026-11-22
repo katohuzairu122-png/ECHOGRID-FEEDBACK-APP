@@ -167,6 +167,13 @@ describe('middleware — customer QR deep-link continuity', () => {
     expect(redirectTarget(await middleware(rotating))).toBeNull();
   });
 
+  it('bounds oversized customer deep-link return values before login', async () => {
+    const response = await middleware(request('/loyalty/dashboard/qr?ref=' + 'x'.repeat(2400)));
+    const location = new URL(response.headers.get('location')!);
+    expect(location.pathname).toBe('/loyalty/login');
+    expect(location.searchParams.get('next')).toBe('/loyalty/dashboard');
+  });
+
   it('does not change anonymous login, signup, or feedback access', async () => {
     for (const path of ['/loyalty/login', '/loyalty/signup', '/feedback']) {
       expect(redirectTarget(await middleware(request(path)))).toBeNull();
