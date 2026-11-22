@@ -34,3 +34,19 @@ test('password return login preserves the requested QR destination on an isolate
   expect(cookies.some((cookie) =>
     cookie.name === '__Host-ff_customer_access' && cookie.httpOnly && cookie.secure)).toBe(true);
 });
+
+
+test('email login rejects an external return destination before credentials are submitted', async ({
+  page, baseURL,
+}) => {
+  test.skip(process.env.E2E_CUSTOMER_AUTH_ISOLATED !== '1',
+    'Requires explicit isolated customer-auth acceptance opt-in');
+  const origin = baseURL ? new URL(baseURL) : null;
+  test.skip(!origin || !['localhost', '127.0.0.1'].includes(origin.hostname),
+    'Refuses non-loopback browser targets');
+
+  await page.goto('/loyalty/login/email?next=https%3A%2F%2Fevil.example%2Fsteal');
+  const next = await page.locator('input[name="next"]').inputValue();
+  expect(next).toBe('/loyalty/dashboard');
+  expect(new URL(next, origin!).origin).toBe(origin!.origin);
+});
