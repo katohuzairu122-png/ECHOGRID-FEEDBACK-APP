@@ -50,3 +50,33 @@ test('email login rejects an external return destination before credentials are 
   expect(next).toBe('/loyalty/dashboard');
   expect(new URL(next, origin!).origin).toBe(origin!.origin);
 });
+
+
+test('unknown email and incorrect password receive the same generic response and no customer session', async ({
+  page, context, baseURL,
+}) => {
+  test.skip(process.env.E2E_CUSTOMER_AUTH_ISOLATED !== '1',
+    'Requires explicit isolated customer-auth acceptance opt-in');
+  const origin = baseURL ? new URL(baseURL) : null;
+  test.skip(!origin || !['localhost', '127.0.0.1'].includes(origin.hostname),
+    'Refuses non-loopback browser targets');
+  const existingEmail = process.env.E2E_CUSTOMER_EMAIL ?? '';
+  test.skip(!existingEmail.endsWith('@example.test'),
+    'Requires a synthetic existing customer to test wrong password without guessing identities');
+
+  const errorText = 'The email or password is not correct.';
+  const attempts = [
+    { email: `missing-${crypto.randomUUID()}@example.test`, password: 'incorrect-password-synthetic' },
+    { email: existingEmail, password: `incorrect-${crypto.randomUUID()}` },
+  ];
+  for (const attempt of attempts) {
+    await context.clearCookies();
+    await page.goto('/loyalty/login/email');
+    await page.getByLabel('Email').fill(attempt.email);
+    await page.getByLabel('Password').fill(attempt.password);
+    await page.getByRole('button', { name: 'Sign in' }).click();
+    await expect(page.getByText(errorText)).toBeVisible();
+    const cookies = await context.cookies();
+    expect(cookies.filter(cookie => cookie.name.startsWith('__Host-ff_customer_'))).toHaveLength(0);
+  }
+});
