@@ -54,3 +54,25 @@ Additional read-only cross-provider verification matched the staging API Worker'
 No shared migrations, secret exposure, real customer identity modifications, terms or membership changes, deployment, rate-limit configuration modifications, feature activation, or automatic merge is authorized by this audit.
 
 R3 browser tests and direct QR deep-link safeguards are tracked separately in draft PR #555. That PR's hosted CI is not evidence that opt-in customer A–H browser acceptance ran.
+
+
+## 2026-11-22 authorized staging migration completion
+
+**OWNER AUTHORIZATION:** In the ongoing customer-authentication completion conversation, the owner explicitly granted authorization to proceed with the previously identified staging migration and controlled synthetic acceptance. This authorization did not include production migration or deployment, activating legacy upgrade, or automatically merging PRs.
+
+**Target:** Neon project `echo-grid-staging`, default branch `br-bold-water-aukjlvw3` (Neon display name `production`), database `neondb`. The staging API's Hyperdrive metadata pointed to the matching Neon endpoint before the change. The separate `echo-grid-production` project was **not** modified.
+
+1. **Recovery point created:** Neon branch `br-falling-hat-auq20iqi` named `backup-pre-customer-auth-0087-2026-11-22`, parent `br-bold-water-aukjlvw3`; the recovery branch was retained and not used as a test target.
+2. **Rehearsal:** Applied the two canonical `0087_customer_pending_registration.sql` DDL operations plus Drizzle ledger entry to a disposable migration branch. Verified column type, CHECK constraint, previous ledger entry, and new journal entry; no errors.
+3. **Applied to staging:** Neon prepared migration `c86c8fac-1d83-4308-bb9d-4d7f0d1bfcf8` returned `applied: true`, and its temporary branch was deleted by Neon.
+4. **Post-apply catalog verification:** `public.customer_auth_challenges.registration_sealed_data` exists with type `text`; `customer_auth_challenges_registration_sealed_check` exists.
+5. **Drizzle migration ledger:** New row `id=88`, `created_at=1795250000000`, `hash=fab77c0dbab7628a314ac8b82187aa8568e2d2abb3e5c8cafabfaa0cfc1643dd`. Previous row `id=87`, timestamp `1795154649004` preserved.
+6. **Readiness aggregates (read-only):** `customer_credentials` rows with null `legacy_tokens_invalid_before`: **0**. Verified login email credentials: **3**. No identity or credential rows were inspected individually or modified.
+
+**R4-F2 STATUS: REMEDIATED IN STAGING — schema/journal verified.** The earlier evidence in this document records the pre-migration state and must not be mistaken for the current state.
+
+**Outstanding acceptance:** Successful staging single-pass registration, mail proof delivery and consumption, rotating sessions, negative auth, phone verification, legacy upgrade, QR business continuity, and cross-customer denial have **not** been executed or certified by this migration operation. Staging `CUSTOMER_EMAIL_AUTH_ENABLED` was already `true`, and no worker configuration changed. `CUSTOMER_LEGACY_UPGRADE_ENABLED` remains absent. Existing candidate R3 tests are opt-in and skipped without an authorized test stack and fixtures.
+
+**Recovery rule:** This is a forward-only migration. Do not drop the column or overwrite the staging branch automatically; a rollback requiring data restoration must be separately risk-reviewed and authorized. Preserve the backup branch until the owner approves release validation and retention.
+
+No production database, Worker deployment, live identities, feature flags, customer consent, or retention scheduler was modified.
