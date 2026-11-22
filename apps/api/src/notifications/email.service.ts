@@ -44,6 +44,14 @@ export interface ResendCredentials {
   fromAddress: string;
 }
 
+/** Safe provider status for operational diagnostics; never retain response body or recipient. */
+export class EmailProviderHttpError extends Error {
+  constructor(readonly status: number) {
+    super(`Email delivery failed with status ${status}`);
+    this.name = 'EmailProviderHttpError';
+  }
+}
+
 export class ResendEmailService implements EmailService {
   constructor(private readonly credentials: ResendCredentials) {}
 
@@ -66,7 +74,7 @@ export class ResendEmailService implements EmailService {
       // Response body isn't logged verbatim -- same caution as
       // TwilioSmsService/AnthropicSummaryGenerator, in case it ever echoes
       // back request content (a recipient's email address, message body).
-      throw new Error(`Email delivery failed with status ${response.status}`);
+      throw new EmailProviderHttpError(response.status);
     }
   }
 }
