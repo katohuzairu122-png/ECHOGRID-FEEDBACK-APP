@@ -55,7 +55,10 @@ ENVIRONMENT = "production"
 # new tokens and for tokens already issued.
 PLATFORM_IMPERSONATION_ENABLED = "true"
 # PROD-AUTH-02: approved production password/session policies.
-# CUSTOMER_EMAIL_AUTH_ENABLED deliberately absent: activation requires a separate authorization.
+# PROD-AUTH-04: owner-authorized production customer email registration.
+# Rollback: set to "false" on BOTH production Workers in a protected release.
+# Legacy credential upgrade remains off.
+CUSTOMER_EMAIL_AUTH_ENABLED = "true"
 CUSTOMER_PASSWORD_MIN_LENGTH = "8"
 CUSTOMER_SESSION_ACCESS_TTL_SECONDS = "900"
 CUSTOMER_SESSION_REFRESH_TTL_SECONDS = "2592000"
