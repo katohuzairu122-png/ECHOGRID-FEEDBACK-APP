@@ -80,3 +80,25 @@ test('unknown email and incorrect password receive the same generic response and
     expect(cookies.filter(cookie => cookie.name.startsWith('__Host-ff_customer_'))).toHaveLength(0);
   }
 });
+
+
+test('email login rejects protocol-relative and encoded backslash return-target smuggling', async ({
+  page, baseURL,
+}) => {
+  test.skip(process.env.E2E_CUSTOMER_AUTH_ISOLATED !== '1',
+    'Requires explicit isolated customer-auth acceptance opt-in');
+  const origin = baseURL ? new URL(baseURL) : null;
+  test.skip(!origin || !['localhost', '127.0.0.1'].includes(origin.hostname),
+    'Refuses non-loopback browser targets');
+
+  const unsafeTargets = [
+    '//evil.example/steal',
+    '/\\evil.example/steal',
+    '/%5Cevil.example/steal',
+    '/%2F%2Fevil.example/steal',
+  ];
+  for (const target of unsafeTargets) {
+    await page.goto(`/loyalty/login/email?next=${encodeURIComponent(target)}`);
+    await expect(page.locator('input[name="next"]')).toHaveValue('/loyalty/dashboard');
+  }
+});
