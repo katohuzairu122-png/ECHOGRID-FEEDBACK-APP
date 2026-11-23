@@ -210,7 +210,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
       });
     });
 
-    it('restores the paired state and allows pending evidence to earn again', async () => {
+    it('clears moderation without earning, then requires fresh customer Restore consent before pending evidence earns', async () => {
       const state = new CommunityPlatformStateService(appDbOf(db));
       const restored = await state.restore(
         customerId,
@@ -219,10 +219,18 @@ describe.skipIf(!process.env.DATABASE_URL)(
       );
 
       expect(restored.changed).toBe(true);
-      expect(restored.membership.status).toBe('active');
+      expect(restored.membership.status).toBe('inactive');
       expect(restored.membership.suspendedAt).toBeNull();
-      expect(restored.account.status).toBe('active');
+      expect(restored.account.status).toBe('closed');
       expect(restored.account.pointsBalance).toBe(50);
+
+      const withheld = await new CommunityPointAwardService(appDbOf(db)).reevaluatePendingMembership(customerId);
+      expect(withheld.every((award) => !award.awarded)).toBe(true);
+      expect((await createRepositories(db).communityPointAccounts.findById(accountId))?.pointsBalance).toBe(50);
+      const activated = await new CommunityMembershipService(appDbOf(db)).join(customerId, 'community-policy-v1');
+      expect(activated.membership.status).toBe('active');
+      const evidence = await createRepositories(db).auditLog.listForEntity('community_membership', membershipId);
+      expect(evidence.some((row) => row.metadata?.operation === 'restore' && row.metadata?.consentAccepted === true)).toBe(true);
 
       const awards =
         await new CommunityPointAwardService(appDbOf(db)).reevaluatePendingMembership(

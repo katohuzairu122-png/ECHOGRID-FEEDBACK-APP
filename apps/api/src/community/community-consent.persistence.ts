@@ -53,7 +53,7 @@ export async function validCommunityConsent(db: Db, customerId: string, membersh
   if (!event || event.actorUserId !== null || event.businessId !== null || event.entityType !== 'community_membership' || evidence.customerId !== customerId || evidence.consentGrantId !== grant.id ||
     evidence.publicationId !== terms.publicationId || evidence.manifestHash !== terms.manifestHash || evidence.version !== terms.version ||
     evidence.hashAlgorithm !== terms.hashAlgorithm || evidence.acceptedAt !== grant.grantedAt.toISOString() ||
-    evidence.artifactHash !== grant.metadata?.artifactHash || evidence.locale !== grant.metadata?.locale || evidence.consentAccepted !== true || !['join', 'rejoin'].includes(String(evidence.operation))) return undefined;
+    evidence.artifactHash !== grant.metadata?.artifactHash || evidence.locale !== grant.metadata?.locale || evidence.consentAccepted !== true || !['join', 'rejoin', 'restore'].includes(String(evidence.operation))) return undefined;
   return grant;
 }
 

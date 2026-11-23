@@ -523,6 +523,13 @@ describe.skipIf(!process.env.DATABASE_URL)('NETWORK-05 real HTTP-to-Postgres lif
     } finally { await client.query("update users set platform_role='admin' where id=$1", [moderatorA]); }
     for (const token of [cashierToken, impersonation.token]) expect((await request(`/api/v1/platform/community-points/${f.id}/restore`, token, 'POST', { reason: 'Not allowed.' })).status).toBe(403);
     expect((await request(`/api/v1/platform/community-points/${f.id}/restore`, adminToken, 'POST', { reason: 'Synthetic clearance.' })).status).toBe(200);
+    expect((await f.service.getStatus(f.id)).membership?.status).toBe('inactive');
+    const restoreAcceptance = await syntheticCommunityAcceptance(f.service, f.id, input.expectedTermsVersion);
+    expect(restoreAcceptance.operation).toBe('restore');
+    expect((await request('/api/v1/community/me/join', f.token, 'POST', { ...restoreAcceptance, consentAccepted: false })).status).toBe(400);
+    expect((await f.service.getStatus(f.id)).membership?.status).toBe('inactive');
+    expect((await request('/api/v1/community/me/join', f.token, 'POST', restoreAcceptance)).status).toBe(200);
+    expect((await f.service.getStatus(f.id)).membership?.status).toBe('active');
     expect((await request('/api/v1/community/me/leave', f.token, 'POST')).status).toBe(200);
     expect((await request('/api/v1/community/me/join', f.token, 'POST', input)).status).toBe(409);
   });
@@ -1800,14 +1807,14 @@ describe.skipIf(!process.env.DATABASE_URL)('NETWORK-05 real HTTP-to-Postgres lif
   );
 
   it.skipIf(!browserEnabled)(
-    'browser accepts synthetic current terms, leaves and rejoins explicitly in four locales (NETWORK-15-T2)',
+    'browser accepts synthetic terms, joins, rejoins and freshly restores in four locales (NETWORK-15-T2)',
     async () => withModerationBrowser(moderatorB, async (page, context, webUrl, browserExpect) => {
       for (const locale of ['en', 'fr', 'es', 'ar'] as const) for (const width of [375, 1280]) {
         const f = await membershipFixture();
         const publication = await publishSyntheticCommunityTerms('network15t2-browser-synthetic');
         const copy = (requireWeb(`./messages/${locale}/loyalty.json`) as { customer: { community: {
           membership: { status: { absent: string; active: string; left: string; inactive: string } };
-          selfService: { join: string; rejoin: string; leave: string; confirmTitle: string; confirmLeave: string; acceptTerms: string; verifyPhone: string; retry: string; joinErrors: { stale: string } };
+          selfService: { join: string; rejoin: string; leave: string; confirmTitle: string; confirmLeave: string; acceptTerms: string; verifyPhone: string; retry: string; restore: string; joinErrors: { stale: string } };
         } } }).customer.community;
         await context.clearCookies(); await context.addCookies([{ name: 'ff_customer_token', value: f.token, url: webUrl, httpOnly: true }, { name: 'ff_locale', value: locale, url: webUrl }]);
         await page.setViewportSize({ width, height: 900 });
@@ -1848,6 +1855,26 @@ describe.skipIf(!process.env.DATABASE_URL)('NETWORK-05 real HTTP-to-Postgres lif
         await controls.getByRole('button', { name: copy.selfService.rejoin, exact: true }).click();
         await browserExpect(page.getByTestId('membership-status')).toHaveText(copy.membership.status.active);
         const after = await f.service.getStatus(f.id); expect(after.account?.id).toBe(account.id); expect(after.account?.pointsBalance).toBe(account.pointsBalance);
+        const actorToken = await signAccessToken(moderatorA, secret);
+        const historical = (await client.query("select id,metadata from audit_log where entity_id=$1 and metadata->>'consentAccepted'='true' order by id", [after.membership!.id])).rows;
+        expect((await request(`/api/v1/platform/community-points/${f.id}/suspend`, actorToken, 'POST', { reason: 'Synthetic browser investigation.' })).status).toBe(200);
+        expect((await request(`/api/v1/platform/community-points/${f.id}/restore`, actorToken, 'POST', { reason: 'Synthetic browser clearance.' })).status).toBe(200);
+        expect((await f.service.getStatus(f.id)).membership?.status).toBe('inactive');
+        await page.reload();
+        await browserExpect(page.getByTestId('membership-status')).toHaveText(copy.membership.status.inactive);
+        await browserExpect(checkbox).not.toBeChecked();
+        const restoreButton = controls.getByRole('button', { name: copy.selfService.restore, exact: true });
+        await browserExpect(restoreButton).toBeDisabled();
+        const declined = await membershipNonEffects(); await page.reload();
+        expect(await membershipNonEffects()).toEqual(declined);
+        expect((await request('/api/v1/community/me/join', f.token, 'POST', { operation: 'restore' })).status).toBe(400);
+        expect((await f.service.getStatus(f.id)).membership?.status).toBe('inactive');
+        await checkbox.focus(); await checkbox.press('Space'); await restoreButton.click();
+        await browserExpect(page.getByTestId('membership-status')).toHaveText(copy.membership.status.active);
+        const restored = await f.service.getStatus(f.id);
+        expect(restored.account?.id).toBe(account.id); expect(restored.account?.pointsBalance).toBe(account.pointsBalance);
+        expect((await client.query("select count(*)::int n from audit_log where entity_id=$1 and metadata->>'operation'='restore' and metadata->>'consentAccepted'='true'", [after.membership!.id])).rows[0].n).toBe(1);
+        expect((await client.query("select id,metadata from audit_log where entity_id=$1 and metadata->>'consentAccepted'='true' and metadata->>'operation'<>'restore' order by id", [after.membership!.id])).rows).toEqual(historical);
         expect(await page.locator('html').evaluate((el: { scrollWidth: number }) => el.scrollWidth)).toBeLessThanOrEqual(width);
         await browserExpect(page.locator('html')).toHaveAttribute('dir', locale === 'ar' ? 'rtl' : 'ltr');
       }

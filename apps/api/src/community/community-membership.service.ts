@@ -30,7 +30,7 @@ export class CommunityMembershipService {
         await tx.execute(sql`select id from ${customers} where ${customers.id}=${customerId} for update`);
         const membership = await createRepositories(tx).communityMemberships.findByCustomerId(customerId);
         const previous = await latestCommunityTransition(tx, membership?.id);
-        return { terms, transitionId: previous?.id ?? null, operation: membership ? 'rejoin' as const : 'join' as const };
+        return { terms, transitionId: previous?.id ?? null, operation: membership?.status === 'inactive' ? 'restore' as const : membership ? 'rejoin' as const : 'join' as const };
       });
     } catch (error) {
       if (error instanceof AppError && error.code === 'COMMUNITY_TERMS_UNAVAILABLE') return null;
@@ -57,10 +57,10 @@ export class CommunityMembershipService {
       const terms = await databaseTermsAuthority(tx).resolve(locale || 'en');
       const previous = await latestCommunityTransition(tx, membership?.id);
       const basis = previous?.id ?? null;
-      const operation = membership ? 'rejoin' as const : 'join' as const;
+      const operation = membership?.status === 'inactive' ? 'restore' as const : membership ? 'rejoin' as const : 'join' as const;
       const currentGrant = membership?.status === 'active' ? await validCommunityConsent(tx, customerId, membership.id, terms) : undefined;
       const expectedBasis = currentGrant ? (currentGrant.metadata?.previousTransitionId as string | null) : basis;
-      const expectedOperation = currentGrant ? currentGrant.metadata?.operation as 'join' | 'rejoin' : operation;
+      const expectedOperation = currentGrant ? currentGrant.metadata?.operation as 'join' | 'rejoin' | 'restore' : operation;
       const input = validateCommunityTermsAcceptance(raw, terms, { operation: expectedOperation, transitionId: expectedBasis });
       const key = await communityRequestKey(customerId, input.idempotencyKey);
       const fingerprint = await hashCommunityTermsContent(JSON.stringify([input.operation, terms.publicationId, terms.manifestHash, terms.contentHash, terms.locale, input.expectedTransitionId]));

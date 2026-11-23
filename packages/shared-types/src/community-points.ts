@@ -63,7 +63,7 @@ export type CommunityPointLedgerQuery = z.infer<
 >;
 
 export const joinCommunitySchema = z.object({
-  operation: z.enum(['join', 'rejoin']),
+  operation: z.enum(['join', 'rejoin', 'restore']),
   consentAccepted: z.literal(true),
   expectedPublicationId: z.uuid(),
   expectedTermsVersion: z.string().min(1).max(100),
@@ -81,7 +81,7 @@ export const communityTermsOfferSchema = z.object({
     locale: z.enum(['en', 'fr', 'es', 'ar']), content: z.string().min(1).max(100_000),
     contentHash: z.string().regex(/^[a-f0-9]{64}$/), manifestHash: z.string().regex(/^[a-f0-9]{64}$/), hashAlgorithm: z.literal('sha256-utf8'),
   }).strict(),
-  transitionId: z.uuid().nullable(), operation: z.enum(['join', 'rejoin']),
+  transitionId: z.uuid().nullable(), operation: z.enum(['join', 'rejoin', 'restore']),
 }).strict();
 export type CommunityTermsOffer = z.infer<typeof communityTermsOfferSchema>;
 

@@ -96,9 +96,85 @@ describe.skipIf(!url)('NETWORK-15-T2 consent and D1 runtime (PostgreSQL)', () =>
     const role=`t2_reader_${crypto.randomUUID().replaceAll('-','')}`; const c=await opened(); await q(`create role ${role} nologin nosuperuser nobypassrls`); await q(`grant usage on schema public to ${role}`); await q(`grant select on community_terms_current,community_terms_publications to ${role}`);
     try{await c.query(`set role ${role}`); await expect(c.query('update community_terms_current set publication_id=null')).rejects.toMatchObject({code:'42501'}); await expect(c.query('delete from community_terms_publications')).rejects.toMatchObject({code:'42501'});}finally{await c.query('reset role'); await q(`drop owned by ${role}`); await q(`drop role ${role}`);}
   });
+  it('D1-FRESH-01 current prior consent cannot silently activate platform Restore', async () => {
+    const id = await customer(); const first = await service.join(id, await input(id));
+    await platform.suspend(id, { reason: 'Synthetic moderation.' }, audit());
+    const cleared = await platform.restore(id, { reason: 'Synthetic clearance.' }, audit());
+    expect(cleared.membership.status).toBe('inactive');
+    expect(cleared.account.status).toBe('closed');
+    expect((await q('select status from consent_grants where customer_id=$1', [id]))[0].status).toBe('revoked');
+    const fresh = await input(id, false); expect(fresh.operation).toBe('restore');
+    expect(fresh.expectedTransitionId).not.toBe(first.consent.transitionId);
+    const restored = await service.join(id, fresh);
+    expect(restored.membership.status).toBe('active');
+    expect(restored.consent.transitionId).not.toBe(first.consent.transitionId);
+  });
   it('RESTORE-01/07 needs current consent and authoritative phone', async () => {
     const id=await customer(); await service.join(id,await input(id)); await platform.suspend(id,{reason:'Synthetic moderation.'},audit()); await q('update customers set phone_verified_at=null where id=$1',[id]);
-    await expect(platform.restore(id,{reason:'Synthetic clearance.'},audit())).rejects.toMatchObject({code:'PHONE_VERIFICATION_REQUIRED'}); await q('update customers set phone_verified_at=now() where id=$1',[id]); expect((await platform.restore(id,{reason:'Synthetic clearance.'},audit())).membership.status).toBe('active');
+    await expect(platform.restore(id,{reason:'Synthetic clearance.'},audit())).rejects.toMatchObject({code:'PHONE_VERIFICATION_REQUIRED'}); await q('update customers set phone_verified_at=now() where id=$1',[id]); expect((await platform.restore(id,{reason:'Synthetic clearance.'},audit())).membership.status).toBe('inactive');
+    expect((await service.join(id,await input(id,false))).membership.status).toBe('active');
+  });
+  it('D1-FRESH-02 concurrent clearance and six explicit restores record one transition each', async () => {
+    const id=await customer(); const first=await service.join(id,await input(id));
+    await platform.suspend(id,{reason:'Synthetic moderation.'},audit());
+    const clients=await Promise.all(Array.from({length:6},()=>opened()));
+    const cleared=await Promise.all(clients.map(c=>new CommunityPlatformStateService(buildDb(c)).restore(id,{reason:'Synthetic clearance.'},audit())));
+    expect(cleared.filter(r=>r.changed)).toHaveLength(1); expect(cleared.every(r=>r.membership.status==='inactive')).toBe(true);
+    const raw=await input(id,false); const restored=await Promise.all(clients.map(c=>new CommunityMembershipService(buildDb(c)).join(id,raw)));
+    expect(restored.filter(r=>r.reactivated)).toHaveLength(1);
+    expect(new Set(restored.map(r=>r.consent.transitionId)).size).toBe(1);
+    expect(restored[0]!.membership.id).toBe(first.membership.id); expect(restored[0]!.account.id).toBe(first.account.id);
+    expect(await counts(id)).toEqual([1,1,2,3]);
+    expect((await q("select count(*)::int n from consent_grants where customer_id=$1 and status='active'",[id]))[0].n).toBe(1);
+  });
+  it.each(['audit_log','consent_grants','community_memberships'])('D1-FRESH-03 %s failure rolls back fresh Restore and evidence', async (table) => {
+    const id=await customer(); await service.join(id,await input(id)); await platform.suspend(id,{reason:'Synthetic moderation.'},audit());
+    await platform.restore(id,{reason:'Synthetic clearance.'},audit()); const raw=await input(id,false); const before=await counts(id);
+    const name=`d1_failure_${crypto.randomUUID().replaceAll('-','')}`;
+    const condition=table==='audit_log'?`NEW.metadata->>'customerId'='${id}' AND NEW.metadata->>'operation'='restore'`:`NEW.customer_id='${id}'::uuid`;
+    await q(`create function ${name}() returns trigger language plpgsql as $$ begin if ${condition} then raise exception 'SYNTHETIC_RESTORE_FAILURE'; end if; return NEW; end $$`);
+    await q(`create trigger ${name} before ${table==='community_memberships'?'update':'insert'} on ${table} for each row execute function ${name}()`);
+    try {await expect(service.join(id,raw)).rejects.toThrow(); expect(await counts(id)).toEqual(before);
+      const state=await service.getStatus(id); expect(state.membership?.status).toBe('inactive'); expect(state.account?.status).toBe('closed');
+      expect((await q("select count(*)::int n from consent_grants where customer_id=$1 and status='active'",[id]))[0].n).toBe(0);
+    } finally {await q(`drop trigger ${name} on ${table}`); await q(`drop function ${name}()`);}
+    expect((await service.join(id,raw)).membership.status).toBe('active');
+  });
+  it('D1-FRESH-04 declining or replaying a prior restoration cannot reactivate', async () => {
+    const id=await customer(); const joinedInput=await input(id); await service.join(id,joinedInput);
+    await platform.suspend(id,{reason:'Synthetic moderation.'},audit()); await platform.restore(id,{reason:'Synthetic clearance.'},audit());
+    const raw=await input(id,false); const before=await counts(id);
+    await expect(service.join(id,{...raw,consentAccepted:false})).rejects.toMatchObject({code:'COMMUNITY_CONSENT_REQUIRED'});
+    await expect(service.join(id,joinedInput)).rejects.toMatchObject({code:'COMMUNITY_ACCEPTANCE_STALE'}); expect(await counts(id)).toEqual(before);
+    await platform.suspend(id,{reason:'Second investigation.'},audit()); await platform.restore(id,{reason:'Second clearance.'},audit());
+    await expect(service.join(id,raw)).rejects.toMatchObject({code:'COMMUNITY_ACCEPTANCE_STALE'});
+    expect((await service.getStatus(id)).membership?.status).toBe('inactive');
+    expect((await service.join(id,await input(id,false))).membership.status).toBe('active');
+  });
+  it('D1-FRESH-05 explicit Restore racing Leave always preserves the successful Leave', async () => {
+    const id=await customer(); await service.join(id,await input(id)); await platform.suspend(id,{reason:'Synthetic moderation.'},audit());
+    await platform.restore(id,{reason:'Synthetic clearance.'},audit()); const raw=await input(id,false); const c=await opened();
+    const result=await Promise.allSettled([service.join(id,raw),new CommunityMembershipService(buildDb(c)).leave(id)]);
+    expect(result[1]!.status).toBe('fulfilled'); if(result[0]!.status==='rejected')expect(result[0]!.reason).toMatchObject({code:'COMMUNITY_ACCEPTANCE_STALE'});
+    const state=await service.getStatus(id); expect(state.membership?.status).toBe('left'); expect(state.account?.status).toBe('closed');
+    expect((await q("select count(*)::int n from consent_grants where customer_id=$1 and status='active'",[id]))[0].n).toBe(0);
+  });
+  it('D1-FRESH-06 current terms and customer identity are revalidated for Restore', async () => {
+    const id=await customer(); await service.join(id,await input(id)); await platform.suspend(id,{reason:'Synthetic moderation.'},audit());
+    await platform.restore(id,{reason:'Synthetic clearance.'},audit()); const raw=await input(id,false); const other=await customer();
+    await expect(service.join(other,raw)).rejects.toMatchObject({code:'COMMUNITY_ACCEPTANCE_STALE'}); expect(await counts(other)).toEqual([0,0,0,0]);
+    await q('update customers set phone_verified_at=null where id=$1',[id]);
+    await expect(service.join(id,raw)).rejects.toMatchObject({code:'PHONE_VERIFICATION_REQUIRED'});
+    await q('update customers set phone_verified_at=now() where id=$1',[id]); await terms();
+    await expect(service.join(id,raw)).rejects.toMatchObject({code:'COMMUNITY_ACCEPTANCE_STALE'});
+    expect((await service.getStatus(id)).membership?.status).toBe('inactive');
+  });
+  it('D1-FRESH-07 clearance audit failure rolls back status and prior consent revocation', async () => {
+    const id=await customer(); await service.join(id,await input(id)); await platform.suspend(id,{reason:'Synthetic moderation.'},audit()); const before=await counts(id);
+    await expect(platform.restore(id,{reason:'Synthetic clearance.'},{...audit(),actorUserId:crypto.randomUUID()})).rejects.toThrow();
+    expect(await counts(id)).toEqual(before); const state=await service.getStatus(id);
+    expect(state.membership?.status).toBe('suspended'); expect(state.account?.status).toBe('suspended');
+    expect((await q("select status from consent_grants where customer_id=$1",[id]))[0].status).toBe('active');
   });
   it('RESTORE-02 stale consent clears moderation without activation; fresh acceptance works', async () => {
     const id=await customer(); await service.join(id,await input(id)); await platform.suspend(id,{reason:'Synthetic moderation.'},audit()); await terms(); const cleared=await platform.restore(id,{reason:'Synthetic clearance.'},audit());

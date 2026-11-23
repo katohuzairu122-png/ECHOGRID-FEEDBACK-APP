@@ -145,11 +145,11 @@ describe('NETWORK-15-T2 independent terms foundation (NOT activation enforcement
     const { request, terms } = await acceptance();
     expect(() => validateCommunityTermsAcceptance({ ...request, idempotencyKey }, terms, basis)).toThrow('Explicit current terms acceptance is required.');
   });
-  it('requires a fresh server lifecycle basis for Rejoin', async () => {
+  it.each(['rejoin', 'restore'] as const)('requires a fresh server lifecycle basis for %s', async (operation) => {
     const { request, terms } = await acceptance(); const transitionId = randomUUID();
-    const rejoin = { ...request, operation: 'rejoin', expectedTransitionId: transitionId };
-    expect(validateCommunityTermsAcceptance(rejoin, terms, { operation: 'rejoin', transitionId })).toEqual(rejoin);
-    expect(() => validateCommunityTermsAcceptance(rejoin, terms, { operation: 'rejoin', transitionId: randomUUID() })).toThrow('Community terms or membership state changed. Review and retry.');
+    const rejoin = { ...request, operation, expectedTransitionId: transitionId };
+    expect(validateCommunityTermsAcceptance(rejoin, terms, { operation, transitionId })).toEqual(rejoin);
+    expect(() => validateCommunityTermsAcceptance(rejoin, terms, { operation, transitionId: randomUUID() })).toThrow('Community terms or membership state changed. Review and retry.');
   });
   it('ships an empty registry without the unapproved legal candidate', () => {
     const migration = readFileSync(resolve('drizzle/0088_community_membership_consent.sql'), 'utf8');

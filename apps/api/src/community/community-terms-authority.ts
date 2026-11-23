@@ -117,7 +117,7 @@ export class CommunityTermsAuthority {
 }
 
 const acceptanceSchema = z.object({
-  operation: z.enum(['join', 'rejoin']),
+  operation: z.enum(['join', 'rejoin', 'restore']),
   consentAccepted: z.literal(true),
   expectedPublicationId: z.uuid(),
   expectedTermsVersion: z.string().min(1).max(100),
@@ -135,7 +135,7 @@ const acceptanceSchema = z.object({
 export function validateCommunityTermsAcceptance(
   raw: unknown,
   terms: Readonly<CommunityTermsView>,
-  basis: { operation: 'join' | 'rejoin'; transitionId: string | null },
+  basis: { operation: 'join' | 'rejoin' | 'restore'; transitionId: string | null },
 ) {
   const parsed = acceptanceSchema.safeParse(raw);
   if (!parsed.success) {

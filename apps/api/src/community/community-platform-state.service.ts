@@ -4,9 +4,9 @@ import type {
 } from '@echo-grid-feedback/shared-types';
 import type { Database, Db } from '../db/client';
 import { customers, consentGrants } from '../db/schema';
-import { and, desc, eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { assertVerifiedPhoneFor } from '../lib/customer-verification';
-import { databaseTermsAuthority, lockCommunityTerms, validCommunityConsent } from './community-consent.persistence';
+import { COMMUNITY_CONSENT_ACTION, latestCommunityTransition, lockCommunityTerms } from './community-consent.persistence';
 import {
   createRepositories,
   type CommunityMembership,
@@ -122,19 +122,10 @@ export class CommunityPlatformStateService {
       }
 
       const repos = createRepositories(tx);
-      const [projection] = await tx.select().from(consentGrants).where(and(eq(consentGrants.customerId, customerId), eq(consentGrants.purpose, 'community_membership'), eq(consentGrants.status, 'active'))).orderBy(desc(consentGrants.grantedAt)).limit(1);
-      const locale = typeof projection?.metadata?.locale === 'string' ? projection.metadata.locale : 'en';
-      let valid = false;
-      try {
-        // A savepoint lets an unavailable/missing registry fail closed without
-        // poisoning the transaction that clears an authorized suspension.
-        const terms = await tx.transaction((nested) => databaseTermsAuthority(nested).resolve(locale));
-        valid = Boolean(await validCommunityConsent(tx, customerId, state.membership.id, terms));
-      } catch (error) {
-        if (!(error instanceof AppError) || error.code !== 'COMMUNITY_TERMS_UNAVAILABLE') throw error;
-      }
-      const targetMembership = valid ? 'active' as const : 'inactive' as const;
-      const targetAccount = valid ? 'active' as const : 'closed' as const;
+      // D1: moderation clearance never reuses an earlier acceptance. Only the
+      // customer's explicit restore operation may activate this paired state.
+      const targetMembership = 'inactive' as const;
+      const targetAccount = 'closed' as const;
       const membership = await repos.communityMemberships.updateStatus(customerId, {
         status: targetMembership,
         suspendedAt: null,
@@ -152,6 +143,19 @@ export class CommunityPlatformStateService {
         );
       }
 
+      const previous = await latestCommunityTransition(tx, state.membership.id);
+      const transitionId = crypto.randomUUID();
+      const clock = await tx.execute<{ revoked_at: string }>(sql`select clock_timestamp()::text as revoked_at`);
+      await tx.update(consentGrants).set({ status: 'revoked', revokedAt: new Date(clock.rows[0]!.revoked_at) })
+        .where(and(eq(consentGrants.customerId, customerId), eq(consentGrants.purpose, 'community_membership'), eq(consentGrants.status, 'active')));
+      // An immutable lifecycle barrier invalidates every pre-clearance form,
+      // including an earlier restore offer after a second suspension/clearance.
+      await repos.auditLog.recordReturningId({ id: transitionId, businessId: null, actorUserId: audit.actorUserId,
+        action: COMMUNITY_CONSENT_ACTION, entityType: 'community_membership', entityId: membership.id,
+        metadata: { customerId, operation: 'moderation_clearance', consentAccepted: false,
+          sequence: Number(previous?.metadata?.sequence ?? 0) + 1, previousTransitionId: previous?.id ?? null,
+          auditCorrelationId: transitionId, membershipFrom: 'suspended', membershipTo: 'inactive' },
+        ipAddress: null, userAgent: null });
       await repos.auditLog.record({
         businessId: null,
         actorUserId: audit.actorUserId,
