@@ -36,6 +36,18 @@ export function SignupVerifyForm({ next }: { next: string; minLength?: number | 
     setChallenge(readChallengeFromHash(window.location.hash));
     window.history.replaceState(null, '', window.location.pathname + window.location.search);
   }, []);
+  // Same-document navigation to another email link changes only the fragment.
+  // Next.js may reuse this component, so the initial mount effect will not rerun.
+  // Accept a newly opened proof without retaining the fragment in browser history.
+  useEffect(() => {
+    const onHashChange = () => {
+      setChallenge(readChallengeFromHash(window.location.hash));
+      window.history.replaceState(null, '', window.location.pathname + window.location.search);
+    };
+    window.addEventListener('hashchange', onHashChange);
+    return () => window.removeEventListener('hashchange', onHashChange);
+  }, []);
+
   useEffect(() => {
     if (state.success && state.next) window.location.assign(state.next);
   }, [state]);
