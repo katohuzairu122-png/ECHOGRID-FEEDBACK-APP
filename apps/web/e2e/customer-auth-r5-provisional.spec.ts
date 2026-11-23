@@ -95,23 +95,37 @@ test('A/H — customer enters account details once; registration form remains us
 
   await page.getByLabel('Confirm password').fill(password);
   const submissionEvents: string[] = [];
+  const formState = await page.locator('form').evaluate((element) => {
+    const form = element as HTMLFormElement;
+    const submit = form.querySelector<HTMLButtonElement>('button[type="submit"]');
+    const invalidFields = Array.from(form.elements)
+      .filter((field): field is HTMLInputElement => field instanceof HTMLInputElement && !field.validity.valid)
+      .map((field) => ({ name: field.name, flags: Object.keys(field.validity).filter((key) => field.validity[key as keyof ValidityState] === true) }));
+    return { valid: form.checkValidity(), submitDisabled: submit?.disabled ?? null, invalidFields };
+  });
   page.on('request', (request) => {
-    if (request.method() === 'POST') submissionEvents.push(`request ${new URL(request.url()).pathname}`);
+    const pathname = new URL(request.url()).pathname;
+    if (pathname === '/loyalty/signup' || pathname.startsWith('/_next/')) {
+      submissionEvents.push(`request ${request.method()} ${pathname}`);
+    }
   });
   page.on('response', (response) => {
-    if (response.request().method() === 'POST') {
-      submissionEvents.push(`response ${new URL(response.url()).pathname} ${response.status()}`);
+    const pathname = new URL(response.url()).pathname;
+    if (pathname === '/loyalty/signup' || pathname.startsWith('/_next/')) {
+      submissionEvents.push(`response ${response.request().method()} ${pathname} ${response.status()}`);
     }
   });
   page.on('requestfailed', (request) => {
-    if (request.method() === 'POST') {
-      submissionEvents.push(`failed ${new URL(request.url()).pathname} ${request.failure()?.errorText ?? 'unknown'}`);
+    const pathname = new URL(request.url()).pathname;
+    if (pathname === '/loyalty/signup' || pathname.startsWith('/_next/')) {
+      submissionEvents.push(`failed ${request.method()} ${pathname} ${request.failure()?.errorText ?? 'unknown'}`);
     }
   });
   await submitRegistration(page);
   try {
     await expectGenericConfirmation(page, 'The passwords do not match.');
   } catch (error) {
+    console.info('customer_auth_r5_signup_form_state', JSON.stringify(formState));
     console.info('customer_auth_r5_signup_browser_events', submissionEvents.join(' | ') || 'none');
     throw error;
   }
