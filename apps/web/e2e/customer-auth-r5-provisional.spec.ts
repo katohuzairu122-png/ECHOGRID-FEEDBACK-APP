@@ -94,8 +94,27 @@ test('A/H — customer enters account details once; registration form remains us
   await expect(page.getByText('The passwords do not match.', { exact: true })).toBeVisible();
 
   await page.getByLabel('Confirm password').fill(password);
+  const submissionEvents: string[] = [];
+  page.on('request', (request) => {
+    if (request.method() === 'POST') submissionEvents.push(`request ${new URL(request.url()).pathname}`);
+  });
+  page.on('response', (response) => {
+    if (response.request().method() === 'POST') {
+      submissionEvents.push(`response ${new URL(response.url()).pathname} ${response.status()}`);
+    }
+  });
+  page.on('requestfailed', (request) => {
+    if (request.method() === 'POST') {
+      submissionEvents.push(`failed ${new URL(request.url()).pathname} ${request.failure()?.errorText ?? 'unknown'}`);
+    }
+  });
   await submitRegistration(page);
-  await expectGenericConfirmation(page, 'The passwords do not match.');
+  try {
+    await expectGenericConfirmation(page, 'The passwords do not match.');
+  } catch (error) {
+    console.info('customer_auth_r5_signup_browser_events', submissionEvents.join(' | ') || 'none');
+    throw error;
+  }
   expect(new URL(page.url()).searchParams.get('email')).toBeNull();
   expect(
     (await page.context().cookies()).some((cookie) =>
