@@ -281,3 +281,23 @@ test('C/G — unknown email and wrong password receive the same generic login de
     cookie.name.startsWith('__Host-ff_customer_'),
   )).toBe(false);
 });
+
+test('H — customer email login localization remains navigable in en/fr/es/ar and Arabic is RTL', async ({ page, context }) => {
+  await context.clearCookies();
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/loyalty/login/email');
+  const translations = [
+    { locale: 'en', heading: 'Sign in with email', direction: 'ltr' },
+    { locale: 'fr', heading: 'Se connecter avec l’e-mail', direction: 'ltr' },
+    { locale: 'es', heading: 'Iniciar sesión con correo', direction: 'ltr' },
+    { locale: 'ar', heading: 'تسجيل الدخول بالبريد الإلكتروني', direction: 'rtl' },
+  ] as const;
+  for (const item of translations) {
+    await page.locator('select').first().selectOption(item.locale);
+    await expect(page.getByRole('heading', { name: item.heading })).toBeVisible();
+    await expect(page.locator('html')).toHaveAttribute('lang', item.locale);
+    await expect(page.locator('html')).toHaveAttribute('dir', item.direction);
+    await expect(page.locator('input[type="email"]')).toBeVisible();
+    await expect(page.locator('input[type="password"]')).toBeVisible();
+  }
+});
