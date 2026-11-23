@@ -248,7 +248,7 @@ test('D — refresh rotates credentials; logout revokes the issued session', asy
   )?.value;
   expect(oldRefresh).toBeTruthy();
   await context.clearCookies({ name: '__Host-ff_customer_access' });
-  await page.goto('/loyalty/dashboard');
+  await page.goto('/loyalty/session/refresh?next=%2Floyalty%2Fdashboard');
   await expect(page).toHaveURL(/\/loyalty\/dashboard(?:\?|$)/);
   const afterRefresh = await context.cookies();
   const rotatedRefresh = afterRefresh.find(
