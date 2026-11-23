@@ -31,7 +31,13 @@ async function requestProof(page: Page, address: string, name = 'Synthetic R5 Cu
 }
 
 async function submitRegistration(page: Page) {
+  const actionResponse = page.waitForResponse((response) => {
+    const request = response.request();
+    return request.method() === 'POST' && new URL(response.url()).pathname === '/loyalty/signup';
+  });
   await page.getByRole('button', { name: 'Send confirmation link' }).click();
+  const response = await actionResponse;
+  expect(response.ok()).toBe(true);
 }
 
 async function expectGenericConfirmation(page: Page) {
