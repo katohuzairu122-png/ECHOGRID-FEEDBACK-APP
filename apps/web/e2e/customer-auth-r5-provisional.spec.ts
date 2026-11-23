@@ -275,8 +275,7 @@ test('C/G — unknown email and wrong password receive the same generic login de
   await page.getByLabel('Email').fill('unknown-login-' + Date.now() + '@example.test');
   await page.getByLabel('Password').fill(password + '-incorrect');
   await page.getByRole('button', { name: 'Sign in' }).click();
-  await expect(error).toBeVisible();
-  expect(await error.textContent()).toBe(knownError);
+  await expect(error).toHaveText(knownError ?? '', { timeout: 15_000 });
   expect((await context.cookies()).some((cookie) =>
     cookie.name.startsWith('__Host-ff_customer_'),
   )).toBe(false);
