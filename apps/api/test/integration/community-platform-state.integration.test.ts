@@ -230,7 +230,10 @@ describe.skipIf(!process.env.DATABASE_URL)(
       const activated = await new CommunityMembershipService(appDbOf(db)).join(customerId, 'community-policy-v1');
       expect(activated.membership.status).toBe('active');
       const evidence = await createRepositories(db).auditLog.listForEntity('community_membership', membershipId);
-      expect(evidence.some((row) => row.metadata?.operation === 'restore' && row.metadata?.consentAccepted === true)).toBe(true);
+      expect(evidence.some((row) => {
+        const metadata = row.metadata as Record<string, unknown> | null;
+        return metadata?.operation === 'restore' && metadata?.consentAccepted === true;
+      })).toBe(true);
 
       const awards =
         await new CommunityPointAwardService(appDbOf(db)).reevaluatePendingMembership(
