@@ -94,35 +94,10 @@ test('A/H — customer enters account details once; registration form remains us
   await expect(page.getByText('The passwords do not match.', { exact: true })).toBeVisible();
 
   await page.getByLabel('Confirm password').fill(password);
-  const submissionEvents: string[] = [];
-  const formState = await page.locator('form').evaluate((element) => {
-    const form = element as HTMLFormElement;
-    const submit = form.querySelector<HTMLButtonElement>('button[type="submit"]');
-    const invalidFields = Array.from(form.elements)
-      .filter((field): field is HTMLInputElement => field instanceof HTMLInputElement && !field.validity.valid)
-      .map((field) => ({ name: field.name, flags: Object.keys(field.validity).filter((key) => field.validity[key as keyof ValidityState] === true) }));
-    return { valid: form.checkValidity(), submitDisabled: submit?.disabled ?? null, invalidFields };
-  });
-  page.on('request', (request) => {
-    const pathname = new URL(request.url()).pathname;
-    if (pathname === '/loyalty/signup' || pathname.startsWith('/_next/')) {
-      submissionEvents.push(`request ${request.method()} ${pathname}`);
-    }
-  });
-  page.on('response', (response) => {
-    const pathname = new URL(response.url()).pathname;
-    if (pathname === '/loyalty/signup' || pathname.startsWith('/_next/')) {
-      submissionEvents.push(`response ${response.request().method()} ${pathname} ${response.status()}`);
-    }
-  });
-  page.on('requestfailed', (request) => {
-    const pathname = new URL(request.url()).pathname;
-    if (pathname === '/loyalty/signup' || pathname.startsWith('/_next/')) {
-      submissionEvents.push(`failed ${request.method()} ${pathname} ${request.failure()?.errorText ?? 'unknown'}`);
-    }
-  });
+  expect((await page.getByLabel('Name').inputValue()) === 'Synthetic R5 Customer').toBe(true);
+  expect((await page.getByLabel('Email').inputValue()) === email).toBe(true);
+  expect((await page.getByLabel('Choose a password').inputValue()) === password).toBe(true);
   await submitRegistration(page);
-  try {
     await expectGenericConfirmation(page, 'The passwords do not match.');
   } catch (error) {
     console.info('customer_auth_r5_signup_form_state', JSON.stringify(formState));
@@ -143,44 +118,8 @@ test('B/G — email proof completes once, creates a rotating session, and reject
   context,
 }) => {
   expect(verifyUrl).toContain('/loyalty/signup/verify');
-  const link = new URL(verifyUrl);
-  const decodedChallenge = decodeURIComponent(link.hash.startsWith('#c=') ? link.hash.slice(3) : '');
-  const [challengeId = '', proof = ''] = decodedChallenge.split('.');
-  console.info('customer_auth_r5_verification_link_shape', JSON.stringify({
-    path: link.pathname,
-    expectedFragmentPrefix: link.hash.startsWith('#c='),
-    challengeIdLength: challengeId.length,
-    challengeIdLooksUuid: /^[0-9a-fA-F-]{36}$/.test(challengeId),
-    proofLength: proof.length,
-    proofCharactersAllowed: /^[A-Za-z0-9_-]+$/.test(proof),
-  }));
-  await page.addInitScript(() => {
-    const raw = window.location.hash;
-    const value = raw.startsWith('#c=') ? decodeURIComponent(raw.slice(3)) : '';
-    const [id = '', secret = ''] = value.split('.');
-    Object.assign(window, {
-      __customerAuthR5InitialHash: {
-        present: raw.startsWith('#c='),
-        idLength: id.length,
-        idLooksUuid: /^[0-9a-fA-F-]{36}$/.test(id),
-        proofLength: secret.length,
-        proofLooksAllowed: /^[A-Za-z0-9_-]{16,}$/.test(secret),
-      },
-    });
-  });
   await page.goto(verifyUrl);
-  try {
-    await expect(page.getByRole('button', { name: 'Create account' })).toBeVisible();
-  } catch (error) {
-    const visibleText = await page.locator('h1, h2, p, [role="alert"], button').allTextContents();
-    const safeLocation = await page.evaluate(() => ({
-      pathname: window.location.pathname,
-      hashPresent: window.location.hash.startsWith('#c='),
-      initialHash: (window as Window & { __customerAuthR5InitialHash?: unknown }).__customerAuthR5InitialHash ?? null,
-    }));
-    console.info('customer_auth_r5_verify_visible_state', JSON.stringify({ safeLocation, text: visibleText.map((value) => value.trim()).filter(Boolean) }));
-    throw error;
-  }
+  await expect(page.getByRole('button', { name: 'Create account' })).toBeVisible();
   await expect(page.getByLabel('Name')).toHaveCount(0);
   await expect(page.getByLabel('Email')).toHaveCount(0);
   await expect(page.getByLabel('Choose a password')).toHaveCount(0);
