@@ -242,3 +242,42 @@ test('G — registration delivery limit returns a generic throttle response', as
     page.getByText('Too many attempts. Please wait a few minutes and try again.', { exact: true }),
   ).toBeVisible();
 });
+
+test('B/G — malformed and forged confirmation links cannot activate a customer session', async ({ page, context }) => {
+  await context.clearCookies();
+  await page.goto('/loyalty/signup/verify#c=malformed');
+  await expect(page.getByRole('button', { name: 'Create account' })).toHaveCount(0);
+  await expect(page.getByRole('link', { name: 'Request a new link' })).toBeVisible();
+  expect(new URL(page.url()).hash).toBe('');
+  const forged = '141664f8-1ef4-4872-b445-fca151ba65aa.' + 'a'.repeat(64);
+  await page.goto('/loyalty/signup/verify#c=' + forged);
+  await expect(page.getByRole('button', { name: 'Create account' })).toBeVisible();
+  expect(new URL(page.url()).hash).toBe('');
+  await page.getByRole('button', { name: 'Create account' }).click();
+  await expect(page.getByText(
+    'This confirmation link is invalid, expired or already used. Request a new link.',
+    { exact: true },
+  )).toBeVisible();
+  expect((await context.cookies()).some((cookie) =>
+    cookie.name.startsWith('__Host-ff_customer_'),
+  )).toBe(false);
+});
+
+test('C/G — unknown email and wrong password receive the same generic login denial', async ({ page, context }) => {
+  await context.clearCookies();
+  await page.goto('/loyalty/login/email');
+  await page.getByLabel('Email').fill(email);
+  await page.getByLabel('Password').fill(password + '-incorrect');
+  await page.getByRole('button', { name: 'Sign in' }).click();
+  const error = page.getByText('The email or password is not correct.', { exact: true });
+  await expect(error).toBeVisible();
+  const knownError = await error.textContent();
+  await page.getByLabel('Email').fill('unknown-login-' + Date.now() + '@example.test');
+  await page.getByLabel('Password').fill(password + '-incorrect');
+  await page.getByRole('button', { name: 'Sign in' }).click();
+  await expect(error).toBeVisible();
+  expect(await error.textContent()).toBe(knownError);
+  expect((await context.cookies()).some((cookie) =>
+    cookie.name.startsWith('__Host-ff_customer_'),
+  )).toBe(false);
+});
