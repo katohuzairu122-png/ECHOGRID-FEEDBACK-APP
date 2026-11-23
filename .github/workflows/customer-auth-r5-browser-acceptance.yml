@@ -13,8 +13,6 @@ on:
       - 'apps/web/src/app/loyalty/**'
       - 'apps/web/src/lib/actions/customer-email-auth.ts'
       - 'tools/prepare-customer-auth-r5-env.mjs'
-  push:
-    branches: [dev/customer-auth-r3-r5-browser-acceptance]
 
 permissions:
   contents: read

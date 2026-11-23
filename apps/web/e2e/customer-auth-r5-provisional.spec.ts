@@ -33,8 +33,8 @@ async function requestProof(page: Page, address: string, name = 'Synthetic R5 Cu
 async function expectGenericConfirmation(page: Page) {
   const heading = page.getByRole('heading', { name: 'Check your email' });
   const alert = page.getByRole('alert');
-  await expect(heading.or(alert)).toBeVisible();
-  if (await alert.isVisible()) {
+  await expect.poll(async () => (await heading.isVisible()) || (await alert.isVisible())).toBe(true);
+  if (!(await heading.isVisible())) {
     // Keep the diagnostic to the generic translated error; never print form values.
     throw new Error(`Registration returned an error state: ${(await alert.textContent())?.trim()}`);
   }
