@@ -60,7 +60,7 @@ function serializeAccount(
 
 communityCustomerRoutes.get('/', async (c) =>
   withDb(c, async (db) => {
-    const status = await new CommunityMembershipService(db).getStatus(c.get('customerId'));
+    const status = await new CommunityMembershipService(db, c.env).getStatus(c.get('customerId'));
     return ok(c, {
       membership: serializeMembership(status.membership),
       account: serializeAccount(status.account),
@@ -71,7 +71,7 @@ communityCustomerRoutes.get('/', async (c) =>
 communityCustomerRoutes.post('/join', async (c) => {
   const body = await parseJsonBody(c.req.raw, joinCommunitySchema);
   return withDb(c, async (db) => {
-    const result = await new CommunityMembershipService(db).join(
+    const result = await new CommunityMembershipService(db, c.env).join(
       c.get('customerId'),
       body,
     );
@@ -95,7 +95,7 @@ communityCustomerRoutes.post('/join', async (c) => {
 
 communityCustomerRoutes.post('/leave', async (c) =>
   withDb(c, async (db) => {
-    const result = await new CommunityMembershipService(db).leave(c.get('customerId'));
+    const result = await new CommunityMembershipService(db, c.env).leave(c.get('customerId'));
     return ok(c, {
       membership: serializeMembership(result.membership),
       account: serializeAccount(result.account),
@@ -103,4 +103,4 @@ communityCustomerRoutes.post('/leave', async (c) =>
   }),
 );
 
-communityCustomerRoutes.get('/terms', async (c) => withDb(c, async (db) => ok(c, { offer: await new CommunityMembershipService(db).getOffer(c.get('customerId'), c.req.query('locale') ?? 'en') })));
+communityCustomerRoutes.get('/terms', async (c) => withDb(c, async (db) => ok(c, { offer: await new CommunityMembershipService(db, c.env).getOffer(c.get('customerId'), c.req.query('locale') ?? 'en') })));

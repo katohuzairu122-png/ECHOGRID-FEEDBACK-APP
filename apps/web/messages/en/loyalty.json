@@ -327,6 +327,7 @@
         "cancel": "Cancel",
         "confirmLeave": "Confirm leave",
         "leaving": "Leaving…",
+        "operationUnavailable": "Community membership is temporarily unavailable. Refresh your status and try again later.",
         "termsUnavailable": "Joining and rejoining are unavailable until approved Community membership terms are published.",
         "termsRequired": "Joining requires approved terms, explicit acceptance and an eligible account. No membership is created by viewing this page.",
         "join": "Join Community",

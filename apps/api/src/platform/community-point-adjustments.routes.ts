@@ -131,7 +131,7 @@ platformCommunityPointAdjustmentRoutes.post(
     );
     const { db, close } = await createDb(c.env.HYPERDRIVE);
     try {
-      const result = await new CommunityPlatformStateService(db).suspend(
+      const result = await new CommunityPlatformStateService(db, c.env).suspend(
         c.req.param('customerId'),
         body,
         auditContext(c),
@@ -157,7 +157,7 @@ platformCommunityPointAdjustmentRoutes.post(
     );
     const { db, close } = await createDb(c.env.HYPERDRIVE);
     try {
-      const result = await new CommunityPlatformStateService(db).restore(
+      const result = await new CommunityPlatformStateService(db, c.env).restore(
         c.req.param('customerId'),
         body,
         auditContext(c),

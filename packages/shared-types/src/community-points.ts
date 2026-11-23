@@ -82,6 +82,8 @@ export const communityTermsOfferSchema = z.object({
     contentHash: z.string().regex(/^[a-f0-9]{64}$/), manifestHash: z.string().regex(/^[a-f0-9]{64}$/), hashAlgorithm: z.literal('sha256-utf8'),
   }).strict(),
   transitionId: z.uuid().nullable(), operation: z.enum(['join', 'rejoin', 'restore']),
+  /** Server-derived availability; absent on old API responses means closed. */
+  activationAvailable: z.boolean().optional(),
 }).strict();
 export type CommunityTermsOffer = z.infer<typeof communityTermsOfferSchema>;
 

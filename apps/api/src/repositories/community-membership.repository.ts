@@ -1,4 +1,5 @@
-import { eq } from 'drizzle-orm';
+import { assertCommunityMembershipWrite, assertCommunityMembershipOperation, type CommunityMembershipWritePermit } from '../community/community-membership-controls';
+import { and, eq } from 'drizzle-orm';
 import { communityMemberships } from '../db/schema';
 import { BaseRepository } from './base.repository';
 
@@ -19,8 +20,12 @@ export class CommunityMembershipRepository extends BaseRepository {
     });
   }
 
-  async create(input: NewCommunityMembership): Promise<CommunityMembership> {
-    const [row] = await this.db.insert(communityMemberships).values(input).returning();
+  async create(input: NewCommunityMembership, permit?: CommunityMembershipWritePermit): Promise<CommunityMembership> {
+    const insert = { ...input };
+    assertCommunityMembershipWrite(this.db, insert.customerId, insert.status ?? 'active', permit);
+    if ((insert.status ?? 'active') === 'active') assertCommunityMembershipOperation(permit, 'join');
+    if (insert.status === 'inactive') assertCommunityMembershipOperation(permit, 'clearance');
+    const [row] = await this.db.insert(communityMemberships).values(insert).returning();
     if (!row) throw new Error('Community membership insert returned no row');
     return row;
   }
@@ -33,11 +38,23 @@ export class CommunityMembershipRepository extends BaseRepository {
         'status' | 'policyVersion' | 'joinedAt' | 'leftAt' | 'suspendedAt'
       >
     >,
+    permit?: CommunityMembershipWritePermit,
   ): Promise<CommunityMembership | undefined> {
+    const change = { ...patch };
+    assertCommunityMembershipWrite(this.db, customerId, change.status, permit);
+    const protectedWrite = change.status === 'active' || change.status === 'inactive';
+    const previous = protectedWrite ? await this.findByCustomerId(customerId) : undefined;
+    if (protectedWrite) {
+      if (!previous) return undefined;
+      const operation = change.status === 'inactive'
+        ? previous.status === 'suspended' ? 'clearance' : null
+        : previous.status === 'inactive' ? 'restore' : previous.status === 'left' ? 'rejoin' : null;
+      assertCommunityMembershipOperation(permit, operation);
+    }
     const [row] = await this.db
       .update(communityMemberships)
-      .set({ ...patch, updatedAt: new Date() })
-      .where(eq(communityMemberships.customerId, customerId))
+      .set({ ...change, updatedAt: new Date() })
+      .where(and(eq(communityMemberships.customerId, customerId), previous ? eq(communityMemberships.status, previous.status) : undefined))
       .returning();
     return row;
   }

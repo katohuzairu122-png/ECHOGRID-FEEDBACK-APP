@@ -8,7 +8,7 @@ const h = vi.hoisted(() => ({ leave: vi.fn(), join: vi.fn(), router: { refresh: 
 vi.mock('@/lib/actions/community-membership', () => ({ leaveCommunityAction: h.leave, joinCommunityAction: h.join }));
 vi.mock('next/navigation', () => ({ useRouter: () => h.router }));
 beforeEach(() => { vi.clearAllMocks(); h.leave.mockResolvedValue({ left: true }); });
-const offer: CommunityTermsOffer = { operation: 'join', transitionId: null, terms: { publicationId: '22222222-2222-4222-8222-222222222222', version: 'synthetic-unit-only',
+const offer: CommunityTermsOffer = { activationAvailable: true, operation: 'join', transitionId: null, terms: { publicationId: '22222222-2222-4222-8222-222222222222', version: 'synthetic-unit-only',
   effectiveAt: '2020-01-01T00:00:00Z', locale: 'en', content: 'SYNTHETIC TEST TERMS — NOT LEGAL APPROVAL', contentHash: 'a'.repeat(64), manifestHash: 'b'.repeat(64), hashAlgorithm: 'sha256-utf8' } };
 it('requires explicit unchecked acceptance, then refreshes authoritative membership and points', async () => {
   const user = userEvent.setup(); h.join.mockResolvedValue({ joined: true, released: 2 });
@@ -105,4 +105,19 @@ it('never presents proposed Community terms or a legal acceptance checkbox as ac
   expect(screen.queryByText('community-membership-v1.0')).not.toBeInTheDocument();
   expect(screen.queryByRole('link', { name: /membership terms/i })).not.toBeInTheDocument();
   expect(h.leave).not.toHaveBeenCalled();
+});
+
+it.each(['absent', 'left', 'inactive'] as const)('closed %s enrollment keeps account access and permitted Leave, with no acceptance checkbox', (status) => {
+  renderWithIntl(<CommunityMembershipControls status={status} phone="verified" offer={{ ...offer, activationAvailable: false }} />);
+  expect(screen.getByText(/Community membership is temporarily unavailable/)).toBeVisible();
+  expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+  expect(screen.getByRole('button', { name: status === 'inactive' ? 'Restore Community membership' : status === 'left' ? 'Rejoin Community' : 'Join Community' })).toBeDisabled();
+  if (status === 'inactive') expect(screen.getByRole('button', { name: 'Leave Community' })).toBeEnabled();
+  expect(h.join).not.toHaveBeenCalled(); expect(h.leave).not.toHaveBeenCalled();
+});
+it('an older API offer without authoritative availability fails closed', () => {
+  const { activationAvailable: _availability, ...older } = offer;
+  renderWithIntl(<CommunityMembershipControls status="absent" phone="verified" offer={older} />);
+  expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Join Community' })).toBeDisabled();
 });

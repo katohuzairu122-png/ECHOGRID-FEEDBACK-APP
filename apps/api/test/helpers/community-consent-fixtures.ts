@@ -1,3 +1,4 @@
+import type { Db } from '../../src/db/client';
 /** TEST ONLY: synthetic approvals on loopback disposable PostgreSQL. */
 import { Client } from 'pg';
 import { CommunityMembershipService as RuntimeService } from '../../src/community/community-membership.service';
@@ -27,6 +28,14 @@ export async function publishSyntheticCommunityTerms(version = 'synthetic-commun
   } finally { await client.end(); }
 }
 
+/** Isolated test opt-in only. Never exported from application code. */
+export const SYNTHETIC_MEMBERSHIP_CONTROLS = Object.freeze({
+  COMMUNITY_MEMBERSHIP_JOIN_ENABLED: 'true',
+  COMMUNITY_MEMBERSHIP_REJOIN_ENABLED: 'true',
+  COMMUNITY_MEMBERSHIP_RESTORE_ENABLED: 'true',
+  COMMUNITY_MEMBERSHIP_CLEARANCE_ENABLED: 'true',
+});
+
 const attempts = new Map<string, { request: Record<string, unknown>; transitionId: string }>();
 
 export async function syntheticCommunityAcceptance(service: RuntimeService, customerId: string, label = 'synthetic-community-http') {
@@ -42,6 +51,7 @@ export async function syntheticCommunityAcceptance(service: RuntimeService, cust
  * Old test labels are converted to explicit synthetic acceptance ONLY here.
  */
 export class FixtureCommunityMembershipService extends RuntimeService {
+  constructor(db: Db) { super(db, SYNTHETIC_MEMBERSHIP_CONTROLS); }
   override async join(customerId: string, label: unknown) {
     if (typeof label !== 'string') return super.join(customerId, label);
     const state = await this.getStatus(customerId);

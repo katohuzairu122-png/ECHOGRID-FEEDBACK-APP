@@ -1,3 +1,4 @@
+import { CommunityMembershipControls, recordCommunityMembershipControl, type CommunityMembershipControlConfig } from './community-membership-controls';
 import { and, eq, sql } from 'drizzle-orm';
 import type { Db } from '../db/client';
 import { customers, consentGrants } from '../db/schema';
@@ -14,7 +15,10 @@ export interface JoinCommunityResult extends CommunityStatus {
 }
 
 export class CommunityMembershipService {
-  constructor(private readonly db: Db) {}
+  private readonly controls: CommunityMembershipControls;
+  constructor(private readonly db: Db, config: CommunityMembershipControlConfig = {}) {
+    this.controls = new CommunityMembershipControls(config);
+  }
 
   async getStatus(customerId: string): Promise<CommunityStatus> {
     const repos = createRepositories(this.db);
@@ -30,7 +34,8 @@ export class CommunityMembershipService {
         await tx.execute(sql`select id from ${customers} where ${customers.id}=${customerId} for update`);
         const membership = await createRepositories(tx).communityMemberships.findByCustomerId(customerId);
         const previous = await latestCommunityTransition(tx, membership?.id);
-        return { terms, transitionId: previous?.id ?? null, operation: membership?.status === 'inactive' ? 'restore' as const : membership ? 'rejoin' as const : 'join' as const };
+        const operation = membership?.status === 'inactive' ? 'restore' as const : membership ? 'rejoin' as const : 'join' as const;
+        return { terms, transitionId: previous?.id ?? null, operation, activationAvailable: this.controls.available(operation) };
       });
     } catch (error) {
       if (error instanceof AppError && error.code === 'COMMUNITY_TERMS_UNAVAILABLE') return null;
@@ -41,7 +46,8 @@ export class CommunityMembershipService {
   /** One transaction, registry -> customer -> account. A legacy version string
    * is never acceptance, even when this service is called without an HTTP route. */
   async join(customerId: string, raw: unknown): Promise<JoinCommunityResult> {
-    return this.db.transaction(async (tx) => {
+    try {
+    const result = await this.db.transaction(async (tx) => {
       await lockCommunityTerms(tx);
       await tx.execute(sql`select id from ${customers} where ${customers.id}=${customerId} for update`);
       const repos = createRepositories(tx);
@@ -61,6 +67,8 @@ export class CommunityMembershipService {
       const currentGrant = membership?.status === 'active' ? await validCommunityConsent(tx, customerId, membership.id, terms) : undefined;
       const expectedBasis = currentGrant ? (currentGrant.metadata?.previousTransitionId as string | null) : basis;
       const expectedOperation = currentGrant ? currentGrant.metadata?.operation as 'join' | 'rejoin' | 'restore' : operation;
+      if (!['join', 'rejoin', 'restore'].includes(expectedOperation)) communityConsentStale();
+      const permit = this.controls.authorize(tx, customerId, expectedOperation);
       const input = validateCommunityTermsAcceptance(raw, terms, { operation: expectedOperation, transitionId: expectedBasis });
       const key = await communityRequestKey(customerId, input.idempotencyKey);
       const fingerprint = await hashCommunityTermsContent(JSON.stringify([input.operation, terms.publicationId, terms.manifestHash, terms.contentHash, terms.locale, input.expectedTransitionId]));
@@ -76,8 +84,8 @@ export class CommunityMembershipService {
       const priorMembershipObservation = membership ? { status: membership.status, joinedAt: membership.joinedAt.toISOString(), policyVersion: membership.policyVersion } : null;
       const clock = await tx.execute<{ accepted_at: string }>(sql`select clock_timestamp()::text as accepted_at`);
       const acceptedAt = new Date(clock.rows[0]!.accepted_at);
-      if (!membership) membership = await repos.communityMemberships.create({ customerId, status: 'active', policyVersion: terms.version, joinedAt: acceptedAt, leftAt: null, suspendedAt: null });
-      else membership = await repos.communityMemberships.updateStatus(customerId, { status: 'active', policyVersion: terms.version, joinedAt: acceptedAt, leftAt: null, suspendedAt: null });
+      if (!membership) membership = await repos.communityMemberships.create({ customerId, status: 'active', policyVersion: terms.version, joinedAt: acceptedAt, leftAt: null, suspendedAt: null }, permit);
+      else membership = await repos.communityMemberships.updateStatus(customerId, { status: 'active', policyVersion: terms.version, joinedAt: acceptedAt, leftAt: null, suspendedAt: null }, permit);
       if (!membership) throw new AppError('Community membership could not be activated.', 409, 'COMMUNITY_MEMBERSHIP_CONFLICT');
       if (!account) account = await repos.communityPointAccounts.create({ customerId, status: 'active', pointsBalance: 0 });
       else if (account.status !== 'active') account = await repos.communityPointAccounts.updateStatus(account.id, 'active');
@@ -94,6 +102,14 @@ export class CommunityMembershipService {
         metadata: { ...metadata, sequence: Number(previous?.metadata?.sequence ?? 0) + 1, priorMembershipObservation, consentAccepted: true, consentGrantId: grantId, acceptedAt: acceptedAt.toISOString(), auditCorrelationId: transitionId }, ipAddress: null, userAgent: null, createdAt: acceptedAt });
       return { membership, account, created, reactivated: !created, consent: { version: terms.version, acceptedAt: acceptedAt.toISOString(), transitionId } };
     });
+    recordCommunityMembershipControl('activation', 'permitted');
+    return result;
+    } catch (error) {
+      if (!(error instanceof AppError && error.code === 'COMMUNITY_MEMBERSHIP_OPERATION_DISABLED')) {
+        recordCommunityMembershipControl('activation', 'transition_failed');
+      }
+      throw error;
+    }
   }
 
   /** Leave requires no terms service/schema and never deletes prior evidence. */
