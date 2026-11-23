@@ -327,6 +327,7 @@
         "cancel": "Cancelar",
         "confirmLeave": "Confirmar salida",
         "leaving": "Saliendo…",
+        "operationUnavailable": "La membresía de la Comunidad no está disponible temporalmente. Actualiza tu estado e inténtalo más tarde.",
         "termsUnavailable": "Unirse y volver a unirse no está disponible hasta que se publiquen las condiciones aprobadas.",
         "termsRequired": "Unirse requiere condiciones aprobadas, aceptación explícita y una cuenta elegible. Ver esta página no crea una membresía.",
         "join": "Unirse a la Comunidad",

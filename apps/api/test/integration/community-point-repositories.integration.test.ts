@@ -1,3 +1,5 @@
+import { CommunityMembershipControls } from '../../src/community/community-membership-controls';
+import { SYNTHETIC_MEMBERSHIP_CONTROLS } from '../helpers/community-consent-fixtures';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { Client } from 'pg';
 import { buildDb } from '../../src/db/client';
@@ -14,6 +16,7 @@ async function expectUniqueViolation(promise: Promise<unknown>): Promise<void> {
 }
 
 describe.skipIf(!process.env.DATABASE_URL)('Split 05 Community repositories (integration)', () => {
+  let db: ReturnType<typeof buildDb>;
   let client: Client;
   let repos: ReturnType<typeof createRepositories>;
   let customerId: string;
@@ -21,7 +24,8 @@ describe.skipIf(!process.env.DATABASE_URL)('Split 05 Community repositories (int
   beforeAll(async () => {
     client = new Client({ connectionString: process.env.DATABASE_URL });
     await client.connect();
-    repos = createRepositories(buildDb(client));
+    db = buildDb(client);
+    repos = createRepositories(db);
 
     const customer = await repos.customers.create({
       phone: `+1556${Math.floor(Math.random() * 9_000_000 + 1_000_000)}`,
@@ -39,7 +43,7 @@ describe.skipIf(!process.env.DATABASE_URL)('Split 05 Community repositories (int
       customerId,
       status: 'active',
       policyVersion: 'community-v1',
-    });
+    }, new CommunityMembershipControls(SYNTHETIC_MEMBERSHIP_CONTROLS).authorize(db, customerId, 'join'));
     expect(membership.customerId).toBe(customerId);
     expect((await repos.communityMemberships.findActiveByCustomerId(customerId))?.id).toBe(
       membership.id,
@@ -50,7 +54,7 @@ describe.skipIf(!process.env.DATABASE_URL)('Split 05 Community repositories (int
         customerId,
         status: 'active',
         policyVersion: 'community-v1',
-      }),
+      }, new CommunityMembershipControls(SYNTHETIC_MEMBERSHIP_CONTROLS).authorize(db, customerId, 'join')),
     );
 
     const left = await repos.communityMemberships.updateStatus(customerId, {

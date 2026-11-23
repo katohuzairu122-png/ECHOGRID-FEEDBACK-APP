@@ -327,6 +327,7 @@
         "cancel": "Annuler",
         "confirmLeave": "Confirmer le départ",
         "leaving": "Départ en cours…",
+        "operationUnavailable": "L’adhésion à la Communauté est temporairement indisponible. Actualisez votre statut et réessayez plus tard.",
         "termsUnavailable": "L’adhésion et la réadhésion sont indisponibles tant que les conditions approuvées ne sont pas publiées.",
         "termsRequired": "L’adhésion nécessite des conditions approuvées, une acceptation explicite et un compte éligible. Consulter cette page ne crée aucune adhésion.",
         "join": "Rejoindre la Communauté",

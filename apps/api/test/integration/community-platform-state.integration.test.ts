@@ -1,3 +1,4 @@
+import { SYNTHETIC_MEMBERSHIP_CONTROLS } from '../helpers/community-consent-fixtures';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { Client } from 'pg';
 import { buildDb } from '../../src/db/client';
@@ -135,7 +136,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
     });
 
     it('suspends membership/account atomically while preserving balance and history', async () => {
-      const service = new CommunityPlatformStateService(appDbOf(db));
+      const service = new CommunityPlatformStateService(appDbOf(db), SYNTHETIC_MEMBERSHIP_CONTROLS);
       const result = await service.suspend(
         customerId,
         { reason: 'Platform policy investigation.' },
@@ -211,7 +212,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
     });
 
     it('clears moderation without earning, then requires fresh customer Restore consent before pending evidence earns', async () => {
-      const state = new CommunityPlatformStateService(appDbOf(db));
+      const state = new CommunityPlatformStateService(appDbOf(db), SYNTHETIC_MEMBERSHIP_CONTROLS);
       const restored = await state.restore(
         customerId,
         { reason: 'Platform investigation cleared.' },
@@ -268,7 +269,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
       await repos.communityPointAccounts.updateStatus(accountId, 'suspended');
 
       await expect(
-        new CommunityPlatformStateService(appDbOf(db)).suspend(
+        new CommunityPlatformStateService(appDbOf(db), SYNTHETIC_MEMBERSHIP_CONTROLS).suspend(
           customerId,
           { reason: 'Must fail on state mismatch.' },
           audit(),
@@ -282,7 +283,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
     });
 
     it('rolls back both state changes when required semantic audit insertion fails', async () => {
-      const service = new CommunityPlatformStateService(appDbOf(db));
+      const service = new CommunityPlatformStateService(appDbOf(db), SYNTHETIC_MEMBERSHIP_CONTROLS);
 
       await expect(
         service.suspend(

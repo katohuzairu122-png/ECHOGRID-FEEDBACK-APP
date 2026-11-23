@@ -20,7 +20,7 @@ export function CommunityMembershipControls({ status, phone, offer = null }: {
   const [confirmed, setConfirmed] = useState(false);
   const [state, action, pending] = useActionState(leaveCommunityAction, initial);
   const router = useRouter();
-  const offerKey = offer ? `${offer.terms.publicationId}:${offer.terms.locale}:${offer.transitionId ?? 'first'}` : 'unavailable';
+  const offerKey = offer ? `${offer.terms.publicationId}:${offer.terms.locale}:${offer.transitionId ?? 'first'}:${offer.activationAvailable === true}` : 'unavailable';
   useEffect(() => {
     if (state.left) { setOpen(false); setConfirmed(false); router.refresh(); }
   }, [state.left, router]);

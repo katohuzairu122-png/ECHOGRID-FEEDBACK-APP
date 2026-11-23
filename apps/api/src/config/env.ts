@@ -287,6 +287,12 @@ export interface Bindings {
   CUSTOMER_RECOVERY_ENABLED?: string;
   /** NETWORK-01: Network Feed feature flag. Disabled unless exactly "true". Not set in wrangler.toml. */
   NETWORK_FEED_ENABLED?: string;
+  /** CONTROL-01: independent server operation gates; unset/malformed = disabled.
+   * No values are allocated by deployment configuration. Never client-controlled. */
+  COMMUNITY_MEMBERSHIP_JOIN_ENABLED?: string | undefined;
+  COMMUNITY_MEMBERSHIP_REJOIN_ENABLED?: string | undefined;
+  COMMUNITY_MEMBERSHIP_RESTORE_ENABLED?: string | undefined;
+  COMMUNITY_MEMBERSHIP_CLEARANCE_ENABLED?: string | undefined;
   /**
    * The customer password minimum length (owner decision CA-05, APPROVED 2026-11-16: 8). It is configuration, never a code
    * default: every customer flow that sets a password (email sign-up, recovery, password setup and change) reads this one value,

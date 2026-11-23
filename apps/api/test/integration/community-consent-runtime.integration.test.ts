@@ -1,3 +1,5 @@
+import { SYNTHETIC_MEMBERSHIP_CONTROLS } from '../helpers/community-consent-fixtures';
+import { CommunityMembershipControls } from '../../src/community/community-membership-controls';
 import { Client } from 'pg';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { buildDb } from '../../src/db/client';
@@ -12,7 +14,7 @@ const url = process.env.DATABASE_URL;
 if (url && !['127.0.0.1','localhost'].includes(new URL(url).hostname)) throw new Error('Loopback disposable database required');
 describe.skipIf(!url)('NETWORK-15-T2 consent and D1 runtime (PostgreSQL)', () => {
   const client = new Client({ connectionString: url }); const db = buildDb(client);
-  const service = new CommunityMembershipService(db); const platform = new CommunityPlatformStateService(db);
+  const service = new CommunityMembershipService(db, SYNTHETIC_MEMBERSHIP_CONTROLS); const platform = new CommunityPlatformStateService(db, SYNTHETIC_MEMBERSHIP_CONTROLS);
   const extra: Client[] = []; let actor: string;
   const q = async (text: string, values: unknown[] = []) => (await client.query(text, values)).rows;
   const customer = async (verified = true) => (await createRepositories(db).customers.create({ phone: `+1556${Math.floor(Math.random()*9e8)}`, phoneVerifiedAt: verified ? new Date() : null })).id;
@@ -56,8 +58,8 @@ describe.skipIf(!url)('NETWORK-15-T2 consent and D1 runtime (PostgreSQL)', () =>
   });
   it('T2-11/12 six concurrent Join/Rejoin requests commit one transition', async () => {
     const id=await customer(); const raw=await input(id); const clients=await Promise.all(Array.from({length:6},()=>opened()));
-    const joined=await Promise.all(clients.map(c=>new CommunityMembershipService(buildDb(c)).join(id,raw))); expect(joined.filter(r=>r.created)).toHaveLength(1); expect(await counts(id)).toEqual([1,1,1,1]);
-    await service.leave(id); const again=await input(id,false); const rejoined=await Promise.all(clients.map(c=>new CommunityMembershipService(buildDb(c)).join(id,again)));
+    const joined=await Promise.all(clients.map(c=>new CommunityMembershipService(buildDb(c), SYNTHETIC_MEMBERSHIP_CONTROLS).join(id,raw))); expect(joined.filter(r=>r.created)).toHaveLength(1); expect(await counts(id)).toEqual([1,1,1,1]);
+    await service.leave(id); const again=await input(id,false); const rejoined=await Promise.all(clients.map(c=>new CommunityMembershipService(buildDb(c), SYNTHETIC_MEMBERSHIP_CONTROLS).join(id,again)));
     expect(rejoined.filter(r=>r.reactivated)).toHaveLength(1); expect(new Set(rejoined.map(r=>r.membership.id))).toEqual(new Set([joined[0]!.membership.id])); expect(new Set(rejoined.map(r=>r.account.id))).toEqual(new Set([joined[0]!.account.id]));
     expect((await q("select count(*)::int n from audit_log where entity_id=$1 and metadata->>'operation'='rejoin'",[joined[0]!.membership.id]))[0].n).toBe(1);
   });
@@ -86,7 +88,7 @@ describe.skipIf(!url)('NETWORK-15-T2 consent and D1 runtime (PostgreSQL)', () =>
   it('T2-23 publisher-first lock ordering rejects a stale browser after publication commits', async () => {
     const id=await customer(); const raw=await input(id); const next=await terms(); await q('update community_terms_current set publication_id=$1',[raw.expectedPublicationId]);
     const holder=await opened(); const joining=await opened(); await holder.query('begin'); await holder.query('select pg_advisory_xact_lock(hashtextextended($1,0))',[COMMUNITY_TERMS_LOCK]);
-    const pending=new CommunityMembershipService(buildDb(joining)).join(id,raw).then(()=>null,(e:unknown)=>e);
+    const pending=new CommunityMembershipService(buildDb(joining), SYNTHETIC_MEMBERSHIP_CONTROLS).join(id,raw).then(()=>null,(e:unknown)=>e);
     try { let waiting=0; const deadline=Date.now()+5_000; do {waiting=Number((await q("select count(*) n from pg_locks where locktype='advisory' and not granted and ((classid::bigint<<32)|objid::bigint)=hashtextextended($1,0)",[COMMUNITY_TERMS_LOCK]))[0].n);}while(!waiting&&Date.now()<deadline);
       expect(waiting).toBeGreaterThan(0); await holder.query('update community_terms_current set publication_id=$1',[next.id]); await holder.query('commit'); expect(await pending).toMatchObject({code:'COMMUNITY_ACCEPTANCE_STALE'}); expect(await counts(id)).toEqual([0,0,0,0]);
     }finally{await holder.query('rollback'); await pending;}
@@ -118,9 +120,9 @@ describe.skipIf(!url)('NETWORK-15-T2 consent and D1 runtime (PostgreSQL)', () =>
     const id=await customer(); const first=await service.join(id,await input(id));
     await platform.suspend(id,{reason:'Synthetic moderation.'},audit());
     const clients=await Promise.all(Array.from({length:6},()=>opened()));
-    const cleared=await Promise.all(clients.map(c=>new CommunityPlatformStateService(buildDb(c)).restore(id,{reason:'Synthetic clearance.'},audit())));
+    const cleared=await Promise.all(clients.map(c=>new CommunityPlatformStateService(buildDb(c), SYNTHETIC_MEMBERSHIP_CONTROLS).restore(id,{reason:'Synthetic clearance.'},audit())));
     expect(cleared.filter(r=>r.changed)).toHaveLength(1); expect(cleared.every(r=>r.membership.status==='inactive')).toBe(true);
-    const raw=await input(id,false); const restored=await Promise.all(clients.map(c=>new CommunityMembershipService(buildDb(c)).join(id,raw)));
+    const raw=await input(id,false); const restored=await Promise.all(clients.map(c=>new CommunityMembershipService(buildDb(c), SYNTHETIC_MEMBERSHIP_CONTROLS).join(id,raw)));
     expect(restored.filter(r=>r.reactivated)).toHaveLength(1);
     expect(new Set(restored.map(r=>r.consent.transitionId)).size).toBe(1);
     expect(restored[0]!.membership.id).toBe(first.membership.id); expect(restored[0]!.account.id).toBe(first.account.id);
@@ -154,7 +156,7 @@ describe.skipIf(!url)('NETWORK-15-T2 consent and D1 runtime (PostgreSQL)', () =>
   it('D1-FRESH-05 explicit Restore racing Leave always preserves the successful Leave', async () => {
     const id=await customer(); await service.join(id,await input(id)); await platform.suspend(id,{reason:'Synthetic moderation.'},audit());
     await platform.restore(id,{reason:'Synthetic clearance.'},audit()); const raw=await input(id,false); const c=await opened();
-    const result=await Promise.allSettled([service.join(id,raw),new CommunityMembershipService(buildDb(c)).leave(id)]);
+    const result=await Promise.allSettled([service.join(id,raw),new CommunityMembershipService(buildDb(c), SYNTHETIC_MEMBERSHIP_CONTROLS).leave(id)]);
     expect(result[1]!.status).toBe('fulfilled'); if(result[0]!.status==='rejected')expect(result[0]!.reason).toMatchObject({code:'COMMUNITY_ACCEPTANCE_STALE'});
     const state=await service.getStatus(id); expect(state.membership?.status).toBe('left'); expect(state.account?.status).toBe('closed');
     expect((await q("select count(*)::int n from consent_grants where customer_id=$1 and status='active'",[id]))[0].n).toBe(0);
@@ -181,7 +183,7 @@ describe.skipIf(!url)('NETWORK-15-T2 consent and D1 runtime (PostgreSQL)', () =>
     expect(cleared.membership.status).toBe('inactive'); expect(cleared.membership.leftAt).toBeNull(); expect(cleared.account.status).toBe('closed'); expect((await service.join(id,await input(id,false))).membership.status).toBe('active');
   });
   it('RESTORE-03/08 legacy acceptance is never fabricated, including an empty registry', async () => {
-    const id=await customer(); const repos=createRepositories(db); await repos.communityMemberships.create({customerId:id,status:'active',policyVersion:'legacy-unknown'}); await repos.communityPointAccounts.create({customerId:id,status:'active',pointsBalance:51});
+    const id=await customer(); const repos=createRepositories(db); await repos.communityMemberships.create({customerId:id,status:'active',policyVersion:'legacy-unknown'}, new CommunityMembershipControls(SYNTHETIC_MEMBERSHIP_CONTROLS).authorize(db,id,'join')); await repos.communityPointAccounts.create({customerId:id,status:'active',pointsBalance:51});
     await platform.suspend(id,{reason:'Synthetic moderation.'},audit()); const result=await platform.restore(id,{reason:'Synthetic clearance.'},audit()); expect(result.membership.status).toBe('inactive'); expect(result.account.pointsBalance).toBe(51); expect((await counts(id))[2]).toBe(0);
   });
   it('RESTORE-04/05 voluntary Leave and customer suspension cannot be bypassed', async () => {
@@ -190,7 +192,7 @@ describe.skipIf(!url)('NETWORK-15-T2 consent and D1 runtime (PostgreSQL)', () =>
   });
   it('RESTORE-06 a successful Leave racing Restore remains authoritative', async () => {
     const id=await customer(); await service.join(id,await input(id)); await platform.suspend(id,{reason:'Synthetic moderation.'},audit()); const c=await opened();
-    const result=await Promise.allSettled([platform.restore(id,{reason:'Synthetic clearance.'},audit()),new CommunityMembershipService(buildDb(c)).leave(id)]);
+    const result=await Promise.allSettled([platform.restore(id,{reason:'Synthetic clearance.'},audit()),new CommunityMembershipService(buildDb(c), SYNTHETIC_MEMBERSHIP_CONTROLS).leave(id)]);
     if(result[1]!.status==='fulfilled')expect((await service.getStatus(id)).membership?.status).toBe('left'); else {expect(result[1]!.reason).toMatchObject({code:'COMMUNITY_MEMBERSHIP_SUSPENDED'}); await service.leave(id);}
     await expect(platform.restore(id,{reason:'Synthetic clearance.'},audit())).rejects.toMatchObject({code:'COMMUNITY_STATE_CONFLICT'});
   });

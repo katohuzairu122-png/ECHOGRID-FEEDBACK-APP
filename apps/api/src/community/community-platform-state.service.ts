@@ -1,3 +1,4 @@
+import { CommunityMembershipControls, recordCommunityMembershipControl, type CommunityMembershipControlConfig } from './community-membership-controls';
 import { sql } from 'drizzle-orm';
 import type {
   CommunityPointPlatformStateChangeInput,
@@ -27,7 +28,10 @@ export interface CommunityPlatformStateResult {
 }
 
 export class CommunityPlatformStateService {
-  constructor(private readonly db: Database) {}
+  private readonly controls: CommunityMembershipControls;
+  constructor(private readonly db: Database, config: CommunityMembershipControlConfig = {}) {
+    this.controls = new CommunityMembershipControls(config);
+  }
 
   async suspend(
     customerId: string,
@@ -98,7 +102,8 @@ export class CommunityPlatformStateService {
     input: CommunityPointPlatformStateChangeInput,
     audit: PlatformCommunityStateAuditContext,
   ): Promise<CommunityPlatformStateResult> {
-    return this.db.transaction(async (tx) => {
+    try {
+    const result = await this.db.transaction(async (tx) => {
       await lockCommunityTerms(tx);
       const schema = await tx.execute<{ available: boolean }>(sql`select to_regclass('public.community_terms_current') is not null as available`);
       if (!schema.rows[0]?.available) throw new AppError('Community membership terms are unavailable.', 503, 'COMMUNITY_TERMS_UNAVAILABLE');
@@ -106,6 +111,7 @@ export class CommunityPlatformStateService {
       const customer = await createRepositories(tx).customers.findById(customerId);
       if (!customer || customer.status !== 'active') throw new AppError('Customer account is not available.', 409, 'CUSTOMER_NOT_AVAILABLE');
       assertVerifiedPhoneFor(customer, 'community');
+      const permit = this.controls.authorize(tx, customerId, 'clearance');
 
       if (
         (state.membership.status === 'active' && state.account.status === 'active') ||
@@ -129,7 +135,7 @@ export class CommunityPlatformStateService {
       const membership = await repos.communityMemberships.updateStatus(customerId, {
         status: targetMembership,
         suspendedAt: null,
-      });
+      }, permit);
       const account = await repos.communityPointAccounts.updateStatus(
         state.account.id,
         targetAccount,
@@ -178,6 +184,12 @@ export class CommunityPlatformStateService {
 
       return { membership, account, changed: true };
     });
+    recordCommunityMembershipControl('clearance', 'permitted');
+    return result;
+    } catch (error) {
+      if (!(error instanceof AppError && error.code === 'COMMUNITY_MEMBERSHIP_OPERATION_DISABLED')) recordCommunityMembershipControl('clearance', 'transition_failed');
+      throw error;
+    }
   }
 
   private async lockAndLoad(
