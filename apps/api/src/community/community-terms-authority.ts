@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { AppError } from '../lib/errors';
 
-/** Inert foundation: no database adapter, route, publication or activation writer. */
+/** Strict terms validation; registry/transaction integration lives in community-consent.persistence. */
 const localeSchema = z.enum(['en', 'fr', 'es', 'ar']);
 const digestSchema = z.string().regex(/^[a-f0-9]{64}$/);
 const timestampSchema = z.iso.datetime({ offset: true });
@@ -75,7 +75,7 @@ function unavailable(): never {
 }
 
 export class CommunityTermsAuthority {
-  // No adapter is installed. The shipped default always fails closed.
+  // A caller without a trusted server source always fails closed.
   constructor(private readonly source: CommunityTermsSource = { readCurrent: async () => null }) {}
 
   async resolve(locale: string): Promise<Readonly<CommunityTermsView>> {
@@ -117,7 +117,7 @@ export class CommunityTermsAuthority {
 }
 
 const acceptanceSchema = z.object({
-  operation: z.enum(['join', 'rejoin']),
+  operation: z.enum(['join', 'rejoin', 'restore']),
   consentAccepted: z.literal(true),
   expectedPublicationId: z.uuid(),
   expectedTermsVersion: z.string().min(1).max(100),
@@ -135,7 +135,7 @@ const acceptanceSchema = z.object({
 export function validateCommunityTermsAcceptance(
   raw: unknown,
   terms: Readonly<CommunityTermsView>,
-  basis: { operation: 'join' | 'rejoin'; transitionId: string | null },
+  basis: { operation: 'join' | 'rejoin' | 'restore'; transitionId: string | null },
 ) {
   const parsed = acceptanceSchema.safeParse(raw);
   if (!parsed.success) {

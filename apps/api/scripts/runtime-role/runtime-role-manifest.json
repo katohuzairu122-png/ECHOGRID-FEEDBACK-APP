@@ -1014,6 +1014,20 @@
     "UPDATE"
    ],
    "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
+  },
+  "community_terms_current": {
+   "class": "RUNTIME",
+   "verbs": [
+    "SELECT"
+   ],
+   "reason": "Community-only terms authority reads; runtime cannot approve, publish or mutate terms."
+  },
+  "community_terms_publications": {
+   "class": "RUNTIME",
+   "verbs": [
+    "SELECT"
+   ],
+   "reason": "Community-only terms authority reads; runtime cannot approve, publish or mutate terms."
   }
  }
 }

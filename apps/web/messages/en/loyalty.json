@@ -344,7 +344,23 @@
           "suspended": "This membership is suspended and cannot be changed here.",
           "missing": "No Community membership was found. Refresh your status.",
           "unavailable": "Leaving could not be confirmed. Try again or refresh your status."
-        }
+        },
+        "inactive": "Moderation is cleared. Your membership remains inactive until you explicitly accept the current terms to restore it.",
+        "termsTitle": "Community membership terms",
+        "termsVersion": "Version {version} · Effective {date}",
+        "acceptTerms": "I have read and explicitly accept these Community membership terms.",
+        "joining": "Joining…",
+        "joined": "Membership updated. Pending awards released: {count}.",
+        "joinErrors": {
+          "acceptance": "Read and explicitly accept the displayed terms.",
+          "stale": "Terms or membership changed. Refresh, review and accept again.",
+          "phone": "Verify your phone before joining.",
+          "suspended": "Your account or membership cannot be activated here.",
+          "unavailable": "Joining could not be confirmed. Refresh your status before retrying."
+        },
+        "restore": "Restore Community membership",
+        "restoring": "Restoring…",
+        "restored": "Membership restored. Eligible pending awards released: {count}."
       },
       "membership": {
         "title": "Membership",
@@ -352,7 +368,8 @@
           "active": "Active member",
           "left": "Left the Community",
           "suspended": "Membership suspended",
-          "absent": "Not a member"
+          "absent": "Not a member",
+          "inactive": "Inactive — acceptance required"
         },
         "activeOn": "Member since {date}",
         "leftOn": "Left on {date}",

@@ -73,7 +73,7 @@ communityCustomerRoutes.post('/join', async (c) => {
   return withDb(c, async (db) => {
     const result = await new CommunityMembershipService(db).join(
       c.get('customerId'),
-      body.policyVersion,
+      body,
     );
     const released = await new CommunityPointAwardService(db).reevaluatePendingMembership(
       c.get('customerId'),
@@ -83,6 +83,7 @@ communityCustomerRoutes.post('/join', async (c) => {
       {
         membership: serializeMembership(result.membership),
         account: serializeAccount(result.account),
+        consent: result.consent,
         created: result.created,
         reactivated: result.reactivated,
         releasedPendingAwards: released.filter((award) => award.awarded).length,
@@ -101,3 +102,5 @@ communityCustomerRoutes.post('/leave', async (c) =>
     });
   }),
 );
+
+communityCustomerRoutes.get('/terms', async (c) => withDb(c, async (db) => ok(c, { offer: await new CommunityMembershipService(db).getOffer(c.get('customerId'), c.req.query('locale') ?? 'en') })));

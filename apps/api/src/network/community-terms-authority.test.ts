@@ -145,18 +145,16 @@ describe('NETWORK-15-T2 independent terms foundation (NOT activation enforcement
     const { request, terms } = await acceptance();
     expect(() => validateCommunityTermsAcceptance({ ...request, idempotencyKey }, terms, basis)).toThrow('Explicit current terms acceptance is required.');
   });
-  it('requires a fresh server lifecycle basis for Rejoin', async () => {
+  it.each(['rejoin', 'restore'] as const)('requires a fresh server lifecycle basis for %s', async (operation) => {
     const { request, terms } = await acceptance(); const transitionId = randomUUID();
-    const rejoin = { ...request, operation: 'rejoin', expectedTransitionId: transitionId };
-    expect(validateCommunityTermsAcceptance(rejoin, terms, { operation: 'rejoin', transitionId })).toEqual(rejoin);
-    expect(() => validateCommunityTermsAcceptance(rejoin, terms, { operation: 'rejoin', transitionId: randomUUID() })).toThrow('Community terms or membership state changed. Review and retry.');
+    const rejoin = { ...request, operation, expectedTransitionId: transitionId };
+    expect(validateCommunityTermsAcceptance(rejoin, terms, { operation, transitionId })).toEqual(rejoin);
+    expect(() => validateCommunityTermsAcceptance(rejoin, terms, { operation, transitionId: randomUUID() })).toThrow('Community terms or membership state changed. Review and retry.');
   });
-  it('does not wire the foundation into existing activation paths or customer navigation', () => {
-    for (const file of ['community-customer.routes.ts', 'community-membership.service.ts', 'community-platform-state.service.ts']) {
-      expect(readFileSync(resolve('src/community', file), 'utf8')).not.toContain('community-terms-authority');
-    }
-    const controls = readFileSync(resolve('../web/src/app/loyalty/dashboard/community/membership-controls.tsx'), 'utf8');
-    expect(controls).not.toContain('consentAccepted');
-    expect(controls).not.toContain('community-membership-v1.0');
+  it('ships an empty registry without the unapproved legal candidate', () => {
+    const migration = readFileSync(resolve('drizzle/0088_community_membership_consent.sql'), 'utf8');
+    expect(migration).toContain("VALUES ('community_membership', NULL)");
+    expect(migration).not.toContain('community-membership-v1.0');
+    expect(migration).not.toMatch(/INSERT INTO public\.community_terms_publications/i);
   });
 });

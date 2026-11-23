@@ -12,8 +12,8 @@ describe.skipIf(!process.env.DATABASE_URL)('NETWORK-15-T1 current consent/audit 
   });
   afterAll(async () => { await client.end(); });
 
-  it('rejects an unsupported Community purpose instead of disguising it as business consent', async () => {
-    await expect(client.query("insert into consent_grants(customer_id,purpose,consent_version) values ($1,'community_membership','synthetic-only')", [customerId]))
+  it('rejects unknown purposes after the approved T2 Community purpose extension', async () => {
+    await expect(client.query("insert into consent_grants(customer_id,purpose,consent_version) values ($1,'community_membership_forged','synthetic-only')", [customerId]))
       .rejects.toMatchObject({ code: '23514' });
     expect((await client.query('select count(*)::int n from consent_grants where customer_id=$1', [customerId])).rows[0].n).toBe(0);
   });
@@ -39,7 +39,7 @@ describe.skipIf(!process.env.DATABASE_URL)('NETWORK-15-T1 current consent/audit 
     try {
       await client.query("insert into community_memberships(customer_id,status,policy_version) values ($1,'active','synthetic-probe-not-consent')", [id]);
       await client.query("insert into community_point_accounts(customer_id,status,points_balance) values ($1,'active',0)", [id]);
-      await expect(client.query("insert into consent_grants(customer_id,purpose,consent_version) values ($1,'community_membership','synthetic-only')", [id]))
+      await expect(client.query("insert into consent_grants(customer_id,purpose,consent_version) values ($1,'community_membership_forged','synthetic-only')", [id]))
         .rejects.toMatchObject({ code: '23514' });
     } finally { await client.query('rollback'); }
     for (const table of ['community_memberships', 'community_point_accounts', 'consent_grants']) {

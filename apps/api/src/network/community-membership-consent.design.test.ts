@@ -152,7 +152,8 @@ describe('NETWORK-15-T1 proposed consent reference model (NOT runtime enforcemen
   });
   it('T1-15 current application exposes no draft Join/Rejoin action from navigation or verification', () => {
     const source = readFileSync(resolve('../web/src/lib/actions/community-membership.ts'), 'utf8');
-    expect(source).not.toMatch(/export\s+async\s+function\s+(?:join|rejoin)/i);
+    expect(source).toContain('joinCommunitySchema.safeParse');
+    expect(source).toContain("form.get('consentAccepted') !== 'yes'");
     const controls = readFileSync(resolve('../web/src/app/loyalty/dashboard/community/membership-controls.tsx'), 'utf8');
     expect(controls).not.toContain('community-membership-v1.0');
     expect(controls).not.toContain('consentAccepted');

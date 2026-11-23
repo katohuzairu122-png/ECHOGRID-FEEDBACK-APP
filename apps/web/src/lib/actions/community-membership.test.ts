@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { leaveCommunityAction } from './community-membership';
+import { leaveCommunityAction, joinCommunityAction } from './community-membership';
 import { customerApiFetch } from '@/lib/customer-api-client';
 import { ApiError } from '@/lib/api-error';
 import { revalidatePath } from 'next/cache';
@@ -10,6 +10,28 @@ const form = () => { const f = new FormData(); f.set('confirmed', 'yes'); return
 const customerId = '11111111-1111-4111-8111-111111111111';
 const response = () => ({ membership: { id: '22222222-2222-4222-8222-222222222222', customerId, status: 'left', policyVersion: 'fixture-only', joinedAt: '2026-11-01T00:00:00Z', leftAt: '2026-11-21T00:00:00Z', suspendedAt: null, createdAt: '', updatedAt: '' }, account: { id: '33333333-3333-4333-8333-333333333333', customerId, status: 'closed', pointsBalance: 80, createdAt: '', updatedAt: '' } });
 beforeEach(() => vi.resetAllMocks());
+function accepted() {
+  const f = new FormData(); for (const [key,value] of Object.entries({ operation: 'join', consentAccepted: 'yes', expectedPublicationId: '22222222-2222-4222-8222-222222222222',
+    expectedTermsVersion: 'synthetic-only', expectedTermsHash: 'a'.repeat(64), expectedArtifactHash: 'b'.repeat(64), displayedLocale: 'en', expectedTransitionId: '', idempotencyKey: 'synthetic-key' })) f.set(key,value); return f;
+}
+describe('Community acceptance Server Action', () => {
+  it('requires literal deliberate acceptance without a default', async () => { const f=accepted(); f.delete('consentAccepted'); expect(await joinCommunityAction({},f)).toEqual({error:'acceptance'}); expect(fetcher).not.toHaveBeenCalled(); });
+  it.each(['customerId','verified','acceptedAt','approved','policyVersion'])('refuses forged %s', async (key) => { const f=accepted(); f.set(key,'forged'); expect(await joinCommunityAction({},f)).toEqual({error:'acceptance'}); expect(fetcher).not.toHaveBeenCalled(); });
+  it('refuses duplicate form fields', async () => { const f=accepted(); f.append('expectedTermsVersion','other'); expect(await joinCommunityAction({},f)).toEqual({error:'acceptance'}); expect(fetcher).not.toHaveBeenCalled(); });
+  it.each([['COMMUNITY_ACCEPTANCE_STALE','stale'],['PHONE_VERIFICATION_REQUIRED','phone'],['COMMUNITY_MEMBERSHIP_SUSPENDED','suspended'],['COMMUNITY_TERMS_UNAVAILABLE','unavailable']])('maps %s without leaking private error details', async (code,error) => { fetcher.mockRejectedValue(new ApiError('private',409,code)); expect(await joinCommunityAction({},accepted())).toEqual({error}); expect(revalidatePath).not.toHaveBeenCalled(); });
+  it('validates authoritative success and refreshes points without issuing them in the UI', async () => {
+    const raw=response(); fetcher.mockResolvedValue({ ...raw, membership:{...raw.membership,status:'active',policyVersion:'synthetic-only',leftAt:null}, account:{...raw.account,status:'active'}, consent:{version:'synthetic-only'},releasedPendingAwards:2 });
+    expect(await joinCommunityAction({},accepted())).toEqual({joined:true,released:2}); expect(revalidatePath).toHaveBeenCalledWith('/loyalty/dashboard/community');
+    const sent=JSON.parse(String(fetcher.mock.calls[0]![1]?.body)); expect(sent.consentAccepted).toBe(true); expect(sent.expectedTransitionId).toBeNull(); expect(sent).not.toHaveProperty('customerId');
+  });
+  it('submits fresh Restore as a distinct customer action and never supplies identity', async () => {
+    const raw=response(); fetcher.mockResolvedValue({ ...raw, membership:{...raw.membership,status:'active',policyVersion:'synthetic-only',leftAt:null}, account:{...raw.account,status:'active'}, consent:{version:'synthetic-only'},releasedPendingAwards:0 });
+    const f=accepted(); f.set('operation','restore'); f.set('expectedTransitionId','44444444-4444-4444-8444-444444444444');
+    expect(await joinCommunityAction({},f)).toEqual({joined:true,released:0});
+    const sent=JSON.parse(String(fetcher.mock.calls[0]![1]?.body)); expect(sent.operation).toBe('restore'); expect(sent.consentAccepted).toBe(true); expect(sent).not.toHaveProperty('customerId');
+  });
+  it('does not swallow session redirect control flow', async () => { const e=Object.assign(new Error('NEXT_REDIRECT'),{digest:'NEXT_REDIRECT;replace;/loyalty/login;307;'}); fetcher.mockRejectedValue(e); await expect(joinCommunityAction({},accepted())).rejects.toBe(e); });
+});
 describe('Community leave boundary', () => {
   it('requires explicit confirmation before any API request', async () => {
     expect(await leaveCommunityAction({}, new FormData())).toEqual({ error: 'confirmation' });

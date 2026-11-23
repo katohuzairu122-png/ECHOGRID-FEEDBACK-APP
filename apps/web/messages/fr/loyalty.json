@@ -344,7 +344,23 @@
           "suspended": "Cette adhésion est suspendue et ne peut pas être modifiée ici.",
           "missing": "Aucune adhésion trouvée. Actualisez votre statut.",
           "unavailable": "Le départ n’a pas pu être confirmé. Réessayez ou actualisez le statut."
-        }
+        },
+        "inactive": "La suspension a été levée. Votre adhésion reste inactive jusqu’à votre acceptation explicite des conditions actuelles pour la rétablir.",
+        "termsTitle": "Conditions d’adhésion à la Communauté",
+        "termsVersion": "Version {version} · En vigueur le {date}",
+        "acceptTerms": "J’ai lu et j’accepte expressément ces conditions d’adhésion à la Communauté.",
+        "joining": "Adhésion en cours…",
+        "joined": "Adhésion mise à jour. Attributions en attente débloquées : {count}.",
+        "joinErrors": {
+          "acceptance": "Lisez et acceptez expressément les conditions affichées.",
+          "stale": "Les conditions ou l’adhésion ont changé. Actualisez, vérifiez et acceptez à nouveau.",
+          "phone": "Vérifiez votre téléphone avant d’adhérer.",
+          "suspended": "Ce compte ou cette adhésion ne peut pas être activé ici.",
+          "unavailable": "L’adhésion n’a pas pu être confirmée. Actualisez votre statut avant de réessayer."
+        },
+        "restore": "Rétablir l’adhésion à la communauté",
+        "restoring": "Rétablissement…",
+        "restored": "Adhésion rétablie. Récompenses en attente admissibles débloquées : {count}."
       },
       "membership": {
         "title": "Adhésion",
@@ -352,7 +368,8 @@
           "active": "Membre actif",
           "left": "A quitté la Communauté",
           "suspended": "Adhésion suspendue",
-          "absent": "Non membre"
+          "absent": "Non membre",
+          "inactive": "Inactive — acceptation requise"
         },
         "activeOn": "Membre depuis le {date}",
         "leftOn": "Parti le {date}",

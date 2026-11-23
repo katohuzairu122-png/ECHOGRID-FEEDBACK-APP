@@ -15,7 +15,7 @@ import { customers } from './customers';
 import { businesses } from './businesses';
 import { branches } from './branches';
 
-export const COMMUNITY_MEMBERSHIP_STATUSES = ['active', 'left', 'suspended'] as const;
+export const COMMUNITY_MEMBERSHIP_STATUSES = ['active', 'left', 'suspended', 'inactive'] as const;
 export type CommunityMembershipStatus = (typeof COMMUNITY_MEMBERSHIP_STATUSES)[number];
 
 export const COMMUNITY_POINT_ACCOUNT_STATUSES = ['active', 'suspended', 'closed'] as const;
@@ -79,7 +79,7 @@ export const communityMemberships = pgTable(
     index('community_memberships_status_idx').on(table.status),
     check(
       'community_memberships_status_check',
-      sql`${table.status} IN ('active','left','suspended')`,
+      sql`${table.status} IN ('active','left','suspended','inactive')`,
     ),
     check(
       'community_memberships_left_at_check',

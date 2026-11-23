@@ -34,6 +34,7 @@ vi.mock('../../src/db/client', async (original) => {
   };
 });
 
+import { platformCommunityPointAdjustmentRoutes } from '../../src/platform/community-point-adjustments.routes';
 import { authRoutes } from '../../src/auth/auth.routes';
 import { buildDb } from '../../src/db/client';
 import { appDbOf } from '../helpers/runtime-db';
@@ -42,7 +43,7 @@ import { CustomerSessionService } from '../../src/customer-auth/customer-session
 import { loyaltyCustomerRoutes } from '../../src/loyalty/loyalty-customer.routes';
 import { communityFeedRoutes } from '../../src/community/community-feed.routes';
 import { CommunityPointAdminAdjustmentService } from '../../src/community/community-point-admin-adjustment.service';
-import { CommunityMembershipService } from '../../src/community/community-membership.service';
+import { FixtureCommunityMembershipService as CommunityMembershipService, syntheticCommunityAcceptance, publishSyntheticCommunityTerms } from '../helpers/community-consent-fixtures';
 import { communityCustomerRoutes } from '../../src/community/community-customer.routes';
 import { communityPointCustomerRoutes } from '../../src/community/community-point-customer.routes';
 import { platformNetworkModerationRoutes } from '../../src/platform/network-moderation.routes';
@@ -78,6 +79,7 @@ describe.skipIf(!process.env.DATABASE_URL)('NETWORK-05 real HTTP-to-Postgres lif
   app.onError(errorHandler);
   app.use('*', auditTrail);
   app.route(base, platformNetworkModerationRoutes);
+  app.route('/api/v1/platform/community-points', platformCommunityPointAdjustmentRoutes);
   app.route('/api/v1/auth', authRoutes);
   app.route('/api/v1/network', communityFeedRoutes);
   app.route('/api/v1/loyalty/me', loyaltyCustomerRoutes);
@@ -416,7 +418,9 @@ describe.skipIf(!process.env.DATABASE_URL)('NETWORK-05 real HTTP-to-Postgres lif
     expect((await client.query('select phone,phone_verified_at from customers where id=$1', [id])).rows[0]).toEqual(before);
     expect((await request('/api/v1/network/feed', token)).status).toBe(403);
     expect((await request('/api/v1/community/me', token)).status).toBe(200);
-    const join = await request('/api/v1/community/me/join', token, 'POST', { policyVersion: 'network14-test' });
+    const acceptance = await syntheticCommunityAcceptance(new CommunityMembershipService(appDbOf(buildDb(client))), id, 'network14-synthetic-consent');
+    expect((await request('/api/v1/community/me/join', token, 'POST', { policyVersion: 'network14-test' })).status).toBe(400);
+    const join = await request('/api/v1/community/me/join', token, 'POST', acceptance);
     expect(join.status).toBe(403);
     expect(await join.text()).toContain('PHONE_VERIFICATION_REQUIRED');
     expect((await client.query('select count(*)::int n from community_memberships where customer_id=$1', [id])).rows[0].n).toBe(0);
@@ -430,7 +434,9 @@ describe.skipIf(!process.env.DATABASE_URL)('NETWORK-05 real HTTP-to-Postgres lif
     expect((await request('/api/v1/network/feed?verified=true', token)).status).toBe(400);
     expect((await request(`/api/v1/network/feed?customerId=${customer}`, token)).status).toBe(400);
     expect((await request(`/api/v1/network/feed?businessId=${business}`, token)).status).toBe(400);
-    const join = await request('/api/v1/community/me/join', token, 'POST', { policyVersion: 'network14-test' });
+    const acceptance = await syntheticCommunityAcceptance(new CommunityMembershipService(appDbOf(buildDb(client))), id, 'network14-synthetic-consent');
+    expect((await request('/api/v1/community/me/join', token, 'POST', { policyVersion: 'network14-test' })).status).toBe(400);
+    const join = await request('/api/v1/community/me/join', token, 'POST', acceptance);
     expect(join.status).toBe(201);
     expect((await join.json() as { data: { membership: { customerId: string } } }).data.membership.customerId).toBe(id);
     expect((await request(base + '/posts', token, 'POST', { body: 'not permitted', contentLocale: 'en' })).status).toBe(401);
@@ -473,6 +479,7 @@ describe.skipIf(!process.env.DATABASE_URL)('NETWORK-05 real HTTP-to-Postgres lif
       const denied = await request('/api/v1/network/feed', token, 'GET', undefined, 'true', testEnv);
       expect(denied.status).toBe(401);
       expect((await request('/api/v1/community/me/leave', token, 'POST', undefined, 'true', testEnv)).status).toBe(401);
+      expect((await request('/api/v1/community/me/join', token, 'POST', {}, 'true', testEnv)).status).toBe(401);
       expect((await denied.json() as { error: { code: string } }).error.code).toBe('UNAUTHENTICATED');
     },
   );
@@ -484,11 +491,48 @@ describe.skipIf(!process.env.DATABASE_URL)('NETWORK-05 real HTTP-to-Postgres lif
     )).rows[0]!.id;
     const token = await signCustomerAccessToken(id, customerSecret);
     const service = new CommunityMembershipService(appDbOf(buildDb(client)));
-    // Synthetic service fixture only; this is NOT customer acceptance of approved membership terms.
+    // Synthetic approval/explicit acceptance through the real service; never legal approval.
+    if (status === 'absent') await client.query('update community_terms_current set publication_id=null');
     if (status !== 'absent') await service.join(id, 'network15-synthetic-fixture-not-consent');
     if (status === 'suspended') await client.query("update community_memberships set status='suspended',suspended_at=now() where customer_id=$1", [id]);
     return { id, token, service };
   }
+
+  it('NETWORK-15-T2 actual HTTP consent scopes identity and denies non-customer identities', async () => {
+    const f = await membershipFixture(); const other = await membershipFixture();
+    const input = await syntheticCommunityAcceptance(f.service, f.id, 'network15t2-http');
+    const cashierToken = await signCashierAccessToken(moderatorA, secret, { businessId: business, sessionId: randomUUID() });
+    const impersonation = await signImpersonationToken(moderatorA, author, secret);
+    const expired = await sign({ sub: f.id, type: 'customer_access', iat: 0, exp: 1 }, customerSecret, 'HS256');
+    for (const token of ['', 'forged-token', expired, cashierToken, impersonation.token, await signAccessToken(moderatorA, secret)])
+      expect((await request('/api/v1/community/me/join', token, 'POST', input)).status).toBe(401);
+    expect((await request('/api/v1/community/me/join', f.token, 'POST', { ...input, customerId: other.id })).status).toBe(400);
+    const response = await request('/api/v1/community/me/join', f.token, 'POST', input); expect(response.status).toBe(201);
+    const raw = await response.json() as { data: { consent: { version: string }; membership: { customerId: string } } };
+    expect(raw.data.membership.customerId).toBe(f.id);
+    expect(JSON.stringify(raw)).not.toMatch(/metadata|idempotencyKey|requestDigest|approval|phone|password/);
+    expect((await other.service.getStatus(other.id)).membership).toBeNull();
+    expect((await request(`/api/v1/platform/community-points/${f.id}/restore`, f.token, 'POST', { reason: 'No moderator authority.' })).status).toBe(401);
+    const adminToken = await signAccessToken(moderatorA, secret);
+    expect((await request(`/api/v1/platform/community-points/${f.id}/suspend`, adminToken, 'POST', { reason: 'Synthetic moderation.' })).status).toBe(200);
+    try {
+      for (const role of [null, 'support', 'billing']) {
+        await client.query('update users set platform_role=$2 where id=$1', [moderatorA, role]);
+        expect((await request(`/api/v1/platform/community-points/${f.id}/restore`, adminToken, 'POST', { reason: 'No current authority.' })).status).toBe(403);
+      }
+    } finally { await client.query("update users set platform_role='admin' where id=$1", [moderatorA]); }
+    for (const token of [cashierToken, impersonation.token]) expect((await request(`/api/v1/platform/community-points/${f.id}/restore`, token, 'POST', { reason: 'Not allowed.' })).status).toBe(403);
+    expect((await request(`/api/v1/platform/community-points/${f.id}/restore`, adminToken, 'POST', { reason: 'Synthetic clearance.' })).status).toBe(200);
+    expect((await f.service.getStatus(f.id)).membership?.status).toBe('inactive');
+    const restoreAcceptance = await syntheticCommunityAcceptance(f.service, f.id, input.expectedTermsVersion);
+    expect(restoreAcceptance.operation).toBe('restore');
+    expect((await request('/api/v1/community/me/join', f.token, 'POST', { ...restoreAcceptance, consentAccepted: false })).status).toBe(400);
+    expect((await f.service.getStatus(f.id)).membership?.status).toBe('inactive');
+    expect((await request('/api/v1/community/me/join', f.token, 'POST', restoreAcceptance)).status).toBe(200);
+    expect((await f.service.getStatus(f.id)).membership?.status).toBe('active');
+    expect((await request('/api/v1/community/me/leave', f.token, 'POST')).status).toBe(200);
+    expect((await request('/api/v1/community/me/join', f.token, 'POST', input)).status).toBe(409);
+  });
 
   async function membershipNonEffects() {
     const tables = ['community_memberships', 'community_point_accounts', 'community_point_transactions',
@@ -519,8 +563,11 @@ describe.skipIf(!process.env.DATABASE_URL)('NETWORK-05 real HTTP-to-Postgres lif
     const before = await membershipNonEffects();
     const denied = await request('/api/v1/community/me/join', f.token, 'POST',
       { policyVersion: 'not-approved-negative-fixture', verified: true, customerId: customer });
-    expect(denied.status).toBe(403);
-    expect(await denied.text()).toContain('PHONE_VERIFICATION_REQUIRED');
+    expect(denied.status).toBe(400);
+    const acceptance = await syntheticCommunityAcceptance(f.service, f.id);
+    const unverified = await request('/api/v1/community/me/join', f.token, 'POST', acceptance);
+    expect(unverified.status).toBe(403);
+    expect(await unverified.text()).toContain('PHONE_VERIFICATION_REQUIRED');
     expect((await request('/api/v1/community/me/join', f.token, 'POST', { policyVersion: '' })).status).toBe(400);
     expect(await membershipNonEffects()).toEqual(before);
   });
@@ -533,6 +580,7 @@ describe.skipIf(!process.env.DATABASE_URL)('NETWORK-05 real HTTP-to-Postgres lif
       { actorUserId: moderatorA, ipAddress: null, userAgent: null });
     const before = await membershipNonEffects();
     const otherBefore = await other.service.getStatus(other.id);
+    const otherConsentsBefore = (await client.query('select * from consent_grants where customer_id=$1 order by id', [other.id])).rows;
     const response = await request('/api/v1/community/me/leave', own.token, 'POST', { customerId: other.id, verified: true });
     expect(response.status).toBe(200);
     const state = await own.service.getStatus(own.id);
@@ -540,7 +588,10 @@ describe.skipIf(!process.env.DATABASE_URL)('NETWORK-05 real HTTP-to-Postgres lif
     expect(state.account?.status).toBe('closed');
     expect(state.account?.pointsBalance).toBe(80);
     expect(await other.service.getStatus(other.id)).toEqual(otherBefore);
-    expect(await membershipNonEffects()).toEqual(before);
+    expect((await client.query('select * from consent_grants where customer_id=$1 order by id', [other.id])).rows).toEqual(otherConsentsBefore);
+    const afterLeave = await membershipNonEffects();
+    expect(Object.fromEntries(Object.entries(afterLeave).filter(([key]) => key !== 'consent_grants:contents'))).toEqual(Object.fromEntries(Object.entries(before).filter(([key]) => key !== 'consent_grants:contents')));
+    expect((await client.query("select count(*)::int n from consent_grants where customer_id=$1 and purpose='community_membership' and status='active'", [own.id])).rows[0].n).toBe(0);
     const replay = await request('/api/v1/community/me/leave', own.token, 'POST');
     expect(replay.status).toBe(200);
     expect(await own.service.getStatus(own.id)).toEqual(state);
@@ -1701,6 +1752,7 @@ describe.skipIf(!process.env.DATABASE_URL)('NETWORK-05 real HTTP-to-Postgres lif
           await page.setViewportSize({ width, height: 900 });
           await client.query('delete from community_memberships where customer_id=$1', [f.id]);
           await client.query('delete from community_point_accounts where customer_id=$1', [f.id]);
+          await client.query('update community_terms_current set publication_id=null');
           await client.query('update customers set phone_verified_at=null where id=$1', [f.id]);
           const before = await membershipNonEffects();
           await page.goto(target);
@@ -1722,6 +1774,7 @@ describe.skipIf(!process.env.DATABASE_URL)('NETWORK-05 real HTTP-to-Postgres lif
           // Preexisting member fixture, NOT UI terms acceptance. Joining/rejoining acceptance is policy-blocked.
           await client.query('update customers set phone_verified_at=now() where id=$1', [f.id]);
           await f.service.join(f.id, 'network15-synthetic-fixture-not-consent');
+          await client.query('update community_terms_current set publication_id=null');
           await page.goto(target);
           await browserExpect(page.getByTestId('membership-status')).toHaveText(copy.membership.status.active);
           const leave = controls.getByRole('button', { name: copy.selfService.leave, exact: true });
@@ -1751,6 +1804,81 @@ describe.skipIf(!process.env.DATABASE_URL)('NETWORK-05 real HTTP-to-Postgres lif
       }
     }),
     120000,
+  );
+
+  it.skipIf(!browserEnabled)(
+    'browser accepts synthetic terms, joins, rejoins and freshly restores in four locales (NETWORK-15-T2)',
+    async () => withModerationBrowser(moderatorB, async (page, context, webUrl, browserExpect) => {
+      for (const locale of ['en', 'fr', 'es', 'ar'] as const) for (const width of [375, 1280]) {
+        const f = await membershipFixture();
+        const publication = await publishSyntheticCommunityTerms('network15t2-browser-synthetic');
+        const copy = (requireWeb(`./messages/${locale}/loyalty.json`) as { customer: { community: {
+          membership: { status: { absent: string; active: string; left: string; inactive: string } };
+          selfService: { join: string; rejoin: string; leave: string; confirmTitle: string; confirmLeave: string; acceptTerms: string; verifyPhone: string; retry: string; restore: string; joinErrors: { stale: string } };
+        } } }).customer.community;
+        await context.clearCookies(); await context.addCookies([{ name: 'ff_customer_token', value: f.token, url: webUrl, httpOnly: true }, { name: 'ff_locale', value: locale, url: webUrl }]);
+        await page.setViewportSize({ width, height: 900 });
+        await client.query('update customers set phone_verified_at=null where id=$1', [f.id]);
+        const before = await membershipNonEffects();
+        await page.goto(webUrl + '/loyalty/dashboard/community');
+        await browserExpect(page.getByTestId('membership-status')).toHaveText(copy.membership.status.absent);
+        const controls = page.getByTestId('community-membership-controls');
+        await browserExpect(controls.getByRole('checkbox', { name: copy.selfService.acceptTerms })).toBeDisabled();
+        await browserExpect(controls.getByRole('link', { name: copy.selfService.verifyPhone, exact: true })).toBeVisible();
+        expect(await membershipNonEffects()).toEqual(before);
+        const denied = await syntheticCommunityAcceptance(f.service, f.id, publication.version);
+        expect((await request('/api/v1/community/me/join', f.token, 'POST', denied)).status).toBe(403);
+        await client.query('update customers set phone_verified_at=now() where id=$1', [f.id]);
+        await page.reload();
+        const checkbox = controls.getByRole('checkbox', { name: copy.selfService.acceptTerms });
+        await browserExpect(checkbox).not.toBeChecked();
+        await browserExpect(controls.getByRole('button', { name: copy.selfService.join, exact: true })).toBeDisabled();
+        if (locale === 'en' && width === 375) {
+          await publishSyntheticCommunityTerms('network15t2-browser-revised-synthetic');
+          await checkbox.check(); await controls.getByRole('button', { name: copy.selfService.join, exact: true }).click();
+          await browserExpect(controls.getByRole('alert')).toHaveText(copy.selfService.joinErrors.stale);
+          expect((await f.service.getStatus(f.id)).membership).toBeNull();
+          await controls.getByRole('button', { name: copy.selfService.retry, exact: true }).click();
+          await browserExpect(checkbox).not.toBeChecked();
+          await browserExpect(controls.getByRole('alert')).toHaveCount(0);
+        }
+        await checkbox.focus(); await checkbox.press('Space');
+        await controls.getByRole('button', { name: copy.selfService.join, exact: true }).click();
+        await browserExpect(page.getByTestId('membership-status')).toHaveText(copy.membership.status.active);
+        const account = (await f.service.getStatus(f.id)).account!;
+        await controls.getByRole('button', { name: copy.selfService.leave, exact: true }).click();
+        const dialog = page.getByRole('dialog', { name: copy.selfService.confirmTitle });
+        await browserExpect(dialog.getByRole('button', { name: copy.selfService.confirmLeave, exact: true })).toBeDisabled();
+        await dialog.getByRole('checkbox').check(); await dialog.getByRole('button', { name: copy.selfService.confirmLeave, exact: true }).click();
+        await browserExpect(page.getByTestId('membership-status')).toHaveText(copy.membership.status.left);
+        await browserExpect(checkbox).not.toBeChecked(); await checkbox.check();
+        await controls.getByRole('button', { name: copy.selfService.rejoin, exact: true }).click();
+        await browserExpect(page.getByTestId('membership-status')).toHaveText(copy.membership.status.active);
+        const after = await f.service.getStatus(f.id); expect(after.account?.id).toBe(account.id); expect(after.account?.pointsBalance).toBe(account.pointsBalance);
+        const actorToken = await signAccessToken(moderatorA, secret);
+        const historical = (await client.query("select id,metadata from audit_log where entity_id=$1 and metadata->>'consentAccepted'='true' order by id", [after.membership!.id])).rows;
+        expect((await request(`/api/v1/platform/community-points/${f.id}/suspend`, actorToken, 'POST', { reason: 'Synthetic browser investigation.' })).status).toBe(200);
+        expect((await request(`/api/v1/platform/community-points/${f.id}/restore`, actorToken, 'POST', { reason: 'Synthetic browser clearance.' })).status).toBe(200);
+        expect((await f.service.getStatus(f.id)).membership?.status).toBe('inactive');
+        await page.reload();
+        await browserExpect(page.getByTestId('membership-status')).toHaveText(copy.membership.status.inactive);
+        await browserExpect(checkbox).not.toBeChecked();
+        const restoreButton = controls.getByRole('button', { name: copy.selfService.restore, exact: true });
+        await browserExpect(restoreButton).toBeDisabled();
+        const declined = await membershipNonEffects(); await page.reload();
+        expect(await membershipNonEffects()).toEqual(declined);
+        expect((await request('/api/v1/community/me/join', f.token, 'POST', { operation: 'restore' })).status).toBe(400);
+        expect((await f.service.getStatus(f.id)).membership?.status).toBe('inactive');
+        await checkbox.focus(); await checkbox.press('Space'); await restoreButton.click();
+        await browserExpect(page.getByTestId('membership-status')).toHaveText(copy.membership.status.active);
+        const restored = await f.service.getStatus(f.id);
+        expect(restored.account?.id).toBe(account.id); expect(restored.account?.pointsBalance).toBe(account.pointsBalance);
+        expect((await client.query("select count(*)::int n from audit_log where entity_id=$1 and metadata->>'operation'='restore' and metadata->>'consentAccepted'='true'", [after.membership!.id])).rows[0].n).toBe(1);
+        expect((await client.query("select id,metadata from audit_log where entity_id=$1 and metadata->>'consentAccepted'='true' and metadata->>'operation'<>'restore' order by id", [after.membership!.id])).rows).toEqual(historical);
+        expect(await page.locator('html').evaluate((el: { scrollWidth: number }) => el.scrollWidth)).toBeLessThanOrEqual(width);
+        await browserExpect(page.locator('html')).toHaveAttribute('dir', locale === 'ar' ? 'rtl' : 'ltr');
+      }
+    }), 120000,
   );
 
   it.skipIf(!browserEnabled)(
