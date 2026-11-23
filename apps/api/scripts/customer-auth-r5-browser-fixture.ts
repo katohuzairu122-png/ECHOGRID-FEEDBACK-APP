@@ -145,17 +145,10 @@ app.get('/__test/mailbox', (c) => {
 });
 app.route('/api/v1/customer-auth', emailAuth);
 app.route('/api/v1/customer-session', lifecycle);
-app.onError((error) => {
-  // Test-only diagnostic: never emit request data or provider messages.
-  console.error('customer_auth_r5_hono_error', error instanceof Error ? error.name : 'unknown');
-  return new Response('Internal Server Error', { status: 500 });
-});
+app.onError(() => new Response('Internal Server Error', { status: 500 }));
 
 const port = Number(process.env.CUSTOMER_AUTH_R5_API_PORT ?? '8792');
 const server = createServer(async (incoming, outgoing) => {
-  const startedAt = Date.now();
-  const pathname = new URL(incoming.url ?? '/', `http://127.0.0.1:${port}`).pathname;
-  console.info('customer_auth_r5_request_start', incoming.method ?? 'UNKNOWN', pathname);
   try {
     const chunks: Buffer[] = [];
     for await (const chunk of incoming) chunks.push(Buffer.from(chunk));
@@ -181,10 +174,8 @@ const server = createServer(async (incoming, outgoing) => {
     for (const [name, value] of response.headers) outgoing.setHeader(name, value);
     outgoing.writeHead(response.status);
     outgoing.end(Buffer.from(await response.arrayBuffer()));
-    console.info('customer_auth_r5_request_done', incoming.method ?? 'UNKNOWN', pathname, response.status, Date.now() - startedAt);
     await Promise.allSettled(pending);
-  } catch (error) {
-    console.error('customer_auth_r5_request_error', incoming.method ?? 'UNKNOWN', pathname, error instanceof Error ? error.name : 'unknown');
+  } catch { 
     outgoing.writeHead(500);
     outgoing.end();
   }
