@@ -1,0 +1,72 @@
+name: Customer Auth R5 provisional Chromium acceptance
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/customer-auth-r5-browser-acceptance.yml'
+      - 'apps/api/scripts/customer-auth-r5-browser-fixture.ts'
+      - 'apps/api/src/customer-auth/**'
+      - 'apps/api/drizzle/**'
+      - 'apps/web/playwright.customer-auth-r5.config.ts'
+      - 'apps/web/e2e/customer-auth-r5-provisional.spec.ts'
+      - 'apps/web/src/app/loyalty/**'
+      - 'apps/web/src/lib/actions/customer-email-auth.ts'
+      - 'tools/prepare-customer-auth-r5-env.mjs'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: customer-auth-r5-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  provisional-browser:
+    name: Chromium provisional acceptance (PostgreSQL ${{ matrix.postgres }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        postgres: ['16', '18']
+    services:
+      postgres:
+        image: postgres:${{ matrix.postgres }}
+        env:
+          POSTGRES_USER: echogrid
+          POSTGRES_PASSWORD: echogrid
+          POSTGRES_DB: echogrid_customer_auth_r5_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 5s
+          --health-timeout 5s --health-retries 10
+    env:
+      CI: 'true'
+      DATABASE_URL: postgresql://echogrid:echogrid@localhost:5432/echogrid_customer_auth_r5_test
+      CUSTOMER_AUTH_R5_TEST_ONLY: 'true'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Record exact revision and database major
+        run: |
+          git rev-parse HEAD
+          psql "$DATABASE_URL" -Atc "select current_setting('server_version_num')"
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.9.0
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Create per-run synthetic credentials
+        run: node tools/prepare-customer-auth-r5-env.mjs
+      - name: Apply migrations to disposable PostgreSQL
+        run: pnpm --filter @echo-grid-feedback/api db:migrate
+      - name: Install Chromium
+        run: pnpm --filter @echo-grid-feedback/web exec playwright install --with-deps chromium
+      - name: Run provisional real-browser suite
+        run: pnpm --filter @echo-grid-feedback/web exec playwright test --config playwright.customer-auth-r5.config.ts

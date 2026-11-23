@@ -1,6 +1,6 @@
 'use client';
 
-import { useActionState, useEffect, useState } from 'react';
+import { useActionState, useEffect, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import Link from 'next/link';
 import { completeEmailRegistrationAction, type EmailAuthState } from '@/lib/actions/customer-email-auth';
@@ -26,11 +26,28 @@ export function SignupVerifyForm({ next }: { next: string; minLength?: number | 
   const [state, formAction, pending] = useActionState(completeEmailRegistrationAction, initial);
   const t = useTranslations('loyalty.customer.emailAuth');
   const [challenge, setChallenge] = useState<string | null | undefined>(undefined);
+  const challengeRead = useRef(false);
 
   useEffect(() => {
+    // React Strict Mode replays effects in development. Consume the fragment once,
+    // otherwise the replay sees the already-scrubbed URL and overwrites the proof.
+    if (challengeRead.current) return;
+    challengeRead.current = true;
     setChallenge(readChallengeFromHash(window.location.hash));
     window.history.replaceState(null, '', window.location.pathname + window.location.search);
   }, []);
+  // Same-document navigation to another email link changes only the fragment.
+  // Next.js may reuse this component, so the initial mount effect will not rerun.
+  // Accept a newly opened proof without retaining the fragment in browser history.
+  useEffect(() => {
+    const onHashChange = () => {
+      setChallenge(readChallengeFromHash(window.location.hash));
+      window.history.replaceState(null, '', window.location.pathname + window.location.search);
+    };
+    window.addEventListener('hashchange', onHashChange);
+    return () => window.removeEventListener('hashchange', onHashChange);
+  }, []);
+
   useEffect(() => {
     if (state.success && state.next) window.location.assign(state.next);
   }, [state]);
