@@ -617,6 +617,13 @@
       "when": 1795250000000,
       "tag": "0087_customer_pending_registration",
       "breakpoints": true
+    },
+    {
+      "idx": 88,
+      "version": "7",
+      "when": 1795422498513,
+      "tag": "0088_community_membership_consent",
+      "breakpoints": true
     }
   ]
 }

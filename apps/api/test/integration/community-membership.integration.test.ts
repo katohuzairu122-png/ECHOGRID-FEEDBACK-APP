@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { Client } from 'pg';
 import { buildDb } from '../../src/db/client';
 import { createRepositories } from '../../src/repositories';
-import { CommunityMembershipService } from '../../src/community/community-membership.service';
+import { FixtureCommunityMembershipService as CommunityMembershipService } from '../helpers/community-consent-fixtures';
 import { appDbOf } from '../helpers/runtime-db';
 
 describe.skipIf(!process.env.DATABASE_URL)('Split 05 Community membership service (integration)', () => {

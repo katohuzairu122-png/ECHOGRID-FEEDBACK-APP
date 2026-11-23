@@ -3,10 +3,39 @@ import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithIntl } from '@/test-utils';
 import { CommunityMembershipControls } from './membership-controls';
-const h = vi.hoisted(() => ({ leave: vi.fn(), router: { refresh: vi.fn() } }));
-vi.mock('@/lib/actions/community-membership', () => ({ leaveCommunityAction: h.leave }));
+import type { CommunityTermsOffer } from '@echo-grid-feedback/shared-types';
+const h = vi.hoisted(() => ({ leave: vi.fn(), join: vi.fn(), router: { refresh: vi.fn() } }));
+vi.mock('@/lib/actions/community-membership', () => ({ leaveCommunityAction: h.leave, joinCommunityAction: h.join }));
 vi.mock('next/navigation', () => ({ useRouter: () => h.router }));
 beforeEach(() => { vi.clearAllMocks(); h.leave.mockResolvedValue({ left: true }); });
+const offer: CommunityTermsOffer = { operation: 'join', transitionId: null, terms: { publicationId: '22222222-2222-4222-8222-222222222222', version: 'synthetic-unit-only',
+  effectiveAt: '2020-01-01T00:00:00Z', locale: 'en', content: 'SYNTHETIC TEST TERMS — NOT LEGAL APPROVAL', contentHash: 'a'.repeat(64), manifestHash: 'b'.repeat(64), hashAlgorithm: 'sha256-utf8' } };
+it('requires explicit unchecked acceptance, then refreshes authoritative membership and points', async () => {
+  const user = userEvent.setup(); h.join.mockResolvedValue({ joined: true, released: 2 });
+  renderWithIntl(<CommunityMembershipControls status="absent" phone="verified" offer={offer} />);
+  const check = screen.getByRole('checkbox'); expect(check).not.toBeChecked();
+  expect(screen.getByRole('button', { name: 'Join Community' })).toBeDisabled(); expect(h.join).not.toHaveBeenCalled();
+  await user.click(check); await user.click(screen.getByRole('button', { name: 'Join Community' }));
+  await waitFor(() => expect(h.join).toHaveBeenCalledTimes(1)); await waitFor(() => expect(h.router.refresh).toHaveBeenCalled());
+  expect(screen.getByRole('button', { name: 'Join Community' })).toBeDisabled();
+});
+it('does not mistake phone verification for acceptance or membership', () => {
+  renderWithIntl(<CommunityMembershipControls status="absent" phone="unverified" offer={offer} />);
+  expect(screen.getByRole('checkbox')).toBeDisabled(); expect(screen.getByRole('button', { name: 'Join Community' })).toBeDisabled(); expect(h.join).not.toHaveBeenCalled();
+});
+it('keeps stale terms recoverable and requires refresh before another attempt', async () => {
+  const user = userEvent.setup(); h.join.mockResolvedValue({ error: 'stale' });
+  renderWithIntl(<CommunityMembershipControls status="absent" phone="verified" offer={offer} />);
+  await user.click(screen.getByRole('checkbox')); await user.click(screen.getByRole('button', { name: 'Join Community' }));
+  expect(await screen.findByRole('alert')).toHaveTextContent('Terms or membership changed');
+  expect(screen.getByRole('button', { name: 'Join Community' })).toBeDisabled();
+  await user.click(screen.getByRole('button', { name: 'Refresh status' })); expect(h.router.refresh).toHaveBeenCalled();
+});
+it('distinguishes cleared inactive membership from voluntary Leave and allows explicit acceptance or confirmed Leave', () => {
+  renderWithIntl(<CommunityMembershipControls status="inactive" phone="verified" offer={{ ...offer, operation: 'restore' }} />);
+  expect(screen.getByText(/Moderation is cleared/)).toBeVisible(); expect(screen.getByRole('checkbox')).not.toBeChecked();
+  expect(screen.getByRole('button', { name: 'Restore Community membership' })).toBeDisabled(); expect(screen.getByRole('button', { name: 'Leave Community' })).toBeEnabled();
+});
 it.each(['absent', 'left'] as const)('keeps %s enrollment unavailable without approved terms', (status) => {
   renderWithIntl(<CommunityMembershipControls status={status} phone="verified" />);
   expect(screen.getByRole('button', { name: status === 'left' ? 'Rejoin Community' : 'Join Community' })).toBeDisabled();

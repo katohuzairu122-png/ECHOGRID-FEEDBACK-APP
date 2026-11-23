@@ -1,5 +1,11 @@
 # Community membership consent contract — proposed, non-activating
 
+> Historical T1 proposal. The final T2 Owner dispatch supersedes conflicting technical
+> implementation/Restore statements: every Restore requires fresh customer consent;
+> prior consent is never reused. See [the current D1 ruling](../../NETWORK-15/NETWORK_15_T2_D1_APPROVED.md)
+> and [runtime contract](../../NETWORK-15/NETWORK_15_T2_RUNTIME_CONSENT.md).
+> Legal terms and live activation remain unapproved.
+
 **Status: DESIGN ONLY — NO APPROVED TERMS — NO RUNTIME ACTIVATION.**
 Baseline: `f2f9212d502607ee24af203dcb2fcf865a55b8ad`.
 Candidate identifier: `community-membership-v1.0`; approved/effective version: none.

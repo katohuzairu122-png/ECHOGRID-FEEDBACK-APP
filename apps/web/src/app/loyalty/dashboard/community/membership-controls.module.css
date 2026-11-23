@@ -8,3 +8,5 @@
 .confirmation input { flex-shrink: 0; width: 20px; height: 20px; }
 .dialog { max-width: min(28rem, calc(100vw - 2rem)); background: var(--ws-surface); color: var(--ws-text); border-color: var(--ws-border); }
 .dialog h2 { color: var(--ws-text); }
+
+.terms { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 24rem; overflow: auto; padding: 1rem; border: 1px solid var(--ws-border); border-radius: .5rem; }

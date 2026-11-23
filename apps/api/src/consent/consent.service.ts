@@ -1,3 +1,4 @@
+import { AppError } from '../lib/errors';
 import type { ConsentPurpose } from '../db/schema';
 import type { Repositories } from '../repositories';
 
@@ -21,6 +22,7 @@ export class ConsentService {
     idempotencyKey?: string;
     metadata?: Record<string, unknown>;
   }) {
+    if (input.purpose === 'community_membership') throw new AppError('Use explicit Community acceptance.', 400, 'COMMUNITY_CONSENT_FLOW_REQUIRED');
     return this.repos.consentGrants.create({
       customerId: input.customerId,
       purpose: input.purpose,

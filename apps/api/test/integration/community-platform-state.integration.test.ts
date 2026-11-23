@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { Client } from 'pg';
 import { buildDb } from '../../src/db/client';
 import { createRepositories } from '../../src/repositories';
-import { CommunityMembershipService } from '../../src/community/community-membership.service';
+import { FixtureCommunityMembershipService as CommunityMembershipService } from '../helpers/community-consent-fixtures';
 import { CommunityPointAwardService } from '../../src/community/community-point-award.service';
 import { CommunityPointAdminAdjustmentService } from '../../src/community/community-point-admin-adjustment.service';
 import { CommunityPlatformStateService } from '../../src/community/community-platform-state.service';
@@ -210,7 +210,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
       });
     });
 
-    it('restores the paired state and allows pending evidence to earn again', async () => {
+    it('clears moderation without earning, then requires fresh customer Restore consent before pending evidence earns', async () => {
       const state = new CommunityPlatformStateService(appDbOf(db));
       const restored = await state.restore(
         customerId,
@@ -219,10 +219,21 @@ describe.skipIf(!process.env.DATABASE_URL)(
       );
 
       expect(restored.changed).toBe(true);
-      expect(restored.membership.status).toBe('active');
+      expect(restored.membership.status).toBe('inactive');
       expect(restored.membership.suspendedAt).toBeNull();
-      expect(restored.account.status).toBe('active');
+      expect(restored.account.status).toBe('closed');
       expect(restored.account.pointsBalance).toBe(50);
+
+      const withheld = await new CommunityPointAwardService(appDbOf(db)).reevaluatePendingMembership(customerId);
+      expect(withheld.every((award) => !award.awarded)).toBe(true);
+      expect((await createRepositories(db).communityPointAccounts.findById(accountId))?.pointsBalance).toBe(50);
+      const activated = await new CommunityMembershipService(appDbOf(db)).join(customerId, 'community-policy-v1');
+      expect(activated.membership.status).toBe('active');
+      const evidence = await createRepositories(db).auditLog.listForEntity('community_membership', membershipId);
+      expect(evidence.some((row) => {
+        const metadata = row.metadata as Record<string, unknown> | null;
+        return metadata?.operation === 'restore' && metadata?.consentAccepted === true;
+      })).toBe(true);
 
       const awards =
         await new CommunityPointAwardService(appDbOf(db)).reevaluatePendingMembership(

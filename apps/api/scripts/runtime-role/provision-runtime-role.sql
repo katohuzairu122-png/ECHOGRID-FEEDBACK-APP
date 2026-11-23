@@ -60,6 +60,8 @@ DECLARE
     ['community_point_award_decisions', 'INSERT, SELECT, UPDATE'],
     ['community_point_rules', 'INSERT, SELECT, UPDATE'],
     ['community_point_transactions', 'INSERT, SELECT'],
+    ['community_terms_current', 'SELECT'],
+    ['community_terms_publications', 'SELECT'],
     ['consent_grants', 'INSERT, SELECT, UPDATE'],
     ['conversations', 'INSERT, SELECT, UPDATE'],
     ['critical_incidents', 'INSERT, SELECT, UPDATE'],

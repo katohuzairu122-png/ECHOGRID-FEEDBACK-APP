@@ -16,6 +16,20 @@ No equivalent approved Community terms/publication/consent contract was found.
 Documents live under the established `docs/architecture/builds/NETWORK/` convention,
 in this scoped `NETWORK-15-T1/` folder rather than a competing root directory.
 
+## Subsequent T2 development ruling — 2026-11-23
+
+The final NETWORK-15-T2 Owner dispatch approves fresh explicit versioned consent
+for Join, terminated-membership Rejoin and **every Restore**. A prior consent may
+not be reused for Restore. Atomic grant/audit/activation, current lifecycle binding,
+retry/concurrency protection and unchanged tenant/phone rules are required.
+The canonical runtime decision is
+[NETWORK_15_T2_D1_APPROVED.md](../../NETWORK-15/NETWORK_15_T2_D1_APPROVED.md).
+It supersedes conflicting technical proposal/unimplemented statements below for
+T2 development (explicit acceptance, Community registry/purpose, immutable evidence,
+Rejoin and Restore integration). The table below preserves the historical T1
+reconciliation; legal wording, effective publication, material-change/retention
+policies and shared-environment activation remain separate approval gates.
+
 ## D1–D10
 
 | ID | Recommendation | Existing authority / decision still required |

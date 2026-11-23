@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-export const communityMembershipStatusSchema = z.enum(['active', 'left', 'suspended']);
+export const communityMembershipStatusSchema = z.enum(['active', 'left', 'suspended', 'inactive']);
 export type CommunityMembershipStatus = z.infer<typeof communityMembershipStatusSchema>;
 
 export const communityPointAccountStatusSchema = z.enum(['active', 'suspended', 'closed']);
@@ -63,9 +63,27 @@ export type CommunityPointLedgerQuery = z.infer<
 >;
 
 export const joinCommunitySchema = z.object({
-  policyVersion: z.string().trim().min(1).max(100),
-});
+  operation: z.enum(['join', 'rejoin', 'restore']),
+  consentAccepted: z.literal(true),
+  expectedPublicationId: z.uuid(),
+  expectedTermsVersion: z.string().min(1).max(100),
+  expectedTermsHash: z.string().regex(/^[a-f0-9]{64}$/),
+  expectedArtifactHash: z.string().regex(/^[a-f0-9]{64}$/),
+  displayedLocale: z.enum(['en', 'fr', 'es', 'ar']),
+  expectedTransitionId: z.uuid().nullable(),
+  idempotencyKey: z.string().min(1).max(100).refine((key) => key.trim() === key),
+}).strict();
 export type JoinCommunityInput = z.infer<typeof joinCommunitySchema>;
+
+export const communityTermsOfferSchema = z.object({
+  terms: z.object({
+    publicationId: z.uuid(), version: z.string().min(1).max(100), effectiveAt: z.iso.datetime({ offset: true }),
+    locale: z.enum(['en', 'fr', 'es', 'ar']), content: z.string().min(1).max(100_000),
+    contentHash: z.string().regex(/^[a-f0-9]{64}$/), manifestHash: z.string().regex(/^[a-f0-9]{64}$/), hashAlgorithm: z.literal('sha256-utf8'),
+  }).strict(),
+  transitionId: z.uuid().nullable(), operation: z.enum(['join', 'rejoin', 'restore']),
+}).strict();
+export type CommunityTermsOffer = z.infer<typeof communityTermsOfferSchema>;
 
 export const createCommunityPointRuleSchema = z
   .object({

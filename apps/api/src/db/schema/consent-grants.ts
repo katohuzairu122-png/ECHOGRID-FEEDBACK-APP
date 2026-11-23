@@ -9,6 +9,7 @@ export const CONSENT_PURPOSES = [
   'survey_participation',
   'settlement_access',
   'contact_sharing',
+  'community_membership',
 ] as const;
 export type ConsentPurpose = (typeof CONSENT_PURPOSES)[number];
 
@@ -46,7 +47,7 @@ export const consentGrants = pgTable(
     uniqueIndex('consent_grants_idempotency_key').on(table.idempotencyKey).where(sql`${table.idempotencyKey} IS NOT NULL`),
     check(
       'consent_grants_purpose_check',
-      sql`${table.purpose} IN ('join_loyalty','marketing','survey_participation','settlement_access','contact_sharing')`,
+      sql`${table.purpose} IN ('join_loyalty','marketing','survey_participation','settlement_access','contact_sharing','community_membership')`,
     ),
     check(
       'consent_grants_status_check',
