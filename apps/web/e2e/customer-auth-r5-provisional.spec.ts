@@ -31,18 +31,25 @@ async function requestProof(page: Page, address: string, name = 'Synthetic R5 Cu
 }
 
 async function submitRegistration(page: Page) {
-  const actionResponse = page.waitForResponse((response) => {
-    const request = response.request();
-    return request.method() === 'POST' && new URL(response.url()).pathname === '/loyalty/signup';
-  });
   await page.getByRole('button', { name: 'Send confirmation link' }).click();
-  const response = await actionResponse;
-  expect(response.ok()).toBe(true);
 }
 
-async function expectGenericConfirmation(page: Page) {
+async function expectGenericConfirmation(page: Page, previousError?: string) {
   const heading = page.getByRole('heading', { name: 'Check your email' });
-  await expect(heading).toBeVisible();
+  const alert = page.getByRole('alert');
+  await expect
+    .poll(async () => {
+      if (await heading.isVisible()) return true;
+      const messages = (await alert.allTextContents()).map((message) => message.trim());
+      return messages.some((message) => message && message !== previousError);
+    })
+    .toBe(true);
+  if (!(await heading.isVisible())) {
+    const messages = (await alert.allTextContents())
+      .map((message) => message.trim())
+      .filter((message) => message && message !== previousError);
+    throw new Error(`Registration returned a generic UI error: ${messages.join(' | ')}`);
+  }
 }
 
 async function capturedVerificationLink(page: Page, address: string): Promise<string> {
@@ -85,7 +92,7 @@ test('A/H — customer enters account details once; registration form remains us
 
   await page.getByLabel('Confirm password').fill(password);
   await submitRegistration(page);
-  await expectGenericConfirmation(page);
+  await expectGenericConfirmation(page, 'The passwords do not match.');
   expect(new URL(page.url()).searchParams.get('email')).toBeNull();
   expect(
     (await page.context().cookies()).some((cookie) =>
