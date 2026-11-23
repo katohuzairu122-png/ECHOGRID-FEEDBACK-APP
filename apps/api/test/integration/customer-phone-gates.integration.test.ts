@@ -3,7 +3,7 @@ import { Client } from 'pg';
 import { buildDb } from '../../src/db/client';
 import { createRepositories } from '../../src/repositories';
 import { CustomerMembershipService } from '../../src/customer-relationships/customer-membership.service';
-import { CommunityMembershipService } from '../../src/community/community-membership.service';
+import { FixtureCommunityMembershipService as CommunityMembershipService } from '../helpers/community-consent-fixtures';
 import { appDbOf } from '../helpers/runtime-db';
 
 /**

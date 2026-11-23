@@ -1,3 +1,6 @@
+import { sql } from 'drizzle-orm';
+import { customers } from '../db/schema';
+import { CommunityMembershipService } from '../community/community-membership.service';
 import type { Database } from '../db/client';
 import { createRepositories } from '../repositories';
 import {
@@ -29,6 +32,15 @@ export class ConsentWithdrawalService {
     const grant = await createRepositories(this.db).consentGrants.findOwned(grantId, customerId);
     if (!grant) return false;
 
+    if (grant.purpose === 'community_membership') {
+      return this.db.transaction(async (tx) => {
+        await tx.execute(sql`select id from ${customers} where ${customers.id}=${customerId} for update`);
+        const current = await createRepositories(tx).consentGrants.findOwned(grantId, customerId);
+        if (!current || current.status !== 'active' || (current.expiresAt && current.expiresAt.getTime() <= Date.now())) return false;
+        await new CommunityMembershipService(tx).leave(customerId);
+        return true;
+      });
+    }
     const businessId = grant.businessId;
     if (grant.purpose !== 'join_loyalty' || businessId === null) {
       return createRepositories(this.db).consentGrants.revoke(grantId, customerId);

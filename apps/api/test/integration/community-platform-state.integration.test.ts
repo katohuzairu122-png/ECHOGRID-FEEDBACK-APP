@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { Client } from 'pg';
 import { buildDb } from '../../src/db/client';
 import { createRepositories } from '../../src/repositories';
-import { CommunityMembershipService } from '../../src/community/community-membership.service';
+import { FixtureCommunityMembershipService as CommunityMembershipService } from '../helpers/community-consent-fixtures';
 import { CommunityPointAwardService } from '../../src/community/community-point-award.service';
 import { CommunityPointAdminAdjustmentService } from '../../src/community/community-point-admin-adjustment.service';
 import { CommunityPlatformStateService } from '../../src/community/community-platform-state.service';

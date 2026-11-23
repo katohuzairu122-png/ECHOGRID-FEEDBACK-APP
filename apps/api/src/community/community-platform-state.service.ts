@@ -3,7 +3,10 @@ import type {
   CommunityPointPlatformStateChangeInput,
 } from '@echo-grid-feedback/shared-types';
 import type { Database, Db } from '../db/client';
-import { customers } from '../db/schema';
+import { customers, consentGrants } from '../db/schema';
+import { and, desc, eq } from 'drizzle-orm';
+import { assertVerifiedPhoneFor } from '../lib/customer-verification';
+import { databaseTermsAuthority, lockCommunityTerms, validCommunityConsent } from './community-consent.persistence';
 import {
   createRepositories,
   type CommunityMembership,
@@ -42,8 +45,8 @@ export class CommunityPlatformStateService {
       }
 
       if (
-        state.membership.status !== 'active' ||
-        state.account.status !== 'active'
+        !((state.membership.status === 'active' && state.account.status === 'active') ||
+          (state.membership.status === 'inactive' && state.account.status === 'closed'))
       ) {
         throw this.stateConflict(state.membership, state.account);
       }
@@ -76,9 +79,9 @@ export class CommunityPlatformStateService {
           customerId,
           accountId: account.id,
           reason: input.reason,
-          membershipFrom: 'active',
+          membershipFrom: state.membership.status,
           membershipTo: 'suspended',
-          accountFrom: 'active',
+          accountFrom: state.account.status,
           accountTo: 'suspended',
           pointsBalance: account.pointsBalance,
         },
@@ -96,11 +99,17 @@ export class CommunityPlatformStateService {
     audit: PlatformCommunityStateAuditContext,
   ): Promise<CommunityPlatformStateResult> {
     return this.db.transaction(async (tx) => {
+      await lockCommunityTerms(tx);
+      const schema = await tx.execute<{ available: boolean }>(sql`select to_regclass('public.community_terms_current') is not null as available`);
+      if (!schema.rows[0]?.available) throw new AppError('Community membership terms are unavailable.', 503, 'COMMUNITY_TERMS_UNAVAILABLE');
       const state = await this.lockAndLoad(tx, customerId);
+      const customer = await createRepositories(tx).customers.findById(customerId);
+      if (!customer || customer.status !== 'active') throw new AppError('Customer account is not available.', 409, 'CUSTOMER_NOT_AVAILABLE');
+      assertVerifiedPhoneFor(customer, 'community');
 
       if (
-        state.membership.status === 'active' &&
-        state.account.status === 'active'
+        (state.membership.status === 'active' && state.account.status === 'active') ||
+        (state.membership.status === 'inactive' && state.account.status === 'closed')
       ) {
         return { ...state, changed: false };
       }
@@ -113,13 +122,26 @@ export class CommunityPlatformStateService {
       }
 
       const repos = createRepositories(tx);
+      const [projection] = await tx.select().from(consentGrants).where(and(eq(consentGrants.customerId, customerId), eq(consentGrants.purpose, 'community_membership'), eq(consentGrants.status, 'active'))).orderBy(desc(consentGrants.grantedAt)).limit(1);
+      const locale = typeof projection?.metadata?.locale === 'string' ? projection.metadata.locale : 'en';
+      let valid = false;
+      try {
+        // A savepoint lets an unavailable/missing registry fail closed without
+        // poisoning the transaction that clears an authorized suspension.
+        const terms = await tx.transaction((nested) => databaseTermsAuthority(nested).resolve(locale));
+        valid = Boolean(await validCommunityConsent(tx, customerId, state.membership.id, terms));
+      } catch (error) {
+        if (!(error instanceof AppError) || error.code !== 'COMMUNITY_TERMS_UNAVAILABLE') throw error;
+      }
+      const targetMembership = valid ? 'active' as const : 'inactive' as const;
+      const targetAccount = valid ? 'active' as const : 'closed' as const;
       const membership = await repos.communityMemberships.updateStatus(customerId, {
-        status: 'active',
+        status: targetMembership,
         suspendedAt: null,
       });
       const account = await repos.communityPointAccounts.updateStatus(
         state.account.id,
-        'active',
+        targetAccount,
       );
 
       if (!membership || !account) {
@@ -141,9 +163,9 @@ export class CommunityPlatformStateService {
           accountId: account.id,
           reason: input.reason,
           membershipFrom: 'suspended',
-          membershipTo: 'active',
+          membershipTo: targetMembership,
           accountFrom: 'suspended',
-          accountTo: 'active',
+          accountTo: targetAccount,
           pointsBalance: account.pointsBalance,
         },
         ipAddress: audit.ipAddress,

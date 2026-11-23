@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { AppError } from '../lib/errors';
 
-/** Inert foundation: no database adapter, route, publication or activation writer. */
+/** Strict terms validation; registry/transaction integration lives in community-consent.persistence. */
 const localeSchema = z.enum(['en', 'fr', 'es', 'ar']);
 const digestSchema = z.string().regex(/^[a-f0-9]{64}$/);
 const timestampSchema = z.iso.datetime({ offset: true });
@@ -75,7 +75,7 @@ function unavailable(): never {
 }
 
 export class CommunityTermsAuthority {
-  // No adapter is installed. The shipped default always fails closed.
+  // A caller without a trusted server source always fails closed.
   constructor(private readonly source: CommunityTermsSource = { readCurrent: async () => null }) {}
 
   async resolve(locale: string): Promise<Readonly<CommunityTermsView>> {

@@ -71,3 +71,7 @@ CREATE TRIGGER community_terms_pointer_no_truncate BEFORE TRUNCATE ON public.com
 ALTER TABLE public.community_terms_current ENABLE ALWAYS TRIGGER community_terms_pointer_guard;
 --> statement-breakpoint
 ALTER TABLE public.community_terms_current ENABLE ALWAYS TRIGGER community_terms_pointer_no_truncate;
+
+--> statement-breakpoint
+-- Community requests do not occupy the legacy global key namespace.
+CREATE UNIQUE INDEX consent_grants_community_request_key ON public.consent_grants (customer_id, (metadata->>'requestKeyDigest')) WHERE purpose='community_membership' AND metadata->>'requestKeyDigest' IS NOT NULL;
