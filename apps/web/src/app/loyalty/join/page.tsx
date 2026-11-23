@@ -9,9 +9,9 @@ import { BusinessFinder } from './business-finder';
 export const dynamic = 'force-dynamic';
 
 /**
- * LANDING-ROLE-01: where a loyalty customer lands after choosing "I'm a loyalty customer" on the registration page. Joining a business
- * still happens only by scanning that business's QR code; this page explains that and helps the customer find a registered business
- * (names only, from the anonymous /public/businesses list). A failure to load the list never blocks the QR path.
+ * CUSTOMER-JOIN-HUB-02: three independent paths: business QR onboarding, direct platform account registration,
+ * and searching public business names. Creating a platform account never creates a business membership.
+ * A business membership requires its separately verified QR and explicit join consent.
  */
 export default async function LoyaltyJoinPage() {
   const t = await getTranslations('loyalty.customer.joinHub');
@@ -38,13 +38,28 @@ export default async function LoyaltyJoinPage() {
         </Card>
         <Card className="mt-4">
           <CardHeader>
+            <CardTitle>{t('platformTitle')}</CardTitle>
+            <CardDescription>{t('platformBody')}</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Link href="/loyalty/signup" className="inline-flex min-h-11 items-center rounded-md bg-brand-700 px-5 py-2.5 font-medium text-white hover:bg-brand-800">
+              {t('platformCta')}
+            </Link>
+          </CardContent>
+        </Card>
+        <Card className="mt-4">
+          <CardHeader>
             <CardTitle>{t('findTitle')}</CardTitle>
+            <CardDescription>{t('findBody')}</CardDescription>
           </CardHeader>
           <CardContent>
             <BusinessFinder
               names={names}
               loadFailed={loadFailed}
               labels={{
+                searchLabel: t('searchLabel'),
+                searchPlaceholder: t('searchPlaceholder'),
+                noMatches: t('noMatches'),
                 selectLabel: t('selectLabel'),
                 selectPlaceholder: t('selectPlaceholder'),
                 empty: t('empty'),

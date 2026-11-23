@@ -6,6 +6,9 @@ import { Label, Select, buttonVariants } from '@/components/ui';
 import { cn } from '@/lib/utils';
 
 export interface BusinessFinderLabels {
+  searchLabel: string;
+  searchPlaceholder: string;
+  noMatches: string;
   selectLabel: string;
   selectPlaceholder: string;
   empty: string;
@@ -18,12 +21,14 @@ export interface BusinessFinderLabels {
 }
 
 /**
- * LANDING-ROLE-01: a native <select> over the registered business names (the list is capped at 100 by the API). Choosing a name shows how to
+ * CUSTOMER-JOIN-HUB-02: client-side search over publicly listed business names (API currently caps the list at 100). Choosing one explains how to
  * join THAT business (scan its QR code) plus a link to open the customer account now. It creates no membership: the QR flow does.
  */
 export function BusinessFinder({ names, loadFailed, labels }: { names: string[]; loadFailed: boolean; labels: BusinessFinderLabels }) {
   const selectId = useId();
   const [chosen, setChosen] = useState('');
+  const [query, setQuery] = useState('');
+  const filtered = names.filter((name) => name.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()));
 
   if (loadFailed) return <p role="status" className="text-sm text-neutral-600">{labels.loadError}</p>;
   if (names.length === 0) return <p role="status" className="text-sm text-neutral-600">{labels.empty}</p>;
@@ -31,10 +36,22 @@ export function BusinessFinder({ names, loadFailed, labels }: { names: string[];
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-col gap-1.5">
+        <Label htmlFor={`${selectId}-search`}>{labels.searchLabel}</Label>
+        <input
+          id={`${selectId}-search`}
+          type="search"
+          value={query}
+          onChange={(event) => { setQuery(event.target.value); setChosen(''); }}
+          placeholder={labels.searchPlaceholder}
+          className="min-h-11 w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-neutral-900"
+        />
+      </div>
+      {filtered.length === 0 && <p role="status" className="text-sm text-neutral-600">{labels.noMatches}</p>}
+      <div className="flex flex-col gap-1.5">
         <Label htmlFor={selectId}>{labels.selectLabel}</Label>
         <Select id={selectId} value={chosen} onChange={(e) => setChosen(e.target.value)}>
           <option value="">{labels.selectPlaceholder}</option>
-          {names.map((name) => (
+          {filtered.map((name) => (
             <option key={name} value={name}>{name}</option>
           ))}
         </Select>

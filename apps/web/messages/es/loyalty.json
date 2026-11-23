@@ -644,10 +644,10 @@
     },
     "joinHub": {
       "title": "Únete como cliente de fidelidad",
-      "description": "Únete al programa de fidelidad de cualquier negocio registrado en Echo Grid. Te unes a un negocio escaneando su código QR.",
+      "description": "Crea tu cuenta de Echo Grid directamente o únete al programa de fidelidad de un negocio escaneando su código QR. Las membresías de negocios son independientes.",
       "scanTitle": "Escanea el código QR de un negocio",
       "scanBody": "Abre la cámara de tu teléfono y apunta al código QR de Echo Grid del negocio. El enlace se abre aquí y crearás o abrirás tu cuenta de cliente.",
-      "findTitle": "O busca un negocio registrado",
+      "findTitle": "Buscar un negocio al que unirme",
       "selectLabel": "Negocios registrados",
       "selectPlaceholder": "Elige un negocio…",
       "empty": "Aún no hay negocios para elegir. Escanea en su lugar el código QR de un negocio.",
@@ -655,8 +655,15 @@
       "chosenTitle": "Únete a {name}",
       "chosenBody": "Escanea el código QR de Echo Grid en {name} o pídeselo. Crea o abre tu cuenta de cliente ahora para estar listo.",
       "accountCta": "Crear o abrir mi cuenta de cliente",
-      "accountNote": "Verificarás tu teléfono con un código de un solo uso.",
-      "back": "Volver a elegir cómo participar"
+      "accountNote": "Crear tu cuenta de Echo Grid no te une automáticamente a este negocio.",
+      "back": "Volver a elegir cómo participar",
+      "platformTitle": "Unirme directamente a Echo Grid",
+      "platformBody": "Crea tu cuenta de cliente de la plataforma sin elegir un negocio. Más adelante podrás unirte a programas de fidelidad escaneando sus códigos QR.",
+      "platformCta": "Crear mi cuenta de Echo Grid",
+      "findBody": "Busca en el directorio de negocios registrados. Solo te unirás a un negocio después de escanear su QR y aceptar la membresía.",
+      "searchLabel": "Buscar negocios",
+      "searchPlaceholder": "Escribe el nombre del negocio",
+      "noMatches": "Ningún negocio registrado coincide con tu búsqueda."
     }
   }
 }

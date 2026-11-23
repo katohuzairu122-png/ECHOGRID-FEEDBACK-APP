@@ -644,10 +644,10 @@
     },
     "joinHub": {
       "title": "Join as a loyalty customer",
-      "description": "Join the loyalty program of any business registered with Echo Grid. You join a business by scanning its QR code.",
+      "description": "Create your Echo Grid account directly, or join a business loyalty program by scanning its QR code. Business memberships are separate.",
       "scanTitle": "Scan a business QR code",
       "scanBody": "Open your phone's camera and point it at the business's Echo Grid QR code. The link opens here and you'll create or open your customer account.",
-      "findTitle": "Or find a registered business",
+      "findTitle": "Search for a business to join",
       "selectLabel": "Registered businesses",
       "selectPlaceholder": "Choose a business…",
       "empty": "No businesses are available to choose yet. Scan a business's QR code instead.",
@@ -655,8 +655,15 @@
       "chosenTitle": "Join {name}",
       "chosenBody": "Scan the Echo Grid QR code at {name}, or ask them for it. Create or open your customer account now so you're ready.",
       "accountCta": "Create or open my customer account",
-      "accountNote": "You'll verify your phone with a one-time code.",
-      "back": "Back to choose how to participate"
+      "accountNote": "Creating your Echo Grid account does not automatically join this business.",
+      "back": "Back to choose how to participate",
+      "platformTitle": "Join Echo Grid directly",
+      "platformBody": "Create your platform customer account without choosing a business. You can explore Echo Grid and join business loyalty programs later with their QR codes.",
+      "platformCta": "Create my Echo Grid account",
+      "findBody": "Search the registered business directory. A business membership is activated only after you scan its QR code and consent to joining.",
+      "searchLabel": "Search businesses",
+      "searchPlaceholder": "Enter a business name",
+      "noMatches": "No registered businesses match your search."
     }
   }
 }
