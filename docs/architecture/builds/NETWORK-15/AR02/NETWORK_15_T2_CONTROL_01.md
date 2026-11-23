@@ -20,10 +20,12 @@ Recommended option: independent default-off server controls for initial Join,
 terminated-membership Rejoin, customer Restore and platform clearance. Proposed
 names are `COMMUNITY_MEMBERSHIP_JOIN_ENABLED`, `COMMUNITY_MEMBERSHIP_REJOIN_ENABLED`,
 `COMMUNITY_MEMBERSHIP_RESTORE_ENABLED`, `COMMUNITY_MEMBERSHIP_CLEARANCE_ENABLED`.
-These names are a design proposal, **not existing configuration**. Only an exact
-approved enabled value may allow execution; unset/malformed is disabled. No
+These names are a design proposal, **not existing configuration**. The proposed enabled value is the exact string `"true"`; unset, `"false"`,
+case variants and malformed values are disabled. No
 production values or toggles are allocated/changed by AR02. Owner may choose an
-approved equivalent with the same behavior. No administrator override is presumed.
+approved equivalent with the same behavior. No administrator override is presumed. Existing platform Suspend remains available
+under its current permission; do not gate the entire platform router or block
+security restrictions/independent adjustments as a shortcut.
 
 | Boundary                                                   | Proposed required disabled behavior                                                                                                                                                                                                                                                                                       |
 | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
