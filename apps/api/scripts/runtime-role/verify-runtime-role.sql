@@ -100,6 +100,8 @@ SELECT c.relname AS name, v.verb, 'PRIVILEGE_OUTSIDE_MANIFEST' AS violation
        ('community_point_rules', 'UPDATE'),
        ('community_point_transactions', 'INSERT'),
        ('community_point_transactions', 'SELECT'),
+       ('community_terms_current', 'SELECT'),
+       ('community_terms_publications', 'SELECT'),
        ('consent_grants', 'INSERT'),
        ('consent_grants', 'SELECT'),
        ('consent_grants', 'UPDATE'),
