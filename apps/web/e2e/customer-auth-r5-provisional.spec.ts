@@ -144,7 +144,13 @@ test('B/G — email proof completes once, creates a rotating session, and reject
 }) => {
   expect(verifyUrl).toContain('/loyalty/signup/verify');
   await page.goto(verifyUrl);
-  await expect(page.getByRole('button', { name: 'Create account' })).toBeVisible();
+  try {
+    await expect(page.getByRole('button', { name: 'Create account' })).toBeVisible();
+  } catch (error) {
+    const visibleText = await page.locator('h1, h2, p, [role="alert"], button').allTextContents();
+    console.info('customer_auth_r5_verify_visible_state', JSON.stringify(visibleText.map((value) => value.trim()).filter(Boolean)));
+    throw error;
+  }
   await expect(page.getByLabel('Name')).toHaveCount(0);
   await expect(page.getByLabel('Email')).toHaveCount(0);
   await expect(page.getByLabel('Choose a password')).toHaveCount(0);
