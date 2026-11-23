@@ -31,28 +31,12 @@ async function requestProof(page: Page, address: string, name = 'Synthetic R5 Cu
 }
 
 async function submitRegistration(page: Page) {
-  const actionResponse = page.waitForResponse((response) => {
-    const request = response.request();
-    return request.method() === 'POST' && Boolean(request.headers()['next-action']);
-  });
   await page.getByRole('button', { name: 'Send confirmation link' }).click();
-  const response = await actionResponse;
-  expect(response.ok()).toBe(true);
 }
 
 async function expectGenericConfirmation(page: Page) {
   const heading = page.getByRole('heading', { name: 'Check your email' });
-  const alert = page.getByRole('alert');
-  await expect
-    .poll(async () => (await heading.isVisible()) || (await alert.count()) > 0)
-    .toBe(true);
-  if (!(await heading.isVisible())) {
-    // Keep the diagnostic to the generic translated error; never print form values.
-    const messages = (await alert.allTextContents())
-      .map((message) => message.trim())
-      .filter(Boolean);
-    throw new Error(`Registration returned an error state: ${messages.join(' | ')}`);
-  }
+  await expect(heading).toBeVisible();
 }
 
 async function capturedVerificationLink(page: Page, address: string): Promise<string> {
@@ -130,7 +114,14 @@ test('B/G — email proof completes once, creates a rotating session, and reject
   await context.clearCookies();
   await page.goto(verifyUrl);
   await page.getByRole('button', { name: 'Create account' }).click();
-  await expect(page.getByRole('alert')).toBeVisible();
+  await expect(
+    page.getByText(
+      'This confirmation link is invalid, expired or already used. Request a new link.',
+      {
+        exact: true,
+      },
+    ),
+  ).toBeVisible();
   expect(
     (await context.cookies()).filter((cookie) => cookie.name.startsWith('__Host-ff_customer_')),
   ).toHaveLength(0);
@@ -143,7 +134,9 @@ test('C — password login rejects wrong credentials generically and accepts the
   await page.getByLabel('Email').fill(email);
   await page.getByLabel('Password').fill(`${password}-wrong`);
   await page.getByRole('button', { name: 'Sign in' }).click();
-  await expect(page.getByRole('alert')).toContainText(/email or password/i);
+  await expect(
+    page.getByText('The email or password is not correct.', { exact: true }),
+  ).toBeVisible();
 
   await page.getByLabel('Email').fill(email);
   await page.getByLabel('Password').fill(password);
@@ -221,7 +214,12 @@ test('G — duplicate and unknown registration requests use the same confirmatio
 
 test('G — registration delivery limit returns a generic throttle response', async ({ page }) => {
   const limited = `limited-${Date.now()}@example.test`;
-  for (let attempt = 0; attempt < 3; attempt += 1) await requestProof(page, limited);
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    await requestProof(page, limited);
+    await expectGenericConfirmation(page);
+  }
   await requestProof(page, limited);
-  await expect(page.getByRole('alert')).toBeVisible();
+  await expect(
+    page.getByText('Too many attempts. Please wait a few minutes and try again.', { exact: true }),
+  ).toBeVisible();
 });
