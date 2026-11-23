@@ -27,7 +27,17 @@ async function requestProof(page: Page, address: string, name = 'Synthetic R5 Cu
   await page.getByLabel('Email').fill(address);
   await page.getByLabel('Choose a password').fill(password);
   await page.getByLabel('Confirm password').fill(password);
+  await submitRegistration(page);
+}
+
+async function submitRegistration(page: Page) {
+  const actionResponse = page.waitForResponse((response) => {
+    const request = response.request();
+    return request.method() === 'POST' && Boolean(request.headers()['next-action']);
+  });
   await page.getByRole('button', { name: 'Send confirmation link' }).click();
+  const response = await actionResponse;
+  expect(response.ok()).toBe(true);
 }
 
 async function expectGenericConfirmation(page: Page) {
@@ -80,11 +90,11 @@ test('A/H — customer enters account details once; registration form remains us
   await page.getByLabel('Email').fill(email);
   await page.getByLabel('Choose a password').fill(password);
   await page.getByLabel('Confirm password').fill(`${password}-mismatch`);
-  await page.getByRole('button', { name: 'Send confirmation link' }).click();
+  await submitRegistration(page);
   await expect(page.getByRole('alert')).toBeVisible();
 
   await page.getByLabel('Confirm password').fill(password);
-  await page.getByRole('button', { name: 'Send confirmation link' }).click();
+  await submitRegistration(page);
   await expectGenericConfirmation(page);
   expect(new URL(page.url()).searchParams.get('email')).toBeNull();
   expect(
