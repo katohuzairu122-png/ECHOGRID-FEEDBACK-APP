@@ -5,6 +5,9 @@ import { renderWithIntl } from '@/test-utils';
 import { BusinessFinder, type BusinessFinderLabels } from './business-finder';
 
 const labels: BusinessFinderLabels = {
+  searchLabel: 'Search businesses',
+  searchPlaceholder: 'Enter a business name',
+  noMatches: 'No registered businesses match your search.',
   selectLabel: 'Registered businesses',
   selectPlaceholder: 'Choose a business…',
   empty: 'No businesses yet',
