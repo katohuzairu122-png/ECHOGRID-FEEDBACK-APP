@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { logEmailAuthUnavailable } from './customer-email-auth.diagnostics';
+import { logEmailAuthUnavailable, logRegistrationDelivery } from './customer-email-auth.diagnostics';
 import { limitEmailAuthRequest, createIsolatedCustomerEmailAuthRoutes } from './customer-email-auth.routes';
 
 const SENTINELS = ['victim@example.test', '203.0.113.9', 'sekrit-value-0123456789abcdef0123456789', 'binding-detail-should-not-leak'];
@@ -20,6 +20,28 @@ const baseDeps = {
 const request = new Request('https://api.test/api/v1/customer-auth/email/register/request', { method: 'POST', headers: { 'cf-connecting-ip': '203.0.113.9' } });
 
 afterEach(() => vi.restoreAllMocks());
+
+describe('privacy-safe registration delivery milestones (PROD-AUTH-05)', () => {
+  it('logs only fixed event codes and a bounded HTTP status', () => {
+    const info = vi.spyOn(console, 'info').mockImplementation(() => undefined);
+    logRegistrationDelivery('challenge_created');
+    logRegistrationDelivery('delivery_attempted');
+    logRegistrationDelivery('delivery_failed', { failureKind: 'provider_http', providerStatus: 403 });
+    logRegistrationDelivery('delivery_failed', { failureKind: 'transport_or_internal', providerStatus: 999 });
+    expect(captured(info)).toEqual([
+      { event: 'customer_registration_delivery', stage: 'challenge_created' },
+      { event: 'customer_registration_delivery', stage: 'delivery_attempted' },
+      { event: 'customer_registration_delivery', stage: 'delivery_failed', providerStatus: 403, failureKind: 'provider_http' },
+      { event: 'customer_registration_delivery', stage: 'delivery_failed', failureKind: 'transport_or_internal' },
+    ]);
+    expectNoSensitive(captured(info));
+  });
+
+  it('logging failure never changes registration request behavior', () => {
+    vi.spyOn(console, 'info').mockImplementation(() => { throw new Error('sink unavailable'); });
+    expect(() => logRegistrationDelivery('provider_accepted')).not.toThrow();
+  });
+});
 
 describe('reason-coded diagnostics for the generic 503', () => {
   it('an untrusted (unsigned or mismatched) source is logged as untrusted_source, and the decision is still "unavailable"', async () => {

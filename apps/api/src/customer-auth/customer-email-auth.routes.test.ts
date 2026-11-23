@@ -56,10 +56,17 @@ describe('isolated customer email HTTP', () => {
 
   it('enforces both delivery budgets before sending and hides delivery failures', async () => {
     const { routes, limit, requestProof } = setup();
+    const eventLog = vi.spyOn(console, 'info').mockImplementation(() => {});
     requestProof.mockRejectedValueOnce(new Error('internal provider credentials'));
     const response = await routes.request(post('register/request', { email: address }));
     expect(response.status).toBe(202);
     expect(await response.json()).toEqual({ accepted: true });
+    expect(eventLog).toHaveBeenCalledWith(JSON.stringify({
+      event: 'customer_registration_delivery', stage: 'request_failed',
+    }));
+    expect(eventLog.mock.calls.flat().join(' ')).not.toContain(address);
+    expect(eventLog.mock.calls.flat().join(' ')).not.toContain('internal provider credentials');
+    eventLog.mockRestore();
     expect(limit.mock.calls.map(([call]) => call)).toEqual([
       { key: 'customer-email:delivery:source:trusted-edge', limit: 10, windowSeconds: 3600 },
       { key: 'customer-email:delivery:identifier:opaque-email', limit: 3, windowSeconds: 3600 },

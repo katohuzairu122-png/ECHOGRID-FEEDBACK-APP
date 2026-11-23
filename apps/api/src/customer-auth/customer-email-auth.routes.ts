@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { z } from 'zod';
-import { logEmailAuthUnavailable } from './customer-email-auth.diagnostics';
+import { logEmailAuthUnavailable, logRegistrationDelivery } from './customer-email-auth.diagnostics';
 import { CustomerAuthError } from './customer-auth.service';
 import type { IssuedSession } from './customer-session.service';
 import type { PasswordLoginResult } from './customer-password-auth.service';
@@ -151,7 +151,10 @@ export function createIsolatedCustomerEmailAuthRoutes(dependencies: IsolatedEmai
       ? dependencies.requestProof(dto.data.email, dto.data.next, signup)
       : dto.data.next === undefined
         ? dependencies.requestProof(dto.data.email)
-        : dependencies.requestProof(dto.data.email, dto.data.next)).catch(() => undefined);
+        : dependencies.requestProof(dto.data.email, dto.data.next)).catch(() => {
+      // Preserve non-enumerating HTTP 202 while recording a fixed, PII-free failure stage.
+      logRegistrationDelivery('request_failed');
+    });
     return accepted();
   });
   routes.post(paths.complete, async (c) => {

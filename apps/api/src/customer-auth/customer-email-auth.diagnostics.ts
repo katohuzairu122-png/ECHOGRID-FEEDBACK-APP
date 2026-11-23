@@ -36,3 +36,36 @@ export function logEmailAuthUnavailable(
     // Logging must never change the response.
   }
 }
+
+
+/**
+ * PROD-AUTH-05: operational milestones for email registration. No recipient, proof, challenge ID,
+ * request body, identifier digest, IP or error message may be supplied or logged.
+ * Correlation uses the existing Cloudflare invocation trace, not customer identifiers.
+ */
+export type RegistrationDeliveryStage =
+  | 'request_suppressed'
+  | 'challenge_created'
+  | 'delivery_attempted'
+  | 'provider_accepted'
+  | 'delivery_failed'
+  | 'request_failed';
+
+export function logRegistrationDelivery(
+  stage: RegistrationDeliveryStage,
+  detail?: { providerStatus?: number; failureKind?: 'provider_http' | 'transport_or_internal' },
+): void {
+  const line: Record<string, unknown> = { event: 'customer_registration_delivery', stage };
+  // Only a valid HTTP error status is permitted. Never log provider bodies or free-form errors.
+  if (detail?.providerStatus !== undefined &&
+      Number.isInteger(detail.providerStatus) &&
+      detail.providerStatus >= 400 && detail.providerStatus <= 599) {
+    line.providerStatus = detail.providerStatus;
+  }
+  if (detail?.failureKind) line.failureKind = detail.failureKind;
+  try {
+    console.info(JSON.stringify(line));
+  } catch {
+    // Diagnostics must never change signup behavior.
+  }
+}

@@ -9,6 +9,8 @@ import { customerChallengeDigest, normalizeLoginEmail } from './customer-email-c
 import { completeEmailRegistration } from './customer-email-registration.service';
 import { checkPasswordPolicy, normalizePassword, type PasswordPolicyConfig } from './customer-password-policy';
 import { sealPendingRegistration, unsealPendingRegistration } from './customer-registration-seal';
+import { logRegistrationDelivery } from './customer-email-auth.diagnostics';
+import { EmailProviderHttpError } from '../notifications/email.service';
 
 const purpose = 'email_registration';
 
@@ -67,7 +69,10 @@ export function createEmailRegistrationService(config: {
           isNull(customerAuthChallenges.customerId),
           gt(customerAuthChallenges.createdAt, new Date(timestamp.getTime() - 60_000)),
         )).limit(1);
-      if (recent || await new CustomerCredentialRepository(tx).findByLoginEmail(email)) return null;
+      if (recent || await new CustomerCredentialRepository(tx).findByLoginEmail(email)) {
+        logRegistrationDelivery('request_suppressed');
+        return null;
+      }
       return new CustomerAuthChallengeRepository(tx).create({
         purpose, subjectDigest, proofDigest,
         expiresAt: new Date(timestamp.getTime() + 900_000),
@@ -75,7 +80,19 @@ export function createEmailRegistrationService(config: {
         ...(registrationSealedData ? { registrationSealedData } : {}),
       });
     });
-    if (challengeId) await config.deliver({ recipient: email, challengeId, proof, ...(next ? { next } : {}) });
+    if (challengeId) {
+      logRegistrationDelivery('challenge_created');
+      logRegistrationDelivery('delivery_attempted');
+      try {
+        await config.deliver({ recipient: email, challengeId, proof, ...(next ? { next } : {}) });
+        logRegistrationDelivery('provider_accepted');
+      } catch (error) {
+        logRegistrationDelivery('delivery_failed', error instanceof EmailProviderHttpError
+          ? { failureKind: 'provider_http', providerStatus: error.status }
+          : { failureKind: 'transport_or_internal' });
+        throw error;
+      }
+    }
   };
   return {
     keyForIdentifier,
