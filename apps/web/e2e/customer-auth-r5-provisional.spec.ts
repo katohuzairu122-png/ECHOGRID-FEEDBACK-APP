@@ -143,6 +143,17 @@ test('B/G — email proof completes once, creates a rotating session, and reject
   context,
 }) => {
   expect(verifyUrl).toContain('/loyalty/signup/verify');
+  const link = new URL(verifyUrl);
+  const decodedChallenge = decodeURIComponent(link.hash.startsWith('#c=') ? link.hash.slice(3) : '');
+  const [challengeId = '', proof = ''] = decodedChallenge.split('.');
+  console.info('customer_auth_r5_verification_link_shape', JSON.stringify({
+    path: link.pathname,
+    expectedFragmentPrefix: link.hash.startsWith('#c='),
+    challengeIdLength: challengeId.length,
+    challengeIdLooksUuid: /^[0-9a-fA-F-]{36}$/.test(challengeId),
+    proofLength: proof.length,
+    proofCharactersAllowed: /^[A-Za-z0-9_-]+$/.test(proof),
+  }));
   await page.goto(verifyUrl);
   try {
     await expect(page.getByRole('button', { name: 'Create account' })).toBeVisible();
