@@ -202,3 +202,15 @@ targets for a v1, to be confirmed/adjusted by the owner before production:
 | Mutating request p99 latency | < 1s (excludes async-queued work like AI summaries) |
 | Queue message processing lag | < 5 min under normal load |
 | Critical security patch turnaround | < 24h from discovery |
+
+## Community T2 activation/recovery hold (AR01)
+
+**UNAPPROVED operational proposal — no activation or recovery authorized.**
+For the pending NETWORK-15-T2 implementation, use the scoped
+[AR01 audit](architecture/builds/NETWORK-15/AR01/ACTIVATION_READINESS.md) and
+[proposed runbook](architecture/builds/NETWORK-15/AR01/CONTROLLED_ACTIVATION_RUNBOOK.md)
+when preparing a separately authorized release. Generic Worker rollback guidance
+above is not proof of compatibility with inactive membership or fresh Restore
+consent. NETWORK_FEED_ENABLED is not a membership enrollment kill switch.
+The audit distinguishes older operational statements from later isolated restore
+and privacy implementation records; it does not certify current live settings.
