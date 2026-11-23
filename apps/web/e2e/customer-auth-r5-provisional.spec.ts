@@ -98,12 +98,7 @@ test('A/H — customer enters account details once; registration form remains us
   expect((await page.getByLabel('Email').inputValue()) === email).toBe(true);
   expect((await page.getByLabel('Choose a password').inputValue()) === password).toBe(true);
   await submitRegistration(page);
-    await expectGenericConfirmation(page, 'The passwords do not match.');
-  } catch (error) {
-    console.info('customer_auth_r5_signup_form_state', JSON.stringify(formState));
-    console.info('customer_auth_r5_signup_browser_events', submissionEvents.join(' | ') || 'none');
-    throw error;
-  }
+  await expectGenericConfirmation(page, 'The passwords do not match.');
   expect(new URL(page.url()).searchParams.get('email')).toBeNull();
   expect(
     (await page.context().cookies()).some((cookie) =>
