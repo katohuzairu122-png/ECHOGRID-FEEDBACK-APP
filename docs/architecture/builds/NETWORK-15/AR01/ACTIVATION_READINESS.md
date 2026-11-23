@@ -7,6 +7,13 @@ Date: 2026-11-23 (Kuwait). Scope: repository inspection and documentation only.
 Companions: [proposed runbook](CONTROLLED_ACTIVATION_RUNBOOK.md) and
 [unapproved owner decisions](OWNER_DECISIONS.md).
 
+## Dated follow-up — 2026-11-23 AR02
+
+This AR01 body preserves its original audit snapshot. Both #562 and #563 have since
+merged; see [AR02 current reconciliation and approval package](../AR02/READINESS_AND_OWNER_DECISIONS.md).
+That satisfies the merge hold, not legal, runtime-containment or activation approval.
+AR02 separately evaluates the full runtime G5 criterion; no recommendation is approved.
+
 ## Authoritative baseline
 
 - Current main: `aa7c016b7a3cd4aca4769414b4f18242ea2cc7fe`.
