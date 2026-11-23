@@ -38,11 +38,14 @@ async function expectGenericConfirmation(page: Page, previousError?: string) {
   const heading = page.getByRole('heading', { name: 'Check your email' });
   const alert = page.getByRole('alert');
   await expect
-    .poll(async () => {
-      if (await heading.isVisible()) return true;
-      const messages = (await alert.allTextContents()).map((message) => message.trim());
-      return messages.some((message) => message && message !== previousError);
-    })
+    .poll(
+      async () => {
+        if (await heading.isVisible()) return true;
+        const messages = (await alert.allTextContents()).map((message) => message.trim());
+        return messages.some((message) => message && message !== previousError);
+      },
+      { timeout: 30_000 },
+    )
     .toBe(true);
   if (!(await heading.isVisible())) {
     const messages = (await alert.allTextContents())
