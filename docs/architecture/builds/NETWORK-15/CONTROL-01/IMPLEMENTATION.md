@@ -123,3 +123,22 @@ results and any limitations are recorded in the completion report/PR. Existing C
 runs API/Web units, PG16/PG18, static/type/build/migration checks; NETWORK-05 runs
 the actual HTTP/PostgreSQL harness and real Chromium on the built Next application.
 No protected deployment workflow is modified.
+
+## Read-only shared configuration observation (23 November 2026)
+
+Worker settings metadata was read for `echo-grid-feedback-api` and
+`echo-grid-feedback-api-staging`. All four operation bindings and the earlier
+proposed master binding were absent on both. Only presence/type and classification
+of the named nonsecret controls were requested in the returned evidence; secret
+values were not retrieved. No settings were modified. Absence is safe for the new
+guarded code but does not prove that deployed revisions contain those guards.
+
+## Validation remediation
+
+The first HTTP lifecycle run detected an existing concurrency fixture using two
+simultaneous domain transactions on one pg Client; PostgreSQL logged overlapping
+BEGINs. Conditional repository state checks exposed that invalid fixture model.
+The race now uses separate clients, retains real concurrent Join/Leave operations,
+and accepts only the documented stale-acceptance rejection. No assertions or
+production locks were relaxed. Added a deferred-read unit regression for mutable
+repository inputs and an actual blocked-transaction test for snapshot/drain limits.

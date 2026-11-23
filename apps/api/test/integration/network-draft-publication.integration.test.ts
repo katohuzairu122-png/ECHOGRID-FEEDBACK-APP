@@ -730,9 +730,25 @@ describe.skipIf(!process.env.DATABASE_URL)('NETWORK-05 real HTTP-to-Postgres lif
     expect(leaves.map((r) => r.status)).toEqual(Array(5).fill(200));
     expect((await f.service.getStatus(f.id)).membership?.status).toBe('left');
     // Characterize the existing service under concurrency. No customer joining UI is enabled.
-    await Promise.all([f.service.join(f.id, 'network15-synthetic-fixture-not-consent'),
-      request('/api/v1/community/me/leave', f.token, 'POST'),
-      f.service.join(f.id, 'network15-synthetic-fixture-not-consent')]);
+    const raw = await syntheticCommunityAcceptance(f.service, f.id, 'network15-synthetic-fixture-not-consent');
+    // Independent transactions need independent pg clients. Concurrent BEGINs
+    // on the fixture's single client overlap, rather than testing row locks.
+    const racers = await Promise.all(Array.from({ length: 2 }, async () => {
+      const c = new Client({ connectionString: process.env.DATABASE_URL }); await c.connect(); return c;
+    }));
+    try {
+      const results = await Promise.allSettled([
+        new CommunityMembershipService(appDbOf(buildDb(racers[0]!))).join(f.id, raw),
+        request('/api/v1/community/me/leave', f.token, 'POST'),
+        new CommunityMembershipService(appDbOf(buildDb(racers[1]!))).join(f.id, raw),
+      ]);
+      expect(results[1]!.status).toBe('fulfilled');
+      if (results[1]!.status === 'fulfilled') expect(results[1]!.value).toHaveProperty('status', 200);
+      for (const index of [0, 2]) {
+        const result = results[index]!;
+        if (result.status === 'rejected') expect(result.reason).toMatchObject({ code: 'COMMUNITY_ACCEPTANCE_STALE' });
+      }
+    } finally { await Promise.all(racers.map(c => c.end())); }
     const final = await f.service.getStatus(f.id);
     expect(final.membership?.id).toBe(initial.membership?.id);
     expect(final.account?.id).toBe(initial.account?.id);

@@ -53,3 +53,20 @@ describe('CONTROL-01 independent fail-closed operation controls', () => {
     expect(payload).toEqual({ event: 'community_membership.control', operation: 'clearance', reason: 'transition_failed' });
   });
 });
+
+it('a caller cannot mutate an active write into clearance while the repository awaits state', async () => {
+  let release!: (row: { status: 'left' }) => void;
+  const written: unknown[] = [];
+  const fake = {
+    query: { communityMemberships: { findFirst: () => new Promise(resolve => { release = resolve; }) } },
+    update: () => ({ set: (value: unknown) => { written.push(value); return { where: () => ({ returning: async () => [{ status: 'active' }] }) }; } }),
+  };
+  const db = fake as unknown as Db;
+  const permit = new CommunityMembershipControls({ COMMUNITY_MEMBERSHIP_REJOIN_ENABLED: 'true' }).authorize(db, 'synthetic', 'rejoin');
+  const patch: { status: 'active' | 'inactive' } = { status: 'active' };
+  const result = new CommunityMembershipRepository(db).updateStatus('synthetic', patch, permit);
+  patch.status = 'inactive';
+  release({ status: 'left' });
+  await result;
+  expect(written).toEqual([expect.objectContaining({ status: 'active' })]);
+});

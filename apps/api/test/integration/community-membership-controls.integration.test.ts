@@ -104,6 +104,7 @@ describe.skipIf(!url)('CONTROL-01 real PostgreSQL containment', () => {
     await expect(repos.communityMemberships.updateStatus(id, { status: 'active' })).rejects.toMatchObject({ status: 503 });
     await expect(repos.communityMemberships.updateStatus(id, { status: 'inactive' })).rejects.toMatchObject({ status: 503 });
     const permit = new CommunityMembershipControls(SYNTHETIC_MEMBERSHIP_CONTROLS).authorize(db, id, 'join');
+    await expect(repos.communityMemberships.updateStatus(id, { status: 'active' }, permit)).rejects.toMatchObject({ status: 503 });
     await db.transaction(async tx => { await expect(createRepositories(tx).communityMemberships.updateStatus(id, { status: 'active' }, permit)).rejects.toMatchObject({ status: 503 }); });
     expect(await snapshot(id)).toEqual(left);
   });
@@ -118,6 +119,32 @@ describe.skipIf(!url)('CONTROL-01 real PostgreSQL containment', () => {
     expect(await new ConsentWithdrawalService(db).revoke(grant, id)).toBe(true);
     await enabled.join(id, await raw(id));
     expect((await new CommunityPlatformStateService(db).suspend(id, { reason: 'Synthetic safety operation.' }, audit())).membership.status).toBe('suspended');
+  });
+
+  it('a blocked in-flight enabled request can finish after configuration closes, while a fresh disabled request denies', async () => {
+    const { id, input } = await prepare('join');
+    const open = async () => { const c = new Client({ connectionString: url }); await c.connect(); extra.push(c); return c; };
+    const holder = await open(); const joining = await open(); const fresh = await open();
+    const pid = (await joining.query('select pg_backend_pid() pid')).rows[0].pid;
+    const config: CommunityMembershipControlConfig = { COMMUNITY_MEMBERSHIP_JOIN_ENABLED: 'true' };
+    const captured = new CommunityMembershipService(buildDb(joining), config);
+    await holder.query('begin'); await holder.query('select id from customers where id=$1 for update', [id]);
+    const pending = captured.join(id, input).then(r => r.membership.status, (error: unknown) => error);
+    let denied: Promise<unknown> | undefined;
+    try {
+      let waiting = false; const deadline = Date.now() + 5000;
+      while (!waiting && Date.now() < deadline) {
+        waiting = (await q("select wait_event_type='Lock' waiting from pg_stat_activity where pid=$1", [pid]))[0]?.waiting === true;
+        if (!waiting) await new Promise(resolve => setTimeout(resolve, 10));
+      }
+      expect(waiting).toBe(true);
+      config.COMMUNITY_MEMBERSHIP_JOIN_ENABLED = 'false';
+      denied = new CommunityMembershipService(buildDb(fresh), config).join(id, input).then(() => null, (error: unknown) => error);
+      await holder.query('commit');
+      expect(await pending).toBe('active');
+      expect(await denied).toMatchObject({ status: 503, code: 'COMMUNITY_MEMBERSHIP_OPERATION_DISABLED' });
+      expect((await q("select count(*)::int n from consent_grants where customer_id=$1 and purpose='community_membership'", [id]))[0].n).toBe(1);
+    } finally { await holder.query('rollback'); await pending; await denied; }
   });
 
   it('request snapshots are explicit: captured enablement can finish; a fresh disabled service denies', async () => {
