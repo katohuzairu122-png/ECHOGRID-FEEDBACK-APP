@@ -1,5 +1,6 @@
 import { getCommunityHub } from '@/lib/community-hub';
-import { getCommunityPhoneEligibility } from '@/lib/community-membership';
+import { getLocale } from 'next-intl/server';
+import { getCommunityPhoneEligibility, getCommunityTermsOffer } from '@/lib/community-membership';
 import { CommunityMembershipControls } from './membership-controls';
 import { CommunityHubView } from './community-hub-view';
 
@@ -16,8 +17,9 @@ export default async function CommunityPage({ searchParams }: CommunityPageProps
   const raw = (await searchParams).offset;
   const parsed = Number(Array.isArray(raw) ? raw[0] : raw);
   const offset = Number.isInteger(parsed) && parsed > 0 && parsed <= 100_000 ? parsed : 0;
-  const [data, phone] = await Promise.all([getCommunityHub(offset), getCommunityPhoneEligibility()]);
+  const locale = await getLocale();
+  const [data, phone, offer] = await Promise.all([getCommunityHub(offset), getCommunityPhoneEligibility(), getCommunityTermsOffer(locale)]);
   const controls = data.membership.status === 'ready'
-    ? <CommunityMembershipControls status={data.membership.data.membership?.status ?? 'absent'} phone={phone} /> : undefined;
+    ? <CommunityMembershipControls status={data.membership.data.membership?.status ?? 'absent'} phone={phone} offer={offer} /> : undefined;
   return <CommunityHubView data={data} membershipControls={controls} />;
 }

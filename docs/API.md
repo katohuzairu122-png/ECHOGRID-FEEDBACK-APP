@@ -2255,3 +2255,11 @@ these exist:
   raw customer UUID isn't a safe thing to put in a shareable referral link.
   A proper referral-code scheme (short, non-guessable, mapped back to a
   customer) is designed but not built.
+
+## Community membership consent (NETWORK-15-T2)
+
+The version-only Community Join contract is superseded by strict server-resolved
+publication/explicit-acceptance enforcement. Status, localized terms offers,
+Join/Rejoin, Leave, safe errors, DTOs and inactive moderation-clearance behavior
+are documented in [the runtime contract](architecture/builds/NETWORK-15/NETWORK_15_T2_RUNTIME_CONSENT.md).
+No approved membership terms or live activation ships with this development block.

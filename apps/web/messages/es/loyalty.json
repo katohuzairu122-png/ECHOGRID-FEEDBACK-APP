@@ -344,6 +344,19 @@
           "suspended": "Esta membresía está suspendida y no se puede modificar aquí.",
           "missing": "No se encontró una membresía. Actualiza el estado.",
           "unavailable": "No se pudo confirmar la salida. Inténtalo de nuevo o actualiza el estado."
+        },
+        "inactive": "La restricción de moderación se ha levantado. La membresía seguirá inactiva hasta que acepte las condiciones actuales.",
+        "termsTitle": "Condiciones de membresía de la Comunidad",
+        "termsVersion": "Versión {version} · Vigentes desde {date}",
+        "acceptTerms": "He leído y acepto expresamente estas condiciones de membresía de la Comunidad.",
+        "joining": "Uniéndose…",
+        "joined": "Membresía actualizada. Premios pendientes liberados: {count}.",
+        "joinErrors": {
+          "acceptance": "Lea y acepte expresamente las condiciones mostradas.",
+          "stale": "Las condiciones o la membresía han cambiado. Actualice, revise y vuelva a aceptar.",
+          "phone": "Verifique su teléfono antes de unirse.",
+          "suspended": "Esta cuenta o membresía no se puede activar aquí.",
+          "unavailable": "No se pudo confirmar la membresía. Actualice su estado antes de reintentar."
         }
       },
       "membership": {
@@ -352,7 +365,8 @@
           "active": "Miembro activo",
           "left": "Dejó la Comunidad",
           "suspended": "Membresía suspendida",
-          "absent": "No es miembro"
+          "absent": "No es miembro",
+          "inactive": "Inactiva — se requiere aceptación"
         },
         "activeOn": "Miembro desde {date}",
         "leftOn": "Se fue el {date}",
