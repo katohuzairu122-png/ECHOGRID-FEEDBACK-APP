@@ -2263,3 +2263,8 @@ publication/explicit-acceptance enforcement. Status, localized terms offers,
 Join/Rejoin, Leave, safe errors, DTOs and inactive moderation-clearance behavior
 are documented in [the runtime contract](architecture/builds/NETWORK-15/NETWORK_15_T2_RUNTIME_CONSENT.md).
 No approved membership terms or live activation ships with this development block.
+
+NETWORK-15-T2 final D1: platform Restore clears moderation to inactive only.
+Fresh customer consent uses POST /community/me/join with operation="restore",
+current approved terms and the clearance lifecycle basis. Prior consent is not
+reused; consent, immutable evidence and customer activation commit atomically.

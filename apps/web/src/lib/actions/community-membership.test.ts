@@ -24,6 +24,12 @@ describe('Community acceptance Server Action', () => {
     expect(await joinCommunityAction({},accepted())).toEqual({joined:true,released:2}); expect(revalidatePath).toHaveBeenCalledWith('/loyalty/dashboard/community');
     const sent=JSON.parse(String(fetcher.mock.calls[0]![1]?.body)); expect(sent.consentAccepted).toBe(true); expect(sent.expectedTransitionId).toBeNull(); expect(sent).not.toHaveProperty('customerId');
   });
+  it('submits fresh Restore as a distinct customer action and never supplies identity', async () => {
+    const raw=response(); fetcher.mockResolvedValue({ ...raw, membership:{...raw.membership,status:'active',policyVersion:'synthetic-only',leftAt:null}, account:{...raw.account,status:'active'}, consent:{version:'synthetic-only'},releasedPendingAwards:0 });
+    const f=accepted(); f.set('operation','restore'); f.set('expectedTransitionId','44444444-4444-4444-8444-444444444444');
+    expect(await joinCommunityAction({},f)).toEqual({joined:true,released:0});
+    const sent=JSON.parse(String(fetcher.mock.calls[0]![1]?.body)); expect(sent.operation).toBe('restore'); expect(sent.consentAccepted).toBe(true); expect(sent).not.toHaveProperty('customerId');
+  });
   it('does not swallow session redirect control flow', async () => { const e=Object.assign(new Error('NEXT_REDIRECT'),{digest:'NEXT_REDIRECT;replace;/loyalty/login;307;'}); fetcher.mockRejectedValue(e); await expect(joinCommunityAction({},accepted())).rejects.toBe(e); });
 });
 describe('Community leave boundary', () => {

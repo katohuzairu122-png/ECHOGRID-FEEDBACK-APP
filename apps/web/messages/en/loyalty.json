@@ -345,7 +345,7 @@
           "missing": "No Community membership was found. Refresh your status.",
           "unavailable": "Leaving could not be confirmed. Try again or refresh your status."
         },
-        "inactive": "Moderation is cleared. Membership is inactive until you accept the current terms.",
+        "inactive": "Moderation is cleared. Your membership remains inactive until you explicitly accept the current terms to restore it.",
         "termsTitle": "Community membership terms",
         "termsVersion": "Version {version} · Effective {date}",
         "acceptTerms": "I have read and explicitly accept these Community membership terms.",
@@ -357,7 +357,10 @@
           "phone": "Verify your phone before joining.",
           "suspended": "Your account or membership cannot be activated here.",
           "unavailable": "Joining could not be confirmed. Refresh your status before retrying."
-        }
+        },
+        "restore": "Restore Community membership",
+        "restoring": "Restoring…",
+        "restored": "Membership restored. Eligible pending awards released: {count}."
       },
       "membership": {
         "title": "Membership",

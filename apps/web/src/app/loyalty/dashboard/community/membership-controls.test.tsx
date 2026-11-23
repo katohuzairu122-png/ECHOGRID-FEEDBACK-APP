@@ -32,9 +32,9 @@ it('keeps stale terms recoverable and requires refresh before another attempt', 
   await user.click(screen.getByRole('button', { name: 'Refresh status' })); expect(h.router.refresh).toHaveBeenCalled();
 });
 it('distinguishes cleared inactive membership from voluntary Leave and allows explicit acceptance or confirmed Leave', () => {
-  renderWithIntl(<CommunityMembershipControls status="inactive" phone="verified" offer={{ ...offer, operation: 'rejoin' }} />);
+  renderWithIntl(<CommunityMembershipControls status="inactive" phone="verified" offer={{ ...offer, operation: 'restore' }} />);
   expect(screen.getByText(/Moderation is cleared/)).toBeVisible(); expect(screen.getByRole('checkbox')).not.toBeChecked();
-  expect(screen.getByRole('button', { name: 'Rejoin Community' })).toBeDisabled(); expect(screen.getByRole('button', { name: 'Leave Community' })).toBeEnabled();
+  expect(screen.getByRole('button', { name: 'Restore Community membership' })).toBeDisabled(); expect(screen.getByRole('button', { name: 'Leave Community' })).toBeEnabled();
 });
 it.each(['absent', 'left'] as const)('keeps %s enrollment unavailable without approved terms', (status) => {
   renderWithIntl(<CommunityMembershipControls status={status} phone="verified" />);

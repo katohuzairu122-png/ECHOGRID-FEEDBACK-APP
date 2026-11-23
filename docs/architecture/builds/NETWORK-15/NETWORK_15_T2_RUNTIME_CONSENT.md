@@ -18,7 +18,7 @@ migration, deployment, live consent or live enrollment is authorized here.**
 | active | Voluntarily enrolled; new activations have immutable acceptance | active | Confirmed Leave |
 | left | Voluntarily terminated | closed; balance/history retained | Fresh explicit Rejoin |
 | suspended | Moderation blocks customer changes | suspended | Authorized platform clearance only |
-| inactive | Moderation cleared, current acceptance missing/stale | closed; balance/history retained | Fresh explicit Rejoin or confirmed Leave |
+| inactive | Moderation cleared, fresh Restore acceptance pending | closed; balance/history retained | Fresh explicit Restore or confirmed Leave |
 
 `inactive` implements D1's already-approved inactive outcome inside the existing
 state machine; it is not voluntary Leave, and Restore does not invent `left_at`.
@@ -28,7 +28,7 @@ customer phone assurance is never a moderator permission.
 
 Legacy active rows are not backfilled, silently suspended or falsely marked as
 accepted. Already-active material-change enforcement remains a separate policy.
-Legacy suspension restores to inactive without evidence; fresh explicit acceptance
+Every suspension clears to inactive without customer activation; fresh explicit acceptance
 then reuses the original membership/account. Known earlier membership dates and
 policy labels are recorded as *prior observations*, not historical consent proof,
 before a real transition replaces mutable current-state fields.
@@ -92,7 +92,9 @@ middleware/current identity and existing customer-scoped rate limiting.
 ```
 
 The expected values are stale-view preconditions, never authority. Rejoin uses the
-same endpoint with `operation:rejoin` and the current server lifecycle basis.
+same endpoint with `operation:rejoin`; moderation-cleared inactive membership uses
+`operation:restore`. Both require fresh explicit acceptance and the current server
+lifecycle basis. Suspended members cannot self-clear moderation.
 The result includes the existing status/account summary, created/reactivated flags,
 minimal consent version/server time/transition reference and the actual number of
 pending awards released by the existing post-commit reevaluation.
@@ -133,36 +135,53 @@ lock ordering. Leave/withdrawal take customer then account and need no publicati
 lock. The existing award/Leave locked-active-account revalidation is untouched.
 
 Immutable audit evidence binds authenticated customer, membership, grant,
-Join/Rejoin operation, exact publication/version/manifest/artifact/locale,
+Join/Rejoin/Restore operation, exact publication/version/manifest/artifact/locale,
 server-generated acceptance time and correlation/transition IDs. Prior observations
 are explicitly not previous acceptance. It excludes phone/email/name, credentials,
 IP/UA and raw request keys. Customer events use null staff actor because that FK
 belongs to staff users. Audit failure propagates and rolls back all writes.
 
 The existing grant is a revocable projection, not immutable history. Its exact
-binding must match the immutable event to authorize Restore. Leave revokes rather
+binding must match the immutable event for an idempotent acceptance replay. It
+never substitutes for fresh Restore consent. Leave and moderation clearance revoke rather
 than deleting it. A deterministic per-membership event sequence and previous UUID
 provide lifecycle ordering under the customer lock, independent of timestamp ties.
 No parallel consent ledger or financial earning rule is introduced.
 
 ## D1 Restore
 
-Restore takes registry shared lock before customer/account locks, checks current
-customer and phone eligibility, then the existing paired state invariant.
-Valid current grant **and** matching immutable evidence permit active/active.
-Missing/stale evidence or unavailable approved terms clear authorized moderation
-into inactive/closed. A savepoint prevents a terms read failure from poisoning the
-clearance transaction. Missing new schema fails closed before any activation.
-No evidence is invented by staff. Left state cannot be restored. A successful
-Leave serialized with Restore remains left; suspended Leave still follows the
-existing denial rule. Platform semantic audit failure rolls back both statuses.
+The final Owner dispatch explicitly supersedes the earlier valid-consent-reuse
+variant: **Restore always requires fresh affirmative customer consent**, even if
+an old grant matches the current publication. See the canonical D1 record.
+
+1. An authorized platform moderator clears suspended/suspended to inactive/closed.
+   This never activates membership, accepts terms or releases pending awards.
+   Current customer/phone eligibility and the existing paired-state checks remain.
+2. Clearance revokes prior active Community consent projections and appends an
+   immutable `moderation_clearance` lifecycle barrier with `consentAccepted:false`.
+   It retains the existing `restored_by_platform` semantic audit for compatibility.
+   All clearance state, projection revocation and both audit writes are atomic.
+3. Only a fresh customer `operation:restore` request against that barrier and the
+   current approved publication may activate inactive/closed to active/active.
+   New grant, mandatory immutable acceptance evidence and activation commit in one
+   transaction through the same strict `/join` boundary, without a second consent
+   system or staff-supplied customer acceptance.
+4. Matching retry returns that transition's original evidence. Six concurrent
+   customer requests commit one activation; an older clearance form, prior Join,
+   prior Restore or successful Leave cannot be replayed to reactivate membership.
+
+Registry shared lock precedes customer/account locks. Missing schema fails closed.
+Platform clearance needs no approved publication, but customer Restore always does.
+Left state cannot be platform-restored. A successful Leave serialized with explicit
+Restore remains left; suspended Leave retains its existing denial. Audit/consent
+failure rolls back the entire affected transition and keeps historical evidence.
 
 ## Customer interface
 
 One Community tab remains, with Points & Membership and Feed. The membership
 section reads a locale-specific approved offer, displays exact version/effective
 time and accessible plain text, and starts with unchecked acceptance. Unavailable
-terms keep Join/Rejoin disabled. Phone handoff uses the existing account route,
+terms keep Join/Rejoin/Restore disabled. Phone handoff uses the existing account route,
 never sends SMS on page load and never treats returning as verification or consent.
 Server Actions reject duplicate/extra fields and rely on API enforcement, not
 client flags. Pending submission disables duplicates; stale terms require refresh
@@ -178,7 +197,7 @@ PostgreSQL**. Existing positive service fixtures now construct real explicit
 acceptance through the actual runtime, rather than calling a legacy bypass.
 Unit/model tests remain separately labeled; old inert-only source guards are
 superseded by real empty-registry/strict-boundary regressions, not suppressed.
-Tests cover atomic failure rollback, six-way Join/Rejoin, stale publication under
+Tests cover atomic failure rollback, six-way Join/Rejoin/Restore and clearance, stale publication under
 observed advisory contention, cross-domain key collision (red before correction),
 old-schema availability, role/session/customer isolation and every D1 outcome.
 Existing Network pinning, pagination, Feed projection, moderation and financial

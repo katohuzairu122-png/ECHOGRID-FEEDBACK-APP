@@ -27,7 +27,7 @@ export function CommunityMembershipControls({ status, phone, offer = null }: {
 
   return <div className={styles.controls} data-testid="community-membership-controls">
     <p>{t('distinction')}</p>
-    {status === 'inactive' && <><p role="status">{t('inactive')}</p><CommunityEnrollmentControls key={offerKey} rejoin phone={phone} offer={offer} /></>}
+    {status === 'inactive' && <><p role="status">{t('inactive')}</p><CommunityEnrollmentControls key={offerKey} restore rejoin phone={phone} offer={offer} /></>}
     {status === 'suspended' ? <p role="status">{t('suspended')}</p> : (status === 'active' || status === 'inactive') ? <>
       <button className={styles.action} type="button" onClick={() => { setConfirmed(false); setOpen(true); }}>{t('leave')}</button>
       <Dialog open={open} onOpenChange={(value) => { if (!pending) { setOpen(value); setConfirmed(false); } }}>

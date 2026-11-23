@@ -1,40 +1,50 @@
-# NETWORK-15-T2-D1 — approved development contract
+# NETWORK-15-T2-D1 — final approved development ruling
 
 Date: 2026-11-23. Baseline: `aa7c016b7a3cd4aca4769414b4f18242ea2cc7fe`.
+Authority: Owner dispatch **ECHO GRID — NETWORK-15-T2 FINAL IMPLEMENTATION**,
+section 3, “D1 OWNER RULING — APPROVED FOR THIS DISPATCH”.
 
-Authority: in this development conversation, the assistant presented the five
-outcomes below and asked for development-only approval of NETWORK-15-T2-D1. The
-Owner responded **“Proceed”**. This is the affirmative approval previously missing
-from T1/#553. Earlier records marked PROPOSED describe the historical state; they
-are superseded for this narrowly stated development contract.
+**D1: Restore requires fresh, explicit, versioned customer consent.**
 
-Approved outcomes:
+Binding requirements:
 
-1. Restore activates membership only with valid current consent and verified eligibility.
-2. Missing/stale consent leaves membership inactive until explicit acceptance after moderation clearance.
-3. Restore cannot override voluntary Leave or existing bans.
-4. Concurrent Restore/Leave cannot resurrect terminated membership.
-5. Historical consent, balances and ledgers remain intact.
+1. Initial Join requires affirmative consent.
+2. Rejoin requires affirmative consent whenever reactivating a terminated membership.
+3. Restore requires fresh affirmative consent; previously recorded consent cannot be silently reused.
+4. Consent identifies the applicable policy/version and membership transition.
+5. Membership transition and consent persistence commit atomically.
+6. Failed transactions leave no partially restored membership or orphaned consent.
+7. Historical consent remains auditable and immutable.
+8. Concurrent retries/replays create no duplicate transitions, memberships or consent events.
+9. Viewing, QR scanning, authentication and phone verification never constitute consent.
+10. Business loyalty, customer registration and Community membership consent remain separate.
 
-The approval authorizes implementation, disposable database/schema testing,
-regressions, browser acceptance and a draft PR. It does **not** approve legal
-wording/localizations, a terms version/effective date, publication, live enrollment,
-deployment, shared migrations, production configuration, merging or T3.
+## Supersession and implementation
 
-## Minimal representation
+This final dispatch supersedes the earlier same-day development variant that
+allowed platform Restore to reactivate with a matching prior grant. That variant
+is historical, not the current contract; no already-recorded audit is rewritten.
 
-The existing membership state machine gains `inactive`: moderation cleared,
-existing membership retained, consent-dependent activation pending. Its Community
-Points account is `closed`, with balance/history preserved. It is distinct from
-voluntary `left`; `left_at` is not invented by Restore. `suspended` remains blocked
-until authorized clearance. Existing platform permission `community:adjust` is
-unchanged. No parallel membership store or new moderator permission is introduced.
+The existing inactive state separates moderator clearance from customer consent:
 
-Only fresh explicit Join/Rejoin can activate an inactive member. Legacy active
-records are not rewritten or backfilled into consent; material-change enforcement
-for already-active members is not silently introduced. If a legacy active member
-wants to accept through self-service, the existing Leave followed by explicit
-Rejoin establishes a real new acceptance rather than fabricating historical proof.
+- Authorized platform Restore clears suspended/suspended to inactive/closed,
+  revokes prior active Community consent projections and appends an immutable
+  non-consent clearance barrier. It never activates membership or releases awards.
+- The authenticated customer sees unchecked current terms and an explicit Restore
+  action. `POST /api/v1/community/me/join`, `operation:restore`, accepts only the
+  current publication and clearance basis. Grant, immutable acceptance event and
+  inactive-to-active activation commit atomically. Matching retries return that
+  same new acceptance; previous consent or pre-clearance forms are insufficient.
+- Voluntary left state, bans and renewed suspension cannot be overridden.
+  Customer identity, phone, tenant and existing platform permissions are retained.
+- Historical audit/ledgers, balances and membership/account IDs are preserved.
+  No extra earning rule, financial service or authentication mechanism is added.
 
-No approved effective terms are shipped. Candidate `community-membership-v1.0`
-remains unapproved and unavailable for customer acceptance.
+## Approval limits
+
+Development, additive migration source/disposable databases, tests, real Chromium
+and a draft PR are authorized. Legal wording/localizations, a legal version or
+effective date, publication, live enrollment, shared migrations, deployment,
+production configuration, merging and NETWORK-15-T3 are not approved here.
+No approved effective publication is shipped; joining/restoring fails closed
+without one. Customer UI translations are not approval of legal artifacts.

@@ -345,7 +345,7 @@
           "missing": "No se encontró una membresía. Actualiza el estado.",
           "unavailable": "No se pudo confirmar la salida. Inténtalo de nuevo o actualiza el estado."
         },
-        "inactive": "La restricción de moderación se ha levantado. La membresía seguirá inactiva hasta que acepte las condiciones actuales.",
+        "inactive": "La suspensión se ha levantado. Tu membresía permanece inactiva hasta que aceptes explícitamente las condiciones actuales para restaurarla.",
         "termsTitle": "Condiciones de membresía de la Comunidad",
         "termsVersion": "Versión {version} · Vigentes desde {date}",
         "acceptTerms": "He leído y acepto expresamente estas condiciones de membresía de la Comunidad.",
@@ -357,7 +357,10 @@
           "phone": "Verifique su teléfono antes de unirse.",
           "suspended": "Esta cuenta o membresía no se puede activar aquí.",
           "unavailable": "No se pudo confirmar la membresía. Actualice su estado antes de reintentar."
-        }
+        },
+        "restore": "Restaurar la membresía de la comunidad",
+        "restoring": "Restaurando…",
+        "restored": "Membresía restaurada. Recompensas pendientes elegibles liberadas: {count}."
       },
       "membership": {
         "title": "Membresía",

@@ -345,7 +345,7 @@
           "missing": "Aucune adhésion trouvée. Actualisez votre statut.",
           "unavailable": "Le départ n’a pas pu être confirmé. Réessayez ou actualisez le statut."
         },
-        "inactive": "La restriction de modération est levée. L’adhésion reste inactive jusqu’à votre acceptation des conditions actuelles.",
+        "inactive": "La suspension a été levée. Votre adhésion reste inactive jusqu’à votre acceptation explicite des conditions actuelles pour la rétablir.",
         "termsTitle": "Conditions d’adhésion à la Communauté",
         "termsVersion": "Version {version} · En vigueur le {date}",
         "acceptTerms": "J’ai lu et j’accepte expressément ces conditions d’adhésion à la Communauté.",
@@ -357,7 +357,10 @@
           "phone": "Vérifiez votre téléphone avant d’adhérer.",
           "suspended": "Ce compte ou cette adhésion ne peut pas être activé ici.",
           "unavailable": "L’adhésion n’a pas pu être confirmée. Actualisez votre statut avant de réessayer."
-        }
+        },
+        "restore": "Rétablir l’adhésion à la communauté",
+        "restoring": "Rétablissement…",
+        "restored": "Adhésion rétablie. Récompenses en attente admissibles débloquées : {count}."
       },
       "membership": {
         "title": "Adhésion",

@@ -10,7 +10,7 @@ import { joinCommunityAction, type CommunityJoinState } from '@/lib/actions/comm
 import styles from './membership-controls.module.css';
 
 const initial: CommunityJoinState = {};
-export function CommunityEnrollmentControls({ rejoin, phone, offer }: { rejoin: boolean; phone: CommunityPhoneEligibility; offer: CommunityTermsOffer | null }) {
+export function CommunityEnrollmentControls({ rejoin, restore = false, phone, offer }: { rejoin: boolean; restore?: boolean; phone: CommunityPhoneEligibility; offer: CommunityTermsOffer | null }) {
   const t = useTranslations('loyalty.customer.community.selfService'); const router = useRouter();
   const [accepted, setAccepted] = useState(false); const [key, setKey] = useState('');
   const [state, action, pending] = useActionState(joinCommunityAction, initial);
@@ -26,10 +26,10 @@ export function CommunityEnrollmentControls({ rejoin, phone, offer }: { rejoin: 
         expectedTransitionId: offer.transitionId ?? '', idempotencyKey: key }).map(([name,value]) => <input key={name} type="hidden" name={name} value={value} />)}
       <label className={styles.confirmation}><input type="checkbox" name="consentAccepted" value="yes" required checked={accepted}
         disabled={pending || phone !== 'verified'} onChange={(e) => setAccepted(e.target.checked)} />{t('acceptTerms')}</label>
-      <button className={styles.action} type="submit" disabled={!accepted || !key || pending || state.joined || state.error === 'stale' || phone !== 'verified'}>{t(pending ? 'joining' : rejoin ? 'rejoin' : 'join')}</button>
+      <button className={styles.action} type="submit" disabled={!accepted || !key || pending || state.joined || state.error === 'stale' || phone !== 'verified'}>{t(pending ? restore ? 'restoring' : 'joining' : restore ? 'restore' : rejoin ? 'rejoin' : 'join')}</button>
       {state.error && <><p role="alert">{t(`joinErrors.${state.error}`)}</p>{state.error === 'phone' && <Link className={styles.action} href="/loyalty/dashboard/phone?next=%2Floyalty%2Fdashboard%2Fcommunity">{t('verifyPhone')}</Link>}<button className={styles.action} type="button" onClick={() => { setAccepted(false); router.refresh(); }}>{t('retry')}</button></>}
-      {state.joined && <p role="status">{t('joined', { count: state.released ?? 0 })}</p>}
-    </form> : <><p role="status">{t('termsUnavailable')}</p><button className={styles.action} type="button" disabled aria-describedby="community-terms-note">{t(rejoin ? 'rejoin' : 'join')}</button></>}
+      {state.joined && <p role="status">{t(restore ? 'restored' : 'joined', { count: state.released ?? 0 })}</p>}
+    </form> : <><p role="status">{t('termsUnavailable')}</p><button className={styles.action} type="button" disabled aria-describedby="community-terms-note">{t(restore ? 'restore' : rejoin ? 'rejoin' : 'join')}</button></>}
     <p id="community-terms-note">{t('termsRequired')}</p>
     {phone === 'unverified' ? <><p>{t('phoneRequired')}</p>
       <Link className={styles.action} href="/loyalty/dashboard/phone?next=%2Floyalty%2Fdashboard%2Fcommunity">{t('verifyPhone')}</Link>

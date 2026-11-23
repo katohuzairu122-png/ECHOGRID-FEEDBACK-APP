@@ -1,5 +1,11 @@
 # Community Join/Rejoin acceptance — non-activating T1 matrix
 
+> Historical T1 proposal. The final T2 Owner dispatch supersedes conflicting technical
+> implementation/Restore statements: every Restore requires fresh customer consent;
+> prior consent is never reused. See [the current D1 ruling](../../NETWORK-15/NETWORK_15_T2_D1_APPROVED.md)
+> and [runtime contract](../../NETWORK-15/NETWORK_15_T2_RUNTIME_CONSENT.md).
+> Legal terms and live activation remain unapproved.
+
 **Status: PROPOSED CONTRACT / NO FEATURE ACTIVATION.**
 Reference models validate a design against synthetic inputs. They are not the
 production service and cannot prove that its legacy Join endpoint enforces these
