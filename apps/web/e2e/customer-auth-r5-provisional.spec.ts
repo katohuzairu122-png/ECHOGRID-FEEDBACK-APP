@@ -262,8 +262,8 @@ test('D — refresh rotates credentials; logout revokes the issued session', asy
   await expect(page).toHaveURL(/\/loyalty\/login/);
   await context.clearCookies();
   await context.addCookies(issued);
-  await page.goto('/loyalty/dashboard');
-  await expect(page).not.toHaveURL(/\/loyalty\/dashboard(?:\?|$)/);
+  await page.goto('/loyalty/session/refresh?next=%2Floyalty%2Fdashboard');
+  await expect(page).toHaveURL(/\/loyalty\/login(?:\?|$)/);
 });
 
 test('F/G — QR destination survives sign-in and an external destination is sanitized', async ({
