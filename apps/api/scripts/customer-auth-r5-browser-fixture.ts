@@ -175,7 +175,7 @@ const server = createServer(async (incoming, outgoing) => {
     outgoing.writeHead(response.status);
     outgoing.end(Buffer.from(await response.arrayBuffer()));
     await Promise.allSettled(pending);
-  } catch { 
+  } catch {
     outgoing.writeHead(500);
     outgoing.end();
   }
