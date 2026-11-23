@@ -154,12 +154,31 @@ test('B/G — email proof completes once, creates a rotating session, and reject
     proofLength: proof.length,
     proofCharactersAllowed: /^[A-Za-z0-9_-]+$/.test(proof),
   }));
+  await page.addInitScript(() => {
+    const raw = window.location.hash;
+    const value = raw.startsWith('#c=') ? decodeURIComponent(raw.slice(3)) : '';
+    const [id = '', secret = ''] = value.split('.');
+    Object.assign(window, {
+      __customerAuthR5InitialHash: {
+        present: raw.startsWith('#c='),
+        idLength: id.length,
+        idLooksUuid: /^[0-9a-fA-F-]{36}$/.test(id),
+        proofLength: secret.length,
+        proofLooksAllowed: /^[A-Za-z0-9_-]{16,}$/.test(secret),
+      },
+    });
+  });
   await page.goto(verifyUrl);
   try {
     await expect(page.getByRole('button', { name: 'Create account' })).toBeVisible();
   } catch (error) {
     const visibleText = await page.locator('h1, h2, p, [role="alert"], button').allTextContents();
-    console.info('customer_auth_r5_verify_visible_state', JSON.stringify(visibleText.map((value) => value.trim()).filter(Boolean)));
+    const safeLocation = await page.evaluate(() => ({
+      pathname: window.location.pathname,
+      hashPresent: window.location.hash.startsWith('#c='),
+      initialHash: (window as Window & { __customerAuthR5InitialHash?: unknown }).__customerAuthR5InitialHash ?? null,
+    }));
+    console.info('customer_auth_r5_verify_visible_state', JSON.stringify({ safeLocation, text: visibleText.map((value) => value.trim()).filter(Boolean) }));
     throw error;
   }
   await expect(page.getByLabel('Name')).toHaveCount(0);
