@@ -26,3 +26,10 @@ appendFileSync(
     mode: 0o600,
   },
 );
+
+// These are run-specific synthetic credentials, not repository secrets, so
+// GitHub will not mask them automatically when later steps print environment
+// metadata. Register every value with the runner before exporting it.
+for (const value of Object.values(values)) {
+  process.stdout.write(`::add-mask::${value}\n`);
+}

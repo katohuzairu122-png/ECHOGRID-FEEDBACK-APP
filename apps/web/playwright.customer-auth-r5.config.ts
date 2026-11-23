@@ -22,12 +22,15 @@ export default defineConfig({
   workers: 1,
   timeout: 120_000,
   retries: 0,
-  reporter: [['list'], ['html', { open: 'never' }]],
+  // Keep CI evidence in text-only logs; a failed-test DOM snapshot can contain
+  // a synthetic password or a proof-bearing form value.
+  reporter: 'list',
   use: {
     ...devices['Desktop Chrome'],
     baseURL: 'http://localhost:3000',
     extraHTTPHeaders: { 'cf-connecting-ip': '198.51.100.77' },
     trace: 'off',
+    screenshot: 'off',
   },
   webServer: [
     {

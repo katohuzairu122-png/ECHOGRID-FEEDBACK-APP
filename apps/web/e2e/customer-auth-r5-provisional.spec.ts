@@ -30,6 +30,16 @@ async function requestProof(page: Page, address: string, name = 'Synthetic R5 Cu
   await page.getByRole('button', { name: 'Send confirmation link' }).click();
 }
 
+async function expectGenericConfirmation(page: Page) {
+  const heading = page.getByRole('heading', { name: 'Check your email' });
+  const alert = page.getByRole('alert');
+  await expect(heading.or(alert)).toBeVisible();
+  if (await alert.isVisible()) {
+    // Keep the diagnostic to the generic translated error; never print form values.
+    throw new Error(`Registration returned an error state: ${(await alert.textContent())?.trim()}`);
+  }
+}
+
 async function capturedVerificationLink(page: Page, address: string): Promise<string> {
   const response = await page.request.get(
     `http://127.0.0.1:8792/__test/mailbox?recipient=${encodeURIComponent(address)}`,
@@ -70,7 +80,7 @@ test('A/H — customer enters account details once; registration form remains us
 
   await page.getByLabel('Confirm password').fill(password);
   await page.getByRole('button', { name: 'Send confirmation link' }).click();
-  await expect(page.getByText('Check your email')).toBeVisible();
+  await expectGenericConfirmation(page);
   expect(new URL(page.url()).searchParams.get('email')).toBeNull();
   expect(
     (await page.context().cookies()).some((cookie) =>
@@ -186,9 +196,11 @@ test('G — duplicate and unknown registration requests use the same confirmatio
 }) => {
   const unknown = `unknown-${Date.now()}@example.test`;
   await requestProof(page, email);
-  const existingText = await page.getByText('Check your email').textContent();
+  await expectGenericConfirmation(page);
+  const existingText = await page.getByRole('heading', { name: 'Check your email' }).textContent();
   await requestProof(page, unknown);
-  const unknownText = await page.getByText('Check your email').textContent();
+  await expectGenericConfirmation(page);
+  const unknownText = await page.getByRole('heading', { name: 'Check your email' }).textContent();
   expect(existingText).toBe(unknownText);
 });
 
