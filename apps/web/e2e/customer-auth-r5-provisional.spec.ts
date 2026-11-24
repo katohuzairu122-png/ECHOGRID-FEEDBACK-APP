@@ -262,7 +262,9 @@ test('E — recovery verifies independent email and phone factors, resets passwo
   await page.getByLabel('Phone verification code').fill('000000');
   await page.getByRole('button', { name: 'Verify phone code' }).click();
   await expect(
-    page.getByRole('alert').filter({ hasText: 'This recovery request is invalid or expired.' }),
+    page.getByText('This recovery request is invalid, expired or already used.', {
+      exact: true,
+    }),
   ).toBeVisible();
   await page.getByLabel('Phone verification code').fill('123456');
   await page.getByRole('button', { name: 'Verify phone code' }).click();
