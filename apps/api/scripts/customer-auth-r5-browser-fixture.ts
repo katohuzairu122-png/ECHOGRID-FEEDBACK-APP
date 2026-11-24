@@ -5,6 +5,15 @@ import { Hono } from 'hono';
 import { buildDb } from '../src/db/client';
 import { createDirectPbkdf2Worker } from '../src/auth/pbkdf2-worker';
 import { createCustomerEmailTrustedSource } from '../src/customer-auth/customer-email-trusted-source';
+import { CustomerAuthService } from '../src/customer-auth/customer-auth.service';
+import { TwilioVerifyService } from '../src/customer-auth/twilio-verify.service';
+import { customerAuthRoutes } from '../src/customer-auth/customer-auth.routes';
+import { loyaltyCustomerRoutes } from '../src/loyalty/loyalty-customer.routes';
+import { createRepositories } from '../src/repositories';
+import { errorHandler } from '../src/lib/error-handler';
+import { createCustomerEmailLinkService } from '../src/customer-auth/customer-email-link.service';
+import { createCustomerEmailLinkComposition } from '../src/customer-auth/customer-email-link.composition';
+import { createEmailLinkProofDelivery } from '../src/customer-auth/customer-email-auth.delivery';
 import {
   createCustomerEmailAuthComposition,
   createEmailAuthDependencies,
@@ -63,6 +72,31 @@ if (
 const mailboxes = new Map<string, EmailMessage[]>();
 const budgets = new Map<string, { count: number; resetsAt: number }>();
 const recoveryPhoneCodes = new Map<string, string>();
+const syntheticTwilioVerifications = new Map<string, { code: string; expiresAt: number }>();
+const legacyOtpDiagnostics: string[] = [];
+const originalFetch = globalThis.fetch.bind(globalThis);
+globalThis.fetch = async (input, init) => {
+  const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+  if (!url.startsWith('https://verify.twilio.com/v2/Services/')) return originalFetch(input, init);
+  const form = init?.body instanceof URLSearchParams
+    ? new URLSearchParams(init.body)
+    : new URLSearchParams(typeof init?.body === 'string' ? init.body : '');
+  const phone = form.get('To') ?? '';
+  if (!/^\+[1-9][0-9]{7,14}$/.test(phone)) return Response.json({ code: 60200 }, { status: 400 });
+  if (url.endsWith('/Verifications')) {
+    syntheticTwilioVerifications.set(phone, { code: '123456', expiresAt: Date.now() + 600_000 });
+    legacyOtpDiagnostics.push('provider_request_accepted');
+    return Response.json({ status: 'pending' });
+  }
+  if (url.endsWith('/VerificationCheck')) {
+    const active = syntheticTwilioVerifications.get(phone);
+    const approved = Boolean(active && active.expiresAt > Date.now() && active.code === form.get('Code'));
+    if (approved) syntheticTwilioVerifications.delete(phone);
+    legacyOtpDiagnostics.push(approved ? 'provider_proof_approved' : 'provider_proof_denied');
+    return Response.json({ status: approved ? 'approved' : 'pending' });
+  }
+  return Response.json({ code: 20404 }, { status: 404 });
+};
 const emailSink: EmailService = {
   async send(message) {
     if (!message.to.endsWith('@example.test'))
@@ -134,6 +168,39 @@ const emailAuth = createCustomerEmailAuthComposition({
       deliver: createRegistrationProofDelivery({ email: emailSink, webBaseUrl: config.webBaseUrl }),
       limit: testLimiter,
       resolveTrustedSource,
+      legacyOtpSession: async (phone, code) => withDb(async (db) => {
+        const provider = new TwilioVerifyService({
+          accountSid: 'AC_SYNTHETIC_CUSTOMER_AUTH_TEST',
+          authToken: 'synthetic-test-provider-token-never-live',
+          serviceSid: 'VA_SYNTHETIC_CUSTOMER_AUTH_TEST',
+        });
+        const auth = new CustomerAuthService(
+          createRepositories(db),
+          { async send() {} },
+          { CUSTOMER_JWT_SECRET: legacySecret },
+          hasher,
+        );
+        try {
+          if (!await provider.check(phone, code)) {
+            legacyOtpDiagnostics.push('legacy_proof_rejected');
+            return null;
+          }
+          const customer = await auth.completeVerifiedPhoneForRotatingSession(phone);
+          legacyOtpDiagnostics.push('legacy_identity_resolved');
+          const established = await new CustomerSessionService(db, config.session).establishSession({
+            customerId: customer.id,
+            authMethod: 'otp',
+          });
+          legacyOtpDiagnostics.push(established.ok ? 'legacy_session_established' : `legacy_session_denied:${established.reason}`);
+          return established.ok ? established.session : null;
+        } catch (error) {
+          const code = typeof error === 'object' && error !== null && 'code' in error
+            ? String((error as { code: unknown }).code)
+            : error instanceof Error ? error.name : 'UnknownError';
+          legacyOtpDiagnostics.push(`legacy_exception:${code}`);
+          throw error;
+        }
+      }),
     });
     return { dependencies, close: async () => {} };
   },
@@ -263,6 +330,38 @@ const recoveryRoutes = createCustomerRecoveryRoutes({
   },
 });
 
+const emailLinkRoutes = createCustomerEmailLinkComposition({
+  isEnabled: () => true,
+  async open() {
+    const client = new Client({ connectionString });
+    await client.connect();
+    const db = buildDb(client);
+    return {
+      dependencies: {
+        sessions: new CustomerSessionService(db, config.session),
+        link: createCustomerEmailLinkService({
+          db,
+          hmacSecret,
+          hasher,
+          passwordPolicy: { minLength: config.passwordMinLength },
+          deliver: createEmailLinkProofDelivery({ email: emailSink, webBaseUrl: config.webBaseUrl }),
+        }),
+        limiter: {
+          resolveTrustedSource,
+          keyForIdentifier: (address: string) => customerChallengeDigest({
+            secret: hmacSecret,
+            purpose: 'email_link',
+            field: 'subject',
+            value: normalizeLoginEmail(address) ?? address,
+          }),
+          limit: testLimiter,
+        },
+      },
+      close: () => client.end(),
+    };
+  },
+});
+
 const app = new Hono();
 app.get('/health', (c) => c.body(null, 204));
 app.get('/__test/mailbox', (c) => {
@@ -270,6 +369,10 @@ app.get('/__test/mailbox', (c) => {
   const recipient = c.req.query('recipient') ?? '';
   if (!recipient.endsWith('@example.test')) return c.body(null, 404);
   return c.json({ messages: mailboxes.get(recipient) ?? [] }, 200, { 'Cache-Control': 'no-store' });
+});
+app.get('/__test/legacy-otp-diagnostics', (c) => {
+  if (c.req.header('authorization') !== `Bearer ${fixtureToken}`) return c.body(null, 404);
+  return c.json({ events: legacyOtpDiagnostics.slice(-12) }, 200, { 'Cache-Control': 'no-store' });
 });
 app.post('/__test/mark-phone-verified', async (c) => {
   if (c.req.header('authorization') !== `Bearer ${fixtureToken}`) return c.body(null, 404);
@@ -284,6 +387,22 @@ app.post('/__test/mark-phone-verified', async (c) => {
         AND cc.login_email_verified_at IS NOT NULL AND c.phone IS NULL`);
   });
   return c.json({ accepted: true }, 200, { 'Cache-Control': 'no-store' });
+});
+app.post('/__test/advance-recovery-hold', async (c) => {
+  if (c.req.header('authorization') !== `Bearer ${fixtureToken}`) return c.body(null, 404);
+  const payload = (await c.req.json().catch(() => null)) as { recipient?: unknown } | null;
+  const recipient = typeof payload?.recipient === 'string' ? normalizeLoginEmail(payload.recipient) : null;
+  if (!recipient?.endsWith('@example.test')) return c.body(null, 404);
+  const advanced = await withDb(async (db) => db.execute(sql`
+    UPDATE customer_recovery_attempts AS attempt
+       SET hold_started_at = now() - interval '2 seconds',
+           hold_until = now() - interval '1 second'
+      FROM customer_credentials AS credential
+     WHERE credential.customer_id = attempt.customer_id
+       AND credential.login_email = ${recipient}
+       AND attempt.status = 'security_hold'
+  `));
+  return c.json({ accepted: Number(advanced.rowCount ?? 0) === 1 }, 200, { 'Cache-Control': 'no-store' });
 });
 app.post('/__test/password-hash-check', async (c) => {
   if (c.req.header('authorization') !== `Bearer ${fixtureToken}`) {
@@ -329,11 +448,63 @@ app.get('/__test/customer-session-status', async (c) => {
   );
   return c.body(null, active ? 204 : 401);
 });
+app.post('/__test/seed-legacy-customer', async (c) => {
+  if (c.req.header('authorization') !== `Bearer ${fixtureToken}`) return c.body(null, 404);
+  const payload = (await c.req.json().catch(() => null)) as { phone?: unknown } | null;
+  const phone = typeof payload?.phone === 'string' ? payload.phone : '';
+  if (!/^\+1555[0-9]{7}$/.test(phone)) return c.body(null, 404);
+  const result = await withDb(async (db) => {
+    const { customer } = await new CustomerRepository(db).createIfAbsent({ phone, phoneVerifiedAt: new Date() });
+    if (!customer) throw new Error('Synthetic legacy identity could not be created.');
+    const slug = `r5-legacy-${phone.slice(-7)}`;
+    const business = await db.$client.query<{ id: string }>(
+      'INSERT INTO businesses (name, slug) VALUES ($1, $2) ON CONFLICT (slug) DO UPDATE SET name=EXCLUDED.name RETURNING id',
+      ['Synthetic R5 Legacy Business', slug],
+    );
+    const businessId = business.rows[0]?.id;
+    if (!businessId) throw new Error('Synthetic business could not be created.');
+    const membership = await db.$client.query<{ id: string }>(
+      `INSERT INTO business_customer_memberships (customer_id, business_id, status, onboarding_source)
+       VALUES ($1, $2, 'active', 'legacy_migration')
+       ON CONFLICT (customer_id, business_id) DO UPDATE SET status='active' RETURNING id`,
+      [customer.id, businessId],
+    );
+    const membershipId = membership.rows[0]?.id;
+    if (!membershipId) throw new Error('Synthetic membership could not be created.');
+    await db.$client.query(
+      `INSERT INTO loyalty_accounts (customer_id, business_id, membership_id, points)
+       VALUES ($1, $2, $3, 42)
+       ON CONFLICT (customer_id, business_id) DO UPDATE SET membership_id=EXCLUDED.membership_id, points=42`,
+      [customer.id, businessId, membershipId],
+    );
+    return { customerId: customer.id };
+  });
+  return c.json(result, 200, { 'Cache-Control': 'no-store' });
+});
+app.get('/__test/legacy-customer-snapshot', async (c) => {
+  if (c.req.header('authorization') !== `Bearer ${fixtureToken}`) return c.body(null, 404);
+  const phone = c.req.query('phone') ?? '';
+  if (!/^\+1555[0-9]{7}$/.test(phone)) return c.body(null, 404);
+  const snapshot = await withDb(async (db) => {
+    const { rows } = await db.$client.query(
+      `SELECT c.id, c.full_name AS "fullName", cc.login_email AS email,
+              (SELECT count(*)::int FROM business_customer_memberships m WHERE m.customer_id=c.id) AS memberships,
+              (SELECT COALESCE(sum(a.points), 0)::int FROM loyalty_accounts a WHERE a.customer_id=c.id) AS points
+         FROM customers c LEFT JOIN customer_credentials cc ON cc.customer_id=c.id WHERE c.phone=$1`,
+      [phone],
+    );
+    return rows[0] ?? null;
+  });
+  return c.json({ customer: snapshot }, 200, { 'Cache-Control': 'no-store' });
+});
 
+app.route('/api/v1/customer-auth', customerAuthRoutes);
+app.route('/api/v1/customer-auth', emailLinkRoutes);
 app.route('/api/v1/customer-auth', emailAuth);
 app.route('/api/v1/customer-session', lifecycle);
 app.route('/api/v1/customer-recovery', recoveryRoutes);
-app.onError(() => new Response('Internal Server Error', { status: 500 }));
+app.route('/api/v1/loyalty/me', loyaltyCustomerRoutes);
+app.onError(errorHandler);
 
 const port = Number(process.env.CUSTOMER_AUTH_R5_API_PORT ?? '8792');
 const server = createServer(async (incoming, outgoing) => {
@@ -352,7 +523,33 @@ const server = createServer(async (incoming, outgoing) => {
       ...(body ? { body, duplex: 'half' } : {}),
     } as RequestInit);
     const pending: Promise<unknown>[] = [];
-    const response = await app.fetch(request, {}, {
+    const rateLimiter = { async limit() { return { success: true }; } };
+    const response = await app.fetch(request, {
+      ENVIRONMENT: 'production',
+      HYPERDRIVE: { connectionString },
+      PASSWORD_HASHER: { async fetch() { throw new Error('Unused synthetic hasher binding'); } },
+      CUSTOMER_EMAIL_AUTH_ENABLED: 'true',
+      CUSTOMER_RECOVERY_ENABLED: 'true',
+      CUSTOMER_EMAIL_AUTH_HMAC_SECRET: hmacSecret,
+      CUSTOMER_SESSION_SIGNING_SECRET: sessionSecret,
+      CUSTOMER_SESSION_ACCESS_TTL_SECONDS: '900',
+      CUSTOMER_SESSION_REFRESH_TTL_SECONDS: '3600',
+      CUSTOMER_SESSION_ABSOLUTE_TTL_SECONDS: '7200',
+      CUSTOMER_SESSION_IDLE_TTL_SECONDS: '1800',
+      CUSTOMER_STEP_UP_WINDOW_SECONDS: '600',
+      CUSTOMER_PASSWORD_MIN_LENGTH: '8',
+      CUSTOMER_JWT_SECRET: legacySecret,
+      CUSTOMER_AUTH_RATE_LIMIT: rateLimiter,
+      CUSTOMER_API_RATE_LIMITER: rateLimiter,
+      PUBLIC_RATE_LIMITER: rateLimiter,
+      OTP_RATE_LIMITER: rateLimiter,
+      CLIENT_ATTRIBUTION_SECRET: attributionSecret,
+      WEB_BASE_URL: 'http://localhost:3000',
+      TWILIO_ACCOUNT_SID: 'AC_SYNTHETIC_CUSTOMER_AUTH_TEST',
+      TWILIO_AUTH_TOKEN: 'synthetic-test-provider-token-never-live',
+      TWILIO_FROM_NUMBER: '+15555550100',
+      TWILIO_VERIFY_SERVICE_SID: 'VA_SYNTHETIC_CUSTOMER_AUTH_TEST',
+    } as never, {
       waitUntil(promise) {
         pending.push(Promise.resolve(promise));
       },

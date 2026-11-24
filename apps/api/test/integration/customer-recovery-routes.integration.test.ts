@@ -318,8 +318,9 @@ describe.skipIf(!process.env.DATABASE_URL)('customer recovery routes (integratio
       const attemptId = await begin(s, c);
       expect(await body(await emailStep(s, attemptId))).toEqual({ status: 'awaiting_factors' });
       expect(s.otp.sent).toEqual([]);
-      expect(await body(await phoneStep(s, attemptId))).toEqual({ status: 'factors_verified' });
+      expect(await body(await phoneStep(s, attemptId))).toMatchObject({ status: 'security_hold' });
       expect(s.otp.sent).toEqual([c.phone]);
+      await setHoldIn(attemptId, -1);
       const before = await credential(c.id);
       const done = await s.post('complete', { attemptId, newPassword: NEW });
       expect(done.status).toBe(204);
@@ -340,9 +341,11 @@ describe.skipIf(!process.env.DATABASE_URL)('customer recovery routes (integratio
           )
         )[0]!.n,
       ).toBe(0);
-      expect(s.notices.map((n) => n.kind)).toEqual(['initiated', 'completed']);
+      expect(s.notices.map((n) => n.kind)).toEqual(['initiated', 'hold_started', 'completed']);
       expect(s.notices.every((n) => n.attemptId === attemptId)).toBe(true);
-      expect(s.notices[1]!.cancelToken).toBeUndefined();
+      expect(s.notices[1]!.cancelToken).toMatch(/^[a-f0-9]{64}$/);
+      expect(s.notices[1]!.cancelToken).not.toBe(s.notices[0]!.cancelToken);
+      expect(s.notices[2]!.cancelToken).toBeUndefined();
     });
 
     it('lost email (phone OTP + recovery code) is held 24 hours, can be cancelled by the emailed credential, and otherwise completes only after the deadline', async () => {
@@ -413,6 +416,7 @@ describe.skipIf(!process.env.DATABASE_URL)('customer recovery routes (integratio
       const id = await begin(s, c);
       await emailStep(s, id);
       await phoneStep(s, id);
+      await setHoldIn(id, -1);
       const results = await Promise.all([
         s.post('complete', { attemptId: id, newPassword: NEW }),
         s2.post('complete', { attemptId: id, newPassword: `${NEW} other` }),
@@ -426,10 +430,11 @@ describe.skipIf(!process.env.DATABASE_URL)('customer recovery routes (integratio
       const id = await begin(s, c);
       await emailStep(s, id);
       await phoneStep(s, id);
+      await setHoldIn(id, -1);
       const before = await credential(c.id);
       expect((await s.post('complete', { attemptId: id, newPassword: 'short' })).status).toBe(401);
       expect(await credential(c.id)).toEqual(before);
-      expect((await attempt(id)).status).toBe('factors_verified');
+      expect((await attempt(id)).status).toBe('security_hold');
     });
   });
 

@@ -12,7 +12,7 @@ import { createSharedEmailAuthLimiter } from './customer-email-rate-limit';
 import { createEmailRegistrationService } from './customer-email-auth.service';
 import { createRegistrationProofDelivery } from './customer-email-auth.delivery';
 import { createIsolatedCustomerEmailAuthRoutes, type IsolatedEmailAuthDependencies } from './customer-email-auth.routes';
-import { customerChallengeDigest } from './customer-email-challenge-digest';
+import { customerAuthLimiterIdentifier } from './customer-auth-limiter-identifier';
 import { CustomerSessionService } from './customer-session.service';
 import { logEmailAuthUnavailable } from './customer-email-auth.diagnostics';
 import { CustomerPasswordAuthService } from './customer-password-auth.service';
@@ -89,8 +89,7 @@ export function createEmailAuthDependencies(config: ResolvedEmailAuthConfig, par
     });
   return {
     resolveTrustedSource: parts.resolveTrustedSource,
-    keyForIdentifier: (address) =>
-      customerChallengeDigest({ secret: config.hmacSecret, purpose: 'email_registration', field: 'subject', value: address }),
+    keyForIdentifier: (address) => customerAuthLimiterIdentifier(config.hmacSecret, address),
     limit: parts.limit,
     requestProof: (address, next, signup) => parts.withDb((db) => registration(db).requestProof(address, next, signup)),
     completeRegistration: (input) => parts.withDb(async (db) => {
@@ -123,6 +122,10 @@ export function createEmailAuthDependencies(config: ResolvedEmailAuthConfig, par
         newPassword: input.newPassword,
       });
       return result.ok;
+    }),
+    resolvePasswordChangeCustomerId: (accessToken) => parts.withDb(async (db) => {
+      const identity = await new CustomerSessionService(db, config.session).authenticateSessionToken(accessToken);
+      return identity?.assurance === 'session' ? identity.customerId : null;
     }),
     ...(parts.legacyOtpSession ? { legacyOtpSession: parts.legacyOtpSession } : {}),
     transportSession: (session) =>

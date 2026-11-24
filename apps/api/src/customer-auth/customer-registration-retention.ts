@@ -2,15 +2,17 @@ import { sql } from 'drizzle-orm';
 import type { Database } from '../db/client';
 
 /**
- * CUSTOMER-AUTH-UX-02-R2: deliberately UNWIRED, bounded cleanup primitive.
+ * CUSTOMER-AUTH-FINAL-CLOSURE D03: bounded cleanup primitive. It deliberately
+ * has no scheduled caller; production cadence and any extra grace period remain
+ * operational decisions and must not be inferred here.
  *
  * Removes only sealed pending-registration setup data after the challenge's
  * existing 15-minute validity window has ended. It does not delete challenge
  * rows, proofs, attempt counters, or audit/consent evidence.
  *
- * No cron, route, queue, or scheduled caller is authorized by this module.
- * Owner privacy approval, execution cadence and observability are separate
- * activation gates. A caller must supply a trusted server timestamp.
+ * No cron, route, queue, or scheduled caller is wired by this module. The
+ * approved challenge expiration is the eligibility boundary. A caller must
+ * supply a trusted server timestamp.
  */
 export async function purgeExpiredRegistrationCiphertext(
   db: Database,

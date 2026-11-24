@@ -81,10 +81,11 @@ export function createCustomerEmailLinkService(config: {
     },
 
     async complete(owner: Owner, input: {
-      email: string; challengeId: string; proof: string; password: string;
+      name: string; email: string; challengeId: string; proof: string; password: string;
     }): Promise<boolean> {
+      const name = input.name.trim();
       const email = normalizeLoginEmail(input.email);
-      if (!email || !isUuid(input.challengeId) || input.proof.length < 6 || input.proof.length > 256 ||
+      if (!name || name.length > 120 || !email || !isUuid(input.challengeId) || input.proof.length < 6 || input.proof.length > 256 ||
           !isHashableLength(input.password, config.passwordPolicy.maxLength)) return false;
       const [subjectDigest, proofDigest] = await Promise.all([
         digest('subject', email), digest('proof', input.proof),
@@ -158,6 +159,9 @@ export function createCustomerEmailLinkService(config: {
             });
             if (!created) throw new Error('Credential claim conflict');
           }
+
+          await tx.update(customers).set({ fullName: name, updatedAt: now })
+            .where(eq(customers.id, owner.customerId));
 
           const revoked = await new CustomerSessionRepository(tx).revokeAllForCustomer({
             customerId: owner.customerId, reason: 'logout_all', now,

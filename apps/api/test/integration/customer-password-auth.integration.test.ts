@@ -91,7 +91,7 @@ describe.skipIf(!process.env.DATABASE_URL)('customer password auth (integration)
     client.query(text, values).then((r) => r.rows as T[]);
   const customerByPhone = async (phone: string) =>
     (
-      await q<{ id: string; status: string }>('SELECT id, status FROM customers WHERE phone=$1', [
+      await q<{ id: string; status: string; fullName: string | null }>('SELECT id, status, full_name AS "fullName" FROM customers WHERE phone=$1', [
         phone,
       ])
     )[0];
@@ -269,7 +269,7 @@ describe.skipIf(!process.env.DATABASE_URL)('customer password auth (integration)
       const [r] = right.messages;
       if (!l || !r) throw new Error('Expected separate owner-bound proofs');
       const input = (message: typeof l) => ({
-        email, challengeId: message.challengeId, proof: message.proof, password: GOOD,
+        name: 'Synthetic Legacy Customer', email, challengeId: message.challengeId, proof: message.proof, password: GOOD,
       });
       expect(await left.link.complete(secondOwner, input(l))).toBe(false);
       expect((await q<{ attempts: number }>(
@@ -301,6 +301,8 @@ describe.skipIf(!process.env.DATABASE_URL)('customer password auth (integration)
       if (hasPassword) expect((await a.auth.registerWithPassword(proof(phone), GOOD)).ok).toBe(true);
       const otp = await a.auth.signInWithVerifiedPhone(proof(phone));
       if (!otp.ok) throw new Error('Expected synthetic OTP session');
+      const foreignOtp = await b.auth.signInWithVerifiedPhone(proof(PHONE(98)));
+      if (!foreignOtp.ok) throw new Error('Expected a separate synthetic customer session');
       const owner = { customerId: otp.customerId, sessionId: otp.session.sessionId };
       const before = await q<{ password_hash: string }>(
         'SELECT password_hash FROM customer_credentials WHERE customer_id=$1', [owner.customerId],
@@ -333,7 +335,9 @@ describe.skipIf(!process.env.DATABASE_URL)('customer password auth (integration)
       expect(deliver).toHaveBeenCalledTimes(1);
       const message = deliver.mock.calls[0]?.[0];
       if (!message) throw new Error('Expected a synthetic proof');
-      const input = { email, challengeId: message.challengeId, proof: message.proof, password: GOOD };
+      const input = { name: 'Synthetic Legacy Customer', email, challengeId: message.challengeId, proof: message.proof, password: GOOD };
+      expect((await post('complete', { ...input, name: ' ' })).status).toBe(400);
+      expect((await post('complete', input, foreignOtp.session.accessToken)).status).toBe(401);
       limit.mockResolvedValueOnce(false);
       expect((await post('complete', input)).status).toBe(429);
       expect((await post('complete', { ...input, proof: 'wrong-proof' })).status).toBe(401);
@@ -345,7 +349,7 @@ describe.skipIf(!process.env.DATABASE_URL)('customer password auth (integration)
       );
       expect(after[0]?.login_email).toBe(email);
       if (hasPassword) expect(after[0]?.password_hash).toBe(before[0]?.password_hash);
-      expect((await customerByPhone(phone))?.id).toBe(owner.customerId);
+      expect(await customerByPhone(phone)).toMatchObject({ id: owner.customerId, fullName: 'Synthetic Legacy Customer' });
       expect(await a.sessions.authenticateLegacyToken(legacy)).toBeNull();
       expect(await a.sessions.authenticateSessionToken(otp.session.accessToken)).toBeNull();
       expect((await a.sessions.refresh(otp.session.refreshCredential)).ok).toBe(false);
@@ -405,7 +409,7 @@ describe.skipIf(!process.env.DATABASE_URL)('customer password auth (integration)
         await env.link.requestProof(owner, email);
         const [m] = env.messages;
         if (!m) throw new Error('Expected proof');
-        expect(await env.link.complete(owner, { email, challengeId: m.challengeId, proof: m.proof, password: GOOD })).toBe(true);
+        expect(await env.link.complete(owner, { name: 'Synthetic Legacy Customer', email, challengeId: m.challengeId, proof: m.proof, password: GOOD })).toBe(true);
         expect(held).toEqual([]);
       });
 
@@ -423,7 +427,7 @@ describe.skipIf(!process.env.DATABASE_URL)('customer password auth (integration)
         await env.link.requestProof(owner, email);
         const [m] = env.messages;
         if (!m) throw new Error('Expected proof');
-        expect(await env.link.complete(owner, { email, challengeId: m.challengeId, proof: m.proof, password: GOOD })).toBe(false);
+        expect(await env.link.complete(owner, { name: 'Synthetic Legacy Customer', email, challengeId: m.challengeId, proof: m.proof, password: GOOD })).toBe(false);
         expect((await q<{ login_email: string | null }>('SELECT login_email FROM customer_credentials WHERE customer_id=$1', [owner.customerId]))[0]?.login_email).toBeNull();
         expect((await q<{ consumed_at: Date | null }>('SELECT consumed_at FROM customer_auth_challenges WHERE id=$1', [m.challengeId]))[0]?.consumed_at).toBeNull();
         expect((await q<{ revoked_at: Date | null }>('SELECT revoked_at FROM customer_sessions WHERE id=$1', [owner.sessionId]))[0]?.revoked_at).toBeNull();
@@ -438,7 +442,7 @@ describe.skipIf(!process.env.DATABASE_URL)('customer password auth (integration)
         await env.link.requestProof(owner, email);
         const [m] = env.messages;
         if (!m) throw new Error('Expected proof');
-        const input = (password: string) => ({ email, challengeId: m.challengeId, proof: m.proof, password });
+        const input = (password: string) => ({ name: 'Synthetic Legacy Customer', email, challengeId: m.challengeId, proof: m.proof, password });
         for (let i = 0; i < 5; i += 1) expect(await env.link.complete(owner, input(`${GOOD} wrong ${i}`))).toBe(false);
         expect((await q<{ attempts: number }>('SELECT attempts FROM customer_auth_challenges WHERE id=$1', [m.challengeId]))[0]?.attempts).toBe(5);
         expect(await env.link.complete(owner, input(GOOD))).toBe(false);
@@ -460,7 +464,7 @@ describe.skipIf(!process.env.DATABASE_URL)('customer password auth (integration)
         await env.link.requestProof(owner, email);
         const [m] = env.messages;
         if (!m) throw new Error('Expected proof');
-        expect(await env.link.complete(owner, { email, challengeId: m.challengeId, proof: m.proof, password: GOOD })).toBe(true);
+        expect(await env.link.complete(owner, { name: 'Synthetic Legacy Customer', email, challengeId: m.challengeId, proof: m.proof, password: GOOD })).toBe(true);
         expect(await a.sessions.establishSession({ customerId: owner.customerId, authMethod: 'otp' }))
           .toEqual({ ok: false, reason: 'otp_retired' });
         expect(await a.auth.signInWithVerifiedPhone(proof(phone))).toEqual({ ok: false, reason: 'customer_inactive' });
@@ -475,7 +479,7 @@ describe.skipIf(!process.env.DATABASE_URL)('customer password auth (integration)
         await env.link.requestProof(owner, email);
         const [m] = env.messages;
         if (!m) throw new Error('Expected proof');
-        const input = { email, challengeId: m.challengeId, proof: m.proof, password: GOOD };
+        const input = { name: 'Synthetic Legacy Customer', email, challengeId: m.challengeId, proof: m.proof, password: GOOD };
 
         const login = await a.auth.loginWithPassword({ phone, password: GOOD });
         if (!login.ok) throw new Error('Expected password session');
@@ -501,8 +505,8 @@ describe.skipIf(!process.env.DATABASE_URL)('customer password auth (integration)
         const [ml] = envL.messages; const [mr] = envR.messages;
         if (!ml || !mr) throw new Error('Expected proofs');
         const outcomes = await Promise.all([
-          envL.link.complete(l.owner, { email, challengeId: ml.challengeId, proof: ml.proof, password: GOOD }),
-          envR.link.complete(r.owner, { email, challengeId: mr.challengeId, proof: mr.proof, password: GOOD }),
+          envL.link.complete(l.owner, { name: 'Synthetic Legacy Customer', email, challengeId: ml.challengeId, proof: ml.proof, password: GOOD }),
+          envR.link.complete(r.owner, { name: 'Synthetic Legacy Customer', email, challengeId: mr.challengeId, proof: mr.proof, password: GOOD }),
         ]);
         expect(outcomes.filter(Boolean)).toHaveLength(1);
         expect(await q('SELECT 1 FROM customer_credentials WHERE login_email=$1', [email])).toHaveLength(1);
@@ -829,7 +833,7 @@ describe.skipIf(!process.env.DATABASE_URL)('customer password auth (integration)
       await link.requestProof(owner, email);
       const [m] = messages;
       if (!m) throw new Error('Expected proof');
-      expect(await link.complete(owner, { email, challengeId: m.challengeId, proof: m.proof, password: GOOD })).toBe(true);
+      expect(await link.complete(owner, { name: 'Synthetic Legacy Customer', email, challengeId: m.challengeId, proof: m.proof, password: GOOD })).toBe(true);
       return { customerId: owner.customerId, email };
     };
     const credentialRow = async (customerId: string) => (await q<{ password_hash: string; login_email: string | null }>(
@@ -911,7 +915,7 @@ describe.skipIf(!process.env.DATABASE_URL)('customer password auth (integration)
         const [m] = messages;
         if (!m) throw new Error('Expected proof');
         await Promise.all([
-          link.complete(owner, { email, challengeId: m.challengeId, proof: m.proof, password: GOOD }),
+          link.complete(owner, { name: 'Synthetic Legacy Customer', email, challengeId: m.challengeId, proof: m.proof, password: GOOD }),
           b.auth.recoverPassword(proof(phone), GOOD2),
         ]);
         const row = (await credentialRow(owner.customerId))!;

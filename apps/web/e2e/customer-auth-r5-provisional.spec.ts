@@ -1,13 +1,9 @@
 import { test, expect, type Page } from '@playwright/test';
 
 /**
- * PROVISIONAL CUSTOMER-AUTH-R3-R5 browser contract.
- *
- * The user-provided R5 brief proposes these domains but explicitly requires
- * Owner approval before they can be treated as the canonical A-H contract.
- * This suite covers only the registration, proof, password login, rotating
- * session, safe QR return, anti-enumeration and responsive-form slices that
- * the isolated fixture can exercise without shared resources or providers.
+ * CUSTOMER-AUTH-R5 isolated Chromium acceptance slice.
+ * D01 approves the A-H contract; this fixture currently covers only the
+ * scenarios present below and must not be treated as the complete contract.
  */
 test.skip(
   process.env.CUSTOMER_AUTH_R5_TEST_ONLY !== 'true',
@@ -201,6 +197,125 @@ test('D — refresh rotates credentials; logout revokes the issued session', asy
   await expect(page).toHaveURL(/\/loyalty\/login(?:\?|$)/);
 });
 
+test('F — Settings phone verification uses the protected customer route and a single-use synthetic provider proof', async ({
+  page,
+}) => {
+  await page.goto('/loyalty/login/email');
+  await page.getByLabel('Email').fill(email);
+  await page.getByLabel('Password').fill(password);
+  await page.getByRole('button', { name: 'Sign in' }).click();
+  await expect(page).toHaveURL(/\/loyalty\/dashboard(?:\?|$)/);
+
+  await page.goto('/loyalty/dashboard/settings');
+  await expect(page.getByRole('heading', { name: 'Account settings' })).toBeVisible();
+  await expect(page.getByText('Not verified', { exact: true })).toBeVisible();
+  await page.getByRole('link', { name: 'Verify a phone number' }).click();
+  await expect(page.getByRole('heading', { name: 'Verify your phone' })).toBeVisible();
+  const attachedPhone = '+15550184923';
+  await page.getByLabel('Phone number').fill(attachedPhone);
+  await page.getByRole('button', { name: 'Send code' }).click();
+  await expect(page.getByRole('heading', { name: 'Enter the code' })).toBeVisible();
+  await page.getByLabel('Verification code').fill('000000');
+  await page.getByRole('button', { name: 'Verify phone' }).click();
+  await expect(page.getByText('That code is not correct or has expired.', { exact: true })).toBeVisible();
+  await page.getByLabel('Verification code').fill('123456');
+  await page.getByRole('button', { name: 'Verify phone' }).click();
+  // Successful verification deliberately returns to the authorized dashboard destination.
+  await expect(page).toHaveURL(/\/loyalty\/dashboard(?:\?|$)/);
+
+  await page.goto('/loyalty/dashboard/settings');
+  await expect(page.getByText('Verified', { exact: true })).toHaveCount(2);
+  await expect(page.locator('body')).toContainText('+•••••••4923');
+  await expect(page.locator('body')).not.toContainText(attachedPhone);
+});
+
+test('F — legacy phone customer upgrades on the original identity with membership and points retained', async ({
+  page,
+}) => {
+  const legacyPhone = '+15550000001';
+  const legacyEmail = `r5-legacy-${Date.now()}@example.test`;
+  const seed = await page.request.post('http://127.0.0.1:8792/__test/seed-legacy-customer', {
+    headers: { Authorization: `Bearer ${mailboxToken}` },
+    data: { phone: legacyPhone },
+  });
+  expect(seed.status()).toBe(200);
+  const readSnapshot = async () => {
+    const response = await page.request.get(
+      `http://127.0.0.1:8792/__test/legacy-customer-snapshot?phone=${encodeURIComponent(legacyPhone)}`,
+      { headers: { Authorization: `Bearer ${mailboxToken}` } },
+    );
+    expect(response.status()).toBe(200);
+    return (await response.json()).customer as {
+      id: string; fullName: string | null; email: string | null; memberships: number; points: number;
+    };
+  };
+  const before = await readSnapshot();
+  expect(before).toMatchObject({ id: (await seed.json()).customerId, fullName: null, memberships: 1, points: 42 });
+
+  const resetBudget = await page.request.post('http://127.0.0.1:8792/__test/reset-login-budget', {
+    headers: { Authorization: `Bearer ${mailboxToken}` },
+  });
+  expect(resetBudget.status()).toBe(204);
+  await page.goto('/loyalty/login?method=phone&next=%2Floyalty%2Fdashboard%2Fsettings');
+  await page.getByLabel('Phone number').fill(legacyPhone);
+  await page.getByRole('button', { name: 'Send code' }).click();
+  await expect(page.getByLabel('Verification code')).toBeVisible();
+  const legacyAuthResponses: Array<{ path: string; status: number }> = [];
+  page.on('response', (response) => {
+    const path = new URL(response.url()).pathname;
+    if (/customer|auth|otp|verify/i.test(path)) legacyAuthResponses.push({ path, status: response.status() });
+  });
+  await page.getByLabel('Verification code').fill('123456');
+  await page.getByRole('button', { name: 'Verify' }).click();
+  try {
+    await expect(page).toHaveURL(/\/loyalty\/dashboard\/settings(?:\?|$)/);
+  } catch {
+    const diagnostic = await page.request.get('http://127.0.0.1:8792/__test/legacy-otp-diagnostics', {
+      headers: { Authorization: `Bearer ${mailboxToken}` },
+    });
+    const failureUrl = new URL(page.url());
+    throw new Error(`Legacy OTP acceptance failed; reason: ${failureUrl.searchParams.get('error')}; synthetic stages: ${JSON.stringify(await diagnostic.json())}; auth responses: ${JSON.stringify(legacyAuthResponses)}`);
+  }
+  await expect(page.getByLabel('Email to link')).toBeVisible();
+  await page.getByLabel('Email to link').fill(legacyEmail);
+  await page.getByRole('button', { name: 'Send email confirmation' }).click();
+  await expect(page.getByRole('status')).toContainText('a confirmation link has been sent');
+
+  const message = await page.request.get(
+    `http://127.0.0.1:8792/__test/mailbox?recipient=${encodeURIComponent(legacyEmail)}`,
+    { headers: { Authorization: `Bearer ${mailboxToken}` } },
+  );
+  expect(message.status()).toBe(200);
+  const delivery = (await message.json()).messages?.at(-1) as { subject?: string; html?: string } | undefined;
+  expect(delivery?.subject).toBe('Confirm your email to secure your existing Echo Grid account');
+  const proofLink = delivery?.html?.match(/href="([^"]+)"/)?.[1];
+  expect(proofLink).toBeTruthy();
+  await page.goto(proofLink!);
+  await expect(page.getByRole('heading', { name: 'Confirm email and set password' })).toBeVisible();
+  await page.getByLabel('Name').fill('Legacy Customer Restored');
+  await page.getByLabel('Email to link').fill(legacyEmail);
+  await expect(page).not.toHaveURL(/#c=/);
+  await page.getByLabel('New password', { exact: true }).fill(password);
+  await page.getByLabel('Confirm new password', { exact: true }).fill(password);
+  await page.getByRole('button', { name: 'Secure my existing account' }).click();
+  await expect(page).toHaveURL(/\/loyalty\/login(?:\?|$)/);
+
+  await page.getByLabel('Email').fill(legacyEmail);
+  await page.getByLabel('Password').fill(password);
+  await page.getByRole('button', { name: 'Sign in' }).click();
+  await expect(page).toHaveURL(/\/loyalty\/dashboard(?:\?|$)/);
+  await page.goto('/loyalty/dashboard/settings');
+  await expect(page.getByLabel('Name')).toHaveValue('Legacy Customer Restored');
+  const after = await readSnapshot();
+  expect(after).toMatchObject({
+    id: before.id,
+    fullName: 'Legacy Customer Restored',
+    email: legacyEmail,
+    memberships: before.memberships,
+    points: before.points,
+  });
+});
+
 test('E — recovery verifies independent email and phone factors, resets password, and revokes sessions', async ({
   page,
   context,
@@ -298,6 +413,20 @@ test('E — recovery verifies independent email and phone factors, resets passwo
   ).toBeVisible();
   await page.getByLabel('Phone verification code').fill('123456');
   await page.getByRole('button', { name: 'Verify phone code' }).click();
+
+  await expect(
+    page.getByText('For your security, this recovery is on hold until', { exact: false }),
+  ).toBeVisible();
+  await expect(page.getByLabel('New password', { exact: true })).toHaveCount(0);
+  const advanceHold = await page.request.post(
+    'http://127.0.0.1:8792/__test/advance-recovery-hold',
+    { headers: { Authorization: `Bearer ${mailboxToken}` }, data: { recipient: email } },
+  );
+  expect(advanceHold.status()).toBe(200);
+  expect((await advanceHold.json()).accepted).toBe(true);
+  await page.clock.install({ time: new Date(Date.now() + 86_401_000) });
+  await page.clock.fastForward(1_000);
+  await expect(page.getByLabel('New password', { exact: true })).toBeVisible();
 
   const newPassword = `${password}-recovered`;
   await page.getByLabel('New password', { exact: true }).fill(newPassword);

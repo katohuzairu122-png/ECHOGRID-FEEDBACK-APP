@@ -29,12 +29,14 @@ function setup() {
   const completeRegistration = vi.fn(async () => ({ ok: true, customerId: 'internal-id' }) as const);
   const login = vi.fn(async (): Promise<PasswordLoginResult> => ({ ok: false, kind: 'invalid' }));
   const changePassword = vi.fn(async () => true);
+  const resolvePasswordChangeCustomerId = vi.fn(async (): Promise<string | null> => '11111111-1111-4111-8111-111111111111');
   const transportSession = vi.fn(() => new Response(null, { status: 204 }));
   const routes = createIsolatedCustomerEmailAuthRoutes({
-    resolveTrustedSource, limit, requestProof, completeRegistration, login, changePassword, transportSession,
+    resolveTrustedSource, limit, requestProof, completeRegistration, login, changePassword,
+    resolvePasswordChangeCustomerId, transportSession,
     keyForIdentifier: async () => 'opaque-email',
   });
-  return { routes, resolveTrustedSource, limit, requestProof, completeRegistration, login, changePassword, transportSession };
+  return { routes, resolveTrustedSource, limit, requestProof, completeRegistration, login, changePassword, resolvePasswordChangeCustomerId, transportSession };
 }
 
 describe('isolated customer email HTTP', () => {
@@ -125,8 +127,25 @@ describe('isolated customer email HTTP', () => {
     expect(changePassword).toHaveBeenCalledExactlyOnceWith('rotating-access', {
       currentPassword: 'current-secret', newPassword: 'next-secret',
     });
-    expect(limit.mock.calls).toHaveLength(2);
+    expect(limit.mock.calls).toHaveLength(3);
+    expect(limit.mock.calls.map(([call]) => call.key)).toEqual([
+      'customer-email:login:source:trusted-edge',
+      'customer-email:login:identifier:opaque-email',
+      'customer-email:login:account:opaque-email',
+    ]);
     expect(response.headers.get('cache-control')).toBe('no-store');
+  });
+
+  it('fails closed when a request has no live rotating customer identity for the account budget', async () => {
+    const state = setup();
+    state.resolvePasswordChangeCustomerId.mockResolvedValueOnce(null);
+    const req = new Request('http://localhost/email/password/change', {
+      method: 'POST', headers: { 'content-type': 'application/json', authorization: 'Bearer stale-token' },
+      body: JSON.stringify({ currentPassword: 'current-secret', newPassword: 'next-secret' }),
+    });
+    expect((await state.routes.request(req)).status).toBe(401);
+    expect(state.limit).not.toHaveBeenCalled();
+    expect(state.changePassword).not.toHaveBeenCalled();
   });
 
   it('does not run a password change without trusted source or an access bearer', async () => {
@@ -168,6 +187,7 @@ describe('legacy phone OTP upgrade HTTP boundaries', () => {
       completeRegistration: async () => ({ ok: false as const, kind: 'invalid' as const }),
       login: async () => ({ ok: false as const, kind: 'invalid' as const }),
       changePassword: async () => false,
+      resolvePasswordChangeCustomerId: async () => '11111111-1111-4111-8111-111111111111',
       legacyOtpSession,
       requestLink,
       completeLink,

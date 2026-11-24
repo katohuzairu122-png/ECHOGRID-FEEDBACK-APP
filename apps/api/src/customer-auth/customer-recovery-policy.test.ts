@@ -5,7 +5,6 @@ import {
   isTerminalRecoveryStatus,
   recoveryPathFor,
   RECOVERY_HOLD_SECONDS,
-  RECOVERY_RECENT_PHONE_WINDOW_SECONDS,
   RECOVERY_TRANSITIONS,
   type RecoveryFactor,
 } from './customer-recovery-policy';
@@ -40,14 +39,19 @@ describe('risk classification (D2, D5)', () => {
     expect(classifyRecoveryRisk({ path: 'phone_code', nowMs: now, phoneVerifiedAtMs: now - 100 * DAY }).risk).toBe('high');
     expect(classifyRecoveryRisk({ path: 'email_code', nowMs: now, phoneVerifiedAtMs: null }).reason).toBe('recovery_code_path');
   });
-  it('email + phone is standard only when the phone was verified long ago', () => {
-    expect(classifyRecoveryRisk({ path: 'email_phone', nowMs: now, phoneVerifiedAtMs: now - 30 * DAY })).toEqual({ risk: 'standard', reason: 'both_factors' });
+  it('phone-based recovery remains high risk when no approved recency threshold is configured', () => {
+    expect(classifyRecoveryRisk({ path: 'email_phone', nowMs: now, phoneVerifiedAtMs: now - 30 * DAY })).toEqual({ risk: 'high', reason: 'recent_phone_verification' });
   });
-  it('a recently verified phone, or one with no verification time, escalates to high risk', () => {
+  it('a missing, invalid or recent phone timestamp escalates to high risk', () => {
     expect(classifyRecoveryRisk({ path: 'email_phone', nowMs: now, phoneVerifiedAtMs: now - DAY })).toEqual({ risk: 'high', reason: 'recent_phone_verification' });
     expect(classifyRecoveryRisk({ path: 'email_phone', nowMs: now, phoneVerifiedAtMs: null }).risk).toBe('high');
-    const exactlyAtWindow = now - RECOVERY_RECENT_PHONE_WINDOW_SECONDS * 1000;
-    expect(classifyRecoveryRisk({ path: 'email_phone', nowMs: now, phoneVerifiedAtMs: exactlyAtWindow }).risk).toBe('standard');
+    expect(classifyRecoveryRisk({ path: 'email_phone', nowMs: now, phoneVerifiedAtMs: Number.NaN, recentPhoneWindowSeconds: 7 * 86_400 }).risk).toBe('high');
+    expect(classifyRecoveryRisk({ path: 'email_phone', nowMs: now, phoneVerifiedAtMs: now + 1, recentPhoneWindowSeconds: 7 * 86_400 }).risk).toBe('high');
+  });
+  it('only an explicitly configured threshold can classify an old verified phone as standard', () => {
+    const threshold = 7 * 86_400;
+    expect(classifyRecoveryRisk({ path: 'email_phone', nowMs: now, phoneVerifiedAtMs: now - 30 * DAY, recentPhoneWindowSeconds: threshold })).toEqual({ risk: 'standard', reason: 'both_factors' });
+    expect(classifyRecoveryRisk({ path: 'email_phone', nowMs: now, phoneVerifiedAtMs: now - DAY, recentPhoneWindowSeconds: threshold })).toEqual({ risk: 'high', reason: 'recent_phone_verification' });
   });
   it('the hold is the approved 24 hours', () => expect(RECOVERY_HOLD_SECONDS).toBe(86_400));
 });

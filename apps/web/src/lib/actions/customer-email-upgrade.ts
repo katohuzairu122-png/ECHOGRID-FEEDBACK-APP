@@ -52,10 +52,11 @@ export async function completeCustomerEmailUpgradeAction(
 ): Promise<CustomerEmailUpgradeState> {
   if (!isCustomerEmailAuthWebEnabled() || process.env.CUSTOMER_LEGACY_UPGRADE_ENABLED !== 'true') return { error: 'unavailable' };
   const email = input(data, 'email').toLowerCase();
+  const name = input(data, 'name');
   const password = String(data.get('password') ?? '');
   const confirmation = String(data.get('passwordConfirmation') ?? '');
   const [challengeId = '', proof = ''] = input(data, 'challenge').split('.');
-  if (!emailPattern.test(email) || email.length > 254 || !challengeId || !proof || !password) return { error: 'invalid' };
+  if (!name || name.length > 120 || !emailPattern.test(email) || email.length > 254 || !challengeId || !proof || !password) return { error: 'invalid' };
   if (password !== confirmation) return { error: 'password_mismatch' };
   const minLength = getCustomerPasswordMinLength();
   if (minLength !== null && passwordLength(password) < minLength) return { error: 'password_too_short', minLength };
@@ -63,7 +64,7 @@ export async function completeCustomerEmailUpgradeAction(
   if (!token) return { error: 'verify_phone_again' };
   try {
     const reply = await callCustomerAuthApi('/customer-auth/email/link/complete', {
-      bearer: token, body: { email, challengeId, proof, password },
+      bearer: token, body: { name, email, challengeId, proof, password },
     });
     if (reply.status === 204) {
       await clearCompatibleCustomerSession();
