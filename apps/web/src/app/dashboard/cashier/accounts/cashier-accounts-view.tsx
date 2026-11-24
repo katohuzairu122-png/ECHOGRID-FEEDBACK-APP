@@ -1,6 +1,6 @@
 'use client';
 
-import { useActionState, useState } from 'react';
+import { useActionState, useState, type FormEvent } from 'react';
 import { useTranslations, useFormatter } from 'next-intl';
 import {
   cashierAccountStatusAction, cashierReauthAction, createCashierAccountAction, resetCashierCredentialAction,
@@ -9,7 +9,8 @@ import {
 import {
   assignmentProblem, type CashierAccessMode, type CashierAccountDto, type CashierBranchOption, type CashierBusinessCodeDto,
 } from '@/lib/cashier-accounts-types';
-import { Badge, Button, Input, Label } from '@/components/ui';
+import { Badge, Button, Dialog, DialogContent, DialogDescription, DialogTitle, Input, Label } from '@/components/ui';
+import { suggestCashierUsername } from '@/lib/cashier-username';
 
 const initial: CashierAccountsActionState = {};
 const KNOWN_ERRORS = new Set([
@@ -111,54 +112,157 @@ function ReauthCard() {
 
 function CredentialNotice({ credential, onDismiss }: { credential: NonNullable<CashierAccountsActionState['credential']>; onDismiss: () => void }) {
   const t = useTranslations('cashier.dashboard.accounts.credential');
+  const [copied, setCopied] = useState(false);
+  const details = [
+    credential.cashierCode ? `${t('code')}: ${credential.cashierCode}` : '',
+    credential.username ? `${t('username')}: ${credential.username}` : '',
+    credential.password ? `${t('password')}: ${credential.password}` : '',
+  ].filter(Boolean).join('\n');
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(details);
+      setCopied(true);
+    } catch {
+      setCopied(false); // the details stay on screen; copying is only a convenience
+    }
+  };
+  // A modal that only the button closes (not Escape or an outside click): the password is shown once, so it must not vanish by accident.
   return (
-    <section role="alert" className="space-y-2 rounded-md border border-amber-300 bg-amber-50 p-4 text-sm">
-      <h2 className="text-base font-semibold">{t('title')}</h2>
-      <p>{t('warning')}</p>
-      <dl className="grid grid-cols-[max-content_1fr] gap-x-4 gap-y-1">
-        {credential.cashierCode && (<><dt className="text-neutral-600">{t('code')}</dt><dd className="font-mono">{credential.cashierCode}</dd></>)}
-        {credential.username && (<><dt className="text-neutral-600">{t('username')}</dt><dd className="font-mono">{credential.username}</dd></>)}
-        {credential.password
-          ? (<><dt className="text-neutral-600">{t('password')}</dt><dd className="select-all font-mono">{credential.password}</dd></>)
-          : (<><dt className="text-neutral-600">{t('password')}</dt><dd>{t('setByYou')}</dd></>)}
-      </dl>
-      <Button type="button" variant="outline" size="sm" onClick={onDismiss}>{t('dismiss')}</Button>
-    </section>
+    <Dialog open onOpenChange={() => undefined}>
+      <DialogContent role="alertdialog">
+        <DialogTitle>{t('title')}</DialogTitle>
+        <DialogDescription>{t('warning')}</DialogDescription>
+        <dl className="mt-4 grid grid-cols-[max-content_1fr] gap-x-4 gap-y-1 text-sm">
+          {credential.cashierCode && (<><dt className="text-neutral-600">{t('code')}</dt><dd className="font-mono">{credential.cashierCode}</dd></>)}
+          {credential.username && (<><dt className="text-neutral-600">{t('username')}</dt><dd className="font-mono">{credential.username}</dd></>)}
+          {credential.password
+            ? (<><dt className="text-neutral-600">{t('password')}</dt><dd className="select-all break-all font-mono">{credential.password}</dd></>)
+            : (<><dt className="text-neutral-600">{t('password')}</dt><dd>{t('setByYou')}</dd></>)}
+        </dl>
+        <div className="mt-5 flex flex-wrap gap-2">
+          <Button type="button" variant="outline" onClick={copy}>{copied ? t('copied') : t('copy')}</Button>
+          <Button type="button" onClick={onDismiss}>{t('dismiss')}</Button>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
 function CreateForm({ branches, onCredential }: { branches: CashierBranchOption[]; onCredential: (c: NonNullable<CashierAccountsActionState['credential']>) => void }) {
   const t = useTranslations('cashier.dashboard.accounts.create');
-  const [state, action, pending] = useActionState(async (prev: CashierAccountsActionState, form: FormData) => {
-    const next = await createCashierAccountAction(prev, form);
-    const { credential, ...rest } = next;
-    if (next.status === 'created' && credential) onCredential(credential);
-    return rest; // the one-time credential is handed to the notice and not kept in this form's state
-  }, initial);
+  const errors = useTranslations('cashier.dashboard.accounts.errors');
+  const [name, setName] = useState('');
+  // Every branch starts ticked: with one branch there is nothing to choose, with several the owner only unticks what does not apply.
+  const [ids, setIds] = useState<string[]>(branches.map((b) => b.id));
+  const [open, setOpen] = useState(false);
+  const [problem, setProblem] = useState<'name' | 'branches' | null>(null);
+  const [password, setPassword] = useState('');
+  const [pending, setPending] = useState(false);
+  const [dialogError, setDialogError] = useState<string | null>(null);
+  const [created, setCreated] = useState(false);
+
+  const askForPassword = (e: FormEvent) => {
+    e.preventDefault();
+    setCreated(false);
+    if (name.trim().length < 2) return setProblem('name');
+    if (ids.length === 0) return setProblem('branches');
+    setProblem(null);
+    setDialogError(null);
+    setPassword('');
+    setOpen(true);
+  };
+
+  const confirmAndCreate = async (e: FormEvent) => {
+    e.preventDefault();
+    if (pending) return;
+    setPending(true);
+    setDialogError(null);
+    try {
+      const reauthForm = new FormData();
+      reauthForm.set('password', password);
+      const reauth = await cashierReauthAction({}, reauthForm);
+      if (reauth.status !== 'reauthenticated') {
+        setDialogError(reauth.status === 'failed' ? t('confirmWrong') : errors('generic'));
+        return;
+      }
+      // The sign-in name is made from the name; if it is taken, a few digits are added and it is tried again.
+      let result: CashierAccountsActionState = {};
+      for (let attempt = 0; attempt < 4; attempt += 1) {
+        const suffix = attempt === 0 ? '' : String(Math.floor(10 + Math.random() * 90));
+        const form = new FormData();
+        form.set('username', suggestCashierUsername(name, suffix));
+        form.set('displayName', name.trim());
+        form.set('accessMode', ids.length === 1 ? 'single' : 'multiple');
+        for (const id of ids) form.append('branchId', id);
+        result = await createCashierAccountAction({}, form);
+        if (!(result.status === 'failed' && result.error === 'CASHIER_USERNAME_TAKEN')) break;
+      }
+      if (result.status === 'created' && result.credential) {
+        onCredential(result.credential);
+        setOpen(false);
+        setName('');
+        setPassword('');
+        setCreated(true);
+        return;
+      }
+      setDialogError(
+        result.status === 'reauthRequired' ? errors('generic')
+          : result.status === 'failed' && result.error && KNOWN_ERRORS.has(result.error) ? errors(result.error) : errors('generic'),
+      );
+    } finally {
+      setPending(false);
+    }
+  };
+
+  const toggle = (id: string) => setIds((cur) => (cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]));
   return (
     <section aria-labelledby="create-title" className="space-y-3">
       <h2 id="create-title" className="text-lg font-semibold">{t('title')}</h2>
-      <form action={action} className="space-y-4 rounded-md border border-neutral-200 bg-white p-4">
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div className="space-y-1">
-            <Label htmlFor="create-username">{t('username')}</Label>
-            <Input id="create-username" name="username" required minLength={3} maxLength={32} autoCapitalize="none" autoComplete="off" />
-            <p className="text-xs text-neutral-500">{t('usernameHint')}</p>
-          </div>
-          <div className="space-y-1">
-            <Label htmlFor="create-displayName">{t('displayName')}</Label>
-            <Input id="create-displayName" name="displayName" required maxLength={120} autoComplete="off" />
-          </div>
-        </div>
-        <BranchPicker branches={branches} initialMode="single" initialIds={[]} idPrefix="create-branch" />
+      <form onSubmit={askForPassword} className="space-y-4 rounded-md border border-neutral-200 bg-white p-4">
         <div className="space-y-1">
-          <Label htmlFor="create-password">{t('password')}</Label>
-          <Input id="create-password" name="password" type="password" minLength={8} maxLength={128} autoComplete="new-password" className="max-w-sm" />
-          <p className="text-xs text-neutral-500">{t('passwordHint')}</p>
+          <Label htmlFor="create-name">{t('name')}</Label>
+          <Input id="create-name" name="name" value={name} onChange={(e) => setName(e.target.value)} maxLength={120} autoComplete="off" className="max-w-sm" />
+          <p className="text-xs text-neutral-500">{t('nameHint')}</p>
+          {problem === 'name' && <p className="text-xs text-amber-800">{t('nameNeeds')}</p>}
         </div>
-        <Button type="submit" disabled={pending}>{t('submit')}</Button>
-        <Outcome state={state} {...(state.status === 'created' ? { success: t('created') } : {})} />
+        {branches.length === 0 ? (
+          <p className="text-sm text-amber-800">{t('noBranches')}</p>
+        ) : branches.length === 1 ? (
+          <p className="text-sm">{t('worksAt', { branch: branches[0]!.name })}</p>
+        ) : (
+          <fieldset className="space-y-1">
+            <legend className="text-sm font-medium">{t('branchesTitle')}</legend>
+            <p className="text-xs text-neutral-500">{t('branchesHint')}</p>
+            {branches.map((b) => (
+              <label key={b.id} htmlFor={`create-branch-${b.id}`} className="flex items-center gap-2 text-sm">
+                <input id={`create-branch-${b.id}`} type="checkbox" checked={ids.includes(b.id)} onChange={() => toggle(b.id)} />
+                {b.name}
+              </label>
+            ))}
+            {problem === 'branches' && <p className="text-xs text-amber-800">{t('branchNeeds')}</p>}
+          </fieldset>
+        )}
+        <Button type="submit" disabled={branches.length === 0}>{t('submit')}</Button>
+        {created && <p role="status" className="text-sm text-green-800">{t('created')}</p>}
       </form>
+
+      <Dialog open={open} onOpenChange={(next) => { if (!pending) setOpen(next); }}>
+        <DialogContent>
+          <DialogTitle>{t('confirmTitle')}</DialogTitle>
+          <DialogDescription>{t('confirmHint')}</DialogDescription>
+          <form onSubmit={confirmAndCreate} className="mt-4 space-y-3">
+            <div className="space-y-1">
+              <Label htmlFor="create-confirm-password">{t('confirmPassword')}</Label>
+              <Input id="create-confirm-password" type="password" autoComplete="current-password" required autoFocus value={password} onChange={(e) => setPassword(e.target.value)} />
+            </div>
+            {dialogError && <p role="alert" className="text-sm text-red-700">{dialogError}</p>}
+            <div className="flex flex-wrap gap-2">
+              <Button type="submit" disabled={pending || password.length === 0}>{pending ? t('creating') : t('confirmSubmit')}</Button>
+              <Button type="button" variant="outline" disabled={pending} onClick={() => setOpen(false)}>{t('cancel')}</Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
     </section>
   );
 }

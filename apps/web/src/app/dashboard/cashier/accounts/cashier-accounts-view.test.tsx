@@ -82,78 +82,145 @@ describe('cashier accounts view', () => {
     expect(screen.getAllByRole('button', { name: 'Enable' })).toHaveLength(1);
   });
 
-  it('single access allows exactly one branch: switching mode trims the selection and a hint explains the rule', () => {
-    view([]);
-    const create = screen.getByRole('heading', { name: 'Create a cashier account' }).closest('section')!;
-    fireEvent.click(within(create).getByLabelText('Several branches'));
-    fireEvent.click(within(create).getByLabelText('Main'));
-    fireEvent.click(within(create).getByLabelText('Harbour'));
-    expect(within(create).getByLabelText('Main')).toBeChecked();
-    expect(within(create).getByLabelText('Harbour')).toBeChecked();
-    fireEvent.click(within(create).getByLabelText('One branch'));
-    expect(within(create).getByLabelText('Main')).toBeChecked();
-    expect(within(create).getByLabelText('Harbour')).not.toBeChecked();
-    fireEvent.click(within(create).getByLabelText('Main')); // untick: nothing selected
-    expect(within(create).getByText('Tick exactly one branch.')).toBeInTheDocument();
-    fireEvent.click(within(create).getByLabelText('Several branches'));
-    fireEvent.click(within(create).getByLabelText('Airport'));
-    expect(within(create).getByText('Tick at least two branches.')).toBeInTheDocument();
-  });
+  const nameBox = () => screen.getByLabelText("Cashier's name");
+  const createdCredential = { username: 'amina', password: 'Gen3ratedPass1234567890', cashierCode: 'ABCDEFGHJK' };
 
-  it('creating shows the one-time credential, then dismissing removes it from the page', async () => {
-    m.create.mockResolvedValue({ status: 'created', credential: { username: 'till9', password: 'Gen3ratedPass1234567890', cashierCode: 'ABCDEFGHJK' } });
-    view([]);
-    fireEvent.change(screen.getByLabelText('Username'), { target: { value: 'till9' } });
-    fireEvent.change(screen.getByLabelText('Name or employee label'), { target: { value: 'Till nine' } });
-    fireEvent.click(screen.getByLabelText('Main'));
-    fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
+  it('simplest case, one branch: only a name is asked; the branch is shown as text; the password is asked for in a dialog right there', async () => {
+    m.reauth.mockResolvedValue({ status: 'reauthenticated' });
+    m.create.mockResolvedValue({ status: 'created', credential: createdCredential });
+    view([], 'ABCDEFGHJK', [{ id: 'b1', name: 'Buddy 1' }]);
+    expect(screen.getByText('Works at Buddy 1')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Several branches')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Buddy 1')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/^Username/)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/^Password/)).not.toBeInTheDocument();
+    fireEvent.change(nameBox(), { target: { value: 'Amina' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Create cashier' }));
+    expect(m.reauth).not.toHaveBeenCalled(); // nothing happens until the owner confirms in the dialog
+    fireEvent.change(await screen.findByLabelText('Password to confirm'), { target: { value: 'owner-password' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm and create' }));
     expect(await screen.findByText('Save this sign-in now')).toBeInTheDocument();
-    expect(screen.getByText('Gen3ratedPass1234567890')).toBeInTheDocument();
-    expect(m.create).toHaveBeenCalledTimes(1);
+    expect((m.reauth.mock.calls[0]![1] as FormData).get('password')).toBe('owner-password');
     const sent = m.create.mock.calls[0]![1] as FormData;
+    expect(sent.get('username')).toBe('amina');
+    expect(sent.get('displayName')).toBe('Amina');
     expect(sent.get('accessMode')).toBe('single');
     expect(sent.getAll('branchId')).toEqual(['b1']);
+    expect(sent.get('password')).toBeNull(); // always generated
+    expect(screen.getByText('Gen3ratedPass1234567890')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'I have saved it' }));
-    expect(screen.queryByText('Gen3ratedPass1234567890')).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByText('Gen3ratedPass1234567890')).not.toBeInTheDocument());
+    expect(screen.getByText('The cashier was created.')).toBeInTheDocument();
+    expect((nameBox() as HTMLInputElement).value).toBe('');
   });
 
-  it('a password the administrator chose is never shown back', async () => {
-    m.create.mockResolvedValue({ status: 'created', credential: { username: 'till8', password: '', cashierCode: 'ABCDEFGHJK' } });
+  it('several branches: all are ticked by default; unticking leaves the rest, and one left means single access', async () => {
+    m.reauth.mockResolvedValue({ status: 'reauthenticated' });
+    m.create.mockResolvedValue({ status: 'created', credential: createdCredential });
     view([]);
-    fireEvent.change(screen.getByLabelText('Username'), { target: { value: 'till8' } });
-    fireEvent.change(screen.getByLabelText('Name or employee label'), { target: { value: 'x' } });
-    fireEvent.click(screen.getByLabelText('Main'));
-    fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
-    expect(await screen.findByText('The password you chose')).toBeInTheDocument();
+    const create = screen.getByRole('heading', { name: 'Add a cashier' }).closest('section')!;
+    for (const b of ['Main', 'Harbour', 'Airport']) expect(within(create).getByLabelText(b)).toBeChecked();
+    fireEvent.click(within(create).getByLabelText('Harbour'));
+    fireEvent.click(within(create).getByLabelText('Airport'));
+    fireEvent.change(nameBox(), { target: { value: 'Roaming Rita' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Create cashier' }));
+    fireEvent.change(await screen.findByLabelText('Password to confirm'), { target: { value: 'pw' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm and create' }));
+    await screen.findByText('Save this sign-in now');
+    const sent = m.create.mock.calls[0]![1] as FormData;
+    expect(sent.getAll('branchId')).toEqual(['b1']);
+    expect(sent.get('accessMode')).toBe('single');
+    expect(sent.get('username')).toBe('roaming.rita');
   });
 
-  it('known API failures get plain-language messages; an unknown one gets a generic message, never raw text', async () => {
-    m.create.mockResolvedValueOnce({ status: 'failed', error: 'CASHIER_USERNAME_TAKEN' });
+  it('asks for the name and at least one branch before anything else happens', () => {
     view([]);
-    fireEvent.change(screen.getByLabelText('Username'), { target: { value: 'dup' } });
-    fireEvent.change(screen.getByLabelText('Name or employee label'), { target: { value: 'x' } });
-    fireEvent.click(screen.getByLabelText('Main'));
-    fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
-    expect(await screen.findByText('That username is already used in this business.')).toBeInTheDocument();
-    m.create.mockResolvedValueOnce({ status: 'failed', error: 'SOMETHING_SECRET_INTERNAL' });
-    // React resets the uncontrolled form after an action, so the required fields are filled in again.
-    fireEvent.change(screen.getByLabelText('Username'), { target: { value: 'dup2' } });
-    fireEvent.change(screen.getByLabelText('Name or employee label'), { target: { value: 'x' } });
-    fireEvent.click(screen.getByLabelText('Main'));
-    fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Create cashier' }));
+    expect(screen.getByText("Type the cashier's name.")).toBeInTheDocument();
+    expect(screen.queryByLabelText('Password to confirm')).not.toBeInTheDocument();
+    const create = screen.getByRole('heading', { name: 'Add a cashier' }).closest('section')!;
+    for (const b of ['Main', 'Harbour', 'Airport']) fireEvent.click(within(create).getByLabelText(b));
+    fireEvent.change(nameBox(), { target: { value: 'Amina' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Create cashier' }));
+    expect(screen.getByText('Tick at least one branch.')).toBeInTheDocument();
+    expect(m.reauth).not.toHaveBeenCalled();
+    expect(m.create).not.toHaveBeenCalled();
+  });
+
+  it('a wrong owner password is explained inside the dialog and nothing is created', async () => {
+    m.reauth.mockResolvedValue({ status: 'failed', error: 'UNAUTHENTICATED' });
+    view([], 'ABCDEFGHJK', [{ id: 'b1', name: 'Buddy 1' }]);
+    fireEvent.change(nameBox(), { target: { value: 'Amina' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Create cashier' }));
+    fireEvent.change(await screen.findByLabelText('Password to confirm'), { target: { value: 'wrong' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm and create' }));
+    expect(await screen.findByText('That password is not correct.')).toBeInTheDocument();
+    expect(m.create).not.toHaveBeenCalled();
+  });
+
+  it('a taken sign-in name is retried with digits added, without bothering the owner', async () => {
+    m.reauth.mockResolvedValue({ status: 'reauthenticated' });
+    m.create
+      .mockResolvedValueOnce({ status: 'failed', error: 'CASHIER_USERNAME_TAKEN' })
+      .mockResolvedValueOnce({ status: 'created', credential: { ...createdCredential, username: 'amina47' } });
+    view([], 'ABCDEFGHJK', [{ id: 'b1', name: 'Buddy 1' }]);
+    fireEvent.change(nameBox(), { target: { value: 'Amina' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Create cashier' }));
+    fireEvent.change(await screen.findByLabelText('Password to confirm'), { target: { value: 'pw' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm and create' }));
+    expect(await screen.findByText('Save this sign-in now')).toBeInTheDocument();
+    expect(m.create).toHaveBeenCalledTimes(2);
+    expect((m.create.mock.calls[0]![1] as FormData).get('username')).toBe('amina');
+    expect((m.create.mock.calls[1]![1] as FormData).get('username')).toMatch(/^amina\d{2}$/);
+  });
+
+  it('other failures get plain messages in the dialog; an unknown one gets a generic message, never raw text', async () => {
+    m.reauth.mockResolvedValue({ status: 'reauthenticated' });
+    m.create.mockResolvedValue({ status: 'failed', error: 'SOMETHING_SECRET_INTERNAL' });
+    view([], 'ABCDEFGHJK', [{ id: 'b1', name: 'Buddy 1' }]);
+    fireEvent.change(nameBox(), { target: { value: 'Amina' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Create cashier' }));
+    fireEvent.change(await screen.findByLabelText('Password to confirm'), { target: { value: 'pw' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm and create' }));
     expect(await screen.findByText('That could not be done. Try again.')).toBeInTheDocument();
     expect(screen.queryByText(/SECRET_INTERNAL/)).not.toBeInTheDocument();
   });
 
-  it('asks for the password again when the API demands re-authentication', async () => {
-    m.create.mockResolvedValue({ status: 'reauthRequired' });
-    view([]);
-    fireEvent.change(screen.getByLabelText('Username'), { target: { value: 'till7' } });
-    fireEvent.change(screen.getByLabelText('Name or employee label'), { target: { value: 'x' } });
-    fireEvent.click(screen.getByLabelText('Main'));
-    fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
-    expect(await screen.findByText('Confirm your password above, then try again.')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Confirm' })).toBeInTheDocument();
+  it('with no branch yet it says to create one first and does not offer the button', () => {
+    view([], 'ABCDEFGHJK', []);
+    expect(screen.getByText('Create a branch first, then you can add a cashier.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Create cashier' })).toBeDisabled();
+  });
+
+  it('the sign-in details can be copied in one tap', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+    m.reauth.mockResolvedValue({ status: 'reauthenticated' });
+    m.create.mockResolvedValue({ status: 'created', credential: createdCredential });
+    view([], 'ABCDEFGHJK', [{ id: 'b1', name: 'Buddy 1' }]);
+    fireEvent.change(nameBox(), { target: { value: 'Amina' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Create cashier' }));
+    fireEvent.change(await screen.findByLabelText('Password to confirm'), { target: { value: 'pw' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm and create' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Copy sign-in details' }));
+    await waitFor(() => expect(writeText).toHaveBeenCalledTimes(1));
+    expect(writeText.mock.calls[0]![0]).toContain('Gen3ratedPass1234567890');
+    expect(writeText.mock.calls[0]![0]).toContain('amina');
+    expect(await screen.findByText('Copied')).toBeInTheDocument();
+  });
+
+  it('editing still offers one or several branches only when the business has two or more', async () => {
+    view([account({ accessMode: 'multiple', branches: [{ id: 'b1', name: 'Main' }, { id: 'b2', name: 'Harbour' }] })]);
+    fireEvent.click(screen.getByRole('button', { name: 'Branches' }));
+    const row = screen.getByText('Front till').closest('li')!;
+    fireEvent.click(within(row).getByLabelText('One branch'));
+    expect(within(row).getByLabelText('Main')).toBeChecked();
+    expect(within(row).getByLabelText('Harbour')).not.toBeChecked();
+    fireEvent.click(within(row).getByLabelText('Main'));
+    expect(within(row).getByText('Tick exactly one branch.')).toBeInTheDocument();
+    fireEvent.click(within(row).getByLabelText('Several branches'));
+    fireEvent.click(within(row).getByLabelText('Airport'));
+    expect(within(row).getByText('Tick at least two branches.')).toBeInTheDocument();
   });
 
   it('editing branches pre-selects the current assignment and warns that removal ends sessions on that branch', async () => {
