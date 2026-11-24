@@ -293,6 +293,14 @@ test('E — recovery verifies independent email and phone factors, resets passwo
   await page.getByLabel('New password', { exact: true }).fill(newPassword);
   await page.getByLabel('Confirm new password').fill(newPassword);
   await page.getByRole('button', { name: 'Reset password' }).click();
+  const passwordStored = await page.request.post(
+    'http://127.0.0.1:8792/__test/password-hash-check',
+    {
+      headers: { Authorization: `Bearer ${mailboxToken}` },
+      data: { email, password: newPassword },
+    },
+  );
+  expect(passwordStored.status()).toBe(204);
   const recoveryCompleted = page.getByText(
     'Your password was reset and all existing sessions were revoked.',
     { exact: false },

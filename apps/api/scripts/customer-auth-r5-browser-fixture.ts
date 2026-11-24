@@ -18,6 +18,7 @@ import {
 import { createCustomerSessionLifecycleComposition } from '../src/customer-auth/customer-session-lifecycle.composition';
 import { CustomerSessionService } from '../src/customer-auth/customer-session.service';
 import { CustomerPasswordAuthService } from '../src/customer-auth/customer-password-auth.service';
+import { normalizePassword } from '../src/customer-auth/customer-password-policy';
 import { CustomerCredentialRepository } from '../src/repositories/customer-credential.repository';
 import { CustomerRepository } from '../src/repositories/customer.repository';
 import { createCustomerRecoveryService } from '../src/customer-auth/customer-recovery-attempt.service';
@@ -284,6 +285,29 @@ app.post('/__test/mark-phone-verified', async (c) => {
   });
   return c.json({ accepted: true }, 200, { 'Cache-Control': 'no-store' });
 });
+app.post('/__test/password-hash-check', async (c) => {
+  if (c.req.header('authorization') !== `Bearer ${fixtureToken}`) {
+    return c.body(null, 404);
+  }
+  const payload = (await c.req.json().catch(() => null)) as { email?: unknown; password?: unknown } | null;
+  if (typeof payload?.email !== 'string' || typeof payload.password !== 'string') {
+    return c.body(null, 400);
+  }
+  const matches = await withDb(async (db) => {
+    const email = normalizeLoginEmail(payload.email as string);
+    if (!email) return false;
+    const credential = await new CustomerCredentialRepository(db).findByLoginEmail(email);
+    return Boolean(
+      credential?.loginEmailVerifiedAt &&
+        (await hasher.verify(
+          normalizePassword(payload.password as string),
+          credential.passwordHash,
+        )),
+    );
+  });
+  return c.body(null, matches ? 204 : 401);
+});
+
 app.post('/__test/reset-login-budget', (c) => {
   if (c.req.header('authorization') !== `Bearer ${fixtureToken}`) {
     return c.body(null, 404);
