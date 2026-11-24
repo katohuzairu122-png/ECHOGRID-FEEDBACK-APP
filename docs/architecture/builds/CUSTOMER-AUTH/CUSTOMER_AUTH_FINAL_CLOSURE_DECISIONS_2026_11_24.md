@@ -28,6 +28,8 @@ Approved rule: preserve limits already enforced; fail closed when a mandatory li
 
 The repository's `CUSTOMER_AUTH_RATE_LIMIT_DIMENSIONS` module defines an additional proposed six-surface scheme (including an OTP global spend ceiling), but its own source and design note state it is not mounted and its Cloudflare bindings are not declared. Its example numbers are explicitly illustrative. They are therefore not represented as enforced or approved limits. The source also does not establish a separate global SMS spend ceiling or a verified end-customer source address behind the web Worker. Those operational controls require an explicit future numerical/trust decision before relying on that proposed module. Existing deployed OTP route limiter remains 3/minute; no attempt budget was raised.
 
+Related challenge protections, separate from request throttles: registration email proofs expire after 900 seconds, allow at most 5 failed proof attempts, and suppress same-email re-issuance for 60 seconds; email-link proofs expire after 900 seconds, suppress same customer/email re-issuance for 60 seconds, and cap at 3 live proofs per customer. SMS OTPs expire after 600 seconds, allow 5 attempts, and enforce a 60-second same-number cooldown. Recovery challenge and attempt bounds are listed in the table above. Provider-side Twilio spend limits are external to this repository and were not verified.
+
 Executable coverage remains required for the actual route compositions and bindings. Unit tests of the isolated limiter implementation alone do not establish deployed binding behavior.
 
 ## D03 — pending-registration retention
