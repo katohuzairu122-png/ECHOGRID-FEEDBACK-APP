@@ -220,7 +220,8 @@ test('F — Settings phone verification uses the protected customer route and a 
   await expect(page.getByText('That code is not correct or has expired.', { exact: true })).toBeVisible();
   await page.getByLabel('Verification code').fill('123456');
   await page.getByRole('button', { name: 'Verify phone' }).click();
-  await expect(page.getByRole('heading', { name: 'Your phone is verified' })).toBeVisible();
+  // Successful verification deliberately returns to the authorized dashboard destination.
+  await expect(page).toHaveURL(/\/loyalty\/dashboard(?:\?|$)/);
 
   await page.goto('/loyalty/dashboard/settings');
   await expect(page.getByText('Verified', { exact: true })).toHaveCount(2);
