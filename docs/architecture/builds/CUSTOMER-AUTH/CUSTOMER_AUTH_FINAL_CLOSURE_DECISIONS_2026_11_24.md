@@ -10,6 +10,8 @@ This record translates the owner's approvals into repository behavior. Approval 
 
 Approved domains: registration, email verification, password login, session security, account recovery, QR and customer identity continuity, authorization/isolation/abuse protection, and localization/accessibility. The existing R5 contract document is now marked owner-approved. Its prior provisional browser fixture still does not cover every scenario; uncovered tests remain blockers and are not counted as passes.
 
+Legacy phone-only upgrade completion now collects a customer name on the email-proof confirmation screen and writes that name in the same transaction that consumes the proof, attaches verified email/password credentials, and revokes the OTP session. The isolated Chromium fixture now includes protected Settings phone verification and a seeded legacy account with a business membership and points balance; these scenarios count only if the exact-head PG16/18 jobs pass.
+
 ## D02 — existing rate-limit architecture
 
 Approved rule: preserve limits already enforced; fail closed when a mandatory limiter is unavailable; do not promote illustrative values from the old 01D-5 proposal to policy. Current code-defined budgets observed at this baseline are:

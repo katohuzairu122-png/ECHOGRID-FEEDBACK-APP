@@ -10,6 +10,10 @@ import { TwilioVerifyService } from '../src/customer-auth/twilio-verify.service'
 import { customerAuthRoutes } from '../src/customer-auth/customer-auth.routes';
 import { loyaltyCustomerRoutes } from '../src/loyalty/loyalty-customer.routes';
 import { createRepositories } from '../src/repositories';
+import { errorHandler } from '../src/lib/error-handler';
+import { createCustomerEmailLinkService } from '../src/customer-auth/customer-email-link.service';
+import { createCustomerEmailLinkComposition } from '../src/customer-auth/customer-email-link.composition';
+import { createEmailLinkProofDelivery } from '../src/customer-auth/customer-email-auth.delivery';
 import {
   createCustomerEmailAuthComposition,
   createEmailAuthDependencies,
@@ -73,7 +77,9 @@ const originalFetch = globalThis.fetch.bind(globalThis);
 globalThis.fetch = async (input, init) => {
   const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
   if (!url.startsWith('https://verify.twilio.com/v2/Services/')) return originalFetch(input, init);
-  const form = new URLSearchParams(typeof init?.body === 'string' ? init.body : '');
+  const form = init?.body instanceof URLSearchParams
+    ? new URLSearchParams(init.body)
+    : new URLSearchParams(typeof init?.body === 'string' ? init.body : '');
   const phone = form.get('To') ?? '';
   if (!/^\+[1-9][0-9]{7,14}$/.test(phone)) return Response.json({ code: 60200 }, { status: 400 });
   if (url.endsWith('/Verifications')) {
@@ -308,6 +314,38 @@ const recoveryRoutes = createCustomerRecoveryRoutes({
   },
 });
 
+const emailLinkRoutes = createCustomerEmailLinkComposition({
+  isEnabled: () => true,
+  async open() {
+    const client = new Client({ connectionString });
+    await client.connect();
+    const db = buildDb(client);
+    return {
+      dependencies: {
+        sessions: new CustomerSessionService(db, config.session),
+        link: createCustomerEmailLinkService({
+          db,
+          hmacSecret,
+          hasher,
+          passwordPolicy: { minLength: config.passwordMinLength },
+          deliver: createEmailLinkProofDelivery({ email: emailSink, webBaseUrl: config.webBaseUrl }),
+        }),
+        limiter: {
+          resolveTrustedSource,
+          keyForIdentifier: (address: string) => customerChallengeDigest({
+            secret: hmacSecret,
+            purpose: 'email_link',
+            field: 'subject',
+            value: normalizeLoginEmail(address) ?? address,
+          }),
+          limit: testLimiter,
+        },
+      },
+      close: () => client.end(),
+    };
+  },
+});
+
 const app = new Hono();
 app.get('/health', (c) => c.body(null, 204));
 app.get('/__test/mailbox', (c) => {
@@ -390,13 +428,63 @@ app.get('/__test/customer-session-status', async (c) => {
   );
   return c.body(null, active ? 204 : 401);
 });
+app.post('/__test/seed-legacy-customer', async (c) => {
+  if (c.req.header('authorization') !== `Bearer ${fixtureToken}`) return c.body(null, 404);
+  const payload = (await c.req.json().catch(() => null)) as { phone?: unknown } | null;
+  const phone = typeof payload?.phone === 'string' ? payload.phone : '';
+  if (!/^\+1555[0-9]{7}$/.test(phone)) return c.body(null, 404);
+  const result = await withDb(async (db) => {
+    const { customer } = await new CustomerRepository(db).createIfAbsent({ phone, phoneVerifiedAt: new Date() });
+    if (!customer) throw new Error('Synthetic legacy identity could not be created.');
+    const slug = `r5-legacy-${phone.slice(-7)}`;
+    const business = await db.$client.query<{ id: string }>(
+      'INSERT INTO businesses (name, slug) VALUES ($1, $2) ON CONFLICT (slug) DO UPDATE SET name=EXCLUDED.name RETURNING id',
+      ['Synthetic R5 Legacy Business', slug],
+    );
+    const businessId = business.rows[0]?.id;
+    if (!businessId) throw new Error('Synthetic business could not be created.');
+    const membership = await db.$client.query<{ id: string }>(
+      `INSERT INTO business_customer_memberships (customer_id, business_id, status, onboarding_source)
+       VALUES ($1, $2, 'active', 'legacy_migration')
+       ON CONFLICT (customer_id, business_id) DO UPDATE SET status='active' RETURNING id`,
+      [customer.id, businessId],
+    );
+    const membershipId = membership.rows[0]?.id;
+    if (!membershipId) throw new Error('Synthetic membership could not be created.');
+    await db.$client.query(
+      `INSERT INTO loyalty_accounts (customer_id, business_id, membership_id, points)
+       VALUES ($1, $2, $3, 42)
+       ON CONFLICT (customer_id, business_id) DO UPDATE SET membership_id=EXCLUDED.membership_id, points=42`,
+      [customer.id, businessId, membershipId],
+    );
+    return { customerId: customer.id };
+  });
+  return c.json(result, 200, { 'Cache-Control': 'no-store' });
+});
+app.get('/__test/legacy-customer-snapshot', async (c) => {
+  if (c.req.header('authorization') !== `Bearer ${fixtureToken}`) return c.body(null, 404);
+  const phone = c.req.query('phone') ?? '';
+  if (!/^\+1555[0-9]{7}$/.test(phone)) return c.body(null, 404);
+  const snapshot = await withDb(async (db) => {
+    const { rows } = await db.$client.query(
+      `SELECT c.id, c.full_name AS "fullName", cc.login_email AS email,
+              (SELECT count(*)::int FROM business_customer_memberships m WHERE m.customer_id=c.id) AS memberships,
+              (SELECT COALESCE(sum(a.points), 0)::int FROM loyalty_accounts a WHERE a.customer_id=c.id) AS points
+         FROM customers c LEFT JOIN customer_credentials cc ON cc.customer_id=c.id WHERE c.phone=$1`,
+      [phone],
+    );
+    return rows[0] ?? null;
+  });
+  return c.json({ customer: snapshot }, 200, { 'Cache-Control': 'no-store' });
+});
 
-app.route('/api/v1/customer-auth', emailAuth);
 app.route('/api/v1/customer-auth', customerAuthRoutes);
+app.route('/api/v1/customer-auth', emailLinkRoutes);
+app.route('/api/v1/customer-auth', emailAuth);
 app.route('/api/v1/customer-session', lifecycle);
 app.route('/api/v1/customer-recovery', recoveryRoutes);
 app.route('/api/v1/loyalty/me', loyaltyCustomerRoutes);
-app.onError(() => new Response('Internal Server Error', { status: 500 }));
+app.onError(errorHandler);
 
 const port = Number(process.env.CUSTOMER_AUTH_R5_API_PORT ?? '8792');
 const server = createServer(async (incoming, outgoing) => {

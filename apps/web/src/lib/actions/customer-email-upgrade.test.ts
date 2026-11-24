@@ -37,7 +37,7 @@ describe('legacy phone-owned customer email/password upgrade', () => {
   it('requires a rotating session, never a legacy 90-day bearer', async () => {
     expect(await requestCustomerEmailUpgradeAction({}, form({ email }))).toEqual({ error: 'verify_phone_again' });
     expect(await completeCustomerEmailUpgradeAction({}, form({
-      email, challenge: proof, password: 'new-password-123', passwordConfirmation: 'new-password-123',
+      name: 'Existing Customer', email, challenge: proof, password: 'new-password-123', passwordConfirmation: 'new-password-123',
     }))).toEqual({ error: 'verify_phone_again' });
     expect(h.api).not.toHaveBeenCalled();
   });
@@ -61,13 +61,13 @@ describe('legacy phone-owned customer email/password upgrade', () => {
     h.current.mockResolvedValue({ kind: 'rotating', accessToken: 'fresh-otp-access' });
     h.api.mockResolvedValue({ status: 204, body: null });
     const result = await completeCustomerEmailUpgradeAction({}, form({
-      email, challenge: proof, password: 'new-password-123', passwordConfirmation: 'new-password-123',
+      name: 'Existing Customer', email, challenge: proof, password: 'new-password-123', passwordConfirmation: 'new-password-123',
     }));
     expect(result).toEqual({ success: true });
     expect(h.api).toHaveBeenCalledExactlyOnceWith('/customer-auth/email/link/complete', {
       bearer: 'fresh-otp-access',
       body: {
-        email, challengeId: '141664f8-1ef4-4872-b445-fca151ba65aa',
+        name: 'Existing Customer', email, challengeId: '141664f8-1ef4-4872-b445-fca151ba65aa',
         proof: 'synthetic-proof', password: 'new-password-123',
       },
     });
@@ -79,11 +79,14 @@ describe('legacy phone-owned customer email/password upgrade', () => {
   it('keeps credentials and sessions unchanged after an invalid proof or password mismatch', async () => {
     h.current.mockResolvedValue({ kind: 'rotating', accessToken: 'fresh-otp-access' });
     expect(await completeCustomerEmailUpgradeAction({}, form({
-      email, challenge: proof, password: 'password-a', passwordConfirmation: 'password-b',
+      name: '   ', email, challenge: proof, password: 'new-password-123', passwordConfirmation: 'new-password-123',
+    }))).toEqual({ error: 'invalid' });
+    expect(await completeCustomerEmailUpgradeAction({}, form({
+      name: 'Existing Customer', email, challenge: proof, password: 'password-a', passwordConfirmation: 'password-b',
     }))).toEqual({ error: 'password_mismatch' });
     h.api.mockResolvedValue({ status: 401, body: null });
     expect(await completeCustomerEmailUpgradeAction({}, form({
-      email, challenge: proof, password: 'new-password-123', passwordConfirmation: 'new-password-123',
+      name: 'Existing Customer', email, challenge: proof, password: 'new-password-123', passwordConfirmation: 'new-password-123',
     }))).toEqual({ error: 'invalid' });
     expect(h.clear).not.toHaveBeenCalled();
   });

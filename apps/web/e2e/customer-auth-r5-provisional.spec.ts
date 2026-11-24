@@ -228,6 +228,75 @@ test('F — Settings phone verification uses the protected customer route and a 
   await expect(page.locator('body')).not.toContainText(attachedPhone);
 });
 
+test('F — legacy phone customer upgrades on the original identity with membership and points retained', async ({
+  page,
+}) => {
+  const legacyPhone = '+15550000001';
+  const legacyEmail = `r5-legacy-${Date.now()}@example.test`;
+  const seed = await page.request.post('http://127.0.0.1:8792/__test/seed-legacy-customer', {
+    headers: { Authorization: `Bearer ${mailboxToken}` },
+    data: { phone: legacyPhone },
+  });
+  expect(seed.status()).toBe(200);
+  const readSnapshot = async () => {
+    const response = await page.request.get(
+      `http://127.0.0.1:8792/__test/legacy-customer-snapshot?phone=${encodeURIComponent(legacyPhone)}`,
+      { headers: { Authorization: `Bearer ${mailboxToken}` } },
+    );
+    expect(response.status()).toBe(200);
+    return (await response.json()).customer as {
+      id: string; fullName: string | null; email: string | null; memberships: number; points: number;
+    };
+  };
+  const before = await readSnapshot();
+  expect(before).toMatchObject({ id: (await seed.json()).customerId, fullName: null, memberships: 1, points: 42 });
+
+  await page.goto('/loyalty/login?method=phone&next=%2Floyalty%2Fdashboard%2Fsettings');
+  await page.getByLabel('Phone number').fill(legacyPhone);
+  await page.getByRole('button', { name: 'Send code' }).click();
+  await expect(page.getByLabel('Verification code')).toBeVisible();
+  await page.getByLabel('Verification code').fill('123456');
+  await page.getByRole('button', { name: 'Verify' }).click();
+  await expect(page).toHaveURL(/\/loyalty\/dashboard\/settings(?:\?|$)/);
+  await expect(page.getByLabel('Email to link')).toBeVisible();
+  await page.getByLabel('Email to link').fill(legacyEmail);
+  await page.getByRole('button', { name: 'Send email confirmation' }).click();
+  await expect(page.getByRole('status')).toContainText('a confirmation link has been sent');
+
+  const message = await page.request.get(
+    `http://127.0.0.1:8792/__test/mailbox?recipient=${encodeURIComponent(legacyEmail)}`,
+    { headers: { Authorization: `Bearer ${mailboxToken}` } },
+  );
+  expect(message.status()).toBe(200);
+  const delivery = (await message.json()).messages?.at(-1) as { subject?: string; html?: string } | undefined;
+  expect(delivery?.subject).toContain('Confirm this address');
+  const proofLink = delivery?.html?.match(/href="([^"]+)"/)?.[1];
+  expect(proofLink).toBeTruthy();
+  await page.goto(proofLink!);
+  await expect(page.getByRole('heading', { name: 'Confirm email and set password' })).toBeVisible();
+  await page.getByLabel('Name').fill('Legacy Customer Restored');
+  await page.getByLabel('Email to link').fill(legacyEmail);
+  await page.getByLabel('New password').fill(password);
+  await page.getByLabel('Confirm new password').fill(password);
+  await page.getByRole('button', { name: 'Secure my existing account' }).click();
+  await expect(page).toHaveURL(/\/loyalty\/login(?:\?|$)/);
+
+  await page.getByLabel('Email').fill(legacyEmail);
+  await page.getByLabel('Password').fill(password);
+  await page.getByRole('button', { name: 'Sign in' }).click();
+  await expect(page).toHaveURL(/\/loyalty\/dashboard(?:\?|$)/);
+  await page.goto('/loyalty/dashboard/settings');
+  await expect(page.getByLabel('Name')).toHaveValue('Legacy Customer Restored');
+  const after = await readSnapshot();
+  expect(after).toMatchObject({
+    id: before.id,
+    fullName: 'Legacy Customer Restored',
+    email: legacyEmail,
+    memberships: before.memberships,
+    points: before.points,
+  });
+});
+
 test('E — recovery verifies independent email and phone factors, resets password, and revokes sessions', async ({
   page,
   context,

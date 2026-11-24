@@ -43,6 +43,8 @@ export function CustomerEmailUpgradeVerifyForm() {
           {challenge ? (
             <form action={action} className="flex flex-col gap-3">
               <input type="hidden" name="challenge" value={challenge} />
+              <Label htmlFor="upgrade-confirm-name">{t('nameLabel')}</Label>
+              <Input id="upgrade-confirm-name" name="name" autoComplete="name" maxLength={120} required />
               <Label htmlFor="upgrade-confirm-email">{t('upgradeEmailLabel')}</Label>
               <Input id="upgrade-confirm-email" type="email" autoComplete="email" name="email" required />
               <Label htmlFor="upgrade-password">{t('newPasswordLabel')}</Label>

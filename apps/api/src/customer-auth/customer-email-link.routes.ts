@@ -10,6 +10,7 @@ import type { CustomerSessionService } from './customer-session.service';
 import type { createCustomerEmailLinkService } from './customer-email-link.service';
 
 const emailLinkCompleteSchema = z.object({
+  name: z.string().trim().min(1).max(120),
   email: z.string().trim().toLowerCase().pipe(z.email().max(254)),
   challengeId: z.uuid(),
   proof: z.string().min(6).max(256),
