@@ -273,11 +273,15 @@ test('E — recovery verifies independent email and phone factors, resets passwo
   await page.getByLabel('New password', { exact: true }).fill(newPassword);
   await page.getByLabel('Confirm new password').fill(newPassword);
   await page.getByRole('button', { name: 'Reset password' }).click();
-  await expect(
-    page.getByText('Your password was reset and all existing sessions were revoked.', {
-      exact: true,
-    }),
-  ).toBeVisible();
+  const recoveryCompleted = page.getByText(
+    'Your password was reset and all existing sessions were revoked.',
+    { exact: true },
+  );
+  try {
+    await expect(recoveryCompleted).toBeVisible({ timeout: 10_000 });
+  } catch {
+    throw new Error(`Recovery password reset rendered: ${await page.locator('body').innerText()}`);
+  }
 
   await context.clearCookies();
   await context.addCookies(oldSessionCookies);
