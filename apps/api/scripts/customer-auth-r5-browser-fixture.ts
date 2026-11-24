@@ -552,6 +552,13 @@ app.post('/__test/acceptance-clock', async (c) => {
       'SELECT customer_id FROM customer_credentials WHERE login_email=$1', [recipient],
     )).rows[0];
     if (!customer) return null;
+    if (input.kind === 'recovery-email-cooldown') {
+      // Move only this synthetic account's delivery timestamps past the real
+      // 60-second resend budget. Do not restore consumed or expired proofs.
+      await db.$client.query(`UPDATE customer_auth_challenges SET created_at=now()-interval '61 seconds'
+        WHERE customer_id=$1 AND purpose='email_recovery'`, [customer.customer_id]);
+      return {};
+    }
     if (input.kind === 'access') {
       const row = (await db.$client.query<{ id: string }>(
         'SELECT id FROM customer_sessions WHERE customer_id=$1 AND revoked_at IS NULL ORDER BY created_at DESC LIMIT 1', [customer.customer_id],

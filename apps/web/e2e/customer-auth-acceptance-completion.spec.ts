@@ -232,6 +232,7 @@ test('E — Settings reauthentication, one-time codes, cancellation and consumed
   await page.goto(cancellation);
   await page.getByRole('button', { name: 'Cancel recovery', exact: true }).click();
   await expect(page.getByRole('alert')).toBeVisible();
+  await helper(page, 'acceptance-clock', { recipient: email, kind: 'recovery-email-cooldown' });
   await startEmailRecovery(page);
   await page.getByLabel('One unused recovery code', { exact: true }).fill(first);
   await page.getByRole('button', { name: 'Verify recovery code', exact: true }).click();
