@@ -141,6 +141,36 @@ describe.skipIf(!process.env.DATABASE_URL)('Rotating customer sessions in the cu
     expect((await secondRead.json() as { data: { name: string } }).data).toMatchObject({ name: 'Second Synthetic Customer' });
   });
 
+  it('denies a customer session another customer’s business membership while allowing the member', async () => {
+    const first = await emailSession();
+    const second = await emailSession();
+    const business = await client.query<{ id: string }>(
+      'INSERT INTO businesses (name, slug) VALUES ($1, $2) RETURNING id',
+      ['Synthetic Isolation Business', `auth-isolation-${crypto.randomUUID()}`],
+    );
+    const businessId = business.rows[0]!.id;
+    try {
+      const membership = await client.query<{ id: string }>(
+        `INSERT INTO business_customer_memberships (customer_id, business_id, status)
+         VALUES ($1, $2, 'active') RETURNING id`, [second.customerId, businessId],
+      );
+      await client.query(
+        `INSERT INTO loyalty_accounts (customer_id, business_id, membership_id, points)
+         VALUES ($1, $2, $3, 77)`, [second.customerId, businessId, membership.rows[0]!.id],
+      );
+      const request = (token: string) => customerApi.fetch(new Request(
+        `https://api.test/loyalty/me/accounts/${businessId}`,
+        { headers: { Authorization: `Bearer ${token}` } },
+      ), runtimeEnv, ctx());
+      expect((await request(first.session.accessToken)).status).toBe(404);
+      const memberRead = await request(second.session.accessToken);
+      expect(memberRead.status).toBe(200);
+      expect((await memberRead.json() as { data: { points: number } }).data.points).toBe(77);
+    } finally {
+      await client.query('DELETE FROM businesses WHERE id=$1', [businessId]);
+    }
+  });
+
   it('revoking the session takes effect IMMEDIATELY, not at token expiry', async () => {
     const { customerId, session } = await emailSession();
     expect((await me(app, session.accessToken)).status).toBe(200);
