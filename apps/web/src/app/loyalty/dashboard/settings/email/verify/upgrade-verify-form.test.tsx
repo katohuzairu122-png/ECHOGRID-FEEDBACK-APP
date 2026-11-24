@@ -9,7 +9,7 @@ import { CustomerEmailUpgradeVerifyForm } from './upgrade-verify-form';
 
 const proof = '141664f8-1ef4-4872-b445-fca151ba65aa.' + 'a'.repeat(64);
 
-beforeEach(() => vi.clearAllMocks());
+beforeEach(() => { vi.clearAllMocks(); });
 afterEach(() => { window.history.replaceState(null, '', '/'); vi.restoreAllMocks(); });
 
 describe('legacy email-upgrade proof landing', () => {
