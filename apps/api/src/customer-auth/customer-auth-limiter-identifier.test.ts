@@ -38,7 +38,7 @@ describe('real customer-auth limiter key composition', () => {
   });
 
   it('produces opaque, distinct phone and credential-change keys; invalid values fail closed', async () => {
-    const subjects = ['+15551234567', '+15551234568', 'password-change', `password-change:${customerId}`];
+    const subjects = ['+1234567', '+15551234567', '+15551234568', 'password-change', `password-change:${customerId}`];
     const keys = await Promise.all(subjects.map(value => customerAuthLimiterIdentifier(secret, value)));
     expect(new Set(keys).size).toBe(subjects.length);
     for (let i = 0; i < keys.length; i++) {

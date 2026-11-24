@@ -7,7 +7,7 @@ export async function customerAuthLimiterIdentifier(secret: string, value: strin
   if (normalizeLoginEmail(value) === value) {
     return customerChallengeDigest({ secret, purpose: 'email_registration', field: 'subject', value });
   }
-  const phone = /^\+[1-9][0-9]{7,14}$/.test(value);
+  const phone = /^\+[1-9][0-9]{6,14}$/.test(value);
   const passwordChange = value === 'password-change' ||
     (value.startsWith('password-change:') && isUuid(value.slice('password-change:'.length)));
   const encoder = new TextEncoder();
