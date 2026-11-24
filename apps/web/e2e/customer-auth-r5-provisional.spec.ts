@@ -252,6 +252,10 @@ test('F — legacy phone customer upgrades on the original identity with members
   const before = await readSnapshot();
   expect(before).toMatchObject({ id: (await seed.json()).customerId, fullName: null, memberships: 1, points: 42 });
 
+  const resetBudget = await page.request.post('http://127.0.0.1:8792/__test/reset-login-budget', {
+    headers: { Authorization: `Bearer ${mailboxToken}` },
+  });
+  expect(resetBudget.status()).toBe(204);
   await page.goto('/loyalty/login?method=phone&next=%2Floyalty%2Fdashboard%2Fsettings');
   await page.getByLabel('Phone number').fill(legacyPhone);
   await page.getByRole('button', { name: 'Send code' }).click();
