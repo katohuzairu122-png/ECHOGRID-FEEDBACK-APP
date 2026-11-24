@@ -345,6 +345,9 @@ test('E — recovery verifies independent email and phone factors, resets passwo
   await expect(
     page.getByText('The email or password is not correct.', { exact: true }),
   ).toBeVisible();
+  // Start a fresh login document after the deliberately wrong-password attempt.
+  await page.goto('/loyalty/login/email');
+  await page.getByLabel('Email').fill(email);
   await page.getByLabel('Password').fill(newPassword);
   await page.getByRole('button', { name: 'Sign in' }).click();
   try {
