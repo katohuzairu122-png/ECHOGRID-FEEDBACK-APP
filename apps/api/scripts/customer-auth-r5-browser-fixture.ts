@@ -154,7 +154,7 @@ const lifecycle = createCustomerSessionLifecycleComposition({
 
 const recoveryRoutes = createCustomerRecoveryRoutes({
   isEnabled: () => true,
-  resolveTrustedSource: async (request) => resolveTrustedSource(request),
+  resolveTrustedSource: async (context) => resolveTrustedSource(context.req.raw),
   async open() {
     const client = new Client({ connectionString });
     await client.connect();
