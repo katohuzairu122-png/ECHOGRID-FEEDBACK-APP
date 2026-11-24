@@ -84,8 +84,10 @@ describe.skipIf(!process.env.DATABASE_URL)('customer recovery orchestration (int
   const proof = (phone: string): VerifiedPhoneProof => ({ phone, verifiedAt: new Date(), source: 'local_otp' });
 
   /** An email-linked customer. `phoneDaysAgo` null leaves the phone UNVERIFIED. */
+  let customerPhoneSequence = 0;
   const customer = async (i: number, o: { email?: boolean; phoneDaysAgo?: number | null } = {}) => {
-    const phone = PHONE(i);
+    // Distinct customer fixture numbers even when scenarios reuse the same logical index.
+    const phone = `+1559${RUN.slice(-5)}${String(i).padStart(2, '0')}${String(++customerPhoneSequence).padStart(4, '0')}`;
     expect((await a.auth.registerWithPassword(proof(phone), GOOD)).ok).toBe(true);
     const [row] = await q<{ id: string }>('SELECT id FROM customers WHERE phone=$1', [phone]);
     const id = row!.id;
@@ -141,7 +143,7 @@ describe.skipIf(!process.env.DATABASE_URL)('customer recovery orchestration (int
   afterEach(() => { vi.restoreAllMocks(); });
   afterAll(async () => {
     for (const id of businesses) await client.query('DELETE FROM businesses WHERE id=$1', [id]);
-    await client.query('DELETE FROM customers WHERE phone LIKE $1', [`+1559${RUN}%`]);
+    await client.query('DELETE FROM customers WHERE phone LIKE $1', [`+1559${RUN.slice(-5)}%`]);
     await Promise.all([client.end(), client2.end()]);
   });
   const fresh = () => { h = harness(client); };
@@ -341,7 +343,7 @@ describe.skipIf(!process.env.DATABASE_URL)('customer recovery orchestration (int
       const id = await start(c);
       await emailFactor(id);
       await h.svc.verifyPhoneFactor({ attemptId: id, sourceKey: SRC, proof: phoneProof(c.phone) });
-      expect((await attempt(id)).status).toBe('factors_verified');
+      expect((await attempt(id)).status).toBe('security_hold');
       await q('UPDATE customer_recovery_attempts SET notice_accepted_at = NULL WHERE id=$1', [id]);
       const before = await credential(c.id);
       expect(await finish(id)).toEqual({ ok: false });
@@ -356,6 +358,7 @@ describe.skipIf(!process.env.DATABASE_URL)('customer recovery orchestration (int
       const id = await start(c);
       await emailFactor(id);
       await h.svc.verifyPhoneFactor({ attemptId: id, sourceKey: SRC, proof: phoneProof(c.phone) });
+      await setHoldIn(id, -1);
       const results = await Promise.all([finish(id, h, NEW), finish(id, other, `${NEW} other`)]);
       expect(results.filter((r) => r.ok)).toHaveLength(1);
       expect((await q<{ n: number }>(`SELECT count(*)::int n FROM customer_auth_events WHERE customer_id=$1 AND event_type='recovery_completed'`, [c.id]))[0]!.n).toBe(1);
@@ -384,6 +387,7 @@ describe.skipIf(!process.env.DATABASE_URL)('customer recovery orchestration (int
       const doneToken = h.notices.at(-1)!.cancelToken!;
       await emailFactor(done);
       await h.svc.verifyPhoneFactor({ attemptId: done, sourceKey: SRC, proof: phoneProof(c2.phone) });
+      await setHoldIn(done, -1);
       expect(await finish(done)).toEqual({ ok: true });
       expect(await h.svc.cancel({ attemptId: done, token: doneToken, sourceKey: SRC })).toEqual({ ok: false });
 
@@ -492,6 +496,7 @@ describe.skipIf(!process.env.DATABASE_URL)('customer recovery orchestration (int
       const id = await start(c);
       await emailFactor(id);
       await h.svc.verifyPhoneFactor({ attemptId: id, sourceKey: SRC, proof: phoneProof(c.phone) });
+      await setHoldIn(id, -1);
       const before = await credential(c.id);
       const original = CustomerAuthEventRepository.prototype.append;
       vi.spyOn(CustomerAuthEventRepository.prototype, 'append').mockImplementation(function (this: CustomerAuthEventRepository, event) {
@@ -503,7 +508,7 @@ describe.skipIf(!process.env.DATABASE_URL)('customer recovery orchestration (int
       expect(await credential(c.id)).toEqual(before);
       expect(await a.sessions.authenticateSessionToken(live.accessToken)).not.toBeNull();
       expect((await q<{ n: number }>('SELECT count(*)::int n FROM customer_recovery_code_sets WHERE customer_id=$1 AND revoked_at IS NULL', [c.id]))[0]!.n).toBe(1);
-      expect((await attempt(id)).status).toBe('factors_verified');
+      expect((await attempt(id)).status).toBe('security_hold');
       expect(await finish(id)).toEqual({ ok: true }); // and it can still be completed afterwards
     });
 
@@ -516,6 +521,7 @@ describe.skipIf(!process.env.DATABASE_URL)('customer recovery orchestration (int
       const id = await start(c);
       await emailFactor(id);
       await h.svc.verifyPhoneFactor({ attemptId: id, sourceKey: SRC, proof: phoneProof(c.phone) });
+      await setHoldIn(id, -1);
       expect(await finish(id)).toEqual({ ok: true });
       for (const s of [s1, s2]) expect(await a.sessions.authenticateSessionToken(s.accessToken)).toBeNull();
       const reasons = await q<{ revoked_reason: string }>(`SELECT DISTINCT revoked_reason FROM customer_sessions WHERE customer_id=$1`, [c.id]);
@@ -529,10 +535,11 @@ describe.skipIf(!process.env.DATABASE_URL)('customer recovery orchestration (int
       const id = await start(c);
       await emailFactor(id);
       await h.svc.verifyPhoneFactor({ attemptId: id, sourceKey: SRC, proof: phoneProof(c.phone) });
+      await setHoldIn(id, -1);
       const before = await credential(c.id);
       expect(await finish(id, h, 'short')).toEqual({ ok: false });
       expect(await credential(c.id)).toEqual(before);
-      expect((await attempt(id)).status).toBe('factors_verified');
+      expect((await attempt(id)).status).toBe('security_hold');
     });
   });
 
