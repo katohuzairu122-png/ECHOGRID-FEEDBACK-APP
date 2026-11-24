@@ -133,37 +133,37 @@ export async function runCli(argv: readonly string[], env: Readonly<Record<strin
     // E2-A/E2-B: customers exist only when ALL three approvals are recorded; an approved mailbox with no adapter in this build is refused.
     let provisioner: LiveCustomerProvisioner | null = null;
     let driverToClose: SignupDriver | undefined;
-    if (missingApprovals(config).length === 0) {
-      const mailbox = createVerificationMailbox(config.mailbox, { runId, webHost: config.targets.web.host, ...(io.mailboxAdapters ? { adapters: io.mailboxAdapters } : {}), env });
-      const driver = await io.signupDriver?.({ webHost: config.targets.web.host });
-      if (!driver) throw new HarnessRefusal('PROVISIONER_REFUSED', 'No sign-up driver is available in this build.');
-      driverToClose = driver;
-      provisioner = new LiveCustomerProvisioner({ runId, config, mailbox, driver });
-    }
-    // E2-D: browser evidence is accepted only in the mode of this run (staging).
-    let browser: BrowserCheck[] | undefined;
-    const reportFile = value('--browser-results');
-    if (reportFile) {
-      if (!io.readReport) throw new HarnessRefusal('CONFIG_INVALID', 'Reading a browser report is not available here.');
-      browser = ingestPlaywrightReport(io.readReport(reportFile), 'staging');
-    }
-    const pacer = createPacer();
-    const ctx: Context = { api: createLiveClient(targets, { fetch: io.fetch, pacer }), runId, ownerA, ownerB, provisioner, ...(browser ? { browser } : {}) };
-    const only = value('--scenarios')?.split(',').filter(Boolean);
-    let outcome: Awaited<ReturnType<typeof runAcceptance>>;
     try {
-      outcome = await runAcceptance({
-        ctx, mode: 'staging', commit: io.commit(), outDir: value('--out') ?? path.join(process.cwd(), 'acceptance-results', 'cashier-02'), only, signal: io.signal,
-      });
+      if (missingApprovals(config).length === 0) {
+        const mailbox = createVerificationMailbox(config.mailbox, { runId, webHost: config.targets.web.host, ...(io.mailboxAdapters ? { adapters: io.mailboxAdapters } : {}), env });
+        const driver = await io.signupDriver?.({ webHost: config.targets.web.host });
+        if (!driver) throw new HarnessRefusal('PROVISIONER_REFUSED', 'No sign-up driver is available in this build.');
+        driverToClose = driver;
+        provisioner = new LiveCustomerProvisioner({ runId, config, mailbox, driver });
+      }
+      // E2-D: browser evidence is accepted only in the mode of this run (staging).
+      let browser: BrowserCheck[] | undefined;
+      const reportFile = value('--browser-results');
+      if (reportFile) {
+        if (!io.readReport) throw new HarnessRefusal('CONFIG_INVALID', 'Reading a browser report is not available here.');
+        browser = ingestPlaywrightReport(io.readReport(reportFile), 'staging');
+      }
+      const pacer = createPacer();
+      const ctx: Context = { api: createLiveClient(targets, { fetch: io.fetch, pacer }), runId, ownerA, ownerB, provisioner, ...(browser ? { browser } : {}) };
+      const only = value('--scenarios')?.split(',').filter(Boolean);
+      const outcome = await runAcceptance({
+          ctx, mode: 'staging', commit: io.commit(), outDir: value('--out') ?? path.join(process.cwd(), 'acceptance-results', 'cashier-02'), only, signal: io.signal,
+        });
+      const { report, file, interruptedEarlier } = outcome;
+      if (interruptedEarlier.length > 0) io.log(`note: ${interruptedEarlier.length} earlier run(s) have a journal but no final report (not touched).`);
+      for (const c of report.checks) io.log(`${c.status} ${c.id} ${c.title}${c.status === 'PASS' ? '' : ` :: ${c.detail}`}`);
+      io.log(`PASS ${report.counts.pass}  FAIL ${report.counts.fail}  NOT RUN ${report.counts.notRun}  state ${report.state}  hash ${report.reportHash.slice(0, 12)}`);
+      if (file) io.log(`result file: ${file}`);
+      return exitCodeFor(report, { requireAll: flag('--require-all') });
     } finally {
+      // Release the synthetic customer browser even if report decoding, pacing or runner setup fails.
       await driverToClose?.close?.().catch(() => undefined);
     }
-    const { report, file, interruptedEarlier } = outcome;
-    if (interruptedEarlier.length > 0) io.log(`note: ${interruptedEarlier.length} earlier run(s) have a journal but no final report (not touched).`);
-    for (const c of report.checks) io.log(`${c.status} ${c.id} ${c.title}${c.status === 'PASS' ? '' : ` :: ${c.detail}`}`);
-    io.log(`PASS ${report.counts.pass}  FAIL ${report.counts.fail}  NOT RUN ${report.counts.notRun}  state ${report.state}  hash ${report.reportHash.slice(0, 12)}`);
-    if (file) io.log(`result file: ${file}`);
-    return exitCodeFor(report, { requireAll: flag('--require-all') });
   } catch (error) {
     if (error instanceof HarnessRefusal) {
       io.log(`BLOCKED (${error.code}): ${error.message}`);

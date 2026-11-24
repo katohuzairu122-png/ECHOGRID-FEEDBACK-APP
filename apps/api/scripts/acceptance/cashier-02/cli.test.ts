@@ -93,6 +93,17 @@ describe('E2 wiring: approvals, provisioner, mailbox and browser evidence', () =
     expect(await runCli(['--env', 'staging'], creds, t.impl)).toBe(2);
     expect(t.lines.join('\n')).toMatch(/PROVISIONER_REFUSED/);
   });
+  it('always closes a provisioned browser when browser-report ingestion fails before scenarios begin', async () => {
+    let closed = 0;
+    const t = live(all, {
+      mailboxAdapters: { fixture: () => ({ listMessages: async () => [] }) },
+      signupDriver: async () => ({ close: async () => { closed += 1; } }) as never,
+      readReport: () => { throw new Error('synthetic invalid browser report'); },
+    });
+    expect(await runCli(['--env', 'staging', '--browser-results', '/tmp/invalid.json'], creds, t.impl)).toBe(3);
+    expect(closed).toBe(1);
+    expect(t.lines.join('\\n')).toMatch(/ERROR/);
+  });
   it('partial approvals never build a provisioner: the driver is not even asked for', async () => {
     let asked = false;
     const t = live({ ...all, customerProvisioning: { approved: false, approvedBy: null } }, { signupDriver: async () => { asked = true; return {} as never; }, mailboxAdapters: { fixture: () => ({ listMessages: async () => [] }) } });
