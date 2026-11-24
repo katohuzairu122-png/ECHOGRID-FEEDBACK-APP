@@ -7,6 +7,9 @@ if (process.env.CI !== 'true' || !process.env.GITHUB_ENV) {
 
 const values = {
   CUSTOMER_AUTH_R5_TEST_ONLY: 'true',
+  // Exercise the gated email/password and legacy-upgrade routes only in this isolated CI process.
+  CUSTOMER_EMAIL_AUTH_ENABLED: 'true',
+  CUSTOMER_LEGACY_UPGRADE_ENABLED: 'true',
   CUSTOMER_AUTH_R5_MAILBOX_TOKEN: randomBytes(32).toString('base64url'),
   CLIENT_ATTRIBUTION_SECRET: randomBytes(32).toString('base64url'),
   CUSTOMER_EMAIL_AUTH_HMAC_SECRET: randomBytes(32).toString('base64url'),
