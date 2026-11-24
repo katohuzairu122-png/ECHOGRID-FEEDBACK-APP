@@ -247,9 +247,14 @@ test('E — recovery verifies independent email and phone factors, resets passwo
 
   await page.goto(recoveryUrl!);
   await page.getByRole('button', { name: 'Confirm this email factor' }).click();
-  await expect(
-    page.getByRole('status').filter({ hasText: 'One more independent factor is required.' }),
-  ).toBeVisible();
+  const awaitingFactor = page
+    .getByRole('status')
+    .filter({ hasText: 'One more independent factor is required.' });
+  try {
+    await expect(awaitingFactor).toBeVisible({ timeout: 10_000 });
+  } catch {
+    throw new Error(`Recovery email verification rendered: ${await page.locator('body').innerText()}`);
+  }
   await page.getByRole('button', { name: 'Send phone code' }).click();
   await page.getByLabel('Phone verification code').fill('000000');
   await page.getByRole('button', { name: 'Verify phone code' }).click();
