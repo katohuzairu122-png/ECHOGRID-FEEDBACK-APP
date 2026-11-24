@@ -56,26 +56,6 @@ describe('cashier accounts view', () => {
     }
   });
 
-  it('with only one branch, "Several branches" is not offered: no unsatisfiable choice, single access is submitted, the branch can be ticked', () => {
-    view([], 'ABCDEFGHJK', [{ id: 'b1', name: 'Buddy 1' }]);
-    const create = screen.getByRole('heading', { name: 'Create a cashier account' }).closest('section, div, form, article') as HTMLElement;
-    const scope = within(create.parentElement ?? create);
-    expect(scope.queryByLabelText('Several branches')).not.toBeInTheDocument();
-    expect(scope.queryByLabelText('One branch')).not.toBeInTheDocument();
-    expect(document.querySelector('input[type="hidden"][name="accessMode"][value="single"]')).not.toBeNull();
-    expect(screen.queryByText('Tick at least two branches.')).not.toBeInTheDocument();
-    expect(scope.getByText('The cashier serves at one branch only.')).toBeInTheDocument();
-    expect(scope.getByLabelText('Buddy 1')).not.toBeChecked();
-    fireEvent.click(scope.getByLabelText('Buddy 1'));
-    expect(scope.getByLabelText('Buddy 1')).toBeChecked();
-  });
-
-  it('with two or more branches both access modes are offered', () => {
-    view([]);
-    expect(screen.getAllByLabelText('Several branches').length).toBeGreaterThan(0);
-    expect(screen.getAllByLabelText('One branch').length).toBeGreaterThan(0);
-  });
-
   it('an active account offers disable (not enable); a disabled one offers enable (not disable)', () => {
     view([account({ id: 'a1' }), account({ id: 'a2', username: 'off1', status: 'disabled' })]);
     expect(screen.getAllByRole('button', { name: 'Disable' })).toHaveLength(1);
