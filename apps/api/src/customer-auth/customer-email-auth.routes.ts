@@ -57,6 +57,8 @@ export type IsolatedEmailAuthDependencies = {
   completeRegistration(input: z.infer<typeof emailRegistrationCompleteSchema>): Promise<EmailRegistrationResult & { session?: IssuedSession }>;
   login(input: z.infer<typeof emailPasswordLoginSchema>): Promise<PasswordLoginResult>;
   changePassword(accessToken: string, input: z.infer<typeof emailPasswordChangeSchema>): Promise<boolean>;
+  /** Resolves only a live rotating password/session identity; used to rate-limit changes per account. */
+  resolvePasswordChangeCustomerId?(accessToken: string): Promise<string | null>;
   requestLink?: (accessToken: string, email: string) => Promise<boolean>;
   completeLink?: (accessToken: string, input: { email: string; challengeId: string; proof: string; password: string }) => Promise<boolean>;
   transportSession(session: IssuedSession): Response;
@@ -111,6 +113,38 @@ export async function limitEmailAuthRequest(
     return sourceAllowed && identifierAllowed ? 'allowed' : 'limited';
   } catch (error) {
     logEmailAuthUnavailable('limiter_error', { surface, error });
+    return 'unavailable';
+  }
+}
+
+/**
+ * Password changes preserve the existing source and shared credential-change
+ * ceilings while adding a separate per-customer counter. The account key is
+ * derived through the same keyed identifier function and is never exposed.
+ */
+export async function limitPasswordChangeRequest(
+  dependencies: Pick<IsolatedEmailAuthDependencies, 'resolveTrustedSource' | 'keyForIdentifier' | 'limit'>,
+  request: Request,
+  customerId: string,
+): Promise<'allowed' | 'limited' | 'unavailable'> {
+  try {
+    const source = await dependencies.resolveTrustedSource(request);
+    if (!source) {
+      logEmailAuthUnavailable('untrusted_source', { surface: 'login' });
+      return 'unavailable';
+    }
+    const [globalIdentifier, accountIdentifier] = await Promise.all([
+      dependencies.keyForIdentifier('password-change'),
+      dependencies.keyForIdentifier(`password-change:${customerId}`),
+    ]);
+    const results = await Promise.all([
+      dependencies.limit({ key: `customer-email:login:source:${source}`, limit: 5, windowSeconds: 900 }),
+      dependencies.limit({ key: `customer-email:login:identifier:${globalIdentifier}`, limit: 5, windowSeconds: 900 }),
+      dependencies.limit({ key: `customer-email:login:account:${accountIdentifier}`, limit: 5, windowSeconds: 900 }),
+    ]);
+    return results.every(Boolean) ? 'allowed' : 'limited';
+  } catch (error) {
+    logEmailAuthUnavailable('limiter_error', { surface: 'login', error });
     return 'unavailable';
   }
 }
@@ -217,10 +251,14 @@ export function createIsolatedCustomerEmailAuthRoutes(dependencies: IsolatedEmai
     if (!await dependencies.resolveTrustedSource(c.req.raw)) return unavailable();
     const dto = emailPasswordChangeSchema.safeParse(await c.req.json().catch(() => null));
     if (!dto.success) return badRequest();
-    const decision = await limitEmailAuthRequest(dependencies, c.req.raw, 'login', 'password-change');
-    if (decision !== 'allowed') return deny(decision);
     const accessToken = c.req.header('authorization')?.match(/^Bearer ([^\s]+)$/)?.[1];
-    if (!accessToken || !await dependencies.changePassword(accessToken, dto.data)) return invalid();
+    if (!accessToken) return invalid();
+    if (!dependencies.resolvePasswordChangeCustomerId) return unavailable();
+    const customerId = await dependencies.resolvePasswordChangeCustomerId(accessToken);
+    if (!customerId) return invalid();
+    const decision = await limitPasswordChangeRequest(dependencies, c.req.raw, customerId);
+    if (decision !== 'allowed') return deny(decision);
+    if (!await dependencies.changePassword(accessToken, dto.data)) return invalid();
     return new Response(null, { status: 204, headers: { 'Cache-Control': 'no-store' } });
   });
   return routes;

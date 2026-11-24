@@ -1,13 +1,9 @@
 import { test, expect, type Page } from '@playwright/test';
 
 /**
- * PROVISIONAL CUSTOMER-AUTH-R3-R5 browser contract.
- *
- * The user-provided R5 brief proposes these domains but explicitly requires
- * Owner approval before they can be treated as the canonical A-H contract.
- * This suite covers only the registration, proof, password login, rotating
- * session, safe QR return, anti-enumeration and responsive-form slices that
- * the isolated fixture can exercise without shared resources or providers.
+ * CUSTOMER-AUTH-R5 isolated Chromium acceptance slice.
+ * D01 approves the A-H contract; this fixture currently covers only the
+ * scenarios present below and must not be treated as the complete contract.
  */
 test.skip(
   process.env.CUSTOMER_AUTH_R5_TEST_ONLY !== 'true',
@@ -298,6 +294,18 @@ test('E — recovery verifies independent email and phone factors, resets passwo
   ).toBeVisible();
   await page.getByLabel('Phone verification code').fill('123456');
   await page.getByRole('button', { name: 'Verify phone code' }).click();
+
+  await expect(page.getByRole('status')).toContainText(/hold/i);
+  await expect(page.getByLabel('New password', { exact: true })).toHaveCount(0);
+  const advanceHold = await page.request.post(
+    'http://127.0.0.1:8792/__test/advance-recovery-hold',
+    { headers: { Authorization: `Bearer ${mailboxToken}` }, data: { recipient: email } },
+  );
+  expect(advanceHold.status()).toBe(200);
+  expect((await advanceHold.json()).accepted).toBe(true);
+  await page.clock.install({ time: new Date(Date.now() + 86_401_000) });
+  await page.clock.fastForward(1_000);
+  await expect(page.getByLabel('New password', { exact: true })).toBeVisible();
 
   const newPassword = `${password}-recovered`;
   await page.getByLabel('New password', { exact: true }).fill(newPassword);

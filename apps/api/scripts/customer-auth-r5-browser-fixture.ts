@@ -285,6 +285,21 @@ app.post('/__test/mark-phone-verified', async (c) => {
   });
   return c.json({ accepted: true }, 200, { 'Cache-Control': 'no-store' });
 });
+app.post('/__test/advance-recovery-hold', async (c) => {
+  if (c.req.header('authorization') !== `Bearer ${fixtureToken}`) return c.body(null, 404);
+  const payload = (await c.req.json().catch(() => null)) as { recipient?: unknown } | null;
+  const recipient = typeof payload?.recipient === 'string' ? normalizeLoginEmail(payload.recipient) : null;
+  if (!recipient?.endsWith('@example.test')) return c.body(null, 404);
+  const advanced = await withDb(async (db) => db.execute(sql`
+    UPDATE customer_recovery_attempts AS attempt
+       SET hold_until = now() - interval '1 second'
+      FROM customer_credentials AS credential
+     WHERE credential.customer_id = attempt.customer_id
+       AND credential.login_email = ${recipient}
+       AND attempt.status = 'security_hold'
+  `));
+  return c.json({ accepted: Number(advanced.rowCount ?? 0) === 1 }, 200, { 'Cache-Control': 'no-store' });
+});
 app.post('/__test/password-hash-check', async (c) => {
   if (c.req.header('authorization') !== `Bearer ${fixtureToken}`) {
     return c.body(null, 404);

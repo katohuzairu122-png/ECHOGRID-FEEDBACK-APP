@@ -6,6 +6,7 @@ import { CustomerAuthEventRepository } from '../../src/repositories/customer-aut
 import { CustomerSessionService } from '../../src/customer-auth/customer-session.service';
 import { CustomerPasswordAuthService, type VerifiedPhoneProof } from '../../src/customer-auth/customer-password-auth.service';
 import { createCustomerRecoveryCodeService } from '../../src/customer-auth/customer-recovery-code.service';
+import { recoveryCodeVerifier } from '../../src/customer-auth/customer-recovery-code';
 import {
   createCustomerRecoveryService,
   type RecoveryLimiter,
@@ -146,7 +147,7 @@ describe.skipIf(!process.env.DATABASE_URL)('customer recovery orchestration (int
   const fresh = () => { h = harness(client); };
 
   describe('authentication matrix (D1, D3, D5, D6)', () => {
-    it('email + phone (both available, old verified phone): standard path, no hold, resets the password and issues NO session', async () => {
+    it('email + phone (both available, old verified phone): unresolved recency stays high risk, holds, then resets without issuing a session', async () => {
       fresh();
       const c = await customer(1);
       const live = await passwordSession(c.id);
@@ -159,8 +160,10 @@ describe.skipIf(!process.env.DATABASE_URL)('customer recovery orchestration (int
 
       const id = await start(c);
       expect(await emailFactor(id)).toEqual({ ok: true, status: 'awaiting_factors' });
-      expect(await h.svc.verifyPhoneFactor({ attemptId: id, sourceKey: SRC, proof: phoneProof(c.phone) })).toEqual({ ok: true, status: 'factors_verified' });
-      expect(await attempt(id)).toMatchObject({ status: 'factors_verified', risk: 'standard', risk_reason: 'both_factors', hold_until: null });
+      expect(await h.svc.verifyPhoneFactor({ attemptId: id, sourceKey: SRC, proof: phoneProof(c.phone) })).toMatchObject({ ok: true, status: 'security_hold' });
+      expect(await attempt(id)).toMatchObject({ status: 'security_hold', risk: 'high', risk_reason: 'recent_phone_verification' });
+      expect(await finish(id)).toEqual({ ok: false });
+      await setHoldIn(id, -1);
       expect(await finish(id)).toEqual({ ok: true });
 
       expect(await attempt(id)).toMatchObject({ status: 'completed', ended_reason: 'completed' });
@@ -176,7 +179,7 @@ describe.skipIf(!process.env.DATABASE_URL)('customer recovery orchestration (int
       expect((await q<{ n: number }>('SELECT count(*)::int n FROM customer_sessions WHERE customer_id=$1', [c.id]))[0]!.n).toBe(sessionsBefore + 1);
       expect((await q<{ n: number }>(`SELECT count(*)::int n FROM customer_sessions WHERE customer_id=$1 AND auth_method='recovery'`, [c.id]))[0]!.n).toBe(0);
       expect(await eventTypes(c.id)).toEqual(expect.arrayContaining(['recovery_started', 'recovery_factor_verified', 'recovery_completed']));
-      expect(h.notices.map((n) => n.kind)).toEqual(['initiated', 'completed']);
+      expect(h.notices.map((n) => n.kind)).toEqual(['initiated', 'hold_started', 'completed']);
     });
 
     it('lost email: phone + recovery code is HIGH risk and holds 24 hours before it can complete', async () => {
@@ -423,6 +426,12 @@ describe.skipIf(!process.env.DATABASE_URL)('customer recovery orchestration (int
       const id = await start(c);
       await emailFactor(id);
       await h.svc.verifyCodeFactor({ attemptId: id, sourceKey: SRC, code });
+      const verifier = await recoveryCodeVerifier({ secret: SECRET, customerId: c.id, code });
+      const consumedBefore = (await q<{ consumed_at: Date | null }>(
+        'SELECT consumed_at FROM customer_recovery_codes WHERE customer_id=$1 AND verifier=$2',
+        [c.id, verifier],
+      ))[0]!.consumed_at;
+      expect(consumedBefore).not.toBeNull();
       const holdToken = h.notices.find((n) => n.kind === 'hold_started')!.cancelToken!;
       expect(await h.svc.cancel({ attemptId: id, token: holdToken, sourceKey: SRC })).toEqual({ ok: true });
       await setHoldIn(id, -1).catch(() => undefined);
@@ -431,6 +440,46 @@ describe.skipIf(!process.env.DATABASE_URL)('customer recovery orchestration (int
       expect(row.status).toBe('cancelled');
       expect(row.email_factor_at).not.toBeNull(); // factor evidence stays on the row
       expect(row.code_factor_at).not.toBeNull();
+      const consumedAfter = (await q<{ consumed_at: Date | null }>(
+        'SELECT consumed_at FROM customer_recovery_codes WHERE customer_id=$1 AND verifier=$2',
+        [c.id, verifier],
+      ))[0]!.consumed_at;
+      expect(consumedAfter).toEqual(consumedBefore); // cancellation cannot refund a consumed code
+      const nextAttempt = await start(c);
+      expect(await h.svc.verifyCodeFactor({ attemptId: nextAttempt, sourceKey: SRC, code })).toEqual({ ok: false });
+      expect((await q<{ consumed_at: Date | null }>(
+        'SELECT consumed_at FROM customer_recovery_codes WHERE customer_id=$1 AND verifier=$2',
+        [c.id, verifier],
+      ))[0]!.consumed_at).toEqual(consumedBefore); // replay remains denied
+    });
+
+    it('cancellation and completion race to one terminal state; consumed code stays consumed', async () => {
+      fresh();
+      const other = harness(client2);
+      const c = await customer(42);
+      const code = (await issueCodes(c.id))[0]!;
+      const id = await start(c);
+      await emailFactor(id);
+      await h.svc.verifyCodeFactor({ attemptId: id, sourceKey: SRC, code });
+      await setHoldIn(id, -1);
+      const token = h.notices.find((n) => n.kind === 'hold_started')!.cancelToken!;
+      const [completion, cancellation] = await Promise.all([
+        finish(id, other, NEW),
+        h.svc.cancel({ attemptId: id, token, sourceKey: SRC }),
+      ]);
+      const row = await attempt(id);
+      expect(['completed', 'cancelled']).toContain(row.status);
+      if (row.status === 'completed') {
+        expect(completion).toEqual({ ok: true });
+        expect(cancellation).toEqual({ ok: false });
+      } else {
+        expect(completion).toEqual({ ok: false });
+        expect(cancellation).toEqual({ ok: true });
+      }
+      expect((await q<{ consumed_at: Date | null }>(
+        'SELECT consumed_at FROM customer_recovery_codes WHERE customer_id=$1 AND verifier=$2',
+        [c.id, await recoveryCodeVerifier({ secret: SECRET, customerId: c.id, code })],
+      ))[0]!.consumed_at).not.toBeNull();
     });
   });
 

@@ -124,6 +124,10 @@ export function createEmailAuthDependencies(config: ResolvedEmailAuthConfig, par
       });
       return result.ok;
     }),
+    resolvePasswordChangeCustomerId: (accessToken) => parts.withDb(async (db) => {
+      const identity = await new CustomerSessionService(db, config.session).authenticateSessionToken(accessToken);
+      return identity?.assurance === 'session' ? identity.customerId : null;
+    }),
     ...(parts.legacyOtpSession ? { legacyOtpSession: parts.legacyOtpSession } : {}),
     transportSession: (session) =>
       Response.json(

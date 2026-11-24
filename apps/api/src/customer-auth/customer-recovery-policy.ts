@@ -13,11 +13,12 @@ import type {
  *  D3 lost email = phone + code; lost phone = email + code; both available = email + phone;
  *     both lost = no self-service (one factor can never satisfy the policy).
  *  D4 password reset only (this module has no email or phone change).
- *  D5/D6 an unverified phone is never a factor; a recently verified phone escalates to high risk.
+ *  D5/D6 an unverified phone is never a factor; phone-based recovery remains high risk unless an
+ *  approved recency threshold is supplied. The repository has no authoritative recycled-number signal.
  *
- * OWNER DECISION TO CONFIRM: the risk classification below (any path that uses a
- * recovery code, or a phone verified within `recentPhoneWindowSeconds`, is HIGH).
- * The rulings say "high-risk recovery" without defining it.
+ * The owner has approved elevated assurance but has not specified what counts as "recent" or
+ * supplied an authoritative recycled-number signal. Therefore production composition supplies no
+ * recency threshold and all phone-dependent recovery takes the existing high-risk hold path.
  */
 export const RECOVERY_HOLD_SECONDS = 24 * 60 * 60;
 /** Time to supply the second factor, from initiation. */
@@ -28,8 +29,6 @@ export const RECOVERY_STANDARD_COMPLETION_SECONDS = 15 * 60;
 export const RECOVERY_POST_HOLD_COMPLETION_SECONDS = 24 * 60 * 60;
 /** Cancel-token lifetime from initiation (extended when a hold starts). */
 export const RECOVERY_CANCEL_WINDOW_SECONDS = 72 * 60 * 60;
-/** OWNER DECISION: a phone verified more recently than this escalates the attempt to high risk (D5). */
-export const RECOVERY_RECENT_PHONE_WINDOW_SECONDS = 7 * 24 * 60 * 60;
 
 export type RecoveryFactor = 'email' | 'phone' | 'code';
 export type RecoveryPath = 'email_phone' | 'phone_code' | 'email_code';
@@ -77,9 +76,18 @@ export function classifyRecoveryRisk(input: RecoveryRiskInput): {
   reason: CustomerRecoveryRiskReason;
 } {
   if (input.path !== 'email_phone') return { risk: 'high', reason: 'recovery_code_path' };
-  const window = (input.recentPhoneWindowSeconds ?? RECOVERY_RECENT_PHONE_WINDOW_SECONDS) * 1000;
-  // A phone with no verification time is never a valid factor (D6); treat it as the most recent possible.
-  if (input.phoneVerifiedAtMs === null || input.nowMs - input.phoneVerifiedAtMs < window) {
+  const windowSeconds = input.recentPhoneWindowSeconds;
+  // No threshold is inferred from the former provisional seven-day value. Until one is approved,
+  // unknown age, future timestamps, and every phone-based recovery are treated as high risk.
+  if (
+    windowSeconds === undefined ||
+    !Number.isFinite(windowSeconds) ||
+    windowSeconds <= 0 ||
+    input.phoneVerifiedAtMs === null ||
+    !Number.isFinite(input.phoneVerifiedAtMs) ||
+    input.phoneVerifiedAtMs > input.nowMs ||
+    input.nowMs - input.phoneVerifiedAtMs < windowSeconds * 1000
+  ) {
     return { risk: 'high', reason: 'recent_phone_verification' };
   }
   return { risk: 'standard', reason: 'both_factors' };

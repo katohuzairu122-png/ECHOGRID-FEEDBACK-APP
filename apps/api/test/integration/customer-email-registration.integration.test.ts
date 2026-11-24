@@ -13,12 +13,13 @@ describe.skipIf(!process.env.DATABASE_URL)('S2 email registration transaction (P
   const deliveredAddress = `delivery-${email}`;
   let client: Client;
   const challengeIds: string[] = [];
+  const createdEmails: string[] = [];
   beforeAll(async () => {
     client = new Client({ connectionString: process.env.DATABASE_URL });
     await client.connect();
   });
   afterAll(async () => {
-    await client.query('DELETE FROM customers WHERE id IN (SELECT customer_id FROM customer_credentials WHERE login_email = ANY($1::text[]))', [[email, deliveredAddress]]);
+    await client.query('DELETE FROM customers WHERE id IN (SELECT customer_id FROM customer_credentials WHERE login_email = ANY($1::text[]))', [[email, deliveredAddress, ...createdEmails]]);
     await client.query('DELETE FROM customer_auth_challenges WHERE id = ANY($1::uuid[])', [challengeIds]);
     await client.end();
   });
@@ -114,5 +115,40 @@ describe.skipIf(!process.env.DATABASE_URL)('S2 email registration transaction (P
       email: message.recipient, challengeId: message.challengeId, proof: message.proof,
       name: 'Synthetic Customer', password: 'a strong synthetic password',
     })).ok).toBe(true);
+  });
+
+  it('seals setup data until proof completion and clears the ciphertext in the activation transaction', async () => {
+    const db = buildDb(client);
+    const address = `sealed-${Date.now()}@example.test`;
+    createdEmails.push(address);
+    const messages: Array<Parameters<RegistrationProofDelivery>[0]> = [];
+    const registration = createEmailRegistrationService({
+      db, hmacSecret: secret, passwordPolicy: { minLength: 12 },
+      hasher: { hash: (value) => pbkdf2Hash(value, 1000), verify: async () => false },
+      deliver: async (message) => { messages.push(message); },
+    });
+    await registration.requestProof(address, undefined, {
+      name: 'Ciphertext Customer', password: 'a confidential synthetic password',
+    });
+    const [message] = messages;
+    if (!message) throw new Error('Expected a synthetic registration proof');
+    challengeIds.push(message.challengeId);
+    const sealed = (await client.query(
+      'SELECT registration_sealed_data FROM customer_auth_challenges WHERE id=$1', [message.challengeId],
+    )).rows[0].registration_sealed_data as string;
+    expect(sealed).toMatch(/^v1\./);
+    expect(sealed).not.toContain(address);
+    expect(sealed).not.toContain('Ciphertext Customer');
+    expect(sealed).not.toContain('a confidential synthetic password');
+
+    const activated = await registration.completeRegistration({
+      challengeId: message.challengeId, proof: message.proof,
+    });
+    expect(activated.ok).toBe(true);
+    const after = (await client.query(
+      'SELECT registration_sealed_data, consumed_at FROM customer_auth_challenges WHERE id=$1', [message.challengeId],
+    )).rows[0];
+    expect(after.registration_sealed_data).toBeNull();
+    expect(after.consumed_at).not.toBeNull();
   });
 });

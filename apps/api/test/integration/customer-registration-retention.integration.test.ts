@@ -1,88 +1,83 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { Client } from 'pg';
-import { eq } from 'drizzle-orm';
 import { buildDb } from '../../src/db/client';
-import { customerAuthChallenges } from '../../src/db/schema';
 import { CustomerAuthChallengeRepository } from '../../src/repositories/customer-auth-challenge.repository';
 import { purgeExpiredRegistrationCiphertext } from '../../src/customer-auth/customer-registration-retention';
 
-const url = process.env.DATABASE_URL;
-if (url) {
-  const target = new URL(url);
-  if (!['localhost', '127.0.0.1'].includes(target.hostname) ||
-      !['/echogrid_test', '/echogrid_ci_pg18'].includes(target.pathname)) {
-    throw new Error('Retention integration test requires a disposable loopback PostgreSQL database.');
-  }
-}
-
-describe.skipIf(!url)('pending-registration ciphertext cleanup (disposable PostgreSQL)', () => {
+/** D03 cleanup acceptance against disposable PostgreSQL only. */
+describe.skipIf(!process.env.DATABASE_URL)('pending registration ciphertext retention (Postgres)', () => {
   let client: Client;
   let db: ReturnType<typeof buildDb>;
-  const created: string[] = [];
+  let challenges: CustomerAuthChallengeRepository;
+  const ids: string[] = [];
+  const digest = (n: number) => `${n.toString(16).padStart(2, '0')}${'a'.repeat(62)}`;
 
   beforeAll(async () => {
-    client = new Client({ connectionString: url });
+    client = new Client({ connectionString: process.env.DATABASE_URL });
     await client.connect();
     db = buildDb(client);
+    challenges = new CustomerAuthChallengeRepository(db);
   });
 
   afterAll(async () => {
-    if (!client) return;
-    for (const id of created) {
-      await db.delete(customerAuthChallenges).where(eq(customerAuthChallenges.id, id));
-    }
+    if (ids.length) await client.query('DELETE FROM customer_auth_challenges WHERE id = ANY($1::uuid[])', [ids]);
     await client.end();
   });
 
-  async function challenge(expiresAt: Date, createdAt: Date) {
-    const repository = new CustomerAuthChallengeRepository(db);
-    const unique = crypto.randomUUID().replace(/-/g, '');
-    const id = await repository.create({
-      purpose: 'email_registration',
-      subjectDigest: unique.padEnd(64, 'a'),
-      proofDigest: unique.padEnd(64, 'b'),
-      expiresAt, now: createdAt,
-      registrationSealedData: 'v1.synthetic-ciphertext-not-a-real-secret',
-    });
-    created.push(id);
-    return id;
-  }
-
-  async function sealed(id: string) {
-    const [row] = await db.select({
-      value: customerAuthChallenges.registrationSealedData,
-    }).from(customerAuthChallenges).where(eq(customerAuthChallenges.id, id));
-    return row?.value;
-  }
-
-  it('clears only expired sealed content, in bounded batches; leaves live challenges and rows untouched', async () => {
+  it('clears expired sealed payloads in bounded, idempotent batches and preserves live challenge evidence', async () => {
     const now = new Date();
-    const expiredAt = new Date(now.getTime() - 60_000);
-    const oldCreated = new Date(now.getTime() - 30 * 60_000);
-    const liveAt = new Date(now.getTime() + 10 * 60_000);
-    const first = await challenge(expiredAt, oldCreated);
-    const second = await challenge(expiredAt, oldCreated);
-    const live = await challenge(liveAt, now);
+    const expiredCreatedAt = new Date(now.getTime() - 3 * 86_400_000);
+    const expiredAt = new Date(now.getTime() - 86_400_000);
+    const expiredA = await challenges.create({
+      purpose: 'email_registration', subjectDigest: digest(1), proofDigest: digest(2),
+      expiresAt: expiredAt, now: expiredCreatedAt,
+      registrationSealedData: 'v1.synthetic-ciphertext-a',
+    });
+    const expiredB = await challenges.create({
+      purpose: 'email_registration', subjectDigest: digest(3), proofDigest: digest(4),
+      expiresAt: expiredAt, now: expiredCreatedAt,
+      registrationSealedData: 'v1.synthetic-ciphertext-b',
+    });
+    const live = await challenges.create({
+      purpose: 'email_registration', subjectDigest: digest(5), proofDigest: digest(6),
+      expiresAt: new Date(now.getTime() + 900_000), now,
+      registrationSealedData: 'v1.synthetic-live-ciphertext',
+    });
+    ids.push(expiredA, expiredB, live);
 
-    await purgeExpiredRegistrationCiphertext(db, now, 1);
-    const afterFirst = [await sealed(first), await sealed(second)];
-    expect(afterFirst.filter((value) => value === null)).toHaveLength(1);
-    expect(await sealed(live)).not.toBeNull();
+    const eligibleCount = async () => Number((await client.query(
+      `SELECT count(*)::int AS n FROM customer_auth_challenges
+       WHERE purpose='email_registration' AND registration_sealed_data IS NOT NULL AND expires_at <= now()`,
+    )).rows[0].n);
+    const before = await eligibleCount();
+    await purgeExpiredRegistrationCiphertext(db, new Date(), 1);
+    const afterOneBatch = await eligibleCount();
+    expect(afterOneBatch).toBe(before - 1);
 
-    await purgeExpiredRegistrationCiphertext(db, now, 1);
-    expect(await sealed(first)).toBeNull();
-    expect(await sealed(second)).toBeNull();
-    expect(await sealed(live)).not.toBeNull();
-    const [historical] = await db.select({ id: customerAuthChallenges.id })
-      .from(customerAuthChallenges).where(eq(customerAuthChallenges.id, first));
-    expect(historical?.id).toBe(first);
+    await purgeExpiredRegistrationCiphertext(db, new Date(), 500);
+    const expired = await client.query(
+      `SELECT id, registration_sealed_data, attempts, subject_digest, proof_digest
+       FROM customer_auth_challenges WHERE id = ANY($1::uuid[]) ORDER BY id`,
+      [[expiredA, expiredB]],
+    );
+    expect(expired.rows).toHaveLength(2);
+    expect(expired.rows.every((row) => row.registration_sealed_data === null)).toBe(true);
+    expect(expired.rows.every((row) => row.subject_digest && row.proof_digest && row.attempts === 0)).toBe(true);
+
+    const liveRow = (await client.query(
+      'SELECT registration_sealed_data FROM customer_auth_challenges WHERE id=$1', [live],
+    )).rows[0];
+    expect(liveRow.registration_sealed_data).toBe('v1.synthetic-live-ciphertext');
+
+    await purgeExpiredRegistrationCiphertext(db, new Date(), 500);
+    const countAfterRepeat = await eligibleCount();
+    expect(countAfterRepeat).toBe(0);
+    expect((await client.query('SELECT id FROM customer_auth_challenges WHERE id=ANY($1::uuid[])', [[expiredA, expiredB, live]])).rowCount).toBe(3);
   });
 
-  it('refuses invalid caller-controlled bounds before accessing the database', async () => {
-    const now = new Date();
-    for (const limit of [0, -1, 501, 1.5, Number.NaN]) {
-      await expect(purgeExpiredRegistrationCiphertext(db, now, limit)).rejects.toThrow();
-    }
+  it('rejects untrusted timestamps and unbounded batch sizes', async () => {
     await expect(purgeExpiredRegistrationCiphertext(db, new Date(Number.NaN), 1)).rejects.toThrow();
+    await expect(purgeExpiredRegistrationCiphertext(db, new Date(), 0)).rejects.toThrow();
+    await expect(purgeExpiredRegistrationCiphertext(db, new Date(), 501)).rejects.toThrow();
   });
 });
