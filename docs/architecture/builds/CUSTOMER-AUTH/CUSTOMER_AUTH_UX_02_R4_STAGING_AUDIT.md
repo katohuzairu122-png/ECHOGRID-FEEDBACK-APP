@@ -1,5 +1,7 @@
 # ECHO GRID — CUSTOMER-AUTH-UX-02-R4 Staging Readiness Audit
 
+> Historical audit. The later [2026-11-24 activation reconciliation](CUSTOMER_AUTH_ACCEPTANCE_AND_ACTIVATION_2026_11_24.md) verifies email auth enabled in production and staging; recovery/legacy-upgrade flags remain absent. The older statement that production email activation is off is superseded. This note changes no runtime setting or authorization.
+
 **Date:** 2026-11-22  
 **Status:** READ-ONLY VERIFIED — ACTIVATION/ACCEPTANCE BLOCKED  
 **Repository baseline:** main `ce30172485041327787aea227f365c8aa33bd076`

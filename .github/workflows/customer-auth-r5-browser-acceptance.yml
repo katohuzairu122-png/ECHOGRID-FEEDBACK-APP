@@ -10,9 +10,14 @@ on:
       - 'apps/api/drizzle/**'
       - 'apps/web/playwright.customer-auth-r5.config.ts'
       - 'apps/web/e2e/customer-auth-r5-provisional.spec.ts'
+      - 'apps/web/e2e/customer-auth-acceptance-completion.spec.ts'
       - 'apps/web/src/app/loyalty/**'
+      - 'apps/web/src/app/account/recovery/**'
       - 'apps/web/src/lib/actions/customer-email-auth.ts'
+      - 'apps/web/src/lib/actions/customer-recovery.ts'
+      - 'apps/web/src/lib/customer-session*.ts'
       - 'tools/prepare-customer-auth-r5-env.mjs'
+      - 'docs/architecture/builds/CUSTOMER-AUTH/**'
 
 permissions:
   contents: read

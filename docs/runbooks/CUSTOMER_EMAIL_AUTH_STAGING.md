@@ -1,7 +1,6 @@
 # Customer email authentication (Option A): staging runbook
 
-**Status:** preparation only. Nothing here has been run against staging. Email authentication is OFF in every deployed
-environment. Every step below needs separate owner authorization; this document authorizes none of them.
+**Status:** historical preparation procedure, not a current environment inventory. Read-only 2026-11-24 metadata verifies email authentication enabled on API/Web in production and staging, while recovery/legacy-upgrade flags are absent. See [the current activation record](../architecture/builds/CUSTOMER-AUTH/CUSTOMER_AUTH_ACCEPTANCE_AND_ACTIVATION_2026_11_24.md). Do not blindly repeat provisioning, migration or activation steps below. Each mutation requires separate owner authorization; this document grants none.
 
 ## Approved policy
 - `CUSTOMER_PASSWORD_MIN_LENGTH=8` (owner decision CA-05, final). Applies to customer password creation, and to recovery and
@@ -84,6 +83,5 @@ phone-verification PR (485) is merged.
 Set `CUSTOMER_EMAIL_AUTH_ENABLED="false"` on both Workers and redeploy. Legacy customer authentication is unaffected throughout.
 Issued rotating sessions stop being honored; password hashes are retained.
 
-## Open owner decisions
-Idle limit; step-up window; kill-switch (KS-2); policy for changing a verified phone number; merge of PR 485; provisioning of
-secrets and the Durable Object namespace for staging.
+## Historical open-decision list
+At initial drafting: idle limit; step-up window; kill-switch (KS-2); verified-phone replacement policy; PR 485; staging provisioning. This list is not current status: idle/step-up approval is recorded above, D01–D06 are reconciled in the dated activation record, and deployment/provider/schema readiness must be verified separately. Do not infer present blockers or approval from this historical list.

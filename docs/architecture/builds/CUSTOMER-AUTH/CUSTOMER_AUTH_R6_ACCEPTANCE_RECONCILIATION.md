@@ -1,5 +1,7 @@
 # CUSTOMER-AUTH-R6 — Consolidated final-acceptance reconciliation
 
+> Historical R6 record. Current D01 contract approval, merged PR #569 evidence, added acceptance paths and activation observations are reconciled in [the 2026-11-24 record](CUSTOMER_AUTH_ACCEPTANCE_AND_ACTIVATION_2026_11_24.md). Historical “PROPOSED” and unexecuted-branch passages below are not current approval/configuration claims.
+
 **Status: DEVELOPMENT IN PROGRESS — NOT FULLY ACCEPTED; NOT DEPLOYMENT AUTHORITY.**
 
 Baseline: `main` at `9609de466fba081ee9da371e50da6aef4436d9ea` (merged PR #564). The R5 browser contract remains **PROPOSED — OWNER APPROVAL REQUIRED**. Existing production email-auth enablement does not itself approve recovery, legacy upgrade, retention or numerical rate-limit policies.

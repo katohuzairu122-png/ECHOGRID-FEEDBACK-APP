@@ -52,4 +52,4 @@ Development tests use the existing transactional email and Twilio Verify adapter
 
 ## Activation boundary
 
-`CUSTOMER_EMAIL_AUTH_ENABLED` and `CUSTOMER_LEGACY_UPGRADE_ENABLED` remain disabled in shared environments. This change does not edit production/staging environment configuration, secrets, or databases; it does not deploy, merge, or schedule cleanup.
+Read-only reconciliation verifies email auth `true` on production/staging API and Web Workers; recovery and legacy-upgrade flags are absent. See [the dated record](CUSTOMER_AUTH_ACCEPTANCE_AND_ACTIVATION_2026_11_24.md) for versions and evidence. This observed state is not activation approval. No production/staging configuration, secrets or databases are changed; no deployment, merge or cleanup schedule is authorized.

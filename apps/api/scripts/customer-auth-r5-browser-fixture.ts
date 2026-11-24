@@ -9,6 +9,14 @@ import { CustomerAuthService } from '../src/customer-auth/customer-auth.service'
 import { TwilioVerifyService } from '../src/customer-auth/twilio-verify.service';
 import { customerAuthRoutes } from '../src/customer-auth/customer-auth.routes';
 import { loyaltyCustomerRoutes } from '../src/loyalty/loyalty-customer.routes';
+import { customerMembershipRoutes } from '../src/customer-relationships/customer-membership.routes';
+import { qrRoutes } from '../src/qr/qr.routes';
+import { businessRoutes } from '../src/businesses/business.routes';
+import { signQrToken } from '../src/qr/qr-token';
+import { decode, sign } from 'hono/jwt';
+import { signCustomerSessionAccessToken } from '../src/customer-auth/session-tokens';
+import { createCustomerRecoveryCodeService } from '../src/customer-auth/customer-recovery-code.service';
+import { createRecoveryCodeManagementLimiter } from '../src/customer-auth/customer-recovery-code-management';
 import { createRepositories } from '../src/repositories';
 import { errorHandler } from '../src/lib/error-handler';
 import { createCustomerEmailLinkService } from '../src/customer-auth/customer-email-link.service';
@@ -50,6 +58,8 @@ const hmacSecret = process.env.CUSTOMER_EMAIL_AUTH_HMAC_SECRET;
 const sessionSecret = process.env.CUSTOMER_SESSION_SIGNING_SECRET;
 const legacySecret = process.env.CUSTOMER_JWT_SECRET;
 const recoverySecret = process.env.CUSTOMER_RECOVERY_HMAC_SECRET;
+const qrSecret = process.env.QR_TOKEN_SECRET;
+const fraudSalt = process.env.FRAUD_DETECTION_SALT;
 
 if (
   process.env.CI !== 'true' ||
@@ -62,7 +72,9 @@ if (
   !sessionSecret ||
   !legacySecret ||
   !recoverySecret ||
-  [fixtureToken, attributionSecret, hmacSecret, sessionSecret, legacySecret, recoverySecret].some(
+  !qrSecret ||
+  !fraudSalt ||
+  [fixtureToken, attributionSecret, hmacSecret, sessionSecret, legacySecret, recoverySecret, qrSecret, fraudSalt].some(
     (value) => Buffer.byteLength(value) < 32,
   )
 ) {
@@ -71,6 +83,16 @@ if (
 
 const mailboxes = new Map<string, EmailMessage[]>();
 const budgets = new Map<string, { count: number; resetsAt: number }>();
+const velocityState = new Map<string, { value: string; expiresAt: number }>();
+const velocityKv = {
+  async get(key: string) {
+    const entry = velocityState.get(key);
+    return entry && entry.expiresAt > Date.now() ? entry.value : null;
+  },
+  async put(key: string, value: string, options: { expirationTtl: number }) {
+    velocityState.set(key, { value, expiresAt: Date.now() + options.expirationTtl * 1000 });
+  },
+};
 const recoveryPhoneCodes = new Map<string, string>();
 const syntheticTwilioVerifications = new Map<string, { code: string; expiresAt: number }>();
 const legacyOtpDiagnostics: string[] = [];
@@ -232,6 +254,7 @@ const recoveryRoutes = createCustomerRecoveryRoutes({
       passwordMinLength: config.passwordMinLength,
       phoneProofMaxAgeSeconds: 300,
     });
+    const recoveryCodes = createCustomerRecoveryCodeService({ db, hmacSecret: recoverySecret, stepUpWindowSeconds: session.stepUpWindowSeconds });
     const service = createCustomerRecoveryService({
       db,
       hmacSecret: recoverySecret,
@@ -292,37 +315,9 @@ const recoveryRoutes = createCustomerRecoveryRoutes({
             sessionId: string;
             currentPassword: string;
           }) => passwordAuth.reauthenticateSession({ customerId, sessionId, currentPassword }),
-          allow: async ({ sourceKey, customerId }: { sourceKey: string; customerId: string }) => {
-            const [source, customer] = await Promise.all([
-              customerChallengeDigest({
-                secret: recoverySecret,
-                purpose: 'email_recovery',
-                field: 'subject',
-                value: `recovery-code-source:${sourceKey}`,
-              }),
-              customerChallengeDigest({
-                secret: recoverySecret,
-                purpose: 'email_recovery',
-                field: 'subject',
-                value: `recovery-code-customer:${customerId}`,
-              }),
-            ]);
-            const allowed = await Promise.all([
-              testLimiter({
-                key: `customer-recovery:code-management:source:${source}`,
-                limit: 5,
-                windowSeconds: 900,
-              }),
-              testLimiter({
-                key: `customer-recovery:code-management:customer:${customer}`,
-                limit: 5,
-                windowSeconds: 900,
-              }),
-            ]);
-            return allowed.every(Boolean);
-          },
-          issue: async () => ({ ok: false as const }),
-          revoke: async () => ({ ok: false as const }),
+          allow: createRecoveryCodeManagementLimiter(recoverySecret, testLimiter),
+          issue: (owner) => recoveryCodes.issue(owner),
+          revoke: (owner) => recoveryCodes.revoke(owner),
         },
       },
       close: () => client.end(),
@@ -386,7 +381,10 @@ app.post('/__test/mark-phone-verified', async (c) => {
       WHERE cc.customer_id = c.id AND cc.login_email = ${recipient}
         AND cc.login_email_verified_at IS NOT NULL AND c.phone IS NULL`);
   });
-  return c.json({ accepted: true }, 200, { 'Cache-Control': 'no-store' });
+  const stored = await withDb(db => db.$client.query<{ phone: string }>(
+    'SELECT c.phone FROM customers c JOIN customer_credentials cc ON cc.customer_id=c.id WHERE cc.login_email=$1', [recipient],
+  ));
+  return c.json({ accepted: true, phone: stored.rows[0]?.phone }, 200, { 'Cache-Control': 'no-store' });
 });
 app.post('/__test/advance-recovery-hold', async (c) => {
   if (c.req.header('authorization') !== `Bearer ${fixtureToken}`) return c.body(null, 404);
@@ -434,6 +432,11 @@ app.post('/__test/reset-login-budget', (c) => {
   for (const key of budgets.keys()) {
     if (key.startsWith('customer-email:login:')) budgets.delete(key);
   }
+  return c.body(null, 204);
+});
+app.post('/__test/reset-acceptance-budgets', (c) => {
+  if (c.req.header('authorization') !== `Bearer ${fixtureToken}`) return c.body(null, 404);
+  budgets.clear();
   return c.body(null, 204);
 });
 
@@ -498,12 +501,104 @@ app.get('/__test/legacy-customer-snapshot', async (c) => {
   return c.json({ customer: snapshot }, 200, { 'Cache-Control': 'no-store' });
 });
 
+// The following helpers exist only in this loopback/CI/database-name guarded
+// process. They never mount in the application, and never accept live identities.
+app.post('/__test/seed-qr-context', async (c) => {
+  if (c.req.header('authorization') !== `Bearer ${fixtureToken}`) return c.body(null, 404);
+  const contexts = await withDb(async (db) => {
+    const create = async (label: string) => {
+      const slug = `r5-qr-${crypto.randomUUID()}`;
+      const business = (await db.$client.query<{ id: string }>(
+        'INSERT INTO businesses (name,slug) VALUES ($1,$2) RETURNING id', [`Synthetic ${label}`, slug],
+      )).rows[0]!;
+      const branch = (await db.$client.query<{ id: string }>(
+        'INSERT INTO branches (business_id,name,slug) VALUES ($1,$2,$3) RETURNING id', [business.id, `Synthetic ${label} branch`, slug],
+      )).rows[0]!;
+      const qr = (await db.$client.query<{ id: string }>(
+        'INSERT INTO qr_codes (business_id,branch_id) VALUES ($1,$2) RETURNING id', [business.id, branch.id],
+      )).rows[0]!;
+      const token = await signQrToken({ qrCodeId: qr.id, businessId: business.id, branchId: branch.id }, qrSecret);
+      return { businessId: business.id, branchId: branch.id, qrId: qr.id, token };
+    };
+    const a = await create('acceptance A'); const b = await create('acceptance B');
+    const payload = decode(a.token).payload;
+    return { a, b, expired: await sign({ ...payload, iat: Math.floor(Date.now() / 1000) - 3600, exp: Math.floor(Date.now() / 1000) - 1 }, qrSecret),
+      foreignScope: await sign({ ...payload, businessId: b.businessId, branchId: b.branchId }, qrSecret),
+      legacy: await sign({ ...payload, type: 'qr_feedback' }, qrSecret) };
+  });
+  return c.json(contexts, 200, { 'Cache-Control': 'no-store' });
+});
+app.post('/__test/revoke-qr', async (c) => {
+  if (c.req.header('authorization') !== `Bearer ${fixtureToken}`) return c.body(null, 404);
+  const input = await c.req.json<{ qrId?: string }>();
+  if (!/^[0-9a-f-]{36}$/.test(input.qrId ?? '')) return c.body(null, 400);
+  await withDb(db => db.$client.query(`UPDATE qr_codes SET status='revoked' WHERE id=$1 AND business_id IN
+    (SELECT id FROM businesses WHERE slug LIKE 'r5-qr-%')`, [input.qrId]));
+  return c.body(null, 204);
+});
+app.post('/__test/acceptance-clock', async (c) => {
+  if (c.req.header('authorization') !== `Bearer ${fixtureToken}`) return c.body(null, 404);
+  const input = await c.req.json<{ recipient?: string; kind?: string }>();
+  const recipient = normalizeLoginEmail(input.recipient);
+  if (!recipient?.endsWith('@example.test')) return c.body(null, 404);
+  const result = await withDb(async db => {
+    if (input.kind === 'registration') {
+      const digest = await customerChallengeDigest({ secret: hmacSecret, purpose: 'email_registration', field: 'subject', value: recipient });
+      await db.$client.query(`UPDATE customer_auth_challenges SET created_at=now()-interval '20 minutes', expires_at=now()-interval '1 second'
+        WHERE purpose='email_registration' AND subject_digest=$1 AND consumed_at IS NULL`, [digest]);
+      return {};
+    }
+    const customer = (await db.$client.query<{ customer_id: string }>(
+      'SELECT customer_id FROM customer_credentials WHERE login_email=$1', [recipient],
+    )).rows[0];
+    if (!customer) return null;
+    if (input.kind === 'recovery-email-cooldown') {
+      // Move only this synthetic account's delivery timestamps past the real
+      // 60-second resend budget. Do not restore consumed or expired proofs.
+      await db.$client.query(`UPDATE customer_auth_challenges SET created_at=now()-interval '61 seconds'
+        WHERE customer_id=$1 AND purpose='email_recovery'`, [customer.customer_id]);
+      return {};
+    }
+    if (input.kind === 'access') {
+      const row = (await db.$client.query<{ id: string }>(
+        'SELECT id FROM customer_sessions WHERE customer_id=$1 AND revoked_at IS NULL ORDER BY created_at DESC LIMIT 1', [customer.customer_id],
+      )).rows[0];
+      return row ? { accessToken: await signCustomerSessionAccessToken(customer.customer_id, row.id, sessionSecret,
+        { ttlSeconds: 900, nowSeconds: Math.floor(Date.now() / 1000) - 3600 }) } : null;
+    }
+    if (input.kind === 'idle') await db.$client.query(`UPDATE customer_sessions SET idle_expires_at=now()-interval '1 second' WHERE customer_id=$1`, [customer.customer_id]);
+    else if (input.kind === 'absolute') await db.$client.query(`UPDATE customer_sessions SET absolute_expires_at=now()-interval '1 second', idle_expires_at=now()-interval '1 second' WHERE customer_id=$1`, [customer.customer_id]);
+    else if (input.kind === 'refresh') await db.$client.query(`UPDATE customer_refresh_tokens SET expires_at=now()-interval '1 second' WHERE session_id IN (SELECT id FROM customer_sessions WHERE customer_id=$1)`, [customer.customer_id]);
+    else if (input.kind === 'replay') await db.$client.query(`UPDATE customer_refresh_tokens SET rotated_at=now()-interval '20 seconds' WHERE rotated_at IS NOT NULL AND session_id IN (SELECT id FROM customer_sessions WHERE customer_id=$1)`, [customer.customer_id]);
+    else return null;
+    return {};
+  });
+  return result ? c.json(result, 200, { 'Cache-Control': 'no-store' }) : c.body(null, 400);
+});
+app.get('/__test/customer-effects', async (c) => {
+  if (c.req.header('authorization') !== `Bearer ${fixtureToken}`) return c.body(null, 404);
+  const recipient = normalizeLoginEmail(c.req.query('recipient'));
+  if (!recipient?.endsWith('@example.test')) return c.body(null, 404);
+  const rows = await withDb(db => db.$client.query(`SELECT c.id,
+    (SELECT count(*)::int FROM business_customer_memberships WHERE customer_id=c.id) AS memberships,
+    (SELECT count(*)::int FROM consent_grants WHERE customer_id=c.id AND purpose='join_loyalty' AND status='active') AS consents,
+    (SELECT count(*)::int FROM customer_onboarding_events WHERE customer_id=c.id) AS onboarding,
+    (SELECT COALESCE(sum(points),0)::int FROM loyalty_accounts WHERE customer_id=c.id) AS points,
+    (SELECT count(*)::int FROM loyalty_transactions WHERE loyalty_account_id IN (SELECT id FROM loyalty_accounts WHERE customer_id=c.id)) AS transactions,
+    (SELECT count(*)::int FROM community_memberships WHERE customer_id=c.id) AS community
+    FROM customers c JOIN customer_credentials cc ON cc.customer_id=c.id WHERE cc.login_email=$1`, [recipient]));
+  return c.json(rows.rows[0] ?? null, 200, { 'Cache-Control': 'no-store' });
+});
+
 app.route('/api/v1/customer-auth', customerAuthRoutes);
 app.route('/api/v1/customer-auth', emailLinkRoutes);
 app.route('/api/v1/customer-auth', emailAuth);
 app.route('/api/v1/customer-session', lifecycle);
 app.route('/api/v1/customer-recovery', recoveryRoutes);
 app.route('/api/v1/loyalty/me', loyaltyCustomerRoutes);
+app.route('/api/v1/customer-memberships', customerMembershipRoutes);
+app.route('/api/v1/qr', qrRoutes);
+app.route('/api/v1/businesses', businessRoutes);
 app.onError(errorHandler);
 
 const port = Number(process.env.CUSTOMER_AUTH_R5_API_PORT ?? '8792');
@@ -539,6 +634,9 @@ const server = createServer(async (incoming, outgoing) => {
       CUSTOMER_STEP_UP_WINDOW_SECONDS: '600',
       CUSTOMER_PASSWORD_MIN_LENGTH: '8',
       CUSTOMER_JWT_SECRET: legacySecret,
+      QR_TOKEN_SECRET: qrSecret,
+      FRAUD_DETECTION_SALT: fraudSalt,
+      CACHE: velocityKv,
       CUSTOMER_AUTH_RATE_LIMIT: rateLimiter,
       CUSTOMER_API_RATE_LIMITER: rateLimiter,
       PUBLIC_RATE_LIMITER: rateLimiter,

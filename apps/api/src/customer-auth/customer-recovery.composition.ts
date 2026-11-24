@@ -1,3 +1,4 @@
+import { createRecoveryCodeManagementLimiter } from './customer-recovery-code-management';
 import type { Context } from 'hono';
 import type { Bindings } from '../config/env';
 import { createDb } from '../db/client';
@@ -9,7 +10,7 @@ import { CustomerSessionService } from './customer-session.service';
 import { CustomerPasswordAuthService } from './customer-password-auth.service';
 import { createCustomerRecoveryCodeService } from './customer-recovery-code.service';
 import { createSmsService } from './sms.service';
-import { customerChallengeDigest, normalizeLoginEmail } from './customer-email-challenge-digest';
+import { normalizeLoginEmail } from './customer-email-challenge-digest';
 import { createCustomerEmailTrustedSource } from './customer-email-trusted-source';
 import { createSharedEmailAuthLimiter } from './customer-email-rate-limit';
 import { resolveEmailAuthConfig } from './customer-email-auth.config';
@@ -143,41 +144,7 @@ export async function openRecoveryDependencies(c: Context) {
       stepUpWindowSeconds: emailAuth.config.session.stepUpWindowSeconds,
     });
     const rateLimit = createSharedEmailAuthLimiter(env.CUSTOMER_AUTH_RATE_LIMIT);
-    const allowCodeManagement = async ({
-      sourceKey,
-      customerId,
-    }: {
-      sourceKey: string;
-      customerId: string;
-    }) => {
-      const [source, customer] = await Promise.all([
-        customerChallengeDigest({
-          secret,
-          purpose: 'email_recovery',
-          field: 'subject',
-          value: `recovery-code-source:${sourceKey}`,
-        }),
-        customerChallengeDigest({
-          secret,
-          purpose: 'email_recovery',
-          field: 'subject',
-          value: `recovery-code-customer:${customerId}`,
-        }),
-      ]);
-      const allowed = await Promise.all([
-        rateLimit({
-          key: `customer-recovery:code-management:source:${source}`,
-          limit: 5,
-          windowSeconds: 900,
-        }),
-        rateLimit({
-          key: `customer-recovery:code-management:customer:${customer}`,
-          limit: 5,
-          windowSeconds: 900,
-        }),
-      ]);
-      return allowed.every(Boolean);
-    };
+    const allowCodeManagement = createRecoveryCodeManagementLimiter(secret, rateLimit);
     return {
       deps: {
         service,
