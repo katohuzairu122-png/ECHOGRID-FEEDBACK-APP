@@ -197,6 +197,37 @@ test('D — refresh rotates credentials; logout revokes the issued session', asy
   await expect(page).toHaveURL(/\/loyalty\/login(?:\?|$)/);
 });
 
+test('F — Settings phone verification uses the protected customer route and a single-use synthetic provider proof', async ({
+  page,
+}) => {
+  await page.goto('/loyalty/login/email');
+  await page.getByLabel('Email').fill(email);
+  await page.getByLabel('Password').fill(password);
+  await page.getByRole('button', { name: 'Sign in' }).click();
+  await expect(page).toHaveURL(/\/loyalty\/dashboard(?:\?|$)/);
+
+  await page.goto('/loyalty/dashboard/settings');
+  await expect(page.getByRole('heading', { name: 'Account settings' })).toBeVisible();
+  await expect(page.getByText('Not verified', { exact: true })).toBeVisible();
+  await page.getByRole('link', { name: 'Verify a phone number' }).click();
+  await expect(page.getByRole('heading', { name: 'Verify your phone' })).toBeVisible();
+  const attachedPhone = '+15550184923';
+  await page.getByLabel('Phone number').fill(attachedPhone);
+  await page.getByRole('button', { name: 'Send code' }).click();
+  await expect(page.getByRole('heading', { name: 'Enter the code' })).toBeVisible();
+  await page.getByLabel('Verification code').fill('000000');
+  await page.getByRole('button', { name: 'Verify phone' }).click();
+  await expect(page.getByRole('alert')).toContainText('That code is not correct or has expired.');
+  await page.getByLabel('Verification code').fill('123456');
+  await page.getByRole('button', { name: 'Verify phone' }).click();
+  await expect(page.getByRole('heading', { name: 'Your phone is verified' })).toBeVisible();
+
+  await page.goto('/loyalty/dashboard/settings');
+  await expect(page.getByText('Verified', { exact: true })).toHaveCount(2);
+  await expect(page.locator('body')).toContainText('+•••••••4923');
+  await expect(page.locator('body')).not.toContainText(attachedPhone);
+});
+
 test('E — recovery verifies independent email and phone factors, resets password, and revokes sessions', async ({
   page,
   context,
