@@ -294,8 +294,9 @@ test('F — legacy phone customer upgrades on the original identity with members
   await expect(page.getByRole('heading', { name: 'Confirm email and set password' })).toBeVisible();
   await page.getByLabel('Name').fill('Legacy Customer Restored');
   await page.getByLabel('Email to link').fill(legacyEmail);
-  await page.getByLabel('New password').fill(password);
-  await page.getByLabel('Confirm new password').fill(password);
+  await expect(page).not.toHaveURL(/#c=/);
+  await page.getByLabel('New password', { exact: true }).fill(password);
+  await page.getByLabel('Confirm new password', { exact: true }).fill(password);
   await page.getByRole('button', { name: 'Secure my existing account' }).click();
   await expect(page).toHaveURL(/\/loyalty\/login(?:\?|$)/);
 
