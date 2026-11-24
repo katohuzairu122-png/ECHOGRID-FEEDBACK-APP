@@ -91,7 +91,7 @@ describe.skipIf(!process.env.DATABASE_URL)('customer password auth (integration)
     client.query(text, values).then((r) => r.rows as T[]);
   const customerByPhone = async (phone: string) =>
     (
-      await q<{ id: string; status: string }>('SELECT id, status FROM customers WHERE phone=$1', [
+      await q<{ id: string; status: string; fullName: string | null }>('SELECT id, status, full_name AS "fullName" FROM customers WHERE phone=$1', [
         phone,
       ])
     )[0];

@@ -93,10 +93,11 @@ describe.skipIf(!process.env.DATABASE_URL)('customer recovery orchestration (int
     const id = row!.id;
     const days = o.phoneDaysAgo === undefined ? 30 : o.phoneDaysAgo;
     await q(`UPDATE customers SET phone_verified_at = ${days === null ? 'NULL' : `now() - interval '${days} days'`} WHERE id=$1`, [id]);
+    const email = `rec-${i}-${RUN}-${customerPhoneSequence}@example.test`;
     if (o.email !== false) {
-      await q('UPDATE customer_credentials SET login_email=$2, login_email_verified_at=now() WHERE customer_id=$1', [id, `rec-${i}-${RUN}@example.test`]);
+      await q('UPDATE customer_credentials SET login_email=$2, login_email_verified_at=now() WHERE customer_id=$1', [id, email]);
     }
-    return { id, phone };
+    return { id, phone, email };
   };
   const passwordSession = async (customerId: string) => {
     const s = await a.sessions.establishSession({ customerId, authMethod: 'password' });
@@ -172,8 +173,8 @@ describe.skipIf(!process.env.DATABASE_URL)('customer recovery orchestration (int
       const after = await credential(c.id) as { legacy_tokens_invalid_before: Date; password_hash: string };
       expect(after.password_hash).not.toBe(before.password_hash);
       expect(after.legacy_tokens_invalid_before.getTime()).toBeGreaterThan(before.legacy_tokens_invalid_before.getTime());
-      expect(await a.auth.loginWithVerifiedEmailPassword({ email: `rec-1-${RUN}@example.test`, password: NEW })).toMatchObject({ ok: true });
-      expect(await a.auth.loginWithVerifiedEmailPassword({ email: `rec-1-${RUN}@example.test`, password: GOOD })).toMatchObject({ ok: false });
+      expect(await a.auth.loginWithVerifiedEmailPassword({ email: c.email, password: NEW })).toMatchObject({ ok: true });
+      expect(await a.auth.loginWithVerifiedEmailPassword({ email: c.email, password: GOOD })).toMatchObject({ ok: false });
       expect(await a.sessions.authenticateSessionToken(live.accessToken)).toBeNull();
       // identity, memberships and balances untouched; only the login above created a session
       expect(await q('SELECT * FROM customers WHERE id=$1', [c.id])).toEqual(customerBefore);
