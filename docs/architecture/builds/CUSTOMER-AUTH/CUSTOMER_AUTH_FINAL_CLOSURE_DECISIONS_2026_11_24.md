@@ -1,7 +1,7 @@
 # Echo Grid Customer Authentication — Final Closure Decisions
 
-Date: 2026-11-24  
-Baseline: `c398a5e64445422922d779d4004e3ea2d1c97063`  
+Date: 2026-11-24
+Baseline: `c398a5e64445422922d779d4004e3ea2d1c97063`
 Scope: D01–D06 implementation reconciliation; development and isolated tests only.
 
 This record translates the owner's approvals into repository behavior. Approval does not substitute for the acceptance evidence listed in the final certificate. No shared environment flags, providers, databases, or schedules are changed by this record.

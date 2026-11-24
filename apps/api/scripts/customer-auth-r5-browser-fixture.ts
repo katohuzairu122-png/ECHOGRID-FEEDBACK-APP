@@ -73,6 +73,7 @@ const mailboxes = new Map<string, EmailMessage[]>();
 const budgets = new Map<string, { count: number; resetsAt: number }>();
 const recoveryPhoneCodes = new Map<string, string>();
 const syntheticTwilioVerifications = new Map<string, { code: string; expiresAt: number }>();
+const legacyOtpDiagnostics: string[] = [];
 const originalFetch = globalThis.fetch.bind(globalThis);
 globalThis.fetch = async (input, init) => {
   const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
@@ -84,12 +85,14 @@ globalThis.fetch = async (input, init) => {
   if (!/^\+[1-9][0-9]{7,14}$/.test(phone)) return Response.json({ code: 60200 }, { status: 400 });
   if (url.endsWith('/Verifications')) {
     syntheticTwilioVerifications.set(phone, { code: '123456', expiresAt: Date.now() + 600_000 });
+    legacyOtpDiagnostics.push('provider_request_accepted');
     return Response.json({ status: 'pending' });
   }
   if (url.endsWith('/VerificationCheck')) {
     const active = syntheticTwilioVerifications.get(phone);
     const approved = Boolean(active && active.expiresAt > Date.now() && active.code === form.get('Code'));
     if (approved) syntheticTwilioVerifications.delete(phone);
+    legacyOtpDiagnostics.push(approved ? 'provider_proof_approved' : 'provider_proof_denied');
     return Response.json({ status: approved ? 'approved' : 'pending' });
   }
   return Response.json({ code: 20404 }, { status: 404 });
@@ -177,13 +180,26 @@ const emailAuth = createCustomerEmailAuthComposition({
           { CUSTOMER_JWT_SECRET: legacySecret },
           hasher,
         );
-        if (!await provider.check(phone, code)) return null;
-        const customer = await auth.completeVerifiedPhoneForRotatingSession(phone);
-        const established = await new CustomerSessionService(db, config.session).establishSession({
-          customerId: customer.id,
-          authMethod: 'otp',
-        });
-        return established.ok ? established.session : null;
+        try {
+          if (!await provider.check(phone, code)) {
+            legacyOtpDiagnostics.push('legacy_proof_rejected');
+            return null;
+          }
+          const customer = await auth.completeVerifiedPhoneForRotatingSession(phone);
+          legacyOtpDiagnostics.push('legacy_identity_resolved');
+          const established = await new CustomerSessionService(db, config.session).establishSession({
+            customerId: customer.id,
+            authMethod: 'otp',
+          });
+          legacyOtpDiagnostics.push(established.ok ? 'legacy_session_established' : `legacy_session_denied:${established.reason}`);
+          return established.ok ? established.session : null;
+        } catch (error) {
+          const code = typeof error === 'object' && error !== null && 'code' in error
+            ? String((error as { code: unknown }).code)
+            : error instanceof Error ? error.name : 'UnknownError';
+          legacyOtpDiagnostics.push(`legacy_exception:${code}`);
+          throw error;
+        }
       }),
     });
     return { dependencies, close: async () => {} };
@@ -353,6 +369,10 @@ app.get('/__test/mailbox', (c) => {
   const recipient = c.req.query('recipient') ?? '';
   if (!recipient.endsWith('@example.test')) return c.body(null, 404);
   return c.json({ messages: mailboxes.get(recipient) ?? [] }, 200, { 'Cache-Control': 'no-store' });
+});
+app.get('/__test/legacy-otp-diagnostics', (c) => {
+  if (c.req.header('authorization') !== `Bearer ${fixtureToken}`) return c.body(null, 404);
+  return c.json({ events: legacyOtpDiagnostics.slice(-12) }, 200, { 'Cache-Control': 'no-store' });
 });
 app.post('/__test/mark-phone-verified', async (c) => {
   if (c.req.header('authorization') !== `Bearer ${fixtureToken}`) return c.body(null, 404);

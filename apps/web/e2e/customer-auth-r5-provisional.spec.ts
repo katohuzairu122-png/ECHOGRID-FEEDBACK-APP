@@ -258,7 +258,14 @@ test('F — legacy phone customer upgrades on the original identity with members
   await expect(page.getByLabel('Verification code')).toBeVisible();
   await page.getByLabel('Verification code').fill('123456');
   await page.getByRole('button', { name: 'Verify' }).click();
-  await expect(page).toHaveURL(/\/loyalty\/dashboard\/settings(?:\?|$)/);
+  try {
+    await expect(page).toHaveURL(/\/loyalty\/dashboard\/settings(?:\?|$)/);
+  } catch {
+    const diagnostic = await page.request.get('http://127.0.0.1:8792/__test/legacy-otp-diagnostics', {
+      headers: { Authorization: `Bearer ${mailboxToken}` },
+    });
+    throw new Error(`Legacy OTP acceptance failed; synthetic stages: ${JSON.stringify(await diagnostic.json())}`);
+  }
   await expect(page.getByLabel('Email to link')).toBeVisible();
   await page.getByLabel('Email to link').fill(legacyEmail);
   await page.getByRole('button', { name: 'Send email confirmation' }).click();
