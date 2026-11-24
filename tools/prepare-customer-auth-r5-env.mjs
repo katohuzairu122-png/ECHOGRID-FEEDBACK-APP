@@ -17,6 +17,7 @@ const values = {
   CUSTOMER_SESSION_SIGNING_SECRET: randomBytes(32).toString('base64url'),
   CUSTOMER_JWT_SECRET: randomBytes(32).toString('base64url'),
   QR_TOKEN_SECRET: randomBytes(32).toString('base64url'),
+  FRAUD_DETECTION_SALT: randomBytes(32).toString('base64url'),
   E2E_CUSTOMER_EMAIL: `r5-${randomBytes(8).toString('hex')}@example.test`,
   E2E_CUSTOMER_PASSWORD: randomBytes(24).toString('base64url'),
 };

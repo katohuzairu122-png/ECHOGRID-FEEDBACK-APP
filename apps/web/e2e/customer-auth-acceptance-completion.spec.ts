@@ -145,8 +145,11 @@ test('D — expired access refreshes through the real BFF; idle, absolute and re
   const expired = await (await helper(page, 'acceptance-clock', { recipient: email, kind: 'access' })).json();
   const cookie = (await context.cookies()).find(c => c.name === '__Host-ff_customer_access')!;
   await context.addCookies([{ ...cookie, value: expired.accessToken }]);
-  await page.goto('/loyalty/dashboard/settings');
-  await expect(page).toHaveURL(/\/loyalty\/dashboard\/settings(?:\?|$)/);
+  await page.goto('/loyalty/dashboard');
+  // A streamed redirect can leave the requested URL visible before the
+  // refresh handler commits its cookies. Wait for the actual credential change.
+  await expect.poll(async () => (await context.cookies()).find(c => c.name === '__Host-ff_customer_access')?.value !== expired.accessToken).toBe(true);
+  await expect(page).toHaveURL(/\/loyalty\/dashboard(?:\?|$)/);
   expect((await page.request.get(api + '/api/v1/loyalty/me/profile', { headers: await bearer(context) })).status()).toBe(200);
   for (const kind of ['idle', 'absolute', 'refresh']) {
     await context.clearCookies(); await login(page);

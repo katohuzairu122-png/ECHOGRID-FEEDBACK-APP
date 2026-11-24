@@ -83,6 +83,5 @@ phone-verification PR (485) is merged.
 Set `CUSTOMER_EMAIL_AUTH_ENABLED="false"` on both Workers and redeploy. Legacy customer authentication is unaffected throughout.
 Issued rotating sessions stop being honored; password hashes are retained.
 
-## Open owner decisions
-Idle limit; step-up window; kill-switch (KS-2); policy for changing a verified phone number; merge of PR 485; provisioning of
-secrets and the Durable Object namespace for staging.
+## Historical open-decision list
+At initial drafting: idle limit; step-up window; kill-switch (KS-2); verified-phone replacement policy; PR 485; staging provisioning. This list is not current status: idle/step-up approval is recorded above, D01–D06 are reconciled in the dated activation record, and deployment/provider/schema readiness must be verified separately. Do not infer present blockers or approval from this historical list.

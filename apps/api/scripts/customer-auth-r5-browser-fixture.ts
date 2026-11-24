@@ -59,6 +59,7 @@ const sessionSecret = process.env.CUSTOMER_SESSION_SIGNING_SECRET;
 const legacySecret = process.env.CUSTOMER_JWT_SECRET;
 const recoverySecret = process.env.CUSTOMER_RECOVERY_HMAC_SECRET;
 const qrSecret = process.env.QR_TOKEN_SECRET;
+const fraudSalt = process.env.FRAUD_DETECTION_SALT;
 
 if (
   process.env.CI !== 'true' ||
@@ -72,7 +73,8 @@ if (
   !legacySecret ||
   !recoverySecret ||
   !qrSecret ||
-  [fixtureToken, attributionSecret, hmacSecret, sessionSecret, legacySecret, recoverySecret, qrSecret].some(
+  !fraudSalt ||
+  [fixtureToken, attributionSecret, hmacSecret, sessionSecret, legacySecret, recoverySecret, qrSecret, fraudSalt].some(
     (value) => Buffer.byteLength(value) < 32,
   )
 ) {
@@ -81,6 +83,16 @@ if (
 
 const mailboxes = new Map<string, EmailMessage[]>();
 const budgets = new Map<string, { count: number; resetsAt: number }>();
+const velocityState = new Map<string, { value: string; expiresAt: number }>();
+const velocityKv = {
+  async get(key: string) {
+    const entry = velocityState.get(key);
+    return entry && entry.expiresAt > Date.now() ? entry.value : null;
+  },
+  async put(key: string, value: string, options: { expirationTtl: number }) {
+    velocityState.set(key, { value, expiresAt: Date.now() + options.expirationTtl * 1000 });
+  },
+};
 const recoveryPhoneCodes = new Map<string, string>();
 const syntheticTwilioVerifications = new Map<string, { code: string; expiresAt: number }>();
 const legacyOtpDiagnostics: string[] = [];
@@ -616,6 +628,8 @@ const server = createServer(async (incoming, outgoing) => {
       CUSTOMER_PASSWORD_MIN_LENGTH: '8',
       CUSTOMER_JWT_SECRET: legacySecret,
       QR_TOKEN_SECRET: qrSecret,
+      FRAUD_DETECTION_SALT: fraudSalt,
+      CACHE: velocityKv,
       CUSTOMER_AUTH_RATE_LIMIT: rateLimiter,
       CUSTOMER_API_RATE_LIMITER: rateLimiter,
       PUBLIC_RATE_LIMITER: rateLimiter,
