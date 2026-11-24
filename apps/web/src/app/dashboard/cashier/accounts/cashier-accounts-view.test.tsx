@@ -18,8 +18,8 @@ const account = (over: Partial<CashierAccountDto>): CashierAccountDto => ({
   id: 'a1', username: 'till1', displayName: 'Front till', status: 'active', branches: [{ id: 'b1', name: 'Main' }], accessMode: 'single',
   lastLoginAt: null, locked: false, credentialChangedAt: null, createdAt: '2026-11-18T00:00:00Z', ...over,
 });
-const view = (accounts: CashierAccountDto[], code: string | null = 'ABCDEFGHJK') =>
-  renderWithIntl(<CashierAccountsView accounts={accounts} code={{ cashierCode: code, rotatedAt: null }} branches={branches} />);
+const view = (accounts: CashierAccountDto[], code: string | null = 'ABCDEFGHJK', branchList = branches) =>
+  renderWithIntl(<CashierAccountsView accounts={accounts} code={{ cashierCode: code, rotatedAt: null }} branches={branchList} />);
 
 beforeEach(() => {
   // mockReset (not clear): a queued mockResolvedValueOnce must never leak into the next test.
@@ -54,6 +54,26 @@ describe('cashier accounts view', () => {
     for (const name of ['Branches', 'Reset password', 'Disable', 'Enable', 'Sign out devices', 'Revoke access']) {
       expect(screen.queryByRole('button', { name })).not.toBeInTheDocument();
     }
+  });
+
+  it('with only one branch, "Several branches" is not offered: no unsatisfiable choice, single access is submitted, the branch can be ticked', () => {
+    view([], 'ABCDEFGHJK', [{ id: 'b1', name: 'Buddy 1' }]);
+    const create = screen.getByRole('heading', { name: 'Create a cashier account' }).closest('section, div, form, article') as HTMLElement;
+    const scope = within(create.parentElement ?? create);
+    expect(scope.queryByLabelText('Several branches')).not.toBeInTheDocument();
+    expect(scope.queryByLabelText('One branch')).not.toBeInTheDocument();
+    expect(document.querySelector('input[type="hidden"][name="accessMode"][value="single"]')).not.toBeNull();
+    expect(screen.queryByText('Tick at least two branches.')).not.toBeInTheDocument();
+    expect(scope.getByText('The cashier serves at one branch only.')).toBeInTheDocument();
+    expect(scope.getByLabelText('Buddy 1')).not.toBeChecked();
+    fireEvent.click(scope.getByLabelText('Buddy 1'));
+    expect(scope.getByLabelText('Buddy 1')).toBeChecked();
+  });
+
+  it('with two or more branches both access modes are offered', () => {
+    view([]);
+    expect(screen.getAllByLabelText('Several branches').length).toBeGreaterThan(0);
+    expect(screen.getAllByLabelText('One branch').length).toBeGreaterThan(0);
   });
 
   it('an active account offers disable (not enable); a disabled one offers enable (not disable)', () => {

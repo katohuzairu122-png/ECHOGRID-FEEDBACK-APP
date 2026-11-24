@@ -40,7 +40,9 @@ function BranchPicker({
   onChange?: (mode: CashierAccessMode, count: number) => void;
 }) {
   const t = useTranslations('cashier.dashboard.accounts.assign');
-  const [mode, setMode] = useState<CashierAccessMode>(initialMode);
+  // "Several branches" needs at least two branches to choose from. An existing multi-branch account keeps the choice so it can still be edited.
+  const offerMultiple = branches.length >= 2 || initialMode === 'multiple';
+  const [mode, setMode] = useState<CashierAccessMode>(offerMultiple ? initialMode : 'single');
   const [ids, setIds] = useState<string[]>(initialIds);
   const problem = assignmentProblem(mode, ids.length);
   const toggle = (id: string) => {
@@ -58,14 +60,19 @@ function BranchPicker({
   return (
     <fieldset className="space-y-3">
       <legend className="text-sm font-medium">{t('mode')}</legend>
-      <div className="flex flex-wrap gap-4 text-sm">
-        {(['single', 'multiple'] as const).map((m) => (
-          <label key={m} className="flex items-center gap-2">
-            <input type="radio" name="accessMode" value={m} checked={mode === m} onChange={() => pick(m)} />
-            {t(m)}
-          </label>
-        ))}
-      </div>
+      {offerMultiple ? (
+        <div className="flex flex-wrap gap-4 text-sm">
+          {(['single', 'multiple'] as const).map((m) => (
+            <label key={m} className="flex items-center gap-2">
+              <input type="radio" name="accessMode" value={m} checked={mode === m} onChange={() => pick(m)} />
+              {t(m)}
+            </label>
+          ))}
+        </div>
+      ) : (
+        // Fewer than two branches: "Several branches" can never be satisfied, so it is not offered; the form still submits single access.
+        <input type="hidden" name="accessMode" value="single" />
+      )}
       <p className="text-xs text-neutral-600">{t(`${mode}Hint`)}</p>
       <div className="space-y-1" role="group" aria-label={t('branches')}>
         {branches.map((b) => (
