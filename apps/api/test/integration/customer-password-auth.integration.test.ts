@@ -301,7 +301,7 @@ describe.skipIf(!process.env.DATABASE_URL)('customer password auth (integration)
       if (hasPassword) expect((await a.auth.registerWithPassword(proof(phone), GOOD)).ok).toBe(true);
       const otp = await a.auth.signInWithVerifiedPhone(proof(phone));
       if (!otp.ok) throw new Error('Expected synthetic OTP session');
-      const foreignOtp = await b.auth.signInWithVerifiedPhone(proof(PHONE(91)));
+      const foreignOtp = await b.auth.signInWithVerifiedPhone(proof(PHONE(98)));
       if (!foreignOtp.ok) throw new Error('Expected a separate synthetic customer session');
       const owner = { customerId: otp.customerId, sessionId: otp.session.sessionId };
       const before = await q<{ password_hash: string }>(
