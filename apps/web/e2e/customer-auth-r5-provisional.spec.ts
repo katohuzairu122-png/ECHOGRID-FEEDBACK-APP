@@ -222,7 +222,13 @@ test('E — recovery verifies independent email and phone factors, resets passwo
   await page.goto('/account/recovery');
   await page.getByLabel('Account email').fill(email);
   await page.getByRole('button', { name: 'Continue' }).click();
-  await page.getByRole('button', { name: 'Send email confirmation' }).click();
+  const sendEmailProof = page.getByRole('button', { name: 'Send email confirmation' });
+  try {
+    await expect(sendEmailProof).toBeVisible({ timeout: 15_000 });
+  } catch {
+    throw new Error(`Recovery initiation rendered: ${await page.locator('body').innerText()}`);
+  }
+  await sendEmailProof.click();
 
   await expect(
     page.getByText('If the recovery can continue, an email will arrive with a secure link.', {
