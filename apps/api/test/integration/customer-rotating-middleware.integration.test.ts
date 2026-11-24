@@ -165,7 +165,7 @@ describe.skipIf(!process.env.DATABASE_URL)('Rotating customer sessions in the cu
       expect((await request(first.session.accessToken)).status).toBe(404);
       const memberRead = await request(second.session.accessToken);
       expect(memberRead.status).toBe(200);
-      expect((await memberRead.json() as { data: { points: number } }).data.points).toBe(77);
+      expect((await memberRead.json() as { data: { account: { points: number } } }).data.account.points).toBe(77);
     } finally {
       await client.query('DELETE FROM businesses WHERE id=$1', [businessId]);
     }
