@@ -35,7 +35,7 @@ The Chromium workflow uses disposable PostgreSQL 16/18, synthetic email/OTP, per
 | G | Real protected membership/account isolation; forged selectors/tenant headers; staff-principal and untrusted-source denials | Existing route isolation and budget denials |
 | H | Public and authenticated auth routes in en/fr/es/ar at 360/768/1440px; labels, accessible-tree semantics, keyboard and RTL | Existing components and browser tests |
 
-Implementation is present; exact-head hosted evidence is pending and will be recorded before completion. This mapping is not a claim that unexecuted cases passed. Automated semantics/keyboard checks do not claim manual screen-reader or universal WCAG certification.
+Current execution results are the [exact-head checks on PR #570](https://github.com/katohuzairu122-png/ECHOGRID-FEEDBACK-APP/pull/570/checks), with run links and totals recorded in its completion report. This mapping alone is not a claim that an unexecuted case passed. Automated semantics/keyboard checks do not claim manual screen-reader or universal WCAG certification.
 
 The fixture previously refused recovery-code issue/revoke through stubs, while production code-management keys incorrectly used an email-only digest. The updated fixture invokes the real code service and the same shared domain-separated source/customer HMAC limiter as production composition. Approved 5-per-15-minute ceilings, current-password checks, live sessions, fresh reauthentication, one-time codes and the high-risk 24-hour hold remain enforced.
 

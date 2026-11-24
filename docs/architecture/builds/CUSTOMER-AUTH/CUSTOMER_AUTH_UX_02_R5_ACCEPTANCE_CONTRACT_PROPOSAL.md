@@ -1,7 +1,7 @@
 # CUSTOMER-AUTH-UX-02 R5 — Owner-Approved A–H Acceptance Contract
 
 **Contract status: OWNER APPROVED under CUSTOMER-AUTH-FINAL-CLOSURE D01 on 2026-11-24.**
-**Product acceptance status: INCOMPLETE until each mandatory scenario has executed and passed.**
+**Execution status:** See the dated reconciliation and exact-head acceptance checks linked below. Contract approval is separate from executed test evidence, owner product acceptance and runtime activation.
 
 > Current traceability and activation observations are in [the 2026-11-24 reconciliation](CUSTOMER_AUTH_ACCEPTANCE_AND_ACTIVATION_2026_11_24.md). The table below is the earlier baseline. PR #569 verified Settings phone and legacy upgrade; the continuation adds QR/consent/isolation, expiry, recovery codes and broader UI cases. Historical fixture exclusions below do not describe the updated runner.
 

@@ -226,6 +226,9 @@ test('E — Settings reauthentication, one-time codes, cancellation and consumed
   await page.getByRole('button', { name: 'Cancel recovery', exact: true }).click();
   await expect(page.getByText('Recovery cancelled. Your password was not changed.', { exact: true })).toBeVisible();
   await expect(page).not.toHaveURL(/#c=/);
+  // Reopening the same fragment on the same document preserves its completed
+  // client state. Load a fresh document to actually submit the used credential.
+  await page.goto('/account/recovery');
   await page.goto(cancellation);
   await page.getByRole('button', { name: 'Cancel recovery', exact: true }).click();
   await expect(page.getByRole('alert')).toBeVisible();
