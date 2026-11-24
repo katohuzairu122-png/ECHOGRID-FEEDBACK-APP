@@ -14,17 +14,45 @@ import {
  */
 const CUSTOMER_ID = 'a114c838-35fb-4ce4-899f-5e3c644027f5';
 
-function fixture(options: { enabled?: boolean; trusted?: boolean } = {}) {
+function fixture(
+  options: {
+    enabled?: boolean;
+    trusted?: boolean;
+    reauthenticated?: boolean;
+    limited?: boolean;
+  } = {},
+) {
   const findCustomerIdByLoginEmail = vi.fn(async (email: string) =>
     email === 'known@example.test' ? CUSTOMER_ID : null,
+  );
+  const findCustomerIdByVerifiedPhone = vi.fn(async (phone: string) =>
+    phone === '+15555550101' ? CUSTOMER_ID : null,
   );
   const initiate = vi.fn(async () => ({
     ok: true as const,
     attemptId: crypto.randomUUID(),
   }));
+  const codeManagement = {
+    authenticate: vi.fn(async (token: string) =>
+      token === 'valid-session'
+        ? {
+            assurance: 'session' as const,
+            customerId: CUSTOMER_ID,
+            sessionId: crypto.randomUUID(),
+            authMethod: 'password',
+          }
+        : null,
+    ),
+    reauthenticate: vi.fn(async () => options.reauthenticated !== false),
+    allow: vi.fn(async () => options.limited !== true),
+    issue: vi.fn(async () => ({ ok: true as const, codes: ['AAAA-BBBB-CCCC-DDDD'] })),
+    revoke: vi.fn(async () => ({ ok: true as const, revoked: true })),
+  };
   const dependencies = {
     findCustomerIdByLoginEmail,
+    findCustomerIdByVerifiedPhone,
     service: { initiate },
+    codeManagement,
   } as unknown as CustomerRecoveryRouteDependencies;
   const resolveTrustedSource = vi.fn(async () =>
     options.trusted === false ? null : 'r6-test-trusted-source',
@@ -37,21 +65,38 @@ function fixture(options: { enabled?: boolean; trusted?: boolean } = {}) {
   });
   const app = new Hono();
   app.route('/recovery', routes);
-  const post = (path: string, body: unknown) =>
+  const post = (path: string, body: unknown, authorization?: string) =>
     app.request('/recovery/' + path, {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: { 'content-type': 'application/json', ...(authorization ? { authorization } : {}) },
       body: JSON.stringify(body),
     });
-  return { app, post, open, initiate, resolveTrustedSource, findCustomerIdByLoginEmail };
+  return {
+    app,
+    post,
+    open,
+    initiate,
+    resolveTrustedSource,
+    findCustomerIdByLoginEmail,
+    findCustomerIdByVerifiedPhone,
+    codeManagement,
+  };
 }
 
 describe('CUSTOMER-AUTH-R6 recovery HTTP containment', () => {
   it('returns generic 404 on every recovery operation when disabled, before resolving trust or opening a database', async () => {
     const f = fixture({ enabled: false });
     for (const path of [
-      'initiate', 'email-challenge', 'email-verify', 'phone-otp',
-      'phone-verify', 'code-verify', 'cancel', 'complete',
+      'initiate',
+      'email-challenge',
+      'email-verify',
+      'phone-otp',
+      'phone-verify',
+      'code-verify',
+      'cancel',
+      'complete',
+      'codes/issue',
+      'codes/revoke',
     ]) {
       const response = await f.post(path, { email: 'known@example.test' });
       expect(response.status).toBe(404);
@@ -89,16 +134,63 @@ describe('CUSTOMER-AUTH-R6 recovery HTTP containment', () => {
 
   it('keeps known and unknown account initiation responses generic and without cookies', async () => {
     const f = fixture();
-    for (const email of ['known@example.test', 'unknown@example.test']) {
-      const response = await f.post('initiate', { email });
+    for (const selector of [
+      { email: 'known@example.test' },
+      { email: 'unknown@example.test' },
+      { phone: '+15555550101' },
+      { phone: '+15555550102' },
+    ]) {
+      const response = await f.post('initiate', selector);
       expect(response.status).toBe(202);
-      const body = await response.json() as Record<string, unknown>;
+      const body = (await response.json()) as Record<string, unknown>;
       expect(Object.keys(body)).toEqual(['attemptId']);
       expect(body.attemptId).toEqual(expect.any(String));
       expect(response.headers.get('cache-control')).toBe('no-store');
       expect(response.headers.has('set-cookie')).toBe(false);
     }
     expect(f.findCustomerIdByLoginEmail).toHaveBeenCalledTimes(2);
-    expect(f.initiate).toHaveBeenCalledTimes(2);
+    expect(f.findCustomerIdByVerifiedPhone).toHaveBeenCalledTimes(2);
+    expect(f.initiate).toHaveBeenCalledTimes(4);
+  });
+
+  it('requires a valid password session and fresh password reauthentication before issuing recovery codes', async () => {
+    const f = fixture({ reauthenticated: false });
+    const noSession = await f.post('codes/issue', { currentPassword: 'synthetic-password' });
+    expect(noSession.status).toBe(401);
+    const badPassword = await f.post(
+      'codes/issue',
+      { currentPassword: 'incorrect' },
+      'Bearer valid-session',
+    );
+    expect(badPassword.status).toBe(401);
+    expect(f.codeManagement.issue).not.toHaveBeenCalled();
+    expect(f.codeManagement.authenticate).toHaveBeenCalledTimes(1);
+  });
+
+  it('rate limits code management and returns a new code set only after reauthentication', async () => {
+    const limited = fixture({ limited: true });
+    expect(
+      (
+        await limited.post(
+          'codes/issue',
+          { currentPassword: 'synthetic-password' },
+          'Bearer valid-session',
+        )
+      ).status,
+    ).toBe(401);
+    expect(limited.codeManagement.reauthenticate).not.toHaveBeenCalled();
+    const f = fixture();
+    const response = await f.post(
+      'codes/issue',
+      { currentPassword: 'synthetic-password' },
+      'Bearer valid-session',
+    );
+    expect(response.status).toBe(200);
+    expect(response.headers.get('cache-control')).toBe('no-store');
+    expect(await response.json()).toEqual({ codes: ['AAAA-BBBB-CCCC-DDDD'] });
+    expect(f.codeManagement.reauthenticate).toHaveBeenCalledWith(
+      expect.objectContaining({ customerId: CUSTOMER_ID, currentPassword: 'synthetic-password' }),
+    );
+    expect(f.codeManagement.issue).toHaveBeenCalledTimes(1);
   });
 });

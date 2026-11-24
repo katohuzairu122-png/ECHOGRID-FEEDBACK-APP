@@ -1,8 +1,12 @@
 import type { EmailService } from '../notifications/email.service';
 import type { SmsService } from './sms.service';
 import { TwilioVerifyService, type TwilioVerifyCredentials } from './twilio-verify.service';
-import type { RegistrationProofDelivery } from './customer-email-auth.service';
-import type { RecoveryNoticeKind, RecoveryNotifier, RecoveryPhoneOtp } from './customer-recovery-attempt.service';
+import type {
+  RecoveryEmailChallengeDelivery,
+  RecoveryNoticeKind,
+  RecoveryNotifier,
+  RecoveryPhoneOtp,
+} from './customer-recovery-attempt.service';
 
 /**
  * CUSTOMER-AUTH-S4-03: delivery adapters for account recovery, built on the EXISTING
@@ -20,19 +24,32 @@ import type { RecoveryNoticeKind, RecoveryNotifier, RecoveryPhoneOtp } from './c
  *  - the adapters never log a message, recipient or token.
  */
 
-const escapeHtml = (value: string) => value
-  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-  .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+const escapeHtml = (value: string) =>
+  value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 
 const base = (webBaseUrl: string) => webBaseUrl.replace(/\/+$/, '');
 
 /** One opaque credential, `<attemptId>.<token>`, in the URL fragment. */
-export function buildRecoveryCancelLink(webBaseUrl: string, attemptId: string, cancelToken: string): string {
+export function buildRecoveryCancelLink(
+  webBaseUrl: string,
+  attemptId: string,
+  cancelToken: string,
+): string {
   return `${base(webBaseUrl)}/account/recovery/cancel#c=${encodeURIComponent(`${attemptId}.${cancelToken}`)}`;
 }
 
-export function buildRecoveryEmailChallengeLink(webBaseUrl: string, challengeId: string, proof: string): string {
-  return `${base(webBaseUrl)}/account/recovery/email#c=${encodeURIComponent(`${challengeId}.${proof}`)}`;
+export function buildRecoveryEmailChallengeLink(
+  webBaseUrl: string,
+  attemptId: string,
+  challengeId: string,
+  proof: string,
+): string {
+  return `${base(webBaseUrl)}/account/recovery/email#c=${encodeURIComponent(`${attemptId}.${challengeId}.${proof}`)}`;
 }
 
 type Rendered = { subject: string; html: string; sms: string };
@@ -45,7 +62,10 @@ export function renderRecoveryNotice(
     `<div style="font-family:Arial,Helvetica,sans-serif;max-width:520px;margin:0 auto;padding:24px;color:#111827;">` +
     `<p style="font-size:20px;font-weight:700;margin:0 0 16px;">Echo Grid</p>` +
     `<h1 style="font-size:18px;margin:0 0 12px;">${escapeHtml(heading)}</h1>` +
-    paragraphs.map((p) => `<p style="font-size:14px;line-height:1.5;margin:0 0 12px;">${p}</p>`).join('') + `</div>`;
+    paragraphs
+      .map((p) => `<p style="font-size:14px;line-height:1.5;margin:0 0 12px;">${p}</p>`)
+      .join('') +
+    `</div>`;
   const cancel = input.cancelLink
     ? `<a href="${escapeHtml(input.cancelLink)}" style="color:#059669;">Cancel this recovery</a>`
     : '';
@@ -61,7 +81,9 @@ export function renderRecoveryNotice(
         sms: 'Echo Grid: account recovery was started on your account. If this was not you, use the cancel link we emailed you.',
       };
     case 'hold_started': {
-      const until = input.holdUntil ? input.holdUntil.toISOString().replace('T', ' ').slice(0, 16) + ' UTC' : 'in 24 hours';
+      const until = input.holdUntil
+        ? input.holdUntil.toISOString().replace('T', ' ').slice(0, 16) + ' UTC'
+        : 'in 24 hours';
       return {
         subject: 'Your Echo Grid account recovery is on a 24-hour security hold',
         html: wrap('Security hold started', [
@@ -74,7 +96,9 @@ export function renderRecoveryNotice(
     case 'cancelled':
       return {
         subject: 'Your Echo Grid account recovery was cancelled',
-        html: wrap('Recovery cancelled', ['The account recovery on your Echo Grid account was cancelled. Your password was not changed.']),
+        html: wrap('Recovery cancelled', [
+          'The account recovery on your Echo Grid account was cancelled. Your password was not changed.',
+        ]),
         sms: 'Echo Grid: the account recovery on your account was cancelled. Your password was not changed.',
       };
     case 'completed':
@@ -97,26 +121,48 @@ export function createRecoveryNotifier(config: {
 }): RecoveryNotifier {
   return async (notice) => {
     const rendered = renderRecoveryNotice(notice.kind, {
-      ...(notice.cancelToken ? { cancelLink: buildRecoveryCancelLink(config.webBaseUrl, notice.attemptId, notice.cancelToken) } : {}),
+      ...(notice.cancelToken
+        ? {
+            cancelLink: buildRecoveryCancelLink(
+              config.webBaseUrl,
+              notice.attemptId,
+              notice.cancelToken,
+            ),
+          }
+        : {}),
       ...(notice.holdUntil ? { holdUntil: notice.holdUntil } : {}),
     });
     let email: 'accepted' | 'failed' = 'failed';
     try {
-      await config.email.send({ to: notice.recipients.email, subject: rendered.subject, html: rendered.html });
+      await config.email.send({
+        to: notice.recipients.email,
+        subject: rendered.subject,
+        html: rendered.html,
+      });
       email = 'accepted';
-    } catch { /* reported as failed; the orchestrator fails closed */ }
+    } catch {
+      /* reported as failed; the orchestrator fails closed */
+    }
     let phone: 'accepted' | 'failed' | 'skipped' = 'skipped';
     if (notice.recipients.phone && config.sms) {
-      try { await config.sms.send(notice.recipients.phone, rendered.sms); phone = 'accepted'; } catch { phone = 'failed'; }
+      try {
+        await config.sms.send(notice.recipients.phone, rendered.sms);
+        phone = 'accepted';
+      } catch {
+        phone = 'failed';
+      }
     }
     return { email, phone };
   };
 }
 
 /** Delivers the email-challenge link to the customer's own verified login email. */
-export function createRecoveryEmailChallengeDelivery(config: { email: EmailService; webBaseUrl: string }): RegistrationProofDelivery {
-  return async ({ recipient, challengeId, proof }) => {
-    const link = buildRecoveryEmailChallengeLink(config.webBaseUrl, challengeId, proof);
+export function createRecoveryEmailChallengeDelivery(config: {
+  email: EmailService;
+  webBaseUrl: string;
+}): RecoveryEmailChallengeDelivery {
+  return async ({ recipient, attemptId, challengeId, proof }) => {
+    const link = buildRecoveryEmailChallengeLink(config.webBaseUrl, attemptId, challengeId, proof);
     await config.email.send({
       to: recipient,
       subject: 'Confirm your email to continue Echo Grid account recovery',
@@ -132,5 +178,8 @@ export function createRecoveryEmailChallengeDelivery(config: { email: EmailServi
 /** The recovery phone-OTP port over the existing Twilio Verify service (no new credentials). */
 export function createRecoveryPhoneOtp(credentials: TwilioVerifyCredentials): RecoveryPhoneOtp {
   const verify = new TwilioVerifyService(credentials);
-  return { send: (phone) => verify.request(phone), check: (phone, code) => verify.check(phone, code) };
+  return {
+    send: (phone) => verify.request(phone),
+    check: (phone, code) => verify.check(phone, code),
+  };
 }

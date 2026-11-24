@@ -402,7 +402,12 @@ export class CustomerPasswordAuthService {
     sourceHint?: string | null;
   }): Promise<PasswordLoginResult> {
     const invalid = { ok: false, kind: 'invalid' } as const;
-    if (typeof input.email !== 'string' || input.email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(input.email.trim())) return invalid;
+    if (
+      typeof input.email !== 'string' ||
+      input.email.length > 254 ||
+      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(input.email.trim())
+    )
+      return invalid;
     if (
       typeof input.password !== 'string' ||
       input.password.length === 0 ||
@@ -535,6 +540,44 @@ export class CustomerPasswordAuthService {
       sessionId: input.sessionId,
       passwordHash,
     });
+  }
+
+  /** Reauthenticates the exact password session without changing credentials. */
+  async reauthenticateSession(input: {
+    customerId: string;
+    sessionId: string;
+    currentPassword: string;
+  }): Promise<boolean> {
+    const r = this.repos();
+    if (
+      typeof input.currentPassword !== 'string' ||
+      !isHashableLength(input.currentPassword, this.maxLength)
+    )
+      return false;
+    const credential = await r.credentials.findByCustomerId(input.customerId);
+    const customer = await r.customers.findById(input.customerId);
+    if (
+      !credential ||
+      !customer ||
+      !customerMayHaveSession({ status: customer.status, isDeleted: customer.isDeleted })
+    )
+      return false;
+    const verified = await this.hasher.verify(
+      normalizePassword(input.currentPassword),
+      credential.passwordHash,
+    );
+    if (!verified) {
+      await this.bestEffort(r.events, {
+        customerId: input.customerId,
+        sessionId: input.sessionId,
+        eventType: 'step_up_failed',
+        outcome: 'failure',
+        reasonCode: 'bad_current_password',
+        now: this.clock(),
+      });
+      return false;
+    }
+    return this.sessions.recordStepUp({ customerId: input.customerId, sessionId: input.sessionId });
   }
 
   /** Audit writes that describe an outcome already decided must not turn it into an error. */
