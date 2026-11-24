@@ -292,7 +292,8 @@ app.post('/__test/advance-recovery-hold', async (c) => {
   if (!recipient?.endsWith('@example.test')) return c.body(null, 404);
   const advanced = await withDb(async (db) => db.execute(sql`
     UPDATE customer_recovery_attempts AS attempt
-       SET hold_until = now() - interval '1 second'
+       SET hold_started_at = now() - interval '2 seconds',
+           hold_until = now() - interval '1 second'
       FROM customer_credentials AS credential
      WHERE credential.customer_id = attempt.customer_id
        AND credential.login_email = ${recipient}
