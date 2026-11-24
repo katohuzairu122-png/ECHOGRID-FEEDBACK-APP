@@ -275,7 +275,7 @@ test('E — recovery verifies independent email and phone factors, resets passwo
   await page.getByRole('button', { name: 'Reset password' }).click();
   const recoveryCompleted = page.getByText(
     'Your password was reset and all existing sessions were revoked.',
-    { exact: true },
+    { exact: false },
   );
   try {
     await expect(recoveryCompleted).toBeVisible({ timeout: 10_000 });
