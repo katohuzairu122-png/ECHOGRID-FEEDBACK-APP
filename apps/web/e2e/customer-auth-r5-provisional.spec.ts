@@ -247,13 +247,16 @@ test('E — recovery verifies independent email and phone factors, resets passwo
 
   await page.goto(recoveryUrl!);
   await page.getByRole('button', { name: 'Confirm this email factor' }).click();
-  const awaitingFactor = page
-    .getByRole('status')
-    .filter({ hasText: 'One more independent factor is required.' });
+  const awaitingFactor = page.getByText(
+    'One more independent factor is required before a password can be reset.',
+    { exact: true },
+  );
   try {
     await expect(awaitingFactor).toBeVisible({ timeout: 10_000 });
   } catch {
-    throw new Error(`Recovery email verification rendered: ${await page.locator('body').innerText()}`);
+    throw new Error(
+      `Recovery email verification rendered: ${await page.locator('body').innerText()}`,
+    );
   }
   await page.getByRole('button', { name: 'Send phone code' }).click();
   await page.getByLabel('Phone verification code').fill('000000');
@@ -269,9 +272,9 @@ test('E — recovery verifies independent email and phone factors, resets passwo
   await page.getByLabel('Confirm new password').fill(newPassword);
   await page.getByRole('button', { name: 'Reset password' }).click();
   await expect(
-    page
-      .getByRole('status')
-      .filter({ hasText: 'Your password was reset and all existing sessions were revoked.' }),
+    page.getByText('Your password was reset and all existing sessions were revoked.', {
+      exact: true,
+    }),
   ).toBeVisible();
 
   await context.clearCookies();
