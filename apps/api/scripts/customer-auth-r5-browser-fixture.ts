@@ -284,6 +284,18 @@ app.post('/__test/mark-phone-verified', async (c) => {
   });
   return c.json({ accepted: true }, 200, { 'Cache-Control': 'no-store' });
 });
+app.get('/__test/customer-session-status', async (c) => {
+  if (c.req.header('x-customer-auth-r5-fixture') !== fixtureToken) {
+    return c.body(null, 404);
+  }
+  const token = c.req.header('authorization')?.replace(/^Bearer\s+/i, '');
+  if (!token) return c.body(null, 401);
+  const active = await withDb(async (db) =>
+    Boolean(await new CustomerSessionService(db, config.session).authenticateSessionToken(token)),
+  );
+  return c.body(null, active ? 204 : 401);
+});
+
 app.route('/api/v1/customer-auth', emailAuth);
 app.route('/api/v1/customer-session', lifecycle);
 app.route('/api/v1/customer-recovery', recoveryRoutes);

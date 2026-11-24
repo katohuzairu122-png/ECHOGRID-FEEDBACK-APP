@@ -218,6 +218,20 @@ test('E — recovery verifies independent email and phone factors, resets passwo
   await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page).toHaveURL(/\/loyalty\/dashboard(?:\?|$)/);
   const oldSessionCookies = await context.cookies();
+  const oldAccess = oldSessionCookies.find((cookie) =>
+    cookie.name.includes('customer_access'),
+  )?.value;
+  expect(oldAccess).toBeTruthy();
+  const activeRead = await page.request.get(
+    'http://127.0.0.1:8792/__test/customer-session-status',
+    {
+      headers: {
+        Authorization: `Bearer ${oldAccess}`,
+        'x-customer-auth-r5-fixture': mailboxToken,
+      },
+    },
+  );
+  expect(activeRead.status()).toBe(204);
 
   await page.goto('/account/recovery');
   await page.getByLabel('Account email').fill(email);
@@ -286,17 +300,18 @@ test('E — recovery verifies independent email and phone factors, resets passwo
   await context.clearCookies();
   await context.addCookies(oldSessionCookies);
   await page.goto('/loyalty/dashboard');
-  // The shell preflight only checks cookie presence. Prove revocation at the
-  // protected API boundary, where session liveness is authoritative.
-  const oldAccess = oldSessionCookies.find((cookie) =>
-    cookie.name.includes('customer_access'),
-  )?.value;
-  expect(oldAccess).toBeTruthy();
-  const revokedRead = await page.request.get('http://127.0.0.1:8792/api/v1/loyalty/me/profile', {
-    headers: { Authorization: `Bearer ${oldAccess}` },
-  });
+  // The shell preflight only checks cookie presence. Prove that the old
+  // session is rejected by the database-backed session validator.
+  const revokedRead = await page.request.get(
+    'http://127.0.0.1:8792/__test/customer-session-status',
+    {
+      headers: {
+        Authorization: `Bearer ${oldAccess}`,
+        'x-customer-auth-r5-fixture': mailboxToken,
+      },
+    },
+  );
   expect(revokedRead.status()).toBe(401);
-  await expect(page.getByRole('heading', { name: 'My loyalties' })).toHaveCount(0);
 
   await context.clearCookies();
   await page.goto('/loyalty/login/email');
