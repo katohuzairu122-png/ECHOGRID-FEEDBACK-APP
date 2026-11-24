@@ -200,6 +200,87 @@ test('D — refresh rotates credentials; logout revokes the issued session', asy
   await expect(page).toHaveURL(/\/loyalty\/login(?:\?|$)/);
 });
 
+test('E — recovery verifies independent email and phone factors, resets password, and revokes sessions', async ({
+  page,
+  context,
+}) => {
+  const mailbox = `http://127.0.0.1:8792/__test/mailbox`;
+  const fixture = `http://127.0.0.1:8792/__test/mark-phone-verified`;
+  const markPhone = await page.request.post(fixture, {
+    headers: { Authorization: `Bearer ${mailboxToken}` },
+    data: { recipient: email },
+  });
+  expect(markPhone.status()).toBe(200);
+
+  await page.goto('/loyalty/login/email');
+  await page.getByLabel('Email').fill(email);
+  await page.getByLabel('Password').fill(password);
+  await page.getByRole('button', { name: 'Sign in' }).click();
+  await expect(page).toHaveURL(/\/loyalty\/dashboard(?:\?|$)/);
+  const oldSessionCookies = await context.cookies();
+
+  await page.goto('/account/recovery');
+  await page.getByLabel('Account email').fill(email);
+  await page.getByRole('button', { name: 'Continue' }).click();
+  await page.getByRole('button', { name: 'Send email confirmation' }).click();
+
+  await expect(
+    page.getByText('If the recovery can continue, an email will arrive with a secure link.', {
+      exact: true,
+    }),
+  ).toBeVisible();
+  const mail = await page.request.get(`${mailbox}?recipient=${encodeURIComponent(email)}`, {
+    headers: { Authorization: `Bearer ${mailboxToken}` },
+  });
+  expect(mail.status()).toBe(200);
+  const messages = (await mail.json()) as { messages?: Array<{ html?: string; subject?: string }> };
+  const recoveryMessage = messages.messages?.at(-1);
+  expect(recoveryMessage?.subject).toContain('Confirm your email');
+  const recoveryUrl = recoveryMessage?.html?.match(/href="([^"]+)"/)?.[1];
+  expect(recoveryUrl).toContain('/account/recovery/email#c=');
+
+  await page.goto(recoveryUrl!);
+  await page.getByRole('button', { name: 'Confirm this email factor' }).click();
+  await expect(
+    page.getByRole('status').filter({ hasText: 'One more independent factor is required.' }),
+  ).toBeVisible();
+  await page.getByRole('button', { name: 'Send phone code' }).click();
+  await page.getByLabel('Phone verification code').fill('000000');
+  await page.getByRole('button', { name: 'Verify phone code' }).click();
+  await expect(
+    page.getByRole('alert').filter({ hasText: 'This recovery request is invalid or expired.' }),
+  ).toBeVisible();
+  await page.getByLabel('Phone verification code').fill('123456');
+  await page.getByRole('button', { name: 'Verify phone code' }).click();
+
+  const newPassword = `${password}-recovered`;
+  await page.getByLabel('New password').fill(newPassword);
+  await page.getByLabel('Confirm new password').fill(newPassword);
+  await page.getByRole('button', { name: 'Reset password' }).click();
+  await expect(
+    page
+      .getByRole('status')
+      .filter({ hasText: 'Your password was reset and all existing sessions were revoked.' }),
+  ).toBeVisible();
+
+  await context.clearCookies();
+  await context.addCookies(oldSessionCookies);
+  await page.goto('/loyalty/dashboard');
+  await expect(page).toHaveURL(/\/loyalty\/login/);
+
+  await context.clearCookies();
+  await page.goto('/loyalty/login/email');
+  await page.getByLabel('Email').fill(email);
+  await page.getByLabel('Password').fill(password);
+  await page.getByRole('button', { name: 'Sign in' }).click();
+  await expect(
+    page.getByText('The email or password is not correct.', { exact: true }),
+  ).toBeVisible();
+  await page.getByLabel('Password').fill(newPassword);
+  await page.getByRole('button', { name: 'Sign in' }).click();
+  await expect(page).toHaveURL(/\/loyalty\/dashboard(?:\?|$)/);
+});
+
 test('F/G — QR destination survives sign-in and an external destination is sanitized', async ({
   page,
 }) => {
@@ -243,7 +324,10 @@ test('G — registration delivery limit returns a generic throttle response', as
   ).toBeVisible();
 });
 
-test('B/G — malformed and forged confirmation links cannot activate a customer session', async ({ page, context }) => {
+test('B/G — malformed and forged confirmation links cannot activate a customer session', async ({
+  page,
+  context,
+}) => {
   await context.clearCookies();
   await page.goto('/loyalty/signup/verify#c=malformed');
   await expect(page.getByRole('button', { name: 'Create account' })).toHaveCount(0);
@@ -254,16 +338,21 @@ test('B/G — malformed and forged confirmation links cannot activate a customer
   await expect(page.getByRole('button', { name: 'Create account' })).toBeVisible();
   expect(new URL(page.url()).hash).toBe('');
   await page.getByRole('button', { name: 'Create account' }).click();
-  await expect(page.getByText(
-    'This confirmation link is invalid, expired or already used. Request a new link.',
-    { exact: true },
-  )).toBeVisible();
-  expect((await context.cookies()).some((cookie) =>
-    cookie.name.startsWith('__Host-ff_customer_'),
-  )).toBe(false);
+  await expect(
+    page.getByText(
+      'This confirmation link is invalid, expired or already used. Request a new link.',
+      { exact: true },
+    ),
+  ).toBeVisible();
+  expect(
+    (await context.cookies()).some((cookie) => cookie.name.startsWith('__Host-ff_customer_')),
+  ).toBe(false);
 });
 
-test('C/G — unknown email and wrong password receive the same generic login denial', async ({ page, context }) => {
+test('C/G — unknown email and wrong password receive the same generic login denial', async ({
+  page,
+  context,
+}) => {
   await context.clearCookies();
   await page.goto('/loyalty/login/email');
   await page.getByLabel('Email').fill(email);
@@ -276,12 +365,15 @@ test('C/G — unknown email and wrong password receive the same generic login de
   await page.getByLabel('Password').fill(password + '-incorrect');
   await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(error).toHaveText(knownError ?? '', { timeout: 15_000 });
-  expect((await context.cookies()).some((cookie) =>
-    cookie.name.startsWith('__Host-ff_customer_'),
-  )).toBe(false);
+  expect(
+    (await context.cookies()).some((cookie) => cookie.name.startsWith('__Host-ff_customer_')),
+  ).toBe(false);
 });
 
-test('H — customer email login localization remains navigable in en/fr/es/ar and Arabic is RTL', async ({ page, context }) => {
+test('H — customer email login localization remains navigable in en/fr/es/ar and Arabic is RTL', async ({
+  page,
+  context,
+}) => {
   await context.clearCookies();
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/loyalty/login/email');
