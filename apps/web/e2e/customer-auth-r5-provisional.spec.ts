@@ -16,6 +16,7 @@ test.skip(
 
 const email = process.env.E2E_CUSTOMER_EMAIL ?? '';
 const password = process.env.E2E_CUSTOMER_PASSWORD ?? '';
+let currentPassword = password;
 const mailboxToken = process.env.CUSTOMER_AUTH_R5_MAILBOX_TOKEN ?? '';
 let verifyUrl = '';
 
@@ -355,6 +356,7 @@ test('E — recovery verifies independent email and phone factors, resets passwo
   } catch {
     throw new Error(`Post-reset password login rendered: ${await page.locator('body').innerText()}`);
   }
+  currentPassword = newPassword;
 });
 
 test('F/G — QR destination survives sign-in and an external destination is sanitized', async ({
@@ -367,7 +369,7 @@ test('F/G — QR destination survives sign-in and an external destination is san
 
   await page.goto('/loyalty/login/email?next=%2Floyalty%2Fdashboard%2Fqr');
   await page.getByLabel('Email').fill(email);
-  await page.getByLabel('Password').fill(password);
+  await page.getByLabel('Password').fill(currentPassword);
   await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page).toHaveURL(/\/loyalty\/dashboard\/qr(?:\?|$)/);
 
