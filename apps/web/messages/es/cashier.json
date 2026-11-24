@@ -188,14 +188,29 @@
         "rotated": "Se cambió el código del negocio."
       },
       "create": {
-        "title": "Crear una cuenta de cajero",
+        "title": "Añadir un cajero",
         "username": "Nombre de usuario",
         "usernameHint": "De 3 a 32 caracteres: letras minúsculas, números, punto, guion bajo o guion.",
         "displayName": "Nombre o etiqueta del empleado",
         "password": "Contraseña (opcional)",
         "passwordHint": "Déjela vacía para generar una contraseña segura. Si define una, debe tener al menos 8 caracteres.",
-        "submit": "Crear cuenta",
-        "created": "Se creó la cuenta de cajero."
+        "submit": "Crear cajero",
+        "created": "El cajero fue creado.",
+        "name": "Nombre del cajero",
+        "nameHint": "Por ejemplo Amina. Verás este nombre en tu lista; el nombre de acceso se crea por ti.",
+        "nameNeeds": "Escribe el nombre del cajero.",
+        "noBranches": "Crea primero una sucursal y luego podrás añadir un cajero.",
+        "worksAt": "Trabaja en {branch}",
+        "branchesTitle": "¿Dónde puede trabajar este cajero?",
+        "branchesHint": "Todas tus sucursales están marcadas. Desmarca las que no correspondan.",
+        "branchNeeds": "Marca al menos una sucursal.",
+        "confirmTitle": "Confirma que eres tú",
+        "confirmHint": "Escribe tu propia contraseña para crear este cajero.",
+        "confirmPassword": "Contraseña para confirmar",
+        "confirmSubmit": "Confirmar y crear",
+        "creating": "Creando…",
+        "cancel": "Cancelar",
+        "confirmWrong": "Esa contraseña no es correcta."
       },
       "assign": {
         "mode": "Acceso a sucursales",
@@ -248,7 +263,9 @@
         "username": "Nombre de usuario",
         "password": "Contraseña",
         "setByYou": "La contraseña que eligió",
-        "dismiss": "Ya la guardé"
+        "dismiss": "Ya la guardé",
+        "copy": "Copiar datos de acceso",
+        "copied": "Copiado"
       },
       "errors": {
         "generic": "No se pudo hacer. Inténtelo de nuevo.",

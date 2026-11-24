@@ -188,14 +188,29 @@
         "rotated": "Le code d'entreprise a été changé."
       },
       "create": {
-        "title": "Créer un compte caissier",
+        "title": "Ajouter un caissier",
         "username": "Nom d'utilisateur",
         "usernameHint": "3 à 32 caractères : lettres minuscules, chiffres, point, tiret bas ou tiret.",
         "displayName": "Nom ou libellé de l'employé",
         "password": "Mot de passe (facultatif)",
         "passwordHint": "Laissez vide pour générer un mot de passe sûr. Si vous en choisissez un, il doit compter au moins 8 caractères.",
-        "submit": "Créer le compte",
-        "created": "Le compte caissier a été créé."
+        "submit": "Créer le caissier",
+        "created": "Le caissier a été créé.",
+        "name": "Nom du caissier",
+        "nameHint": "Par exemple Amina. Vous verrez ce nom dans votre liste ; l'identifiant de connexion est créé pour vous.",
+        "nameNeeds": "Saisissez le nom du caissier.",
+        "noBranches": "Créez d'abord une succursale, puis vous pourrez ajouter un caissier.",
+        "worksAt": "Travaille à {branch}",
+        "branchesTitle": "Où ce caissier peut-il travailler ?",
+        "branchesHint": "Toutes vos succursales sont cochées. Décochez celles qui ne conviennent pas.",
+        "branchNeeds": "Cochez au moins une succursale.",
+        "confirmTitle": "Confirmez que c'est vous",
+        "confirmHint": "Saisissez votre propre mot de passe pour créer ce caissier.",
+        "confirmPassword": "Mot de passe pour confirmer",
+        "confirmSubmit": "Confirmer et créer",
+        "creating": "Création…",
+        "cancel": "Annuler",
+        "confirmWrong": "Ce mot de passe n'est pas correct."
       },
       "assign": {
         "mode": "Accès aux succursales",
@@ -248,7 +263,9 @@
         "username": "Nom d'utilisateur",
         "password": "Mot de passe",
         "setByYou": "Le mot de passe que vous avez choisi",
-        "dismiss": "Je l'ai enregistré"
+        "dismiss": "Je l'ai enregistré",
+        "copy": "Copier les identifiants",
+        "copied": "Copié"
       },
       "errors": {
         "generic": "Impossible de le faire. Réessayez.",

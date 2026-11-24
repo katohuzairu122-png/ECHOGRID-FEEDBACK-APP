@@ -188,14 +188,29 @@
         "rotated": "The business code was changed."
       },
       "create": {
-        "title": "Create a cashier account",
+        "title": "Add a cashier",
         "username": "Username",
         "usernameHint": "3 to 32 characters: lowercase letters, numbers, dot, underscore or hyphen.",
         "displayName": "Name or employee label",
         "password": "Password (optional)",
         "passwordHint": "Leave empty to generate a secure password. If you set one, it must be at least 8 characters.",
-        "submit": "Create account",
-        "created": "The cashier account was created."
+        "submit": "Create cashier",
+        "created": "The cashier was created.",
+        "name": "Cashier's name",
+        "nameHint": "For example Amina. You will see this name in your list; the sign-in name is made for you.",
+        "nameNeeds": "Type the cashier's name.",
+        "noBranches": "Create a branch first, then you can add a cashier.",
+        "worksAt": "Works at {branch}",
+        "branchesTitle": "Where can this cashier work?",
+        "branchesHint": "All your branches are ticked. Untick any that do not apply.",
+        "branchNeeds": "Tick at least one branch.",
+        "confirmTitle": "Confirm it is you",
+        "confirmHint": "Enter your own password to create this cashier.",
+        "confirmPassword": "Password to confirm",
+        "confirmSubmit": "Confirm and create",
+        "creating": "Creating…",
+        "cancel": "Cancel",
+        "confirmWrong": "That password is not correct."
       },
       "assign": {
         "mode": "Branch access",
@@ -248,7 +263,9 @@
         "username": "Username",
         "password": "Password",
         "setByYou": "The password you chose",
-        "dismiss": "I have saved it"
+        "dismiss": "I have saved it",
+        "copy": "Copy sign-in details",
+        "copied": "Copied"
       },
       "errors": {
         "generic": "That could not be done. Try again.",
