@@ -223,6 +223,15 @@ test('E — recovery verifies independent email and phone factors, resets passwo
   await page.getByLabel('Password').fill(password);
   await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page).toHaveURL(/\/loyalty\/dashboard(?:\?|$)/);
+  const passwordBeforeRecovery = await page.request.post(
+    'http://127.0.0.1:8792/__test/password-hash-check',
+    {
+      headers: { Authorization: `Bearer ${mailboxToken}` },
+      data: { email, password },
+    },
+  );
+  expect(passwordBeforeRecovery.status()).toBe(204);
+
   const oldSessionCookies = await context.cookies();
   const oldAccess = oldSessionCookies.find((cookie) =>
     cookie.name.includes('customer_access'),
