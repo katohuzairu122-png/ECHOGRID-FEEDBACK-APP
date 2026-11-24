@@ -323,7 +323,11 @@ test('E — recovery verifies independent email and phone factors, resets passwo
   ).toBeVisible();
   await page.getByLabel('Password').fill(newPassword);
   await page.getByRole('button', { name: 'Sign in' }).click();
-  await expect(page).toHaveURL(/\/loyalty\/dashboard(?:\?|$)/);
+  try {
+    await expect(page).toHaveURL(/\/loyalty\/dashboard(?:\?|$)/);
+  } catch {
+    throw new Error(`Post-reset password login rendered: ${await page.locator('body').innerText()}`);
+  }
 });
 
 test('F/G — QR destination survives sign-in and an external destination is sanitized', async ({
