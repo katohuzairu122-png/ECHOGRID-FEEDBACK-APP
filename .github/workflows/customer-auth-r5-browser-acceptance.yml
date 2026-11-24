@@ -17,6 +17,7 @@ on:
       - 'apps/web/src/lib/actions/customer-recovery.ts'
       - 'apps/web/src/lib/customer-session*.ts'
       - 'tools/prepare-customer-auth-r5-env.mjs'
+      - 'docs/architecture/builds/CUSTOMER-AUTH/**'
 
 permissions:
   contents: read
