@@ -14,6 +14,7 @@ import { createRepositories } from '../../src/repositories';
 import { CustomerCredentialRepository } from '../../src/repositories/customer-credential.repository';
 import { errorHandler } from '../../src/lib/error-handler';
 import { createFlagAwareCustomerAuthenticate } from '../../src/middleware/customer-authenticate';
+import { loyaltyCustomerRoutes } from '../../src/loyalty/loyalty-customer.routes';
 import { appDbOf } from '../helpers/runtime-db';
 
 /**
@@ -28,12 +29,20 @@ describe.skipIf(!process.env.DATABASE_URL)('Rotating customer sessions in the cu
   let sessions: CustomerSessionService;
   let app: Hono<{ Bindings: Bindings }>;
   let appLegacyOff: Hono<{ Bindings: Bindings }>;
+  let customerApi: Hono<{ Bindings: Bindings }>;
+  let runtimeEnv: Bindings;
   let loginDeps: ReturnType<typeof createEmailAuthDependencies>;
   const delivered: Array<{ recipient: string; challengeId: string; proof: string }> = [];
   const LEGACY_SECRET = 'legacy-jwt-secret-value-0123456789abcdef';
   const ctx = () => ({ waitUntil: vi.fn(), passThroughOnException: vi.fn() }) as unknown as ExecutionContext;
   const me = (a: Hono<{ Bindings: Bindings }>, token: string) =>
     a.fetch(new Request('https://api.test/me', { headers: { Authorization: `Bearer ${token}` } }), {} as Bindings, ctx());
+  const profile = (token: string, method: 'GET' | 'PATCH' = 'GET', body?: unknown) =>
+    customerApi.fetch(new Request(`https://api.test/loyalty/me/profile${method === 'GET' ? '?customerId=forged' : ''}`, {
+      method,
+      headers: { Authorization: `Bearer ${token}`, ...(body === undefined ? {} : { 'Content-Type': 'application/json' }) },
+      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+    }), runtimeEnv, ctx());
   const password = 'correct horse battery staple 42';
   const phone = () => `+1557${Math.floor(Math.random() * 9_000_000 + 1_000_000)}`;
   const phoneCustomer = async () => (await repos.customers.create({ phone: phone(), phoneVerifiedAt: new Date() })).id;
@@ -56,6 +65,7 @@ describe.skipIf(!process.env.DATABASE_URL)('Rotating customer sessions in the cu
     await client.connect();
     db = buildDb(client);
     repos = createRepositories(db);
+    const allow = { limit: async () => ({ success: true }) };
     const env = {
       CUSTOMER_EMAIL_AUTH_ENABLED: 'true',
       CUSTOMER_EMAIL_AUTH_HMAC_SECRET: 'h'.repeat(40),
@@ -69,8 +79,10 @@ describe.skipIf(!process.env.DATABASE_URL)('Rotating customer sessions in the cu
       CUSTOMER_JWT_SECRET: LEGACY_SECRET,
       CLIENT_ATTRIBUTION_SECRET: 'attribution-secret-value-0123456789',
       WEB_BASE_URL: 'https://app.example.test',
-      HYPERDRIVE: {}, PASSWORD_HASHER: {}, CUSTOMER_AUTH_RATE_LIMIT: {},
+      HYPERDRIVE: { connectionString: process.env.DATABASE_URL }, PASSWORD_HASHER: {}, CUSTOMER_AUTH_RATE_LIMIT: {},
+      CUSTOMER_API_RATE_LIMITER: allow, PUBLIC_RATE_LIMITER: allow, OTP_RATE_LIMITER: allow,
     } as unknown as Bindings;
+    runtimeEnv = env;
     const resolved = resolveEmailAuthConfig(env);
     if (!resolved.ok) throw new Error(`test config invalid: ${resolved.missing.join(', ')}`);
     sessions = new CustomerSessionService(appDbOf(db), resolved.config.session);
@@ -91,6 +103,9 @@ describe.skipIf(!process.env.DATABASE_URL)('Rotating customer sessions in the cu
       return a;
     };
     app = build(sessions);
+    customerApi = new Hono<{ Bindings: Bindings }>();
+    customerApi.onError(errorHandler);
+    customerApi.route('/loyalty/me', loyaltyCustomerRoutes);
     // The legacy kill switch (KS-2) off: sessions still work, legacy tokens do not.
     appLegacyOff = build(new CustomerSessionService(appDbOf(db), { ...resolved.config.session, legacyAccepted: () => false }));
   });
@@ -103,6 +118,27 @@ describe.skipIf(!process.env.DATABASE_URL)('Rotating customer sessions in the cu
     const response = await me(app, session.accessToken);
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ customerId });
+  });
+
+  it('the real customer profile API binds reads and writes to the authenticated identity', async () => {
+    const first = await emailSession();
+    const second = await emailSession();
+    await repos.customers.updateProfile(first.customerId, { fullName: 'First Synthetic Customer' });
+    await repos.customers.updateProfile(second.customerId, { fullName: 'Second Synthetic Customer' });
+
+    const firstRead = await profile(first.session.accessToken);
+    expect(firstRead.status).toBe(200);
+    expect((await firstRead.json() as { data: { name: string } }).data).toMatchObject({ name: 'First Synthetic Customer' });
+
+    const forgedWrite = await profile(first.session.accessToken, 'PATCH', {
+      name: 'Stolen Profile', customerId: second.customerId,
+    });
+    expect(forgedWrite.status).toBe(400);
+    const secondRead = await customerApi.fetch(new Request('https://api.test/loyalty/me/profile', {
+      headers: { Authorization: `Bearer ${second.session.accessToken}` },
+    }), runtimeEnv, ctx());
+    expect(secondRead.status).toBe(200);
+    expect((await secondRead.json() as { data: { name: string } }).data).toMatchObject({ name: 'Second Synthetic Customer' });
   });
 
   it('revoking the session takes effect IMMEDIATELY, not at token expiry', async () => {

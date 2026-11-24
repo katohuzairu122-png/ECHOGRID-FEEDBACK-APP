@@ -295,7 +295,9 @@ test('E — recovery verifies independent email and phone factors, resets passwo
   await page.getByLabel('Phone verification code').fill('123456');
   await page.getByRole('button', { name: 'Verify phone code' }).click();
 
-  await expect(page.getByRole('status')).toContainText(/hold/i);
+  await expect(
+    page.getByText('For your security, this recovery is on hold until', { exact: false }),
+  ).toBeVisible();
   await expect(page.getByLabel('New password', { exact: true })).toHaveCount(0);
   const advanceHold = await page.request.post(
     'http://127.0.0.1:8792/__test/advance-recovery-hold',
