@@ -270,7 +270,7 @@ test('E — recovery verifies independent email and phone factors, resets passwo
   await page.getByRole('button', { name: 'Verify phone code' }).click();
 
   const newPassword = `${password}-recovered`;
-  await page.getByLabel('New password').fill(newPassword);
+  await page.getByLabel('New password', { exact: true }).fill(newPassword);
   await page.getByLabel('Confirm new password').fill(newPassword);
   await page.getByRole('button', { name: 'Reset password' }).click();
   await expect(
