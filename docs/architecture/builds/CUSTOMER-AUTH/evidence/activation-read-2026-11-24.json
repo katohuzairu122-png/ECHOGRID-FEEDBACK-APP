@@ -1,0 +1,278 @@
+{
+  "observed": {
+    "checkedAt": "2026-11-24T13:06:42.117Z",
+    "readOnly": true,
+    "workers": [
+      {
+        "worker": "echo-grid-feedback-api",
+        "account": "cf205213947e3617297373060fe4c15f",
+        "deploymentId": "1c8dda4e-b4b4-44b9-9771-60836539f013",
+        "versions": [
+          {
+            "id": "e9b6d8b1-5b63-47a0-aa25-6f598ef0bbf9",
+            "percentage": 100,
+            "createdOn": "2026-11-22T17:52:11.35553Z",
+            "flags": [
+              {
+                "name": "CUSTOMER_EMAIL_AUTH_ENABLED",
+                "value": "true"
+              },
+              {
+                "name": "CUSTOMER_SESSION_ABSOLUTE_TTL_SECONDS",
+                "value": "2592000"
+              },
+              {
+                "name": "CUSTOMER_SESSION_ACCESS_TTL_SECONDS",
+                "value": "900"
+              },
+              {
+                "name": "CUSTOMER_SESSION_IDLE_TTL_SECONDS",
+                "value": "1800"
+              },
+              {
+                "name": "CUSTOMER_SESSION_REFRESH_TTL_SECONDS",
+                "value": "2592000"
+              },
+              {
+                "name": "CUSTOMER_STEP_UP_WINDOW_SECONDS",
+                "value": "300"
+              },
+              {
+                "name": "ENVIRONMENT",
+                "value": "production"
+              }
+            ]
+          }
+        ],
+        "scriptFlags": [
+          {
+            "name": "CUSTOMER_EMAIL_AUTH_ENABLED",
+            "value": "true"
+          },
+          {
+            "name": "CUSTOMER_SESSION_ABSOLUTE_TTL_SECONDS",
+            "value": "2592000"
+          },
+          {
+            "name": "CUSTOMER_SESSION_ACCESS_TTL_SECONDS",
+            "value": "900"
+          },
+          {
+            "name": "CUSTOMER_SESSION_IDLE_TTL_SECONDS",
+            "value": "1800"
+          },
+          {
+            "name": "CUSTOMER_SESSION_REFRESH_TTL_SECONDS",
+            "value": "2592000"
+          },
+          {
+            "name": "CUSTOMER_STEP_UP_WINDOW_SECONDS",
+            "value": "300"
+          },
+          {
+            "name": "ENVIRONMENT",
+            "value": "production"
+          }
+        ]
+      },
+      {
+        "worker": "echo-grid-feedback-web",
+        "account": "cf205213947e3617297373060fe4c15f",
+        "deploymentId": "2acd0437-57e6-4ca9-9459-74152d7ea780",
+        "versions": [
+          {
+            "id": "c3601071-0062-44c2-88db-0aa3b7aa2e61",
+            "percentage": 100,
+            "createdOn": "2026-11-22T17:55:21.685467Z",
+            "flags": [
+              {
+                "name": "CUSTOMER_EMAIL_AUTH_ENABLED",
+                "value": "true"
+              }
+            ]
+          }
+        ],
+        "scriptFlags": [
+          {
+            "name": "CUSTOMER_EMAIL_AUTH_ENABLED",
+            "value": "true"
+          }
+        ]
+      },
+      {
+        "worker": "echo-grid-feedback-api-staging",
+        "account": "cf205213947e3617297373060fe4c15f",
+        "deploymentId": "c34e1edf-ae39-4b94-8d14-4b1577e50f7b",
+        "versions": [
+          {
+            "id": "d4ab22db-db16-4824-b398-b908ec99ab7e",
+            "percentage": 100,
+            "createdOn": "2026-11-22T10:01:08.917125Z",
+            "flags": [
+              {
+                "name": "CUSTOMER_EMAIL_AUTH_ENABLED",
+                "value": "true"
+              },
+              {
+                "name": "CUSTOMER_SESSION_ABSOLUTE_TTL_SECONDS",
+                "value": "2592000"
+              },
+              {
+                "name": "CUSTOMER_SESSION_ACCESS_TTL_SECONDS",
+                "value": "900"
+              },
+              {
+                "name": "CUSTOMER_SESSION_IDLE_TTL_SECONDS",
+                "value": "1800"
+              },
+              {
+                "name": "CUSTOMER_SESSION_REFRESH_TTL_SECONDS",
+                "value": "2592000"
+              },
+              {
+                "name": "CUSTOMER_STEP_UP_WINDOW_SECONDS",
+                "value": "300"
+              },
+              {
+                "name": "ENVIRONMENT",
+                "value": "staging"
+              }
+            ]
+          }
+        ],
+        "scriptFlags": [
+          {
+            "name": "CUSTOMER_EMAIL_AUTH_ENABLED",
+            "value": "true"
+          },
+          {
+            "name": "CUSTOMER_SESSION_ABSOLUTE_TTL_SECONDS",
+            "value": "2592000"
+          },
+          {
+            "name": "CUSTOMER_SESSION_ACCESS_TTL_SECONDS",
+            "value": "900"
+          },
+          {
+            "name": "CUSTOMER_SESSION_IDLE_TTL_SECONDS",
+            "value": "1800"
+          },
+          {
+            "name": "CUSTOMER_SESSION_REFRESH_TTL_SECONDS",
+            "value": "2592000"
+          },
+          {
+            "name": "CUSTOMER_STEP_UP_WINDOW_SECONDS",
+            "value": "300"
+          },
+          {
+            "name": "ENVIRONMENT",
+            "value": "staging"
+          }
+        ]
+      },
+      {
+        "worker": "echo-grid-feedback-web-staging",
+        "account": "cf205213947e3617297373060fe4c15f",
+        "deploymentId": "def578ef-3249-4043-9217-887489a061e7",
+        "versions": [
+          {
+            "id": "cbf27d99-3041-45f3-b1b1-18b3c8cb6d0b",
+            "percentage": 100,
+            "createdOn": "2026-11-22T10:01:23.982237Z",
+            "flags": [
+              {
+                "name": "CUSTOMER_EMAIL_AUTH_ENABLED",
+                "value": "true"
+              }
+            ]
+          }
+        ],
+        "scriptFlags": [
+          {
+            "name": "CUSTOMER_EMAIL_AUTH_ENABLED",
+            "value": "true"
+          }
+        ]
+      }
+    ]
+  },
+  "confirmation": {
+    "checkedAt": "2026-11-24T13:18:22.201Z",
+    "independentSettingsRead": [
+      {
+        "worker": "echo-grid-feedback-api",
+        "flags": [
+          {
+            "name": "CUSTOMER_EMAIL_AUTH_ENABLED",
+            "type": "plain_text",
+            "value": "true"
+          },
+          {
+            "name": "CUSTOMER_RECOVERY_ENABLED",
+            "type": "absent"
+          },
+          {
+            "name": "CUSTOMER_LEGACY_UPGRADE_ENABLED",
+            "type": "absent"
+          }
+        ]
+      },
+      {
+        "worker": "echo-grid-feedback-web",
+        "flags": [
+          {
+            "name": "CUSTOMER_EMAIL_AUTH_ENABLED",
+            "type": "plain_text",
+            "value": "true"
+          },
+          {
+            "name": "CUSTOMER_RECOVERY_ENABLED",
+            "type": "absent"
+          },
+          {
+            "name": "CUSTOMER_LEGACY_UPGRADE_ENABLED",
+            "type": "absent"
+          }
+        ]
+      },
+      {
+        "worker": "echo-grid-feedback-api-staging",
+        "flags": [
+          {
+            "name": "CUSTOMER_EMAIL_AUTH_ENABLED",
+            "type": "plain_text",
+            "value": "true"
+          },
+          {
+            "name": "CUSTOMER_RECOVERY_ENABLED",
+            "type": "absent"
+          },
+          {
+            "name": "CUSTOMER_LEGACY_UPGRADE_ENABLED",
+            "type": "absent"
+          }
+        ]
+      },
+      {
+        "worker": "echo-grid-feedback-web-staging",
+        "flags": [
+          {
+            "name": "CUSTOMER_EMAIL_AUTH_ENABLED",
+            "type": "plain_text",
+            "value": "true"
+          },
+          {
+            "name": "CUSTOMER_RECOVERY_ENABLED",
+            "type": "absent"
+          },
+          {
+            "name": "CUSTOMER_LEGACY_UPGRADE_ENABLED",
+            "type": "absent"
+          }
+        ]
+      }
+    ]
+  },
+  "scope": "Read-only Cloudflare metadata. No secret values, databases, providers or configuration mutations."
+}

@@ -17,7 +17,7 @@ if (!clientAttributionSecret || Buffer.byteLength(clientAttributionSecret) < 32)
 
 export default defineConfig({
   testDir: './e2e',
-  testMatch: ['customer-auth-r5-provisional.spec.ts'],
+  testMatch: ['customer-auth-r5-provisional.spec.ts', 'customer-auth-acceptance-completion.spec.ts'],
   fullyParallel: false,
   workers: 1,
   timeout: 120_000,

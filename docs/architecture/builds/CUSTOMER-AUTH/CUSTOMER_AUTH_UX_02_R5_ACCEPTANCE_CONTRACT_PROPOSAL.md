@@ -3,6 +3,8 @@
 **Contract status: OWNER APPROVED under CUSTOMER-AUTH-FINAL-CLOSURE D01 on 2026-11-24.**
 **Product acceptance status: INCOMPLETE until each mandatory scenario has executed and passed.**
 
+> Current traceability and activation observations are in [the 2026-11-24 reconciliation](CUSTOMER_AUTH_ACCEPTANCE_AND_ACTIVATION_2026_11_24.md). The table below is the earlier baseline. PR #569 verified Settings phone and legacy upgrade; the continuation adds QR/consent/isolation, expiry, recovery codes and broader UI cases. Historical fixture exclusions below do not describe the updated runner.
+
 The Owner approved these A–H domains as the canonical final development-acceptance framework. This approval does not make unexecuted cases pass, invent new activity gates, or replace existing product/security requirements.
 
 ## Approved domains and current test mapping
