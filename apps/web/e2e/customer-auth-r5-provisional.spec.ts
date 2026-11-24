@@ -260,6 +260,11 @@ test('F — legacy phone customer upgrades on the original identity with members
   await page.getByLabel('Phone number').fill(legacyPhone);
   await page.getByRole('button', { name: 'Send code' }).click();
   await expect(page.getByLabel('Verification code')).toBeVisible();
+  const legacyAuthResponses: Array<{ path: string; status: number }> = [];
+  page.on('response', (response) => {
+    const path = new URL(response.url()).pathname;
+    if (/customer|auth|otp|verify/i.test(path)) legacyAuthResponses.push({ path, status: response.status() });
+  });
   await page.getByLabel('Verification code').fill('123456');
   await page.getByRole('button', { name: 'Verify' }).click();
   try {
@@ -268,7 +273,7 @@ test('F — legacy phone customer upgrades on the original identity with members
     const diagnostic = await page.request.get('http://127.0.0.1:8792/__test/legacy-otp-diagnostics', {
       headers: { Authorization: `Bearer ${mailboxToken}` },
     });
-    throw new Error(`Legacy OTP acceptance failed; synthetic stages: ${JSON.stringify(await diagnostic.json())}`);
+    throw new Error(`Legacy OTP acceptance failed; synthetic stages: ${JSON.stringify(await diagnostic.json())}; auth responses: ${JSON.stringify(legacyAuthResponses)}`);
   }
   await expect(page.getByLabel('Email to link')).toBeVisible();
   await page.getByLabel('Email to link').fill(legacyEmail);
