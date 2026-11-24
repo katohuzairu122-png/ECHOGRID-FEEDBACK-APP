@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('../db/client', () => ({ createDb: vi.fn(async () => ({ db: {}, close: async () => {} })) }));
 vi.mock('../repositories', () => ({ createRepositories: () => ({
   customers: { findById: mocks.findCustomer, setPreferredLocale: mocks.setPreferredLocale },
+  customerDeletionRequests: { findPending: async () => null },
   users: { findById: mocks.findUser },
 }) }));
 vi.mock('../middleware/rate-limit', () => ({

@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({ findCustomer: vi.fn(async () => ({ status: 'ac
 vi.mock('./db/client', () => ({ createDb: vi.fn(async () => ({ db: {}, close: async () => {} })) }));
 vi.mock('./repositories', () => ({ createRepositories: () => ({
   customers: { findById: mocks.findCustomer },
+  customerDeletionRequests: { findPending: async () => null },
   loyaltyAccounts: { listForCustomer: mocks.listAccounts },
 }) }));
 vi.mock('./middleware/rate-limit', () => {

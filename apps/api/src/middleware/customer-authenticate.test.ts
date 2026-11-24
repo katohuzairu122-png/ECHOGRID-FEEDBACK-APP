@@ -6,13 +6,14 @@ import type { Customer } from '../repositories/customer.repository';
 const mocks = vi.hoisted(() => ({
   findById: vi.fn<(id: string) => Promise<Customer | undefined>>(),
   close: vi.fn(async () => undefined),
+  findPending: vi.fn<(id: string) => Promise<{ scheduledFor: Date } | null>>(async () => null),
 }));
 
 vi.mock('../db/client', () => ({
   createDb: vi.fn(async () => ({ db: {}, close: mocks.close })),
 }));
 vi.mock('../repositories', () => ({
-  createRepositories: vi.fn(() => ({ customers: { findById: mocks.findById } })),
+  createRepositories: vi.fn(() => ({ customers: { findById: mocks.findById }, customerDeletionRequests: { findPending: mocks.findPending } })),
 }));
 
 const { createCustomerAuthenticate, customerAuthenticate } = await import('./customer-authenticate');
@@ -94,6 +95,30 @@ describe('customerAuthenticate account-state enforcement', () => {
     const response = await request(await signCustomerAccessToken(CUSTOMER_ID, JWT_SECRET));
 
     expect(response.status).toBe(401);
+  });
+
+  it('CUST-DEL-01: a pending deletion answers 403 ACCOUNT_DELETION_PENDING with the date on every ordinary route', async () => {
+    const scheduledFor = new Date('2026-12-24T10:00:00Z');
+    mocks.findPending.mockResolvedValue({ scheduledFor });
+
+    const response = await request(await signCustomerAccessToken(CUSTOMER_ID, JWT_SECRET));
+
+    expect(response.status).toBe(403);
+    const body = (await response.json()) as { error: { code: string; details?: { scheduledFor: string } } };
+    expect(body.error.code).toBe('ACCOUNT_DELETION_PENDING');
+    expect(body.error.details?.scheduledFor).toBe(scheduledFor.toISOString());
+  });
+
+  it('CUST-DEL-01: a router that sets allowPendingDeletion is not blocked and does not even look the request up', async () => {
+    mocks.findPending.mockResolvedValue({ scheduledFor: new Date() });
+    const open = new Hono<{ Bindings: Bindings; Variables: { allowPendingDeletion?: boolean } }>();
+    open.get('/', async (c, next) => { c.set('allowPendingDeletion', true); await next(); }, customerAuthenticate, (c) => c.json({ ok: true }));
+    open.onError(errorHandler as never);
+
+    const response = await open.request('/', { headers: { authorization: `Bearer ${await signCustomerAccessToken(CUSTOMER_ID, JWT_SECRET)}` } }, env, executionCtx());
+
+    expect(response.status).toBe(200);
+    expect(mocks.findPending).not.toHaveBeenCalled();
   });
 });
 

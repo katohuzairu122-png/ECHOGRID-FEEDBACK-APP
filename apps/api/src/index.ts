@@ -29,6 +29,7 @@ import { customerRecoveryRoutes } from './customer-auth/customer-recovery.compos
 import { customerEmailAuthComposition } from './customer-auth/customer-email-auth.composition';
 import { customerEmailLinkComposition } from './customer-auth/customer-email-link.composition';
 import { customerSessionLifecycleComposition } from './customer-auth/customer-session-lifecycle.composition';
+import { customerDeletionComposition } from './customer-account/customer-deletion.composition';
 import { customerMembershipRoutes } from './customer-relationships/customer-membership.routes';
 import { customerLanguageRoutes } from './customer-language/customer-language.routes';
 import { consentRoutes } from './consent/consent.routes';
@@ -184,6 +185,8 @@ api.route('/customer-auth', customerEmailLinkComposition);
 api.route('/customer-auth', customerEmailAuthComposition);
 // S5-03: refresh and logout for rotating customer sessions, same gate, Web Worker only.
 api.route('/customer-session', customerSessionLifecycleComposition);
+// CUST-DEL-01: customer "Delete my account data" request (same gate as the session lifecycle; nothing is erased here).
+api.route('/customer-account', customerDeletionComposition);
 // S4-03: account recovery. DISABLED BY DEFAULT: every path is a generic 404 unless CUSTOMER_RECOVERY_ENABLED is exactly "true".
 api.route('/customer-recovery', customerRecoveryRoutes);
 api.route('/customer-memberships', customerMembershipRoutes);

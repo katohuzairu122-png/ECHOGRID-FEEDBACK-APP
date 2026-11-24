@@ -10,6 +10,7 @@ import { RefreshTokenRepository } from './refresh-token.repository';
 import { PasswordResetTokenRepository } from './password-reset-token.repository';
 import { PermissionRepository } from './permission.repository';
 import { AuditLogRepository } from './audit-log.repository';
+import { CustomerDeletionRequestRepository } from './customer-deletion-request.repository';
 import { QrCodeRepository } from './qr-code.repository';
 import { QrScanEventRepository } from './qr-scan-event.repository';
 import { FeedbackRepository } from './feedback.repository';
@@ -68,6 +69,7 @@ export * from './refresh-token.repository';
 export * from './password-reset-token.repository';
 export * from './permission.repository';
 export * from './audit-log.repository';
+export * from './customer-deletion-request.repository';
 export * from './qr-code.repository';
 export * from './qr-scan-event.repository';
 export * from './feedback.repository';
@@ -125,6 +127,7 @@ export function createRepositories(db: Db) {
     passwordResetTokens: new PasswordResetTokenRepository(db),
     permissions: new PermissionRepository(db),
     auditLog: new AuditLogRepository(db),
+    customerDeletionRequests: new CustomerDeletionRequestRepository(db),
     qrCodes: new QrCodeRepository(db),
     qrScanEvents: new QrScanEventRepository(db),
     feedback: new FeedbackRepository(db),
