@@ -15,7 +15,8 @@ function fixture() {
     session: {} as never,
   }, {
     withDb: async () => { throw new Error('No database should be opened'); },
-    hasher: {} as never, limit, resolveTrustedSource: async () => 'trusted-source', legacyOtpSession,
+    hasher: {} as never, deliver: vi.fn(async () => {}),
+    limit, resolveTrustedSource: async () => 'trusted-source', legacyOtpSession,
   });
   const changePassword = vi.fn(async () => true);
   const app = createIsolatedCustomerEmailAuthRoutes({

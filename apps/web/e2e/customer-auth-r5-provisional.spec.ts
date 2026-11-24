@@ -287,7 +287,7 @@ test('F — legacy phone customer upgrades on the original identity with members
   );
   expect(message.status()).toBe(200);
   const delivery = (await message.json()).messages?.at(-1) as { subject?: string; html?: string } | undefined;
-  expect(delivery?.subject).toContain('Confirm this address');
+  expect(delivery?.subject).toBe('Confirm your email to secure your existing Echo Grid account');
   const proofLink = delivery?.html?.match(/href="([^"]+)"/)?.[1];
   expect(proofLink).toBeTruthy();
   await page.goto(proofLink!);
