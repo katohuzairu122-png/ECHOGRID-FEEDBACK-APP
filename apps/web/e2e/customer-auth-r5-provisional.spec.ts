@@ -273,7 +273,8 @@ test('F — legacy phone customer upgrades on the original identity with members
     const diagnostic = await page.request.get('http://127.0.0.1:8792/__test/legacy-otp-diagnostics', {
       headers: { Authorization: `Bearer ${mailboxToken}` },
     });
-    throw new Error(`Legacy OTP acceptance failed; synthetic stages: ${JSON.stringify(await diagnostic.json())}; auth responses: ${JSON.stringify(legacyAuthResponses)}`);
+    const failureUrl = new URL(page.url());
+    throw new Error(`Legacy OTP acceptance failed; reason: ${failureUrl.searchParams.get('error')}; synthetic stages: ${JSON.stringify(await diagnostic.json())}; auth responses: ${JSON.stringify(legacyAuthResponses)}`);
   }
   await expect(page.getByLabel('Email to link')).toBeVisible();
   await page.getByLabel('Email to link').fill(legacyEmail);
