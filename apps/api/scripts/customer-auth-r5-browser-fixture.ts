@@ -284,6 +284,16 @@ app.post('/__test/mark-phone-verified', async (c) => {
   });
   return c.json({ accepted: true }, 200, { 'Cache-Control': 'no-store' });
 });
+app.post('/__test/reset-login-budget', (c) => {
+  if (c.req.header('authorization') !== `Bearer ${fixtureToken}`) {
+    return c.body(null, 404);
+  }
+  for (const key of budgets.keys()) {
+    if (key.startsWith('customer-email:login:')) budgets.delete(key);
+  }
+  return c.body(null, 204);
+});
+
 app.get('/__test/customer-session-status', async (c) => {
   if (c.req.header('x-customer-auth-r5-fixture') !== fixtureToken) {
     return c.body(null, 404);

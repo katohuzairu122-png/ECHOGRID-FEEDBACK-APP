@@ -212,6 +212,12 @@ test('E — recovery verifies independent email and phone factors, resets passwo
   });
   expect(markPhone.status()).toBe(200);
 
+  const resetBudget = await page.request.post(
+    'http://127.0.0.1:8792/__test/reset-login-budget',
+    { headers: { Authorization: `Bearer ${mailboxToken}` } },
+  );
+  expect(resetBudget.status()).toBe(204);
+
   await page.goto('/loyalty/login/email');
   await page.getByLabel('Email').fill(email);
   await page.getByLabel('Password').fill(password);
