@@ -217,7 +217,7 @@ test('F — Settings phone verification uses the protected customer route and a 
   await expect(page.getByRole('heading', { name: 'Enter the code' })).toBeVisible();
   await page.getByLabel('Verification code').fill('000000');
   await page.getByRole('button', { name: 'Verify phone' }).click();
-  await expect(page.getByRole('alert')).toContainText('That code is not correct or has expired.');
+  await expect(page.getByText('That code is not correct or has expired.', { exact: true })).toBeVisible();
   await page.getByLabel('Verification code').fill('123456');
   await page.getByRole('button', { name: 'Verify phone' }).click();
   await expect(page.getByRole('heading', { name: 'Your phone is verified' })).toBeVisible();

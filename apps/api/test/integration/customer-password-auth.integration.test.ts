@@ -1,6 +1,3 @@
-Warning: truncated output (original token count: 14327)
-Total output lines: 1123
-
 import { describe, it, expect, beforeAll, afterAll, afterEach, vi } from 'vitest';
 import { Client } from 'pg';
 import { createCustomerEmailLinkService } from '../../src/customer-auth/customer-email-link.service';
@@ -448,7 +445,198 @@ describe.skipIf(!process.env.DATABASE_URL)('customer password auth (integration)
         const input = (password: string) => ({ name: 'Synthetic Legacy Customer', email, challengeId: m.challengeId, proof: m.proof, password });
         for (let i = 0; i < 5; i += 1) expect(await env.link.complete(owner, input(`${GOOD} wrong ${i}`))).toBe(false);
         expect((await q<{ attempts: number }>('SELECT attempts FROM customer_auth_challenges WHERE id=$1', [m.challengeId]))[0]?.attempts).toBe(5);
-        expect(await env.link.complete(o…2327 tokens truncated…tomerByPhone(PHONE(11))).toBeUndefined();
+        expect(await env.link.complete(owner, input(GOOD))).toBe(false);
+        expect((await q<{ login_email: string | null }>('SELECT login_email FROM customer_credentials WHERE customer_id=$1', [owner.customerId]))[0]?.login_email).toBeNull();
+      });
+
+      it('F2: caps concurrent live proofs per customer', async () => {
+        const { owner } = await otpOwner(PHONE(77));
+        const env = linkEnv();
+        for (let i = 0; i < 5; i += 1) await env.link.requestProof(owner, `r1-cap-${i}-${RUN}@example.test`);
+        expect(env.messages).toHaveLength(3);
+      });
+
+      it('F4: OTP establishment after linking is refused with an internal reason, generic outward', async () => {
+        const phone = PHONE(76);
+        const email = `r1-otp-${RUN}@example.test`;
+        const { owner } = await otpOwner(phone);
+        const env = linkEnv();
+        await env.link.requestProof(owner, email);
+        const [m] = env.messages;
+        if (!m) throw new Error('Expected proof');
+        expect(await env.link.complete(owner, { name: 'Synthetic Legacy Customer', email, challengeId: m.challengeId, proof: m.proof, password: GOOD })).toBe(true);
+        expect(await a.sessions.establishSession({ customerId: owner.customerId, authMethod: 'otp' }))
+          .toEqual({ ok: false, reason: 'otp_retired' });
+        expect(await a.auth.signInWithVerifiedPhone(proof(phone))).toEqual({ ok: false, reason: 'customer_inactive' });
+      });
+
+      it('F7: a suspended customer and a password-method session cannot link', async () => {
+        const phone = PHONE(75);
+        const email = `r1-gate-${RUN}@example.test`;
+        expect((await a.auth.registerWithPassword(proof(phone), GOOD)).ok).toBe(true);
+        const { owner } = await otpOwner(phone);
+        const env = linkEnv();
+        await env.link.requestProof(owner, email);
+        const [m] = env.messages;
+        if (!m) throw new Error('Expected proof');
+        const input = { name: 'Synthetic Legacy Customer', email, challengeId: m.challengeId, proof: m.proof, password: GOOD };
+
+        const login = await a.auth.loginWithPassword({ phone, password: GOOD });
+        if (!login.ok) throw new Error('Expected password session');
+        const passwordOwner = { customerId: login.session.customerId, sessionId: login.session.sessionId };
+        expect(await env.link.complete(passwordOwner, input)).toBe(false);
+
+        await q(`UPDATE customers SET status='suspended' WHERE id=$1`, [owner.customerId]);
+        expect(await env.link.complete(owner, input)).toBe(false);
+        await q(`UPDATE customers SET status='active' WHERE id=$1`, [owner.customerId]);
+        expect((await q<{ login_email: string | null }>('SELECT login_email FROM customer_credentials WHERE customer_id=$1', [owner.customerId]))[0]?.login_email).toBeNull();
+      });
+
+      it('F7: a concurrent claim of one email by two customers WITH passwords yields exactly one link', async () => {
+        const email = `r1-race-pw-${RUN}@example.test`;
+        const left = { phone: PHONE(74) }; const right = { phone: PHONE(73) };
+        expect((await a.auth.registerWithPassword(proof(left.phone), GOOD)).ok).toBe(true);
+        expect((await b.auth.registerWithPassword(proof(right.phone), GOOD)).ok).toBe(true);
+        const l = await otpOwner(left.phone);
+        const r = await otpOwner(right.phone);
+        const envL = linkEnv(); const envR = linkEnv({ connection: client2 });
+        await envL.link.requestProof(l.owner, email);
+        await envR.link.requestProof(r.owner, email);
+        const [ml] = envL.messages; const [mr] = envR.messages;
+        if (!ml || !mr) throw new Error('Expected proofs');
+        const outcomes = await Promise.all([
+          envL.link.complete(l.owner, { name: 'Synthetic Legacy Customer', email, challengeId: ml.challengeId, proof: ml.proof, password: GOOD }),
+          envR.link.complete(r.owner, { name: 'Synthetic Legacy Customer', email, challengeId: mr.challengeId, proof: mr.proof, password: GOOD }),
+        ]);
+        expect(outcomes.filter(Boolean)).toHaveLength(1);
+        expect(await q('SELECT 1 FROM customer_credentials WHERE login_email=$1', [email])).toHaveLength(1);
+      });
+    });
+  });
+
+  describe('phone proof', () => {
+    it('refuses a stale, a future-dated and a malformed proof in every flow, and creates nothing', async () => {
+      const bad = [
+        proof(PHONE(1), { verifiedAt: new Date(clockMs - 301_000) }),
+        proof(PHONE(1), { verifiedAt: new Date(clockMs + 60_000) }),
+        proof('5551234567'),
+        proof('+0123'),
+      ];
+      for (const p of bad) {
+        expect(await a.auth.signInWithVerifiedPhone(p)).toEqual({
+          ok: false,
+          reason: 'proof_invalid',
+        });
+        expect(await a.auth.registerWithPassword(p, GOOD)).toEqual({
+          ok: false,
+          reason: 'proof_invalid',
+        });
+        expect(await a.auth.recoverPassword(p, GOOD)).toEqual({
+          ok: false,
+          reason: 'proof_invalid',
+        });
+      }
+      expect(await customerByPhone(PHONE(1))).toBeUndefined();
+      expect(hashCalls).toBe(0);
+    });
+  });
+
+  describe('signInWithVerifiedPhone', () => {
+    it('creates a customer once, even for two simultaneous first verifications (the 01C race)', async () => {
+      const [r1, r2] = await Promise.all([
+        a.auth.signInWithVerifiedPhone(proof(PHONE(2))),
+        b.auth.signInWithVerifiedPhone(proof(PHONE(2))),
+      ]);
+      expect(r1.ok && r2.ok).toBe(true);
+      if (r1.ok && r2.ok) {
+        expect([r1.isNewCustomer, r2.isNewCustomer].filter(Boolean)).toHaveLength(1);
+        expect(r1.customerId).toBe(r2.customerId);
+        expect(r1.hasPassword).toBe(false);
+      }
+      expect(await q('SELECT 1 FROM customers WHERE phone=$1', [PHONE(2)])).toHaveLength(1);
+    });
+
+    it('keeps the existing identity for a returning customer and reports hasPassword', async () => {
+      const first = await a.auth.registerWithPassword(proof(PHONE(3)), GOOD);
+      expect(first.ok).toBe(true);
+      const again = await a.auth.signInWithVerifiedPhone(proof(PHONE(3)));
+      expect(again.ok && again.hasPassword && !again.isNewCustomer).toBe(true);
+      expect(first.ok && again.ok && first.customerId === again.customerId).toBe(true);
+    });
+
+    it('marks a previously unverified customer verified, and refuses suspended and soft-deleted-phone customers cleanly', async () => {
+      await q(`INSERT INTO customers (phone, phone_verified_at) VALUES ($1, NULL)`, [PHONE(4)]);
+      expect((await a.auth.signInWithVerifiedPhone(proof(PHONE(4)))).ok).toBe(true);
+      expect(
+        (
+          await q<{ phone_verified_at: Date | null }>(
+            'SELECT phone_verified_at FROM customers WHERE phone=$1',
+            [PHONE(4)],
+          )
+        )[0]!.phone_verified_at,
+      ).not.toBeNull();
+
+      await q(
+        `INSERT INTO customers (phone, phone_verified_at, status) VALUES ($1, now(), 'suspended')`,
+        [PHONE(5)],
+      );
+      expect(await a.auth.signInWithVerifiedPhone(proof(PHONE(5)))).toEqual({
+        ok: false,
+        reason: 'customer_inactive',
+      });
+
+      await q(
+        `INSERT INTO customers (phone, phone_verified_at, is_deleted) VALUES ($1, now(), true)`,
+        [PHONE(6)],
+      );
+      expect(await a.auth.signInWithVerifiedPhone(proof(PHONE(6)))).toEqual({
+        ok: false,
+        reason: 'phone_unavailable',
+      });
+      expect(await a.auth.registerWithPassword(proof(PHONE(6)), GOOD)).toEqual({
+        ok: false,
+        reason: 'phone_unavailable',
+      });
+    });
+  });
+
+  describe('registerWithPassword', () => {
+    it('creates the customer, stores only a hash that verifies, sets the legacy cutoff and opens a session', async () => {
+      const r = await a.auth.registerWithPassword(proof(PHONE(10)), GOOD);
+      expect(r.ok && r.isNewCustomer).toBe(true);
+      const c = (await customerByPhone(PHONE(10)))!;
+      const [cred] = await q<{ password_hash: string; legacy_tokens_invalid_before: Date | null }>(
+        'SELECT password_hash, legacy_tokens_invalid_before FROM customer_credentials WHERE customer_id=$1',
+        [c.id],
+      );
+      expect(cred!.password_hash).toMatch(/^pbkdf2\$1000\$/);
+      expect(cred!.password_hash).not.toContain(GOOD);
+      expect(cred!.legacy_tokens_invalid_before).not.toBeNull();
+      expect(await createDirectPbkdf2Worker().verify(GOOD, cred!.password_hash)).toBe(true);
+      // The plaintext is in no table at all.
+      for (const t of [
+        'customers',
+        'customer_credentials',
+        'customer_sessions',
+        'customer_refresh_tokens',
+        'customer_auth_events',
+      ]) {
+        expect(await q(`SELECT 1 FROM ${t} x WHERE x::text LIKE $1`, [`%${GOOD}%`])).toHaveLength(
+          0,
+        );
+      }
+      if (r.ok)
+        expect(await a.sessions.authenticateSessionToken(r.session.accessToken)).toMatchObject({
+          customerId: c.id,
+        });
+    });
+
+    it('returns every policy violation and changes nothing, hashing nothing', async () => {
+      const r = await a.auth.registerWithPassword(proof(PHONE(11)), 'aaa');
+      expect(r).toMatchObject({ ok: false, reason: 'policy' });
+      if (!r.ok && r.reason === 'policy')
+        expect(r.violations).toEqual(expect.arrayContaining(['too_short', 'repetitive']));
+      expect(await customerByPhone(PHONE(11))).toBeUndefined();
       expect(hashCalls).toBe(0);
     });
 
