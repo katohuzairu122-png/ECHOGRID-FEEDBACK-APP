@@ -286,7 +286,17 @@ test('E — recovery verifies independent email and phone factors, resets passwo
   await context.clearCookies();
   await context.addCookies(oldSessionCookies);
   await page.goto('/loyalty/dashboard');
-  await expect(page).toHaveURL(/\/loyalty\/login/);
+  // The shell preflight only checks cookie presence. Prove revocation at the
+  // protected API boundary, where session liveness is authoritative.
+  const oldAccess = oldSessionCookies.find((cookie) =>
+    cookie.name.includes('customer_access'),
+  )?.value;
+  expect(oldAccess).toBeTruthy();
+  const revokedRead = await page.request.get('http://127.0.0.1:8792/api/v1/loyalty/me/profile', {
+    headers: { Authorization: `Bearer ${oldAccess}` },
+  });
+  expect(revokedRead.status()).toBe(401);
+  await expect(page.getByRole('heading', { name: 'My loyalties' })).toHaveCount(0);
 
   await context.clearCookies();
   await page.goto('/loyalty/login/email');
