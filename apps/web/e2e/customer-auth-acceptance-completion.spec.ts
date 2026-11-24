@@ -164,8 +164,13 @@ test('D — concurrent refresh has one winner, stale replay revokes that session
   const independent = await browser.newContext();
   try {
     for (const clone of clones) await clone.addCookies(original);
-    const results = await Promise.all(clones.map(c => c.request.get('http://localhost:3000/loyalty/session/refresh?next=%2Floyalty%2Fdashboard', { maxRedirects: 0 })));
-    for (const result of results) expect(result.status()).toBe(303);
+    // Real browser navigations retain localhost's secure-cookie semantics;
+    // isolated cookie jars ensure both requests present the original pair.
+    await Promise.all(clones.map(async c => {
+      const tab = await c.newPage();
+      await tab.goto('http://localhost:3000/loyalty/session/refresh?next=%2Floyalty%2Fdashboard');
+      await expect(tab).toHaveURL(/\/loyalty\/dashboard(?:\?|$)/);
+    }));
     const changed = await Promise.all(clones.map(async c => {
       const before = original.find(v => v.name === '__Host-ff_customer_refresh')?.value;
       const after = (await c.cookies()).find(v => v.name === '__Host-ff_customer_refresh')?.value;
