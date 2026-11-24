@@ -10,6 +10,7 @@ const values = {
   CUSTOMER_AUTH_R5_MAILBOX_TOKEN: randomBytes(32).toString('base64url'),
   CLIENT_ATTRIBUTION_SECRET: randomBytes(32).toString('base64url'),
   CUSTOMER_EMAIL_AUTH_HMAC_SECRET: randomBytes(32).toString('base64url'),
+  CUSTOMER_RECOVERY_HMAC_SECRET: randomBytes(32).toString('base64url'),
   CUSTOMER_SESSION_SIGNING_SECRET: randomBytes(32).toString('base64url'),
   CUSTOMER_JWT_SECRET: randomBytes(32).toString('base64url'),
   E2E_CUSTOMER_EMAIL: `r5-${randomBytes(8).toString('hex')}@example.test`,

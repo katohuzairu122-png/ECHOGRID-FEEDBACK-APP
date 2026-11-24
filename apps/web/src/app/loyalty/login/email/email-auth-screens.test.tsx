@@ -7,7 +7,9 @@ const h = vi.hoisted(() => ({
   login: vi.fn(),
   request: vi.fn(),
   complete: vi.fn(),
-  notFound: vi.fn(() => { throw new Error('NOT_FOUND'); }),
+  notFound: vi.fn(() => {
+    throw new Error('NOT_FOUND');
+  }),
 }));
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/actions/customer-email-auth', () => ({
@@ -17,9 +19,15 @@ vi.mock('@/lib/actions/customer-email-auth', () => ({
 }));
 vi.mock('@/lib/actions/language', () => ({ setLanguageAction: vi.fn() }));
 vi.mock('@/lib/actions/customer-auth', () => ({ requestOtpAction: vi.fn() }));
-vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: vi.fn() }), notFound: h.notFound }));
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ refresh: vi.fn() }),
+  notFound: h.notFound,
+}));
 vi.mock('@/lib/customer-email-auth-client', () => ({
   isCustomerEmailAuthWebEnabled: () => process.env.CUSTOMER_EMAIL_AUTH_ENABLED === 'true',
+  isCustomerRecoveryWebEnabled: () =>
+    process.env.CUSTOMER_EMAIL_AUTH_ENABLED === 'true' &&
+    process.env.CUSTOMER_RECOVERY_ENABLED === 'true',
 }));
 
 import { EmailLoginForm } from './email-login-form';
@@ -35,16 +43,22 @@ const assign = vi.fn();
 beforeEach(() => {
   vi.clearAllMocks();
   process.env.CUSTOMER_EMAIL_AUTH_ENABLED = 'true';
-  Object.defineProperty(window, 'location', { value: { ...window.location, assign, hash: '', pathname: '/loyalty/signup/verify', search: '' }, writable: true });
+  Object.defineProperty(window, 'location', {
+    value: { ...window.location, assign, hash: '', pathname: '/loyalty/signup/verify', search: '' },
+    writable: true,
+  });
 });
-afterEach(() => { process.env.CUSTOMER_EMAIL_AUTH_ENABLED = ''; });
+afterEach(() => {
+  process.env.CUSTOMER_EMAIL_AUTH_ENABLED = '';
+});
 
 const CHALLENGE = '11111111-1111-4111-8111-111111111111.' + 'p'.repeat(40);
 
 describe('readChallengeFromHash', () => {
   it('accepts only a well-formed challenge id and proof', () => {
     expect(readChallengeFromHash(`#c=${encodeURIComponent(CHALLENGE)}`)).toBe(CHALLENGE);
-    for (const bad of ['', '#', '#c=', '#c=abc', '#x=1', `#c=${CHALLENGE}&extra=1`, '#c=%E0%A4%A']) expect(readChallengeFromHash(bad)).toBeNull();
+    for (const bad of ['', '#', '#c=', '#c=abc', '#x=1', `#c=${CHALLENGE}&extra=1`, '#c=%E0%A4%A'])
+      expect(readChallengeFromHash(bad)).toBeNull();
   });
 });
 
@@ -55,7 +69,9 @@ describe('EmailLoginForm', () => {
     await userEvent.type(screen.getByLabelText('Email'), 'a@example.test');
     await userEvent.type(screen.getByLabelText('Password'), 'wrong');
     await userEvent.click(screen.getByRole('button', { name: 'Sign in' }));
-    expect(await screen.findByRole('alert')).toHaveTextContent('The email or password is not correct.');
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'The email or password is not correct.',
+    );
     expect(assign).not.toHaveBeenCalled();
   });
   it('on success loads the destination as a fresh document', async () => {
@@ -68,8 +84,14 @@ describe('EmailLoginForm', () => {
   });
   it('offers sign-up and the phone alternative, both keeping next', () => {
     render(<EmailLoginForm next="/loyalty/dashboard/qr" />);
-    expect(screen.getByRole('link', { name: /Create an account with email/ })).toHaveAttribute('href', '/loyalty/signup?next=%2Floyalty%2Fdashboard%2Fqr');
-    expect(screen.getByRole('link', { name: /phone number instead/ })).toHaveAttribute('href', '/loyalty/login?method=phone&next=%2Floyalty%2Fdashboard%2Fqr');
+    expect(screen.getByRole('link', { name: /Create an account with email/ })).toHaveAttribute(
+      'href',
+      '/loyalty/signup?next=%2Floyalty%2Fdashboard%2Fqr',
+    );
+    expect(screen.getByRole('link', { name: /phone number instead/ })).toHaveAttribute(
+      'href',
+      '/loyalty/login?method=phone&next=%2Floyalty%2Fdashboard%2Fqr',
+    );
   });
 });
 
@@ -105,7 +127,9 @@ describe('SignupVerifyForm', () => {
     const { container } = render(<SignupVerifyForm next="/loyalty/dashboard" />);
     expect(await screen.findByText('Confirm your email')).toBeInTheDocument();
     expect(replace).toHaveBeenCalledWith(null, '', '/loyalty/signup/verify');
-    expect((container.querySelector('input[name="challenge"]') as HTMLInputElement).value).toBe(CHALLENGE);
+    expect((container.querySelector('input[name="challenge"]') as HTMLInputElement).value).toBe(
+      CHALLENGE,
+    );
     await userEvent.click(screen.getByRole('button', { name: 'Create account' }));
     expect(h.complete).toHaveBeenCalled();
     await waitFor(() => expect(assign).toHaveBeenCalledWith('/loyalty/dashboard'));
@@ -118,7 +142,10 @@ describe('SignupVerifyForm', () => {
     render(<SignupVerifyForm next="/loyalty/dashboard" />);
     expect(await screen.findByText(/This link is incomplete/)).toBeInTheDocument();
     expect(screen.queryByLabelText('Choose a password')).not.toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Request a new link' })).toHaveAttribute('href', '/loyalty/signup?next=%2Floyalty%2Fdashboard');
+    expect(screen.getByRole('link', { name: 'Request a new link' })).toHaveAttribute(
+      'href',
+      '/loyalty/signup?next=%2Floyalty%2Fdashboard',
+    );
   });
   it('shows a translated error for a rejected proof', async () => {
     window.location.hash = `#c=${encodeURIComponent(CHALLENGE)}`;
@@ -132,14 +159,21 @@ describe('SignupVerifyForm', () => {
 describe('entry points', () => {
   it('routes the primary customer sign-in to email/password when enabled and keeps OTP as an explicit alternate', async () => {
     process.env.CUSTOMER_EMAIL_AUTH_ENABLED = 'true';
-    const emailPrimary = await CustomerLoginPage({ searchParams: Promise.resolve({}) }) as { type: unknown };
-    const phoneAlternate = await CustomerLoginPage({ searchParams: Promise.resolve({ method: 'phone' }) }) as { type: unknown };
+    const emailPrimary = (await CustomerLoginPage({ searchParams: Promise.resolve({}) })) as {
+      type: unknown;
+    };
+    const phoneAlternate = (await CustomerLoginPage({
+      searchParams: Promise.resolve({ method: 'phone' }),
+    })) as { type: unknown };
     expect(emailPrimary.type).toBe(EmailLoginForm);
     expect(phoneAlternate.type).toBe(OtpLoginForm);
   });
   it('the phone sign-in page links to email sign-in only when the feature is on', () => {
     const { rerender } = render(<OtpLoginForm next="/loyalty/dashboard" emailEnabled />);
-    expect(screen.getByRole('link', { name: 'Sign in with email' })).toHaveAttribute('href', '/loyalty/login?next=%2Floyalty%2Fdashboard');
+    expect(screen.getByRole('link', { name: 'Sign in with email' })).toHaveAttribute(
+      'href',
+      '/loyalty/login?next=%2Floyalty%2Fdashboard',
+    );
     rerender(<OtpLoginForm next="/loyalty/dashboard" />);
     expect(screen.queryByRole('link', { name: 'Sign in with email' })).not.toBeInTheDocument();
   });
@@ -150,7 +184,9 @@ describe('entry points', () => {
     }
     process.env.CUSTOMER_EMAIL_AUTH_ENABLED = 'true';
     for (const page of [EmailLoginPage, SignupPage, VerifyPage]) {
-      await expect(page({ searchParams: Promise.resolve({ next: '//evil.example' }) })).resolves.toBeTruthy();
+      await expect(
+        page({ searchParams: Promise.resolve({ next: '//evil.example' }) }),
+      ).resolves.toBeTruthy();
     }
   });
 });
@@ -177,11 +213,14 @@ describe('SignupRequestForm password minimum (configured, approved 8)', () => {
   });
   it('the signup page passes the configured minimum to the screen', async () => {
     process.env.CUSTOMER_PASSWORD_MIN_LENGTH = '8';
-    const element = (await SignupPage({ searchParams: Promise.resolve({}) })) as { props: { minLength?: number } };
+    const element = (await SignupPage({ searchParams: Promise.resolve({}) })) as {
+      props: { minLength?: number };
+    };
     expect(element.props.minLength).toBe(8);
     delete process.env.CUSTOMER_PASSWORD_MIN_LENGTH;
-    const without = (await SignupPage({ searchParams: Promise.resolve({}) })) as { props: { minLength?: number } };
+    const without = (await SignupPage({ searchParams: Promise.resolve({}) })) as {
+      props: { minLength?: number };
+    };
     expect(without.props.minLength).toBeUndefined();
   });
 });
-

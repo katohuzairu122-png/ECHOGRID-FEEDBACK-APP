@@ -46,6 +46,7 @@ export default defineConfig({
       env: {
         API_BASE_URL: 'http://127.0.0.1:8792',
         CUSTOMER_EMAIL_AUTH_ENABLED: 'true',
+        CUSTOMER_RECOVERY_ENABLED: 'true',
         CUSTOMER_PASSWORD_MIN_LENGTH: '8',
       },
       reuseExistingServer: false,

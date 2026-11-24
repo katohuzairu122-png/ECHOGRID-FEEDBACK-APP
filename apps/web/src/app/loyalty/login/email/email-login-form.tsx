@@ -4,14 +4,29 @@ import { useActionState, useEffect } from 'react';
 import { useTranslations } from 'next-intl';
 import Link from 'next/link';
 import { loginWithEmailAction, type EmailAuthState } from '@/lib/actions/customer-email-auth';
-import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Input, Label } from '@/components/ui';
+import {
+  Button,
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+  Input,
+  Label,
+} from '@/components/ui';
 import { Logo } from '@/components/brand';
 import { LanguageSelector } from '@/components/language-selector';
 
 const initial: EmailAuthState = {};
 
 /** Email and password sign-in. The action sets the HttpOnly cookies; the client then loads `next` as a fresh document. */
-export function EmailLoginForm({ next }: { next: string }) {
+export function EmailLoginForm({
+  next,
+  recoveryEnabled = false,
+}: {
+  next: string;
+  recoveryEnabled?: boolean;
+}) {
   const [state, formAction, pending] = useActionState(loginWithEmailAction, initial);
   const t = useTranslations('loyalty.customer.emailAuth');
 
@@ -37,8 +52,22 @@ export function EmailLoginForm({ next }: { next: string }) {
             </div>
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="password">{t('passwordLabel')}</Label>
-              <Input id="password" name="password" type="password" autoComplete="current-password" required />
+              <Input
+                id="password"
+                name="password"
+                type="password"
+                autoComplete="current-password"
+                required
+              />
             </div>
+            {recoveryEnabled && (
+              <Link
+                href="/account/recovery"
+                className="text-sm font-medium text-brand-700 hover:underline"
+              >
+                {t('passwordRecoveryLink')}
+              </Link>
+            )}
             {state.error && (
               <p role="alert" className="text-sm text-danger">
                 {t(`errors.${state.error}`)}
@@ -47,10 +76,16 @@ export function EmailLoginForm({ next }: { next: string }) {
             <Button type="submit" disabled={pending || state.success === true} className="w-full">
               {pending ? t('signingIn') : t('signInButton')}
             </Button>
-            <Link href={`/loyalty/signup?next=${encodeURIComponent(next)}`} className="text-center text-sm font-medium text-brand-700 hover:underline">
+            <Link
+              href={`/loyalty/signup?next=${encodeURIComponent(next)}`}
+              className="text-center text-sm font-medium text-brand-700 hover:underline"
+            >
               {t('createAccountLink')}
             </Link>
-            <Link href={`/loyalty/login?method=phone&next=${encodeURIComponent(next)}`} className="text-center text-sm font-medium text-brand-700 hover:underline">
+            <Link
+              href={`/loyalty/login?method=phone&next=${encodeURIComponent(next)}`}
+              className="text-center text-sm font-medium text-brand-700 hover:underline"
+            >
               {t('usePhoneInstead')}
             </Link>
           </form>

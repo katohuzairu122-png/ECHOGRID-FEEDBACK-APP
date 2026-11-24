@@ -3,19 +3,31 @@ import { getTranslations } from 'next-intl/server';
 import { customerApiFetch } from '@/lib/customer-api-client';
 import type { CustomerProfileDto } from '@/lib/customer-profile';
 import { CustomerProfileForm } from './profile-form';
-import { buttonVariants, Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui';
+import {
+  buttonVariants,
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui';
 import { cn } from '@/lib/utils';
 import { getCompatibleCustomerCredentials } from '@/lib/customer-session';
 import { CustomerSecurityForm } from './security-form';
 import { CustomerEmailUpgradeForm } from './email-upgrade-form';
-import { isCustomerEmailAuthWebEnabled } from '@/lib/customer-email-auth-client';
+import {
+  isCustomerEmailAuthWebEnabled,
+  isCustomerRecoveryWebEnabled,
+} from '@/lib/customer-email-auth-client';
+import { CustomerRecoveryCodesForm } from './recovery-codes-form';
 
 export const dynamic = 'force-dynamic';
 
 export default async function CustomerSettingsPage() {
-  const [profile, t, credentials] = await Promise.all([
+  const [profile, t, recoveryT, credentials] = await Promise.all([
     customerApiFetch<CustomerProfileDto>('/loyalty/me/profile'),
     getTranslations('loyalty.customer.settings'),
+    getTranslations('loyalty.customer.accountRecovery'),
     getCompatibleCustomerCredentials(),
   ]);
   return (
@@ -32,28 +44,65 @@ export default async function CustomerSettingsPage() {
         <CardContent className="flex flex-col gap-5">
           <CustomerProfileForm name={profile.name ?? ''} />
           <dl className="grid gap-3 text-sm sm:grid-cols-2">
-            <div><dt className="font-medium text-neutral-700">{t('emailLabel')}</dt><dd className="text-neutral-900">{profile.email ?? t('notSet')}</dd></div>
-            <div><dt className="font-medium text-neutral-700">{t('emailStatusLabel')}</dt><dd className="text-neutral-900">{profile.emailVerified ? t('verified') : t('unverified')}</dd></div>
-            <div><dt className="font-medium text-neutral-700">{t('phoneLabel')}</dt><dd className="text-neutral-900">{profile.phoneMasked ?? t('notSet')}</dd></div>
-            <div><dt className="font-medium text-neutral-700">{t('phoneStatusLabel')}</dt><dd className="text-neutral-900">{profile.phoneVerified ? t('verified') : t('unverified')}</dd></div>
+            <div>
+              <dt className="font-medium text-neutral-700">{t('emailLabel')}</dt>
+              <dd className="text-neutral-900">{profile.email ?? t('notSet')}</dd>
+            </div>
+            <div>
+              <dt className="font-medium text-neutral-700">{t('emailStatusLabel')}</dt>
+              <dd className="text-neutral-900">
+                {profile.emailVerified ? t('verified') : t('unverified')}
+              </dd>
+            </div>
+            <div>
+              <dt className="font-medium text-neutral-700">{t('phoneLabel')}</dt>
+              <dd className="text-neutral-900">{profile.phoneMasked ?? t('notSet')}</dd>
+            </div>
+            <div>
+              <dt className="font-medium text-neutral-700">{t('phoneStatusLabel')}</dt>
+              <dd className="text-neutral-900">
+                {profile.phoneVerified ? t('verified') : t('unverified')}
+              </dd>
+            </div>
           </dl>
           <div>
-            <Link href="/loyalty/dashboard/phone" className={cn(buttonVariants({ variant: 'outline' }))}>{t('phoneAction')}</Link>
+            <Link
+              href="/loyalty/dashboard/phone"
+              className={cn(buttonVariants({ variant: 'outline' }))}
+            >
+              {t('phoneAction')}
+            </Link>
             <p className="mt-2 text-xs text-neutral-600">{t('phoneChangeNote')}</p>
           </div>
         </CardContent>
       </Card>
+      {profile.emailVerified &&
+        credentials.kind === 'rotating' &&
+        isCustomerRecoveryWebEnabled() && (
+          <Card>
+            <CardHeader>
+              <CardTitle>{recoveryT('recoveryCodesTitle')}</CardTitle>
+              <CardDescription>{recoveryT('recoveryCodesDescription')}</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <CustomerRecoveryCodesForm />
+            </CardContent>
+          </Card>
+        )}
       <Card>
         <CardHeader>
           <CardTitle>{t('securityTitle')}</CardTitle>
           <CardDescription>{t('securityDescription')}</CardDescription>
         </CardHeader>
         <CardContent>
-          {profile.emailVerified
-            ? <CustomerSecurityForm canManageSessions={credentials.kind === 'rotating'} />
-            : isCustomerEmailAuthWebEnabled() && process.env.CUSTOMER_LEGACY_UPGRADE_ENABLED === 'true'
-              ? <CustomerEmailUpgradeForm canUpgrade={credentials.kind === 'rotating'} />
-              : <p className="text-sm text-neutral-600">{t('passwordNotAvailable')}</p>}
+          {profile.emailVerified ? (
+            <CustomerSecurityForm canManageSessions={credentials.kind === 'rotating'} />
+          ) : isCustomerEmailAuthWebEnabled() &&
+            process.env.CUSTOMER_LEGACY_UPGRADE_ENABLED === 'true' ? (
+            <CustomerEmailUpgradeForm canUpgrade={credentials.kind === 'rotating'} />
+          ) : (
+            <p className="text-sm text-neutral-600">{t('passwordNotAvailable')}</p>
+          )}
         </CardContent>
       </Card>
     </section>

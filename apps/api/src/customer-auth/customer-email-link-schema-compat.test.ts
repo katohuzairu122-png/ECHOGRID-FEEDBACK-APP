@@ -23,10 +23,16 @@ const sources = sourceFiles(join(API_ROOT, 'src')).map((full) => ({
   path: relative(API_ROOT, full).split('\\').join('/'),
   text: readFileSync(full, 'utf8'),
 }));
-const referencing = (needle: RegExp) => sources.filter((f) => needle.test(f.text)).map((f) => f.path).sort();
+const referencing = (needle: RegExp) =>
+  sources
+    .filter((f) => needle.test(f.text))
+    .map((f) => f.path)
+    .sort();
 
 describe('S3 schema dependencies (migration 0072 / 0073)', () => {
-  const journal = JSON.parse(read('drizzle/meta/_journal.json')) as { entries: Array<{ idx: number; tag: string }> };
+  const journal = JSON.parse(read('drizzle/meta/_journal.json')) as {
+    entries: Array<{ idx: number; tag: string }>;
+  };
   const entry = (prefix: string) => journal.entries.find((e) => e.tag.startsWith(prefix));
 
   it('lists 0072 before 0073, and both after 0068 (credentials table)', () => {
@@ -65,26 +71,43 @@ describe('S3 stays unreachable from the deployed Worker until activation', () =>
     expect(referencing(/new CustomerSessionService\(/)).toEqual([
       'src/customer-auth/customer-email-auth.composition.ts',
       'src/customer-auth/customer-email-link.composition.ts',
+      'src/customer-auth/customer-recovery.composition.ts',
       'src/customer-auth/customer-session-lifecycle.composition.ts',
       'src/middleware/customer-authenticate.ts',
     ]);
-    expect(read('src/customer-auth/customer-session-lifecycle.composition.ts')).toMatch(/isEnabled: \(c\) => isCustomerEmailAuthEnabled\(c\.env as Bindings\)/);
-    expect(read('src/index.ts')).toMatch(/api\.route\('\/customer-session', customerSessionLifecycleComposition\);/);
+    expect(read('src/customer-auth/customer-session-lifecycle.composition.ts')).toMatch(
+      /isEnabled: \(c\) => isCustomerEmailAuthEnabled\(c\.env as Bindings\)/,
+    );
+    expect(read('src/index.ts')).toMatch(
+      /api\.route\('\/customer-session', customerSessionLifecycleComposition\);/,
+    );
     const middlewareSource = read('src/middleware/customer-authenticate.ts');
-    expect(middlewareSource).toMatch(/isEnabled: \(c\) => isCustomerEmailAuthEnabled\(c\.env as Bindings\)/);
-    expect(middlewareSource).toContain('export const legacyCustomerAuthenticate = createCustomerAuthenticate();');
+    expect(middlewareSource).toMatch(
+      /isEnabled: \(c\) => isCustomerEmailAuthEnabled\(c\.env as Bindings\)/,
+    );
+    expect(middlewareSource).toContain(
+      'export const legacyCustomerAuthenticate = createCustomerAuthenticate();',
+    );
     const composition = read('src/customer-auth/customer-email-auth.composition.ts');
-    expect(composition).toMatch(/isEnabled: \(c\) => isCustomerEmailAuthEnabled\(c\.env as Bindings\)/);
-    expect(read('src/customer-auth/customer-email-auth.config.ts')).toMatch(/CUSTOMER_EMAIL_AUTH_ENABLED === 'true'/);
+    expect(composition).toMatch(
+      /isEnabled: \(c\) => isCustomerEmailAuthEnabled\(c\.env as Bindings\)/,
+    );
+    expect(read('src/customer-auth/customer-email-auth.config.ts')).toMatch(
+      /CUSTOMER_EMAIL_AUTH_ENABLED === 'true'/,
+    );
     const index = read('src/index.ts');
     expect(index.match(/customerEmailAuthComposition/g)?.length).toBe(2); // import + mount
     expect(index).toMatch(/api\.route\('\/customer-auth', customerEmailAuthComposition\);/);
     expect(index.match(/customerEmailLinkComposition/g)?.length).toBe(2); // import + isolated mount
     expect(index).toMatch(/api\.route\('\/customer-auth', customerEmailLinkComposition\);/);
     const emailLinkComposition = read('src/customer-auth/customer-email-link.composition.ts');
-    expect(emailLinkComposition).toMatch(/env\.CUSTOMER_EMAIL_AUTH_ENABLED === 'true' && env\.CUSTOMER_LEGACY_UPGRADE_ENABLED === 'true'/);
+    expect(emailLinkComposition).toMatch(
+      /env\.CUSTOMER_EMAIL_AUTH_ENABLED === 'true' && env\.CUSTOMER_LEGACY_UPGRADE_ENABLED === 'true'/,
+    );
     // The legacy-only verifier is preserved verbatim and is what runs whenever the flag is off.
-    expect(read('src/middleware/customer-authenticate.ts')).toContain('if (!options.isEnabled(c)) return legacyCustomerAuthenticate(c, next);');
+    expect(read('src/middleware/customer-authenticate.ts')).toContain(
+      'if (!options.isEnabled(c)) return legacyCustomerAuthenticate(c, next);',
+    );
   });
 
   it('only the session service, password service (E10 guard) and credential repository touch the 0072 login state read', () => {
@@ -99,24 +122,33 @@ describe('S3 stays unreachable from the deployed Worker until activation', () =>
     const index = read('src/index.ts');
     expect(index).toMatch(/customerEmailLinkComposition/);
     const link = read('src/customer-auth/customer-email-link.composition.ts');
-    expect(link).toMatch(/CUSTOMER_EMAIL_AUTH_ENABLED === 'true' && env\.CUSTOMER_LEGACY_UPGRADE_ENABLED === 'true'/);
-    expect(link).toMatch(/if \(!options\.isEnabled\(c\)\) return c\.json\(\{ error: 'Not Found' \}, 404\)/);
+    expect(link).toMatch(
+      /CUSTOMER_EMAIL_AUTH_ENABLED === 'true' && env\.CUSTOMER_LEGACY_UPGRADE_ENABLED === 'true'/,
+    );
+    expect(link).toMatch(
+      /if \(!options\.isEnabled\(c\)\) return c\.json\(\{ error: 'Not Found' \}, 404\)/,
+    );
     const middleware = read('src/middleware/customer-authenticate.ts');
-    expect(middleware).toContain('export const legacyCustomerAuthenticate = createCustomerAuthenticate();');
+    expect(middleware).toContain(
+      'export const legacyCustomerAuthenticate = createCustomerAuthenticate();',
+    );
   });
 
   it('E10: the phone-proof-only recovery methods have no non-test caller (not activated)', () => {
     expect(referencing(/\.recoverPassword\(/)).toEqual([]);
-    expect(referencing(/\.completeRecovery\(/)).toEqual(['src/customer-auth/customer-password-auth.service.ts']);
+    expect(referencing(/\.completeRecovery\(/)).toEqual([
+      'src/customer-auth/customer-password-auth.service.ts',
+    ]);
   });
 
-  it('S4-01: the recovery-code service is internal only (no non-test importer, no entry point reference)', () => {
-    // The S4-02 orchestrator is the only importer, and it is itself unreachable (next test).
+  it('S4-01: recovery-code operations are reachable only through the gated recovery composition', () => {
     expect(referencing(/customer-recovery-code\.service/)).toEqual([
       'src/customer-auth/customer-recovery-attempt.service.ts',
+      'src/customer-auth/customer-recovery.composition.ts',
     ]);
     expect(referencing(/createCustomerRecoveryCodeService/)).toEqual([
       'src/customer-auth/customer-recovery-code.service.ts',
+      'src/customer-auth/customer-recovery.composition.ts',
     ]);
     expect(read('src/index.ts')).not.toMatch(/recovery-code|RecoveryCode/);
   });
@@ -126,7 +158,9 @@ describe('S3 stays unreachable from the deployed Worker until activation', () =>
     // exactly one entry point, and it is the gated router
     expect(index.match(/customerRecoveryRoutes/g)?.length).toBe(2); // import + mount
     expect(index).toMatch(/api\.route\('\/customer-recovery', customerRecoveryRoutes\);/);
-    expect(index).not.toMatch(/createCustomerRecoveryService|recovery-attempt|recovery-code|recovery-delivery|recovery-config/);
+    expect(index).not.toMatch(
+      /createCustomerRecoveryService|recovery-attempt|recovery-code|recovery-delivery|recovery-config/,
+    );
     // the orchestrator is imported only by the composition root, the routes' type and the delivery adapters' types
     expect(referencing(/from ['"][^'"]*customer-recovery-attempt\.service['"]/)).toEqual([
       'src/customer-auth/customer-recovery-delivery.ts',
@@ -144,8 +178,14 @@ describe('S3 stays unreachable from the deployed Worker until activation', () =>
     ]);
     // and the router refuses everything unless the explicit gate is on
     const composition = read('src/customer-auth/customer-recovery.composition.ts');
-    expect(composition).toMatch(/isEnabled: \(c\) => isCustomerRecoveryEnabled\(c\.env as Bindings\)/);
-    expect(composition).toMatch(/env\.CUSTOMER_RECOVERY_ENABLED === 'true'/);
-    expect(read('src/customer-auth/customer-recovery.routes.ts')).toMatch(/if \(!config\.isEnabled\(c\)\) return notFound\(\);/);
+    expect(composition).toMatch(
+      /isEnabled: \(c\) => isCustomerRecoveryEnabled\(c\.env as Bindings\)/,
+    );
+    expect(composition).toMatch(
+      /CUSTOMER_EMAIL_AUTH_ENABLED === 'true' && env\.CUSTOMER_RECOVERY_ENABLED === 'true'/,
+    );
+    expect(read('src/customer-auth/customer-recovery.routes.ts')).toMatch(
+      /if \(!config\.isEnabled\(c\)\) return notFound\(\);/,
+    );
   });
 });

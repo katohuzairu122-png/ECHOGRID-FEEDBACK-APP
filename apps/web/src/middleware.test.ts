@@ -47,24 +47,30 @@ describe('middleware — public landing information', () => {
 });
 
 describe('middleware — account recovery paths', () => {
-  it.each(['/forgot-password', '/reset-password'])(
-    'serves %s to a signed-out visitor instead of redirecting to /login',
-    async (path) => {
-      expect(redirectTarget(await middleware(request(path)))).toBeNull();
-    },
-  );
+  it.each([
+    '/forgot-password',
+    '/reset-password',
+    '/account/recovery',
+    '/account/recovery/email',
+    '/account/recovery/cancel',
+  ])('serves %s to a signed-out visitor instead of redirecting to /login', async (path) => {
+    expect(redirectTarget(await middleware(request(path)))).toBeNull();
+  });
 
   it('serves /reset-password with its token query string', async () => {
     const req = new NextRequest(new URL('/reset-password?token=abc123', ORIGIN));
     expect(redirectTarget(await middleware(req))).toBeNull();
   });
 
-  it.each(['/forgot-password', '/reset-password'])(
-    'does not bounce a signed-in user away from %s',
-    async (path) => {
-      expect(redirectTarget(await middleware(request(path, { signedIn: true })))).toBeNull();
-    },
-  );
+  it.each([
+    '/forgot-password',
+    '/reset-password',
+    '/account/recovery',
+    '/account/recovery/email',
+    '/account/recovery/cancel',
+  ])('does not bounce a signed-in user away from %s', async (path) => {
+    expect(redirectTarget(await middleware(request(path, { signedIn: true })))).toBeNull();
+  });
 
   it('still bounces a signed-in user away from /login', async () => {
     expect(redirectTarget(await middleware(request('/login', { signedIn: true })))).toBe(
@@ -129,7 +135,13 @@ describe('middleware — protected session refresh', () => {
 });
 
 describe('middleware — cashier app (CASHIER-PWA-01 C4)', () => {
-  it.each(['/cashier', '/cashier/login', '/cashier/redeem', '/cashier/manifest.webmanifest', '/cashier/session/refresh'])(
+  it.each([
+    '/cashier',
+    '/cashier/login',
+    '/cashier/redeem',
+    '/cashier/manifest.webmanifest',
+    '/cashier/session/refresh',
+  ])(
     'does not gate %s on the staff session (the cashier layout enforces its own session)',
     async (path) => {
       expect(redirectTarget(await middleware(request(path)))).toBeNull();
@@ -141,7 +153,6 @@ describe('middleware — cashier app (CASHIER-PWA-01 C4)', () => {
     expect(redirectTarget(await middleware(request('/dashboard')))).toBe('/login');
   });
 });
-
 
 describe('middleware — customer QR deep-link continuity', () => {
   it('keeps the direct QR destination for a signed-out customer', async () => {

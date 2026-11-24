@@ -13,7 +13,8 @@ export async function callCustomerAuthApi(
   init: { body?: unknown; bearer?: string } = {},
 ): Promise<{ status: number; body: unknown }> {
   const headers = new Headers({ Accept: 'application/json' });
-  for (const [name, value] of Object.entries(await signedAttributionHeadersSafe())) headers.set(name, value);
+  for (const [name, value] of Object.entries(await signedAttributionHeadersSafe()))
+    headers.set(name, value);
   if (init.body !== undefined) headers.set('Content-Type', 'application/json');
   if (init.bearer) headers.set('Authorization', `Bearer ${init.bearer}`);
   const response = await fetch(`${API_BASE_URL}/api/v1${path}`, {
@@ -26,7 +27,8 @@ export async function callCustomerAuthApi(
     redirect: 'manual',
     cache: 'no-store',
   });
-  if (response.status >= 300 && response.status < 400) return { status: response.status, body: null };
+  if (response.status >= 300 && response.status < 400)
+    return { status: response.status, body: null };
   const body = await response.json().catch(() => null);
   return { status: response.status, body };
 }
@@ -34,4 +36,12 @@ export async function callCustomerAuthApi(
 /** The web's own switch for showing email sign-up and sign-in. Off unless exactly "true"; the API has its own gate. */
 export function isCustomerEmailAuthWebEnabled(): boolean {
   return process.env.CUSTOMER_EMAIL_AUTH_ENABLED === 'true';
+}
+
+/** Recovery is separately controlled and requires the email-auth session boundary too. */
+export function isCustomerRecoveryWebEnabled(): boolean {
+  return (
+    process.env.CUSTOMER_EMAIL_AUTH_ENABLED === 'true' &&
+    process.env.CUSTOMER_RECOVERY_ENABLED === 'true'
+  );
 }

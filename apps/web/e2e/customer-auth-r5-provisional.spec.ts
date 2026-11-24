@@ -16,6 +16,7 @@ test.skip(
 
 const email = process.env.E2E_CUSTOMER_EMAIL ?? '';
 const password = process.env.E2E_CUSTOMER_PASSWORD ?? '';
+let currentPassword = password;
 const mailboxToken = process.env.CUSTOMER_AUTH_R5_MAILBOX_TOKEN ?? '';
 let verifyUrl = '';
 
@@ -200,6 +201,164 @@ test('D — refresh rotates credentials; logout revokes the issued session', asy
   await expect(page).toHaveURL(/\/loyalty\/login(?:\?|$)/);
 });
 
+test('E — recovery verifies independent email and phone factors, resets password, and revokes sessions', async ({
+  page,
+  context,
+}) => {
+  const mailbox = `http://127.0.0.1:8792/__test/mailbox`;
+  const fixture = `http://127.0.0.1:8792/__test/mark-phone-verified`;
+  const markPhone = await page.request.post(fixture, {
+    headers: { Authorization: `Bearer ${mailboxToken}` },
+    data: { recipient: email },
+  });
+  expect(markPhone.status()).toBe(200);
+
+  const resetBudget = await page.request.post(
+    'http://127.0.0.1:8792/__test/reset-login-budget',
+    { headers: { Authorization: `Bearer ${mailboxToken}` } },
+  );
+  expect(resetBudget.status()).toBe(204);
+
+  await page.goto('/loyalty/login/email');
+  await page.getByLabel('Email').fill(email);
+  await page.getByLabel('Password').fill(password);
+  await page.getByRole('button', { name: 'Sign in' }).click();
+  await expect(page).toHaveURL(/\/loyalty\/dashboard(?:\?|$)/);
+  const passwordBeforeRecovery = await page.request.post(
+    'http://127.0.0.1:8792/__test/password-hash-check',
+    {
+      headers: { Authorization: `Bearer ${mailboxToken}` },
+      data: { email, password },
+    },
+  );
+  expect(passwordBeforeRecovery.status()).toBe(204);
+
+  const oldSessionCookies = await context.cookies();
+  const oldAccess = oldSessionCookies.find((cookie) =>
+    cookie.name.includes('customer_access'),
+  )?.value;
+  expect(oldAccess).toBeTruthy();
+  const activeRead = await page.request.get(
+    'http://127.0.0.1:8792/__test/customer-session-status',
+    {
+      headers: {
+        Authorization: `Bearer ${oldAccess}`,
+        'x-customer-auth-r5-fixture': mailboxToken,
+      },
+    },
+  );
+  expect(activeRead.status()).toBe(204);
+
+  await page.goto('/account/recovery');
+  await page.getByLabel('Account email').fill(email);
+  await page.getByRole('button', { name: 'Continue' }).click();
+  const sendEmailProof = page.getByRole('button', { name: 'Send email confirmation' });
+  try {
+    await expect(sendEmailProof).toBeVisible({ timeout: 15_000 });
+  } catch {
+    throw new Error(`Recovery initiation rendered: ${await page.locator('body').innerText()}`);
+  }
+  await sendEmailProof.click();
+
+  await expect(
+    page.getByText('If the recovery can continue, an email will arrive with a secure link.', {
+      exact: true,
+    }),
+  ).toBeVisible();
+  const mail = await page.request.get(`${mailbox}?recipient=${encodeURIComponent(email)}`, {
+    headers: { Authorization: `Bearer ${mailboxToken}` },
+  });
+  expect(mail.status()).toBe(200);
+  const messages = (await mail.json()) as { messages?: Array<{ html?: string; subject?: string }> };
+  const recoveryMessage = messages.messages?.at(-1);
+  expect(recoveryMessage?.subject).toContain('Confirm your email');
+  const recoveryUrl = recoveryMessage?.html?.match(/href="([^"]+)"/)?.[1];
+  expect(recoveryUrl).toContain('/account/recovery/email#c=');
+
+  await page.goto(recoveryUrl!);
+  await page.getByRole('button', { name: 'Confirm this email factor' }).click();
+  const awaitingFactor = page.getByText(
+    'One more independent factor is required before a password can be reset.',
+    { exact: true },
+  );
+  try {
+    await expect(awaitingFactor).toBeVisible({ timeout: 10_000 });
+  } catch {
+    throw new Error(
+      `Recovery email verification rendered: ${await page.locator('body').innerText()}`,
+    );
+  }
+  await page.getByRole('button', { name: 'Send phone code' }).click();
+  await page.getByLabel('Phone verification code').fill('000000');
+  await page.getByRole('button', { name: 'Verify phone code' }).click();
+  await expect(
+    page.getByText('This recovery request is invalid, expired or already used.', {
+      exact: true,
+    }),
+  ).toBeVisible();
+  await page.getByLabel('Phone verification code').fill('123456');
+  await page.getByRole('button', { name: 'Verify phone code' }).click();
+
+  const newPassword = `${password}-recovered`;
+  await page.getByLabel('New password', { exact: true }).fill(newPassword);
+  await page.getByLabel('Confirm new password').fill(newPassword);
+  await page.getByRole('button', { name: 'Reset password' }).click();
+  const recoveryCompleted = page.getByText(
+    'Your password was reset and all existing sessions were revoked.',
+    { exact: false },
+  );
+  try {
+    await expect(recoveryCompleted).toBeVisible({ timeout: 10_000 });
+  } catch {
+    throw new Error(`Recovery password reset rendered: ${await page.locator('body').innerText()}`);
+  }
+
+  const passwordStored = await page.request.post(
+    'http://127.0.0.1:8792/__test/password-hash-check',
+    {
+      headers: { Authorization: `Bearer ${mailboxToken}` },
+      data: { email, password: newPassword },
+    },
+  );
+  expect(passwordStored.status()).toBe(204);
+
+  await context.clearCookies();
+  await context.addCookies(oldSessionCookies);
+  await page.goto('/loyalty/dashboard');
+  // The shell preflight only checks cookie presence. Prove that the old
+  // session is rejected by the database-backed session validator.
+  const revokedRead = await page.request.get(
+    'http://127.0.0.1:8792/__test/customer-session-status',
+    {
+      headers: {
+        Authorization: `Bearer ${oldAccess}`,
+        'x-customer-auth-r5-fixture': mailboxToken,
+      },
+    },
+  );
+  expect(revokedRead.status()).toBe(401);
+
+  await context.clearCookies();
+  await page.goto('/loyalty/login/email');
+  await page.getByLabel('Email').fill(email);
+  await page.getByLabel('Password').fill(password);
+  await page.getByRole('button', { name: 'Sign in' }).click();
+  await expect(
+    page.getByText('The email or password is not correct.', { exact: true }),
+  ).toBeVisible();
+  // Start a fresh login document after the deliberately wrong-password attempt.
+  await page.goto('/loyalty/login/email');
+  await page.getByLabel('Email').fill(email);
+  await page.getByLabel('Password').fill(newPassword);
+  await page.getByRole('button', { name: 'Sign in' }).click();
+  try {
+    await expect(page).toHaveURL(/\/loyalty\/dashboard(?:\?|$)/);
+  } catch {
+    throw new Error(`Post-reset password login rendered: ${await page.locator('body').innerText()}`);
+  }
+  currentPassword = newPassword;
+});
+
 test('F/G — QR destination survives sign-in and an external destination is sanitized', async ({
   page,
 }) => {
@@ -210,7 +369,7 @@ test('F/G — QR destination survives sign-in and an external destination is san
 
   await page.goto('/loyalty/login/email?next=%2Floyalty%2Fdashboard%2Fqr');
   await page.getByLabel('Email').fill(email);
-  await page.getByLabel('Password').fill(password);
+  await page.getByLabel('Password').fill(currentPassword);
   await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page).toHaveURL(/\/loyalty\/dashboard\/qr(?:\?|$)/);
 
@@ -243,7 +402,10 @@ test('G — registration delivery limit returns a generic throttle response', as
   ).toBeVisible();
 });
 
-test('B/G — malformed and forged confirmation links cannot activate a customer session', async ({ page, context }) => {
+test('B/G — malformed and forged confirmation links cannot activate a customer session', async ({
+  page,
+  context,
+}) => {
   await context.clearCookies();
   await page.goto('/loyalty/signup/verify#c=malformed');
   await expect(page.getByRole('button', { name: 'Create account' })).toHaveCount(0);
@@ -254,16 +416,21 @@ test('B/G — malformed and forged confirmation links cannot activate a customer
   await expect(page.getByRole('button', { name: 'Create account' })).toBeVisible();
   expect(new URL(page.url()).hash).toBe('');
   await page.getByRole('button', { name: 'Create account' }).click();
-  await expect(page.getByText(
-    'This confirmation link is invalid, expired or already used. Request a new link.',
-    { exact: true },
-  )).toBeVisible();
-  expect((await context.cookies()).some((cookie) =>
-    cookie.name.startsWith('__Host-ff_customer_'),
-  )).toBe(false);
+  await expect(
+    page.getByText(
+      'This confirmation link is invalid, expired or already used. Request a new link.',
+      { exact: true },
+    ),
+  ).toBeVisible();
+  expect(
+    (await context.cookies()).some((cookie) => cookie.name.startsWith('__Host-ff_customer_')),
+  ).toBe(false);
 });
 
-test('C/G — unknown email and wrong password receive the same generic login denial', async ({ page, context }) => {
+test('C/G — unknown email and wrong password receive the same generic login denial', async ({
+  page,
+  context,
+}) => {
   await context.clearCookies();
   await page.goto('/loyalty/login/email');
   await page.getByLabel('Email').fill(email);
@@ -276,12 +443,15 @@ test('C/G — unknown email and wrong password receive the same generic login de
   await page.getByLabel('Password').fill(password + '-incorrect');
   await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(error).toHaveText(knownError ?? '', { timeout: 15_000 });
-  expect((await context.cookies()).some((cookie) =>
-    cookie.name.startsWith('__Host-ff_customer_'),
-  )).toBe(false);
+  expect(
+    (await context.cookies()).some((cookie) => cookie.name.startsWith('__Host-ff_customer_')),
+  ).toBe(false);
 });
 
-test('H — customer email login localization remains navigable in en/fr/es/ar and Arabic is RTL', async ({ page, context }) => {
+test('H — customer email login localization remains navigable in en/fr/es/ar and Arabic is RTL', async ({
+  page,
+  context,
+}) => {
   await context.clearCookies();
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/loyalty/login/email');
