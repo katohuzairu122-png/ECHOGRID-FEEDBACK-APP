@@ -1,6 +1,6 @@
 'use client';
 
-import { useActionState, useEffect, useState } from 'react';
+import { useActionState, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Input, Label } from '@/components/ui';
@@ -21,9 +21,14 @@ function parseEmailLinkProof(fragment: string): string | null {
 export function CustomerEmailUpgradeVerifyForm() {
   const [state, action, pending] = useActionState(completeCustomerEmailUpgradeAction, initial);
   const [challenge, setChallenge] = useState<string | null | undefined>();
+  const parsed = useRef(false);
   const t = useTranslations('loyalty.customer.settings');
 
   useEffect(() => {
+    // Strict Mode replays effects. Do not replace the retained proof with
+    // null after the first effect has scrubbed it from the address bar.
+    if (parsed.current) return;
+    parsed.current = true;
     setChallenge(parseEmailLinkProof(window.location.hash));
     window.history.replaceState(null, '', window.location.pathname + window.location.search);
   }, []);
