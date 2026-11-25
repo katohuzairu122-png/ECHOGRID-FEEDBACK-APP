@@ -4,23 +4,23 @@ This file records standing project rules. It does not replace the architecture d
 
 ## Brand: Echo Grid -> Tentaship
 
-Echo Grid is the existing implementation identity. Tentaship is the approved target platform brand.
+Tentaship is the complete and indivisible successor brand name of Echo Grid.
 
-All new development must use Tentaship terminology in newly authored user-facing content.
+The standalone Tenta naming convention has been abandoned.
 
-Existing infrastructure, internal identifiers, legal references, historical evidence and compatibility contracts must remain intact until the relevant migration is authorized.
+Approved feature names are Tentaship Badges, Tentaship Shuffle and Tentaship Drops.
 
-Tenta Badges, Tenta Shuffle and Tenta Drops are approved target feature names.
+All new development must use the approved Tentaship naming convention.
 
-Full platform rebranding is reserved for BRAND-01 and must not be executed without separate Owner authorization.
+The existing Echo Grid graphical logo, colour palette, typography and design system are protected brand assets.
 
-Tentaship is the successor brand name of Echo Grid, not a replacement visual identity.
+The transition is a naming migration only.
 
-The existing Echo Grid logo symbol, colour palette, typography and design system are protected brand assets.
+Existing infrastructure, identifiers, legal references, compatibility contracts and historical evidence must remain intact.
 
-Only brand naming is changing.
+Full naming migration is reserved for BRAND-01 and requires separate authorization.
 
-All future development must preserve visual continuity while adopting Tentaship terminology.
+Continue the existing development roadmap without restarting completed work.
 
 Details, protected identifiers and the registered workstreams: `docs/architecture/builds/TENTASHIP/TENTASHIP_00_BRAND_POLICY_AND_ROADMAP.md`.
 
@@ -28,4 +28,4 @@ Details, protected identifiers and the registered workstreams: `docs/architectur
 
 - The Owner merges pull requests. Do not merge.
 - Production or staging deployment, shared-database migration and feature activation require the Owner's explicit instruction.
-- New randomized-reward, badge and sponsored-drop functionality is disabled by default behind its own independent controls (never `NETWORK_FEED_ENABLED`).
+- New randomized-reward, badge and sponsored-drop functionality is disabled by default behind its own independent controls (`TENTASHIP_BADGES_ENABLED`, `TENTASHIP_SHUFFLE_ENABLED`, `TENTASHIP_DROPS_ENABLED` as proposed; never `NETWORK_FEED_ENABLED`).
