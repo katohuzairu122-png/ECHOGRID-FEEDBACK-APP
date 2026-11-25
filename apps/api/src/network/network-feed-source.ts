@@ -90,7 +90,8 @@ export function createNetworkFeedSource(db: Database): FeedSource {
         handle: row.handle,
         contentClass: row.content_class === 'business' ? 'business_post' : 'official',
         businessName: row.content_class === 'business' ? row.business_name : null,
-        businessHandle: row.content_class === 'business' ? row.business_handle : null,
+        // Only a business post carries a profile handle; an official item keeps exactly the original closed shape.
+        ...(row.content_class === 'business' ? { businessHandle: row.business_handle } : {}),
         body: row.body,
         linkUrl: row.link_url,
         contentLocale: row.content_locale,
