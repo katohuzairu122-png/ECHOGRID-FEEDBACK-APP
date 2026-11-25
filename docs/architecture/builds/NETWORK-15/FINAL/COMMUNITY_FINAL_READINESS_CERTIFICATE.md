@@ -7,7 +7,7 @@ Supporting records (same folder): [G2 staging migration authorization record](G2
 `1ef2145ffbd46254e8bacacf9634b1c57e477a79` (merge of #576, CUST-DEL-01). Journal 0000–0089 (90 entries).
 
 ## 2. Development PR and final head SHA
-This consolidated draft PR: see the PR for its number; final head SHA and hosted CI are recorded in section 14 once the last check completes. Contents: three decision/approval records, this certificate, and one disposable workflow `community-pg18-acceptance.yml`. **No application code changed**: no defect was demonstrated (section 4).
+Consolidated draft PR **#578** (`docs/community-final-readiness`). All evidence below was produced on head `26c02472222a73c76493580e4c912cc287993b9f` (the code under test); the final head differs from it only by this certificate's evidence update (documentation, no code). Contents: three decision/approval records, this certificate, and one disposable workflow `community-pg18-acceptance.yml`. **No application code changed**: no defect was demonstrated (section 4).
 
 ## 3. Verified completed functionality (inspected on `main`)
 - Explicit, independent Community membership: Join, Rejoin and fresh-consent Restore are separate, state-derived operations (#562); Restore always needs fresh customer consent; platform clearance is inactive and never customer consent.
@@ -28,7 +28,7 @@ This consolidated draft PR: see the PR for its number; final head SHA and hosted
 ## 5. G1–G8 matrix
 | Gate | Result | Basis |
 |---|---|---|
-| G1 Implementation verified | **PASS** | Merged code inspected; unit, integration and browser suites pass; no defect found. Subject to the PG18 workflow result in section 12 |
+| G1 Implementation verified | **PASS** | Merged code inspected; unit, integration and browser suites pass; no defect found. Verified on PG16 and hosted PG18.7 (section 12) |
 | G2 Migration approved and target verified | **BLOCKED** | Engineering preparation complete (exact range 0088+0089, manifest, risk, post-checks). Owner authorization and execution outstanding |
 | G3 Legal documents approved | **BLOCKED** | Drafts exist; no qualified approval, version or effective date |
 | G4 Legal translations approved | **BLOCKED** | Technical localization PASS (section 11); legal equivalence unreviewed |
@@ -59,14 +59,15 @@ Technical: **PASS**. 116 Community keys identical across en/fr/es/ar; `dir="rtl"
 - **PG16 (local, 2026-11-25):** fresh database 0000–0089; Community+Network integration 181 passed / 20 skipped (the 20 are the browser journeys, run separately below); full API integration 1710 passed / 41 skipped (earlier on the CUST-DEL-01 head); runtime-role security integration 16 passed.
 - **PG16 (hosted):** `ci-cd.yml` uses `postgres:16`.
 - **PG18 migration chain (hosted):** `gate2-pg18-*` jobs replay the full journal on `postgres:18` at each PR head (includes 0088/0089).
-- **PG18 Community integration + browser (new workflow):** `community-pg18-acceptance.yml`; result recorded in section 14. Before this PR it did not exist; it was a verification gap.
+- **PG18.7 Community integration + browser (new workflow, hosted):** `community-pg18-acceptance.yml`, run `45560710158` on head `26c0247`, container `PostgreSQL 18.7`: Community+Network integration **17 files, 181 passed, 20 skipped (the browser journeys), 0 failed**; real-Chromium journeys **20 passed, 0 failed** (30 non-browser tests filtered out). Before this PR no PG18 integration job existed; the gap is closed.
+- **Unit (local, readiness branch):** API 270 files / 4316 tests passed; web 166 files / 1337 tests passed.
 Skipped tests are never counted as passes.
 
 ## 13. Chromium evidence
-Local, real Chromium via the repo's own journeys: `network-draft-publication.integration.test.ts -t "browser"` → **20 passed**, 0 failed (30 non-browser tests filtered out, not counted). Substitution: the sandbox's installed Chromium build is 1243 while the repo's Playwright expects 1228; a scratch-directory shim pointed at the installed build, repository untouched. Hosted Chromium results: section 14.
+Local, real Chromium via the repo's own journeys: `network-draft-publication.integration.test.ts -t "browser"` → **20 passed**, 0 failed (30 non-browser tests filtered out, not counted). Substitution: the sandbox's installed Chromium build is 1243 while the repo's Playwright expects 1228; a scratch-directory shim pointed at the installed build, repository untouched. Hosted (GitHub Actions, PostgreSQL 18.7): the same 20 journeys passed (run `45560710158`), using the repo's pinned Playwright browser, so the local build substitution does not affect the hosted result.
 
 ## 14. Hosted CI results (exact head)
-RECORDED BELOW AFTER THE FINAL PUSH — see the PR's checks. (To be filled with the final head SHA and per-check results.)
+Head `26c02472222a73c76493580e4c912cc287993b9f`: **26 of 26 checks succeeded** (0 failed, 0 pending, 0 cancelled) at the time of reading, including the new PG18 workflow (run `45560710158`, job `lifecycle`: migrate, seed, 181 integration tests, web build, 20 Chromium journeys — all steps success) and the `gate2-pg18-*` jobs that replay the full 0000–0089 journal on PostgreSQL 18. A manual `workflow_dispatch` re-run of the PG18 workflow (`45562683301`) was also started on the same head; it is redundant and not relied on. The later commit that records this evidence changes documentation only.
 
 ## 15. Legal approvals outstanding
 L1–L7 and the four-language artifacts (G3/G4 matrix): all outstanding; no reviewer named.
@@ -81,7 +82,7 @@ G2 executed and verified on staging, then production (separate records, fresh re
 Every G8 line (legal, translations, migration, operators, flags, monitoring, recovery, scope); then a distinct explicit instruction. Rollback = unset/`false` the flags; consent evidence and memberships are retained.
 
 ## 19. Definitive development verdict
-**DEVELOPMENT COMPLETE — OWNER APPROVALS PENDING**, conditional on the hosted PG18 workflow in section 14 passing on the final head. If it fails for a product reason, this changes to NOT COMPLETE with the failing test named.
+**DEVELOPMENT COMPLETE — OWNER APPROVALS PENDING.** All mandatory technical functionality is implemented and verified on PostgreSQL 16 and 18.7 and in real Chromium; no defect was demonstrated; the one verification gap found (no PG18 integration job) was closed by this PR. Legal, operational, migration and release decisions remain with the Owner. This is not a production-readiness statement.
 
 ## 20. Definitive production-readiness verdict
 **NOT PRODUCTION-READY, and not certifiable from CI.** G2–G8 are open: no migration executed, no legal text approved, no operator named, live flag state unread, no activation authorized. Community stays disabled.
