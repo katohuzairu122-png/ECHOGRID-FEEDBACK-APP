@@ -10,14 +10,14 @@ vi.mock('next/navigation', () => ({
   usePathname: () => '/dashboard/community',
 }));
 // The REAL English copy, so the wording the Owner specified is what is asserted.
-const resolve = (namespace: string, key: string) => {
+const resolve = (namespace: string, key: string, values?: Record<string, unknown>) => {
   const root: Record<string, unknown> = { businessCommunity: en, dashboard: dashboardEn };
   const value = [...namespace.split('.'), ...key.split('.')].reduce<unknown>((node, part) => (node as Record<string, unknown> | undefined)?.[part], root);
   if (typeof value !== 'string') throw new Error(`missing message ${namespace}.${key}`);
-  return value;
+  return value.replace(/\{(\w+)\}/g, (_, name: string) => String(values?.[name] ?? `{${name}}`));
 };
-vi.mock('next-intl/server', () => ({ getTranslations: async (namespace: string) => (key: string) => resolve(namespace, key) }));
-vi.mock('next-intl', () => ({ useTranslations: (namespace: string) => (key: string) => resolve(namespace, key) }));
+vi.mock('next-intl/server', () => ({ getTranslations: async (namespace: string) => (key: string, values?: Record<string, unknown>) => resolve(namespace, key, values) }));
+vi.mock('next-intl', () => ({ useTranslations: (namespace: string) => (key: string, values?: Record<string, unknown>) => resolve(namespace, key, values) }));
 vi.mock('@/lib/business', () => ({ getActiveBusiness: m.business }));
 vi.mock('@/lib/permissions', async () => ({
   ...(await vi.importActual<object>('@/lib/workspace-access')),
@@ -33,11 +33,24 @@ import CommunityPostsPage from './posts/page';
 import CommunityInsightsPage from './insights/page';
 
 const owner = () => m.access.mockResolvedValue({ known: true, permissions: new Set(['business:view', 'business:manage_settings', 'analytics:view', 'loyalty:serve']) });
-const status = (enrollment: string, feed: string, publishing = 'closed') => m.api.mockResolvedValue({ enrollment, feed, publishing });
+// The status route and the participation route answer separately; a participation answer of `null` simulates a failed read.
+let participation: unknown = null;
+const status = (enrollment: string, feed: string, publishing = 'closed') =>
+  m.api.mockImplementation(async (path: string) => {
+    if (path === '/community/business/participation') {
+      if (participation === null) throw new Error('unavailable');
+      return participation;
+    }
+    return { enrollment, feed, publishing };
+  });
+const figures = (eligible: unknown, participants: unknown, ratePercent: unknown) => ({ minimumGroupSize: 10, eligible, participants, ratePercent });
+const shown = (value: number) => ({ state: 'shown', value });
+const hidden = { state: 'suppressed' };
 const text = () => document.body.textContent ?? '';
 
 beforeEach(() => {
   vi.clearAllMocks();
+  participation = null;
   owner();
   m.business.mockResolvedValue({ id: 'biz-1', name: 'Buddy Coffee' });
   status('closed', 'closed');
@@ -94,10 +107,11 @@ describe('Community Home', () => {
     expect(screen.getByText(/We could not read the rollout status/)).toBeInTheDocument();
   });
 
-  it('opening it is read-only: exactly one GET of the status route, no write, no other call', async () => {
+  it('opening it is read-only: exactly the status GET and the participation-totals GET, no write, no other call', async () => {
     render(await CommunityHomePage());
-    expect(m.api).toHaveBeenCalledTimes(1);
+    expect(m.api).toHaveBeenCalledTimes(2);
     expect(m.api).toHaveBeenCalledWith('/community/business/status', { businessId: 'biz-1' });
+    expect(m.api).toHaveBeenCalledWith('/community/business/participation', { businessId: 'biz-1' });
     expect(screen.queryAllByRole('button')).toHaveLength(0); // no non-functional or misleading action buttons
     expect(document.querySelector('form')).toBeNull();
   });
@@ -111,14 +125,43 @@ describe('Community Home', () => {
 });
 
 describe('the other internal sections (explicit unavailable states, no data requested)', () => {
-  it('Participation: only the three aggregate headings, all unavailable; no customer-level wording or API call', async () => {
+  it('Participation: when the totals cannot be read it says so, shows no number, and requests only the totals route', async () => {
     render(await CommunityParticipationPage());
     const grid = screen.getByTestId('community-participation');
     for (const label of ['Loyalty customers', 'Community participants', 'Participation rate']) expect(within(grid).getByText(label)).toBeInTheDocument();
     expect(within(grid).getAllByText('Not available yet')).toHaveLength(3);
-    expect(screen.getByText(/Small groups will be hidden so that no one can be identified/)).toBeInTheDocument();
+    expect(screen.getByText(/could not be loaded right now/)).toBeInTheDocument();
+    expect(screen.getByText(/Small groups are hidden so that no one can be identified/)).toBeInTheDocument();
     expect(text()).not.toMatch(/\d/);
-    expect(m.api).not.toHaveBeenCalled();
+    expect(m.api).toHaveBeenCalledTimes(1);
+    expect(m.api).toHaveBeenCalledWith('/community/business/participation', { businessId: 'biz-1' });
+  });
+
+  it('Participation: shows exactly the totals the server returned and never customer-level wording', async () => {
+    participation = figures(shown(120), shown(45), shown(38));
+    render(await CommunityParticipationPage());
+    const grid = screen.getByTestId('community-participation');
+    expect(within(grid).getByText('120')).toBeInTheDocument();
+    expect(within(grid).getByText('45')).toBeInTheDocument();
+    expect(within(grid).getByText('38%')).toBeInTheDocument();
+    expect(text()).not.toMatch(/\b(email|phone|points balance|customer id)\b/i);
+    expect(document.querySelectorAll('input, textarea, select, button, form')).toHaveLength(0);
+  });
+
+  it('Participation: a suppressed figure is explained and never rendered as a number or zero', async () => {
+    participation = figures(shown(25), hidden, hidden);
+    render(await CommunityParticipationPage());
+    const grid = screen.getByTestId('community-participation');
+    expect(within(grid).getByText('25')).toBeInTheDocument();
+    expect(within(grid).getAllByText('Hidden: small group')).toHaveLength(2);
+    expect(within(grid).getAllByText('Hidden to protect privacy: groups smaller than 10 are never shown.').length).toBeGreaterThan(0);
+    expect(within(grid).queryByText('0')).toBeNull();
+  });
+
+  it('Participation: a malformed answer is treated as unavailable, never trusted', async () => {
+    participation = { minimumGroupSize: 3, eligible: shown(5), participants: shown(5), ratePercent: shown(100) };
+    render(await CommunityParticipationPage());
+    expect(within(screen.getByTestId('community-participation')).getAllByText('Not available yet')).toHaveLength(3);
   });
 
   it('My Posts: controlled unavailable state; no editor, no input, no button, no submission, no API call', async () => {

@@ -92,9 +92,10 @@ test('an owner lands on the Community hub; it is honest while Community is disab
   await expect(rollout).toHaveAttribute('data-any-open', 'false');
   await expect(page.getByText('Community activity will appear here when Community becomes available.')).toBeVisible();
   const summary = page.getByTestId('community-summary');
-  await expect(summary.getByText('Not available yet')).toHaveCount(3);
-  // No invented counts, percentages or dates anywhere on the page (the business's own name is the only text allowed to contain digits here).
-  expect((await page.getByTestId('community-hub').innerText()).replace(new RegExp(businessName, 'i'), '')).not.toMatch(/\d/);
+  // A new business has no loyalty customers: every total is suppressed (the server never reveals a small group, not even a zero).
+  await expect(summary.getByText('Hidden: small group')).toHaveCount(3);
+  // No invented counts, percentages or dates anywhere on the page (only the business's own name and the stated minimum group size contain digits).
+  expect((await page.getByTestId('community-hub').innerText()).replace(new RegExp(businessName, 'i'), '').replace(/smaller than 10/g, '')).not.toMatch(/\d/);
 
   // Navigation: Community is the first primary entry, appears once; the other business destinations remain.
   const nav = sidebar(page);
@@ -109,7 +110,7 @@ test('an owner lands on the Community hub; it is honest while Community is disab
   const tabs = page.getByRole('navigation', { name: 'Community sections' });
   await tabs.getByRole('link', { name: 'Participation' }).click();
   await expect(page).toHaveURL('/dashboard/community/participation');
-  await expect(page.getByTestId('community-participation').getByText('Not available yet', { exact: true })).toHaveCount(3);
+  await expect(page.getByTestId('community-participation').getByText('Hidden: small group', { exact: true })).toHaveCount(3);
   await tabs.getByRole('link', { name: 'My Posts' }).click();
   await expect(page.getByText('Business posts are not available yet')).toBeVisible();
   await expect(page.getByTestId('community-hub').locator('input, textarea, select, form')).toHaveCount(0);

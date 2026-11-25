@@ -76,15 +76,23 @@
   "participation": {
     "title": "Participation",
     "description": "How many of your loyalty customers take part in Community.",
-    "unavailableTitle": "Participation figures are not available yet",
-    "unavailable": "This section will show totals only: your loyalty customers, how many take part in Community, and the share they make up. No figures are shown until that reporting is released.",
-    "privacy": "You will never see which individual customers joined, their points, or anything about customers of other businesses. Small groups will be hidden so that no one can be identified.",
+    "unavailableTitle": "Participation totals could not be loaded",
+    "unavailable": "The participation totals could not be loaded right now. Nothing is shown rather than a guess; try again shortly.",
+    "privacy": "You will never see which individual customers joined, their points, or anything about customers of other businesses. Small groups are hidden so that no one can be identified.",
     "metrics": {
       "eligible": "Loyalty customers",
       "participants": "Community participants",
       "rate": "Participation rate"
     },
-    "unavailableShort": "Not available yet"
+    "unavailableShort": "Not available yet",
+    "suppressedShort": "Hidden: small group",
+    "suppressed": "Hidden to protect privacy: groups smaller than {min} are never shown.",
+    "about": "These are totals only. Small groups are hidden, and a figure is also hidden when the remaining group would be small.",
+    "hints": {
+      "eligible": "Your active loyalty customers.",
+      "participants": "Of those, customers who currently take part in Community.",
+      "rate": "Participants as a share of your loyalty customers."
+    }
   },
   "posts": {
     "title": "My Posts",
