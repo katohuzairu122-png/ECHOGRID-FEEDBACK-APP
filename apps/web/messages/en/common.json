@@ -38,5 +38,15 @@
   },
   "language": {
     "label": "Language"
+  },
+  "tentashipBadges": {
+    "title": "Tentaship Badges",
+    "notCurrency": "Badges are achievements. They are not points, have no cash or other value, and cannot be transferred, redeemed or used to enter anything.",
+    "empty": "No badges yet.",
+    "earnedOn": "Earned {date}",
+    "check": "Check for new badges",
+    "newBadges": "{count, plural, one {You earned a new badge.} other {You earned # new badges.}}",
+    "noneNew": "No new badges right now.",
+    "failed": "We could not check right now. Nothing was changed. Please try again."
   }
 }

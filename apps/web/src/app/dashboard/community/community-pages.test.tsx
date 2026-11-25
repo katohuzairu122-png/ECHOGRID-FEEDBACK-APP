@@ -120,9 +120,10 @@ describe('Community Home', () => {
     expect(screen.getByText(/We could not read the rollout status/)).toBeInTheDocument();
   });
 
-  it('opening it is read-only: exactly the status GET and the participation-totals GET, no write, no other call', async () => {
+  it('opening it is read-only: exactly the status, participation-totals and badges GETs, no write, no other call', async () => {
     render(await CommunityHomePage());
-    expect(m.api).toHaveBeenCalledTimes(2);
+    expect(m.api).toHaveBeenCalledTimes(3);
+    expect(m.api).toHaveBeenCalledWith('/tentaship-badges/business', { businessId: 'biz-1', cache: 'no-store' }); // TB-03: a read; renders nothing unless the control is open
     expect(m.api).toHaveBeenCalledWith('/community/business/status', { businessId: 'biz-1' });
     expect(m.api).toHaveBeenCalledWith('/community/business/participation', { businessId: 'biz-1' });
     expect(screen.queryAllByRole('button')).toHaveLength(0); // no non-functional or misleading action buttons
