@@ -58,6 +58,16 @@ export class CustomerOnboardingEventRepository extends BaseRepository {
     return rows.length > 0;
   }
 
+  /** OWNER-INVITE-01: true when an owner-issued invitation has already onboarded someone (read-only, for the customer's preview). */
+  async remoteInviteUsed(businessId: string, reference: string): Promise<boolean> {
+    const rows = await this.db
+      .select({ id: customerOnboardingEvents.id })
+      .from(customerOnboardingEvents)
+      .where(and(eq(customerOnboardingEvents.businessId, businessId), eq(customerOnboardingEvents.source, 'remote_invitation'), eq(customerOnboardingEvents.reference, reference)))
+      .limit(1);
+    return rows.length > 0;
+  }
+
   async listForMembership(membershipId: string): Promise<CustomerOnboardingEvent[]> {
     return this.db
       .select()

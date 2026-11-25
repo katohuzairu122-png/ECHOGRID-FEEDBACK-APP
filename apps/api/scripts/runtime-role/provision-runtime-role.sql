@@ -72,6 +72,7 @@ DECLARE
     ['customer_auth_events', 'DELETE, INSERT, SELECT'],
     ['customer_credentials', 'INSERT, SELECT, UPDATE'],
     ['customer_deletion_requests', 'INSERT, SELECT, UPDATE'],
+    ['customer_invitations', 'INSERT, SELECT, UPDATE'],
     ['customer_onboarding_events', 'INSERT, SELECT'],
     ['customer_recovery_attempts', 'INSERT, SELECT, UPDATE'],
     ['customer_recovery_code_sets', 'INSERT, SELECT, UPDATE'],

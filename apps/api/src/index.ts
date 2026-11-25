@@ -14,6 +14,7 @@ import { auditTrail } from './middleware/audit';
 import { authRoutes } from './auth/auth.routes';
 import { cashierSessionRoutes } from './cashier-sessions/cashier-sessions.routes';
 import { cashierAccountRoutes } from './cashier-accounts/cashier-accounts.routes';
+import { customerInvitationRoutes } from './customer-invitations/customer-invitations.routes';
 import { businessClosureRoutes } from './business-closure/business-closure.routes';
 import { platformBusinessClosureRoutes } from './platform/business-closure.routes';
 import { platformTentashipBadgeRoutes } from './platform/tentaship-badge.routes';
@@ -174,6 +175,8 @@ api.route('/cashier-sessions', cashierSessionRoutes);
 api.route('/cashier-accounts', cashierAccountRoutes);
 // BIZ-CLOSE-01: owner closure REQUEST (record only; processing is blocked). Owner-only (business:delete) with a fresh password proof.
 api.route('/business-closure', businessClosureRoutes);
+// OWNER-INVITE-01: owner-issued customer invitations (cashier:manage, business-wide; never a cashier credential).
+api.route('/customer-invitations', customerInvitationRoutes);
 api.route('/cashier-activity', cashierActivityRoutes);
 api.route('/businesses', businessRoutes);
 api.route('/business-categories', businessCategoryRoutes);

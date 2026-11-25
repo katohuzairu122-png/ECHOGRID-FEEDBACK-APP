@@ -6,6 +6,7 @@ import { AppError } from '../lib/errors';
 import { isUniqueViolation } from '../lib/pg-errors';
 import { assertVerifiedPhone } from '../lib/customer-verification';
 import { endActiveMembership, lockCustomerBusinessRelationship } from './membership-lifecycle';
+import { assertOwnerInvitationUsable } from '../customer-invitations/customer-invitation.service';
 import { assertInviteCashierAuthorized, readVerificationState, type JoinAttribution } from './onboarding-attribution';
 
 export interface JoinCustomerMembershipInput {
@@ -34,7 +35,7 @@ export interface JoinCustomerMembershipResult {
 }
 
 /** Unique indexes a join can still collide on once concurrent joins are serialised. */
-const INVITE_ONCE_CONSTRAINT = 'customer_onboarding_events_invite_once_key';
+const INVITE_ONCE_CONSTRAINTS = ['customer_onboarding_events_invite_once_key', 'customer_onboarding_events_remote_invite_once_key'] as const;
 const JOIN_RACE_CONSTRAINTS = [
   'business_customer_memberships_customer_business_key',
   'loyalty_accounts_membership_id_key',
@@ -45,7 +46,7 @@ const LOYALTY_ACCOUNT_PAIR_CONSTRAINT = 'loyalty_accounts_customer_business_key'
 /** Turns the two unique-violation shapes a join can still hit into deliberate 409s
  * instead of a generic 500; every other failure is returned untouched. */
 function translateJoinError(error: unknown): unknown {
-  if (isUniqueViolation(error, [INVITE_ONCE_CONSTRAINT])) {
+  if (isUniqueViolation(error, INVITE_ONCE_CONSTRAINTS)) {
     return new AppError('This invitation has already been used. Ask the cashier for a new one.', 409, 'ONBOARDING_INVITE_USED');
   }
   if (isUniqueViolation(error, [LOYALTY_ACCOUNT_PAIR_CONSTRAINT])) {
@@ -113,6 +114,10 @@ export class CustomerMembershipService {
           cashierUserId: input.attribution.cashier.userId, sessionId: input.attribution.cashier.sessionId,
           businessId: input.businessId, branchId: input.attribution.branchId,
         });
+      }
+      if (isNewOccurrence && input.attribution?.source === 'remote_invitation') {
+        // OWNER-INVITE-01: shared lock on the invitation row BEFORE anything is written, so a concurrent revocation cannot slip between check and use.
+        await assertOwnerInvitationUsable(tx, { invitationId: input.attribution.reference, businessId: input.businessId, branchId: input.attribution.branchId });
       }
       if (!membership) {
         membership = await repos.customerMemberships.create({
