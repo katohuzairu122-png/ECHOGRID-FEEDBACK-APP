@@ -80,7 +80,10 @@ async function http(method: string, path: string, call: Call = {}): Promise<{ st
   }, env, { waitUntil: (p: Promise<unknown>) => { pending.push(p); }, passThroughOnException: () => {}, props: {} });
   await Promise.all(pending);
   const text = await response.text();
-  return { status: response.status, ...(text ? (JSON.parse(text) as Envelope) : {}) };
+  // A removed route answers with a plain-text 404, which is not an envelope: report the status and keep the text.
+  let body: Envelope | { raw: string } = {};
+  try { body = text ? (JSON.parse(text) as Envelope) : {}; } catch { body = { raw: text }; }
+  return { status: response.status, ...(body as Envelope) };
 }
 
 describe.skipIf(!databaseUrl)('CASHIER-AUTH-02A managed cashier identity (real HTTP, real PostgreSQL)', () => {
@@ -112,7 +115,7 @@ describe.skipIf(!databaseUrl)('CASHIER-AUTH-02A managed cashier identity (real H
   };
 
   const create = async (username: string, branchId: string, extra: Record<string, unknown> = {}, who: 'ownerA' | 'adminA' | 'ownerB' = 'ownerA') =>
-    adminCall('POST', '/cashier-accounts', { username, displayName: `Till ${username}`, branchId, ...extra }, who);
+    adminCall('POST', '/cashier-accounts', { username, displayName: `Till ${username}`, branchId, password: `chosen-pw-${username}`, ...extra }, who);
   const signIn = (businessCode: string, username: string, password: string, deviceLabel?: string) =>
     http('POST', '/auth/cashier/managed-login', { body: { businessCode, username, password, ...(deviceLabel ? { deviceLabel } : {}) } });
   const GENERIC = { status: 401, code: 'INVALID_CREDENTIALS', message: 'Invalid sign-in details.' };
@@ -212,8 +215,9 @@ describe.skipIf(!databaseUrl)('CASHIER-AUTH-02A managed cashier identity (real H
     it('creates an email-less managed identity bound to one business and one branch with only the Cashier role', async () => {
       const res = await create('till1', a1);
       expect(res.status, JSON.stringify(res)).toBe(201);
-      tillPassword = res.data.initialPassword;
-      expect(tillPassword).toHaveLength(24);
+      tillPassword = 'chosen-pw-till1'; // the owner chooses it; the API never generates or returns a password
+      expect(res.data.initialPassword).toBeUndefined();
+      expect(JSON.stringify(res.data)).not.toContain(tillPassword);
       codeA = res.data.cashierCode;
       expect(codeA).toMatch(/^[A-HJ-NP-Z2-9]{10}$/);
       const row = (await q(`SELECT * FROM users WHERE id = $1`, [res.data.account.id]))[0];
@@ -255,7 +259,7 @@ describe.skipIf(!databaseUrl)('CASHIER-AUTH-02A managed cashier identity (real H
     it('an administrator-supplied password (minimum 8) is accepted and never echoed', async () => {
       const res = await create('supplied1', a1, { password: 'eightchr' });
       expect(res.status).toBe(201);
-      expect(res.data.initialPassword).toBeNull();
+      expect(res.data.initialPassword).toBeUndefined();
       expect((await signIn(codeA, 'supplied1', 'eightchr')).status).toBe(200);
     });
 
@@ -273,8 +277,9 @@ describe.skipIf(!databaseUrl)('CASHIER-AUTH-02A managed cashier identity (real H
     it('signs in with business code, username and password; the session is bound to that business and branch', async () => {
       const list = await http('GET', '/cashier-accounts', { token: tok.ownerA!, businessId: bizA });
       const till = list.data.find((a: { username: string }) => a.username === 'till1');
-      const reset = await adminCall('POST', `/cashier-accounts/${till.id}/reset-credential`, {});
-      const password = reset.data.initialPassword as string;
+      const password = 'sign-in-chosen-1';
+      const reset = await adminCall('POST', `/cashier-accounts/${till.id}/reset-credential`, { password });
+      expect(reset.status).toBe(200);
       const res = await signIn(codeA.toLowerCase().replace(/(.{5})/, '$1-'), ' Till1 ', password, 'Counter 1');
       expect(res.status, JSON.stringify(res)).toBe(200);
       expect(res.data.status).toBe('authenticated');
@@ -299,25 +304,39 @@ describe.skipIf(!databaseUrl)('CASHIER-AUTH-02A managed cashier identity (real H
     });
 
     it('business-code confusion: the same username signs into the business its code names, each with its own credential', async () => {
-      const resetB = await adminCall('POST', `/cashier-accounts/${(await q(`SELECT id FROM users WHERE managed_business_id = $1 AND login_username = 'till1'`, [bizB]))[0].id}/reset-credential`, {}, 'ownerB');
-      const inB = await signIn(codeB, 'till1', resetB.data.initialPassword);
+      const resetB = await adminCall('POST', `/cashier-accounts/${(await q(`SELECT id FROM users WHERE managed_business_id = $1 AND login_username = 'till1'`, [bizB]))[0].id}/reset-credential`, { password: 'b-side-secret-1' }, 'ownerB');
+      const inB = await signIn(codeB, 'till1', 'b-side-secret-1');
       expect(inB.status).toBe(200);
       expect(inB.data.session.businessId).toBe(bizB);
       // B's credential never works against A's code, even though the username matches.
-      expect(outcome(await signIn(codeA, 'till1', resetB.data.initialPassword))).toEqual(GENERIC);
+      expect(outcome(await signIn(codeA, 'till1', 'b-side-secret-1'))).toEqual(GENERIC);
     });
 
-    it('rotating the business code stops the old code and starts the new one', async () => {
+    it('the business code is permanent: there is no rotate endpoint, and creating accounts or changing passwords never changes it', async () => {
       const before = await http('GET', '/cashier-accounts/business-code', { token: tok.ownerA!, businessId: bizA });
       expect(before.data.cashierCode).toBe(codeA);
-      const rotated = await adminCall('POST', '/cashier-accounts/business-code/rotate');
-      expect(rotated.status).toBe(200);
-      const newCode = rotated.data.cashierCode as string;
-      expect(newCode).not.toBe(codeA);
-      expect(outcome(await signIn(codeA, 'supplied1', 'eightchr'))).toEqual(GENERIC);
-      expect((await signIn(newCode, 'supplied1', 'eightchr')).status).toBe(200);
-      codeA = newCode;
-      expect(await q(`SELECT 1 FROM audit_log WHERE business_id = $1 AND action = 'cashier_code.rotated'`, [bizA])).toHaveLength(1);
+      const rotate = await adminCall('POST', '/cashier-accounts/business-code/rotate');
+      expect([404, 405]).toContain(rotate.status);
+      await create('permcode1', a1);
+      const after = await http('GET', '/cashier-accounts/business-code', { token: tok.ownerA!, businessId: bizA });
+      expect(after.data.cashierCode).toBe(codeA);
+      expect((await signIn(codeA, 'supplied1', 'eightchr')).status).toBe(200);
+      expect(await q(`SELECT 1 FROM audit_log WHERE business_id = $1 AND action = 'cashier_code.rotated'`, [bizA])).toHaveLength(0);
+    });
+
+    it('the owner must choose the password: none is generated, a missing, short or username-equal password is refused', async () => {
+      const missing = await adminCall('POST', '/cashier-accounts', { username: 'nopass1', displayName: 'No pass', branchId: a1 });
+      expect(missing.status).toBe(400);
+      expect((await create('shortpw1', a1, { password: 'seven77' })).error?.code).toBe('CASHIER_PASSWORD_INVALID');
+      expect((await create('sameasuser', a1, { password: 'sameasuser' })).error?.code).toBe('CASHIER_PASSWORD_INVALID');
+      expect((await create('sameasuser', a1, { password: ' SameAsUser ' })).error?.code).toBe('CASHIER_PASSWORD_INVALID');
+      expect(await q(`SELECT 1 FROM users WHERE managed_business_id = $1 AND login_username IN ('nopass1','shortpw1','sameasuser')`, [bizA])).toHaveLength(0);
+      const odd = await create('unicodepw1', a1, { password: 'Pässwörd ✓ 123 !' });
+      expect(odd.status).toBe(201);
+      expect((await signIn(codeA, 'unicodepw1', 'Pässwörd ✓ 123 !')).status).toBe(200);
+      const id = (await q(`SELECT id FROM users WHERE managed_business_id = $1 AND login_username = 'unicodepw1'`, [bizA]))[0].id;
+      expect((await adminCall('POST', `/cashier-accounts/${id}/reset-credential`, {})).status).toBe(400);
+      expect((await adminCall('POST', `/cashier-accounts/${id}/reset-credential`, { password: 'unicodepw1' })).error?.code).toBe('CASHIER_PASSWORD_INVALID');
     });
 
     it('a managed identity cannot use ordinary web sign-in, email cashier sign-in, password reset or self password change', async () => {
@@ -448,10 +467,10 @@ describe.skipIf(!databaseUrl)('CASHIER-AUTH-02A managed cashier identity (real H
 
     it('a reset returns a new one-time credential, voids the old one, revokes live sessions and clears a lock', async () => {
       await q(`UPDATE users SET failed_login_count = 3, locked_until = now() + interval '10 minutes' WHERE id = $1`, [id]);
-      const reset = await adminCall('POST', `/cashier-accounts/${id}/reset-credential`, {});
+      const fresh = 'owner-chosen-fresh-1';
+      const reset = await adminCall('POST', `/cashier-accounts/${id}/reset-credential`, { password: fresh });
       expect(reset.status).toBe(200);
-      const fresh = reset.data.initialPassword as string;
-      expect(fresh).toHaveLength(24);
+      expect(reset.data.initialPassword).toBeUndefined();
       expect(fresh).not.toBe(password);
       expect(outcome(await signIn(codeA, 'life1', password))).toEqual(GENERIC);
       // The pre-reset session is dead at once: the access token, and the refresh token.
@@ -477,7 +496,7 @@ describe.skipIf(!databaseUrl)('CASHIER-AUTH-02A managed cashier identity (real H
       expect((await adminCall('POST', `/cashier-accounts/${id}/revoke`)).data.status).toBe('revoked');
       expect(outcome(await signIn(codeA, 'life1', password))).toEqual(GENERIC);
       expect((await adminCall('POST', `/cashier-accounts/${id}/enable`)).error?.code).toBe('CASHIER_ACCOUNT_STATE_CONFLICT');
-      expect((await adminCall('POST', `/cashier-accounts/${id}/reset-credential`, {})).error?.code).toBe('CASHIER_ACCOUNT_STATE_CONFLICT');
+      expect((await adminCall('POST', `/cashier-accounts/${id}/reset-credential`, { password: 'state-conflict-pw' })).error?.code).toBe('CASHIER_ACCOUNT_STATE_CONFLICT');
       expect((await adminCall('PATCH', `/cashier-accounts/${id}/username`, { username: 'life1-renamed' })).error?.code).toBe('CASHIER_ACCOUNT_REVOKED');
     });
 
@@ -514,7 +533,7 @@ describe.skipIf(!databaseUrl)('CASHIER-AUTH-02A managed cashier identity (real H
     it("business B's owner cannot read, reset, rename, disable or revoke business A's cashier; nothing changes", async () => {
       const target = (await q(`SELECT id, password_hash, status, login_username FROM users WHERE managed_business_id = $1 AND login_username = 'supplied1'`, [bizA]))[0];
       for (const [method, path, body] of [
-        ['POST', `/cashier-accounts/${target.id}/reset-credential`, {}],
+        ['POST', `/cashier-accounts/${target.id}/reset-credential`, { password: 'cross-tenant-pw-1' }],
         ['PATCH', `/cashier-accounts/${target.id}/username`, { username: 'hijacked' }],
         ['POST', `/cashier-accounts/${target.id}/disable`, undefined],
         ['POST', `/cashier-accounts/${target.id}/revoke`, undefined],

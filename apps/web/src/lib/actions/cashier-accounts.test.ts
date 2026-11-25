@@ -19,7 +19,7 @@ import { ApiError } from '@/lib/api-client';
 import { CASHIER_ADMIN_REAUTH_COOKIE } from '@/lib/cookies';
 import {
   cashierAccountStatusAction, cashierReauthAction, createCashierAccountAction, resetCashierCredentialAction,
-  rotateCashierCodeAction, setCashierBranchesAction,
+  setCashierBranchesAction,
 } from './cashier-accounts';
 
 const form = (entries: Record<string, string | string[]>) => {
@@ -54,38 +54,39 @@ describe('re-authentication proof (D-5)', () => {
   });
 
   it('every change forwards the proof from the cookie as X-Reauth-Proof, and asks for a fresh one when the API demands it', async () => {
-    await rotateCashierCodeAction();
-    expect(m.api).toHaveBeenCalledWith('/cashier-accounts/business-code/rotate', { method: 'POST', businessId: 'biz-1', headers: { 'X-Reauth-Proof': 'proof-token' } });
+    await cashierAccountStatusAction({}, form({ accountId: 'a1', action: 'disable' }));
+    expect(m.api).toHaveBeenCalledWith('/cashier-accounts/a1/disable', { method: 'POST', businessId: 'biz-1', headers: { 'X-Reauth-Proof': 'proof-token' } });
     m.api.mockRejectedValue(new ApiError('re-enter', 403, 'REAUTH_REQUIRED'));
-    expect(await rotateCashierCodeAction()).toEqual({ status: 'reauthRequired' });
+    expect(await cashierAccountStatusAction({}, form({ accountId: 'a1', action: 'disable' }))).toEqual({ status: 'reauthRequired' });
   });
 
   it('sends no proof header when the cookie is absent (the API then refuses with REAUTH_REQUIRED)', async () => {
     m.cookieGet.mockReturnValue(undefined);
-    await rotateCashierCodeAction();
+    await cashierAccountStatusAction({}, form({ accountId: 'a1', action: 'disable' }));
     expect(m.api.mock.calls[0]![1]).toEqual({ method: 'POST', businessId: 'biz-1', headers: {} });
   });
 });
 
 describe('create', () => {
-  it('sends the explicit mode and branch ids, omits an empty password, and returns the one-time credential', async () => {
-    m.api.mockResolvedValue({ account: { username: 'till1' }, initialPassword: 'Gen3ratedPass', cashierCode: 'ABCDEFGHJK' });
+  it('sends the explicit mode, the branch ids and the password the owner chose, and returns only the sign-in details', async () => {
+    m.api.mockResolvedValue({ account: { username: 'till1' }, cashierCode: 'ABCDEFGHJK' });
     const state = await createCashierAccountAction({}, form({
-      username: ' till1 ', displayName: 'Till', accessMode: 'multiple', branchId: ['b1', 'b2'], password: '',
+      username: ' till1 ', displayName: 'Till', accessMode: 'multiple', branchId: ['b1', 'b2'], cashierPassword: ' my own pass 1 ',
     }));
-    expect(state).toEqual({ status: 'created', credential: { username: 'till1', password: 'Gen3ratedPass', cashierCode: 'ABCDEFGHJK' } });
+    expect(state).toEqual({ status: 'created', credential: { username: 'till1', cashierCode: 'ABCDEFGHJK' } });
     const [path, init] = m.api.mock.calls[0]!;
     expect(path).toBe('/cashier-accounts');
-    expect(JSON.parse(init.body)).toEqual({ username: 'till1', displayName: 'Till', accessMode: 'multiple', branchIds: ['b1', 'b2'] });
+    // The password is sent exactly as typed (spaces are legal characters) and is never read back.
+    expect(JSON.parse(init.body)).toEqual({ username: 'till1', displayName: 'Till', accessMode: 'multiple', branchIds: ['b1', 'b2'], password: ' my own pass 1 ' });
+    expect(JSON.stringify(state)).not.toContain('my own pass');
     expect(m.revalidate).toHaveBeenCalledWith('/dashboard/cashier/accounts');
   });
 
-  it('an administrator-chosen password is sent but never echoed back', async () => {
-    m.api.mockResolvedValue({ account: { username: 'till2' }, initialPassword: null, cashierCode: 'ABCDEFGHJK' });
-    const state = await createCashierAccountAction({}, form({ username: 'till2', displayName: 'T', accessMode: 'single', branchId: 'b1', password: 'chosen-password' }));
-    expect(state.credential?.password).toBe('');
-    expect(JSON.parse(m.api.mock.calls[0]![1].body).password).toBe('chosen-password');
-    expect(JSON.stringify(state)).not.toContain('chosen-password');
+  it('an invalid chosen password is reported by its API code, never swallowed or replaced by a generated one', async () => {
+    m.api.mockRejectedValue(new ApiError('short', 422, 'CASHIER_PASSWORD_INVALID'));
+    expect(await createCashierAccountAction({}, form({ username: 'till2', displayName: 'T', accessMode: 'single', branchId: 'b1', cashierPassword: 'short' })))
+      .toEqual({ status: 'failed', error: 'CASHIER_PASSWORD_INVALID' });
+    expect(m.api).toHaveBeenCalledTimes(1);
   });
 
   it('surfaces the API error code and never throws', async () => {
@@ -93,12 +94,12 @@ describe('create', () => {
     expect(await createCashierAccountAction({}, form({ username: 'x', displayName: 'x', accessMode: 'single', branchId: 'b1' })))
       .toEqual({ status: 'failed', error: 'CASHIER_USERNAME_TAKEN' });
     m.api.mockRejectedValue(new Error('down'));
-    expect(await rotateCashierCodeAction()).toEqual({ status: 'failed' });
+    expect(await cashierAccountStatusAction({}, form({ accountId: 'a1', action: 'disable' }))).toEqual({ status: 'failed' });
   });
 
   it('does nothing without an active business', async () => {
     m.business.mockResolvedValue(null);
-    expect(await rotateCashierCodeAction()).toEqual({ status: 'failed' });
+    expect(await cashierAccountStatusAction({}, form({ accountId: 'a1', action: 'disable' }))).toEqual({ status: 'failed' });
     expect(m.api).not.toHaveBeenCalled();
   });
 });
@@ -112,11 +113,17 @@ describe('branches, reset and status', () => {
     expect(JSON.parse(init.body)).toEqual({ accessMode: 'multiple', branchIds: ['b1', 'b2'] });
   });
 
-  it('a reset returns the new password once, for the named account', async () => {
-    m.api.mockResolvedValue({ initialPassword: 'NewPass1234567890abcdefg' });
-    const state = await resetCashierCredentialAction({}, form({ accountId: 'a1', username: 'till1' }));
-    expect(state).toEqual({ status: 'credentialReset', credential: { username: 'till1', password: 'NewPass1234567890abcdefg' } });
+  it('a password change sends exactly the password the owner typed and returns no credential', async () => {
+    m.api.mockResolvedValue({ changed: true });
+    const state = await resetCashierCredentialAction({}, form({ accountId: 'a1', newPassword: 'the new one 77' }));
+    expect(state).toEqual({ status: 'credentialReset' });
     expect(m.api.mock.calls[0]![0]).toBe('/cashier-accounts/a1/reset-credential');
+    expect(JSON.parse(m.api.mock.calls[0]![1].body)).toEqual({ password: 'the new one 77' });
+  });
+
+  it('there is no business-code rotation action any more: the business code is permanent', async () => {
+    const actions = await import('./cashier-accounts');
+    expect(Object.keys(actions).some((name) => /rotate/i.test(name))).toBe(false);
   });
 
   it('only the four known status actions reach the API; anything else is refused locally', async () => {

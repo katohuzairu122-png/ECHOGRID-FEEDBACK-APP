@@ -5,7 +5,7 @@ import { sign, verify } from 'hono/jwt';
  * administrator re-authentication proof. Pure and dependency-free so every rule is unit-testable.
  */
 
-/** D-3: a public, owner-rotatable sign-in code. 10 characters from 32 unambiguous symbols (no I, O, 0 or 1). NOT a secret. */
+/** D-3: a public, PERMANENT sign-in code: assigned once, with the first cashier account, and never changed afterwards. 10 characters from 32 unambiguous symbols (no I, O, 0 or 1). NOT a secret. */
 export const BUSINESS_CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 export const BUSINESS_CODE_LENGTH = 10;
 const BUSINESS_CODE_PATTERN = /^[A-HJ-NP-Z2-9]{10}$/;
@@ -15,14 +15,10 @@ const USERNAME_PATTERN = /^[a-z0-9][a-z0-9._-]{2,31}$/;
 /** D-5. */
 export const MIN_PASSWORD_LENGTH = 8;
 export const MAX_PASSWORD_LENGTH = 128;
-export const INITIAL_PASSWORD_LENGTH = 24;
 export const LOCKOUT_MAX_FAILURES = 5;
 export const LOCKOUT_WINDOW_MS = 15 * 60 * 1000;
 export const LOCKOUT_DURATION_MS = 15 * 60 * 1000;
 export const REAUTH_PROOF_TTL_SECONDS = 5 * 60;
-
-/** Unambiguous alphanumerics for a hand-typed temporary credential (no I, O, l, 0, 1). 56 symbols, about 139 bits at 24. */
-const PASSWORD_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789';
 
 /** Uniform random string without modulo bias (rejection sampling over crypto.getRandomValues). */
 function randomString(alphabet: string, length: number): string {
@@ -40,7 +36,6 @@ function randomString(alphabet: string, length: number): string {
 }
 
 export const generateBusinessCode = () => randomString(BUSINESS_CODE_ALPHABET, BUSINESS_CODE_LENGTH);
-export const generateInitialPassword = () => randomString(PASSWORD_ALPHABET, INITIAL_PASSWORD_LENGTH);
 
 /** Canonical business code (case, spaces and hyphens ignored) or null when it cannot be a code at all. */
 export function normalizeBusinessCode(raw: unknown): string | null {

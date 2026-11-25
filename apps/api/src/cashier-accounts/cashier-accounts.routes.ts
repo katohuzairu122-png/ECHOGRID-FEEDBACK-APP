@@ -68,10 +68,10 @@ const createSchema = z.object({
   branchId: z.uuid().optional(),
   branchIds: branchIdsSchema.optional(),
   accessMode: accessModeSchema.optional(),
-  password: z.string().max(256).optional(),
+  password: z.string().min(1).max(256),
 }).refine((b) => (b.branchId === undefined) !== (b.branchIds === undefined), { error: 'Send either branchId or branchIds.' });
 const branchesSchema = z.object({ accessMode: accessModeSchema, branchIds: branchIdsSchema });
-const passwordSchema = z.object({ password: z.string().max(256).optional() });
+const passwordSchema = z.object({ password: z.string().min(1).max(256) });
 const usernameSchema = z.object({ username: z.string().trim().min(1).max(64) });
 
 // The re-authentication endpoint. Keyed by the authenticated user (mounted after authenticate), never by a body field.
@@ -88,11 +88,7 @@ cashierAccountRoutes.get('/', ...guard, async (c) => ok(c, await withService(c, 
 
 cashierAccountRoutes.get('/business-code', ...guard, async (c) => ok(c, await withService(c, (s) => s.getBusinessCode(c.get('businessId')))));
 
-cashierAccountRoutes.post('/business-code/rotate', ...mutate, async (c) =>
-  ok(c, await withService(c, (s) => s.rotateBusinessCode({ businessId: c.get('businessId'), actorUserId: c.get('userId') }))),
-);
-
-// The initial credential, when generated, is in this response ONLY. It is never stored in plaintext and never logged.
+// The owner chooses the password; it is never returned, never stored in plaintext and never logged. The business code is permanent.
 cashierAccountRoutes.post('/', ...mutate, async (c) => {
   const body = await parseJsonBody(c.req.raw, createSchema);
   const branchIds = body.branchIds ?? [body.branchId as string];

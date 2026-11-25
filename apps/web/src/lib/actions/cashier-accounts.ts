@@ -8,14 +8,14 @@ import { rethrowControlFlow } from '@/lib/rethrow-control-flow';
 import { CASHIER_ADMIN_REAUTH_COOKIE } from '@/lib/cookies';
 
 export type CashierAccountsStatus =
-  | 'reauthenticated' | 'created' | 'updated' | 'credentialReset' | 'codeRotated' | 'failed' | 'reauthRequired';
+  | 'reauthenticated' | 'created' | 'updated' | 'credentialReset' | 'failed' | 'reauthRequired';
 
 export interface CashierAccountsActionState {
   status?: CashierAccountsStatus;
   /** The API error code for a failed action; the view maps it to a message. */
   error?: string;
-  /** Shown ONCE, held only in this action result: never stored, cached or logged by this app. */
-  credential?: { username?: string; password: string; cashierCode?: string };
+  /** The sign-in details to hand over after creating an account. The password is chosen by the owner and is never returned or shown. */
+  credential?: { username?: string; cashierCode?: string };
 }
 
 const PAGE = '/dashboard/cashier/accounts';
@@ -60,21 +60,19 @@ export async function cashierReauthAction(_prev: CashierAccountsActionState, for
   });
 }
 
+/** The owner chooses the cashier's password (`cashierPassword`): nothing is generated, and it is never read back. Not trimmed: spaces are legal characters. */
 export async function createCashierAccountAction(_prev: CashierAccountsActionState, form: FormData): Promise<CashierAccountsActionState> {
-  const password = String(form.get('password') ?? '');
+  const password = String(form.get('cashierPassword') ?? '');
   const body = {
     username: text(form, 'username'), displayName: text(form, 'displayName'),
     accessMode: text(form, 'accessMode'), branchIds: form.getAll('branchId').map(String),
-    ...(password ? { password } : {}),
+    password,
   };
   return run(async (businessId, proof) => {
-    const res = await apiFetch<{ account: { username: string }; initialPassword: string | null; cashierCode: string }>('/cashier-accounts', {
+    const res = await apiFetch<{ account: { username: string }; cashierCode: string }>('/cashier-accounts', {
       method: 'POST', businessId, headers: proof, body: JSON.stringify(body),
     });
-    return {
-      status: 'created',
-      credential: { username: res.account.username, password: res.initialPassword ?? '', cashierCode: res.cashierCode },
-    };
+    return { status: 'created', credential: { username: res.account.username, cashierCode: res.cashierCode } };
   });
 }
 
@@ -87,13 +85,15 @@ export async function setCashierBranchesAction(_prev: CashierAccountsActionState
   });
 }
 
+/** Sets the password the owner typed (`newPassword`) and signs the cashier out of every device. Nothing is generated or returned. */
 export async function resetCashierCredentialAction(_prev: CashierAccountsActionState, form: FormData): Promise<CashierAccountsActionState> {
   const id = text(form, 'accountId');
+  const password = String(form.get('newPassword') ?? '');
   return run(async (businessId, proof) => {
-    const res = await apiFetch<{ initialPassword: string | null }>(`/cashier-accounts/${encodeURIComponent(id)}/reset-credential`, {
-      method: 'POST', businessId, headers: proof, body: JSON.stringify({}),
+    await apiFetch(`/cashier-accounts/${encodeURIComponent(id)}/reset-credential`, {
+      method: 'POST', businessId, headers: proof, body: JSON.stringify({ password }),
     });
-    return { status: 'credentialReset', credential: { username: text(form, 'username'), password: res.initialPassword ?? '' } };
+    return { status: 'credentialReset' };
   });
 }
 
@@ -107,12 +107,5 @@ export async function cashierAccountStatusAction(_prev: CashierAccountsActionSta
   return run(async (businessId, proof) => {
     await apiFetch(`/cashier-accounts/${encodeURIComponent(id)}/${action}`, { method: 'POST', businessId, headers: proof });
     return { status: 'updated' };
-  });
-}
-
-export async function rotateCashierCodeAction(): Promise<CashierAccountsActionState> {
-  return run(async (businessId, proof) => {
-    await apiFetch('/cashier-accounts/business-code/rotate', { method: 'POST', businessId, headers: proof });
-    return { status: 'codeRotated' };
   });
 }

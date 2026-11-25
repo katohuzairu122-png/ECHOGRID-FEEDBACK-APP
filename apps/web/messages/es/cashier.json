@@ -181,19 +181,16 @@
       },
       "code": {
         "title": "Código del negocio",
-        "hint": "Los cajeros inician sesión con este código, su nombre de usuario y su contraseña. No es un secreto, pero cámbielo si se compartió por error.",
-        "none": "Se crea con su primera cuenta de cajero.",
-        "rotate": "Cambiar el código del negocio",
-        "confirmRotate": "¿Cambiar el código del negocio? Los cajeros necesitarán el nuevo código en su próximo inicio de sesión. Los cajeros con sesión abierta no se desconectan.",
-        "rotated": "Se cambió el código del negocio."
+        "hint": "Los cajeros inician sesión con este código, su nombre de usuario y la contraseña que usted eligió. El código nunca cambia y no es secreto.",
+        "none": "Se crea con su primera cuenta de cajero."
       },
       "create": {
         "title": "Añadir un cajero",
         "username": "Nombre de usuario",
         "usernameHint": "De 3 a 32 caracteres: letras minúsculas, números, punto, guion bajo o guion.",
         "displayName": "Nombre o etiqueta del empleado",
-        "password": "Contraseña (opcional)",
-        "passwordHint": "Déjela vacía para generar una contraseña segura. Si define una, debe tener al menos 8 caracteres.",
+        "password": "Contraseña de este cajero",
+        "passwordHint": "Usted la elige. Al menos 8 caracteres; letras, números y símbolos son válidos. Comuníquesela usted mismo al cajero.",
         "submit": "Crear cajero",
         "created": "El cajero fue creado.",
         "name": "Nombre del cajero",
@@ -210,7 +207,10 @@
         "confirmSubmit": "Confirmar y crear",
         "creating": "Creando…",
         "cancel": "Cancelar",
-        "confirmWrong": "Esa contraseña no es correcta."
+        "confirmWrong": "Esa contraseña no es correcta.",
+        "passwordShow": "Mostrar",
+        "passwordHide": "Ocultar",
+        "passwordNeeds": "Elija una contraseña de 8 o más caracteres."
       },
       "assign": {
         "mode": "Acceso a sucursales",
@@ -245,8 +245,7 @@
         "editBranches": "Sucursales",
         "saveBranches": "Guardar sucursales",
         "cancel": "Cancelar",
-        "resetCredential": "Restablecer contraseña",
-        "confirmReset": "¿Restablecer la contraseña de este cajero? Sus sesiones actuales terminan y verá la nueva contraseña una sola vez.",
+        "resetCredential": "Cambiar contraseña",
         "disable": "Desactivar",
         "confirmDisable": "¿Desactivar esta cuenta? Se cierra su sesión ahora y no podrá entrar hasta que la active.",
         "enable": "Activar",
@@ -254,16 +253,21 @@
         "signOut": "Cerrar sesión en dispositivos",
         "confirmSignOut": "¿Cerrar la sesión de este cajero en todos los dispositivos?",
         "revoke": "Revocar acceso",
-        "confirmRevoke": "¿Revocar esta cuenta de forma permanente? No se puede deshacer."
+        "confirmRevoke": "¿Revocar esta cuenta de forma permanente? No se puede deshacer.",
+        "changePasswordTitle": "Cambiar la contraseña de {name}",
+        "changePasswordHint": "Elija una contraseña nueva. El cajero cerrará sesión en todos sus dispositivos.",
+        "newPassword": "Contraseña nueva",
+        "changePasswordSubmit": "Cambiar contraseña",
+        "changePasswordDone": "Contraseña cambiada. {name} cerró sesión en todos sus dispositivos. Comuníquele la contraseña nueva."
       },
       "credential": {
-        "title": "Guarde este acceso ahora",
-        "warning": "Esta contraseña se muestra una sola vez y no se puede recuperar. Entréguesela al cajero de forma segura.",
+        "title": "Cuenta de cajero lista",
+        "warning": "Entregue estos datos al cajero. La contraseña es la que usted eligió; no se muestra aquí y no se puede recuperar, solo cambiar.",
         "code": "Código del negocio",
         "username": "Nombre de usuario",
         "password": "Contraseña",
         "setByYou": "La contraseña que eligió",
-        "dismiss": "Ya la guardé",
+        "dismiss": "Listo",
         "copy": "Copiar datos de acceso",
         "copied": "Copiado"
       },
@@ -272,7 +276,7 @@
         "REAUTH_REQUIRED": "Confirme su contraseña arriba y vuelva a intentarlo.",
         "CASHIER_USERNAME_TAKEN": "Ese nombre de usuario ya se usa en este negocio.",
         "CASHIER_USERNAME_INVALID": "Los nombres de usuario tienen de 3 a 32 caracteres: letras minúsculas, números, punto, guion bajo o guion.",
-        "CASHIER_PASSWORD_INVALID": "Las contraseñas deben tener de 8 a 128 caracteres.",
+        "CASHIER_PASSWORD_INVALID": "Use de 8 a 128 caracteres y que no sea igual al nombre de usuario.",
         "CASHIER_BRANCH_ASSIGNMENT_INVALID": "Elija una sucursal para acceso único, o al menos dos para varias.",
         "CASHIER_BRANCH_NOT_FOUND": "No se encontró una de las sucursales elegidas.",
         "CASHIER_ACCOUNT_STATE_CONFLICT": "Eso no es posible en el estado actual de la cuenta.",
