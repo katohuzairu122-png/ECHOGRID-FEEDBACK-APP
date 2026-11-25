@@ -20,6 +20,10 @@ export interface FeedListInput {
   customerId: string;
   cursor: string | null;
   limit: number;
+  /** BCOMM-04: include approved business posts (server control NETWORK_BUSINESS_DISTRIBUTION_ENABLED, never client-supplied). */
+  includeBusinessPosts?: boolean;
+  /** `following` returns only posts of businesses the session customer follows (an explicit customer choice); default `all`. */
+  filter?: 'all' | 'following';
 }
 
 export interface FeedSource {

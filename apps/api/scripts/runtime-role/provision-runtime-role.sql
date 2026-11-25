@@ -96,6 +96,7 @@ DECLARE
     ['loyalty_tiers', 'INSERT, SELECT, UPDATE'],
     ['loyalty_transactions', 'INSERT, SELECT, UPDATE'],
     ['messages', 'INSERT, SELECT, UPDATE'],
+    ['network_follows', 'DELETE, INSERT, SELECT'],
     ['network_post_revisions', 'INSERT, SELECT, UPDATE'],
     ['network_posts', 'INSERT, SELECT, UPDATE'],
     ['network_revision_approvals', 'INSERT, SELECT'],
