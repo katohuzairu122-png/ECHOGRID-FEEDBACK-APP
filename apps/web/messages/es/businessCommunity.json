@@ -1,0 +1,121 @@
+{
+  "title": "Comunidad",
+  "hubLabel": "Centro de Comunidad",
+  "tagline": "Una cuenta. Todas las fidelidades.",
+  "intro": "Conecte con sus clientes, haga crecer su audiencia y construya relaciones duraderas a través de la Comunidad de Echo Grid.",
+  "workspace": "Espacio de trabajo",
+  "tabs": {
+    "label": "Secciones de la Comunidad",
+    "home": "Inicio",
+    "participation": "Participación",
+    "posts": "Mis publicaciones",
+    "insights": "Estadísticas"
+  },
+  "status": {
+    "title": "Estado del despliegue",
+    "description": "Lo que está abierto ahora. Refleja la configuración real de la plataforma y solo cambia cuando Echo Grid abre una función.",
+    "capabilities": {
+      "enrollment": "Inscripción de clientes",
+      "feed": "Actividad de la Comunidad",
+      "publishing": "Publicación de negocios"
+    },
+    "state": {
+      "open": "Abierto",
+      "closed": "Aún no disponible",
+      "unknown": "Estado no disponible"
+    },
+    "closedNote": "La Comunidad aún no está disponible. Visitar esta página no inscribe a usted ni a ningún cliente, y no se publica nada.",
+    "openNote": "Los clientes ya pueden elegir unirse a la Comunidad. La participación es siempre voluntaria y cada cliente decide por sí mismo.",
+    "unknownNote": "No pudimos leer el estado del despliegue, así que no se da nada por disponible. Inténtelo más tarde."
+  },
+  "summary": {
+    "title": "Resumen de participación",
+    "eligible": "Clientes de fidelidad",
+    "participants": "Participantes de la Comunidad",
+    "rate": "Tasa de participación",
+    "unavailable": "Aún no disponible",
+    "hint": "Se mostrará aquí solo cuando exista un recuento aprobado y protegido para la privacidad.",
+    "link": "Abrir Participación"
+  },
+  "feed": {
+    "title": "Actividad de la Comunidad",
+    "empty": "La actividad de la Comunidad aparecerá aquí cuando la Comunidad esté disponible.",
+    "openNotice": "El canal de la Comunidad para clientes está abierto, pero la actividad para negocios aún no está disponible."
+  },
+  "about": {
+    "title": "Acerca de la Comunidad de Echo Grid",
+    "what": {
+      "title": "Qué es",
+      "body": "La Comunidad de Echo Grid es un espacio compartido que conecta a clientes y negocios de toda la red Echo Grid."
+    },
+    "differs": {
+      "title": "En qué se diferencia de su programa de fidelidad",
+      "body": "Su programa de fidelidad pertenece a su negocio. La Comunidad es independiente: unirse a su programa de fidelidad nunca convierte a un cliente en miembro de la Comunidad."
+    },
+    "benefit": {
+      "title": "Cómo puede beneficiarse su negocio",
+      "body": "Con el tiempo, la Comunidad busca ayudar a los clientes a descubrir negocios y a los negocios a llegar a personas que eligieron participar. Esto aún no está disponible."
+    },
+    "voluntary": {
+      "title": "La participación es voluntaria",
+      "body": "Un cliente se une a la Comunidad solo si lo elige, con su propio consentimiento expreso. Leer esta página nunca inscribe a nadie."
+    },
+    "publishing": {
+      "title": "Publicación, más adelante",
+      "body": "En el futuro, negocios aprobados podrían compartir novedades. La publicación aún no está disponible y cada publicación sería moderada."
+    },
+    "privacy": {
+      "title": "Privacidad de los clientes",
+      "body": "Solo verá totales sobre sus propios clientes, nunca quién se unió ni lo que cualquier cliente hace en otros lugares."
+    },
+    "rollout": {
+      "title": "Disponibilidad actual",
+      "body": "Consulte el estado del despliegue de arriba para saber qué está abierto hoy."
+    }
+  },
+  "participation": {
+    "title": "Participación",
+    "description": "Cuántos de sus clientes de fidelidad participan en la Comunidad.",
+    "unavailableTitle": "Las cifras de participación aún no están disponibles",
+    "unavailable": "Esta sección mostrará solo totales: sus clientes de fidelidad, cuántos participan en la Comunidad y la proporción que representan. No se muestra ninguna cifra hasta que se publique ese informe.",
+    "privacy": "Nunca verá qué clientes concretos se unieron, sus puntos ni nada sobre clientes de otros negocios. Los grupos pequeños se ocultarán para que nadie pueda ser identificado.",
+    "metrics": {
+      "eligible": "Clientes de fidelidad",
+      "participants": "Participantes de la Comunidad",
+      "rate": "Tasa de participación"
+    },
+    "unavailableShort": "Aún no disponible"
+  },
+  "posts": {
+    "title": "Mis publicaciones",
+    "description": "Novedades que su negocio comparte con la Comunidad.",
+    "unavailableTitle": "Las publicaciones de negocio aún no están disponibles",
+    "unavailable": "Cuando se publique la función de publicación para negocios, podrá redactar borradores, ver cuáles están publicadas o en revisión y archivar las antiguas. Hoy no se puede escribir ni publicar nada.",
+    "statesTitle": "Lo que podrá gestionar",
+    "states": {
+      "drafts": "Borradores",
+      "published": "Publicadas",
+      "review": "En revisión",
+      "archived": "Archivadas"
+    }
+  },
+  "insights": {
+    "title": "Estadísticas",
+    "description": "Cómo rinde su actividad en la Comunidad.",
+    "unavailableTitle": "Las estadísticas aún no están disponibles",
+    "unavailable": "Todavía no se mide ninguna actividad de la Comunidad de su negocio, por lo que no se muestran cifras. Las medidas previstas se enumeran abajo; hoy no se registra ninguna.",
+    "plannedTitle": "Medidas previstas",
+    "planned": {
+      "impressions": "Impresiones de publicaciones",
+      "engagement": "Interacción con el contenido",
+      "visits": "Visitas al perfil del negocio",
+      "followers": "Nuevos seguidores",
+      "attribution": "Atribución de inscripciones de fidelidad",
+      "acquisition": "Captación de clientes mediante la Comunidad"
+    }
+  },
+  "states": {
+    "loading": "Cargando la Comunidad…",
+    "error": "No se pudo cargar esta sección. Inténtelo más tarde."
+  }
+}

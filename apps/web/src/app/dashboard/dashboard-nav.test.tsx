@@ -57,7 +57,8 @@ const legacyCashier = {
 const hrefs = (el: Element) =>
   Array.from(el.querySelectorAll('a')).map((a) => a.getAttribute('href'));
 const ADMIN = [
-  '/dashboard',
+  '/dashboard/community',
+  '/dashboard/overview',
   '/dashboard/loyalty',
   '/dashboard/feedback',
   '/dashboard/messages',
@@ -140,16 +141,17 @@ describe('DashboardNav presentation', () => {
     const sidebar = container.querySelector('aside nav')!;
     const user = userEvent.setup();
     const bar = container.querySelector('nav[class*="bottomNav"]')!;
+    // BCOMM-01: the mobile bar reads Community, Loyalty (customers and rewards live inside it), Feedback, then More.
     expect(Array.from(bar.querySelectorAll('a')).map((a) => a.getAttribute('href'))).toEqual([
-      '/dashboard',
-      '/dashboard/loyalty/scan', // cashier "Serve customers" tab is a primary destination
-      '/dashboard/feedback',
+      '/dashboard/community',
       '/dashboard/loyalty',
+      '/dashboard/feedback',
     ]);
     await user.click(screen.getByRole('button', { name: 'nav.more' }));
     const sheet = screen.getByRole('dialog');
     for (const href of [
-      '/dashboard',
+      '/dashboard/community',
+      '/dashboard/overview', // the Business Overview stays reachable
       '/dashboard/branches',
       '/dashboard/feedback',
       '/dashboard/loyalty',
@@ -172,5 +174,48 @@ describe('DashboardNav presentation', () => {
     }
     expect(container.querySelectorAll('aside form')).toHaveLength(1);
     expect(sheet.querySelectorAll('form')).toHaveLength(1);
+  });
+
+  describe('BCOMM-01: the Community entry', () => {
+    const sidebarHrefs = async (access: { known: boolean; permissions: Set<string> }) => {
+      vi.mocked(getMyAccess).mockResolvedValue(access);
+      const { container } = render(await DashboardNav());
+      return { container, hrefs: hrefs(container.querySelector('aside nav')!) };
+    };
+    const manager = { known: true, permissions: new Set(['business:view', 'branches:view', 'feedback:view', 'feedback:manage', 'analytics:view', 'loyalty:view']) };
+    const viewer = { known: true, permissions: new Set(['business:view', 'branches:view', 'feedback:view', 'messages:view']) };
+
+    it('owner: Community is the FIRST primary entry and appears exactly once; the Overview has its own destination', async () => {
+      const { container, hrefs: links } = await sidebarHrefs(owner);
+      expect(links[0]).toBe('/dashboard/community');
+      expect(links.filter((h) => h === '/dashboard/community')).toHaveLength(1);
+      expect(links.filter((h) => h === '/dashboard/overview')).toHaveLength(1);
+      expect(links).not.toContain('/dashboard'); // the entry route is not a second, duplicate destination
+      expect(container.querySelector('aside a[href="/dashboard/community"]')).toBeInTheDocument(); // the workspace home link
+      expect(new Set(links).size).toBe(links.length); // no duplicate entries anywhere
+    });
+
+    it('manager (existing management permissions, no escalation): Community first, billing and team still hidden', async () => {
+      const { hrefs: links } = await sidebarHrefs(manager);
+      expect(links[0]).toBe('/dashboard/community');
+      expect(links).toContain('/dashboard/analytics');
+      expect(links).not.toContain('/dashboard/billing');
+      expect(links).not.toContain('/dashboard/settings/team');
+    });
+
+    it('a view-only management user without a hub permission gets no Community entry and the Overview as home', async () => {
+      const { container, hrefs: links } = await sidebarHrefs(viewer);
+      expect(links).not.toContain('/dashboard/community');
+      expect(links).toContain('/dashboard/overview');
+      expect(container.querySelector('aside a[href="/dashboard/overview"]')).toBeInTheDocument();
+    });
+
+    it('cashier, legacy cashier and unavailable permissions never get a Community entry (navigation is not the only guard: the page and API enforce it)', async () => {
+      for (const access of [cashier, legacyCashier, { known: false, permissions: new Set<string>() }]) {
+        const { hrefs: links } = await sidebarHrefs(access);
+        expect(links).not.toContain('/dashboard/community');
+        expect(links).not.toContain('/dashboard/overview');
+      }
+    });
   });
 });

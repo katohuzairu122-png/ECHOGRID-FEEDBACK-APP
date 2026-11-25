@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { canConfigureProgramme, classifyWorkspace, isCounterStaff } from './workspace-access';
+import { canConfigureProgramme, canViewCommunityHub, classifyWorkspace, isCounterStaff } from './workspace-access';
 
 const access = (known: boolean, ...p: string[]) => ({ known, permissions: new Set(p) });
 // D-C1 default Staff (cashier) and the historical default (an unreconciled role).
@@ -51,5 +51,23 @@ describe('workspace classification (by effective permissions only)', () => {
   it('lets only rewards:manage configure tiers and rewards', () => {
     expect(canConfigureProgramme(access(true, 'rewards:manage'))).toBe(true);
     expect(canConfigureProgramme(access(true, ...STAFF))).toBe(false);
+  });
+});
+
+describe('BCOMM-01 canViewCommunityHub (presentation; the API route enforces the same list)', () => {
+  it('owner, admin and manager shapes (existing management permissions) may open it', () => {
+    for (const permission of ['business:manage_settings', 'analytics:view', 'loyalty:accounts:view', 'rewards:manage', 'feedback:manage', 'team:view']) {
+      expect(canViewCommunityHub(access(true, 'business:view', permission)), permission).toBe(true);
+    }
+  });
+  it('counter staff, view-only users and an unconfirmed permission set may not (fail closed)', () => {
+    expect(canViewCommunityHub(access(true, 'business:view', 'branches:view', 'loyalty:serve'))).toBe(false); // cashier
+    expect(canViewCommunityHub(access(true, 'business:view', 'feedback:view', 'messages:view'))).toBe(false); // view only
+    expect(canViewCommunityHub(access(true))).toBe(false);
+    expect(canViewCommunityHub(access(false, 'business:manage_settings', 'analytics:view'))).toBe(false); // unknown must never elevate
+  });
+  it('a cashier who somehow also holds a management permission is a management user, never counter staff', () => {
+    expect(classifyWorkspace(access(true, 'loyalty:serve', 'analytics:view'))).toBe('management');
+    expect(canViewCommunityHub(access(true, 'loyalty:serve', 'analytics:view'))).toBe(true);
   });
 });

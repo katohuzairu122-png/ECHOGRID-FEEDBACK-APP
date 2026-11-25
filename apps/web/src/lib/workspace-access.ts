@@ -1,3 +1,5 @@
+import { holdsCommunityHubPermission } from '@echo-grid-feedback/shared-types';
+
 export interface MyAccess {
   /** Effective permissions for the active business; empty when they could not be read. */
   permissions: ReadonlySet<string>;
@@ -58,4 +60,12 @@ export function isCounterStaff(access: MyAccess): boolean {
 /** Programme configuration (tiers, rewards, manual adjustment): requires rewards:manage. Fails closed. */
 export function canConfigureProgramme(access: MyAccess): boolean {
   return access.known && access.permissions.has('rewards:manage');
+}
+
+/**
+ * BCOMM-01: who may open the business Community hub. Management workspaces only (never counter staff or an unconfirmed permission set), and
+ * only with at least one of the existing management permissions the API route also requires. Presentation only: the API enforces the same list.
+ */
+export function canViewCommunityHub(access: MyAccess): boolean {
+  return access.known && classifyWorkspace(access) === 'management' && holdsCommunityHubPermission(access.permissions);
 }

@@ -1,0 +1,121 @@
+{
+  "title": "Community",
+  "hubLabel": "Community hub",
+  "tagline": "One account. Every loyalty.",
+  "intro": "Connect with customers, grow your audience and build lasting relationships through the Echo Grid Community.",
+  "workspace": "Workspace",
+  "tabs": {
+    "label": "Community sections",
+    "home": "Home",
+    "participation": "Participation",
+    "posts": "My Posts",
+    "insights": "Insights"
+  },
+  "status": {
+    "title": "Rollout status",
+    "description": "What is open right now. This reflects the live platform settings and changes only when Echo Grid opens a capability.",
+    "capabilities": {
+      "enrollment": "Customer enrollment",
+      "feed": "Community activity",
+      "publishing": "Business publishing"
+    },
+    "state": {
+      "open": "Open",
+      "closed": "Not available yet",
+      "unknown": "Status unavailable"
+    },
+    "closedNote": "Community is not yet available. Visiting this page does not enroll you or any customer, and nothing is published.",
+    "openNote": "Customers can now choose to join Community. Participation is always voluntary and every customer decides for themselves.",
+    "unknownNote": "We could not read the rollout status, so nothing is assumed to be available. Try again later."
+  },
+  "summary": {
+    "title": "Participation summary",
+    "eligible": "Loyalty customers",
+    "participants": "Community participants",
+    "rate": "Participation rate",
+    "unavailable": "Not available yet",
+    "hint": "Shown here only once an approved, privacy-protected count exists.",
+    "link": "Open Participation"
+  },
+  "feed": {
+    "title": "Community activity",
+    "empty": "Community activity will appear here when Community becomes available.",
+    "openNotice": "The customer Community Feed is open, but activity for businesses is not available yet."
+  },
+  "about": {
+    "title": "About Echo Grid Community",
+    "what": {
+      "title": "What it is",
+      "body": "Echo Grid Community is a shared space that connects customers and businesses across the Echo Grid network."
+    },
+    "differs": {
+      "title": "How it differs from your loyalty program",
+      "body": "Your loyalty program belongs to your business. Community is separate: joining your loyalty program never makes a customer a Community member."
+    },
+    "benefit": {
+      "title": "How your business can benefit",
+      "body": "Over time, Community is meant to help customers discover businesses and help businesses reach people who chose to take part. This is not available yet."
+    },
+    "voluntary": {
+      "title": "Participation is voluntary",
+      "body": "A customer joins Community only by choosing to, with their own explicit agreement. Reading this page never enrolls anyone."
+    },
+    "publishing": {
+      "title": "Publishing, later",
+      "body": "In the future, approved businesses may be able to share updates. Publishing is not available yet, and every post would be moderated."
+    },
+    "privacy": {
+      "title": "Customer privacy",
+      "body": "You will only ever see totals about your own customers, never who joined or what any customer does elsewhere."
+    },
+    "rollout": {
+      "title": "Current availability",
+      "body": "See the rollout status above for what is open today."
+    }
+  },
+  "participation": {
+    "title": "Participation",
+    "description": "How many of your loyalty customers take part in Community.",
+    "unavailableTitle": "Participation figures are not available yet",
+    "unavailable": "This section will show totals only: your loyalty customers, how many take part in Community, and the share they make up. No figures are shown until that reporting is released.",
+    "privacy": "You will never see which individual customers joined, their points, or anything about customers of other businesses. Small groups will be hidden so that no one can be identified.",
+    "metrics": {
+      "eligible": "Loyalty customers",
+      "participants": "Community participants",
+      "rate": "Participation rate"
+    },
+    "unavailableShort": "Not available yet"
+  },
+  "posts": {
+    "title": "My Posts",
+    "description": "Updates your business shares with Community.",
+    "unavailableTitle": "Business posts are not available yet",
+    "unavailable": "When business publishing is released you will be able to draft posts, see which are published or under review, and archive older ones. Nothing can be written or published today.",
+    "statesTitle": "What you will manage",
+    "states": {
+      "drafts": "Drafts",
+      "published": "Published",
+      "review": "Under review",
+      "archived": "Archived"
+    }
+  },
+  "insights": {
+    "title": "Insights",
+    "description": "How your Community activity performs.",
+    "unavailableTitle": "Insights are not available yet",
+    "unavailable": "No Community activity is measured for your business yet, so no figures are shown. The planned measures are listed below; none is tracked today.",
+    "plannedTitle": "Planned measures",
+    "planned": {
+      "impressions": "Post impressions",
+      "engagement": "Content engagement",
+      "visits": "Business profile visits",
+      "followers": "New followers",
+      "attribution": "Loyalty enrollment attribution",
+      "acquisition": "Community-driven customer acquisition"
+    }
+  },
+  "states": {
+    "loading": "Loading Community…",
+    "error": "This section could not be loaded. Try again later."
+  }
+}

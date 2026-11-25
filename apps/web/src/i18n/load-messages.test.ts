@@ -15,6 +15,7 @@ const EXPECTED_NAMESPACES = [
   'landing',
   'messaging',
   'cashier',
+  'businessCommunity',
 ];
 
 /**
