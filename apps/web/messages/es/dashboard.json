@@ -74,7 +74,10 @@
     "profilePhoneLabel": "Teléfono",
     "profileSubmit": "Guardar perfil",
     "profileSubmitPending": "Guardando…",
-    "profileSuccess": "Perfil guardado."
+    "profileSuccess": "Perfil guardado.",
+    "closureTitle": "Cerrar este negocio",
+    "closureDescription": "Solicita el cierre de este negocio. Una solicitud no elimina ni cambia nada.",
+    "closureLink": "Revisar y solicitar el cierre"
   },
   "impersonationBanner": {
     "label": "Suplantación activa —",
@@ -240,6 +243,58 @@
       "active": "Activa",
       "paused": "En pausa",
       "closed": "Cerrada"
+    }
+  },
+  "closure": {
+    "title": "Solicitar el cierre del negocio",
+    "intro": "Solo el propietario puede solicitar el cierre. La solicitud es un registro para el equipo de la plataforma: no elimina nada y tu negocio, tus clientes, puntos y recompensas siguen funcionando igual.",
+    "noAccess": "Solo el propietario del negocio puede solicitar el cierre.",
+    "loadFailed": "No pudimos cargar el estado del cierre. Inténtalo de nuevo.",
+    "blockedTitle": "El cierre aún no se puede procesar",
+    "blockedBody": "Cerrar un negocio requiere reglas aprobadas para liquidar saldos de clientes, reembolsos y registros que deben conservarse. Esas reglas aún no están aprobadas, por lo que el cierre está bloqueado. Puedes presentar la solicitud y retirarla en cualquier momento.",
+    "blockers": {
+      "CLOSURE_POLICY_NOT_APPROVED": "Las reglas de cierre, liquidación y conservación de registros aún no están aprobadas.",
+      "PENDING_REDEMPTIONS": "Hay canjes de recompensas de clientes pendientes.",
+      "CUSTOMER_POINTS_OUTSTANDING": "Los clientes aún tienen puntos de fidelidad con este negocio.",
+      "OPEN_REWARD_CLAIMS": "Algunas reclamaciones de recompensas aún no están liquidadas.",
+      "ACTIVE_SUBSCRIPTION": "El negocio tiene una suscripción activa.",
+      "ACTIVE_CASHIER_SESSIONS": "Aún hay sesiones de cajero abiertas.",
+      "COMMUNITY_CONTENT_PUBLISHED": "El negocio tiene publicaciones de Comunidad publicadas."
+    },
+    "obligationsTitle": "Lo que habría que resolver",
+    "obligations": {
+      "pendingRedemptions": "Canjes pendientes",
+      "customerPointBalances": "Clientes con puntos",
+      "customerPointsOutstanding": "Puntos en poder de clientes",
+      "activeMemberships": "Membresías de clientes",
+      "openOrphanRewardClaims": "Reclamaciones de recompensas abiertas",
+      "activeSubscriptions": "Suscripciones activas",
+      "activeCashierSessions": "Sesiones de cajero abiertas",
+      "staffMembers": "Miembros del equipo",
+      "publishedCommunityPosts": "Publicaciones de Comunidad",
+      "communityFollowers": "Seguidores de Comunidad"
+    },
+    "pendingTitle": "Hay una solicitud de cierre abierta",
+    "pendingBody": "Solicitada el {date}. Se avisó al equipo de la plataforma. No se ha eliminado ni cambiado nada.",
+    "withdrawHint": "Retirarla cancela la solicitud y no cambia nada más. Primero pide tu contraseña.",
+    "withdraw": "Retirar solicitud",
+    "withdrawn": "La solicitud fue retirada.",
+    "reauthTitle": "Confirma que eres tú",
+    "passwordLabel": "Tu contraseña",
+    "reauthButton": "Confirmar",
+    "reauthOk": "Confirmado. Tienes 5 minutos para continuar.",
+    "fileTitle": "Solicitar el cierre",
+    "fileHint": "Primero confirma tu contraseña arriba y luego escribe el nombre del negocio.",
+    "confirmLabel": "Escribe \"{name}\" para confirmar",
+    "fileButton": "Solicitar el cierre",
+    "filed": "Se registró tu solicitud de cierre. No se ha eliminado ni cambiado nada.",
+    "errors": {
+      "REAUTH_REQUIRED": "Confirma primero tu contraseña e inténtalo de nuevo.",
+      "CONFIRMATION_MISMATCH": "El nombre que escribiste no coincide con el del negocio.",
+      "INVALID_CREDENTIALS": "Esa contraseña no es correcta.",
+      "VALIDATION_ERROR": "Revisa lo que escribiste e inténtalo de nuevo.",
+      "PERMISSION_DENIED": "Solo el propietario del negocio puede hacer esto.",
+      "generic": "No pudimos completarlo. No se cambió nada. Inténtalo de nuevo."
     }
   }
 }

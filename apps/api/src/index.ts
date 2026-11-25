@@ -14,6 +14,8 @@ import { auditTrail } from './middleware/audit';
 import { authRoutes } from './auth/auth.routes';
 import { cashierSessionRoutes } from './cashier-sessions/cashier-sessions.routes';
 import { cashierAccountRoutes } from './cashier-accounts/cashier-accounts.routes';
+import { businessClosureRoutes } from './business-closure/business-closure.routes';
+import { platformBusinessClosureRoutes } from './platform/business-closure.routes';
 import { cashierActivityRoutes } from './cashier-activity/cashier-activity.routes';
 import { businessRoutes } from './businesses/business.routes';
 import { businessCategoryRoutes } from './businesses/business-category.routes';
@@ -168,6 +170,8 @@ api.use('*', cashierScopeGuard);
 api.route('/auth', authRoutes);
 api.route('/cashier-sessions', cashierSessionRoutes);
 api.route('/cashier-accounts', cashierAccountRoutes);
+// BIZ-CLOSE-01: owner closure REQUEST (record only; processing is blocked). Owner-only (business:delete) with a fresh password proof.
+api.route('/business-closure', businessClosureRoutes);
 api.route('/cashier-activity', cashierActivityRoutes);
 api.route('/businesses', businessRoutes);
 api.route('/business-categories', businessCategoryRoutes);
@@ -250,6 +254,8 @@ api.route('/platform/community-points', platformCommunityPointAdjustmentRoutes);
 // Community pilot allowlist: platform admins only; disabled unless COMMUNITY_MEMBERSHIP_PILOT_REQUIRED makes it matter (it never activates anything).
 api.route('/platform/community-pilot', platformCommunityPilotRoutes);
 api.route('/platform/orphan-settlements', platformOrphanSettlementRoutes);
+// BIZ-CLOSE-01: read-only platform-admin visibility of closure requests.
+api.route('/platform/business-closure', platformBusinessClosureRoutes);
 // Operations diagnostics -- admin-only, and the only platform prefix that
 // WRITES nothing and READS nothing. See ops.routes.ts for why it is gated
 // tighter than audit-log (which admits all three roles).

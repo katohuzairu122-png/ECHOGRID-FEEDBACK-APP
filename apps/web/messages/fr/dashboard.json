@@ -74,7 +74,10 @@
     "profilePhoneLabel": "Numéro de téléphone",
     "profileSubmit": "Enregistrer le profil",
     "profileSubmitPending": "Enregistrement…",
-    "profileSuccess": "Profil enregistré."
+    "profileSuccess": "Profil enregistré.",
+    "closureTitle": "Fermer cette entreprise",
+    "closureDescription": "Demandez la fermeture de cette entreprise. Une demande ne supprime ni ne modifie rien.",
+    "closureLink": "Examiner et demander la fermeture"
   },
   "impersonationBanner": {
     "label": "Emprunt d'identité —",
@@ -240,6 +243,58 @@
       "active": "Active",
       "paused": "En pause",
       "closed": "Clôturée"
+    }
+  },
+  "closure": {
+    "title": "Demander la fermeture de l'entreprise",
+    "intro": "Seul le propriétaire peut demander la fermeture. La demande est un enregistrement pour l'équipe de la plateforme : elle ne supprime rien et votre entreprise, vos clients, points et récompenses continuent de fonctionner normalement.",
+    "noAccess": "Seul le propriétaire de l'entreprise peut demander la fermeture.",
+    "loadFailed": "Impossible de charger l'état de la fermeture. Veuillez réessayer.",
+    "blockedTitle": "La fermeture ne peut pas encore être traitée",
+    "blockedBody": "Fermer une entreprise exige des règles approuvées pour régler les soldes clients, les remboursements et les documents à conserver. Ces règles ne sont pas encore approuvées : la fermeture est donc bloquée. Vous pouvez déposer une demande et la retirer à tout moment.",
+    "blockers": {
+      "CLOSURE_POLICY_NOT_APPROVED": "Les règles de fermeture, de règlement et de conservation des documents ne sont pas encore approuvées.",
+      "PENDING_REDEMPTIONS": "Des échanges de récompenses de clients sont encore en attente.",
+      "CUSTOMER_POINTS_OUTSTANDING": "Des clients détiennent encore des points de fidélité auprès de cette entreprise.",
+      "OPEN_REWARD_CLAIMS": "Certaines demandes de récompense ne sont pas encore réglées.",
+      "ACTIVE_SUBSCRIPTION": "L'entreprise a un abonnement actif.",
+      "ACTIVE_CASHIER_SESSIONS": "Des sessions de caissier sont encore ouvertes.",
+      "COMMUNITY_CONTENT_PUBLISHED": "L'entreprise a des publications Communauté publiées."
+    },
+    "obligationsTitle": "Ce qu'il faudrait régler",
+    "obligations": {
+      "pendingRedemptions": "Échanges en attente",
+      "customerPointBalances": "Clients détenant des points",
+      "customerPointsOutstanding": "Points détenus par les clients",
+      "activeMemberships": "Adhésions clients",
+      "openOrphanRewardClaims": "Demandes de récompense ouvertes",
+      "activeSubscriptions": "Abonnements actifs",
+      "activeCashierSessions": "Sessions de caissier ouvertes",
+      "staffMembers": "Membres de l'équipe",
+      "publishedCommunityPosts": "Publications Communauté",
+      "communityFollowers": "Abonnés Communauté"
+    },
+    "pendingTitle": "Une demande de fermeture est ouverte",
+    "pendingBody": "Demandée le {date}. L'équipe de la plateforme a été prévenue. Rien n'a été supprimé ni modifié.",
+    "withdrawHint": "Retirer la demande l'annule sans rien changer d'autre. Votre mot de passe est d'abord demandé.",
+    "withdraw": "Retirer la demande",
+    "withdrawn": "La demande a été retirée.",
+    "reauthTitle": "Confirmez que c'est bien vous",
+    "passwordLabel": "Votre mot de passe",
+    "reauthButton": "Confirmer",
+    "reauthOk": "Confirmé. Vous avez 5 minutes pour continuer.",
+    "fileTitle": "Demander la fermeture",
+    "fileHint": "Confirmez d'abord votre mot de passe ci-dessus, puis saisissez le nom de l'entreprise.",
+    "confirmLabel": "Saisissez « {name} » pour confirmer",
+    "fileButton": "Demander la fermeture",
+    "filed": "Votre demande de fermeture est enregistrée. Rien n'a été supprimé ni modifié.",
+    "errors": {
+      "REAUTH_REQUIRED": "Confirmez d'abord votre mot de passe, puis réessayez.",
+      "CONFIRMATION_MISMATCH": "Le nom saisi ne correspond pas au nom de l'entreprise.",
+      "INVALID_CREDENTIALS": "Ce mot de passe n'est pas correct.",
+      "VALIDATION_ERROR": "Vérifiez votre saisie et réessayez.",
+      "PERMISSION_DENIED": "Seul le propriétaire de l'entreprise peut faire cela.",
+      "generic": "Impossible de terminer. Rien n'a été modifié. Veuillez réessayer."
     }
   }
 }

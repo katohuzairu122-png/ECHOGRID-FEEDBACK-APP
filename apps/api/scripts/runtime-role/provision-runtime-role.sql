@@ -47,6 +47,7 @@ DECLARE
     ['billing_partner_credit_applications', 'INSERT, SELECT'],
     ['branches', 'INSERT, SELECT, UPDATE'],
     ['business_categories', 'SELECT'],
+    ['business_closure_requests', 'INSERT, SELECT, UPDATE'],
     ['business_customer_memberships', 'INSERT, SELECT, UPDATE'],
     ['business_notification_settings', 'INSERT, SELECT, UPDATE'],
     ['business_profile_revision_locations', 'DELETE, INSERT, SELECT'],

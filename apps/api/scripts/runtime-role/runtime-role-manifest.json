@@ -1030,6 +1030,15 @@
    ],
    "reason": "Community-only terms authority reads; runtime cannot approve, publish or mutate terms."
   },
+  "business_closure_requests": {
+   "class": "RUNTIME",
+   "verbs": [
+    "INSERT",
+    "SELECT",
+    "UPDATE"
+   ],
+   "reason": "BIZ-CLOSE-01: owner closure requests; UPDATE is pending->cancelled only, enforced by a database guard; no DELETE/TRUNCATE; closure processing is blocked and not implemented"
+  },
   "customer_deletion_requests": {
    "class": "RUNTIME",
    "verbs": [

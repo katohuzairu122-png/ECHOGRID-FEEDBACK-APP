@@ -2,7 +2,9 @@ import { redirect } from 'next/navigation';
 import type { CurrentUserDto } from '@echo-grid-feedback/shared-types';
 import { getTranslations } from 'next-intl/server';
 import { getActiveBusiness } from '@/lib/business';
+import Link from 'next/link';
 import { apiFetch } from '@/lib/api-client';
+import { getMyAccess } from '@/lib/permissions';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui';
 import { SettingsForm } from './settings-form';
 import { ChangePasswordForm } from './change-password-form';
@@ -17,9 +19,10 @@ import { ProfileForm } from './profile-form';
  * updateBusinessSettingsAction for the write path and its permission note.
  */
 export default async function BusinessSettingsPage() {
-  const [business, user] = await Promise.all([
+  const [business, user, access] = await Promise.all([
     getActiveBusiness(),
     apiFetch<CurrentUserDto>('/auth/me'),
+    getMyAccess(),
   ]);
   if (!business) redirect('/dashboard');
 
@@ -61,6 +64,18 @@ export default async function BusinessSettingsPage() {
           <ChangePasswordForm />
         </CardContent>
       </Card>
+
+      {access.known && access.permissions.has('business:delete') && (
+        <Card>
+          <CardHeader>
+            <CardTitle>{t('closureTitle')}</CardTitle>
+            <CardDescription>{t('closureDescription')}</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Link href="/dashboard/settings/closure" className="text-sm underline">{t('closureLink')}</Link>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }

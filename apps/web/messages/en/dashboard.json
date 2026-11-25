@@ -74,7 +74,10 @@
     "profilePhoneLabel": "Phone number",
     "profileSubmit": "Save profile",
     "profileSubmitPending": "Saving…",
-    "profileSuccess": "Profile saved."
+    "profileSuccess": "Profile saved.",
+    "closureTitle": "Close this business",
+    "closureDescription": "Request that this business be closed. Nothing is deleted or changed by a request.",
+    "closureLink": "Review and request closure"
   },
   "impersonationBanner": {
     "label": "Impersonating —",
@@ -240,6 +243,58 @@
       "active": "Active",
       "paused": "Paused",
       "closed": "Closed"
+    }
+  },
+  "closure": {
+    "title": "Request business closure",
+    "intro": "Only the business owner can request closure. A request is a record for the platform team: it deletes nothing and your business, customers, points and rewards keep working exactly as before.",
+    "noAccess": "Only the business owner can request closure.",
+    "loadFailed": "We could not load the closure status. Please try again.",
+    "blockedTitle": "Closure cannot be processed yet",
+    "blockedBody": "Closing a business needs approved rules for settling customer balances, refunds and records that must be kept. Those rules are not approved yet, so closure is blocked. You can still file a request, and you can withdraw it at any time.",
+    "blockers": {
+      "CLOSURE_POLICY_NOT_APPROVED": "The closure, settlement and record-retention rules are not approved yet.",
+      "PENDING_REDEMPTIONS": "Customers have reward redemptions that are still pending.",
+      "CUSTOMER_POINTS_OUTSTANDING": "Customers still hold loyalty points with this business.",
+      "OPEN_REWARD_CLAIMS": "Some reward claims are not settled yet.",
+      "ACTIVE_SUBSCRIPTION": "The business has an active subscription.",
+      "ACTIVE_CASHIER_SESSIONS": "Cashier sessions are still signed in.",
+      "COMMUNITY_CONTENT_PUBLISHED": "The business has published Community posts."
+    },
+    "obligationsTitle": "What would need to be resolved",
+    "obligations": {
+      "pendingRedemptions": "Pending redemptions",
+      "customerPointBalances": "Customers holding points",
+      "customerPointsOutstanding": "Points held by customers",
+      "activeMemberships": "Customer memberships",
+      "openOrphanRewardClaims": "Open reward claims",
+      "activeSubscriptions": "Active subscriptions",
+      "activeCashierSessions": "Signed-in cashier sessions",
+      "staffMembers": "Team members",
+      "publishedCommunityPosts": "Published Community posts",
+      "communityFollowers": "Community followers"
+    },
+    "pendingTitle": "A closure request is open",
+    "pendingBody": "Requested on {date}. The platform team has been notified. Nothing has been deleted or changed.",
+    "withdrawHint": "Withdrawing cancels the request and changes nothing else. It asks for your password first.",
+    "withdraw": "Withdraw request",
+    "withdrawn": "The request was withdrawn.",
+    "reauthTitle": "Confirm it is you",
+    "passwordLabel": "Your password",
+    "reauthButton": "Confirm",
+    "reauthOk": "Confirmed. You have 5 minutes to continue.",
+    "fileTitle": "Request closure",
+    "fileHint": "Confirm your password above first, then type the business name.",
+    "confirmLabel": "Type \"{name}\" to confirm",
+    "fileButton": "Request closure",
+    "filed": "Your closure request was recorded. Nothing has been deleted or changed.",
+    "errors": {
+      "REAUTH_REQUIRED": "Confirm your password first, then try again.",
+      "CONFIRMATION_MISMATCH": "The name you typed does not match the business name.",
+      "INVALID_CREDENTIALS": "That password is not correct.",
+      "VALIDATION_ERROR": "Please check what you typed and try again.",
+      "PERMISSION_DENIED": "Only the business owner can do this.",
+      "generic": "We could not complete that. Nothing was changed. Please try again."
     }
   }
 }
