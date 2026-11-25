@@ -61,6 +61,8 @@ async function call(path: string, o: { method?: string; token?: string; business
 describe.skipIf(!databaseUrl)('BCOMM-06 integrated acceptance (disposable PostgreSQL)', () => {
   let client: Client;
   const run = randomUUID().slice(0, 8);
+  // Public display names must not look like a phone number (the profile validator refuses digit runs), so they use a digit-free form of the run id.
+  const tag = run.replace(/[0-9]/g, (d) => 'ghijklmnop'[Number(d)]!);
   const q = async (text: string, values: unknown[] = []) => (await client.query(text, values)).rows;
   const id: Record<string, string> = {}; const tok: Record<string, string> = {};
   let bizA = ''; let bizB = ''; let handleA = '';
@@ -75,7 +77,7 @@ describe.skipIf(!databaseUrl)('BCOMM-06 integrated acceptance (disposable Postgr
     const profiles = new BusinessProfileService(buildDb(client));
     const draft = await profiles.saveDraft(biz, { userId: owner, role: 'business' }, {
       websiteUrl: 'https://cafe.example',
-      translations: [{ locale: 'en', displayName: `Cafe ${label} ${run}`, summary: 'Coffee', description: 'Fresh coffee daily.' }],
+      translations: [{ locale: 'en', displayName: `Cafe ${label} ${tag}`, summary: 'Coffee', description: 'Fresh coffee daily.' }],
       locations: [{ kind: 'place', label: 'Main shop', countryCode: 'GB', city: 'London' }],
     });
     const sub = await profiles.submit(biz, { userId: owner, role: 'business' }, draft.revisionId!);
@@ -127,7 +129,7 @@ describe.skipIf(!databaseUrl)('BCOMM-06 integrated acceptance (disposable Postgr
     for (const c of customers) {
       const feed = await call('/network/feed', { token: c.token });
       const item = (feed.data.items as any[]).find((i) => i.body === `Journey post v2 ${run}`);
-      expect(item, feed.text).toMatchObject({ contentClass: 'business_post', businessName: `Cafe A ${run}`, businessHandle: handleA });
+      expect(item, feed.text).toMatchObject({ contentClass: 'business_post', businessName: `Cafe A ${tag}`, businessHandle: handleA });
     }
     // 10-11. voluntary follow and an engagement (link open); a follow does NOT enroll, consent or message
     const fingerprint = async () => Object.fromEntries(await Promise.all(['community_memberships', 'consent_grants', 'loyalty_accounts', 'loyalty_transactions', 'community_point_transactions', 'notifications']
