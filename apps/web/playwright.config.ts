@@ -17,7 +17,10 @@ export default defineConfig({
   fullyParallel: false, // signup/business/branch data isn't isolated per test yet
   workers: 1,
   timeout: 60_000,
-  retries: 0,
+  // Hosted CI shares one source address with every spec, so the API's per-minute rate limits (e.g. 10 authentication and 20 public requests) can
+  // reject a request that has nothing to do with what a spec verifies. A rejected request creates nothing and the window clears within a minute,
+  // so a failed spec is retried (twice) in CI only; a retried pass is reported as FLAKY by Playwright, never hidden. Local runs never retry.
+  retries: process.env.CI ? 2 : 0,
   use: {
     baseURL: 'http://localhost:3000',
     trace: 'on-first-retry',
