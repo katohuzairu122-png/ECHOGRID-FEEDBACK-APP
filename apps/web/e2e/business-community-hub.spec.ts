@@ -24,17 +24,22 @@ async function createOwner(page: Page, label: string) {
   return { email, businessName: `Hub ${unique}` };
 }
 
-/** Staff see their BUSINESS's language (not a cookie), so the language is set where an owner sets it: Settings. */
+/**
+ * Staff see their BUSINESS's language (not a cookie). The owner sets it in Settings; this test sets the same saved business setting through the
+ * same API (with the owner's own session), because the Settings page is a slow, unrelated hydration-prone page on a cold development server.
+ */
 async function setBusinessLanguage(page: Page, locale: string) {
-  // On a freshly started development server the settings page can be clicked before it has hydrated, which drops the submission. Retry the
-  // whole save until the saved language re-renders the page shell (the success text itself switches language, so the shell is what we watch).
-  await expect(async () => {
-    await page.goto('/dashboard/settings');
-    await page.getByLabel('Language').selectOption(locale);
-    await page.getByRole('button', { name: 'Save settings' }).click();
-    await expect(page.locator('html')).toHaveAttribute('lang', locale, { timeout: 8_000 });
-  }).toPass({ timeout: 60_000 });
-  await page.reload(); // and it persists across a fresh request
+  const api = 'http://localhost:8787/api/v1';
+  const access = (await page.context().cookies('http://localhost:3000')).find((c) => c.name === 'ff_access_token')?.value;
+  expect(access, 'the owner session cookie').toBeTruthy();
+  const auth = { authorization: `Bearer ${access}` };
+  const businesses = (await (await page.request.get(`${api}/businesses`, { headers: auth })).json()) as { data: { id: string }[] };
+  const saved = await page.request.patch(`${api}/businesses/me`, {
+    headers: { ...auth, 'x-business-id': businesses.data[0]!.id, 'content-type': 'application/json' },
+    data: { defaultLocale: locale },
+  });
+  expect(saved.ok()).toBe(true);
+  await page.goto('/dashboard/community');
   await expect(page.locator('html')).toHaveAttribute('lang', locale);
 }
 
