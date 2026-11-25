@@ -280,18 +280,15 @@ describe('CASHIER-AUTH-02C: the header offers a branch switch only to an account
   });
 });
 
-describe('CASHIER-AUTH-02D: the Invite tab', () => {
+describe('CASHIER-FINAL-RECONCILIATION: the cashier navigation is Serve, Redeem and Account only', () => {
   const ctx = (over: Record<string, unknown>) => m.ctx.mockResolvedValue({ businessId: 'b', businessName: 'Cafe', branchId: 'b1', branchName: 'Main', deviceLabel: null, canSwitchBranch: false, ...over });
 
-  it('a session bound to a branch is offered the Invite tab, linking to the invitation screen', async () => {
-    ctx({});
+  it.each([{}, { branchId: null, branchName: null }])('offers no Invite tab and no other management destination (%o)', async (over) => {
+    ctx(over);
     render(await CashierAppLayout({ children: null }));
-    expect(screen.getByRole('link', { name: 'header.invite' })).toHaveAttribute('href', '/cashier/invite');
-  });
-
-  it('a session with no branch is not offered it (an invitation is bound to a branch; none is guessed)', async () => {
-    ctx({ branchId: null, branchName: null });
-    render(await CashierAppLayout({ children: null }));
+    const hrefs = screen.getAllByRole('link').map((a) => a.getAttribute('href'));
+    expect(hrefs).toEqual(expect.arrayContaining(['/cashier', '/cashier/redeem', '/cashier/account']));
+    expect(hrefs.filter((h) => h?.startsWith('/cashier'))).toEqual(['/cashier', '/cashier/redeem', '/cashier/account']);
     expect(screen.queryByRole('link', { name: 'header.invite' })).not.toBeInTheDocument();
   });
 });

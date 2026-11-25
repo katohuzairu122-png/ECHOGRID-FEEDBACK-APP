@@ -47,7 +47,6 @@ import {
   cashierServeAction,
   cashierSwitchBranchAction,
   cashierListBranchesAction,
-  cashierIssueInviteAction,
 } from './actions';
 
 const form = (o: Record<string, string>) => {
@@ -256,46 +255,9 @@ describe('CASHIER-AUTH-02C: switching branches', () => {
   });
 });
 
-describe('CASHIER-AUTH-02D: onboarding invitations', () => {
-  const ready = { inviteUrl: 'https://customers.example.test/loyalty/invite/tok', expiresAt: '2026-11-19T10:10:00.000Z', branchId: 'branch-1', inviteToken: 'tok' };
-
-  it('asks the API for an invitation as the cashier, with no body, and returns only the link, expiry and branch', async () => {
-    m.apiFetch.mockImplementation(async () => { m.surface.push(isCashierSurface()); return ready; });
-    const out = await cashierIssueInviteAction('branch-1');
-    expect(m.apiFetch).toHaveBeenCalledWith('/loyalty/actions/onboarding-invite', { method: 'POST', cache: 'no-store' });
-    expect(m.surface).toEqual([true]); // under the cashier credential, never the staff one
-    expect(out).toEqual({ status: 'ready', inviteUrl: ready.inviteUrl, expiresAt: ready.expiresAt, branchId: 'branch-1' });
-    expect(JSON.stringify(out)).not.toContain('inviteToken');
-  });
-
-  it('a window drawn for another branch is sent back to the counter and asks nothing', async () => {
-    expect(await redirected(cashierIssueInviteAction('branch-2'))).toContain('/cashier;');
-    expect(m.apiFetch).not.toHaveBeenCalled();
-  });
-
-  it('maps refusals to states the screen can explain, and never throws a raw error to the browser', async () => {
-    for (const [status, code, expected] of [
-      [429, 'RATE_LIMITED', 'rate_limited'], [409, 'ONBOARDING_INVITE_BRANCH_REQUIRED', 'branch_required'], [500, 'BOOM', 'unavailable'], [403, 'ONBOARDING_INVITE_CASHIER_ONLY', 'unavailable'],
-    ] as const) {
-      m.apiFetch.mockRejectedValueOnce(new ApiError('x', status, code));
-      expect(await cashierIssueInviteAction('branch-1'), `${status} ${code}`).toEqual({ status: expected });
-    }
-    m.apiFetch.mockRejectedValueOnce(new Error('network'));
-    expect(await cashierIssueInviteAction('branch-1')).toEqual({ status: 'unavailable' });
-  });
-
-  it('an ended session (revoked, disabled, signed out elsewhere) clears the cookies and returns to sign-in', async () => {
-    for (const code of ['CASHIER_ACCESS_REVOKED', 'ACCOUNT_INACTIVE', 'INVALID_REFRESH_TOKEN']) {
-      m.clear.mockClear();
-      m.apiFetch.mockRejectedValueOnce(new ApiError('x', 403, code));
-      expect(await redirected(cashierIssueInviteAction('branch-1'))).toContain('/cashier/login?reason=session');
-      expect(m.clear).toHaveBeenCalledTimes(1);
-    }
-  });
-
-  it('an expired cashier access that cannot be renewed redirects to sign-in before any API call', async () => {
-    m.ensure.mockResolvedValueOnce(false);
-    expect(await redirected(cashierIssueInviteAction('branch-1'))).toContain('/cashier/login');
-    expect(m.apiFetch).not.toHaveBeenCalled();
+describe('CASHIER-FINAL-RECONCILIATION: the cashier interface exposes no invitation action', () => {
+  it('exports no invitation issuer (Invite Customers is not a cashier function)', async () => {
+    const mod = (await import('./actions')) as Record<string, unknown>;
+    expect(Object.keys(mod).filter((k) => /invite/i.test(k))).toEqual([]);
   });
 });

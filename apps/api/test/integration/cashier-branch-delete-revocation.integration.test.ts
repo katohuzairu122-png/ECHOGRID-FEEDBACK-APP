@@ -185,7 +185,8 @@ describe.skipIf(!databaseUrl)('SEC-CASHIER-02D-R2 branch deletion versus cashier
 
 
   const del = (branchId: string) => http('DELETE', `/branches/${branchId}`, { token: ownerToken, businessId: bizA, branchId });
-  const invite = (token: string, branchId: string) => http('POST', '/loyalty/actions/onboarding-invite', { token, businessId: bizA, branchId });
+  // A live-session probe on an allow-listed cashier route (the withdrawn invitation issuer used to serve this purpose).
+  const invite = (token: string, branchId: string) => http('GET', '/businesses/me', { token, businessId: bizA, branchId });
   const liveOnBranch = async (branchId: string) => Number((await q(
     `SELECT count(*)::int n FROM refresh_tokens WHERE client='cashier' AND business_id=$1 AND branch_id=$2 AND revoked_at IS NULL AND expires_at > now()`, [bizA, branchId]))[0].n);
 

@@ -139,11 +139,13 @@ const mainBranch = fx?.branches[0]?.name ?? '';
 test('B01 cashier signs in with the business code and chooses a branch; the serving screen shows it', async ({ browser }) => {
   const { context, page } = await cashierPage(browser, 'en', mainBranch);
   await expect(page.locator('body')).toContainText(mainBranch);
-  await expect(page.getByRole('link', { name: cashierEn.header.invite })).toBeVisible();
+  // CASHIER-FINAL-RECONCILIATION: Invite Customers is not a cashier function, so there is no Invite tab.
+  await expect(page.getByRole('link', { name: cashierEn.header.invite })).toHaveCount(0);
   await context.close();
 });
 
-test('B02 the Invite screen creates a one-time invitation: QR, countdown and a link carrying only the documented claims', async ({ browser }) => {
+// SUPERSEDED by CASHIER-FINAL-RECONCILIATION: depends on cashier-issued invitations, which were withdrawn; re-base on the owner-facing flow if Owner approves it.
+test.fixme('B02 the Invite screen creates a one-time invitation: QR, countdown and a link carrying only the documented claims', async ({ browser }) => {
   const { context, page } = await cashierPage(browser, 'en', mainBranch);
   const link = await createInvite(page, 'en');
   expect(link).toMatch(INVITE_LINK);
@@ -158,7 +160,8 @@ test('B02 the Invite screen creates a one-time invitation: QR, countdown and a l
   await context.close();
 });
 
-test('B03 branch context: a cashier serving at another branch issues an invitation for that branch only', async ({ browser }) => {
+// SUPERSEDED by CASHIER-FINAL-RECONCILIATION: depends on cashier-issued invitations, which were withdrawn; re-base on the owner-facing flow if Owner approves it.
+test.fixme('B03 branch context: a cashier serving at another branch issues an invitation for that branch only', async ({ browser }) => {
   const other = fx!.branches[1]!;
   const { context, page } = await cashierPage(browser, 'en', other.name);
   await expect(page.locator('body')).toContainText(other.name);
@@ -170,7 +173,8 @@ test('B03 branch context: a cashier serving at another branch issues an invitati
   await context.close();
 });
 
-test('B04 customer join: business and branch are shown, Join stays disabled until the explicit consent, then the customer is in', async ({ browser }) => {
+// SUPERSEDED by CASHIER-FINAL-RECONCILIATION: depends on cashier-issued invitations, which were withdrawn; re-base on the owner-facing flow if Owner approves it.
+test.fixme('B04 customer join: business and branch are shown, Join stays disabled until the explicit consent, then the customer is in', async ({ browser }) => {
   needCustomers(2);
   const context = await customerContext(browser, 0, 'en');
   const page = await context.newPage();
@@ -185,7 +189,8 @@ test('B04 customer join: business and branch are shown, Join stays disabled unti
   await context.close();
 });
 
-test('B05 membership state and single use: the same invitation shows "already used" to another customer, and a member sees "already a member"', async ({ browser }) => {
+// SUPERSEDED by CASHIER-FINAL-RECONCILIATION: depends on cashier-issued invitations, which were withdrawn; re-base on the owner-facing flow if Owner approves it.
+test.fixme('B05 membership state and single use: the same invitation shows "already used" to another customer, and a member sees "already a member"', async ({ browser }) => {
   needCustomers(2);
   const other = await (await customerContext(browser, 1, 'en')).newPage();
   await other.goto(mainLink);
@@ -211,7 +216,8 @@ test('B06 rejection state: an invalid invitation is refused clearly and offers n
   await page.context().close();
 });
 
-test('B07 Arabic and right-to-left: the cashier Invite screen and the customer page are translated, RTL, and fit 375 px', async ({ browser }) => {
+// SUPERSEDED by CASHIER-FINAL-RECONCILIATION: depends on cashier-issued invitations, which were withdrawn; re-base on the owner-facing flow if Owner approves it.
+test.fixme('B07 Arabic and right-to-left: the cashier Invite screen and the customer page are translated, RTL, and fit 375 px', async ({ browser }) => {
   const { context, page } = await cashierPage(browser, 'ar', fx!.branches[0]!.name, { width: 375, height: 700 });
   await page.goto(`${targets.cashier}/cashier/invite`);
   expect(await page.evaluate(() => document.documentElement.dir)).toBe('rtl');

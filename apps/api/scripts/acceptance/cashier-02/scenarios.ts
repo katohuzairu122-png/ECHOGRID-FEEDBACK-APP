@@ -213,7 +213,21 @@ export async function buildWorld(ctx: Context): Promise<World> {
   return world;
 }
 
-const invite = (ctx: Context, token: string) => ctx.api.request('POST', '/loyalty/actions/onboarding-invite', { token });
+/**
+ * CASHIER-FINAL-RECONCILIATION: the cashier-issued invitation route was withdrawn, so an invitation is minted with the local signer
+ * (`ctx.forgeInvite`, local mode only) from the claims of a LIVE cashier session. A dead session answers like it did before (401); with no
+ * signer (any non-local run) it answers 501 and the dependent checks fail loudly instead of passing.
+ */
+const invite = async (ctx: Context, token: string): Promise<ApiResult> => {
+  const live = await ctx.api.request('GET', '/auth/me', { token });
+  if (live.status !== 200) return live;
+  if (!ctx.forgeInvite) return { status: 501 } as ApiResult;
+  const c = decodeClaims(token);
+  if (!c.brid) return { status: 409, error: { code: 'ONBOARDING_INVITE_BRANCH_REQUIRED', message: 'no branch' } } as ApiResult;
+  const iat = Math.floor(Date.now() / 1000);
+  const inviteToken = await ctx.forgeInvite({ sub: c.sub, type: 'onboarding_invite', sid: c.sid, biz: c.bid, brid: c.brid, jti: crypto.randomUUID(), iat, exp: iat + 600 });
+  return { status: 200, data: { inviteToken, inviteUrl: 'minted-locally', branchId: c.brid } } as ApiResult;
+};
 const accept = (ctx: Context, customerToken: string, inviteToken: string, extra: Record<string, unknown> = {}) =>
   ctx.api.request('POST', '/customer-memberships/join-assisted', { token: customerToken, body: { inviteToken, consentAccepted: true, consentVersion: 'v1', ...extra } });
 const preview = (ctx: Context, customerToken: string, inviteToken: string) =>
@@ -252,9 +266,9 @@ export const SCENARIOS: Scenario[] = [
       const s = await ctx.api.request('POST', '/auth/cashier/session', { body: { ticket: login.data?.ticket, businessId: ctx.ownerA.businessId, branchId: chosen } });
       await rec.check('S01.3', 'the session is bound to the chosen branch and the business of the code', s.status === 200 && s.data?.session?.branchId === chosen && !!s.data?.accessToken, `${s.status}`);
       const other = w.branchesA[0] as string;
-      const spoof = await ctx.api.request('POST', `/loyalty/actions/onboarding-invite?branchId=${other}`, { token: s.data?.accessToken, branchId: other });
-      await rec.check('S01.4', 'a branch named in the request is ignored or refused: the session\'s branch always wins', (spoof.status === 403 && code(spoof) === 'CASHIER_CONTEXT_MISMATCH') || (spoof.status === 200 && spoof.data?.branchId === chosen), `${spoof.status} ${code(spoof)}`);
-      const mismatch = await ctx.api.request('POST', '/loyalty/actions/onboarding-invite', { token: s.data?.accessToken, businessId: ctx.ownerB.businessId });
+      const spoof = await ctx.api.request('POST', '/cashier-accounts', { token: s.data?.accessToken, branchId: other });
+      await rec.check('S01.4', 'a branch named in the request cannot widen the session: a route outside the allow-list is refused (CASHIER_ROUTE_DENIED)', spoof.status === 403 && code(spoof) === 'CASHIER_ROUTE_DENIED', `${spoof.status} ${code(spoof)}`);
+      const mismatch = await ctx.api.request('POST', '/loyalty/actions/lookup-customer', { token: s.data?.accessToken, businessId: ctx.ownerB.businessId });
       await rec.check('S01.5', 'a header naming another business is refused (CASHIER_CONTEXT_MISMATCH)', mismatch.status === 403 && code(mismatch) === 'CASHIER_CONTEXT_MISMATCH', `${mismatch.status} ${code(mismatch)}`);
     },
   },
@@ -275,8 +289,8 @@ export const SCENARIOS: Scenario[] = [
       await rec.check('S02.1', 'a cashier token is refused on administration and report routes (CASHIER_ROUTE_DENIED)', allDenied, seen.join(','));
       const anon = await ctx.api.request('GET', '/analytics/onboarding', { businessId: ctx.ownerA.businessId });
       await rec.check('S02.2', 'an anonymous caller is refused on the onboarding report', anon.status === 401, `${anon.status}`);
-      const owner = await ctx.api.request('POST', '/loyalty/actions/onboarding-invite', { token: w.tokenA, businessId: ctx.ownerA.businessId });
-      await rec.check('S02.3', 'an owner without a cashier session cannot issue an invitation (ONBOARDING_INVITE_CASHIER_ONLY)', owner.status === 403 && code(owner) === 'ONBOARDING_INVITE_CASHIER_ONLY', `${owner.status} ${code(owner)}`);
+      const issuer = await ctx.api.request('POST', '/loyalty/actions/onboarding-invite', { token: s.accessToken, businessId: ctx.ownerA.businessId });
+      await rec.check('S02.3', 'the withdrawn invitation issuer is refused to a cashier token (CASHIER_ROUTE_DENIED)', issuer.status === 403 && code(issuer) === 'CASHIER_ROUTE_DENIED', `${issuer.status} ${code(issuer)}`);
     },
   },
   {

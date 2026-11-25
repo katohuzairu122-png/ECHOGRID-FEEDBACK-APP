@@ -84,8 +84,6 @@ export async function CashierShell({ children }: { children: React.ReactNode }) 
         tabs={[
           { href: '/cashier', label: t('header.serve') },
           { href: '/cashier/redeem', label: t('header.redeem') },
-          // An invitation is bound to a branch: a session with no branch has nothing to invite for, so the tab is not offered.
-          ...(ctx.branchId ? [{ href: '/cashier/invite', label: t('header.invite') }] : []),
           { href: '/cashier/account', label: t('header.account') },
         ]}
       />
