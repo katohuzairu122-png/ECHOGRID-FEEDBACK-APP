@@ -43,7 +43,12 @@ test('CUST-DEL-02 — password step-up, request, revocation, restricted dashboar
   await page.locator('#deletion-password').fill(password);
   await page.getByRole('button', { name: 'Request account deletion' }).click();
   try {
+    try {
     await expect(page).toHaveURL(/\/loyalty\/login\?next=/);
+  } catch (error) {
+    const alerts = await page.getByRole('alert').allTextContents();
+    throw new Error(`Deletion request failed before redirect; visible alerts: ${JSON.stringify(alerts)}; ${String(error)}`);
+  }
   } catch {
     const messages = await page.locator('p[role="alert"]').allTextContents();
     throw new Error(`Deletion request did not redirect; visible validation category: ${messages.join(' | ') || 'none'}`);
