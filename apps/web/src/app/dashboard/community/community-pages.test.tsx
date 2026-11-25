@@ -226,13 +226,65 @@ describe('the other internal sections (explicit unavailable states, no data requ
     expect(screen.queryByTestId('community-posts')).toBeNull();
   });
 
-  it('Insights: nothing is measured, so no view, follower, engagement, acquisition or conversion figure exists; planned measures are plain words', async () => {
-    render(await CommunityInsightsPage());
-    expect(screen.getByText('Insights are not available yet')).toBeInTheDocument();
-    const planned = within(screen.getByTestId('community-insights-planned')).getAllByRole('listitem').map((li) => li.textContent);
-    expect(planned).toEqual(['Post impressions', 'Content engagement', 'Business profile visits', 'New followers', 'Loyalty enrollment attribution', 'Community-driven customer acquisition']);
-    expect(text()).not.toMatch(/\d/);
-    expect(m.api).not.toHaveBeenCalled();
+  const shown = (value: number) => ({ state: 'shown', value });
+  const hiddenFigure = { state: 'suppressed' };
+  const insights = (over: Record<string, unknown> = {}) => ({
+    rangeDays: 30, from: '2026-01-01', to: '2026-01-30', minimumGroupSize: 10,
+    impressions: shown(500), uniqueReach: shown(40), engagements: shown(90), newFollowers: shown(12), currentFollowers: shown(80),
+    posts: [{ handle: 'AbCdEfGhIjKlMnOpQrStUv', excerpt: 'Fresh croissants', impressions: shown(300), uniqueReach: shown(30), engagements: hiddenFigure }],
+    attribution: { state: 'not_measured' }, profileVisits: { state: 'not_measured' }, ...over,
+  });
+  const withInsights = (answer: unknown, failure: number | null = null) =>
+    m.api.mockImplementation(async (path: string) => {
+      if (path.startsWith('/community/business/insights')) {
+        if (failure !== null) throw new ApiErrorMock('failed', failure);
+        return answer;
+      }
+      return { enrollment: 'closed', feed: 'closed', publishing: 'closed', distribution: 'closed' };
+    });
+  const insightsPage = async (days?: string) => CommunityInsightsPage({ searchParams: Promise.resolve(days ? { days } : {}) });
+
+  it('Insights: shows exactly the server-thresholded totals, hides small groups, and states what is NOT measured', async () => {
+    withInsights(insights());
+    render(await insightsPage());
+    const grid = screen.getByTestId('community-insights');
+    for (const value of ['500', '40', '90', '12', '80']) expect(within(grid).getByText(value)).toBeInTheDocument();
+    const post = within(screen.getByTestId('community-insights-posts'));
+    expect(post.getByText('Fresh croissants')).toBeInTheDocument();
+    expect(post.getByText('Hidden: small group')).toBeInTheDocument(); // the post's engagement figure is suppressed
+    expect(within(screen.getByTestId('community-insights-notmeasured')).getAllByRole('listitem')).toHaveLength(2);
+    expect(m.api).toHaveBeenCalledWith('/community/business/insights?days=30', { businessId: 'biz-1' });
+    expect(document.querySelectorAll('input, textarea, select, button, form')).toHaveLength(0);
+  });
+
+  it('Insights: a small audience shows only "Hidden", never a number or a zero; range links are real navigation', async () => {
+    withInsights(insights({ impressions: hiddenFigure, uniqueReach: hiddenFigure, engagements: hiddenFigure, newFollowers: hiddenFigure, currentFollowers: hiddenFigure, posts: [] }));
+    render(await insightsPage('90'));
+    expect(within(screen.getByTestId('community-insights')).getAllByText('Hidden: small group')).toHaveLength(5);
+    expect(within(screen.getByTestId('community-insights')).queryByText('0')).toBeNull();
+    expect(m.api).toHaveBeenCalledWith('/community/business/insights?days=90', { businessId: 'biz-1' });
+    const nav = screen.getByRole('navigation', { name: 'Period' });
+    expect(within(nav).getByRole('link', { name: 'Last 90 days' })).toHaveAttribute('aria-current', 'page');
+    expect(within(nav).getByRole('link', { name: 'Last 7 days' })).toHaveAttribute('href', '/dashboard/community/insights?days=7');
+  });
+
+  it('Insights: an unknown range falls back to 30 days; a 403, a failure and a malformed answer never show invented figures', async () => {
+    withInsights(insights());
+    render(await insightsPage('9999'));
+    expect(m.api).toHaveBeenCalledWith('/community/business/insights?days=30', { businessId: 'biz-1' });
+    cleanup();
+    withInsights(null, 403);
+    render(await insightsPage());
+    expect(screen.getByText(/your role cannot view insights/)).toBeInTheDocument();
+    cleanup();
+    withInsights(null, 500);
+    render(await insightsPage());
+    expect(screen.getByText(/could not be loaded right now/)).toBeInTheDocument();
+    cleanup();
+    withInsights(insights({ attribution: { state: 'shown' } }));
+    render(await insightsPage());
+    expect(screen.getByText(/could not be loaded right now/)).toBeInTheDocument();
+    expect(screen.queryByTestId('community-insights')).toBeNull();
   });
 });
 
@@ -242,7 +294,7 @@ describe('access control on every section (server-side; navigation is never the 
     ['home', () => CommunityHomePage()],
     ['participation', () => CommunityParticipationPage()],
     ['posts', () => CommunityPostsPage()],
-    ['insights', () => CommunityInsightsPage()],
+    ['insights', () => CommunityInsightsPage({ searchParams: Promise.resolve({}) })],
   ];
 
   it.each(sections)('%s: counter staff are redirected to Serve customers and nothing is read', async (_name, page) => {

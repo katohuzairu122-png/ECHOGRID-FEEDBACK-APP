@@ -4,6 +4,7 @@ import type { CommunityFeedResult } from '@/lib/community-feed-types';
 import styles from '../community-sections.module.css';
 import { FeedRefreshButton } from './feed-refresh-button';
 import { FollowButton } from './follow-button';
+import { PostLink } from './post-link';
 
 const FEED_PATH = '/loyalty/dashboard/community/feed';
 
@@ -107,16 +108,7 @@ export function CommunityFeedView({
                     {item.contentClass === 'business_post' && item.businessHandle && followed ? (
                       <FollowButton handle={item.businessHandle} following={followed.has(item.businessHandle)} name={item.businessName ?? t('feed.business')} />
                     ) : null}
-                    {href && (
-                      <a
-                        className={styles.cardLink}
-                        href={href}
-                        rel="noopener noreferrer nofollow"
-                        target="_blank"
-                      >
-                        {t('feed.openLink')}
-                      </a>
-                    )}
+                    {href && <PostLink className={styles.cardLink} href={href} handle={item.handle} businessPost={item.contentClass === 'business_post'} />}
                   </article>
                 </li>
               );

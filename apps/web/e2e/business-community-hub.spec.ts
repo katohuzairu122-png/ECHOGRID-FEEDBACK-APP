@@ -118,8 +118,14 @@ test('an owner lands on the Community hub; it is honest while Community is disab
   await expect(page.getByTestId('community-posts')).toBeVisible();
   await expect(page.getByRole('button', { name: 'New post' })).toBeVisible();
   await tabs.getByRole('link', { name: 'Insights' }).click();
-  await expect(page.getByText('Insights are not available yet')).toBeVisible();
-  await expect(page.getByTestId('community-insights-planned').getByRole('listitem')).toHaveCount(6);
+  // A new business has no recorded activity: every figure is suppressed (never a zero), and what is not measured is stated.
+  await expect(page.getByTestId('community-insights').getByText('Hidden: small group')).toHaveCount(5);
+  await expect(page.getByTestId('community-insights').getByText('0', { exact: true })).toHaveCount(0);
+  await expect(page.getByTestId('community-insights-notmeasured').getByRole('listitem')).toHaveCount(2);
+  await expect(page.getByRole('navigation', { name: 'Period' }).getByRole('link', { name: 'Last 30 days' })).toHaveAttribute('aria-current', 'page');
+  await page.getByRole('navigation', { name: 'Period' }).getByRole('link', { name: 'Last 7 days' }).click();
+  await expect(page).toHaveURL('/dashboard/community/insights?days=7');
+  await expect(page.getByTestId('community-insights')).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath('community-insights-desktop.png'), fullPage: true });
 
   // The Business Overview keeps its own destination and its content; refreshing never loops.

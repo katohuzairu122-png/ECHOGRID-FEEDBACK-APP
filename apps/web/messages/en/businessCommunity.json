@@ -170,18 +170,44 @@
   },
   "insights": {
     "title": "Insights",
-    "description": "How your Community activity performs.",
-    "unavailableTitle": "Insights are not available yet",
-    "unavailable": "No Community activity is measured for your business yet, so no figures are shown. The planned measures are listed below; none is tracked today.",
-    "plannedTitle": "Planned measures",
-    "planned": {
-      "impressions": "Post impressions",
-      "engagement": "Content engagement",
-      "visits": "Business profile visits",
-      "followers": "New followers",
-      "attribution": "Loyalty enrollment attribution",
-      "acquisition": "Community-driven customer acquisition"
-    }
+    "description": "How your Community posts perform, from events the platform recorded itself.",
+    "unavailableTitle": "Insights could not be loaded right now. Try again shortly.",
+    "forbidden": "You can see Community, but your role cannot view insights.",
+    "rangeLabel": "Period",
+    "range": "Last {days} days",
+    "period": "{from} to {to} (UTC days)",
+    "suppressedShort": "Hidden: small group",
+    "suppressed": "Hidden to protect privacy: figures from fewer than {min} customers are never shown.",
+    "metrics": {
+      "impressions": {
+        "label": "Post impressions",
+        "hint": "Times your posts were shown to signed-in customers (once per customer, post and day)."
+      },
+      "reach": {
+        "label": "Unique reach",
+        "hint": "Different customers who were shown your posts."
+      },
+      "engagements": {
+        "label": "Link opens",
+        "hint": "Times customers opened a link in your posts (once per customer, post and day)."
+      },
+      "newFollowers": {
+        "label": "New followers",
+        "hint": "Customers who chose to follow your business in this period."
+      },
+      "followers": {
+        "label": "Followers now",
+        "hint": "Customers currently following your business."
+      }
+    },
+    "postsTitle": "Your recent posts",
+    "postsEmpty": "No published posts yet.",
+    "notMeasuredTitle": "Not measured yet",
+    "notMeasured": {
+      "visits": "Business profile visits: customers have no profile page to visit yet, so none are counted.",
+      "attribution": "Loyalty enrollment and acquisition attribution: no attribution model has been approved, so no conversion figure is shown."
+    },
+    "privacy": "You never see which customers were reached, followed or opened a link. Figures cover posts shown in the Community Feed only."
   },
   "states": {
     "loading": "Loading Community…",

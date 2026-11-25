@@ -29,3 +29,17 @@ export async function setFollowAction(_previous: FollowState, form: FormData): P
     return { error: 'unavailable' };
   }
 }
+
+/**
+ * BCOMM-05: record that the signed-in customer opened a BUSINESS post's link. Fire-and-forget evidence for the business's thresholded insights:
+ * only a handle is accepted, the customer comes from the session, a failure is silent (it must never block opening the link), and the API
+ * counts at most once per customer, post and day. This is never a consent, enrollment or marketing signal.
+ */
+export async function recordLinkOpenAction(handle: string): Promise<void> {
+  if (!HANDLE.test(handle)) return;
+  try {
+    await customerApiFetch(`/network/engagement/${handle}`, { method: 'POST' }, '/loyalty/dashboard/community/feed');
+  } catch (error) {
+    rethrowControlFlow(error);
+  }
+}

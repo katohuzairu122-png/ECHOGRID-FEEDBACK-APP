@@ -170,18 +170,44 @@
   },
   "insights": {
     "title": "Statistiques",
-    "description": "Les résultats de votre activité dans la Communauté.",
-    "unavailableTitle": "Les statistiques ne sont pas encore disponibles",
-    "unavailable": "Aucune activité de la Communauté n'est encore mesurée pour votre commerce ; aucun chiffre n'est donc affiché. Les mesures prévues sont listées ci-dessous ; aucune n'est suivie aujourd'hui.",
-    "plannedTitle": "Mesures prévues",
-    "planned": {
-      "impressions": "Affichages des publications",
-      "engagement": "Engagement avec le contenu",
-      "visits": "Visites du profil du commerce",
-      "followers": "Nouveaux abonnés",
-      "attribution": "Attribution des adhésions à la fidélité",
-      "acquisition": "Acquisition de clients grâce à la Communauté"
-    }
+    "description": "Les résultats de vos publications dans la Communauté, à partir d'événements enregistrés par la plateforme elle-même.",
+    "unavailableTitle": "Les statistiques n'ont pas pu être chargées pour le moment. Réessayez dans un instant.",
+    "forbidden": "Vous voyez la Communauté, mais votre rôle ne permet pas de consulter les statistiques.",
+    "rangeLabel": "Période",
+    "range": "{days} derniers jours",
+    "period": "Du {from} au {to} (jours UTC)",
+    "suppressedShort": "Masqué : petit groupe",
+    "suppressed": "Masqué pour protéger la vie privée : les chiffres issus de moins de {min} clients ne sont jamais affichés.",
+    "metrics": {
+      "impressions": {
+        "label": "Affichages des publications",
+        "hint": "Nombre de fois où vos publications ont été montrées à des clients connectés (une fois par client, publication et jour)."
+      },
+      "reach": {
+        "label": "Portée unique",
+        "hint": "Nombre de clients différents à qui vos publications ont été montrées."
+      },
+      "engagements": {
+        "label": "Ouvertures de lien",
+        "hint": "Nombre de fois où des clients ont ouvert un lien de vos publications (une fois par client, publication et jour)."
+      },
+      "newFollowers": {
+        "label": "Nouveaux abonnés",
+        "hint": "Clients ayant choisi de suivre votre commerce sur cette période."
+      },
+      "followers": {
+        "label": "Abonnés actuels",
+        "hint": "Clients qui suivent actuellement votre commerce."
+      }
+    },
+    "postsTitle": "Vos publications récentes",
+    "postsEmpty": "Aucune publication publiée pour l'instant.",
+    "notMeasuredTitle": "Pas encore mesuré",
+    "notMeasured": {
+      "visits": "Visites du profil : les clients n'ont pas encore de page de profil à visiter, aucune n'est donc comptée.",
+      "attribution": "Attribution des inscriptions fidélité et de l'acquisition : aucun modèle d'attribution n'est approuvé, aucun chiffre de conversion n'est donc affiché."
+    },
+    "privacy": "Vous ne voyez jamais quels clients ont été touchés, ont suivi ou ont ouvert un lien. Les chiffres ne couvrent que les publications affichées dans le fil de la Communauté."
   },
   "states": {
     "loading": "Chargement de la Communauté…",

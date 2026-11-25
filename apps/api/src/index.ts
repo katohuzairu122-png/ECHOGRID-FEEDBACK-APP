@@ -63,6 +63,7 @@ import { communityFeedRoutes } from './community/community-feed.routes';
 import { platformNetworkModerationRoutes } from './platform/network-moderation.routes';
 import { networkBusinessPostRoutes } from './network/network-business-post.routes';
 import { networkFollowRoutes } from './network/network-follow.routes';
+import { networkEngagementRoutes } from './network/network-engagement.routes';
 import { communityPointCustomerRoutes } from './community/community-point-customer.routes';
 import { orphanCustomerRoutes } from './orphan-settlement/orphan-customer.routes';
 import { orphanSettlementCustomerRoutes } from './orphan-settlement/orphan-settlement-customer.routes';
@@ -219,6 +220,8 @@ api.route('/community/business', communityBusinessRoutes);
 api.route('/network/business-posts', networkBusinessPostRoutes);
 // BCOMM-04: customer follows of published businesses. Mounted before the feed router, which owns the rest of /network.
 api.route('/network/follows', networkFollowRoutes);
+// BCOMM-05: a customer's explicit engagement with a visible business post (link opened). Customer-authenticated; no business role can write here.
+api.route('/network/engagement', networkEngagementRoutes);
 // COMMUNITY-01: read-only, customer-authenticated feed foundation. Empty source only (no approved publication policy).
 api.route('/network', communityFeedRoutes);
 api.route('/community-points/me', communityPointCustomerRoutes);

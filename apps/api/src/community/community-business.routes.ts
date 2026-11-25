@@ -8,7 +8,11 @@ import { requireBusinessWideAccess } from '../middleware/require-business-wide-a
 import { requireAnyPermission } from '../middleware/require-permission';
 import { ok } from '../lib/response';
 import { createDb } from '../db/client';
+import { AppError } from '../lib/errors';
 import { resolveMinimumGroupSize, summarizeParticipation } from './community-participation-aggregate';
+import { summarizeInsights } from './community-insights-aggregate';
+import { NetworkEngagementService } from '../network/network-engagement.service';
+import { COMMUNITY_INSIGHT_RANGES } from '@echo-grid-feedback/shared-types';
 import { isBusinessDistributionEnabled, isBusinessPublishingEnabled, isNetworkFeedEnabled } from '../network/network-flag';
 import { COMMUNITY_MEMBERSHIP_CONTROL_KEYS } from './community-membership-controls';
 
@@ -73,6 +77,35 @@ communityBusinessRoutes.get(
       c.header('Cache-Control', 'no-store');
       return ok(c, summarizeParticipation({ eligible: Number(row.eligible), participants: Number(row.participants) },
         resolveMinimumGroupSize(c.env.COMMUNITY_AGGREGATE_MIN_GROUP_SIZE)));
+    } finally {
+      c.executionCtx.waitUntil(close());
+    }
+  },
+);
+
+/**
+ * BCOMM-05: verified engagement insights for the caller's own business, from server-recorded events only. READ-ONLY, same business-wide gate as the
+ * other hub routes, thresholded by the same Owner-approved minimum group size, `no-store`. `?days=7|30|90` (default 30, UTC days); anything else is
+ * a 400. No row, customer or identifier is returned, and there is no business-writable path to these totals.
+ */
+communityBusinessRoutes.get(
+  '/insights',
+  authenticate,
+  resolveTenantContext,
+  requireBusinessWideAccess,
+  requireAnyPermission(COMMUNITY_HUB_PERMISSIONS),
+  async (c) => {
+    const raw = new URL(c.req.url).searchParams;
+    const days = raw.get('days');
+    const keys = Array.from(raw.keys());
+    if (keys.some((k) => k !== 'days') || raw.getAll('days').length > 1) throw new AppError('Invalid insights query.', 400, 'VALIDATION_ERROR');
+    const rangeDays = days === null ? 30 : Number(days);
+    if (!(COMMUNITY_INSIGHT_RANGES as readonly number[]).includes(rangeDays)) throw new AppError('Invalid insights range.', 400, 'VALIDATION_ERROR');
+    const { db, close } = await createDb(c.env.HYPERDRIVE);
+    try {
+      const rawInsights = await new NetworkEngagementService(db).rawInsights(c.get('businessId'), rangeDays as 7 | 30 | 90);
+      c.header('Cache-Control', 'no-store');
+      return ok(c, summarizeInsights(rawInsights, resolveMinimumGroupSize(c.env.COMMUNITY_AGGREGATE_MIN_GROUP_SIZE)));
     } finally {
       c.executionCtx.waitUntil(close());
     }

@@ -2,6 +2,7 @@ import { and, eq, sql } from 'drizzle-orm';
 import type { Database } from '../db/client';
 import { networkFollows } from '../db/schema/network-posts';
 import { AppError } from '../lib/errors';
+import { NetworkEngagementService } from './network-engagement.service';
 
 /** A generous per-customer bound so follows can never be used to store unbounded data. */
 export const NETWORK_MAX_FOLLOWS = 200;
@@ -40,6 +41,7 @@ export class NetworkFollowService {
         .where(eq(networkFollows.customerId, customerId)) as [{ n: number }];
       if (n >= NETWORK_MAX_FOLLOWS) throw new AppError('You are following the maximum number of businesses.', 409, 'NETWORK_FOLLOW_LIMIT');
       await tx.insert(networkFollows).values({ customerId, businessId });
+      await NetworkEngagementService.recordFollowEvent(tx, customerId, businessId, 'follow');
     });
     return { following: true };
   }
@@ -49,7 +51,11 @@ export class NetworkFollowService {
     const rows = await this.db.execute(sql`select business_id from business_public_profiles where profile_handle = ${profileHandle}`);
     const row = (rows.rows as { business_id: string }[])[0];
     if (!row) throw notFound();
-    await this.db.delete(networkFollows).where(and(eq(networkFollows.customerId, customerId), eq(networkFollows.businessId, row.business_id)));
+    await this.db.transaction(async (tx) => {
+      const removed = await tx.delete(networkFollows)
+        .where(and(eq(networkFollows.customerId, customerId), eq(networkFollows.businessId, row.business_id))).returning({ id: networkFollows.businessId });
+      if (removed.length > 0) await NetworkEngagementService.recordFollowEvent(tx, customerId, row.business_id, 'unfollow');
+    });
     return { following: false };
   }
 

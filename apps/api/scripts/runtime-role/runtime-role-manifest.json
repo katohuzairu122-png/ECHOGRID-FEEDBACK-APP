@@ -1055,6 +1055,14 @@
     "SELECT"
    ],
    "reason": "BCOMM-04 voluntary follow: customer-owned rows, created and removed by the customer through the Feed API, read for the Following filter"
+  },
+  "network_engagement_events": {
+   "class": "RUNTIME",
+   "verbs": [
+    "INSERT",
+    "SELECT"
+   ],
+   "reason": "BCOMM-05 append-only engagement evidence: the server inserts impression/engagement/follow/unfollow events for a signed-in customer and reads thresholded aggregates for the owning business; no UPDATE (database guard) and no DELETE except the customer-account cascade"
   }
  }
 }

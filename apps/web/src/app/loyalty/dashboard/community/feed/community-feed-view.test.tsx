@@ -6,7 +6,8 @@ import { CommunityFeedView } from './community-feed-view';
 
 const { refresh } = vi.hoisted(() => ({ refresh: vi.fn() }));
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh }) }));
-vi.mock('@/lib/actions/community-follows', () => ({ setFollowAction: vi.fn() }));
+const { recordLinkOpen } = vi.hoisted(() => ({ recordLinkOpen: vi.fn() }));
+vi.mock('@/lib/actions/community-follows', () => ({ setFollowAction: vi.fn(), recordLinkOpenAction: recordLinkOpen }));
 beforeEach(() => refresh.mockClear());
 
 const item = (over: Partial<CommunityFeedItem> = {}): CommunityFeedItem => ({
@@ -172,5 +173,26 @@ describe('CommunityFeedView follows (BCOMM-04)', () => {
   it('keeps the Following view when loading more', () => {
     renderWithIntl(<CommunityFeedView result={{ status: 'ready', data: { items: [business()], nextCursor: 'abc_123' } }} filter="following" followed={new Set([HANDLE])} />);
     expect(screen.getByRole('link', { name: 'Load more' })).toHaveAttribute('href', '/loyalty/dashboard/community/feed?filter=following&cursor=abc_123');
+  });
+});
+
+describe('CommunityFeedView link engagement (BCOMM-05)', () => {
+  const HANDLE = 'AbCdEfGhIjKlMnOpQrStUv';
+  beforeEach(() => recordLinkOpen.mockClear());
+  it('opening a BUSINESS post link is noted once per click; an official post link is never tracked; the link itself stays https and safe', () => {
+    renderWithIntl(
+      <CommunityFeedView result={{ status: 'ready', data: { items: [
+        item({ handle: 'abcdefghijklmnopqrstuv', contentClass: 'business_post', businessName: 'Cafe', businessHandle: HANDLE, linkUrl: 'https://cafe.example/menu' }),
+        item({ handle: 'zzzzzzzzzzzzzzzzzzzzzz', linkUrl: 'https://echogrid.example/news' }),
+      ], nextCursor: null } }} followed={new Set()} />,
+    );
+    const links = screen.getAllByRole('link', { name: 'Open link' });
+    expect(links).toHaveLength(2);
+    for (const link of links) expect(link).toHaveAttribute('rel', 'noopener noreferrer nofollow');
+    fireEvent.click(links[0]!);
+    expect(recordLinkOpen).toHaveBeenCalledWith('abcdefghijklmnopqrstuv');
+    recordLinkOpen.mockClear();
+    fireEvent.click(links[1]!);
+    expect(recordLinkOpen).not.toHaveBeenCalled();
   });
 });
