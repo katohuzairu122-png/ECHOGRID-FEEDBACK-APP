@@ -54,6 +54,8 @@ async function call(c: Call) {
 describe.skipIf(!databaseUrl)('business posts (real HTTP, real PostgreSQL)', () => {
   let client: Client;
   const run = randomUUID().slice(0, 8);
+  // Public display names must not look like a phone number (the profile validator refuses digit runs), so they use a digit-free form of the run id.
+  const tag = run.replace(/[0-9]/g, (d) => 'ghijklmnop'[Number(d)]!);
   const tok: Record<string, string> = {};
   const id: Record<string, string> = {};
   let bizA = ''; let bizB = ''; let bizC = '';
@@ -67,7 +69,7 @@ describe.skipIf(!databaseUrl)('business posts (real HTTP, real PostgreSQL)', () 
     if (catalog) await q('update businesses set category_id=$2 where id=$1', [biz, catalog]);
     const draft = await profiles.saveDraft(biz, { userId: owner, role: 'business' }, {
       websiteUrl: 'https://cafe.example',
-      translations: [{ locale: 'en', displayName: `Cafe ${run}`, summary: 'Coffee', description: 'Fresh coffee daily.' }],
+      translations: [{ locale: 'en', displayName: `Cafe ${tag}`, summary: 'Coffee', description: 'Fresh coffee daily.' }],
       locations: [{ kind: 'place', label: 'Main shop', countryCode: 'GB', city: 'London' }],
     });
     const sub = await profiles.submit(biz, { userId: owner, role: 'business' }, draft.revisionId!);

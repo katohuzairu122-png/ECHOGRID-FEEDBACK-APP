@@ -59,6 +59,8 @@ async function call(path: string, o: { method?: string; token?: string; business
 describe.skipIf(!databaseUrl)('engagement events and insights (real PostgreSQL)', () => {
   let client: Client;
   const run = randomUUID().slice(0, 8);
+  // Public display names must not look like a phone number (the profile validator refuses digit runs), so they use a digit-free form of the run id.
+  const tag = run.replace(/[0-9]/g, (d) => 'ghijklmnop'[Number(d)]!);
   const q = async (text: string, values: unknown[] = []) => (await client.query(text, values)).rows;
   let ownerA = ''; let ownerB = ''; let mod1 = ''; let mod2 = ''; let staffA = '';
   let bizA = ''; let bizB = ''; let handleA = '';
@@ -79,7 +81,7 @@ describe.skipIf(!databaseUrl)('engagement events and insights (real PostgreSQL)'
     const profiles = new BusinessProfileService(buildDb(client));
     const draft = await profiles.saveDraft(biz, { userId: owner, role: 'business' }, {
       websiteUrl: 'https://cafe.example',
-      translations: [{ locale: 'en', displayName: `Cafe ${label} ${run}`, summary: 'Coffee', description: 'Fresh coffee daily.' }],
+      translations: [{ locale: 'en', displayName: `Cafe ${label} ${tag}`, summary: 'Coffee', description: 'Fresh coffee daily.' }],
       locations: [{ kind: 'place', label: 'Main shop', countryCode: 'GB', city: 'London' }],
     });
     const sub = await profiles.submit(biz, { userId: owner, role: 'business' }, draft.revisionId!);

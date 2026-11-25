@@ -53,6 +53,8 @@ async function call(path: string, o: { method?: string; token?: string; env?: Re
 describe.skipIf(!databaseUrl)('business posts in the Community Feed and follows (real PostgreSQL)', () => {
   let client: Client;
   const run = randomUUID().slice(0, 8);
+  // Public display names must not look like a phone number (the profile validator refuses digit runs), so they use a digit-free form of the run id.
+  const tag = run.replace(/[0-9]/g, (d) => 'ghijklmnop'[Number(d)]!);
   const q = async (text: string, values: unknown[] = []) => (await client.query(text, values)).rows;
   let ownerA = ''; let ownerB = ''; let mod1 = ''; let mod2 = '';
   let bizA = ''; let bizB = '';
@@ -69,7 +71,7 @@ describe.skipIf(!databaseUrl)('business posts in the Community Feed and follows 
     const profiles = new BusinessProfileService(buildDb(client));
     const draft = await profiles.saveDraft(biz, { userId: owner, role: 'business' }, {
       websiteUrl: 'https://cafe.example',
-      translations: [{ locale: 'en', displayName: `Cafe ${label} ${run}`, summary: 'Coffee', description: 'Fresh coffee daily.' }],
+      translations: [{ locale: 'en', displayName: `Cafe ${label} ${tag}`, summary: 'Coffee', description: 'Fresh coffee daily.' }],
       locations: [{ kind: 'place', label: 'Main shop', countryCode: 'GB', city: 'London' }],
     });
     const sub = await profiles.submit(biz, { userId: owner, role: 'business' }, draft.revisionId!);
@@ -114,7 +116,7 @@ describe.skipIf(!databaseUrl)('business posts in the Community Feed and follows 
     expect(res.status, res.text).toBe(200);
     expect(res.cache).toBe('private, no-store');
     const item = (res.data as Feed).items.find((i) => i.body.includes(`Fresh croissants every morning from seven ${run}`));
-    expect(item).toMatchObject({ contentClass: 'business_post', businessName: `Cafe A ${run}`, businessHandle: handleA });
+    expect(item).toMatchObject({ contentClass: 'business_post', businessName: `Cafe A ${tag}`, businessHandle: handleA });
     expect(Object.keys(item!).sort()).toEqual(['body', 'businessHandle', 'businessName', 'contentClass', 'contentLocale', 'handle', 'linkUrl', 'publishedAt']);
     expect(JSON.stringify(res.data)).not.toMatch(new RegExp(`${bizA}|${ownerA}|${mod2}`)); // no internal ids, authors or reviewers
   });
@@ -148,7 +150,7 @@ describe.skipIf(!databaseUrl)('business posts in the Community Feed and follows 
     // Back to published only through a fresh review, exactly as for any profile.
     const draft = await profiles.saveDraft(bizA, { userId: ownerA, role: 'business' }, {
       websiteUrl: 'https://cafe.example',
-      translations: [{ locale: 'en', displayName: `Cafe A ${run}`, summary: 'Coffee', description: 'Fresh coffee daily.' }],
+      translations: [{ locale: 'en', displayName: `Cafe A ${tag}`, summary: 'Coffee', description: 'Fresh coffee daily.' }],
       locations: [{ kind: 'place', label: 'Main shop', countryCode: 'GB', city: 'London' }],
     });
     const sub = await profiles.submit(bizA, { userId: ownerA, role: 'business' }, draft.revisionId!);
@@ -182,7 +184,7 @@ describe.skipIf(!databaseUrl)('business posts in the Community Feed and follows 
     expect((await call(`/follows/${handleA}`, { method: 'PUT', token: tok1 })).data).toEqual({ following: true }); // idempotent
     expect(Number((await q('select count(*)::int n from network_follows where customer_id=$1', [cust1]))[0].n)).toBe(1);
     const list = (await call('/follows', { token: tok1 })).data as { businessHandle: string; businessName: string }[];
-    expect(list).toEqual([{ businessHandle: handleA, businessName: `Cafe A ${run}` }]);
+    expect(list).toEqual([{ businessHandle: handleA, businessName: `Cafe A ${tag}` }]);
     expect((await call('/follows', { token: tok2 })).data).toEqual([]); // another customer sees none of it
     const following = await feed({ path: '/feed?filter=following' });
     expect(bodies(following).every((b) => !b.includes('News from business B'))).toBe(true);
