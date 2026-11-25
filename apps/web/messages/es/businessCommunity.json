@@ -76,15 +76,23 @@
   "participation": {
     "title": "Participación",
     "description": "Cuántos de sus clientes de fidelidad participan en la Comunidad.",
-    "unavailableTitle": "Las cifras de participación aún no están disponibles",
-    "unavailable": "Esta sección mostrará solo totales: sus clientes de fidelidad, cuántos participan en la Comunidad y la proporción que representan. No se muestra ninguna cifra hasta que se publique ese informe.",
-    "privacy": "Nunca verá qué clientes concretos se unieron, sus puntos ni nada sobre clientes de otros negocios. Los grupos pequeños se ocultarán para que nadie pueda ser identificado.",
+    "unavailableTitle": "No se pudieron cargar los totales de participación",
+    "unavailable": "No se pudieron cargar los totales de participación en este momento. No se muestra nada en lugar de una estimación; inténtelo de nuevo en breve.",
+    "privacy": "Nunca verá qué clientes concretos se unieron, sus puntos ni nada sobre clientes de otros negocios. Los grupos pequeños se ocultan para que nadie pueda ser identificado.",
     "metrics": {
       "eligible": "Clientes de fidelidad",
       "participants": "Participantes de la Comunidad",
       "rate": "Tasa de participación"
     },
-    "unavailableShort": "Aún no disponible"
+    "unavailableShort": "Aún no disponible",
+    "suppressedShort": "Oculto: grupo pequeño",
+    "suppressed": "Oculto para proteger la privacidad: nunca se muestran grupos de menos de {min}.",
+    "about": "Son solo totales. Los grupos pequeños se ocultan, y una cifra también se oculta cuando el grupo restante sería pequeño.",
+    "hints": {
+      "eligible": "Sus clientes de fidelidad activos.",
+      "participants": "De ellos, los clientes que participan actualmente en la Comunidad.",
+      "rate": "Los participantes como proporción de sus clientes de fidelidad."
+    }
   },
   "posts": {
     "title": "Mis publicaciones",

@@ -32,3 +32,22 @@ export interface BusinessCommunityStatus {
   /** Business publishing: not implemented, always closed until BCOMM-03. */
   publishing: 'closed';
 }
+
+/**
+ * BCOMM-02: privacy-protected participation totals for ONE business. A figure is either shown or suppressed (a small group is never disclosed),
+ * and nothing identifies a customer. Suppression is decided by the server; the client only renders what it is given.
+ */
+export type CommunityFigure = { state: 'shown'; value: number } | { state: 'suppressed' };
+
+export interface BusinessCommunityParticipation {
+  /** The smallest group the server will disclose (never below COMMUNITY_AGGREGATE_MIN_GROUP_SIZE_FLOOR). */
+  minimumGroupSize: number;
+  /** The business's active loyalty customers. */
+  eligible: CommunityFigure;
+  /** Of those, the customers who currently hold an active Community membership. */
+  participants: CommunityFigure;
+  /** participants / eligible as a whole percentage; shown only when both figures are shown. */
+  ratePercent: CommunityFigure;
+}
+
+export const COMMUNITY_AGGREGATE_MIN_GROUP_SIZE_FLOOR = 10;

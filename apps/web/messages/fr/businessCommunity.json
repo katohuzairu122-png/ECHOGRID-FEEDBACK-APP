@@ -76,15 +76,23 @@
   "participation": {
     "title": "Participation",
     "description": "Combien de vos clients fidélité participent à la Communauté.",
-    "unavailableTitle": "Les chiffres de participation ne sont pas encore disponibles",
-    "unavailable": "Cette section affichera uniquement des totaux : vos clients fidélité, combien participent à la Communauté et la part qu'ils représentent. Aucun chiffre n'est affiché tant que ce rapport n'est pas disponible.",
-    "privacy": "Vous ne verrez jamais quels clients ont adhéré, leurs points, ni rien sur les clients d'autres commerces. Les petits groupes seront masqués afin que personne ne puisse être identifié.",
+    "unavailableTitle": "Les totaux de participation n'ont pas pu être chargés",
+    "unavailable": "Les totaux de participation n'ont pas pu être chargés pour le moment. Rien n'est affiché plutôt qu'une estimation ; réessayez dans un instant.",
+    "privacy": "Vous ne verrez jamais quels clients ont adhéré, leurs points, ni rien sur les clients d'autres commerces. Les petits groupes sont masqués afin que personne ne puisse être identifié.",
     "metrics": {
       "eligible": "Clients fidélité",
       "participants": "Participants à la Communauté",
       "rate": "Taux de participation"
     },
-    "unavailableShort": "Pas encore disponible"
+    "unavailableShort": "Pas encore disponible",
+    "suppressedShort": "Masqué : petit groupe",
+    "suppressed": "Masqué pour protéger la vie privée : les groupes de moins de {min} ne sont jamais affichés.",
+    "about": "Il s'agit uniquement de totaux. Les petits groupes sont masqués, et un chiffre l'est aussi lorsque le groupe restant serait petit.",
+    "hints": {
+      "eligible": "Vos clients fidélité actifs.",
+      "participants": "Parmi eux, les clients qui participent actuellement à la Communauté.",
+      "rate": "Les participants en proportion de vos clients fidélité."
+    }
   },
   "posts": {
     "title": "Mes publications",

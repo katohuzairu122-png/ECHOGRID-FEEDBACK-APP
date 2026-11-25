@@ -1,25 +1,25 @@
 import Link from 'next/link';
 import { getTranslations } from 'next-intl/server';
 import { getActiveBusiness } from '@/lib/business';
-import { getBusinessCommunityStatus } from '@/lib/business-community';
+import { getBusinessCommunityParticipation, getBusinessCommunityStatus } from '@/lib/business-community';
 import { communityHubGate } from '@/lib/workspace-guard';
 import { redirect } from 'next/navigation';
-import { MetricCard, OverviewPanel, WorkspaceState } from '@/components/workspace/overview-components';
-import styles from '@/components/workspace/workspace.module.css';
+import { OverviewPanel, WorkspaceState } from '@/components/workspace/overview-components';
+import { ParticipationMetrics } from './participation-metrics';
 import { RolloutStatus } from './rollout-status';
 
 const ABOUT = ['what', 'differs', 'benefit', 'voluntary', 'publishing', 'privacy', 'rollout'] as const;
 
 /**
  * Community Home. Everything here is explanatory or read-only. No customer, membership, consent, points or analytics figure is shown: the
- * participation summary is an explicit unavailable state until an approved, privacy-protected count exists (the BCOMM-02 dependency).
+ * participation summary shows only the server's privacy-protected totals (BCOMM-02), with small groups suppressed.
  */
 export default async function CommunityHomePage() {
   const blocked = await communityHubGate();
   if (blocked) return blocked;
   const business = await getActiveBusiness();
   if (!business) redirect('/dashboard');
-  const [t, rollout] = await Promise.all([getTranslations('businessCommunity'), getBusinessCommunityStatus(business.id)]);
+  const [t, rollout, participation] = await Promise.all([getTranslations('businessCommunity'), getBusinessCommunityStatus(business.id), getBusinessCommunityParticipation(business.id)]);
   const feedOpen = rollout.state === 'ready' && rollout.status.feed === 'open';
   return (
     <div className="space-y-6">
@@ -31,11 +31,7 @@ export default async function CommunityHomePage() {
       <RolloutStatus rollout={rollout} />
 
       <OverviewPanel title={t('summary.title')} href="/dashboard/community/participation" linkLabel={t('summary.link')}>
-        <div className={styles.metricGrid} data-testid="community-summary">
-          {(['eligible', 'participants', 'rate'] as const).map((key) => (
-            <MetricCard key={key} label={t(`summary.${key}`)} value={<span className="text-base font-semibold leading-snug">{t('summary.unavailable')}</span>} hint={t('summary.hint')} icon={key === 'rate' ? 'chart' : 'users'} />
-          ))}
-        </div>
+        <ParticipationMetrics result={participation} testId="community-summary" labels={{ eligible: t('summary.eligible'), participants: t('summary.participants'), rate: t('summary.rate') }} />
       </OverviewPanel>
 
       <OverviewPanel title={t('feed.title')}>

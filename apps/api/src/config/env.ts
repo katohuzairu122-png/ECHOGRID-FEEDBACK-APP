@@ -298,6 +298,8 @@ export interface Bindings {
   COMMUNITY_MEMBERSHIP_CLEARANCE_ENABLED?: string | undefined;
   /** Pilot mode: absent/"false" = off; "true" or any other value = pilot eligibility required for activation (fails closed). */
   COMMUNITY_MEMBERSHIP_PILOT_REQUIRED?: string | undefined;
+  /** BCOMM-02: smallest group a business may see in Community participation totals. Whole number >= 10; anything else = 10. */
+  COMMUNITY_AGGREGATE_MIN_GROUP_SIZE?: string | undefined;
   /**
    * The customer password minimum length (owner decision CA-05, APPROVED 2026-11-16: 8). It is configuration, never a code
    * default: every customer flow that sets a password (email sign-up, recovery, password setup and change) reads this one value,
