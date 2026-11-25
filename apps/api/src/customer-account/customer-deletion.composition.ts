@@ -78,6 +78,6 @@ export async function openCustomerDeletionRuntime(c: Context): Promise<CustomerD
 }
 
 export const customerDeletionComposition = createCustomerDeletionComposition({
-  isEnabled: (c) => isCustomerEmailAuthEnabled(c.env as Bindings),
+  isEnabled: (c) => isCustomerEmailAuthEnabled(c.env as Bindings) && (c.env as Bindings).CUSTOMER_DELETION_ENABLED === 'true',
   open: openCustomerDeletionRuntime,
 });
