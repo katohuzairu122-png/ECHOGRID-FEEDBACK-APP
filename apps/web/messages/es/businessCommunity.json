@@ -152,7 +152,8 @@
       "conflict": "Esta publicación no se puede cambiar en su estado actual.",
       "cap": "Se alcanzó el límite diario de publicaciones de su negocio. Inténtelo mañana.",
       "profile": "Publique primero su perfil público; las publicaciones requieren un perfil publicado y un negocio activo.",
-      "failed": "Algo salió mal. Inténtelo de nuevo."
+      "failed": "Algo salió mal. Inténtelo de nuevo.",
+      "link": "Un enlace debe apuntar al sitio web de su negocio (el de su perfil publicado)."
     },
     "reasons": {
       "hate_or_harassment": "contenido de odio o acoso",

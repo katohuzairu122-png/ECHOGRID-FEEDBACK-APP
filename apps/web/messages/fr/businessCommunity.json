@@ -152,7 +152,8 @@
       "conflict": "Cette publication ne peut pas être modifiée dans son état actuel.",
       "cap": "La limite quotidienne de publications de votre commerce est atteinte. Réessayez demain.",
       "profile": "Publiez d'abord votre profil public ; les publications exigent un profil publié et un commerce actif.",
-      "failed": "Une erreur s'est produite. Réessayez."
+      "failed": "Une erreur s'est produite. Réessayez.",
+      "link": "Un lien doit pointer vers le site web de votre commerce (celui de votre profil publié)."
     },
     "reasons": {
       "hate_or_harassment": "contenu haineux ou harcelant",

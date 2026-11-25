@@ -82,8 +82,32 @@ export class NetworkBusinessPostService {
     return toView(row);
   }
 
+  /**
+   * NETWORK-00 C-3 (author's view, applied as the safer default until the Owner rules otherwise): a business post may link only to the website
+   * on its PUBLISHED profile (the same host or one of its subdomains), which limits phishing. A business with no published website cannot link.
+   */
+  private async assertLinkAllowed(businessId: string, linkUrl: string | null): Promise<void> {
+    if (!linkUrl) return;
+    const rows = await this.db.execute(sql`
+      select r.website_url from business_public_profiles p join business_profile_revisions r on r.id = p.published_revision_id
+       where p.business_id = ${businessId}::uuid and p.publication_state = 'published'`);
+    const website = (rows.rows as { website_url: string | null }[])[0]?.website_url;
+    const allowed = (() => {
+      try {
+        if (!website) return false;
+        const site = new URL(website).hostname.toLowerCase().replace(/^www\./, '');
+        const host = new URL(linkUrl).hostname.toLowerCase();
+        return host === site || host === `www.${site}` || host.endsWith(`.${site}`);
+      } catch {
+        return false;
+      }
+    })();
+    if (!allowed) throw new AppError('A post link must point to your business website.', 422, 'NETWORK_LINK_DOMAIN');
+  }
+
   async createDraft(businessId: string, authorId: string, input: NetworkContentInput): Promise<BusinessPostView> {
     const content = this.validate(input);
+    await this.assertLinkAllowed(businessId, content.linkUrl);
     const digest = await computeContentDigest(content);
     const handle = await this.db.transaction(async (tx) => {
       const [profile] = await tx.select({ id: businessPublicProfiles.businessId }).from(businessPublicProfiles)
@@ -110,6 +134,7 @@ export class NetworkBusinessPostService {
   /** Edits the open draft in place, or opens revision n+1 when the latest revision is decided (so a published post can be re-edited without leaving the feed). */
   async saveDraft(businessId: string, handle: string, actorId: string, input: NetworkContentInput): Promise<BusinessPostView> {
     const content = this.validate(input);
+    await this.assertLinkAllowed(businessId, content.linkUrl);
     const digest = await computeContentDigest(content);
     await this.db.transaction(async (tx) => {
       const post = await this.lockOwn(tx, businessId, handle);

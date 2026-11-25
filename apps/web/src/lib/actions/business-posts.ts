@@ -12,7 +12,7 @@ import { getActiveBusiness } from '@/lib/business';
 export interface PostFormState {
   ok?: boolean;
   /** One of the keys under `businessCommunity.posts.errors`. */
-  error?: 'closed' | 'forbidden' | 'invalid' | 'conflict' | 'cap' | 'profile' | 'failed';
+  error?: 'closed' | 'forbidden' | 'invalid' | 'link' | 'conflict' | 'cap' | 'profile' | 'failed';
   handle?: string;
 }
 
@@ -21,6 +21,7 @@ const LOCALES = ['en', 'fr', 'es', 'ar'];
 function errorKey(error: unknown): NonNullable<PostFormState['error']> {
   if (!(error instanceof ApiError)) return 'failed';
   if (error.code === 'NETWORK_PROFILE_REQUIRED' || error.code === 'NETWORK_PROFILE_NOT_PUBLISHED') return 'profile';
+  if (error.code === 'NETWORK_LINK_DOMAIN') return 'link';
   if (error.code === 'NETWORK_DAILY_CAP' || error.status === 429) return 'cap';
   if (error.status === 404) return 'closed';
   if (error.status === 403) return 'forbidden';

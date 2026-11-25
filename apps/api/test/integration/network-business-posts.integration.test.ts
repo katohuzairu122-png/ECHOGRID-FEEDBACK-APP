@@ -162,6 +162,21 @@ describe.skipIf(!databaseUrl)('business posts (real HTTP, real PostgreSQL)', () 
     }
   });
 
+  it('a post may link only to the business\'s own published website (or its subdomains); lookalike hosts and a business with no published profile cannot link', async () => {
+    for (const ok of ['https://cafe.example/menu', 'https://www.cafe.example', 'https://shop.cafe.example/x?y=1']) {
+      expect((await call({ method: 'POST', body: { ...body('Link check'), linkUrl: ok }, ...own() })).status, ok).toBe(201);
+    }
+    for (const bad of ['https://evil.example', 'https://cafe.example.evil.example', 'https://notcafe.example', 'https://cafe.example@evil.example']) {
+      const res = await call({ method: 'POST', body: { ...body('Link check'), linkUrl: bad }, ...own() });
+      expect([422], `${bad}: ${res.text}`).toContain(res.status);
+    }
+    const edit = await call({ method: 'POST', body: body('Edit target'), ...own() });
+    const refused = await call({ method: 'PUT', path: `/${edit.data.handle}/draft`, body: { ...body('Edit target'), linkUrl: 'https://evil.example' }, ...own() });
+    expect(refused.status).toBe(422);
+    expect(refused.code).toBe('NETWORK_LINK_DOMAIN');
+    expect([409, 422]).toContain((await call({ method: 'POST', body: { ...body('No profile'), linkUrl: 'https://cafe.example' }, ...own('ownerC', () => bizC) })).status); // no profile at all: never created
+  });
+
   it('submission needs a published profile and an active business; a business without a profile cannot even draft', async () => {
     const noProfile = await call({ method: 'POST', body: body(), ...own('ownerC', () => bizC) });
     expect(noProfile.status, noProfile.text).toBe(409);
