@@ -6,6 +6,8 @@ import { Button } from '@/components/ui';
 import { LanguageSelector } from '@/components/language-selector';
 import { WorkspaceShell } from '@/components/workspace/workspace-shell';
 import { WorkspaceNavigation } from '@/components/workspace/workspace-navigation';
+import { isCustomerDeletionWebEnabled } from '@/lib/customer-deletion-config';
+import { getCustomerDeletionStatus } from '@/lib/actions/customer-deletion';
 
 /** Customer counterpart to app/dashboard/layout.tsx -- same defense-in-depth
  * shape (middleware already scopes /loyalty as public, so this layout is
@@ -15,6 +17,11 @@ import { WorkspaceNavigation } from '@/components/workspace/workspace-navigation
 export default async function LoyaltyDashboardLayout({ children }: { children: React.ReactNode }) {
   if (!(await hasCustomerSession())) {
     redirect('/loyalty/login');
+  }
+
+  if (isCustomerDeletionWebEnabled()) {
+    const deletion = await getCustomerDeletionStatus();
+    if (deletion.status === 'pending') redirect('/loyalty/deletion/pending');
   }
 
   const t = await getTranslations('loyalty.customer.shell');
