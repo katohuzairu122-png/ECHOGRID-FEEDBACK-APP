@@ -36,3 +36,5 @@ export const CASHIER_SELECT_COOKIE = 'ff_cashier_select';
  * server actions and forwarded to the API as `X-Reauth-Proof`; client scripts never see it. Scoped to the cashier area of the dashboard.
  */
 export const CASHIER_ADMIN_REAUTH_COOKIE = 'ff_cashier_admin_reauth';
+/** BIZ-CLOSE-01: the 5 minute password re-entry proof for a closure request (its own purpose, never shared with cashier administration). */
+export const BUSINESS_CLOSURE_REAUTH_COOKIE = 'ff_business_closure_reauth';

@@ -74,7 +74,10 @@
     "profilePhoneLabel": "رقم الهاتف",
     "profileSubmit": "حفظ الملف الشخصي",
     "profileSubmitPending": "جارٍ الحفظ…",
-    "profileSuccess": "تم حفظ الملف الشخصي."
+    "profileSuccess": "تم حفظ الملف الشخصي.",
+    "closureTitle": "إغلاق هذا النشاط",
+    "closureDescription": "اطلب إغلاق هذا النشاط التجاري. لا يحذف الطلب شيئًا ولا يغيّر أي شيء.",
+    "closureLink": "مراجعة طلب الإغلاق وتقديمه"
   },
   "impersonationBanner": {
     "label": "انتحال الهوية —",
@@ -240,6 +243,58 @@
       "active": "نشطة",
       "paused": "متوقفة مؤقتًا",
       "closed": "مغلقة"
+    }
+  },
+  "closure": {
+    "title": "طلب إغلاق النشاط التجاري",
+    "intro": "يمكن للمالك وحده طلب الإغلاق. الطلب مجرد سجل لفريق المنصة: لا يحذف شيئًا، ويستمر نشاطك وعملاؤك ونقاطك ومكافآتك في العمل كما هي تمامًا.",
+    "noAccess": "يمكن لمالك النشاط وحده طلب الإغلاق.",
+    "loadFailed": "تعذّر تحميل حالة الإغلاق. يرجى المحاولة مرة أخرى.",
+    "blockedTitle": "لا يمكن معالجة الإغلاق بعد",
+    "blockedBody": "يتطلب إغلاق النشاط قواعد معتمدة لتسوية أرصدة العملاء والمبالغ المستردة والسجلات الواجب الاحتفاظ بها. هذه القواعد غير معتمدة بعد، لذلك الإغلاق متوقف. يمكنك تقديم الطلب وسحبه في أي وقت.",
+    "blockers": {
+      "CLOSURE_POLICY_NOT_APPROVED": "قواعد الإغلاق والتسوية والاحتفاظ بالسجلات غير معتمدة بعد.",
+      "PENDING_REDEMPTIONS": "لدى العملاء عمليات استبدال مكافآت ما زالت معلّقة.",
+      "CUSTOMER_POINTS_OUTSTANDING": "ما زال العملاء يملكون نقاط ولاء لدى هذا النشاط.",
+      "OPEN_REWARD_CLAIMS": "بعض مطالبات المكافآت لم تُسوَّ بعد.",
+      "ACTIVE_SUBSCRIPTION": "لدى النشاط اشتراك نشط.",
+      "ACTIVE_CASHIER_SESSIONS": "ما زالت جلسات الكاشير مفتوحة.",
+      "COMMUNITY_CONTENT_PUBLISHED": "لدى النشاط منشورات منشورة في المجتمع."
+    },
+    "obligationsTitle": "ما يجب تسويته",
+    "obligations": {
+      "pendingRedemptions": "عمليات استبدال معلّقة",
+      "customerPointBalances": "عملاء يملكون نقاطًا",
+      "customerPointsOutstanding": "النقاط التي يملكها العملاء",
+      "activeMemberships": "عضويات العملاء",
+      "openOrphanRewardClaims": "مطالبات مكافآت مفتوحة",
+      "activeSubscriptions": "اشتراكات نشطة",
+      "activeCashierSessions": "جلسات كاشير مفتوحة",
+      "staffMembers": "أعضاء الفريق",
+      "publishedCommunityPosts": "منشورات المجتمع",
+      "communityFollowers": "متابعو المجتمع"
+    },
+    "pendingTitle": "يوجد طلب إغلاق مفتوح",
+    "pendingBody": "تم الطلب في {date}. تم إشعار فريق المنصة. لم يُحذف أو يتغيّر أي شيء.",
+    "withdrawHint": "سحب الطلب يلغيه ولا يغيّر شيئًا آخر. سنطلب كلمة المرور أولًا.",
+    "withdraw": "سحب الطلب",
+    "withdrawn": "تم سحب الطلب.",
+    "reauthTitle": "أكّد أنك أنت",
+    "passwordLabel": "كلمة المرور",
+    "reauthButton": "تأكيد",
+    "reauthOk": "تم التأكيد. لديك 5 دقائق للمتابعة.",
+    "fileTitle": "طلب الإغلاق",
+    "fileHint": "أكّد كلمة المرور أعلاه أولًا ثم اكتب اسم النشاط.",
+    "confirmLabel": "اكتب «{name}» للتأكيد",
+    "fileButton": "طلب الإغلاق",
+    "filed": "تم تسجيل طلب الإغلاق. لم يُحذف أو يتغيّر أي شيء.",
+    "errors": {
+      "REAUTH_REQUIRED": "أكّد كلمة المرور أولًا ثم حاول مرة أخرى.",
+      "CONFIRMATION_MISMATCH": "الاسم الذي كتبته لا يطابق اسم النشاط.",
+      "INVALID_CREDENTIALS": "كلمة المرور غير صحيحة.",
+      "VALIDATION_ERROR": "تحقق مما كتبته وحاول مرة أخرى.",
+      "PERMISSION_DENIED": "يمكن لمالك النشاط وحده القيام بذلك.",
+      "generic": "تعذّر الإكمال. لم يتغيّر أي شيء. يرجى المحاولة مرة أخرى."
     }
   }
 }

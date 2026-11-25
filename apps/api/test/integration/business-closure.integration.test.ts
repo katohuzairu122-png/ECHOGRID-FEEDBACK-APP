@@ -252,4 +252,19 @@ describe.skipIf(!databaseUrl)('BIZ-CLOSE-01 business closure request (real HTTP,
       expect(await q(`SELECT 1 FROM business_closure_requests WHERE business_id = $1`, [bizA])).toHaveLength(2);
     });
   });
+
+  describe('suspended businesses do not bypass restrictions', () => {
+    it('a suspended business cannot read or file a closure request (BUSINESS_NOT_ACTIVE) and nothing is recorded', async () => {
+      const bizC = (await repos.businesses.create({ name: `Closure Kiosk ${tag}`, slug: `bc-c-${run}` })).id;
+      const rolesC = await new RoleProvisioningService(repos).seedDefaultRoles(bizC, ownerB);
+      await repos.userBusinessRoles.grant({ userId: ownerB, businessId: bizC, branchId: null, roleId: rolesC.Owner, createdBy: ownerB });
+      const p = await freshProof(ownerBToken, bizC);
+      await q(`UPDATE businesses SET status = 'suspended' WHERE id = $1`, [bizC]);
+      const read = await http('GET', '/business-closure', { token: ownerBToken, businessId: bizC });
+      expect(read.status).toBe(403); expect(read.error?.code).toBe('BUSINESS_NOT_ACTIVE');
+      const filed = await file(ownerBToken, bizC, p, `Closure Kiosk ${tag}`);
+      expect(filed.status).toBe(403); expect(filed.error?.code).toBe('BUSINESS_NOT_ACTIVE');
+      expect(await q(`SELECT 1 FROM business_closure_requests WHERE business_id = $1`, [bizC])).toHaveLength(0);
+    });
+  });
 });
