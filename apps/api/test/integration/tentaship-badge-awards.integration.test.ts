@@ -129,7 +129,11 @@ describe.skipIf(!databaseUrl)('TB-03 Tentaship Badges awards (real HTTP, real Po
     defCustomer = await mkDef({ key: `ba_c_${tag}`.slice(0, 40).toLowerCase(), participantType: 'customer', names: { en: 'Surveyor' }, descriptions: { en: 'Completed 2 surveys.' }, rule: { metric: 'community_survey_completions', threshold: 2 } });
     defBusiness = await mkDef({ key: `ba_b_${tag}`.slice(0, 40).toLowerCase(), participantType: 'business', names: { en: 'Publisher' }, descriptions: {}, rule: { metric: 'published_business_posts', threshold: 1 } });
   });
-  afterAll(async () => { await client?.end(); });
+  afterAll(async () => {
+    // The survey rule was seeded active for this file's decisions. Other files assume no active global survey rule, so retire it (history is kept).
+    await q(`UPDATE community_point_rules SET status = 'retired', retired_at = now() WHERE id = $1`, [ruleId]).catch(() => undefined);
+    await client?.end();
+  });
 
   describe('runtime containment', () => {
     it.each([undefined, 'false', 'TRUE', '1', ' true', 'yes'])('flag %j: customer, business and platform badge routes are a generic 404 and write nothing', async (flag) => {

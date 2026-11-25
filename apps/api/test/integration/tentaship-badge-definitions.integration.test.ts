@@ -86,10 +86,11 @@ describe.skipIf(!databaseUrl)('TB-02 Tentaship Badges definitions (real HTTP, re
   describe('definitions and versions', () => {
     it('creates a definition with a draft v1 that awards nothing, and audits it', async () => {
       const k = key();
+      const awardsBefore = (await q(`SELECT count(*)::int AS n FROM tentaship_badge_awards`))[0].n; // other files share this database
       const r = await http('POST', '/definitions', { token: adminToken, body: body(k), flag: ON });
       expect(r.status, JSON.stringify(r)).toBe(201);
       expect(r.data.version).toMatchObject({ version: 1, status: 'draft' });
-      expect(await q(`SELECT 1 FROM tentaship_badge_awards`)).toHaveLength(0);
+      expect((await q(`SELECT count(*)::int AS n FROM tentaship_badge_awards`))[0].n).toBe(awardsBefore);
       expect(await q(`SELECT 1 FROM audit_log WHERE action = 'tentaship_badge.definition_created' AND entity_id = $1`, [r.data.definition.id])).toHaveLength(1);
       expect((await http('POST', '/definitions', { token: adminToken, body: body(k), flag: ON })).status).toBe(409);
     });
