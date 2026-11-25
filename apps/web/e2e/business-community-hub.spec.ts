@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type BrowserContext, type Page } from '@playwright/test';
 import { collapseDevelopmentBadge } from './helpers/development-chrome';
 
 /**
@@ -29,7 +29,7 @@ async function createOwner(page: Page, label: string) {
  * Staff see their BUSINESS's language (not a cookie). The owner sets it in Settings; this test sets the same saved business setting through the
  * same API (with the owner's own session), because the Settings page is a slow, unrelated hydration-prone page on a cold development server.
  */
-async function setBusinessLanguage(page: Page, locale: string) {
+async function setApiBusinessLanguage(page: Page, locale: string) {
   const api = 'http://localhost:8787/api/v1';
   const access = (await page.context().cookies('http://localhost:3000')).find((c) => c.name === 'ff_access_token')?.value;
   expect(access, 'the owner session cookie').toBeTruthy();
@@ -40,6 +40,10 @@ async function setBusinessLanguage(page: Page, locale: string) {
     data: { defaultLocale: locale },
   });
   expect(saved.ok()).toBe(true);
+}
+
+async function setBusinessLanguage(page: Page, locale: string) {
+  await setApiBusinessLanguage(page, locale);
   await page.goto('/dashboard/community');
   await expect(page.locator('html')).toHaveAttribute('lang', locale);
 }
@@ -51,6 +55,25 @@ function trackPageErrors(page: Page) {
   return errors;
 }
 
+/**
+ * Sign-ups are rate limited per minute by the API, and every spec in this suite signs people up. So this file creates ONE shared owner (cookies are
+ * reused by each test's own browser context) plus one fresh owner for the onboarding and sign-in test: 2 sign-ups instead of one per test.
+ */
+let shared: { cookies: Awaited<ReturnType<BrowserContext['cookies']>>; businessName: string } | undefined;
+
+test.beforeAll(async ({ browser }) => {
+  const context = await browser.newContext();
+  const page = await context.newPage();
+  const owner = await createOwner(page, 'shared');
+  shared = { cookies: await context.cookies(), businessName: owner.businessName };
+  await context.close();
+});
+
+test.beforeEach(async ({ context, page }) => {
+  await context.addCookies(shared!.cookies);
+  await setApiBusinessLanguage(page, 'en'); // every test starts from the default language; the language tests change it themselves
+});
+
 /** Desktop: the vertical sidebar ("Dashboard navigation"). Mobile: the bottom bar ("Business workspace"); only one is visible at a time. */
 const sidebar = (page: Page) => page.getByRole('navigation', { name: 'Dashboard navigation', exact: true });
 const bottomBar = (page: Page) => page.getByRole('navigation', { name: 'Business workspace', exact: true });
@@ -58,7 +81,9 @@ const bottomBar = (page: Page) => page.getByRole('navigation', { name: 'Business
 test('an owner lands on the Community hub; it is honest while Community is disabled; Business Overview stays reachable (desktop)', async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 1280, height: 900 });
   const errors = trackPageErrors(page);
-  const { businessName } = await createOwner(page, 'desktop');
+  const { businessName } = shared!;
+  await page.goto('/dashboard'); // the stable entry resolves to the owner's home
+  await collapseDevelopmentBadge(page);
   await expect(page).toHaveURL('/dashboard/community');
   await expect(page.getByRole('heading', { name: 'Community', exact: true, level: 1 })).toBeVisible();
   await expect(page.getByTestId('community-business-name')).toHaveText(businessName);
@@ -112,7 +137,7 @@ test('an owner lands on the Community hub; it is honest while Community is disab
 
 test('mobile: the bar reads Community, Loyalty, Feedback and More; the Overview is in More; nothing overflows', async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 375, height: 800 });
-  await createOwner(page, 'mobile');
+  await page.goto('/dashboard');
   await collapseDevelopmentBadge(page);
   await expect(page).toHaveURL('/dashboard/community');
   const bottom = bottomBar(page);
@@ -131,7 +156,8 @@ test('mobile: the bar reads Community, Loyalty, Feedback and More; the Overview 
 
 test('keyboard operation, and opening the hub sends no write request (no enrollment, consent or publication)', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 900 });
-  await createOwner(page, 'keyboard');
+  await page.goto('/dashboard/community');
+  await collapseDevelopmentBadge(page);
   const writes: string[] = [];
   page.on('request', (request) => {
     const path = new URL(request.url()).pathname;
@@ -183,7 +209,7 @@ for (const [locale, title, tagline, dir] of [
 ] as const) {
   test(`${locale}: the hub renders in the business's language (${dir})`, async ({ page }, testInfo) => {
     await page.setViewportSize({ width: 375, height: 800 });
-    await createOwner(page, `lang-${locale}`);
+    await collapseDevelopmentBadge(page);
     await setBusinessLanguage(page, locale);
     await page.goto('/dashboard/community');
     await expect(page.locator('html')).toHaveAttribute('dir', dir);
