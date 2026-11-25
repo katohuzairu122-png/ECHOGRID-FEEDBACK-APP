@@ -7,15 +7,12 @@ import { signedAttributionHeadersSafe } from '@/lib/cashier/client-attribution';
 import { callCustomerAuthApi } from '@/lib/customer-email-auth-client';
 import { clearCompatibleCustomerSession, getCustomerToken, hasRotatingRefreshCredential } from '@/lib/customer-session';
 import { rethrowControlFlow } from '@/lib/rethrow-control-flow';
+import { isCustomerDeletionWebEnabled } from '@/lib/customer-deletion-config';
 
 export type CustomerDeletionStatus = { status: 'none' } | {
   status: 'pending'; requestedAt: string; scheduledFor: string;
 };
 export type CustomerDeletionState = { error?: 'invalid' | 'rate_limited' | 'unavailable' };
-
-export const isCustomerDeletionWebEnabled = () =>
-  process.env.CUSTOMER_EMAIL_AUTH_ENABLED === 'true' &&
-  process.env.CUSTOMER_DELETION_ENABLED === 'true';
 
 /** These API routes return raw JSON, unlike ordinary customerApiFetch envelopes. */
 async function callDeletionGet(token: string): Promise<Response> {
