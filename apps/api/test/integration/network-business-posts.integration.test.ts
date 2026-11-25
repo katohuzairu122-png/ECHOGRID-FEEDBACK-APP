@@ -190,7 +190,7 @@ describe.skipIf(!databaseUrl)('business posts (real HTTP, real PostgreSQL)', () 
     // 1. Approved revision with NO recorded approver: going live is refused.
     const a = await submitNew('Direct SQL probe one');
     await q(`update network_post_revisions set status='approved', decided_at=now(), decided_by=$2 where id=$1`, [a.rev, id.mod2]);
-    await expect(live(a.post, a.rev)).rejects.toThrow(/distinct approver/);
+    await expect(live(a.post, a.rev)).rejects.toThrow(/one distinct platform approver/);
     // 2. One real approver but the business suspended: refused; with the business active again it is allowed (one approver suffices).
     const b = await submitNew('Direct SQL probe two');
     await q('insert into network_revision_approvals(revision_id, approver_user_id) values ($1,$2)', [b.rev, id.mod2]);

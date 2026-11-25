@@ -215,7 +215,7 @@ describe.skipIf(!process.env.DATABASE_URL)('network official posts (integration)
       await expect(ins('x', null, 'en', 'nothex')).rejects.toThrow(/network_rev_digest_format/);
       await expect(ins('y'.repeat(2001), null)).rejects.toThrow(/network_rev_body_length/);
       await expect(client.query("INSERT INTO network_posts(handle, author_user_id, content_class) VALUES($1,$2,'business_post')", ['B'.repeat(22), author]))
-        .rejects.toThrow(/network_posts_class_official_only/);
+        .rejects.toThrow(/network_posts_class_valid/); // BCOMM-03 widened the class list to official | business; any other class is still refused
       await expect(client.query("INSERT INTO network_posts(handle, author_user_id, state) VALUES($1,$2,'published')", ['C'.repeat(22), author]))
         .rejects.toThrow(/starts unpublished/);
     });
