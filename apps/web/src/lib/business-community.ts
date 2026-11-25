@@ -14,9 +14,8 @@ const isState = (value: unknown): value is 'open' | 'closed' => value === 'open'
 export function parseCommunityStatus(value: unknown): CommunityRollout {
   if (!value || typeof value !== 'object') return { state: 'unavailable' };
   const v = value as Record<string, unknown>;
-  // Publishing is not implemented, so anything other than 'closed' is rejected rather than trusted.
-  if (!isState(v.enrollment) || !isState(v.feed) || v.publishing !== 'closed') return { state: 'unavailable' };
-  return { state: 'ready', status: { enrollment: v.enrollment, feed: v.feed, publishing: 'closed' } };
+  if (!isState(v.enrollment) || !isState(v.feed) || !isState(v.publishing) || !isState(v.distribution)) return { state: 'unavailable' };
+  return { state: 'ready', status: { enrollment: v.enrollment, feed: v.feed, publishing: v.publishing, distribution: v.distribution } };
 }
 
 export async function getBusinessCommunityStatus(businessId: string): Promise<CommunityRollout> {

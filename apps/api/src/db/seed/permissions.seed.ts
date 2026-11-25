@@ -159,6 +159,11 @@ const PERMISSIONS: NewPermission[] = [
     description: 'Submit the business public profile for platform review and withdraw or re-publish an approved profile. Business-wide access only.',
     category: 'Business profile',
   },
+  {
+    key: 'network:post',
+    description: 'Draft, submit and withdraw business posts for the Community feed and view their moderation status. Business-wide access only; granted to Owner and Admin by default, never to Manager or cashiers unless the Owner grants it.',
+    category: 'Community publishing',
+  },
 ];
 
 /**

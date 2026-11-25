@@ -96,15 +96,76 @@
   },
   "posts": {
     "title": "My Posts",
-    "description": "Updates your business shares with Community.",
-    "unavailableTitle": "Business posts are not available yet",
-    "unavailable": "When business publishing is released you will be able to draft posts, see which are published or under review, and archive older ones. Nothing can be written or published today.",
-    "statesTitle": "What you will manage",
-    "states": {
+    "description": "Draft updates for your customers. Every post is reviewed by Tentaship before it can appear in Community.",
+    "unavailableTitle": "Your posts could not be loaded right now. Try again shortly.",
+    "closed": "Publishing is not open yet. You can read your earlier posts here, but nothing can be created or changed until publishing is opened.",
+    "statusUnknown": "We could not read whether publishing is open, so nothing can be changed right now.",
+    "forbidden": "You can see Community, but your role cannot manage posts. Ask your business owner or an admin to publish for you.",
+    "moderationNote": "A post is visible to customers only after the platform has approved it, while your business profile is published and your business is active.",
+    "empty": "You have no posts yet.",
+    "awaitingNote": "Waiting for the platform's review. You can edit it again after it has been decided.",
+    "rejectedBecause": "Not approved: {reason}. Edit the post and submit it again.",
+    "composer": {
+      "new": "New post",
+      "newTitle": "New post",
+      "editTitle": "Edit post",
+      "body": "Post text",
+      "bodyHelp": "Plain text, up to {max} characters.",
+      "link": "Link (optional, https only)",
+      "language": "Language of the post",
+      "rules": "No formatting, mentions, hashtags, email addresses or phone numbers. Offers and promotions follow the same review as every other post.",
+      "save": "Save draft",
+      "saving": "Saving…",
+      "cancel": "Cancel"
+    },
+    "languages": {
+      "en": "English",
+      "fr": "French",
+      "es": "Spanish",
+      "ar": "Arabic"
+    },
+    "groups": {
       "drafts": "Drafts",
-      "published": "Published",
-      "review": "Under review",
+      "review": "Awaiting review",
+      "live": "Live",
+      "rejected": "Needs changes",
+      "suspended": "Suspended by the platform",
       "archived": "Archived"
+    },
+    "stages": {
+      "draft": "Draft",
+      "awaiting_review": "Awaiting review",
+      "rejected": "Needs changes",
+      "live": "Live",
+      "suspended": "Suspended",
+      "archived": "Archived"
+    },
+    "actions": {
+      "edit": "Edit",
+      "submit": "Submit for review",
+      "archive": "Archive"
+    },
+    "errors": {
+      "closed": "Publishing is not open.",
+      "forbidden": "Your role cannot manage posts.",
+      "invalid": "The post could not be saved. Check the text and the link against the rules above.",
+      "conflict": "This post cannot be changed in its current state.",
+      "cap": "The daily post limit for your business has been reached. Try again tomorrow.",
+      "profile": "Publish your business profile first; posts need a published profile and an active business.",
+      "failed": "Something went wrong. Try again."
+    },
+    "reasons": {
+      "hate_or_harassment": "hateful or harassing content",
+      "threats": "threats",
+      "sexual_content": "sexual content",
+      "illegal_goods_services": "illegal goods or services",
+      "fraud_or_scam": "fraud or scam",
+      "impersonation": "impersonation",
+      "personal_data": "personal data",
+      "misleading_claim": "misleading claim",
+      "competitor_disparagement": "disparaging a competitor",
+      "unsafe_link": "unsafe link",
+      "spam_or_duplicate": "spam or duplicate"
     }
   },
   "insights": {

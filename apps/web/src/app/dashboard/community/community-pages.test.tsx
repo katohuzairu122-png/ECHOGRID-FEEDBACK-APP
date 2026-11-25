@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { cleanup, render, screen, within } from '@testing-library/react';
 import en from '../../../../messages/en/businessCommunity.json';
 import dashboardEn from '../../../../messages/en/dashboard.json';
 
@@ -8,6 +8,7 @@ const m = vi.hoisted(() => ({ access: vi.fn(), business: vi.fn(), api: vi.fn() }
 vi.mock('next/navigation', () => ({
   redirect: (to: string) => { throw Object.assign(new Error('NEXT_REDIRECT'), { to }); },
   usePathname: () => '/dashboard/community',
+  useRouter: () => ({ refresh: vi.fn() }),
 }));
 // The REAL English copy, so the wording the Owner specified is what is asserted.
 const resolve = (namespace: string, key: string, values?: Record<string, unknown>) => {
@@ -16,16 +17,19 @@ const resolve = (namespace: string, key: string, values?: Record<string, unknown
   if (typeof value !== 'string') throw new Error(`missing message ${namespace}.${key}`);
   return value.replace(/\{(\w+)\}/g, (_, name: string) => String(values?.[name] ?? `{${name}}`));
 };
-vi.mock('next-intl/server', () => ({ getTranslations: async (namespace: string) => (key: string, values?: Record<string, unknown>) => resolve(namespace, key, values) }));
+vi.mock('next-intl/server', () => ({ getLocale: async () => 'en', getFormatter: async () => ({ dateTime: () => 'Jan 1, 2026' }), getTranslations: async (namespace: string) => (key: string, values?: Record<string, unknown>) => resolve(namespace, key, values) }));
 vi.mock('next-intl', () => ({ useTranslations: (namespace: string) => (key: string, values?: Record<string, unknown>) => resolve(namespace, key, values) }));
 vi.mock('@/lib/business', () => ({ getActiveBusiness: m.business }));
 vi.mock('@/lib/permissions', async () => ({
   ...(await vi.importActual<object>('@/lib/workspace-access')),
   getMyAccess: () => m.access(),
 }));
-vi.mock('@/lib/api-client', () => ({ apiFetch: m.api, ApiError: class extends Error {} }));
+vi.mock('@/lib/api-client', () => ({ apiFetch: m.api, ApiError: class ApiError extends Error { constructor(message: string, public status = 500) { super(message); } } }));
+vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
+vi.mock('@/lib/actions/business-posts', () => ({ savePostAction: vi.fn(), submitPostAction: vi.fn(), archivePostAction: vi.fn() }));
 vi.mock('@/components/workspace/restricted-panel', () => ({ RestrictedPanel: ({ variant }: { variant: string }) => <p>restricted:{variant}</p> }));
 
+import { ApiError as ApiErrorMock } from '@/lib/api-client';
 import CommunityLayout from './layout';
 import CommunityHomePage from './page';
 import CommunityParticipationPage from './participation/page';
@@ -35,13 +39,20 @@ import CommunityInsightsPage from './insights/page';
 const owner = () => m.access.mockResolvedValue({ known: true, permissions: new Set(['business:view', 'business:manage_settings', 'analytics:view', 'loyalty:serve']) });
 // The status route and the participation route answer separately; a participation answer of `null` simulates a failed read.
 let participation: unknown = null;
+// The business posts route answers with a list, or fails with an HTTP status (403 = may not manage posts).
+let postsAnswer: unknown = [];
+let postsFailure: number | null = null;
 const status = (enrollment: string, feed: string, publishing = 'closed') =>
   m.api.mockImplementation(async (path: string) => {
     if (path === '/community/business/participation') {
       if (participation === null) throw new Error('unavailable');
       return participation;
     }
-    return { enrollment, feed, publishing };
+    if (path === '/network/business-posts') {
+      if (postsFailure !== null) throw new ApiErrorMock('failed', postsFailure);
+      return postsAnswer;
+    }
+    return { enrollment, feed, publishing, distribution: 'closed' };
   });
 const figures = (eligible: unknown, participants: unknown, ratePercent: unknown) => ({ minimumGroupSize: 10, eligible, participants, ratePercent });
 const shown = (value: number) => ({ state: 'shown', value });
@@ -51,6 +62,8 @@ const text = () => document.body.textContent ?? '';
 beforeEach(() => {
   vi.clearAllMocks();
   participation = null;
+  postsAnswer = [];
+  postsFailure = null;
   owner();
   m.business.mockResolvedValue({ id: 'biz-1', name: 'Buddy Coffee' });
   status('closed', 'closed');
@@ -164,15 +177,53 @@ describe('the other internal sections (explicit unavailable states, no data requ
     expect(within(screen.getByTestId('community-participation')).getAllByText('Not available yet')).toHaveLength(3);
   });
 
-  it('My Posts: controlled unavailable state; no editor, no input, no button, no submission, no API call', async () => {
+  const HANDLE = 'AbCdEfGhIjKlMnOpQrStUv';
+  const post = (over: Record<string, unknown> = {}) => ({
+    handle: HANDLE, stage: 'draft', latestRevisionNo: 1, reasonCode: null, body: 'We open a second counter on Saturday.', linkUrl: null,
+    contentLocale: 'en', publishedAt: null, createdAt: '2026-01-01T10:00:00.000Z', ...over,
+  });
+
+  it('My Posts (publishing closed): history is readable, nothing can be created or changed, and it says why', async () => {
+    postsAnswer = [post({ stage: 'live', publishedAt: '2026-01-02T10:00:00.000Z' })];
     render(await CommunityPostsPage());
-    expect(screen.getByText('Business posts are not available yet')).toBeInTheDocument();
-    expect(screen.getByText(/Nothing can be written or published today/)).toBeInTheDocument();
+    expect(screen.getByText(/Publishing is not open yet/)).toBeInTheDocument();
+    expect(screen.getByText('We open a second counter on Saturday.')).toBeInTheDocument();
     expect(document.querySelectorAll('input, textarea, select, button, form')).toHaveLength(0);
-    const states = within(screen.getByTestId('community-posts-states')).getAllByRole('listitem').map((li) => li.textContent);
-    expect(states).toEqual(['Drafts', 'Published', 'Under review', 'Archived']);
-    expect(text()).not.toMatch(/\d/);
-    expect(m.api).not.toHaveBeenCalled();
+    expect(m.api).toHaveBeenCalledWith('/network/business-posts', { businessId: 'biz-1' });
+  });
+
+  it('My Posts (publishing open): the composer and per-stage actions are offered; every other call is a read', async () => {
+    status('closed', 'closed', 'open');
+    postsAnswer = [post(), post({ handle: 'BbCdEfGhIjKlMnOpQrStUv', stage: 'awaiting_review' }),
+      post({ handle: 'CbCdEfGhIjKlMnOpQrStUv', stage: 'rejected', reasonCode: 'misleading_claim' }), post({ handle: 'DbCdEfGhIjKlMnOpQrStUv', stage: 'archived' })];
+    render(await CommunityPostsPage());
+    expect(screen.getByRole('button', { name: 'New post' })).toBeInTheDocument();
+    const cards = screen.getAllByTestId('community-post');
+    expect(cards.map((c) => c.getAttribute('data-stage'))).toEqual(['draft', 'awaiting_review', 'rejected', 'archived']);
+    expect(within(cards[0]!).getByRole('button', { name: 'Submit for review' })).toBeInTheDocument();
+    expect(within(cards[1]!).queryByRole('button', { name: 'Submit for review' })).toBeNull(); // awaiting review: only archive
+    expect(within(cards[2]!).getByText(/Not approved: misleading claim/)).toBeInTheDocument();
+    expect(within(cards[3]!).queryAllByRole('button')).toHaveLength(0); // archived is terminal
+    expect(m.api.mock.calls.every(([path]) => !String(path).includes('/draft') && !String(path).includes('/submit'))).toBe(true);
+  });
+
+  it('My Posts: a user who may see Community but not manage posts is told so and sees no post data', async () => {
+    postsFailure = 403;
+    render(await CommunityPostsPage());
+    expect(screen.getByText(/your role cannot manage posts/)).toBeInTheDocument();
+    expect(document.querySelectorAll('input, textarea, select, button, form')).toHaveLength(0);
+  });
+
+  it('My Posts: a failed or malformed read is "could not be loaded", never an empty list that looks real', async () => {
+    postsFailure = 500;
+    render(await CommunityPostsPage());
+    expect(screen.getByText(/could not be loaded right now/)).toBeInTheDocument();
+    cleanup();
+    postsFailure = null;
+    postsAnswer = [{ handle: 'short', stage: 'draft' }];
+    render(await CommunityPostsPage());
+    expect(screen.getByText(/could not be loaded right now/)).toBeInTheDocument();
+    expect(screen.queryByTestId('community-posts')).toBeNull();
   });
 
   it('Insights: nothing is measured, so no view, follower, engagement, acquisition or conversion figure exists; planned measures are plain words', async () => {

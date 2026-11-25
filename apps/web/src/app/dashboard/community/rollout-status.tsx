@@ -12,10 +12,9 @@ export function RolloutStatus({ rollout }: { rollout: CommunityRollout }) {
   const rows = [
     { key: 'enrollment', state: rollout.state === 'ready' ? rollout.status.enrollment : 'unknown' },
     { key: 'feed', state: rollout.state === 'ready' ? rollout.status.feed : 'unknown' },
-    // Business publishing is not implemented: closed whatever the platform reports.
-    { key: 'publishing', state: rollout.state === 'ready' ? ('closed' as const) : 'unknown' },
+    { key: 'publishing', state: rollout.state === 'ready' ? rollout.status.publishing : 'unknown' },
   ] as const;
-  const anyOpen = rollout.state === 'ready' && (rollout.status.enrollment === 'open' || rollout.status.feed === 'open');
+  const anyOpen = rollout.state === 'ready' && (rollout.status.enrollment === 'open' || rollout.status.feed === 'open' || rollout.status.publishing === 'open');
   const note = rollout.state !== 'ready' ? t('unknownNote') : rollout.status.enrollment === 'open' ? t('openNote') : t('closedNote');
   return (
     <OverviewPanel title={t('title')}>

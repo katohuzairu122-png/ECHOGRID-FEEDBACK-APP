@@ -105,7 +105,9 @@ export class NetworkPostService {
       if (inserted.length === 0) throw new AppError('You have already approved this revision.', 409, 'NETWORK_ALREADY_APPROVED');
       const [{ n }] = await tx.select({ n: sql<number>`count(distinct ${networkRevisionApprovals.approverUserId})::int` })
         .from(networkRevisionApprovals).where(eq(networkRevisionApprovals.revisionId, revisionId)) as [{ n: number }];
-      if (n < NETWORK_REQUIRED_APPROVALS) return { status: 'recorded' as const, approvals: n, required: NETWORK_REQUIRED_APPROVALS };
+      // Official posts keep the two-person rule (N-09); a business post needs one platform approver who is not its author.
+      const required = post.contentClass === 'business' ? 1 : NETWORK_REQUIRED_APPROVALS;
+      if (n < required) return { status: 'recorded' as const, approvals: n, required };
 
       if (post.liveRevisionId) {
         await tx.update(networkPostRevisions).set({ status: 'superseded' }).where(eq(networkPostRevisions.id, post.liveRevisionId));
@@ -176,6 +178,8 @@ export class NetworkPostService {
       revisionId: networkPostRevisions.id, postHandle: networkPosts.handle, revisionNo: networkPostRevisions.revisionNo,
       body: networkPostRevisions.body, linkUrl: networkPostRevisions.linkUrl, contentLocale: networkPostRevisions.contentLocale,
       authorUserId: networkPostRevisions.createdBy, submittedAt: networkPostRevisions.submittedAt,
+      contentClass: networkPosts.contentClass,
+      requiredApprovals: sql<number>`case when ${networkPosts.contentClass} = 'business' then 1 else ${NETWORK_REQUIRED_APPROVALS} end`,
       approvals: sql<number>`(select count(*)::int from ${networkRevisionApprovals} a where a.revision_id = ${networkPostRevisions.id})`,
     }).from(networkPostRevisions).innerJoin(networkPosts, eq(networkPosts.id, networkPostRevisions.postId))
       .where(eq(networkPostRevisions.status, 'submitted')).orderBy(asc(networkPostRevisions.submittedAt)).limit(Math.min(Math.max(limit, 1), 200));

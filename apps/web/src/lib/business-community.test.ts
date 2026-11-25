@@ -10,16 +10,17 @@ beforeEach(() => vi.clearAllMocks());
 
 describe('Community rollout status (fails closed: an unread state never looks open)', () => {
   it('accepts exactly the three-field shape the API returns', () => {
-    expect(parseCommunityStatus({ enrollment: 'open', feed: 'closed', publishing: 'closed' })).toEqual({ state: 'ready', status: { enrollment: 'open', feed: 'closed', publishing: 'closed' } });
+    expect(parseCommunityStatus({ enrollment: 'open', feed: 'closed', publishing: 'open', distribution: 'closed' })).toEqual({ state: 'ready', status: { enrollment: 'open', feed: 'closed', publishing: 'open', distribution: 'closed' } });
   });
   it('anything else is unavailable: null, wrong types, unknown states, and a publishing state other than closed (it is not implemented)', () => {
-    for (const bad of [null, undefined, 'open', 7, {}, { enrollment: 'open' }, { enrollment: 'maybe', feed: 'closed', publishing: 'closed' },
-      { enrollment: 'open', feed: true, publishing: 'closed' }, { enrollment: 'closed', feed: 'closed', publishing: 'open' }]) {
+    for (const bad of [null, undefined, 'open', 7, {}, { enrollment: 'open' }, { enrollment: 'maybe', feed: 'closed', publishing: 'closed', distribution: 'closed' },
+      { enrollment: 'open', feed: true, publishing: 'closed', distribution: 'closed' }, { enrollment: 'closed', feed: 'closed', publishing: 'open' },
+      { enrollment: 'closed', feed: 'closed', publishing: 'closed', distribution: 'maybe' }]) {
       expect(parseCommunityStatus(bad), JSON.stringify(bad)).toEqual({ state: 'unavailable' });
     }
   });
   it('reads only the read-only status route for the named business', async () => {
-    api.mockResolvedValue({ enrollment: 'closed', feed: 'closed', publishing: 'closed' });
+    api.mockResolvedValue({ enrollment: 'closed', feed: 'closed', publishing: 'closed', distribution: 'closed' });
     await getBusinessCommunityStatus('biz-1');
     expect(api).toHaveBeenCalledTimes(1);
     expect(api).toHaveBeenCalledWith('/community/business/status', { businessId: 'biz-1' });

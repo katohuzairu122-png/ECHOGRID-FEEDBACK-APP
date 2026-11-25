@@ -65,3 +65,13 @@ describe('content digest and handle', () => {
     for (const h of handles) expect(h).toMatch(/^[A-Za-z0-9_-]{22}$/);
   });
 });
+
+import { resolveDailyPostCap, NETWORK_BUSINESS_DAILY_POST_CAP } from './network-business-post.service';
+describe('resolveDailyPostCap (BCOMM-03)', () => {
+  it('uses the default unless given a whole number from 1 to 100', () => {
+    expect(resolveDailyPostCap(undefined)).toBe(NETWORK_BUSINESS_DAILY_POST_CAP);
+    for (const bad of ['', '0', '101', '-1', '5.5', 'abc', ' 7', 7, null]) expect(resolveDailyPostCap(bad), String(bad)).toBe(NETWORK_BUSINESS_DAILY_POST_CAP);
+    expect(resolveDailyPostCap('1')).toBe(1);
+    expect(resolveDailyPostCap('100')).toBe(100);
+  });
+});

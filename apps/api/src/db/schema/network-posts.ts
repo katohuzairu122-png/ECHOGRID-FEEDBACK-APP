@@ -3,18 +3,19 @@ import {
 } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import { users } from './users';
+import { businessPublicProfiles } from './business-profiles';
 
 /**
- * NETWORK-01 (development, additive). Platform-OFFICIAL posts only: business posts need a live published BDPN
- * profile, which does not exist yet (NETWORK-00 N-06), so `content_class` is constrained to 'official' and a later,
- * separately authorized block widens it together with its composite tenant foreign key.
+ * NETWORK-01 (development, additive) widened by BCOMM-03: `official` platform posts and `business` posts. A business post
+ * is owned by exactly one business with a BDPN public profile (FK to `business_public_profiles`, immutable), needs ONE platform
+ * approver (official keeps two) and may only go live while that profile is published and the business is active.
  *
  * Disciplines taken from NETWORK-00 / BDPN-01: immutable revisions with a content digest, a live-revision pointer,
  * pre-moderation (nothing is visible until approved), reviewer != author, and TWO distinct approvers for an official
  * post. The rules are enforced in the DATABASE as well as in the service (triggers in migration 0077), so a direct
  * SQL session cannot publish an unapproved or self-approved revision.
  */
-export const NETWORK_CONTENT_CLASSES = ['official'] as const;
+export const NETWORK_CONTENT_CLASSES = ['official', 'business'] as const;
 export type NetworkContentClass = (typeof NETWORK_CONTENT_CLASSES)[number];
 export const NETWORK_POST_STATES = ['unpublished', 'published', 'suspended', 'withdrawn'] as const;
 export type NetworkPostState = (typeof NETWORK_POST_STATES)[number];
@@ -39,6 +40,8 @@ export const networkPosts = pgTable('network_posts', {
   /** Opaque public identifier (22 base64url characters); the internal id is never exposed. */
   handle: text('handle').notNull(),
   contentClass: text('content_class').$type<NetworkContentClass>().notNull().default('official'),
+  /** BCOMM-03: the owning business of a `business` post (tenant ownership); null for `official`. Immutable. */
+  businessId: uuid('business_id').references(() => businessPublicProfiles.businessId, { onDelete: 'restrict' }),
   authorUserId: uuid('author_user_id').notNull().references(() => users.id, { onDelete: 'restrict' }),
   state: text('state').$type<NetworkPostState>().notNull().default('unpublished'),
   liveRevisionId: uuid('live_revision_id').references((): AnyPgColumn => networkPostRevisions.id, { onDelete: 'restrict' }),
@@ -53,7 +56,10 @@ export const networkPosts = pgTable('network_posts', {
   uniqueIndex('network_posts_one_pinned_uq').on(t.contentClass).where(sql`${t.pinned} AND ${t.state} = 'published'`),
   index('network_posts_feed_idx').on(t.state, t.pinned, t.publishedAt, t.id),
   check('network_posts_handle_format', sql`${t.handle} ~ '^[A-Za-z0-9_-]{22}$'`),
-  check('network_posts_class_official_only', sql`${t.contentClass} = 'official'`),
+  check('network_posts_class_valid', sql`${t.contentClass} IN ('official','business')`),
+  check('network_posts_business_scope', sql`(${t.contentClass} = 'business') = (${t.businessId} IS NOT NULL)`),
+  check('network_posts_pin_official_only', sql`NOT ${t.pinned} OR ${t.contentClass} = 'official'`),
+  index('network_posts_business_idx').on(t.businessId, t.state, t.createdAt),
   check('network_posts_state_valid', sql`${t.state} IN ('unpublished','published','suspended','withdrawn')`),
   check('network_posts_pin_requires_published', sql`NOT ${t.pinned} OR ${t.state} = 'published'`),
   check('network_posts_published_has_evidence', sql`${t.state} NOT IN ('published','suspended') OR (${t.liveRevisionId} IS NOT NULL AND ${t.publishedAt} IS NOT NULL AND ${t.expiresAt} IS NOT NULL)`),

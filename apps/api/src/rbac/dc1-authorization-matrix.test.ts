@@ -155,6 +155,7 @@ async function defaultRoleGrants(): Promise<Record<string, string[]>> {
     'profile:edit',
     'profile:submit',
     'cashier:manage',
+    'network:post',
   ];
   const grants: Record<string, string[]> = {};
   const roleNames = new Map<string, string>();
@@ -387,6 +388,13 @@ describe('default role grants (real RoleProvisioningService)', () => {
       expect(personas.Manager, `Manager ${key}`).not.toContain(key);
       expect(personas.Staff, `Staff ${key}`).not.toContain(key);
     }
+  });
+  // BCOMM-03 (NETWORK-00 section 5): business publishing is business-wide and Owner/Admin only; Manager and cashiers never hold it by default.
+  it('network:post goes to Owner and Admin only, never to Manager or Staff', () => {
+    expect(personas.Owner).toContain('network:post');
+    expect(personas.Admin).toContain('network:post');
+    expect(personas.Manager).not.toContain('network:post');
+    expect(personas.Staff).not.toContain('network:post');
   });
   // CASHIER-AUTH-02A (D-4): cashier:manage defaults to Owner and Admin; a Manager only gets it if the Owner grants it, and
   // a cashier (Staff) never holds it.
