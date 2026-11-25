@@ -14,7 +14,9 @@ import type { AuthVariables } from './authenticate';
  * applies to every listed route; this list only narrows, it never grants.
  *
  * Paths are relative to /api/v1 and are matched exactly (method and path, no wildcard segments beyond a single
- * path parameter, no trailing slash). Administrative areas (billing, team, roles, settings, loyalty programme and
+ * path parameter, no trailing slash). CASHIER-FINAL-RECONCILIATION: the former onboarding-invite issuer (CASHIER-AUTH-02D) was
+ * withdrawn from this list: Invite Customers is not a cashier function, so a cashier token is now refused on it with
+ * CASHIER_ROUTE_DENIED (any relocation to the owner-facing Cashier App needs separate Owner approval). Administrative areas (billing, team, roles, settings, loyalty programme and
  * reward configuration, analytics, platform, internal) are deliberately absent.
  */
 export type CashierRoute = { method: 'GET' | 'POST'; pattern: RegExp; label: string };
@@ -51,13 +53,6 @@ export const CASHIER_ALLOWED_ROUTES: readonly CashierRoute[] = [
     method: 'POST',
     pattern: new RegExp(`^/loyalty/redemptions/${PARAM}/confirm$`),
     label: 'POST /loyalty/redemptions/:code/confirm',
-  },
-  {
-    // CASHIER-AUTH-02D (owner-authorised, ONE explicit addition): issues a short-lived, single-use onboarding invitation that the customer
-    // accepts with their own consent. Access-token authenticated, `loyalty:serve`, branch and session from the token, no body, no customer data.
-    method: 'POST',
-    pattern: /^\/loyalty\/actions\/onboarding-invite$/,
-    label: 'POST /loyalty/actions/onboarding-invite',
   },
   { method: 'GET', pattern: /^\/businesses\/me$/, label: 'GET /businesses/me' },
   { method: 'GET', pattern: /^\/auth\/me$/, label: 'GET /auth/me' },

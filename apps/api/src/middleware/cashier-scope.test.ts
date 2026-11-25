@@ -39,21 +39,19 @@ const EXPECTED_ALLOWED = [
   'POST /api/v1/loyalty/accounts/:id/purchase',
   'POST /api/v1/loyalty/actions/lookup-customer',
   'POST /api/v1/loyalty/actions/lookup-purchase',
-  // CASHIER-AUTH-02D: the ONE owner-authorised addition (onboarding invitation issuer)
-  'POST /api/v1/loyalty/actions/onboarding-invite',
   'POST /api/v1/loyalty/actions/resolve-customer',
   'POST /api/v1/loyalty/redemptions/:code/confirm',
 ].sort();
 
 describe('cashier route allow-list (exact, default deny)', () => {
-  it('has exactly the nine counter routes (the eight originals plus the one owner-authorised onboarding-invite route)', () => {
+  it('has exactly the eight counter routes (the onboarding-invite issuer is NOT a cashier function)', () => {
     expect(CASHIER_ALLOWED_ROUTES.map((r) => r.label).sort()).toEqual(
       EXPECTED_ALLOWED.map((s) => s.replace('/api/v1', '')).sort(),
     );
   });
 
   it('accepts each listed method and path', () => {
-    expect(isCashierRouteAllowed('POST', '/loyalty/actions/onboarding-invite')).toBe(true);
+    expect(isCashierRouteAllowed('POST', '/loyalty/actions/onboarding-invite')).toBe(false);
     expect(isCashierRouteAllowed('POST', '/loyalty/actions/lookup-customer')).toBe(true);
     expect(isCashierRouteAllowed('POST', '/loyalty/accounts/abc-123/purchase')).toBe(true);
     expect(isCashierRouteAllowed('GET', '/loyalty/redemptions/CODE1')).toBe(true);
@@ -68,7 +66,7 @@ describe('cashier route allow-list (exact, default deny)', () => {
       expect(isCashierRouteAllowed(m, '/loyalty/accounts/x/purchase')).toBe(false);
     }
     expect(isCashierRouteAllowed('GET', '/loyalty/actions/lookup-customer')).toBe(false);
-    for (const m of ['GET', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS']) expect(isCashierRouteAllowed(m, '/loyalty/actions/onboarding-invite')).toBe(false);
+    for (const m of ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS']) expect(isCashierRouteAllowed(m, '/loyalty/actions/onboarding-invite')).toBe(false);
     expect(isCashierRouteAllowed('POST', '/businesses/me')).toBe(false);
     expect(isCashierRouteAllowed('POST', '/loyalty/redemptions/CODE1')).toBe(false);
     expect(isCashierRouteAllowed('GET', '/loyalty/redemptions/CODE1/confirm')).toBe(false);
@@ -198,5 +196,20 @@ describe('route introspection: no registered route is reachable by a cashier tok
         ).toBe(false);
       }
     }
+  });
+});
+
+describe('CASHIER-FINAL-RECONCILIATION: every surface the Owner ruling withholds from the cashier is refused', () => {
+  const FORBIDDEN: Array<[string, string]> = [
+    ['GET', '/loyalty/accounts'], ['GET', '/loyalty/accounts/abc'], ['GET', '/loyalty/accounts/abc/transactions'], ['POST', '/loyalty/accounts/abc/adjust'],
+    ['GET', '/customers'], ['GET', '/customer-relationships/customers'], ['POST', '/loyalty/actions/onboarding-invite'],
+    ['GET', '/cashier-accounts'], ['POST', '/cashier-accounts'], ['GET', '/cashier-sessions'], ['GET', '/cashier-activity'],
+    ['GET', '/analytics/onboarding'], ['GET', '/loyalty/reports/transactions'], ['GET', '/loyalty/settlement'], ['PUT', '/loyalty/settlement/config'],
+    ['GET', '/loyalty/rewards'], ['POST', '/loyalty/rewards'], ['PATCH', '/loyalty/program'],
+    ['GET', '/community/business/status'], ['POST', '/community/business/posts'], ['GET', '/community/business/insights'],
+    ['GET', '/team'], ['GET', '/settings'], ['GET', '/billing'], ['PATCH', '/businesses/me'], ['POST', '/business-closure/requests'],
+  ];
+  it.each(FORBIDDEN)('%s %s is not on the cashier allow-list', (method, path) => {
+    expect(isCashierRouteAllowed(method, path)).toBe(false);
   });
 });

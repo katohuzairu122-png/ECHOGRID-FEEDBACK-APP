@@ -15,6 +15,7 @@ import { cashierAccountRoutes } from '../../src/cashier-accounts/cashier-account
 import { customerMembershipRoutes } from '../../src/customer-relationships/customer-membership.routes';
 import { loyaltyRoutes } from '../../src/loyalty/loyalty.routes';
 import { signAccessToken } from '../../src/auth/jwt';
+import { signOnboardingInvite } from '../../src/customer-relationships/onboarding-attribution';
 import { signCustomerAccessToken } from '../../src/customer-auth/customer-jwt';
 import { pbkdf2Hash, pbkdf2Verify } from '../../src/auth/password';
 
@@ -120,7 +121,13 @@ describe.skipIf(!databaseUrl)('CASHIER-AUTH-02D onboarding invitation issuer (re
     expect(s.status, JSON.stringify(s)).toBe(200);
     return s.data as Session;
   };
-  const issue = (token: string, extra: Partial<Call> = {}) => http('POST', '/loyalty/actions/onboarding-invite', { token, ...extra });
+  // CASHIER-FINAL-RECONCILIATION: the cashier-facing issuer was withdrawn (Invite Customers is not a cashier function), so these
+  // acceptance tests mint the invitation directly with the same signer, bound to the cashier session carried by a real cashier token.
+  const issue = async (token: string): Promise<{ status: number; data: { inviteToken: string; branchId: string } }> => {
+    const claims = decode(token).payload as { sub: string; sid: string; bid: string; brid: string };
+    const invite = await signOnboardingInvite({ cashierUserId: claims.sub, sessionId: claims.sid, businessId: claims.bid, branchId: claims.brid }, SECRET);
+    return { status: 200, data: { inviteToken: invite.token, branchId: claims.brid } };
+  };
   const switchTo = (refreshToken: string, branchId: string, fromBranchId?: string) =>
     http('POST', '/auth/cashier/switch-branch', { body: { refreshToken, branchId, ...(fromBranchId ? { fromBranchId } : {}) } });
   let phoneSeq = 0;
@@ -162,93 +169,19 @@ describe.skipIf(!databaseUrl)('CASHIER-AUTH-02D onboarding invitation issuer (re
   });
   afterAll(async () => { await client?.end(); });
 
-  describe('issuing', () => {
-    it('issues a signed 10-minute invitation from the cashier session: branch and cashier come from the session, the customer accepts it, and the event is attributed correctly', async () => {
-      const u = await newCashier('multiple', [a1, a2, a3]);
-      const s = await sessionOn(u.username, a2);
-      const res = await issue(s.accessToken);
-      expect(res.status, JSON.stringify(res)).toBe(200);
-      expect(Object.keys(res.data).sort()).toEqual(['branchId', 'expiresAt', 'inviteToken', 'inviteUrl']);
-      expect(res.data.inviteUrl).toBe(`https://web.example.test/loyalty/invite/${res.data.inviteToken}`);
-      expect(res.data.branchId).toBe(a2);
-      const ttl = (new Date(res.data.expiresAt).getTime() - Date.now()) / 1000;
-      expect(ttl).toBeGreaterThan(590); expect(ttl).toBeLessThanOrEqual(600);
-      const customer = await newCustomer();
-      const accepted = await accept(customer.token, res.data.inviteToken);
-      expect(accepted.status, JSON.stringify(accepted)).toBe(201);
-      const [ev] = await events(customer.id);
-      expect(ev).toMatchObject({ source: 'cashier_assisted', branch_id: a2, cashier_user_id: u.id, business_id: bizA });
-    });
-
-    it('trusts nothing in the request: body, query and headers cannot choose the branch, business or cashier', async () => {
-      const u = await newCashier('multiple', [a1, a2]);
-      const s = await sessionOn(u.username, a1);
-      const res = await http('POST', '/loyalty/actions/onboarding-invite?branchId=' + a2, {
-        token: s.accessToken, body: { branchId: a2, businessId: bizB, cashierUserId: 'someone-else', sessionId: 'x' },
-      });
-      expect(res.status, JSON.stringify(res)).toBe(200);
-      expect(res.data.branchId).toBe(a1);
-      const payload = decode(res.data.inviteToken).payload as Record<string, unknown>;
-      expect(payload).toMatchObject({ sub: u.id, biz: bizA, brid: a1 });
-      // a header naming another business or branch is refused by the cashier context binding, never honoured
-      const mismatch = await issue(s.accessToken, { businessId: bizB });
-      expect(mismatch.status).toBe(403);
-      expect(mismatch.error?.code).toBe('CASHIER_CONTEXT_MISMATCH');
-      expect((await issue(s.accessToken, { branchId: a2 })).error?.code).toBe('CASHIER_CONTEXT_MISMATCH');
-    });
-
-    it('the invitation carries no customer data and exactly the documented claims', async () => {
+  describe('the cashier-facing issuer is withdrawn', () => {
+    it('a cashier access token is refused on the issuer before any handler runs, whatever the method or body', async () => {
       const u = await newCashier('single', [a1]);
       const s = await sessionOn(u.username, a1);
-      const res = await issue(s.accessToken);
-      const payload = decode(res.data.inviteToken).payload as Record<string, unknown>;
-      expect(Object.keys(payload).sort()).toEqual(['biz', 'brid', 'exp', 'iat', 'jti', 'sid', 'sub', 'type']);
-      expect(payload.type).toBe('onboarding_invite');
-      expect(JSON.stringify(res)).not.toMatch(/phone|email|name|customer|password|refresh/i);
-    });
-
-    it('each request mints a distinct, single-purpose invitation', async () => {
-      const u = await newCashier('single', [a1]);
-      const s = await sessionOn(u.username, a1);
-      const a = await issue(s.accessToken); const b = await issue(s.accessToken);
-      expect(a.data.inviteToken).not.toBe(b.data.inviteToken);
-      expect((decode(a.data.inviteToken).payload as { jti: string }).jti).not.toBe((decode(b.data.inviteToken).payload as { jti: string }).jti);
+      for (const method of ['POST', 'GET', 'PUT'] as const) {
+        const r = await http(method, '/loyalty/actions/onboarding-invite', { token: s.accessToken });
+        expect(r.status, method).toBe(403);
+        expect(r.error?.code, method).toBe('CASHIER_ROUTE_DENIED');
+      }
     });
   });
 
   describe('refusals', () => {
-    it('requires authentication and a cashier session: anonymous, refresh-token, invitation-token and staff web tokens are all refused', async () => {
-      const u = await newCashier('single', [a1]);
-      const s = await sessionOn(u.username, a1);
-      expect((await http('POST', '/loyalty/actions/onboarding-invite')).status).toBe(401);
-      expect([401, 403]).toContain((await issue(s.refreshToken)).status); // a refresh token is never a credential here (refused as not an access token)
-      const real = await issue(s.accessToken);
-      expect([401, 403]).toContain((await issue(real.data.inviteToken)).status); // an invitation cannot issue an invitation
-      const staff = await issue(ownerToken, { businessId: bizA });
-      expect(staff.status).toBe(403);
-      expect(staff.error?.code).toBe('ONBOARDING_INVITE_CASHIER_ONLY');
-    });
-
-    it('a cashier session with no branch (business-wide staff sign-in without a branch) cannot issue: no guessed branch', async () => {
-      const l = await http('POST', '/auth/cashier/login', { body: { email: ownerEmail, password: PW } });
-      expect(l.status, JSON.stringify(l)).toBe(200);
-      const s = await http('POST', '/auth/cashier/session', { body: { ticket: l.data.ticket, businessId: bizA } });
-      expect(s.status, JSON.stringify(s)).toBe(200);
-      expect(s.data.session.branchId).toBeNull();
-      const res = await issue(s.data.accessToken);
-      expect(res.status).toBe(409);
-      expect(res.error?.code).toBe('ONBOARDING_INVITE_BRANCH_REQUIRED');
-    });
-
-    it('wrong methods and near-miss paths are not routes for a cashier token', async () => {
-      const u = await newCashier('single', [a1]);
-      const s = await sessionOn(u.username, a1);
-      for (const [method, path] of [['GET', '/loyalty/actions/onboarding-invite'], ['PUT', '/loyalty/actions/onboarding-invite'], ['POST', '/loyalty/actions/onboarding-invite/'], ['POST', '/loyalty/actions/onboarding-invites']] as const) {
-        const r = await http(method, path, { token: s.accessToken });
-        expect([403, 404, 405], `${method} ${path}`).toContain(r.status);
-      }
-    });
-
     it('a cashier token cannot reach the customer acceptance endpoint (customer authentication only)', async () => {
       const u = await newCashier('single', [a1]);
       const s = await sessionOn(u.username, a1);
@@ -364,7 +297,7 @@ describe.skipIf(!databaseUrl)('CASHIER-AUTH-02D onboarding invitation issuer (re
       const stale = (await issue(s.accessToken)).data.inviteToken as string;
       const sw = await switchTo(s.refreshToken, a2, a1);
       expect(sw.status).toBe(200);
-      expect((await issue(s.accessToken)).status).toBe(401); // the pre-switch access token is dead
+      expect((await http('GET', '/auth/me', { token: s.accessToken })).status).toBe(401); // the pre-switch access token is dead
       const fresh = await issue(sw.data.accessToken);
       expect(fresh.data.branchId).toBe(a2);
       const customer = await newCustomer();
@@ -384,15 +317,6 @@ describe.skipIf(!databaseUrl)('CASHIER-AUTH-02D onboarding invitation issuer (re
       expect(await memberships(customer.id, bizA)).toHaveLength(1);
       expect(await memberships(customer.id, bizB)).toHaveLength(0);
       expect(await events(customer.id, bizB)).toHaveLength(0);
-    });
-
-    it('the owner of another business cannot issue invitations for this one, and a cashier session cannot be pointed at another business', async () => {
-      const res = await issue(ownerBToken, { businessId: bizA });
-      expect(res.status).toBe(403);
-      const u = await newCashier('single', [a1]);
-      const s = await sessionOn(u.username, a1);
-      expect((await issue(s.accessToken, { businessId: bizB })).status).toBe(403);
-      void ownerBId;
     });
   });
 
@@ -448,74 +372,6 @@ describe.skipIf(!databaseUrl)('CASHIER-AUTH-02D onboarding invitation issuer (re
       const res = await preview((await newCustomer()).token, invite);
       expect(res.status).toBe(400);
       expect(res.error?.code).toBe('ONBOARDING_INVITE_INVALID');
-    });
-  });
-
-  describe('rate limiting and audit', () => {
-    it('is rate limited per business and cashier on its own key (separate from lookups); a refusal issues nothing and writes no audit row', async () => {
-      const u = await newCashier('single', [a1]);
-      const s = await sessionOn(u.username, a1);
-      limiterKeys.length = 0;
-      expect((await issue(s.accessToken)).status).toBe(200);
-      expect(limiterKeys.at(-1)).toBe(`onboarding-invite:${bizA}:${u.id}`);
-      expect(limiterKeys.at(-1)).not.toBe(`${bizA}:${u.id}`); // never the lookup bucket
-      lookupLimiter = { limit: async () => ({ success: false }) };
-      try {
-        const before = (await q(`SELECT count(*)::int AS n FROM audit_log WHERE action = 'loyalty.onboarding_invite_issued' AND actor_user_id = $1`, [u.id]))[0].n;
-        const limited = await issue(s.accessToken);
-        expect(limited.status).toBe(429);
-        expect(limited.error?.code).toBe('RATE_LIMITED');
-        expect(limited.data).toBeUndefined();
-        const after = (await q(`SELECT count(*)::int AS n FROM audit_log WHERE action = 'loyalty.onboarding_invite_issued' AND actor_user_id = $1`, [u.id]))[0].n;
-        expect(after).toBe(before);
-      } finally {
-        lookupLimiter = allow;
-      }
-    });
-
-    it('writes one audit row per issuance, marked as cashier activity, attributed to the cashier and business, with no token or customer data', async () => {
-      const u = await newCashier('single', [a1]);
-      const s = await sessionOn(u.username, a1);
-      const res = await issue(s.accessToken);
-      const rows = await q(`SELECT * FROM audit_log WHERE action = 'loyalty.onboarding_invite_issued' AND actor_user_id = $1`, [u.id]);
-      expect(rows).toHaveLength(1);
-      const jti = (decode(res.data.inviteToken).payload as { jti: string }).jti;
-      expect(rows[0]).toMatchObject({ business_id: bizA, entity_type: 'onboarding_invite', entity_id: jti });
-      expect(rows[0].metadata).toMatchObject({ client: 'cashier' });
-      expect(JSON.stringify(rows[0])).not.toContain(res.data.inviteToken);
-      expect(JSON.stringify(rows[0].metadata)).not.toMatch(/phone|email|password|refresh|eyJ/i);
-    });
-
-    it('the audit row is written BEFORE the token is returned and fails closed: if it cannot be written, no invitation is returned (independent review L-2)', async () => {
-      const u = await newCashier('single', [a1]);
-      const s = await sessionOn(u.username, a1);
-      await q(`CREATE OR REPLACE FUNCTION iv_fail() RETURNS trigger LANGUAGE plpgsql AS $f$ BEGIN IF NEW.action = 'loyalty.onboarding_invite_issued' THEN RAISE EXCEPTION 'injected'; END IF; RETURN NEW; END $f$`);
-      await q(`CREATE TRIGGER iv_fail_trg BEFORE INSERT ON audit_log FOR EACH ROW EXECUTE FUNCTION iv_fail()`);
-      try {
-        const res = await issue(s.accessToken);
-        expect(res.status).toBe(500);
-        expect(JSON.stringify(res)).not.toContain('eyJ'); // no token in the failure body
-        expect(res.data).toBeUndefined();
-      } finally {
-        await q(`DROP TRIGGER iv_fail_trg ON audit_log`);
-      }
-      expect(await q(`SELECT 1 FROM audit_log WHERE action = 'loyalty.onboarding_invite_issued' AND actor_user_id = $1`, [u.id])).toHaveLength(0);
-      // and when it works the row is there already when the response arrives, exactly once, with the cashier marker and the client details
-      const ok = await issue(s.accessToken);
-      expect(ok.status).toBe(200);
-      const rows = await q(`SELECT * FROM audit_log WHERE action = 'loyalty.onboarding_invite_issued' AND actor_user_id = $1`, [u.id]);
-      expect(rows).toHaveLength(1);
-      expect(rows[0].metadata).toMatchObject({ client: 'cashier', outcome: 'success', branchId: a1 });
-    });
-
-    it('a refused request (no branch, wrong credential) issues no invitation and records no issuance', async () => {
-      const before = (await q(`SELECT count(*)::int AS n FROM audit_log WHERE action = 'loyalty.onboarding_invite_issued'`))[0].n;
-      const l = await http('POST', '/auth/cashier/login', { body: { email: ownerEmail, password: PW } });
-      const s = await http('POST', '/auth/cashier/session', { body: { ticket: l.data.ticket, businessId: bizA } });
-      expect((await issue(s.data.accessToken)).status).toBe(409);
-      expect((await issue('not-a-token')).status).toBe(401);
-      const after = (await q(`SELECT count(*)::int AS n FROM audit_log WHERE action = 'loyalty.onboarding_invite_issued'`))[0].n;
-      expect(after).toBe(before);
     });
   });
 });
