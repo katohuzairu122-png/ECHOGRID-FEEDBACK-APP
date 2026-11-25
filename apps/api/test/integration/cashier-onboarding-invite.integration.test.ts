@@ -308,7 +308,7 @@ describe.skipIf(!databaseUrl)('CASHIER-AUTH-02D onboarding invitation issuer (re
       ['the branch is removed from the cashier', async (u) => { expect((await admin('PUT', `/cashier-accounts/${u.id}/branches`, { accessMode: 'multiple', branchIds: [a2, a3] })).status).toBe(200); }],
       ['the sessions are revoked', async (u) => { expect((await admin('POST', `/cashier-accounts/${u.id}/revoke-sessions`)).status).toBe(200); }],
       ['the cashier is disabled', async (u) => { expect((await admin('POST', `/cashier-accounts/${u.id}/disable`)).status).toBe(200); }],
-      ['the credential is reset', async (u) => { expect((await admin('POST', `/cashier-accounts/${u.id}/reset-credential`, {})).status).toBe(200); }],
+      ['the credential is reset', async (u) => { expect((await admin('POST', `/cashier-accounts/${u.id}/reset-credential`, { password: 'owner-chosen-reset-1' })).status).toBe(200); }],
     ];
     for (const [name, change] of scenarios) {
       it(`${name}: an invitation issued before it is refused afterwards and nothing is recorded`, async () => {

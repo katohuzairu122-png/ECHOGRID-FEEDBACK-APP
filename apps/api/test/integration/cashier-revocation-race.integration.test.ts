@@ -244,7 +244,7 @@ describe.skipIf(!databaseUrl)('SEC-CASHIER-02C-R1 session issuance versus branch
     it('a credential reset racing a switch always leaves NO live session, whichever commits first', async () => {
       const u = await newCashier([a1, a2, a3]);
       const s = await sessionOn(u.username, a1);
-      const [sw, reset] = await parked(() => switchTo(s.refreshToken, a3, a1), () => admin('POST', `/cashier-accounts/${u.id}/reset-credential`, {}));
+      const [sw, reset] = await parked(() => switchTo(s.refreshToken, a3, a1), () => admin('POST', `/cashier-accounts/${u.id}/reset-credential`, { password: 'owner-chosen-reset-1' }));
       expect([200, 401, 403, 409]).toContain(sw.status);
       expect(reset.status, JSON.stringify(reset)).toBe(200);
       expect(await live(u.id)).toHaveLength(0);
@@ -342,7 +342,7 @@ describe.skipIf(!databaseUrl)('SEC-CASHIER-02C-R1 session issuance versus branch
       for (let i = 0; i < ROUNDS; i++) {
         const u = await newCashier([a1, a2, a3]);
         const s = await sessionOn(u.username, a1);
-        await Promise.all([switchTo(s.refreshToken, a3, a1), admin('POST', `/cashier-accounts/${u.id}/reset-credential`, {})]);
+        await Promise.all([switchTo(s.refreshToken, a3, a1), admin('POST', `/cashier-accounts/${u.id}/reset-credential`, { password: 'owner-chosen-reset-1' })]);
         expect(await live(u.id), `round ${i}`).toHaveLength(0);
       }
     });
