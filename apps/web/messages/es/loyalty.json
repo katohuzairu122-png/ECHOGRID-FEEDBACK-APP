@@ -232,6 +232,7 @@
       "pendingTitle": "Tu solicitud de eliminación está pendiente",
       "pendingDescription": "Puedes restaurar la cuenta hasta el {date}. Tus membresías y saldos se conservan durante este período.",
       "restore": "Restaurar mi cuenta",
+      "restoreExpired": "El plazo de restauración ha terminado. El responsable de privacidad debe revisar la solicitud; no se han eliminado los datos automáticamente.",
       "signOut": "Cerrar sesión",
       "errors": {
         "invalid": "Confirma la contraseña y la casilla de aceptación.",
