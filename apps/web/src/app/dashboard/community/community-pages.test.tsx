@@ -41,7 +41,7 @@ const status = (enrollment: string, feed: string, publishing = 'closed') =>
       if (participation === null) throw new Error('unavailable');
       return participation;
     }
-    return { enrollment, feed, publishing };
+    return { enrollment, feed, publishing, distribution: 'closed' };
   });
 const figures = (eligible: unknown, participants: unknown, ratePercent: unknown) => ({ minimumGroupSize: 10, eligible, participants, ratePercent });
 const shown = (value: number) => ({ state: 'shown', value });

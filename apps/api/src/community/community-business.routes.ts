@@ -9,7 +9,7 @@ import { requireAnyPermission } from '../middleware/require-permission';
 import { ok } from '../lib/response';
 import { createDb } from '../db/client';
 import { resolveMinimumGroupSize, summarizeParticipation } from './community-participation-aggregate';
-import { isNetworkFeedEnabled } from '../network/network-flag';
+import { isBusinessDistributionEnabled, isBusinessPublishingEnabled, isNetworkFeedEnabled } from '../network/network-flag';
 import { COMMUNITY_MEMBERSHIP_CONTROL_KEYS } from './community-membership-controls';
 
 type Env = { Bindings: Bindings; Variables: AuthVariables & TenantVariables };
@@ -39,7 +39,8 @@ communityBusinessRoutes.get(
     const status: BusinessCommunityStatus = {
       enrollment: enrollmentOpen ? 'open' : 'closed',
       feed: isNetworkFeedEnabled(c.env) ? 'open' : 'closed',
-      publishing: 'closed',
+      publishing: isBusinessPublishingEnabled(c.env) ? 'open' : 'closed',
+      distribution: isBusinessDistributionEnabled(c.env) && isNetworkFeedEnabled(c.env) ? 'open' : 'closed',
     };
     c.header('Cache-Control', 'no-store');
     return ok(c, status);

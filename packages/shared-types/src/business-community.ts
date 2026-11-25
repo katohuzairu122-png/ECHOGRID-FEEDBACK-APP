@@ -21,7 +21,7 @@ export function holdsCommunityHubPermission(permissions: ReadonlySet<string> | r
 
 /**
  * The rollout state a business may see. Coarse and read-only: it reports whether each capability is currently open, never who
- * participates. Business publishing is not implemented, so it is always 'closed' (BCOMM-03).
+ * participates. Publishing and distribution report their own server controls (BCOMM-03/04).
  */
 export type BusinessCommunityCapabilityState = 'open' | 'closed';
 export interface BusinessCommunityStatus {
@@ -29,8 +29,10 @@ export interface BusinessCommunityStatus {
   enrollment: BusinessCommunityCapabilityState;
   /** Whether the Community Feed is currently readable. */
   feed: BusinessCommunityCapabilityState;
-  /** Business publishing: not implemented, always closed until BCOMM-03. */
-  publishing: 'closed';
+  /** Business publishing (authoring and submission), controlled server-side by NETWORK_BUSINESS_PUBLISHING_ENABLED. */
+  publishing: BusinessCommunityCapabilityState;
+  /** Whether approved business posts reach customers: needs the distribution control AND the Feed (BCOMM-04). */
+  distribution: BusinessCommunityCapabilityState;
 }
 
 /**

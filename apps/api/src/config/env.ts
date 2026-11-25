@@ -290,6 +290,12 @@ export interface Bindings {
   CUSTOMER_RECOVERY_ENABLED?: string;
   /** NETWORK-01: Network Feed feature flag. Disabled unless exactly "true". Not set in wrangler.toml. */
   NETWORK_FEED_ENABLED?: string;
+  /** BCOMM-03: business post authoring/submission control. Disabled unless exactly "true". Not set in wrangler.toml. */
+  NETWORK_BUSINESS_PUBLISHING_ENABLED?: string | undefined;
+  /** BCOMM-04: show approved business posts to customers. Disabled unless exactly "true". Not set in wrangler.toml. */
+  NETWORK_BUSINESS_DISTRIBUTION_ENABLED?: string | undefined;
+  /** BCOMM-03: optional posts-per-business-per-24h cap, a whole number 1..100 (default 5). */
+  NETWORK_BUSINESS_DAILY_POST_CAP?: string | undefined;
   /** CONTROL-01: independent server operation gates; unset/malformed = disabled.
    * No values are allocated by deployment configuration. Never client-controlled. */
   COMMUNITY_MEMBERSHIP_JOIN_ENABLED?: string | undefined;

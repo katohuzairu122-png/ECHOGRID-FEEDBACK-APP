@@ -38,7 +38,7 @@ async function status(call: Call = {}) {
     { waitUntil: (p: Promise<unknown>) => { pending.push(p); }, passThroughOnException: () => {}, props: {} });
   await Promise.all(pending);
   const text = await response.text();
-  let body: { data?: { enrollment: string; feed: string; publishing: string }; error?: { code: string } } = {};
+  let body: { data?: { enrollment: string; feed: string; publishing: string; distribution: string }; error?: { code: string } } = {};
   try { body = text ? JSON.parse(text) : {}; } catch { /* plain text */ }
   return { status: response.status, cache: response.headers.get('cache-control'), text, ...body };
 }
@@ -83,7 +83,7 @@ describe.skipIf(!databaseUrl)('business Community status (real HTTP, real Postgr
     for (const who of ['ownerA', 'adminA', 'managerA']) {
       const res = await status({ token: tok[who]!, businessId: bizA });
       expect(res.status, `${who}: ${res.text}`).toBe(200);
-      expect(res.data).toEqual({ enrollment: 'closed', feed: 'closed', publishing: 'closed' });
+      expect(res.data).toEqual({ enrollment: 'closed', feed: 'closed', publishing: 'closed', distribution: 'closed' });
       expect(res.cache).toBe('no-store');
     }
   });
@@ -91,15 +91,26 @@ describe.skipIf(!databaseUrl)('business Community status (real HTTP, real Postgr
   it('reports the real runtime controls: open only for the exact string "true", publishing always closed', async () => {
     const token = tok.ownerA!;
     const open = (env: Record<string, unknown>) => status({ token, businessId: bizA, env });
-    expect((await open({ COMMUNITY_MEMBERSHIP_JOIN_ENABLED: 'true' })).data).toMatchObject({ enrollment: 'open', feed: 'closed', publishing: 'closed' });
+    expect((await open({ COMMUNITY_MEMBERSHIP_JOIN_ENABLED: 'true' })).data).toMatchObject({ enrollment: 'open', feed: 'closed', publishing: 'closed', distribution: 'closed' });
     expect((await open({ COMMUNITY_MEMBERSHIP_RESTORE_ENABLED: 'true' })).data?.enrollment).toBe('open');
     for (const value of ['TRUE', ' true', '1', 'yes', '', true, undefined, 'false']) {
       expect((await open({ COMMUNITY_MEMBERSHIP_JOIN_ENABLED: value })).data?.enrollment, String(value)).toBe('closed');
     }
     // The clearance gate is platform staff only and never counts as customer enrollment; the Feed flag is independent of enrollment.
     expect((await open({ COMMUNITY_MEMBERSHIP_CLEARANCE_ENABLED: 'true' })).data?.enrollment).toBe('closed');
-    expect((await open({ NETWORK_FEED_ENABLED: 'true' })).data).toMatchObject({ enrollment: 'closed', feed: 'open', publishing: 'closed' });
-    expect((await open({ NETWORK_FEED_ENABLED: 'true', COMMUNITY_MEMBERSHIP_JOIN_ENABLED: 'true' })).data).toEqual({ enrollment: 'open', feed: 'open', publishing: 'closed' });
+    expect((await open({ NETWORK_FEED_ENABLED: 'true' })).data).toMatchObject({ enrollment: 'closed', feed: 'open', publishing: 'closed', distribution: 'closed' });
+    expect((await open({ NETWORK_FEED_ENABLED: 'true', COMMUNITY_MEMBERSHIP_JOIN_ENABLED: 'true' })).data).toEqual({ enrollment: 'open', feed: 'open', publishing: 'closed', distribution: 'closed' });
+  });
+
+  it('reports the publishing and distribution controls independently: exact "true" only; distribution also needs the Feed', async () => {
+    const token = tok.ownerA!;
+    const get = (env: Record<string, unknown>) => status({ token, businessId: bizA, env });
+    expect((await get({ NETWORK_BUSINESS_PUBLISHING_ENABLED: 'true' })).data).toMatchObject({ publishing: 'open', distribution: 'closed', feed: 'closed' });
+    expect((await get({ NETWORK_BUSINESS_DISTRIBUTION_ENABLED: 'true' })).data).toMatchObject({ publishing: 'closed', distribution: 'closed' });
+    expect((await get({ NETWORK_BUSINESS_DISTRIBUTION_ENABLED: 'true', NETWORK_FEED_ENABLED: 'true' })).data).toMatchObject({ publishing: 'closed', distribution: 'open', feed: 'open' });
+    for (const value of ['TRUE', '1', 'yes', '', true, ' true']) {
+      expect((await get({ NETWORK_BUSINESS_PUBLISHING_ENABLED: value })).data?.publishing, String(value)).toBe('closed');
+    }
   });
 
   it('refuses view-only staff, a branch-scoped manager, a foreign owner, an outsider and an anonymous caller (server-side)', async () => {
@@ -125,7 +136,7 @@ describe.skipIf(!databaseUrl)('business Community status (real HTTP, real Postgr
     const before = await fingerprint();
     const res = await status({ token: tok.ownerA!, businessId: bizA, env: { COMMUNITY_MEMBERSHIP_JOIN_ENABLED: 'true', NETWORK_FEED_ENABLED: 'true' } });
     expect(res.status).toBe(200);
-    expect(Object.keys(res.data!).sort()).toEqual(['enrollment', 'feed', 'publishing']);
+    expect(Object.keys(res.data!).sort()).toEqual(['distribution', 'enrollment', 'feed', 'publishing']);
     expect(res.text).not.toMatch(/customer|member|points|balance|consent|count/i);
     expect(await fingerprint()).toEqual(before);
   });

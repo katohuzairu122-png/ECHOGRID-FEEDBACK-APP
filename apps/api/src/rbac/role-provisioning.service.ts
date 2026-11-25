@@ -68,6 +68,7 @@ export const DEFAULT_ROLES: Record<DefaultRoleName, string[]> = {
     'messages:send',
     'profile:edit',
     'profile:submit',
+    'network:post',
     'cashier:manage',
   ],
   // Admin mirrors Owner for everything EXCEPT the two irreversible,
@@ -110,6 +111,7 @@ export const DEFAULT_ROLES: Record<DefaultRoleName, string[]> = {
     'messages:send',
     'profile:edit',
     'profile:submit',
+    'network:post',
     'cashier:manage',
   ],
   Manager: [
