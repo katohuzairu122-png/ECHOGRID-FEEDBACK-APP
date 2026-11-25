@@ -20,13 +20,30 @@ async function createOwner(page: Page, label: string) {
   await expect(page).toHaveURL('/dashboard');
   await page.getByLabel('Business name').fill(`Hub ${unique}`);
   await page.getByRole('button', { name: 'Create business' }).click();
+  await collapseDevelopmentBadge(page); // the development-only issue badge must not cover fixed workspace controls
   return { email, businessName: `Hub ${unique}` };
+}
+
+/** Staff see their BUSINESS's language (not a cookie), so the language is set where an owner sets it: Settings. */
+async function setBusinessLanguage(page: Page, locale: string) {
+  await page.goto('/dashboard/settings');
+  await page.getByLabel('Language').selectOption(locale);
+  await page.getByRole('button', { name: 'Save settings' }).click();
+  await expect(page.locator('html')).toHaveAttribute('lang', locale);
+}
+
+/** Uncaught runtime errors on a page are real defects, never ignorable noise. */
+function trackPageErrors(page: Page) {
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  return errors;
 }
 
 const sidebar = (page: Page) => page.getByRole('navigation', { name: 'Business workspace', exact: true });
 
 test('an owner lands on the Community hub; it is honest while Community is disabled; Business Overview stays reachable (desktop)', async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 1280, height: 900 });
+  const errors = trackPageErrors(page);
   const { businessName } = await createOwner(page, 'desktop');
   await expect(page).toHaveURL('/dashboard/community');
   await expect(page.getByRole('heading', { name: 'Community', exact: true, level: 1 })).toBeVisible();
@@ -41,7 +58,8 @@ test('an owner lands on the Community hub; it is honest while Community is disab
   await expect(page.getByText('Community activity will appear here when Community becomes available.')).toBeVisible();
   const summary = page.getByTestId('community-summary');
   await expect(summary.getByText('Not available yet')).toHaveCount(3);
-  expect(await page.getByTestId('community-hub').innerText()).not.toMatch(/\d/); // no invented counts, percentages or dates
+  // No invented counts, percentages or dates anywhere on the page (the business's own name is the only text allowed to contain digits here).
+  expect((await page.getByTestId('community-hub').innerText()).replace(new RegExp(businessName, 'i'), '')).not.toMatch(/\d/);
 
   // Navigation: Community is the first primary entry, appears once; the other business destinations remain.
   const nav = sidebar(page);
@@ -75,6 +93,7 @@ test('an owner lands on the Community hub; it is honest while Community is disab
   await expect(page).toHaveURL('/dashboard/community'); // the entry resolves to the home, once
   await page.reload();
   await expect(page).toHaveURL('/dashboard/community');
+  expect(errors).toEqual([]);
 });
 
 test('mobile: the bar reads Community, Loyalty, Feedback and More; the Overview is in More; nothing overflows', async ({ page }, testInfo) => {
@@ -101,7 +120,9 @@ test('keyboard operation, and opening the hub sends no write request (no enrollm
   await createOwner(page, 'keyboard');
   const writes: string[] = [];
   page.on('request', (request) => {
-    if (request.method() !== 'GET' && request.method() !== 'HEAD') writes.push(`${request.method()} ${new URL(request.url()).pathname}`);
+    const path = new URL(request.url()).pathname;
+    // The development server's own overlay posts to /__nextjs_* ; that is tooling, not the application.
+    if (request.method() !== 'GET' && request.method() !== 'HEAD' && !path.startsWith('/__nextjs_')) writes.push(`${request.method()} ${path}`);
   });
   await page.goto('/dashboard/community');
   const tabs = page.getByRole('navigation', { name: 'Community sections' });
@@ -140,10 +161,10 @@ for (const [locale, title, tagline, dir] of [
   ['es', 'Comunidad', 'Una cuenta. Todas las fidelidades.', 'ltr'],
   ['ar', 'المجتمع', 'حساب واحد. كل برامج الولاء.', 'rtl'],
 ] as const) {
-  test(`${locale}: the hub renders in the user's language (${dir})`, async ({ page, context }, testInfo) => {
+  test(`${locale}: the hub renders in the business's language (${dir})`, async ({ page }, testInfo) => {
     await page.setViewportSize({ width: 375, height: 800 });
     await createOwner(page, `lang-${locale}`);
-    await context.addCookies([{ name: 'ff_locale', value: locale, url: 'http://localhost:3000' }]);
+    await setBusinessLanguage(page, locale);
     await page.goto('/dashboard/community');
     await expect(page.locator('html')).toHaveAttribute('dir', dir);
     await expect(page.getByRole('heading', { name: title, exact: true, level: 1 })).toBeVisible();
