@@ -216,7 +216,8 @@
         "noPurchase": "Les achats ne sont pas disponibles pour cette adhésion.",
         "redemptionNote": "La remise d’une récompense nécessite le code QR du client. Scannez-le pour l’échanger.",
         "done": "Action terminée. Recherchez à nouveau le client avant une autre action."
-      }
+      },
+      "cashierAppLink": "Application caissier : l’ouvrir ou l’installer, sessions de connexion et comptes caissiers"
     }
   },
   "customer": {
