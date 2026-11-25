@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { signUpBusinessOwner } from './helpers/signup';
 
 /**
  * One critical-path smoke test covering the full stack the Vitest/jsdom
@@ -15,12 +16,7 @@ import { test, expect } from '@playwright/test';
 test('signup, create a business, create a branch, see it listed', async ({ page }) => {
   const unique = Date.now();
 
-  await page.goto('/signup?role=business');
-  await page.getByLabel('Full name').fill('E2E Test User');
-  await page.getByLabel('Email').fill(`e2e-${unique}@example.test`);
-  await page.getByLabel('Password', { exact: true }).fill('a-strong-test-password');
-  await page.getByLabel(/I agree to the Terms of Service/).check();
-  await page.getByRole('button', { name: 'Create account' }).click();
+  await signUpBusinessOwner(page, { fullName: 'E2E Test User', email: `e2e-${unique}@example.test`, password: 'a-strong-test-password' });
 
   await expect(page).toHaveURL('/dashboard');
 

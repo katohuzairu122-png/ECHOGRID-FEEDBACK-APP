@@ -1,5 +1,6 @@
 import { test, expect, type BrowserContext, type Page } from '@playwright/test';
 import { collapseDevelopmentBadge } from './helpers/development-chrome';
+import { signUpBusinessOwner } from './helpers/signup';
 
 /**
  * BCOMM-01: the business Community hub in a real browser. Synthetic owner accounts only. Community stays DISABLED in this environment (no
@@ -10,12 +11,7 @@ const PASSWORD = 'a-strong-test-password';
 async function createOwner(page: Page, label: string) {
   const unique = `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
   const email = `${label}-${unique}@example.test`;
-  await page.goto('/signup?role=business');
-  await page.getByLabel('Full name').fill(`Community ${label}`);
-  await page.getByLabel('Email').fill(email);
-  await page.getByLabel('Password', { exact: true }).fill(PASSWORD);
-  await page.getByLabel(/I agree to the Terms of Service/).check();
-  await page.getByRole('button', { name: 'Create account' }).click();
+  await signUpBusinessOwner(page, { fullName: `Community ${label}`, email: email, password: PASSWORD });
   // Mandatory onboarding is not bypassed: with no business the entry stays at /dashboard and asks for one.
   await expect(page).toHaveURL('/dashboard');
   await page.getByLabel('Business name').fill(`Hub ${unique}`);
