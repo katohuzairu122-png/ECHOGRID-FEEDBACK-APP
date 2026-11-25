@@ -1039,6 +1039,39 @@
    ],
    "reason": "BIZ-CLOSE-01: owner closure requests; UPDATE is pending->cancelled only, enforced by a database guard; no DELETE/TRUNCATE; closure processing is blocked and not implemented"
   },
+  "tentaship_badge_definitions": {
+   "class": "RUNTIME",
+   "verbs": [
+    "INSERT",
+    "SELECT"
+   ],
+   "reason": "TB-02: canonical badge identity; append-only, no UPDATE/DELETE/TRUNCATE"
+  },
+  "tentaship_badge_definition_versions": {
+   "class": "RUNTIME",
+   "verbs": [
+    "INSERT",
+    "SELECT",
+    "UPDATE"
+   ],
+   "reason": "TB-02: immutable versioned content; UPDATE is lifecycle-only (draft->active->retired), enforced by a database guard; no DELETE/TRUNCATE"
+  },
+  "tentaship_badge_awards": {
+   "class": "RUNTIME",
+   "verbs": [
+    "INSERT",
+    "SELECT"
+   ],
+   "reason": "TB-03: append-only award ledger with evidence; no UPDATE/DELETE/TRUNCATE"
+  },
+  "tentaship_badge_revocations": {
+   "class": "RUNTIME",
+   "verbs": [
+    "INSERT",
+    "SELECT"
+   ],
+   "reason": "TB-03: append-only approved revocations; no UPDATE/DELETE/TRUNCATE"
+  },
   "customer_deletion_requests": {
    "class": "RUNTIME",
    "verbs": [
