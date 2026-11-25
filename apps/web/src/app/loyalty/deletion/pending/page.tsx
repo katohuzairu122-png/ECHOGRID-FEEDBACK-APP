@@ -1,0 +1,36 @@
+import { redirect } from 'next/navigation';
+import { getLocale, getTranslations } from 'next-intl/server';
+import { Button } from '@/components/ui';
+import { hasCustomerSession } from '@/lib/customer-session';
+import { customerLogoutAction } from '@/lib/actions/customer-auth';
+import { getCustomerDeletionStatus } from '@/lib/actions/customer-deletion';
+import { isCustomerDeletionWebEnabled } from '@/lib/customer-deletion-config';
+import { CustomerDeletionRestoreForm } from './restore-form';
+
+export const dynamic = 'force-dynamic';
+
+export default async function CustomerDeletionPendingPage() {
+  if (!isCustomerDeletionWebEnabled()) redirect('/loyalty/dashboard');
+  if (!(await hasCustomerSession())) redirect('/loyalty/login?next=%2Floyalty%2Fdeletion%2Fpending');
+  const status = await getCustomerDeletionStatus();
+  if (status.status !== 'pending') redirect('/loyalty/dashboard');
+  const [t, locale] = await Promise.all([
+    getTranslations('loyalty.customer.accountDeletion'),
+    getLocale(),
+  ]);
+  return (
+    <main className="mx-auto flex min-h-screen w-full max-w-xl flex-col justify-center gap-5 p-6">
+      <h1 className="text-2xl font-semibold">{t('pendingTitle')}</h1>
+      <p>{t('pendingDescription', { date: new Intl.DateTimeFormat(locale, { dateStyle: 'long' }).format(new Date(status.scheduledFor)) })}</p>
+      <p className="text-sm text-neutral-700">{t('operatorNotice')}</p>
+      {new Date(status.scheduledFor).getTime() > Date.now() ? (
+        <CustomerDeletionRestoreForm />
+      ) : (
+        <p role="status" className="text-sm font-medium">{t('restoreExpired')}</p>
+      )}
+      <form action={customerLogoutAction}>
+        <Button variant="outline" type="submit">{t('signOut')}</Button>
+      </form>
+    </main>
+  );
+}

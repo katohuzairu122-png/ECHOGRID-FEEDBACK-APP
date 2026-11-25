@@ -17,7 +17,7 @@ if (!clientAttributionSecret || Buffer.byteLength(clientAttributionSecret) < 32)
 
 export default defineConfig({
   testDir: './e2e',
-  testMatch: ['customer-auth-r5-provisional.spec.ts', 'customer-auth-acceptance-completion.spec.ts'],
+  testMatch: ['customer-auth-r5-provisional.spec.ts', 'customer-auth-acceptance-completion.spec.ts', 'customer-deletion-acceptance.spec.ts'],
   fullyParallel: false,
   workers: 1,
   timeout: 120_000,
@@ -48,6 +48,7 @@ export default defineConfig({
         CUSTOMER_EMAIL_AUTH_ENABLED: 'true',
         CUSTOMER_LEGACY_UPGRADE_ENABLED: 'true',
         CUSTOMER_RECOVERY_ENABLED: 'true',
+        CUSTOMER_DELETION_ENABLED: 'true',
         CUSTOMER_PASSWORD_MIN_LENGTH: '8',
       },
       reuseExistingServer: false,

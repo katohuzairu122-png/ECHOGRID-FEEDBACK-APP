@@ -1,4 +1,4 @@
-import { and, eq } from 'drizzle-orm';
+import { and, eq, gt } from 'drizzle-orm';
 import { customerDeletionRequests, CUSTOMER_DELETION_RESTORE_DAYS } from '../db/schema';
 import { BaseRepository } from './base.repository';
 
@@ -29,12 +29,12 @@ export class CustomerDeletionRequestRepository extends BaseRepository {
     return { request: existing, created: false };
   }
 
-  /** pending -> cancelled only. Returns the cancelled row, or null when nothing was pending. */
+  /** pending -> cancelled only while scheduledFor is strictly in the future. Expired requests are operator-only. */
   async cancelPending(customerId: string, now: Date): Promise<CustomerDeletionRequest | null> {
     const [row] = await this.db
       .update(customerDeletionRequests)
       .set({ status: 'cancelled', cancelledAt: now })
-      .where(and(eq(customerDeletionRequests.customerId, customerId), eq(customerDeletionRequests.status, 'pending')))
+      .where(and(eq(customerDeletionRequests.customerId, customerId), eq(customerDeletionRequests.status, 'pending'), gt(customerDeletionRequests.scheduledFor, now)))
       .returning();
     return row ?? null;
   }

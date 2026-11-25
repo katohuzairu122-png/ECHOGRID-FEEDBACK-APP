@@ -34,6 +34,7 @@ import {
 } from '../src/customer-auth/customer-email-auth.config';
 import { createCustomerSessionLifecycleComposition } from '../src/customer-auth/customer-session-lifecycle.composition';
 import { CustomerSessionService } from '../src/customer-auth/customer-session.service';
+import { createCustomerDeletionComposition } from '../src/customer-account/customer-deletion.composition';
 import { CustomerPasswordAuthService } from '../src/customer-auth/customer-password-auth.service';
 import { normalizePassword } from '../src/customer-auth/customer-password-policy';
 import { CustomerCredentialRepository } from '../src/repositories/customer-credential.repository';
@@ -236,6 +237,35 @@ const lifecycle = createCustomerSessionLifecycleComposition({
     const db = buildDb(client);
     return {
       sessions: new CustomerSessionService(db, config.session),
+      resolveTrustedSource,
+      close: () => client.end(),
+    };
+  },
+});
+
+const deletionRoutes = createCustomerDeletionComposition({
+  isEnabled: (ctx) => ctx.env.CUSTOMER_EMAIL_AUTH_ENABLED === 'true' &&
+    ctx.env.CUSTOMER_DELETION_ENABLED === 'true',
+  async open() {
+    const client = new Client({ connectionString });
+    await client.connect();
+    const db = buildDb(client);
+    const sessions = new CustomerSessionService(db, config.session);
+    const passwordAuth = new CustomerPasswordAuthService(db, sessions, hasher, {
+      passwordMinLength: config.passwordMinLength,
+      phoneProofMaxAgeSeconds: 300,
+    });
+    return {
+      deps: {
+        sessions,
+        requests: createRepositories(db).customerDeletionRequests,
+        audit: createRepositories(db).auditLog,
+        stepUpWindowSeconds: session.stepUpWindowSeconds,
+        reauthenticate: (customerId: string, sessionId: string, currentPassword: string) =>
+          passwordAuth.reauthenticateSession({ customerId, sessionId, currentPassword }),
+        allowReauthentication: (customerId: string) =>
+          testLimiter({ key: `customer-deletion:reauth:${customerId}`, limit: 5, windowSeconds: 900 }),
+      },
       resolveTrustedSource,
       close: () => client.end(),
     };
@@ -594,6 +624,7 @@ app.route('/api/v1/customer-auth', customerAuthRoutes);
 app.route('/api/v1/customer-auth', emailLinkRoutes);
 app.route('/api/v1/customer-auth', emailAuth);
 app.route('/api/v1/customer-session', lifecycle);
+app.route('/api/v1/customer-account', deletionRoutes);
 app.route('/api/v1/customer-recovery', recoveryRoutes);
 app.route('/api/v1/loyalty/me', loyaltyCustomerRoutes);
 app.route('/api/v1/customer-memberships', customerMembershipRoutes);
@@ -624,6 +655,7 @@ const server = createServer(async (incoming, outgoing) => {
       HYPERDRIVE: { connectionString },
       PASSWORD_HASHER: { async fetch() { throw new Error('Unused synthetic hasher binding'); } },
       CUSTOMER_EMAIL_AUTH_ENABLED: 'true',
+      CUSTOMER_DELETION_ENABLED: 'true',
       CUSTOMER_RECOVERY_ENABLED: 'true',
       CUSTOMER_EMAIL_AUTH_HMAC_SECRET: hmacSecret,
       CUSTOMER_SESSION_SIGNING_SECRET: sessionSecret,

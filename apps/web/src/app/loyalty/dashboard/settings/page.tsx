@@ -20,6 +20,8 @@ import {
   isCustomerRecoveryWebEnabled,
 } from '@/lib/customer-email-auth-client';
 import { CustomerRecoveryCodesForm } from './recovery-codes-form';
+import { CustomerDeletionRequestForm } from './deletion-request-form';
+import { isCustomerDeletionWebEnabled } from '@/lib/customer-deletion-config';
 
 export const dynamic = 'force-dynamic';
 
@@ -105,6 +107,14 @@ export default async function CustomerSettingsPage() {
           )}
         </CardContent>
       </Card>
+      {isCustomerDeletionWebEnabled() && profile.emailVerified && credentials.kind === 'rotating' && (
+        <Card>
+          <CardHeader>
+            <CardTitle>{(await getTranslations('loyalty.customer.accountDeletion'))('title')}</CardTitle>
+          </CardHeader>
+          <CardContent><CustomerDeletionRequestForm /></CardContent>
+        </Card>
+      )}
     </section>
   );
 }

@@ -220,6 +220,26 @@
     }
   },
   "customer": {
+    "accountDeletion": {
+      "title": "Demander la suppression de mes données",
+      "explanation": "Demandez la suppression des données de votre compte. L'accès sera immédiatement limité et vous pourrez restaurer le compte pendant 30 jours. Après ce délai, la suppression n'est pas automatique : un responsable examine les demandes et les obligations de conservation.",
+      "retainedData": "Certaines données financières, de fidélité, de consentement et d'audit peuvent être conservées sous forme pseudonymisée. Les sauvegardes et les prestataires externes ne sont pas automatiquement effacés.",
+      "operatorNotice": "Cette fonction dépose une demande ; elle n'efface pas immédiatement les données. Le traitement dépend d'un examen et des obligations applicables.",
+      "password": "Confirmer votre mot de passe actuel",
+      "confirm": "Je comprends que toutes les sessions prendront fin et que l'accès sera limité jusqu'à la restauration.",
+      "request": "Demander la suppression",
+      "working": "Traitement…",
+      "pendingTitle": "Votre demande de suppression est en attente",
+      "pendingDescription": "Vous pouvez restaurer votre compte jusqu'au {date}. Vos adhésions et soldes sont conservés pendant ce délai.",
+      "restore": "Restaurer mon compte",
+      "restoreExpired": "La période de restauration est terminée. Le responsable de la confidentialité doit examiner la demande ; aucune suppression automatique n'a eu lieu.",
+      "signOut": "Se déconnecter",
+      "errors": {
+        "invalid": "Confirmez votre mot de passe et votre consentement.",
+        "rate_limited": "Trop de tentatives. Réessayez plus tard.",
+        "unavailable": "Cette opération est indisponible. Réessayez plus tard."
+      }
+    },
     "shell": {
       "brand": "Ma fidélité",
       "logout": "Se déconnecter"

@@ -3,6 +3,9 @@ import type { Bindings } from '../config/env';
 import { createDb } from '../db/client';
 import { createRepositories } from '../repositories';
 import { CustomerSessionService } from '../customer-auth/customer-session.service';
+import { CustomerPasswordAuthService } from '../customer-auth/customer-password-auth.service';
+import { createDurableObjectPbkdf2Worker } from '../auth/pbkdf2-worker';
+import { createSharedEmailAuthLimiter } from '../customer-auth/customer-email-rate-limit';
 import { createCustomerEmailTrustedSource } from '../customer-auth/customer-email-trusted-source';
 import { deriveEmailAuthSourceKey, isCustomerEmailAuthEnabled, resolveEmailAuthConfig } from '../customer-auth/customer-email-auth.config';
 import { createCustomerDeletionRoutes, type CustomerDeletionDeps } from './customer-deletion.routes';
@@ -45,12 +48,22 @@ export function createCustomerDeletionComposition(options: {
 export async function openCustomerDeletionRuntime(c: Context): Promise<CustomerDeletionRuntime | null> {
   const env = c.env as Bindings;
   const resolved = resolveEmailAuthConfig(env);
-  if (!resolved.ok) return null;
+  if (!resolved.ok || !env.PASSWORD_HASHER) return null;
   const { db, close } = await createDb(env.HYPERDRIVE);
   const repos = createRepositories(db);
+  const sessions = new CustomerSessionService(db, resolved.config.session);
+  const passwordAuth = new CustomerPasswordAuthService(db, sessions, createDurableObjectPbkdf2Worker(env.PASSWORD_HASHER), {
+    passwordMinLength: resolved.config.passwordMinLength,
+    phoneProofMaxAgeSeconds: 300,
+  });
+  const limiter = createSharedEmailAuthLimiter(env.CUSTOMER_AUTH_RATE_LIMIT);
   return {
     deps: {
-      sessions: new CustomerSessionService(db, resolved.config.session),
+      sessions,
+      reauthenticate: (customerId, sessionId, currentPassword) =>
+        passwordAuth.reauthenticateSession({ customerId, sessionId, currentPassword }),
+      allowReauthentication: (customerId) =>
+        limiter({ key: `customer-deletion:reauth:${customerId}`, limit: 5, windowSeconds: 900 }),
       requests: repos.customerDeletionRequests,
       audit: repos.auditLog,
       stepUpWindowSeconds: resolved.config.session.stepUpWindowSeconds,
@@ -65,6 +78,6 @@ export async function openCustomerDeletionRuntime(c: Context): Promise<CustomerD
 }
 
 export const customerDeletionComposition = createCustomerDeletionComposition({
-  isEnabled: (c) => isCustomerEmailAuthEnabled(c.env as Bindings),
+  isEnabled: (c) => isCustomerEmailAuthEnabled(c.env as Bindings) && (c.env as Bindings).CUSTOMER_DELETION_ENABLED === 'true',
   open: openCustomerDeletionRuntime,
 });

@@ -220,6 +220,26 @@
     }
   },
   "customer": {
+    "accountDeletion": {
+      "title": "Delete my account data",
+      "explanation": "Request account data deletion. Your account will be restricted immediately and you can restore it for 30 days. Deletion is not automatic after 30 days: a privacy operator reviews eligible requests and legal holds.",
+      "retainedData": "Some financial, loyalty, consent and audit records may be retained in pseudonymous form. Backups and external processors are not erased automatically.",
+      "operatorNotice": "This feature requests deletion; it does not immediately erase records. Processing is subject to operator review and applicable requirements.",
+      "password": "Confirm your current password",
+      "confirm": "I understand that all sessions will end and account access will be restricted until I restore it.",
+      "request": "Request account deletion",
+      "working": "Processing…",
+      "pendingTitle": "Your account deletion is pending",
+      "pendingDescription": "Your restore window ends on {date}. Your memberships and balances are preserved during this period. Restoration is available before the deadline.",
+      "restore": "Restore my account",
+      "restoreExpired": "Your restore window has ended. The privacy operator must review the request; no automatic erasure has occurred.",
+      "signOut": "Sign out",
+      "errors": {
+        "invalid": "Confirm your password and acknowledgement.",
+        "rate_limited": "Too many attempts. Try again later.",
+        "unavailable": "This operation is currently unavailable. Try again later."
+      }
+    },
     "shell": {
       "brand": "My loyalties",
       "logout": "Log out"

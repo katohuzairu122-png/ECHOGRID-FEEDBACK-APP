@@ -15,12 +15,14 @@ function build(over: { identity?: unknown; pending?: unknown; created?: boolean;
       cancelPending: vi.fn(async () => over.cancelled ?? null),
     },
     audit: { record: vi.fn(async () => undefined) },
+    reauthenticate: vi.fn(async () => true),
+    allowReauthentication: vi.fn(async () => true),
     stepUpWindowSeconds: 300,
     clock: () => NOW,
   };
   const app = createCustomerDeletionRoutes(deps as unknown as CustomerDeletionDeps);
-  const call = (method: string, path: string, auth = true) =>
-    app.request(path, { method, headers: auth ? { authorization: 'Bearer tok' } : {} });
+  const call = (method: string, path: string, auth = true, body?: unknown) =>
+    app.request(path, { method, headers: { ...(auth ? { authorization: 'Bearer tok' } : {}), ...(body !== undefined ? { 'content-type': 'application/json' } : {}) }, ...(body !== undefined ? { body: JSON.stringify(body) } : {}) });
   return { deps, call };
 }
 
@@ -33,6 +35,35 @@ describe('customer deletion routes', () => {
     const legacy = build({ identity: { assurance: 'legacy', customerId: ID } });
     expect((await legacy.call('POST', '/deletion')).status).toBe(401);
     expect(legacy.deps.requests.fileOrGetPending).not.toHaveBeenCalled();
+  });
+
+  it('password reauthentication records fresh step-up without filing or signing out', async () => {
+    const { call, deps } = build({ identity: { assurance: 'session', customerId: ID, sessionId: 's', authMethod: 'password', stepUpVerifiedAt: null } });
+    const res = await call('POST', '/deletion/reauth', true, { currentPassword: 'correct password' });
+    expect(res.status).toBe(204);
+    expect(deps.reauthenticate).toHaveBeenCalledWith(ID, 's', 'correct password');
+    expect(deps.requests.fileOrGetPending).not.toHaveBeenCalled();
+    expect(deps.sessions.logoutAll).not.toHaveBeenCalled();
+  });
+
+  it('reauthentication fails closed for wrong password, exhausted budget and legacy/OTP sessions', async () => {
+    const a = build({ identity: { assurance: 'session', customerId: ID, sessionId: 's', authMethod: 'password', stepUpVerifiedAt: null } });
+    a.deps.reauthenticate.mockResolvedValueOnce(false);
+    expect((await a.call('POST', '/deletion/reauth', true, { currentPassword: 'bad password' })).status).toBe(401);
+    a.deps.allowReauthentication.mockResolvedValueOnce(false);
+    expect((await a.call('POST', '/deletion/reauth', true, { currentPassword: 'bad password' })).status).toBe(429);
+    expect(a.deps.reauthenticate).toHaveBeenCalledTimes(1);
+    const legacy = build({ identity: { assurance: 'legacy', customerId: ID } });
+    expect((await legacy.call('POST', '/deletion/reauth', true, { currentPassword: 'pw' })).status).toBe(401);
+    const otp = build();
+    expect((await otp.call('POST', '/deletion/reauth', true, { currentPassword: 'pw' })).status).toBe(401);
+  });
+
+  it('rejects malformed password confirmation before rate-limit or credential work', async () => {
+    const t = build({ identity: { assurance: 'session', customerId: ID, sessionId: 's', authMethod: 'password', stepUpVerifiedAt: null } });
+    expect((await t.call('POST', '/deletion/reauth', true, { currentPassword: '', other: 'x' })).status).toBe(400);
+    expect(t.deps.allowReauthentication).not.toHaveBeenCalled();
+    expect(t.deps.reauthenticate).not.toHaveBeenCalled();
   });
 
   it('filing without a fresh step-up is refused and nothing is written', async () => {

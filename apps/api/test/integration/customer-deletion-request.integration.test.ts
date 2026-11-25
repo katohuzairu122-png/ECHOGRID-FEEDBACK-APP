@@ -49,6 +49,25 @@ describe.skipIf(!databaseUrl)('customer deletion requests (integration)', () => 
     expect((await repos.customerDeletionRequests.fileOrGetPending(id, now)).created).toBe(true);
   });
 
+  it('restore works before the deadline but is refused at and after the exact deadline', async () => {
+    const base = new Date('2027-01-01T00:00:00.000Z');
+    const beforeId = await mk();
+    const before = await repos.customerDeletionRequests.fileOrGetPending(beforeId, base);
+    expect((await repos.customerDeletionRequests.cancelPending(beforeId,
+      new Date(before.request.scheduledFor.getTime() - 1)))?.status).toBe('cancelled');
+
+    const atId = await mk();
+    const at = await repos.customerDeletionRequests.fileOrGetPending(atId, base);
+    expect(await repos.customerDeletionRequests.cancelPending(atId, at.request.scheduledFor)).toBeNull();
+    expect((await repos.customerDeletionRequests.findPending(atId))?.status).toBe('pending');
+
+    const afterId = await mk();
+    const after = await repos.customerDeletionRequests.fileOrGetPending(afterId, base);
+    expect(await repos.customerDeletionRequests.cancelPending(afterId,
+      new Date(after.request.scheduledFor.getTime() + 1))).toBeNull();
+    expect((await repos.customerDeletionRequests.findPending(afterId))?.status).toBe('pending');
+  });
+
   it('one pending request per customer is enforced by the database, and requests of different customers are independent', async () => {
     const a = await mk(); const b = await mk();
     await repos.customerDeletionRequests.fileOrGetPending(a, new Date());

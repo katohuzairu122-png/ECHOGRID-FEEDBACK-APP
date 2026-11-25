@@ -220,6 +220,26 @@
     }
   },
   "customer": {
+    "accountDeletion": {
+      "title": "Solicitar la eliminación de mis datos",
+      "explanation": "Solicita la eliminación de los datos de tu cuenta. El acceso quedará restringido de inmediato y podrás restaurarla durante 30 días. La eliminación no es automática después de ese plazo: un responsable de privacidad revisará la solicitud y las obligaciones de conservación.",
+      "retainedData": "Algunos registros financieros, de fidelidad, consentimiento y auditoría pueden conservarse de forma seudonimizada. Las copias de seguridad y los proveedores externos no se eliminan automáticamente.",
+      "operatorNotice": "Esta función presenta una solicitud; no borra datos inmediatamente. El procesamiento requiere revisión y cumplimiento de los requisitos aplicables.",
+      "password": "Confirma tu contraseña actual",
+      "confirm": "Entiendo que se cerrarán todas las sesiones y que el acceso quedará restringido hasta que restaure la cuenta.",
+      "request": "Solicitar eliminación",
+      "working": "Procesando…",
+      "pendingTitle": "Tu solicitud de eliminación está pendiente",
+      "pendingDescription": "Puedes restaurar la cuenta hasta el {date}. Tus membresías y saldos se conservan durante este período.",
+      "restore": "Restaurar mi cuenta",
+      "restoreExpired": "El plazo de restauración ha terminado. El responsable de privacidad debe revisar la solicitud; no se han eliminado los datos automáticamente.",
+      "signOut": "Cerrar sesión",
+      "errors": {
+        "invalid": "Confirma la contraseña y la casilla de aceptación.",
+        "rate_limited": "Demasiados intentos. Inténtalo más tarde.",
+        "unavailable": "Esta operación no está disponible ahora. Inténtalo más tarde."
+      }
+    },
     "shell": {
       "brand": "Mi fidelidad",
       "logout": "Cerrar sesión"
