@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation';
-import { getTranslations } from 'next-intl/server';
+import { getLocale, getTranslations } from 'next-intl/server';
 import { Button } from '@/components/ui';
 import { hasCustomerSession } from '@/lib/customer-session';
 import { customerLogoutAction } from '@/lib/actions/customer-auth';
@@ -14,11 +14,14 @@ export default async function CustomerDeletionPendingPage() {
   if (!(await hasCustomerSession())) redirect('/loyalty/login?next=%2Floyalty%2Fdeletion%2Fpending');
   const status = await getCustomerDeletionStatus();
   if (status.status !== 'pending') redirect('/loyalty/dashboard');
-  const t = await getTranslations('loyalty.customer.accountDeletion');
+  const [t, locale] = await Promise.all([
+    getTranslations('loyalty.customer.accountDeletion'),
+    getLocale(),
+  ]);
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-xl flex-col justify-center gap-5 p-6">
       <h1 className="text-2xl font-semibold">{t('pendingTitle')}</h1>
-      <p>{t('pendingDescription', { date: new Date(status.scheduledFor).toLocaleDateString('en-GB') })}</p>
+      <p>{t('pendingDescription', { date: new Intl.DateTimeFormat(locale, { dateStyle: 'long' }).format(new Date(status.scheduledFor)) })}</p>
       <p className="text-sm text-neutral-700">{t('operatorNotice')}</p>
       {new Date(status.scheduledFor).getTime() > Date.now() ? (
         <CustomerDeletionRestoreForm />
