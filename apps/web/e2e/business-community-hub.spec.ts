@@ -26,11 +26,14 @@ async function createOwner(page: Page, label: string) {
 
 /** Staff see their BUSINESS's language (not a cookie), so the language is set where an owner sets it: Settings. */
 async function setBusinessLanguage(page: Page, locale: string) {
-  await page.goto('/dashboard/settings');
-  await page.getByLabel('Language').selectOption(locale);
-  await page.getByRole('button', { name: 'Save settings' }).click();
-  // The saved business language re-renders the page shell (the success text itself switches language, so wait on the shell, not on the text).
-  await expect(page.locator('html')).toHaveAttribute('lang', locale, { timeout: 20_000 });
+  // On a freshly started development server the settings page can be clicked before it has hydrated, which drops the submission. Retry the
+  // whole save until the saved language re-renders the page shell (the success text itself switches language, so the shell is what we watch).
+  await expect(async () => {
+    await page.goto('/dashboard/settings');
+    await page.getByLabel('Language').selectOption(locale);
+    await page.getByRole('button', { name: 'Save settings' }).click();
+    await expect(page.locator('html')).toHaveAttribute('lang', locale, { timeout: 8_000 });
+  }).toPass({ timeout: 60_000 });
   await page.reload(); // and it persists across a fresh request
   await expect(page.locator('html')).toHaveAttribute('lang', locale);
 }
