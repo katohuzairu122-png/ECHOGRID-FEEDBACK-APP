@@ -45,6 +45,7 @@ import { loyaltyCustomerRoutes } from '../../src/loyalty/loyalty-customer.routes
 import { communityFeedRoutes } from '../../src/community/community-feed.routes';
 import { CommunityPointAdminAdjustmentService } from '../../src/community/community-point-admin-adjustment.service';
 import { FixtureCommunityMembershipService as CommunityMembershipService, syntheticCommunityAcceptance, publishSyntheticCommunityTerms } from '../helpers/community-consent-fixtures';
+import { CommunityPilotEligibilityService } from '../../src/community/community-pilot-eligibility';
 import { communityCustomerRoutes } from '../../src/community/community-customer.routes';
 import { communityPointCustomerRoutes } from '../../src/community/community-point-customer.routes';
 import { platformNetworkModerationRoutes } from '../../src/platform/network-moderation.routes';
@@ -642,6 +643,64 @@ describe.skipIf(!process.env.DATABASE_URL)('NETWORK-05 real HTTP-to-Postgres lif
               expect((await f.service.getStatus(f.id)).membership?.status).toBe('inactive');
             }
           }
+          expect(await page.locator('html').evaluate((el: { scrollWidth: number }) => el.scrollWidth)).toBeLessThanOrEqual(width);
+        }
+      }, { membershipControls: () => controlsConfig });
+    }, 240000,
+  );
+
+  it.skipIf(!browserEnabled)(
+    'browser pilot allowlist gates Community enrollment, revokes immediately and stays RTL-correct in four locales (CF-READINESS-2)',
+    async () => {
+      const gates = { COMMUNITY_MEMBERSHIP_JOIN_ENABLED: 'true', COMMUNITY_MEMBERSHIP_REJOIN_ENABLED: 'true', COMMUNITY_MEMBERSHIP_RESTORE_ENABLED: 'true', COMMUNITY_MEMBERSHIP_CLEARANCE_ENABLED: 'true' } as const;
+      // Every enrollment gate is on, so only the pilot requirement can refuse. The Feed flag is deliberately not part of this configuration.
+      const controlsConfig: Partial<Bindings> = { ...gates, COMMUNITY_MEMBERSHIP_PILOT_REQUIRED: 'true' };
+      const pilot = new CommunityPilotEligibilityService(appDbOf(buildDb(client)));
+      const staff = { actorUserId: moderatorA, ipAddress: null, userAgent: null };
+      await withModerationBrowser(moderatorB, async (page, context, webUrl, browserExpect) => {
+        for (const [locale, width] of [['en', 375], ['fr', 1280], ['es', 1280], ['ar', 375], ['ar', 1280]] as const) {
+          const f = await membershipFixture(); await publishSyntheticCommunityTerms('control01-browser');
+          const copy = (requireWeb(`./messages/${locale}/loyalty.json`) as { customer: { community: {
+            membership: { status: { active: string; left: string } };
+            selfService: { join: string; rejoin: string; leave: string; confirmTitle: string; confirmLeave: string; acceptTerms: string; operationUnavailable: string };
+          } } }).customer.community;
+          await context.clearCookies(); await context.addCookies([{ name: 'ff_customer_token', value: f.token, url: webUrl, httpOnly: true }, { name: 'ff_locale', value: locale, url: webUrl }]);
+          await page.setViewportSize({ width, height: 900 });
+          const controls = page.getByTestId('community-membership-controls');
+
+          // 1. Not on the allowlist: nothing can be activated, in the UI or by a direct request.
+          const before = await membershipNonEffects();
+          await page.goto(webUrl + '/loyalty/dashboard/community');
+          await browserExpect(controls.getByText(copy.selfService.operationUnavailable, { exact: true })).toBeVisible();
+          await browserExpect(controls.getByRole('button', { name: copy.selfService.join, exact: true })).toBeDisabled();
+          await browserExpect(controls.getByRole('checkbox')).toHaveCount(0);
+          await browserExpect(page.locator('html')).toHaveAttribute('dir', locale === 'ar' ? 'rtl' : 'ltr');
+          const direct = await request('/api/v1/community/me/join', f.token, 'POST', await syntheticCommunityAcceptance(f.service, f.id, 'control01-browser'), 'true', controlsConfig);
+          expect(direct.status).toBe(403);
+          expect(JSON.stringify(await direct.json())).toContain('COMMUNITY_PILOT_NOT_ELIGIBLE');
+          expect(await membershipNonEffects()).toEqual(before);
+
+          // 2. Granted: the normal explicit-consent Join works; eligibility alone enrolled nobody.
+          await pilot.grant(f.id, 'synthetic browser pilot', staff);
+          expect(await membershipNonEffects()).toEqual(before);
+          await page.goto(webUrl + '/loyalty/dashboard/community');
+          const checkbox = controls.getByRole('checkbox', { name: copy.selfService.acceptTerms });
+          await browserExpect(checkbox).not.toBeChecked();
+          await checkbox.check();
+          await controls.getByRole('button', { name: copy.selfService.join, exact: true }).click();
+          await browserExpect(page.getByTestId('membership-status')).toHaveText(copy.membership.status.active);
+
+          // 3. Revoked: the member keeps everything, can still leave, and cannot come back until eligible again.
+          await pilot.revoke(f.id, 'synthetic browser pilot ended', staff);
+          await page.reload();
+          await browserExpect(page.getByTestId('membership-status')).toHaveText(copy.membership.status.active);
+          await controls.getByRole('button', { name: copy.selfService.leave, exact: true }).click();
+          const dialog = page.getByRole('dialog', { name: copy.selfService.confirmTitle });
+          await dialog.getByRole('checkbox').check(); await dialog.getByRole('button', { name: copy.selfService.confirmLeave, exact: true }).click();
+          await browserExpect(page.getByTestId('membership-status')).toHaveText(copy.membership.status.left);
+          await page.reload();
+          await browserExpect(controls.getByText(copy.selfService.operationUnavailable, { exact: true })).toBeVisible();
+          await browserExpect(controls.getByRole('button', { name: copy.selfService.rejoin, exact: true })).toBeDisabled();
           expect(await page.locator('html').evaluate((el: { scrollWidth: number }) => el.scrollWidth)).toBeLessThanOrEqual(width);
         }
       }, { membershipControls: () => controlsConfig });

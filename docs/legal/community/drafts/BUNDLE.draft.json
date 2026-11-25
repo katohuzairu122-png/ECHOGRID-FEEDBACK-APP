@@ -1,0 +1,40 @@
+{
+  "status": "DRAFT — NOT LEGALLY APPROVED",
+  "purpose": "community_membership",
+  "canonicalLocale": "en",
+  "hashAlgorithm": "sha256-utf8",
+  "publication": {
+    "id": null,
+    "version": null,
+    "publishedAt": null,
+    "effectiveAt": null,
+    "approval": null,
+    "manifestHash": null
+  },
+  "artifacts": [
+    {
+      "locale": "en",
+      "file": "community-terms.en.md",
+      "bytes": 4263,
+      "contentHash": "0a515a14fb42a774c1b62a5cd682459a180bfb9bad405c6ae547df39373423dc"
+    },
+    {
+      "locale": "fr",
+      "file": "community-terms.fr.md",
+      "bytes": 5465,
+      "contentHash": "344224ad14b431cf7ac8290c750fa581085191b50160cae36a34e53315980d35"
+    },
+    {
+      "locale": "es",
+      "file": "community-terms.es.md",
+      "bytes": 5101,
+      "contentHash": "75209e325385a65d4bf23134fc6445d24db2040af521c97eca7cc0def21492ae"
+    },
+    {
+      "locale": "ar",
+      "file": "community-terms.ar.md",
+      "bytes": 6440,
+      "contentHash": "3b422476262ab7850639b702f77f84c10f949874a4000cce1b79e58132abdc90"
+    }
+  ]
+}

@@ -2,6 +2,7 @@
  "role": "echogrid_app_runtime",
  "sequences": [
   "benefit_application_transitions_seq_seq",
+  "community_pilot_eligibility_events_seq_seq",
   "partner_credit_dispute_events_seq_seq",
   "stripe_evidence_control_events_seq_seq",
   "stripe_provider_event_dispositions_seq_seq"
@@ -1037,6 +1038,14 @@
     "UPDATE"
    ],
    "reason": "CUST-DEL-01: customer deletion requests; UPDATE is cancel-only, enforced by a database guard; no DELETE/TRUNCATE"
+  },
+  "community_pilot_eligibility_events": {
+   "class": "RUNTIME",
+   "verbs": [
+    "INSERT",
+    "SELECT"
+   ],
+   "reason": "Community pilot allowlist event history: append-only (database guard); the runtime inserts grants/revokes through the platform route and reads eligibility; no UPDATE/DELETE/TRUNCATE"
   }
  }
 }

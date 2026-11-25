@@ -1,4 +1,5 @@
 import { CommunityMembershipControls, recordCommunityMembershipControl, type CommunityMembershipControlConfig } from './community-membership-controls';
+import { assertCommunityPilotEligible, communityPilotAllows, communityPilotRequirement, type CommunityPilotControlConfig, type CommunityPilotRequirement } from './community-pilot-eligibility';
 import { and, eq, sql } from 'drizzle-orm';
 import type { Db } from '../db/client';
 import { customers, consentGrants } from '../db/schema';
@@ -16,8 +17,10 @@ export interface JoinCommunityResult extends CommunityStatus {
 
 export class CommunityMembershipService {
   private readonly controls: CommunityMembershipControls;
-  constructor(private readonly db: Db, config: CommunityMembershipControlConfig = {}) {
+  private readonly pilot: CommunityPilotRequirement;
+  constructor(private readonly db: Db, config: CommunityMembershipControlConfig & CommunityPilotControlConfig = {}) {
     this.controls = new CommunityMembershipControls(config);
+    this.pilot = communityPilotRequirement(config);
   }
 
   async getStatus(customerId: string): Promise<CommunityStatus> {
@@ -35,7 +38,8 @@ export class CommunityMembershipService {
         const membership = await createRepositories(tx).communityMemberships.findByCustomerId(customerId);
         const previous = await latestCommunityTransition(tx, membership?.id);
         const operation = membership?.status === 'inactive' ? 'restore' as const : membership ? 'rejoin' as const : 'join' as const;
-        return { terms, transitionId: previous?.id ?? null, operation, activationAvailable: this.controls.available(operation) };
+        const eligible = this.controls.available(operation) && (await communityPilotAllows(tx, customerId, this.pilot)) && !(await customerLifecycleBlocksActivation(tx, customerId));
+        return { terms, transitionId: previous?.id ?? null, operation, activationAvailable: eligible };
       });
     } catch (error) {
       if (error instanceof AppError && error.code === 'COMMUNITY_TERMS_UNAVAILABLE') return null;
@@ -54,6 +58,7 @@ export class CommunityMembershipService {
       const customer = await repos.customers.findById(customerId);
       if (!customer || customer.status !== 'active') throw new AppError('Customer account is not available.', 409, 'CUSTOMER_NOT_AVAILABLE');
       assertVerifiedPhoneFor(customer, 'community');
+      await assertCustomerLifecycleAllowsActivation(tx, customerId);
       let membership = await repos.communityMemberships.findByCustomerId(customerId);
       let account = await repos.communityPointAccounts.findByCustomerId(customerId);
       if (membership?.status === 'suspended' || account?.status === 'suspended') {
@@ -80,6 +85,9 @@ export class CommunityMembershipService {
       }
       // An old request, even with a different key, must never resurrect a Leave.
       if (input.expectedTransitionId !== basis || replay) communityConsentStale();
+      // Pilot eligibility is checked only where an activation would actually be written (an already-active replay returned above),
+      // inside this transaction and under a shared per-customer lock, so a committed revoke is always honoured.
+      await assertCommunityPilotEligible(tx, customerId, this.pilot);
       const created = !membership;
       const priorMembershipObservation = membership ? { status: membership.status, joinedAt: membership.joinedAt.toISOString(), policyVersion: membership.policyVersion } : null;
       const clock = await tx.execute<{ accepted_at: string }>(sql`select clock_timestamp()::text as accepted_at`);
@@ -105,7 +113,11 @@ export class CommunityMembershipService {
     recordCommunityMembershipControl('activation', 'permitted');
     return result;
     } catch (error) {
-      if (!(error instanceof AppError && error.code === 'COMMUNITY_MEMBERSHIP_OPERATION_DISABLED')) {
+      if (error instanceof AppError && error.code === 'COMMUNITY_PILOT_NOT_ELIGIBLE') {
+        recordCommunityMembershipControl('activation', 'pilot_not_eligible');
+      } else if (error instanceof AppError && error.code === 'COMMUNITY_ACCOUNT_DELETION_PENDING') {
+        recordCommunityMembershipControl('activation', 'deletion_pending');
+      } else if (!(error instanceof AppError && error.code === 'COMMUNITY_MEMBERSHIP_OPERATION_DISABLED')) {
         recordCommunityMembershipControl('activation', 'transition_failed');
       }
       throw error;
@@ -137,5 +149,23 @@ export class CommunityMembershipService {
       }
       return { membership: updatedMembership, account: account ?? null };
     });
+  }
+}
+
+
+/** CUST-DEL-01 x Community: a customer with a pending account-deletion request, or an anonymized customer shell, can never be (re)activated
+ * in Community, whichever path reaches this service. Leaving and reads are unaffected. Nothing is erased here. */
+async function customerLifecycleBlocksActivation(tx: Db, customerId: string): Promise<boolean> {
+  const { rows } = await tx.execute<{ blocked: boolean }>(sql`
+    select (
+      exists (select 1 from customer_deletion_requests where customer_id = ${customerId} and status = 'pending')
+      or exists (select 1 from customers where id = ${customerId} and anonymized_at is not null)
+    ) as blocked`);
+  return rows[0]?.blocked === true;
+}
+
+async function assertCustomerLifecycleAllowsActivation(tx: Db, customerId: string): Promise<void> {
+  if (await customerLifecycleBlocksActivation(tx, customerId)) {
+    throw new AppError('This account cannot join Community while it is scheduled for deletion.', 409, 'COMMUNITY_ACCOUNT_DELETION_PENDING');
   }
 }
