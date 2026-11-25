@@ -287,6 +287,46 @@
         "CASHIER_ACCOUNT_NOT_FOUND": "That account no longer exists.",
         "PERMISSION_DENIED": "You do not have permission to do that."
       }
+    },
+    "invitations": {
+      "link": "Invite customers",
+      "title": "Invite customers",
+      "intro": "Create a one-time link or QR code for a branch. The customer opens it, signs in as themselves and gives their own consent. An invitation does not enrol anyone, join Community, or give rewards or badges by itself.",
+      "back": "Back to the Cashier App",
+      "noAccess": "You do not have permission to manage customer invitations.",
+      "loadFailed": "We could not load the invitations. Please try again.",
+      "createTitle": "New invitation",
+      "branchLabel": "Branch",
+      "noBranches": "Add a branch first, then you can invite customers to it.",
+      "hoursLabel": "Valid for (hours)",
+      "hoursHint": "1 to 168 hours. The link works once and stops working when it expires or you revoke it.",
+      "create": "Create invitation",
+      "createdNote": "Invitation created. It is valid until {time}.",
+      "qrLabel": "QR code for the invitation link",
+      "linkLabel": "Invitation link",
+      "copy": "Copy link",
+      "copied": "Link copied.",
+      "copyFailed": "Could not copy. Select the link and copy it.",
+      "oneUse": "Share this link only with the customer you are inviting. It is shown once.",
+      "listTitle": "Invitations",
+      "empty": "No invitations yet.",
+      "createdOn": "Created {date}",
+      "expiresOn": "expires {date}",
+      "revoke": "Revoke",
+      "status": {
+        "active": "Active",
+        "accepted": "Accepted",
+        "revoked": "Revoked",
+        "expired": "Expired"
+      },
+      "errors": {
+        "RATE_LIMITED": "Too many invitations. Please wait a moment.",
+        "INVITATION_BRANCH_INVALID": "Choose an active branch of this business.",
+        "VALIDATION_ERROR": "Please check the values and try again.",
+        "INVITATION_ALREADY_USED": "This invitation has already been used.",
+        "INVITATION_NOT_FOUND": "That invitation no longer exists.",
+        "generic": "We could not complete that. Nothing was changed. Please try again."
+      }
     }
   },
   "branchSwitch": {
