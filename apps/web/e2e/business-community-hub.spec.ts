@@ -182,12 +182,14 @@ test('sign-in keeps secure return URLs and never leaves the site; the new defaul
   await page.setViewportSize({ width: 1280, height: 900 });
   // Start signed out: the shared owner's cookies (added for every test) are cleared, then the same owner signs in.
   await context.clearCookies();
+  await collapseDevelopmentBadge(page); // a page-level handler: the development-only issue badge must not cover the Log out control
   const { email } = shared!;
   const signIn = async (next: string) => {
     await page.goto(`/login?next=${encodeURIComponent(next)}`);
     await page.getByLabel('Email').fill(email);
     await page.getByLabel('Password', { exact: true }).fill(PASSWORD);
     await page.getByRole('button', { name: /^log in$|^sign in$/i }).click();
+    await page.waitForURL((url) => !url.pathname.startsWith('/login'));
   };
   await signIn('/dashboard/feedback'); // an authorized deep link is honoured
   await expect(page).toHaveURL('/dashboard/feedback');
