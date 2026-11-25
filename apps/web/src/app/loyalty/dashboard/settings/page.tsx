@@ -21,7 +21,7 @@ import {
 } from '@/lib/customer-email-auth-client';
 import { CustomerRecoveryCodesForm } from './recovery-codes-form';
 import { CustomerDeletionRequestForm } from './deletion-request-form';
-import { isCustomerDeletionWebEnabled } from '@/lib/actions/customer-deletion';
+import { isCustomerDeletionWebEnabled } from '@/lib/customer-deletion-config';
 
 export const dynamic = 'force-dynamic';
 
