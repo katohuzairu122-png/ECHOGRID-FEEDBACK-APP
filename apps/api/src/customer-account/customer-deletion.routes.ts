@@ -10,6 +10,10 @@ export type CustomerDeletionDeps = {
   sessions: Pick<CustomerSessionService, 'authenticateSessionToken' | 'logoutAll'>;
   requests: Pick<CustomerDeletionRequestRepository, 'findPending' | 'fileOrGetPending' | 'cancelPending'>;
   audit: Pick<AuditLogRepository, 'record'>;
+  /** Password reauthentication updates only the caller's live session step-up evidence. */
+  reauthenticate: (customerId: string, sessionId: string, currentPassword: string) => Promise<boolean>;
+  /** Shared fail-closed rate limit. */
+  allowReauthentication: (customerId: string) => Promise<boolean>;
   stepUpWindowSeconds: number;
   clock?: () => Date;
 };
@@ -36,6 +40,24 @@ export function createCustomerDeletionRoutes(deps: CustomerDeletionDeps) {
   const audit = (customerId: string, action: string, metadata: Record<string, string>) =>
     deps.audit.record({ businessId: null, actorUserId: null, action, entityType: 'customer', entityId: customerId, metadata })
       .catch(() => undefined); // the audit trail describes the request; it must not fail it (same rule as middleware/audit.ts)
+
+  router.post('/deletion/reauth', async (c) => {
+    const who = await identityOf(c.req.raw);
+    if (!who || who.authMethod !== 'password') return json({ error: 'Unauthorized' }, 401);
+    if (Number(c.req.header('content-length') ?? '0') > 8192) return json({ error: 'Invalid request' }, 400);
+    let input: unknown;
+    try { input = await c.req.json(); } catch { return json({ error: 'Invalid request' }, 400); }
+    if (!input || typeof input !== 'object' || Array.isArray(input) ||
+        Object.keys(input).some((key) => key !== 'currentPassword') ||
+        typeof (input as Record<string, unknown>).currentPassword !== 'string' ||
+        !(input as { currentPassword: string }).currentPassword ||
+        (input as { currentPassword: string }).currentPassword.length > 1024)
+      return json({ error: 'Invalid request' }, 400);
+    if (!(await deps.allowReauthentication(who.customerId))) return json({ error: 'Too many attempts' }, 429);
+    const ok = await deps.reauthenticate(who.customerId, who.sessionId, (input as { currentPassword: string }).currentPassword);
+    return ok ? new Response(null, { status: 204, headers: noStore }) :
+      json({ error: 'Invalid credentials' }, 401);
+  });
 
   router.get('/deletion', async (c) => {
     const who = await identityOf(c.req.raw);
