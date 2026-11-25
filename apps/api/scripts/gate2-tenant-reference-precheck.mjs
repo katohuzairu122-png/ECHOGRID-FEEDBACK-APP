@@ -19,6 +19,7 @@ export const SPEC = [
   ['community_point_transactions', 'branches', 'branch_id', 'NULLABLE_TENANT_DECISION'],
   ['community_point_transactions', 'community_point_transactions', 'reversal_of', 'SELF_REFERENCE'],
   ['critical_incidents', 'branches', 'branch_id', 'STRAIGHT'],
+  ['customer_invitations', 'branches', 'branch_id', 'STRAIGHT'], // OWNER-INVITE-01: NOT NULL, ON DELETE RESTRICT; the issuer service additionally checks the branch belongs to the same business
   ['critical_incidents', 'feedback', 'feedback_id', 'STRAIGHT'],
   ['customer_onboarding_events', 'audit_log', 'audit_log_id', 'GUARDED_BY_TRIGGER'],
   ['customer_onboarding_events', 'branches', 'branch_id', 'GUARDED_BY_TRIGGER'],
