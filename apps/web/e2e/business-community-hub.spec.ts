@@ -29,8 +29,9 @@ async function setBusinessLanguage(page: Page, locale: string) {
   await page.goto('/dashboard/settings');
   await page.getByLabel('Language').selectOption(locale);
   await page.getByRole('button', { name: 'Save settings' }).click();
-  await expect(page.getByText('Settings saved.')).toBeVisible(); // wait for the real save, not for any request (the dev server also posts)
-  await page.reload(); // the page shell (language, direction) is resolved per request from the saved business language
+  // The saved business language re-renders the page shell (the success text itself switches language, so wait on the shell, not on the text).
+  await expect(page.locator('html')).toHaveAttribute('lang', locale, { timeout: 20_000 });
+  await page.reload(); // and it persists across a fresh request
   await expect(page.locator('html')).toHaveAttribute('lang', locale);
 }
 
