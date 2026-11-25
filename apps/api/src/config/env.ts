@@ -46,6 +46,9 @@ export interface Bindings {
   /** Shared secret a trusted internal gateway presents in X-Internal-Gateway-Token (>= 32 chars). Independent of, and in addition to, administrator authentication. */
   INTERNAL_API_GATEWAY_TOKEN?: string | undefined;
 
+  /** CUST-DEL-02: explicit opt-in for request/restore API after 0089 migration and legal copy approval. */
+  CUSTOMER_DELETION_ENABLED?: string | undefined;
+
   /** Customer identity (Loyalty module) -- deliberately a separate secret
    * from the staff JWT_ACCESS_SECRET, so a leak of one token system never
    * compromises the other (see customer-auth/customer-jwt.ts). */
