@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { signUpBusinessOwner } from './helpers/signup';
 
 /**
  * The full scan-to-inbox loop -- the single most important proof this
@@ -17,12 +18,7 @@ import { test, expect } from '@playwright/test';
 test('QR code scan to feedback inbox, end to end', async ({ page }) => {
   const unique = Date.now();
 
-  await page.goto('/signup?role=business');
-  await page.getByLabel('Full name').fill('QR E2E Test User');
-  await page.getByLabel('Email').fill(`qr-e2e-${unique}@example.test`);
-  await page.getByLabel('Password', { exact: true }).fill('a-strong-test-password');
-  await page.getByLabel(/I agree to the Terms of Service/).check();
-  await page.getByRole('button', { name: 'Create account' }).click();
+  await signUpBusinessOwner(page, { fullName: 'QR E2E Test User', email: `qr-e2e-${unique}@example.test`, password: 'a-strong-test-password' });
   await expect(page).toHaveURL('/dashboard');
 
   await page.getByLabel('Business name').fill(`QR E2E Business ${unique}`);

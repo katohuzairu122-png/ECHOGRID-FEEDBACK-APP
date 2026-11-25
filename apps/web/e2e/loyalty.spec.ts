@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { signUpBusinessOwner } from './helpers/signup';
 
 /**
  * Staff-side loyalty program setup, end to end: signup -> business ->
@@ -21,12 +22,7 @@ import { test, expect } from '@playwright/test';
 test('staff sets up a loyalty tier, reward, and earning rates, end to end', async ({ page }) => {
   const unique = Date.now();
 
-  await page.goto('/signup?role=business');
-  await page.getByLabel('Full name').fill('Loyalty E2E Test User');
-  await page.getByLabel('Email').fill(`loyalty-e2e-${unique}@example.test`);
-  await page.getByLabel('Password', { exact: true }).fill('a-strong-test-password');
-  await page.getByLabel(/I agree to the Terms of Service/).check();
-  await page.getByRole('button', { name: 'Create account' }).click();
+  await signUpBusinessOwner(page, { fullName: 'Loyalty E2E Test User', email: `loyalty-e2e-${unique}@example.test`, password: 'a-strong-test-password' });
   await expect(page).toHaveURL('/dashboard');
 
   await page.getByLabel('Business name').fill(`Loyalty E2E Business ${unique}`);

@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { signUpBusinessOwner } from './helpers/signup';
 
 const HUB = '/loyalty/dashboard/community';
 
@@ -23,12 +24,7 @@ test.describe('Community hub access', () => {
 
   test('does not accept a staff session as customer authentication', async ({ page }) => {
     const unique = Date.now();
-    await page.goto('/signup?role=business');
-    await page.getByLabel('Full name').fill('Community Access Test');
-    await page.getByLabel('Email').fill(`community-access-${unique}@example.test`);
-    await page.getByLabel('Password', { exact: true }).fill('a-strong-test-password');
-    await page.getByLabel(/I agree to the Terms of Service/).check();
-    await page.getByRole('button', { name: 'Create account' }).click();
+    await signUpBusinessOwner(page, { fullName: 'Community Access Test', email: `community-access-${unique}@example.test`, password: 'a-strong-test-password' });
     await expect(page).toHaveURL(/\/dashboard/);
     await page.goto(HUB);
     await expect(page).toHaveURL(/\/loyalty\/login/);
