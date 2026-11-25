@@ -249,32 +249,3 @@ export async function cashierSwitchBranchAction(
     return { status: 'unavailable' };
   }
 }
-
-/**
- * CASHIER-AUTH-02D: asks the API for a one-time onboarding invitation for THIS session. Nothing is sent from the browser except the
- * branch the screen was drawn for (so a stale window is redirected instead of acting): the API takes the business, branch, cashier and
- * session from the verified cashier token, and returns only a link, its expiry and the branch. It holds no customer data.
- */
-export type CashierInviteState =
-  | { status: 'ready'; inviteUrl: string; expiresAt: string; branchId: string }
-  | { status: 'rate_limited' }
-  | { status: 'branch_required' }
-  | { status: 'unavailable' };
-
-export async function cashierIssueInviteAction(expectedBranchId: string | null): Promise<CashierInviteState> {
-  try {
-    const invite = await withCashier(
-      () => apiFetch<{ inviteUrl: string; expiresAt: string; branchId: string }>('/loyalty/actions/onboarding-invite', { method: 'POST', cache: 'no-store' }),
-      { branchId: expectedBranchId },
-    );
-    return { status: 'ready', inviteUrl: invite.inviteUrl, expiresAt: invite.expiresAt, branchId: invite.branchId };
-  } catch (err) {
-    rethrowControlFlow(err);
-    await endSessionAndSignIn(err);
-    if (err instanceof ApiError) {
-      if (err.status === 429) return { status: 'rate_limited' };
-      if (err.code === 'ONBOARDING_INVITE_BRANCH_REQUIRED') return { status: 'branch_required' };
-    }
-    return { status: 'unavailable' };
-  }
-}

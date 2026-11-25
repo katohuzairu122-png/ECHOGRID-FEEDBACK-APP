@@ -37,7 +37,6 @@ import {
   cashierServeAction,
   cashierSwitchBranchAction,
   cashierListBranchesAction,
-  cashierIssueInviteAction,
 } from './actions';
 
 const CASHIER = 'cashier.echo-grid.uk';
@@ -73,7 +72,6 @@ describe('cashier actions refuse every host except the cashier host', () => {
     ['cashierConfirmRedemptionAction', () => cashierConfirmRedemptionAction(null, 'CODE')],
     ['cashierSwitchBranchAction', () => cashierSwitchBranchAction({}, form())],
     ['cashierListBranchesAction', () => cashierListBranchesAction()],
-    ['cashierIssueInviteAction', () => cashierIssueInviteAction('b1')],
   ];
 
   it.each(calls)('%s on the main host is a 404 and reaches nothing', async (_n, run) => {
