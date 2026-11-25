@@ -21,6 +21,13 @@ async function registrationLink(page: Page): Promise<string> {
   return link!.replaceAll('&amp;', '&');
 }
 
+test.beforeEach(async ({ page }) => {
+  const reset = await page.request.post(api + '/__test/reset-acceptance-budgets', {
+    headers: fixtureHeaders, data: {},
+  });
+  expect(reset.ok()).toBe(true);
+});
+
 test('CUST-DEL-02 — password step-up, request, revocation, restricted dashboard and restore', async ({ page }) => {
   await page.goto('/loyalty/signup');
   await page.getByLabel('Name', { exact: true }).fill('Synthetic deletion customer');
