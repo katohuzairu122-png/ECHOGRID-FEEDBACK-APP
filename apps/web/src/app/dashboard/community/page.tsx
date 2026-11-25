@@ -33,7 +33,7 @@ export default async function CommunityHomePage() {
       <OverviewPanel title={t('summary.title')} href="/dashboard/community/participation" linkLabel={t('summary.link')}>
         <div className={styles.metricGrid} data-testid="community-summary">
           {(['eligible', 'participants', 'rate'] as const).map((key) => (
-            <MetricCard key={key} label={t(`summary.${key}`)} value={t('summary.unavailable')} hint={t('summary.hint')} icon={key === 'rate' ? 'chart' : 'users'} />
+            <MetricCard key={key} label={t(`summary.${key}`)} value={<span className="text-base font-semibold leading-snug">{t('summary.unavailable')}</span>} hint={t('summary.hint')} icon={key === 'rate' ? 'chart' : 'users'} />
           ))}
         </div>
       </OverviewPanel>

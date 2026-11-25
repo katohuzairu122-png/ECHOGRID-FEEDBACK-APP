@@ -19,7 +19,7 @@ export default async function CommunityParticipationPage() {
       <p className="text-sm text-neutral-600">{t('description')}</p>
       <div className={`${styles.metricGrid} mt-3`} data-testid="community-participation">
         {(['eligible', 'participants', 'rate'] as const).map((key) => (
-          <MetricCard key={key} label={t(`metrics.${key}`)} value={t('unavailableShort')} hint={t('unavailableTitle')} icon={key === 'rate' ? 'chart' : 'users'} />
+          <MetricCard key={key} label={t(`metrics.${key}`)} value={<span className="text-base font-semibold leading-snug">{t('unavailableShort')}</span>} hint={t('unavailableTitle')} icon={key === 'rate' ? 'chart' : 'users'} />
         ))}
       </div>
       <WorkspaceState>{t('unavailable')}</WorkspaceState>
