@@ -677,7 +677,7 @@ describe.skipIf(!process.env.DATABASE_URL)('NETWORK-05 real HTTP-to-Postgres lif
           await browserExpect(page.locator('html')).toHaveAttribute('dir', locale === 'ar' ? 'rtl' : 'ltr');
           const direct = await request('/api/v1/community/me/join', f.token, 'POST', await syntheticCommunityAcceptance(f.service, f.id, 'control01-browser'), 'true', controlsConfig);
           expect(direct.status).toBe(403);
-          expect(JSON.stringify(direct.body)).toContain('COMMUNITY_PILOT_NOT_ELIGIBLE');
+          expect(JSON.stringify(await direct.json())).toContain('COMMUNITY_PILOT_NOT_ELIGIBLE');
           expect(await membershipNonEffects()).toEqual(before);
 
           // 2. Granted: the normal explicit-consent Join works; eligibility alone enrolled nobody.
