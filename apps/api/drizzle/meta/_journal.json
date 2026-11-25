@@ -624,6 +624,13 @@
       "when": 1795422498513,
       "tag": "0088_community_membership_consent",
       "breakpoints": true
+    },
+    {
+      "idx": 89,
+      "version": "7",
+      "when": 1795559456815,
+      "tag": "0089_customer_deletion_requests",
+      "breakpoints": true
     }
   ]
 }

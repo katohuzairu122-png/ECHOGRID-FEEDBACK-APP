@@ -24,6 +24,7 @@ export * from './critical-incidents';
 export * from './fraud-signals';
 export * from './customers';
 export * from './customer-sanctions';
+export * from './customer-deletion-requests';
 export * from './business-customer-memberships';
 export * from './customer-onboarding-events';
 export * from './consent-grants';

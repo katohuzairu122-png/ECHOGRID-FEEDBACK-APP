@@ -11,7 +11,16 @@ import { isCustomerEmailAuthEnabled, resolveEmailAuthConfig } from '../customer-
 
 export type CustomerAuthVariables = {
   customerId: string;
+  /** Set only by the deletion-request router: it must stay reachable while a deletion is pending (CUST-DEL-01). */
+  allowPendingDeletion?: boolean;
 };
+
+/** CUST-DEL-01: a customer with a pending deletion request can use nothing except the restore screen and sign-out. */
+export function accountDeletionPendingError(scheduledFor: Date): AppError {
+  return new AppError('This account is scheduled for deletion. Restore it to continue.', 403, 'ACCOUNT_DELETION_PENDING', {
+    scheduledFor: scheduledFor.toISOString(),
+  });
+}
 
 type Rotating = Pick<CustomerSessionService, 'authenticateSessionToken' | 'authenticateLegacyToken'>;
 
@@ -70,6 +79,10 @@ export function createCustomerAuthenticate(rotating?: Rotating) {
       if (!customer || customer.status !== 'active') {
         throw new AppError('Invalid or expired access token.', 401, 'UNAUTHENTICATED');
       }
+      if (!c.get('allowPendingDeletion')) {
+        const pending = await createRepositories(db).customerDeletionRequests.findPending(payload.sub);
+        if (pending) throw accountDeletionPendingError(pending.scheduledFor);
+      }
       c.set('customerId', payload.sub);
     } finally {
       c.executionCtx.waitUntil(close());
@@ -82,7 +95,12 @@ export function createCustomerAuthenticate(rotating?: Rotating) {
 /** The original verifier: the legacy 90-day customer token only. Used whenever rotating sessions are not active. */
 export const legacyCustomerAuthenticate = createCustomerAuthenticate();
 
-export type RotatingSessionOpener = (c: Context) => Promise<{ sessions: Rotating; close(): Promise<void> } | null>;
+export type RotatingSessionOpener = (c: Context) => Promise<{
+  sessions: Rotating;
+  /** CUST-DEL-01: the scheduled deletion date when a request is pending. Runs on the same connection, before close(). */
+  pendingDeletion?: (customerId: string) => Promise<Date | null>;
+  close(): Promise<void>;
+} | null>;
 
 /**
  * CUSTOMER-AUTH-S5-02: accepts rotating customer sessions beside the legacy 90-day token, ONLY when email auth is
@@ -119,12 +137,17 @@ export function createFlagAwareCustomerAuthenticate(options: {
       throw new AppError('Missing or malformed Authorization header.', 401, 'UNAUTHENTICATED');
     }
     let identity: AuthenticatedCustomer | null;
+    let pendingUntil: Date | null = null;
     try {
       identity = await identityFor(opened.sessions, token);
+      if (identity && opened.pendingDeletion && !c.get('allowPendingDeletion')) {
+        pendingUntil = await opened.pendingDeletion(identity.customerId);
+      }
     } finally {
       c.executionCtx.waitUntil(opened.close());
     }
     if (!identity) throw new AppError('Invalid or expired access token.', 401, 'UNAUTHENTICATED');
+    if (pendingUntil) throw accountDeletionPendingError(pendingUntil);
     c.set('customerId', identity.customerId);
     return next();
   });
@@ -139,6 +162,10 @@ export const customerAuthenticate = createFlagAwareCustomerAuthenticate({
     const resolved = resolveEmailAuthConfig(env);
     if (!resolved.ok) return null;
     const { db, close } = await createDb(env.HYPERDRIVE);
-    return { sessions: new CustomerSessionService(db, resolved.config.session), close };
+    return {
+      sessions: new CustomerSessionService(db, resolved.config.session),
+      pendingDeletion: async (customerId) => (await createRepositories(db).customerDeletionRequests.findPending(customerId))?.scheduledFor ?? null,
+      close,
+    };
   },
 });

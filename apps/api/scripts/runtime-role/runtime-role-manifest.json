@@ -1028,6 +1028,15 @@
     "SELECT"
    ],
    "reason": "Community-only terms authority reads; runtime cannot approve, publish or mutate terms."
+  },
+  "customer_deletion_requests": {
+   "class": "RUNTIME",
+   "verbs": [
+    "INSERT",
+    "SELECT",
+    "UPDATE"
+   ],
+   "reason": "CUST-DEL-01: customer deletion requests; UPDATE is cancel-only, enforced by a database guard; no DELETE/TRUNCATE"
   }
  }
 }
