@@ -93,3 +93,34 @@ describe('sanitizeFeedCursor', () => {
     expect(sanitizeFeedCursor(raw)).toBeNull();
   });
 });
+
+import { sanitizeFeedFilter } from './community-feed';
+import { getFollowedHandles } from './community-follows';
+
+describe('Feed filter and follows (BCOMM-04)', () => {
+  beforeEach(() => customer.mockReset());
+  it('accepts only the two documented filters', () => {
+    expect(sanitizeFeedFilter('following')).toBe('following');
+    expect(sanitizeFeedFilter(['following', 'all'])).toBe('following');
+    for (const bad of [undefined, 'all', 'ALL', 'Following', '', 'x', ['x']]) expect(sanitizeFeedFilter(bad as string), String(bad)).toBe('all');
+  });
+  it('sends the following filter to the API only when asked', async () => {
+    customer.mockResolvedValue({ items: [], nextCursor: null });
+    await getCommunityFeed(null, 'following');
+    expect(String(customer.mock.calls[0]![0])).toContain('filter=following');
+    customer.mockClear();
+    await getCommunityFeed(null);
+    expect(String(customer.mock.calls[0]![0])).not.toContain('filter');
+  });
+  it('reads the customer\'s own follows, and returns null (unknown) on any failure or malformed answer', async () => {
+    const handle = 'AbCdEfGhIjKlMnOpQrStUv';
+    customer.mockResolvedValueOnce([{ businessHandle: handle, businessName: 'Cafe' }]);
+    expect(await getFollowedHandles()).toEqual(new Set([handle]));
+    customer.mockResolvedValueOnce([{ businessHandle: 'short' }]);
+    expect(await getFollowedHandles()).toBeNull();
+    customer.mockResolvedValueOnce({ not: 'a list' });
+    expect(await getFollowedHandles()).toBeNull();
+    customer.mockRejectedValueOnce(new ApiError('boom', 500));
+    expect(await getFollowedHandles()).toBeNull();
+  });
+});

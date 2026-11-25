@@ -3,6 +3,7 @@ import {
 } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import { users } from './users';
+import { customers } from './customers';
 import { businessPublicProfiles } from './business-profiles';
 
 /**
@@ -107,3 +108,17 @@ export const networkRevisionApprovals = pgTable('network_revision_approvals', {
   approverUserId: uuid('approver_user_id').notNull().references(() => users.id, { onDelete: 'restrict' }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [primaryKey({ columns: [t.revisionId, t.approverUserId] })]);
+
+/**
+ * BCOMM-04 voluntary follow (NETWORK-00 section 6): a customer follows a PUBLISHED business by its profile. A follow is NOT a loyalty membership,
+ * Community membership, consent grant, notification subscription or marketing permission, and carries no balance. It is deleted with the customer
+ * account (FK cascade). A business can see a thresholded follower COUNT at most, never who follows.
+ */
+export const networkFollows = pgTable('network_follows', {
+  customerId: uuid('customer_id').notNull().references(() => customers.id, { onDelete: 'cascade' }),
+  businessId: uuid('business_id').notNull().references(() => businessPublicProfiles.businessId, { onDelete: 'restrict' }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  primaryKey({ columns: [t.customerId, t.businessId] }),
+  index('network_follows_business_idx').on(t.businessId, t.createdAt),
+]);

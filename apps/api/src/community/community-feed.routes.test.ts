@@ -120,14 +120,14 @@ describe('GET /network/feed (COMMUNITY-01 foundation)', () => {
     const listVisible = vi.fn(async () => ({ items: [item], nextCursor: 'next_1' }));
     const response = await get(appWith({ listVisible }), '?limit=5&cursor=abc_123');
     expect(response.status).toBe(200);
-    expect(listVisible).toHaveBeenCalledWith({ customerId, cursor: 'abc_123', limit: 5 });
+    expect(listVisible).toHaveBeenCalledWith({ customerId, cursor: 'abc_123', limit: 5, includeBusinessPosts: false, filter: 'all' });
     expect(await response.json()).toEqual({ success: true, data: { items: [item], nextCursor: 'next_1' } });
   });
 
   it('uses the default limit when none is supplied', async () => {
     const listVisible = vi.fn(async () => ({ items: [], nextCursor: null }));
     await get(appWith({ listVisible }));
-    expect(listVisible).toHaveBeenCalledWith({ customerId, cursor: null, limit: 20 });
+    expect(listVisible).toHaveBeenCalledWith({ customerId, cursor: null, limit: 20, includeBusinessPosts: false, filter: 'all' });
   });
 
   it.each([

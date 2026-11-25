@@ -1046,6 +1046,15 @@
     "SELECT"
    ],
    "reason": "Community pilot allowlist event history: append-only (database guard); the runtime inserts grants/revokes through the platform route and reads eligibility; no UPDATE/DELETE/TRUNCATE"
+  },
+  "network_follows": {
+   "class": "RUNTIME",
+   "verbs": [
+    "DELETE",
+    "INSERT",
+    "SELECT"
+   ],
+   "reason": "BCOMM-04 voluntary follow: customer-owned rows, created and removed by the customer through the Feed API, read for the Following filter"
   }
  }
 }

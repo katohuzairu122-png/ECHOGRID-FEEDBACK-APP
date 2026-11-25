@@ -12,7 +12,7 @@ import { AppError } from '../lib/errors';
 import { createDb } from '../db/client';
 import type { FeedSource } from './community-feed';
 import { createNetworkFeedSource } from '../network/network-feed-source';
-import { isNetworkFeedEnabled } from '../network/network-flag';
+import { isBusinessDistributionEnabled, isNetworkFeedEnabled } from '../network/network-flag';
 import { assertVerifiedPhone } from '../lib/customer-verification';
 import { createRepositories } from '../repositories';
 
@@ -26,6 +26,7 @@ const feedQuerySchema = z
   .object({
     limit: z.coerce.number().int().min(1).max(FEED_MAX_LIMIT).optional(),
     cursor: z.string().min(1).max(200).regex(/^[A-Za-z0-9_-]+$/).optional(),
+    filter: z.enum(['all', 'following']).optional(),
   })
   .strict();
 
@@ -68,6 +69,9 @@ export function createCommunityFeedRoutes(options: {
         customerId: c.get('customerId'),
         cursor: parsed.data.cursor ?? null,
         limit,
+        // BCOMM-04: business posts reach customers only while the independent distribution control is open; the Feed flag above still gates everything.
+        includeBusinessPosts: isBusinessDistributionEnabled(c.env),
+        filter: parsed.data.filter ?? 'all',
       });
       page = networkFeedPageSchema.parse(raw);
       if (page.items.length > limit) throw new Error('feed source returned an invalid page');
