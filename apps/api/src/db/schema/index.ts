@@ -27,6 +27,7 @@ export * from './customer-sanctions';
 export * from './customer-deletion-requests';
 export * from './business-closure-requests';
 export * from './tentaship-badges';
+export * from './customer-invitations';
 export * from './community-pilot-eligibility';
 export * from './business-customer-memberships';
 export * from './customer-onboarding-events';

@@ -287,6 +287,46 @@
         "CASHIER_ACCOUNT_NOT_FOUND": "Esa cuenta ya no existe.",
         "PERMISSION_DENIED": "No tiene permiso para hacer eso."
       }
+    },
+    "invitations": {
+      "link": "Invitar clientes",
+      "title": "Invitar clientes",
+      "intro": "Crea un enlace o código QR de un solo uso para una sucursal. El cliente lo abre, inicia sesión con su propia cuenta y da su propio consentimiento. Una invitación no inscribe a nadie, no une a Comunidad ni da recompensas o insignias por sí sola.",
+      "back": "Volver a la app de Caja",
+      "noAccess": "No tienes permiso para gestionar invitaciones de clientes.",
+      "loadFailed": "No pudimos cargar las invitaciones. Inténtalo de nuevo.",
+      "createTitle": "Nueva invitación",
+      "branchLabel": "Sucursal",
+      "noBranches": "Añade primero una sucursal y podrás invitar clientes a ella.",
+      "hoursLabel": "Válida durante (horas)",
+      "hoursHint": "De 1 a 168 horas. El enlace funciona una vez y deja de funcionar al caducar o al revocarlo.",
+      "create": "Crear invitación",
+      "createdNote": "Invitación creada. Es válida hasta {time}.",
+      "qrLabel": "Código QR del enlace de invitación",
+      "linkLabel": "Enlace de invitación",
+      "copy": "Copiar enlace",
+      "copied": "Enlace copiado.",
+      "copyFailed": "No se pudo copiar. Selecciona el enlace y cópialo.",
+      "oneUse": "Comparte este enlace solo con el cliente al que invitas. Se muestra una sola vez.",
+      "listTitle": "Invitaciones",
+      "empty": "Aún no hay invitaciones.",
+      "createdOn": "Creada el {date}",
+      "expiresOn": "caduca el {date}",
+      "revoke": "Revocar",
+      "status": {
+        "active": "Activa",
+        "accepted": "Aceptada",
+        "revoked": "Revocada",
+        "expired": "Caducada"
+      },
+      "errors": {
+        "RATE_LIMITED": "Demasiadas invitaciones. Espera un momento.",
+        "INVITATION_BRANCH_INVALID": "Elige una sucursal activa de este negocio.",
+        "VALIDATION_ERROR": "Revisa los valores e inténtalo de nuevo.",
+        "INVITATION_ALREADY_USED": "Esta invitación ya se ha usado.",
+        "INVITATION_NOT_FOUND": "Esa invitación ya no existe.",
+        "generic": "No pudimos completarlo. No se cambió nada. Inténtalo de nuevo."
+      }
     }
   },
   "branchSwitch": {

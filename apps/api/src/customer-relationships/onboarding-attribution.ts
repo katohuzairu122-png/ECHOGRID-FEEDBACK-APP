@@ -22,7 +22,9 @@ const INVITE_TYPE = 'onboarding_invite';
 
 export type JoinAttribution =
   | { source: 'business_qr'; branchId: string; reference: string }
-  | { source: 'cashier_assisted'; branchId: string; reference: string; cashier: { userId: string; sessionId: string } };
+  | { source: 'cashier_assisted'; branchId: string; reference: string; cashier: { userId: string; sessionId: string } }
+  // OWNER-INVITE-01: an invitation issued from the owner-facing Cashier App. No cashier is involved; the invitation row is the authority.
+  | { source: 'remote_invitation'; branchId: string; reference: string };
 
 export interface OnboardingInviteClaims {
   cashierUserId: string;

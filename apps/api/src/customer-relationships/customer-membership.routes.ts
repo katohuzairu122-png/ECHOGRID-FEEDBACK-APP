@@ -1,4 +1,6 @@
 import { Hono, type Context } from 'hono';
+import { sql } from 'drizzle-orm';
+import { peekTokenType, verifyOwnerInvitation, OWNER_INVITATION_TYPE } from '../customer-invitations/invitation-token';
 import { joinAssistedMembershipSchema, joinCustomerMembershipSchema, previewAssistedMembershipSchema } from '@echo-grid-feedback/shared-types';
 import type { Bindings } from '../config/env';
 import { createDb, type Database } from '../db/client';
@@ -84,6 +86,23 @@ customerMembershipRoutes.post('/join', async (c) => {
 // request, decides the business, branch and cashier; the join itself is the same consented, idempotent, serialised workflow.
 customerMembershipRoutes.post('/join-assisted', async (c) => {
   const body = await parseJsonBody(c.req.raw, joinAssistedMembershipSchema);
+  // OWNER-INVITE-01: one customer-facing acceptance contract. An owner-issued invitation is recognised by its signed type and decided
+  // entirely by its server row inside the join transaction; the cashier-assisted path below is unchanged.
+  if (peekTokenType(body.inviteToken) === OWNER_INVITATION_TYPE) {
+    const owned = await verifyOwnerInvitation(body.inviteToken, c.env.JWT_ACCESS_SECRET);
+    return withDb(c, async (db) => {
+      const result = await new CustomerMembershipService(db).join({
+        customerId: c.get('customerId'),
+        businessId: owned.businessId,
+        onboardingSource: 'remote_invitation',
+        onboardingReference: owned.invitationId,
+        attribution: { source: 'remote_invitation', branchId: owned.branchId, reference: owned.invitationId },
+        consentVersion: body.consentVersion,
+        ...(body.idempotencyKey !== undefined ? { idempotencyKey: body.idempotencyKey } : {}),
+      });
+      return ok(c, toJoinMembershipResultDto(result), 201);
+    });
+  }
   const invite = await verifyOnboardingInvite(body.inviteToken, c.env.JWT_ACCESS_SECRET);
   return withDb(c, async (db) => {
     const result = await new CustomerMembershipService(db).join({
@@ -107,6 +126,28 @@ customerMembershipRoutes.post('/join-assisted', async (c) => {
 // An invalid or expired token, or one whose business or branch is gone, is the same generic refusal as at acceptance.
 customerMembershipRoutes.post('/join-assisted/preview', async (c) => {
   const body = await parseJsonBody(c.req.raw, previewAssistedMembershipSchema);
+  if (peekTokenType(body.inviteToken) === OWNER_INVITATION_TYPE) {
+    const owned = await verifyOwnerInvitation(body.inviteToken, c.env.JWT_ACCESS_SECRET);
+    return withDb(c, async (db) => {
+      const repos = createRepositories(db);
+      const rows = await db.execute(sql`
+        SELECT b.name AS business_name, br.name AS branch_name, ci.expires_at AS expires_at
+        FROM customer_invitations ci
+        JOIN businesses b ON b.id = ci.business_id AND b.status = 'active'
+        JOIN branches br ON br.id = ci.branch_id AND br.business_id = ci.business_id AND br.is_deleted = false AND br.status = 'active'
+        WHERE ci.id = ${owned.invitationId} AND ci.business_id = ${owned.businessId} AND ci.branch_id = ${owned.branchId}
+          AND ci.revoked_at IS NULL AND ci.expires_at > now()
+        LIMIT 1`);
+      const row = rows.rows[0] as { business_name: string; branch_name: string; expires_at: Date | string } | undefined;
+      if (!row) throw new AppError('This invitation is not valid or has expired. Ask the business for a new one.', 400, 'ONBOARDING_INVITE_INVALID');
+      const membership = await repos.customerMemberships.findByCustomerAndBusiness(c.get('customerId'), owned.businessId);
+      const used = membership?.status === 'active' ? false : await repos.customerOnboardingEvents.remoteInviteUsed(owned.businessId, owned.invitationId);
+      return ok(c, {
+        status: membership?.status === 'active' ? 'already_member' : used ? 'used' : 'ready',
+        businessName: row.business_name, branchName: row.branch_name, businessId: owned.businessId, expiresAt: new Date(row.expires_at).toISOString(),
+      });
+    });
+  }
   const invite = await verifyOnboardingInvite(body.inviteToken, c.env.JWT_ACCESS_SECRET);
   return withDb(c, async (db) => {
     const repos = createRepositories(db);

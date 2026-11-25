@@ -287,6 +287,46 @@
         "CASHIER_ACCOUNT_NOT_FOUND": "Ce compte n'existe plus.",
         "PERMISSION_DENIED": "Vous n'avez pas l'autorisation de faire cela."
       }
+    },
+    "invitations": {
+      "link": "Inviter des clients",
+      "title": "Inviter des clients",
+      "intro": "Créez un lien ou un code QR à usage unique pour une succursale. Le client l'ouvre, se connecte avec son propre compte et donne son propre consentement. Une invitation n'inscrit personne, ne fait pas rejoindre la Communauté et ne donne ni récompense ni badge à elle seule.",
+      "back": "Retour à l'app Caisse",
+      "noAccess": "Vous n'avez pas l'autorisation de gérer les invitations de clients.",
+      "loadFailed": "Impossible de charger les invitations. Veuillez réessayer.",
+      "createTitle": "Nouvelle invitation",
+      "branchLabel": "Succursale",
+      "noBranches": "Ajoutez d'abord une succursale, puis vous pourrez y inviter des clients.",
+      "hoursLabel": "Valable (heures)",
+      "hoursHint": "De 1 à 168 heures. Le lien fonctionne une seule fois et cesse de fonctionner à son expiration ou si vous le révoquez.",
+      "create": "Créer l'invitation",
+      "createdNote": "Invitation créée. Elle est valable jusqu'au {time}.",
+      "qrLabel": "Code QR du lien d'invitation",
+      "linkLabel": "Lien d'invitation",
+      "copy": "Copier le lien",
+      "copied": "Lien copié.",
+      "copyFailed": "Copie impossible. Sélectionnez le lien et copiez-le.",
+      "oneUse": "Ne partagez ce lien qu'avec le client que vous invitez. Il n'est affiché qu'une fois.",
+      "listTitle": "Invitations",
+      "empty": "Aucune invitation pour le moment.",
+      "createdOn": "Créée le {date}",
+      "expiresOn": "expire le {date}",
+      "revoke": "Révoquer",
+      "status": {
+        "active": "Active",
+        "accepted": "Acceptée",
+        "revoked": "Révoquée",
+        "expired": "Expirée"
+      },
+      "errors": {
+        "RATE_LIMITED": "Trop d'invitations. Patientez un instant.",
+        "INVITATION_BRANCH_INVALID": "Choisissez une succursale active de cette entreprise.",
+        "VALIDATION_ERROR": "Vérifiez les valeurs et réessayez.",
+        "INVITATION_ALREADY_USED": "Cette invitation a déjà été utilisée.",
+        "INVITATION_NOT_FOUND": "Cette invitation n'existe plus.",
+        "generic": "Impossible de terminer. Rien n'a été modifié. Veuillez réessayer."
+      }
     }
   },
   "branchSwitch": {

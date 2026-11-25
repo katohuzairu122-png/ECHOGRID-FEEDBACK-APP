@@ -207,6 +207,7 @@ describe('CASHIER-FINAL-RECONCILIATION: every surface the Owner ruling withholds
     ['GET', '/analytics/onboarding'], ['GET', '/loyalty/reports/transactions'], ['GET', '/loyalty/settlement'], ['PUT', '/loyalty/settlement/config'],
     ['GET', '/loyalty/rewards'], ['POST', '/loyalty/rewards'], ['PATCH', '/loyalty/program'],
     ['GET', '/community/business/status'], ['POST', '/community/business/posts'], ['GET', '/community/business/insights'],
+    ['POST', '/customer-invitations'], ['GET', '/customer-invitations'], ['POST', '/customer-invitations/abc/revoke'],
     ['GET', '/team'], ['GET', '/settings'], ['GET', '/billing'], ['PATCH', '/businesses/me'], ['POST', '/business-closure/requests'],
   ];
   it.each(FORBIDDEN)('%s %s is not on the cashier allow-list', (method, path) => {

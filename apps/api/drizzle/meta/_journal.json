@@ -673,6 +673,13 @@
       "when": 1795623027080,
       "tag": "0095_tentaship_badges",
       "breakpoints": true
+    },
+    {
+      "idx": 96,
+      "version": "7",
+      "when": 1795628046291,
+      "tag": "0096_customer_invitations",
+      "breakpoints": true
     }
   ]
 }

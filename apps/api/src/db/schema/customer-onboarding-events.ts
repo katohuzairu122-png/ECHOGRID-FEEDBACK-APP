@@ -13,8 +13,8 @@ import { users } from './users';
  * Where an onboarding came from. Only sources that a real, authoritative enrollment workflow writes are listed:
  *  - business_qr: the customer scanned a branch's business QR and joined themselves (self-service).
  *  - cashier_assisted: a cashier at a counter issued a one-time invitation that the customer then accepted with their own consent.
- *  - remote_invitation: RESERVED. No workflow writes it yet (no authoritative remote-invitation enrollment exists); it is in the
- *    vocabulary so adding that workflow later needs no change to the CHECK, and a test proves nothing writes it today.
+ *  - remote_invitation: OWNER-INVITE-01: the customer accepted a one-time invitation issued from the owner-facing Cashier App
+ *    (customer_invitations), with their own authentication and explicit join consent. No cashier is recorded (cashier_user_id stays NULL).
  */
 export const ONBOARDING_SOURCES = ['business_qr', 'cashier_assisted', 'remote_invitation'] as const;
 export type OnboardingSource = (typeof ONBOARDING_SOURCES)[number];
@@ -73,6 +73,10 @@ export const customerOnboardingEvents = pgTable(
     uniqueIndex('customer_onboarding_events_invite_once_key')
       .on(table.businessId, table.reference)
       .where(sql`${table.source} = 'cashier_assisted'`),
+    // OWNER-INVITE-01: a remote invitation can onboard exactly one customer too.
+    uniqueIndex('customer_onboarding_events_remote_invite_once_key')
+      .on(table.businessId, table.reference)
+      .where(sql`${table.source} = 'remote_invitation'`),
     check('customer_onboarding_events_source_check', sql`${table.source} IN ('business_qr','cashier_assisted','remote_invitation')`),
     check(
       'customer_onboarding_events_verification_check',

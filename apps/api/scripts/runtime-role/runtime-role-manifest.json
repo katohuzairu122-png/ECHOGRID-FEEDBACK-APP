@@ -1072,6 +1072,15 @@
    ],
    "reason": "TB-03: append-only approved revocations; no UPDATE/DELETE/TRUNCATE"
   },
+  "customer_invitations": {
+   "class": "RUNTIME",
+   "verbs": [
+    "INSERT",
+    "SELECT",
+    "UPDATE"
+   ],
+   "reason": "OWNER-INVITE-01: owner-issued customer invitations; UPDATE is the one-time revocation only, enforced by a database guard; no DELETE/TRUNCATE"
+  },
   "customer_deletion_requests": {
    "class": "RUNTIME",
    "verbs": [
