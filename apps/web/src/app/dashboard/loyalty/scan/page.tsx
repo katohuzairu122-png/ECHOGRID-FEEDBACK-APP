@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { getActiveBusiness } from '@/lib/business';
 import { StaffQrMenu } from './staff-qr-menu';
 import { apiFetch } from '@/lib/api-client';
@@ -23,6 +24,9 @@ export default async function StaffQrPage() {
         <p className="sr-only">{t('title')}. {t('subtitle')}</p>
       </header>
       <StaffQrMenu contexts={contexts} />
+      <p className="text-center text-sm">
+        <Link href="/dashboard/cashier" className="underline">{t('cashierAppLink')}</Link>
+      </p>
     </section>
   );
 }

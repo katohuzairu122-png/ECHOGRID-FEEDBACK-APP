@@ -80,11 +80,11 @@ describe('DashboardNav presentation', () => {
     const sidebar = container.querySelector('aside nav')!;
     const bar = container.querySelector('nav[class*="bottomNav"]')!;
     expect(hrefs(bar)).toEqual(['/dashboard/loyalty/scan']);
-    expect(hrefs(sidebar)).toEqual(['/dashboard/loyalty/scan', '/dashboard/cashier', '/support']);
+    expect(hrefs(sidebar)).toEqual(['/dashboard/loyalty/scan', '/support']); // one counter tab: the Cashier app is reached from inside Serve customers
     await userEvent.setup().click(screen.getByRole('button', { name: 'nav.more' }));
     const sheet = screen.getByRole('dialog');
     // The cashier app entry is a counter tool, not an administrative destination.
-    expect(hrefs(sheet)).toEqual(['/dashboard/cashier', '/support']);
+    expect(hrefs(sheet)).toEqual(['/support']);
     expect(sheet.querySelectorAll('form')).toHaveLength(1); // sign out stays available
     for (const href of ADMIN) {
       expect(sidebar.querySelector('a[href="' + href + '"]')).not.toBeInTheDocument();
@@ -97,7 +97,6 @@ describe('DashboardNav presentation', () => {
     const { container } = render(await DashboardNav());
     expect(hrefs(container.querySelector('aside nav')!)).toEqual([
       '/dashboard/loyalty/scan',
-      '/dashboard/cashier',
       '/support',
     ]);
   });
@@ -163,7 +162,6 @@ describe('DashboardNav presentation', () => {
       '/dashboard/settings',
       '/dashboard/settings/team',
       '/dashboard/billing',
-      '/dashboard/cashier',
       '/support',
     ]) {
       expect(sidebar.querySelector('a[href="' + href + '"]')).toBeInTheDocument();
@@ -217,5 +215,16 @@ describe('DashboardNav presentation', () => {
         expect(links).not.toContain('/dashboard/overview');
       }
     });
+  });
+});
+
+describe('one counter tab (Serve customers and the Cashier app are not two tabs)', () => {
+  it('no role gets a separate Cashier app entry in the sidebar, the bottom bar or the More sheet', async () => {
+    for (const access of [cashier, legacyCashier, owner]) {
+      vi.mocked(getMyAccess).mockResolvedValue(access);
+      const { container, unmount } = render(await DashboardNav());
+      expect(container.querySelector('a[href="/dashboard/cashier"]')).not.toBeInTheDocument();
+      unmount();
+    }
   });
 });
