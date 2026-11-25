@@ -6,6 +6,9 @@ import { communityHubGate } from '@/lib/workspace-guard';
 import { redirect } from 'next/navigation';
 import { OverviewPanel, WorkspaceState } from '@/components/workspace/overview-components';
 import { ParticipationMetrics } from './participation-metrics';
+import { getBusinessBadges } from '@/lib/tentaship-badges';
+import { evaluateBusinessBadgesAction } from '@/lib/actions/tentaship-badges';
+import { BadgesSection } from '@/components/tentaship-badges/badges-section';
 import { RolloutStatus } from './rollout-status';
 
 const ABOUT = ['what', 'differs', 'benefit', 'voluntary', 'publishing', 'privacy', 'rollout'] as const;
@@ -19,7 +22,7 @@ export default async function CommunityHomePage() {
   if (blocked) return blocked;
   const business = await getActiveBusiness();
   if (!business) redirect('/dashboard');
-  const [t, rollout, participation] = await Promise.all([getTranslations('businessCommunity'), getBusinessCommunityStatus(business.id), getBusinessCommunityParticipation(business.id)]);
+  const [t, rollout, participation, badges] = await Promise.all([getTranslations('businessCommunity'), getBusinessCommunityStatus(business.id), getBusinessCommunityParticipation(business.id), getBusinessBadges(business.id)]);
   const feedOpen = rollout.state === 'ready' && rollout.status.feed === 'open';
   return (
     <div className="space-y-6">
@@ -37,6 +40,9 @@ export default async function CommunityHomePage() {
       <OverviewPanel title={t('feed.title')}>
         <WorkspaceState>{feedOpen ? t('feed.openNotice') : t('feed.empty')}</WorkspaceState>
       </OverviewPanel>
+
+      {/* TB-03: only while the independent Tentaship Badges control is open; while closed this renders nothing at all. */}
+      {badges.state === 'ready' && <BadgesSection badges={badges.badges} evaluate={evaluateBusinessBadgesAction} />}
 
       <OverviewPanel title={t('about.title')}>
         <dl className="grid gap-4 sm:grid-cols-2" data-testid="community-about">

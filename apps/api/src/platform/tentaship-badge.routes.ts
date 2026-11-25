@@ -10,6 +10,7 @@ import { ok } from '../lib/response';
 import { AppError } from '../lib/errors';
 import { tentashipBadgesGate } from '../tentaship-badges/badge-gate';
 import { BadgeDefinitionService } from '../tentaship-badges/badge-definition.service';
+import { BadgeAwardService, REVOCATION_REASONS } from '../tentaship-badges/badge-award.service';
 
 type Env = { Bindings: Bindings; Variables: AuthVariables & PlatformVariables & AuditVariables };
 
@@ -69,3 +70,28 @@ for (const action of ['activate', 'retire'] as const) {
     return ok(c, row);
   });
 }
+
+const revokeSchema = z.object({ reasonCode: z.enum(REVOCATION_REASONS), note: z.string().trim().min(1).max(500) }).strict();
+async function withAwards<T>(c: Context<Env>, fn: (s: BadgeAwardService) => Promise<T>): Promise<T> {
+  const { db, close } = await createDb(c.env.HYPERDRIVE);
+  try {
+    return await fn(new BadgeAwardService(db));
+  } finally {
+    c.executionCtx.waitUntil(close());
+  }
+}
+
+/** Award history for audit (aggregate evidence only). */
+platformTentashipBadgeRoutes.get('/awards', async (c) => {
+  const limit = Number(new URL(c.req.url).searchParams.get('limit')) || 50;
+  c.header('Cache-Control', 'no-store');
+  return ok(c, await withAwards(c, (s) => s.history(limit)));
+});
+
+/** Approved revocation: records a reason and the authorising admin; the award stays in the ledger. Idempotent. */
+platformTentashipBadgeRoutes.post('/awards/:id/revoke', async (c) => {
+  const body = await parseJsonBody(c.req.raw, revokeSchema);
+  const result = await withAwards(c, (s) => s.revoke(uuid(c, 'id'), body.reasonCode, body.note, actor(c)));
+  c.set('auditAlreadyRecorded', true);
+  return ok(c, result);
+});

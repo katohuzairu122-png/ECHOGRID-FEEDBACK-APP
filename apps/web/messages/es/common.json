@@ -38,5 +38,15 @@
   },
   "language": {
     "label": "Idioma"
+  },
+  "tentashipBadges": {
+    "title": "Insignias Tentaship",
+    "notCurrency": "Las insignias son logros. No son puntos, no tienen valor en efectivo ni de otro tipo, y no se pueden transferir, canjear ni usar para participar en nada.",
+    "empty": "Aún no hay insignias.",
+    "earnedOn": "Obtenida el {date}",
+    "check": "Buscar nuevas insignias",
+    "newBadges": "{count, plural, one {Obtuviste una nueva insignia.} other {Obtuviste # nuevas insignias.}}",
+    "noneNew": "No hay insignias nuevas por ahora.",
+    "failed": "No pudimos comprobarlo ahora. No se cambió nada. Inténtalo de nuevo."
   }
 }

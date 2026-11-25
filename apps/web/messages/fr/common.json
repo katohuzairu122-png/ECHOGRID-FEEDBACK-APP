@@ -38,5 +38,15 @@
   },
   "language": {
     "label": "Langue"
+  },
+  "tentashipBadges": {
+    "title": "Badges Tentaship",
+    "notCurrency": "Les badges sont des réussites. Ce ne sont pas des points, ils n'ont aucune valeur en argent ou autre, et ne peuvent être ni transférés, ni échangés, ni utilisés pour participer à quoi que ce soit.",
+    "empty": "Aucun badge pour le moment.",
+    "earnedOn": "Obtenu le {date}",
+    "check": "Rechercher de nouveaux badges",
+    "newBadges": "{count, plural, one {Vous avez obtenu un nouveau badge.} other {Vous avez obtenu # nouveaux badges.}}",
+    "noneNew": "Aucun nouveau badge pour le moment.",
+    "failed": "Vérification impossible pour le moment. Rien n'a été modifié. Veuillez réessayer."
   }
 }
