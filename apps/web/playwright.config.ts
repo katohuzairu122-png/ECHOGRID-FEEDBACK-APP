@@ -27,7 +27,9 @@ export default defineConfig({
   },
   webServer: [
     {
-      command: 'pnpm --filter @echo-grid-feedback/api exec wrangler dev --local',
+      // BCOMM-03: the disposable local API opens business publishing so My Posts can be exercised end to end. This is a local test-stack
+      // variable only; no wrangler.toml, workflow or deployed environment sets it.
+      command: 'pnpm --filter @echo-grid-feedback/api exec wrangler dev --local --var NETWORK_BUSINESS_PUBLISHING_ENABLED:true',
       url: 'http://localhost:8787/health',
       reuseExistingServer: true,
       timeout: 30_000,

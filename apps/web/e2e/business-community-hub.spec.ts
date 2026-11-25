@@ -86,10 +86,13 @@ test('an owner lands on the Community hub; it is honest while Community is disab
   await expect(page.getByRole('heading', { name: 'One account. Every loyalty.' })).toBeVisible();
   await expect(page.getByText('Connect with customers, grow your audience and build lasting relationships through the Echo Grid Community.')).toBeVisible();
 
-  // Real rollout state: all three capabilities are closed, and nothing is shown as open or operational.
+  // Real rollout state: enrollment and the Feed are closed; only business publishing is open, because the local test API opens that single
+  // control (see playwright.config.ts). Nothing else is shown as open or operational.
   const rollout = page.getByTestId('community-rollout');
-  await expect(rollout.getByText('Not available yet')).toHaveCount(3);
-  await expect(rollout).toHaveAttribute('data-any-open', 'false');
+  await expect(rollout.getByText('Not available yet')).toHaveCount(2);
+  await expect(rollout.locator('[data-capability="publishing"]')).toHaveAttribute('data-state', 'open');
+  await expect(rollout.locator('[data-capability="enrollment"]')).toHaveAttribute('data-state', 'closed');
+  await expect(rollout.locator('[data-capability="feed"]')).toHaveAttribute('data-state', 'closed');
   await expect(page.getByText('Community activity will appear here when Community becomes available.')).toBeVisible();
   const summary = page.getByTestId('community-summary');
   // A new business has no loyalty customers: every total is suppressed (the server never reveals a small group, not even a zero).
@@ -112,8 +115,8 @@ test('an owner lands on the Community hub; it is honest while Community is disab
   await expect(page).toHaveURL('/dashboard/community/participation');
   await expect(page.getByTestId('community-participation').getByText('Hidden: small group', { exact: true })).toHaveCount(3);
   await tabs.getByRole('link', { name: 'My Posts' }).click();
-  await expect(page.getByText('Business posts are not available yet')).toBeVisible();
-  await expect(page.getByTestId('community-hub').locator('input, textarea, select, form')).toHaveCount(0);
+  await expect(page.getByTestId('community-posts')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'New post' })).toBeVisible();
   await tabs.getByRole('link', { name: 'Insights' }).click();
   await expect(page.getByText('Insights are not available yet')).toBeVisible();
   await expect(page.getByTestId('community-insights-planned').getByRole('listitem')).toHaveCount(6);
@@ -201,6 +204,33 @@ test('sign-in keeps secure return URLs and never leaves the site; the new defaul
   await expect(page).toHaveURL('/dashboard/community');
 });
 
+test('My Posts: with publishing open the composer is offered; a business with no public profile is told so and nothing is created', async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  const errors = trackPageErrors(page);
+  await collapseDevelopmentBadge(page);
+  await page.goto('/dashboard/community/posts');
+  await expect(page.getByTestId('community-posts-empty')).toBeVisible();
+  await expect(page.getByText('Publishing is not open yet')).toHaveCount(0);
+
+  // Keyboard-reachable composer with labelled fields and the content rules stated up front.
+  await page.getByRole('button', { name: 'New post' }).click();
+  const composer = page.getByTestId('post-composer');
+  await expect(composer.getByLabel('Post text')).toBeVisible();
+  await expect(composer.getByLabel('Link (optional, https only)')).toBeVisible();
+  await expect(composer.getByLabel('Language of the post')).toBeVisible();
+  await expect(composer.getByText(/No formatting, mentions, hashtags/)).toBeVisible();
+
+  // The API refuses to start a post for a business that has no public profile at all (posts belong to the published profile).
+  await composer.getByLabel('Post text').fill('We open a second counter this Saturday.');
+  await composer.getByRole('button', { name: 'Save draft' }).click();
+  await expect(composer.getByRole('alert')).toContainText('Publish your business profile first');
+  await page.screenshot({ path: testInfo.outputPath('community-posts-desktop.png'), fullPage: true });
+  await composer.getByRole('button', { name: 'Cancel' }).click();
+  await expect(page.getByTestId('community-post')).toHaveCount(0);
+  await expect(page.getByTestId('community-posts-empty')).toBeVisible();
+  expect(errors, 'uncaught page errors').toEqual([]);
+});
+
 for (const [locale, title, tagline, dir] of [
   ['fr', 'Communauté', 'Un seul compte. Toutes vos fidélités.', 'ltr'],
   ['es', 'Comunidad', 'Una cuenta. Todas las fidelidades.', 'ltr'],
@@ -214,7 +244,7 @@ for (const [locale, title, tagline, dir] of [
     await expect(page.locator('html')).toHaveAttribute('dir', dir);
     await expect(page.getByRole('heading', { name: title, exact: true, level: 1 })).toBeVisible();
     await expect(page.getByRole('heading', { name: tagline })).toBeVisible();
-    await expect(page.getByTestId('community-rollout').locator('[data-state="closed"]')).toHaveCount(3);
+    await expect(page.getByTestId('community-rollout').locator('[data-state="closed"]')).toHaveCount(2);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     if (locale === 'ar') {
       // Right-to-left: text aligns to the right edge and the tabs start on the right.

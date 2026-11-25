@@ -96,15 +96,76 @@
   },
   "posts": {
     "title": "Mes publications",
-    "description": "Les actualités que votre commerce partage avec la Communauté.",
-    "unavailableTitle": "Les publications de commerce ne sont pas encore disponibles",
-    "unavailable": "Lorsque la publication par les commerces sera disponible, vous pourrez rédiger des brouillons, voir lesquelles sont publiées ou en cours de vérification et archiver les plus anciennes. Rien ne peut être écrit ni publié aujourd'hui.",
-    "statesTitle": "Ce que vous pourrez gérer",
-    "states": {
+    "description": "Rédigez des actualités pour vos clients. Chaque publication est examinée par Tentaship avant de pouvoir apparaître dans la Communauté.",
+    "unavailableTitle": "Vos publications n'ont pas pu être chargées pour le moment. Réessayez dans un instant.",
+    "closed": "La publication n'est pas encore ouverte. Vous pouvez relire vos publications précédentes, mais rien ne peut être créé ni modifié tant qu'elle n'est pas ouverte.",
+    "statusUnknown": "Nous n'avons pas pu savoir si la publication est ouverte ; rien ne peut être modifié pour le moment.",
+    "forbidden": "Vous voyez la Communauté, mais votre rôle ne permet pas de gérer les publications. Demandez au propriétaire ou à un administrateur de publier pour vous.",
+    "moderationNote": "Une publication n'est visible des clients qu'après approbation par la plateforme, tant que votre profil public est publié et que votre commerce est actif.",
+    "empty": "Vous n'avez pas encore de publication.",
+    "awaitingNote": "En attente de l'examen de la plateforme. Vous pourrez la modifier de nouveau une fois la décision rendue.",
+    "rejectedBecause": "Non approuvée : {reason}. Modifiez la publication puis soumettez-la de nouveau.",
+    "composer": {
+      "new": "Nouvelle publication",
+      "newTitle": "Nouvelle publication",
+      "editTitle": "Modifier la publication",
+      "body": "Texte de la publication",
+      "bodyHelp": "Texte brut, jusqu'à {max} caractères.",
+      "link": "Lien (facultatif, https uniquement)",
+      "language": "Langue de la publication",
+      "rules": "Pas de mise en forme, de mentions, de hashtags, d'adresses e-mail ni de numéros de téléphone. Les offres et promotions suivent le même examen que toute autre publication.",
+      "save": "Enregistrer le brouillon",
+      "saving": "Enregistrement…",
+      "cancel": "Annuler"
+    },
+    "languages": {
+      "en": "Anglais",
+      "fr": "Français",
+      "es": "Espagnol",
+      "ar": "Arabe"
+    },
+    "groups": {
       "drafts": "Brouillons",
-      "published": "Publiées",
-      "review": "En cours de vérification",
+      "review": "En attente d'examen",
+      "live": "En ligne",
+      "rejected": "À modifier",
+      "suspended": "Suspendues par la plateforme",
       "archived": "Archivées"
+    },
+    "stages": {
+      "draft": "Brouillon",
+      "awaiting_review": "En attente d'examen",
+      "rejected": "À modifier",
+      "live": "En ligne",
+      "suspended": "Suspendue",
+      "archived": "Archivée"
+    },
+    "actions": {
+      "edit": "Modifier",
+      "submit": "Soumettre pour examen",
+      "archive": "Archiver"
+    },
+    "errors": {
+      "closed": "La publication n'est pas ouverte.",
+      "forbidden": "Votre rôle ne permet pas de gérer les publications.",
+      "invalid": "La publication n'a pas pu être enregistrée. Vérifiez le texte et le lien au regard des règles ci-dessus.",
+      "conflict": "Cette publication ne peut pas être modifiée dans son état actuel.",
+      "cap": "La limite quotidienne de publications de votre commerce est atteinte. Réessayez demain.",
+      "profile": "Publiez d'abord votre profil public ; les publications exigent un profil publié et un commerce actif.",
+      "failed": "Une erreur s'est produite. Réessayez."
+    },
+    "reasons": {
+      "hate_or_harassment": "contenu haineux ou harcelant",
+      "threats": "menaces",
+      "sexual_content": "contenu sexuel",
+      "illegal_goods_services": "biens ou services illégaux",
+      "fraud_or_scam": "fraude ou escroquerie",
+      "impersonation": "usurpation d'identité",
+      "personal_data": "données personnelles",
+      "misleading_claim": "allégation trompeuse",
+      "competitor_disparagement": "dénigrement d'un concurrent",
+      "unsafe_link": "lien dangereux",
+      "spam_or_duplicate": "spam ou doublon"
     }
   },
   "insights": {

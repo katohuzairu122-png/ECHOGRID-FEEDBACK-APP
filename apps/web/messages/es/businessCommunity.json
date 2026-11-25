@@ -96,15 +96,76 @@
   },
   "posts": {
     "title": "Mis publicaciones",
-    "description": "Novedades que su negocio comparte con la Comunidad.",
-    "unavailableTitle": "Las publicaciones de negocio aún no están disponibles",
-    "unavailable": "Cuando se publique la función de publicación para negocios, podrá redactar borradores, ver cuáles están publicadas o en revisión y archivar las antiguas. Hoy no se puede escribir ni publicar nada.",
-    "statesTitle": "Lo que podrá gestionar",
-    "states": {
+    "description": "Redacte novedades para sus clientes. Cada publicación la revisa Tentaship antes de poder aparecer en la Comunidad.",
+    "unavailableTitle": "No se pudieron cargar sus publicaciones en este momento. Inténtelo de nuevo en breve.",
+    "closed": "La publicación aún no está abierta. Puede leer sus publicaciones anteriores, pero no se puede crear ni cambiar nada hasta que se abra.",
+    "statusUnknown": "No pudimos saber si la publicación está abierta, así que por ahora no se puede cambiar nada.",
+    "forbidden": "Puede ver la Comunidad, pero su rol no permite gestionar publicaciones. Pida al propietario o a un administrador que publique por usted.",
+    "moderationNote": "Una publicación solo es visible para los clientes después de que la plataforma la apruebe, mientras su perfil público esté publicado y su negocio esté activo.",
+    "empty": "Aún no tiene publicaciones.",
+    "awaitingNote": "A la espera de la revisión de la plataforma. Podrá editarla de nuevo cuando se haya decidido.",
+    "rejectedBecause": "No aprobada: {reason}. Edite la publicación y envíela de nuevo.",
+    "composer": {
+      "new": "Nueva publicación",
+      "newTitle": "Nueva publicación",
+      "editTitle": "Editar publicación",
+      "body": "Texto de la publicación",
+      "bodyHelp": "Texto sin formato, hasta {max} caracteres.",
+      "link": "Enlace (opcional, solo https)",
+      "language": "Idioma de la publicación",
+      "rules": "Sin formato, menciones, hashtags, correos electrónicos ni números de teléfono. Las ofertas y promociones siguen la misma revisión que cualquier otra publicación.",
+      "save": "Guardar borrador",
+      "saving": "Guardando…",
+      "cancel": "Cancelar"
+    },
+    "languages": {
+      "en": "Inglés",
+      "fr": "Francés",
+      "es": "Español",
+      "ar": "Árabe"
+    },
+    "groups": {
       "drafts": "Borradores",
-      "published": "Publicadas",
       "review": "En revisión",
+      "live": "Publicadas",
+      "rejected": "Requieren cambios",
+      "suspended": "Suspendidas por la plataforma",
       "archived": "Archivadas"
+    },
+    "stages": {
+      "draft": "Borrador",
+      "awaiting_review": "En revisión",
+      "rejected": "Requiere cambios",
+      "live": "Publicada",
+      "suspended": "Suspendida",
+      "archived": "Archivada"
+    },
+    "actions": {
+      "edit": "Editar",
+      "submit": "Enviar a revisión",
+      "archive": "Archivar"
+    },
+    "errors": {
+      "closed": "La publicación no está abierta.",
+      "forbidden": "Su rol no permite gestionar publicaciones.",
+      "invalid": "No se pudo guardar la publicación. Compruebe el texto y el enlace con las reglas anteriores.",
+      "conflict": "Esta publicación no se puede cambiar en su estado actual.",
+      "cap": "Se alcanzó el límite diario de publicaciones de su negocio. Inténtelo mañana.",
+      "profile": "Publique primero su perfil público; las publicaciones requieren un perfil publicado y un negocio activo.",
+      "failed": "Algo salió mal. Inténtelo de nuevo."
+    },
+    "reasons": {
+      "hate_or_harassment": "contenido de odio o acoso",
+      "threats": "amenazas",
+      "sexual_content": "contenido sexual",
+      "illegal_goods_services": "bienes o servicios ilegales",
+      "fraud_or_scam": "fraude o estafa",
+      "impersonation": "suplantación de identidad",
+      "personal_data": "datos personales",
+      "misleading_claim": "afirmación engañosa",
+      "competitor_disparagement": "denigrar a un competidor",
+      "unsafe_link": "enlace inseguro",
+      "spam_or_duplicate": "spam o duplicado"
     }
   },
   "insights": {
