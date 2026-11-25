@@ -11,7 +11,7 @@ export type CommunityMembershipOperation = keyof typeof COMMUNITY_MEMBERSHIP_CON
 export type CommunityMembershipControlConfig = Partial<Record<(typeof COMMUNITY_MEMBERSHIP_CONTROL_KEYS)[CommunityMembershipOperation], unknown>>;
 type ControlState = 'enabled' | 'disabled' | 'invalid';
 type SignalOperation = CommunityMembershipOperation | 'activation';
-type SignalReason = 'permitted' | 'disabled' | 'invalid_configuration' | 'missing_permit' | 'transition_failed';
+type SignalReason = 'permitted' | 'disabled' | 'invalid_configuration' | 'missing_permit' | 'transition_failed' | 'pilot_not_eligible' | 'deletion_pending';
 const emitted = new Set<string>();
 
 /** Bounded, identifier-free diagnostics: at most one event per operation/reason

@@ -89,6 +89,8 @@ SELECT c.relname AS name, v.verb, 'PRIVILEGE_OUTSIDE_MANIFEST' AS violation
        ('community_memberships', 'INSERT'),
        ('community_memberships', 'SELECT'),
        ('community_memberships', 'UPDATE'),
+       ('community_pilot_eligibility_events', 'INSERT'),
+       ('community_pilot_eligibility_events', 'SELECT'),
        ('community_point_accounts', 'INSERT'),
        ('community_point_accounts', 'SELECT'),
        ('community_point_accounts', 'UPDATE'),
@@ -330,4 +332,4 @@ SELECT p.proname AS name, 'DEFINER_FUNCTION_EXECUTABLE' AS violation FROM pg_pro
 SELECT c.relname AS name, 'SEQUENCE_OUTSIDE_MANIFEST' AS violation FROM pg_class c
  WHERE c.relkind = 'S' AND c.relnamespace = 'public'::regnamespace
    AND (has_sequence_privilege(:'runtime_login', c.oid, 'USAGE') OR has_sequence_privilege(:'runtime_login', c.oid, 'UPDATE'))
-   AND c.relname NOT IN ('benefit_application_transitions_seq_seq', 'partner_credit_dispute_events_seq_seq', 'stripe_evidence_control_events_seq_seq', 'stripe_provider_event_dispositions_seq_seq');
+   AND c.relname NOT IN ('benefit_application_transitions_seq_seq', 'community_pilot_eligibility_events_seq_seq', 'partner_credit_dispute_events_seq_seq', 'stripe_evidence_control_events_seq_seq', 'stripe_provider_event_dispositions_seq_seq');

@@ -45,6 +45,7 @@ import { platformBillingSubscriptionsRoutes } from './platform/billing-subscript
 import { platformCommunityPointRulesRoutes } from './platform/community-point-rules.routes';
 import { platformCommunityPointLedgerRoutes } from './platform/community-point-ledger.routes';
 import { platformCommunityPointAdjustmentRoutes } from './platform/community-point-adjustments.routes';
+import { platformCommunityPilotRoutes } from './platform/community-pilot.routes';
 import { platformOpsRoutes } from './platform/ops.routes';
 import { internalStripeReadAdminRoutes } from './internal/stripe-read-admin.routes';
 import { platformOrphanSettlementRoutes } from './platform/orphan-settlement.routes';
@@ -234,6 +235,8 @@ api.route('/platform/network-moderation', platformNetworkModerationRoutes);
 api.route('/platform/community-point-rules', platformCommunityPointRulesRoutes);
 api.route('/platform/community-point-ledger', platformCommunityPointLedgerRoutes);
 api.route('/platform/community-points', platformCommunityPointAdjustmentRoutes);
+// Community pilot allowlist: platform admins only; disabled unless COMMUNITY_MEMBERSHIP_PILOT_REQUIRED makes it matter (it never activates anything).
+api.route('/platform/community-pilot', platformCommunityPilotRoutes);
 api.route('/platform/orphan-settlements', platformOrphanSettlementRoutes);
 // Operations diagnostics -- admin-only, and the only platform prefix that
 // WRITES nothing and READS nothing. See ops.routes.ts for why it is gated

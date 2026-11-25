@@ -56,6 +56,7 @@ DECLARE
     ['business_subscriptions', 'INSERT, SELECT, UPDATE'],
     ['businesses', 'INSERT, SELECT, UPDATE'],
     ['community_memberships', 'INSERT, SELECT, UPDATE'],
+    ['community_pilot_eligibility_events', 'INSERT, SELECT'],
     ['community_point_accounts', 'INSERT, SELECT, UPDATE'],
     ['community_point_award_decisions', 'INSERT, SELECT, UPDATE'],
     ['community_point_rules', 'INSERT, SELECT, UPDATE'],
@@ -171,7 +172,7 @@ $$;
 DO $$
 DECLARE s text;
 BEGIN
-  FOREACH s IN ARRAY ARRAY['benefit_application_transitions_seq_seq', 'partner_credit_dispute_events_seq_seq', 'stripe_evidence_control_events_seq_seq', 'stripe_provider_event_dispositions_seq_seq'] LOOP
+  FOREACH s IN ARRAY ARRAY['benefit_application_transitions_seq_seq', 'community_pilot_eligibility_events_seq_seq', 'partner_credit_dispute_events_seq_seq', 'stripe_evidence_control_events_seq_seq', 'stripe_provider_event_dispositions_seq_seq'] LOOP
     IF to_regclass('public.' || s) IS NOT NULL THEN
       EXECUTE format('REVOKE ALL ON SEQUENCE public.%I FROM echogrid_app_runtime', s);
       EXECUTE format('GRANT USAGE, SELECT ON SEQUENCE public.%I TO echogrid_app_runtime', s);

@@ -10,6 +10,7 @@ export const COMMUNITY_PLATFORM_PERMISSIONS = [
   'community:rules:manage',
   'community:ledger:view',
   'community:adjust',
+  'community:pilot',
 ] as const;
 
 export type CommunityPlatformPermission =
