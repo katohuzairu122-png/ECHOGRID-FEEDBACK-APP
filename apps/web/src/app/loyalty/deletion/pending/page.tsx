@@ -20,7 +20,11 @@ export default async function CustomerDeletionPendingPage() {
       <h1 className="text-2xl font-semibold">{t('pendingTitle')}</h1>
       <p>{t('pendingDescription', { date: new Date(status.scheduledFor).toLocaleDateString('en-GB') })}</p>
       <p className="text-sm text-neutral-700">{t('operatorNotice')}</p>
-      <CustomerDeletionRestoreForm />
+      {new Date(status.scheduledFor).getTime() > Date.now() ? (
+        <CustomerDeletionRestoreForm />
+      ) : (
+        <p role="status" className="text-sm font-medium">{t('restoreExpired')}</p>
+      )}
       <form action={customerLogoutAction}>
         <Button variant="outline" type="submit">{t('signOut')}</Button>
       </form>
