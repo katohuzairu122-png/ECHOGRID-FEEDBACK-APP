@@ -75,7 +75,7 @@ describe.skipIf(!databaseUrl)('engagement events and insights (real PostgreSQL)'
     return { id, token: await signCustomerAccessToken(id, CUSTOMER_SECRET) };
   };
   async function newBusiness(label: string, owner: string) {
-    const biz = (await q('insert into businesses(name, slug, status, default_locale) values ($1,$2,$3,$4) returning id', [`Ins ${label} ${run}`, `ins-${label}-${run}`, 'active', 'en']))[0].id as string;
+    const biz = (await q('insert into businesses(name, slug, status, default_locale) values ($1,$2,$3,$4) returning id', [`Ins ${label} ${tag}`, `ins-${label}-${tag}`, 'active', 'en']))[0].id as string;
     const category = (await q('select id from business_categories limit 1'))[0]?.id as string | undefined;
     if (category) await q('update businesses set category_id=$2 where id=$1', [biz, category]);
     const profiles = new BusinessProfileService(buildDb(client));
@@ -103,7 +103,7 @@ describe.skipIf(!databaseUrl)('engagement events and insights (real PostgreSQL)'
     await client.connect();
     const admin = createRepositories(buildDb(client));
     const user = async (label: string) => (await admin.users.create({
-      email: `ins-${label}-${run}@example.test`, fullName: label, passwordHash: await pbkdf2Hash('unused-password-1', 1000), status: 'active',
+      email: `ins-${label}-${tag}@example.test`, fullName: label, passwordHash: await pbkdf2Hash('unused-password-1', 1000), status: 'active',
     })).id;
     ownerA = await user('ownerA'); ownerB = await user('ownerB'); mod1 = await user('mod1'); mod2 = await user('mod2'); staffA = await user('staffA');
     const a = await newBusiness('A', ownerA); const b = await newBusiness('B', ownerB);
@@ -117,8 +117,8 @@ describe.skipIf(!databaseUrl)('engagement events and insights (real PostgreSQL)'
     ownerToken = await signAccessToken(ownerA, STAFF_SECRET); ownerBToken = await signAccessToken(ownerB, STAFF_SECRET); staffToken = await signAccessToken(staffA, STAFF_SECRET);
     moderation = new NetworkPostService(buildDb(client));
     posts = new NetworkBusinessPostService(buildDb(client), 50);
-    postA = await publish(bizA, ownerA, `Engagement post A ${run}`);
-    postB = await publish(bizB, ownerB, `Engagement post B ${run}`);
+    postA = await publish(bizA, ownerA, `Engagement post A ${tag}`);
+    postB = await publish(bizB, ownerB, `Engagement post B ${tag}`);
     for (let i = 0; i < 12; i += 1) cust.push(await makeCustomer());
   });
   afterAll(async () => { await client?.end(); });
@@ -144,7 +144,7 @@ describe.skipIf(!databaseUrl)('engagement events and insights (real PostgreSQL)'
     expect((await call(`/api/v1/network/engagement/${postA}`, { method: 'POST', token: c.token })).data).toEqual({ recorded: true });
     expect(Number((await q(`select count(*)::int n from network_engagement_events where customer_id=$1 and event_type='engagement'`, [c.id]))[0].n)).toBe(1);
     const unknown = await call(`/api/v1/network/engagement/${'A'.repeat(22)}`, { method: 'POST', token: c.token });
-    const draft = await posts.createDraft(bizA, ownerA, { body: `Unpublished draft ${run}`, contentLocale: 'en' });
+    const draft = await posts.createDraft(bizA, ownerA, { body: `Unpublished draft ${tag}`, contentLocale: 'en' });
     const hidden = await call(`/api/v1/network/engagement/${draft.handle}`, { method: 'POST', token: c.token });
     expect([unknown.status, hidden.status]).toEqual([404, 404]);
     expect(hidden.text.replace(/\s/g, '')).toBe(unknown.text.replace(/\s/g, ''));
