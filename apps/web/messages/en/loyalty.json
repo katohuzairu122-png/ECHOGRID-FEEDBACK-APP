@@ -232,6 +232,7 @@
       "pendingTitle": "Your account deletion is pending",
       "pendingDescription": "Your restore window ends on {date}. Your memberships and balances are preserved during this period. Restoration is available before the deadline.",
       "restore": "Restore my account",
+      "restoreExpired": "Your restore window has ended. The privacy operator must review the request; no automatic erasure has occurred.",
       "signOut": "Sign out",
       "errors": {
         "invalid": "Confirm your password and acknowledgement.",
