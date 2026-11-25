@@ -12,6 +12,9 @@ test('Feedback Inbox: honest empty state, keyboard access and responsive layout'
   await page.getByRole('button', { name: 'Create account' }).click();
   await page.getByLabel('Business name').fill(`Inbox ${unique}`);
   await page.getByRole('button', { name: 'Create business' }).click();
+  // BCOMM-01: a new owner lands on the Community hub; these specs exercise the Business Overview, which keeps its own destination.
+  await expect(page.getByRole('heading', { name: 'Community', exact: true })).toBeVisible();
+  await page.goto('/dashboard/overview');
   await expect(page.getByRole('heading', { name: 'Business Overview', exact: true })).toBeVisible();
 
   await page.goto('/dashboard/feedback');

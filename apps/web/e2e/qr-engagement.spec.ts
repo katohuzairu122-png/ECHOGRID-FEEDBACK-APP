@@ -28,6 +28,9 @@ test('QR code scan to feedback inbox, end to end', async ({ page }) => {
   await page.getByLabel('Business name').fill(`QR E2E Business ${unique}`);
   await page.getByRole('button', { name: 'Create business' }).click();
 
+  // BCOMM-01: a new owner lands on the Community hub; these specs exercise the Business Overview, which keeps its own destination.
+  await expect(page.getByRole('heading', { name: 'Community', exact: true })).toBeVisible();
+  await page.goto('/dashboard/overview');
   await page.getByRole('link', { name: 'View branches' }).click();
   await page.getByRole('button', { name: '+ New branch' }).click();
   await page.getByLabel('Name').fill('Main');
