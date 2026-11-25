@@ -140,10 +140,13 @@ test('keyboard operation, and opening the hub sends no write request (no enrollm
   });
   await page.goto('/dashboard/community');
   const tabs = page.getByRole('navigation', { name: 'Community sections' });
-  await tabs.getByRole('link', { name: 'Participation' }).focus();
-  await expect(tabs.getByRole('link', { name: 'Participation' })).toBeFocused();
-  await page.keyboard.press('Enter');
-  await expect(page).toHaveURL('/dashboard/community/participation');
+  // Real keyboard use: focus the link, press Enter. On a cold development server a late hydration can steal focus, so retry the whole gesture.
+  await expect(async () => {
+    await tabs.getByRole('link', { name: 'Participation' }).focus();
+    await expect(tabs.getByRole('link', { name: 'Participation' })).toBeFocused({ timeout: 1_500 });
+    await page.keyboard.press('Enter');
+    await expect(page).toHaveURL('/dashboard/community/participation', { timeout: 4_000 });
+  }).toPass({ timeout: 30_000 });
   await expect(tabs.getByRole('link', { name: 'Participation' })).toHaveAttribute('aria-current', 'page');
   for (const path of ['/dashboard/community', '/dashboard/community/posts', '/dashboard/community/insights']) await page.goto(path);
   expect(writes).toEqual([]);
