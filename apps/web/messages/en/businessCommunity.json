@@ -152,7 +152,8 @@
       "conflict": "This post cannot be changed in its current state.",
       "cap": "The daily post limit for your business has been reached. Try again tomorrow.",
       "profile": "Publish your business profile first; posts need a published profile and an active business.",
-      "failed": "Something went wrong. Try again."
+      "failed": "Something went wrong. Try again.",
+      "link": "A link must point to your own business website (the one on your published profile)."
     },
     "reasons": {
       "hate_or_harassment": "hateful or harassing content",

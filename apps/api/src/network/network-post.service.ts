@@ -179,6 +179,8 @@ export class NetworkPostService {
       body: networkPostRevisions.body, linkUrl: networkPostRevisions.linkUrl, contentLocale: networkPostRevisions.contentLocale,
       authorUserId: networkPostRevisions.createdBy, submittedAt: networkPostRevisions.submittedAt,
       contentClass: networkPosts.contentClass,
+      /** The owning business's name, so a moderator knows whose post this is (the minimum business context; no contact or customer data). */
+      businessName: sql<string | null>`(select b.name from businesses b where b.id = ${networkPosts.businessId})`,
       requiredApprovals: sql<number>`case when ${networkPosts.contentClass} = 'business' then 1 else ${NETWORK_REQUIRED_APPROVALS} end`,
       approvals: sql<number>`(select count(*)::int from ${networkRevisionApprovals} a where a.revision_id = ${networkPostRevisions.id})`,
     }).from(networkPostRevisions).innerJoin(networkPosts, eq(networkPosts.id, networkPostRevisions.postId))
