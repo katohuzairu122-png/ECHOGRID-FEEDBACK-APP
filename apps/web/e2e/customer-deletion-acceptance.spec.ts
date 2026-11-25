@@ -38,7 +38,7 @@ test('CUST-DEL-02 — password step-up, request, revocation, restricted dashboar
   await page.locator('#deletion-password').fill('incorrect-current-password');
   await page.getByRole('checkbox', { name: /I understand that all sessions/ }).check();
   await page.getByRole('button', { name: 'Request account deletion' }).click();
-  await expect(page.getByRole('alert')).toContainText(/Confirm your password/);
+  await expect(page.getByText('Confirm your password and acknowledgement.', { exact: true })).toBeVisible();
 
   await page.locator('#deletion-password').fill(password);
   await page.getByRole('button', { name: 'Request account deletion' }).click();
