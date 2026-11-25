@@ -216,7 +216,8 @@
         "noPurchase": "Purchases are not available for this membership.",
         "redemptionNote": "Reward handoff needs the customer’s QR code. Scan it to redeem a reward.",
         "done": "Action completed. Look the customer up again before another action."
-      }
+      },
+      "cashierAppLink": "Cashier app: open or install it, sign-in sessions and cashier accounts"
     }
   },
   "customer": {

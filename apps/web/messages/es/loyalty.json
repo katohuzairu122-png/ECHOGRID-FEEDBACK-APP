@@ -216,7 +216,8 @@
         "noPurchase": "Las compras no están disponibles para esta membresía.",
         "redemptionNote": "La entrega de una recompensa requiere el código QR del cliente. Escanéelo para canjear.",
         "done": "Acción completada. Busque de nuevo al cliente antes de otra acción."
-      }
+      },
+      "cashierAppLink": "Aplicación de caja: abrirla o instalarla, sesiones de acceso y cuentas de cajero"
     }
   },
   "customer": {

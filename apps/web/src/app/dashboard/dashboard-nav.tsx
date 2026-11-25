@@ -13,7 +13,6 @@ import { CASHIER_HOME, COMMUNITY_HOME, OVERVIEW_HOME } from '@/lib/workspace-gua
 const REQUIRED: Record<string, string | undefined> = {
   // '/dashboard/community' is gated by canViewCommunityHub (any of several permissions), not by a single key.
   '/dashboard/loyalty/scan': 'loyalty:serve',
-  '/dashboard/cashier': 'loyalty:serve',
   '/dashboard/feedback': 'feedback:view',
   '/dashboard/loyalty': 'loyalty:accounts:view',
   '/dashboard/analytics': 'analytics:view',
@@ -50,16 +49,17 @@ export async function DashboardNav() {
     { href: '/dashboard/settings', label: t('nav.settings'), icon: 'settings' },
     { href: '/dashboard/settings/team', label: t('nav.team'), icon: 'users' },
     { href: '/dashboard/billing', label: t('nav.billing'), icon: 'shield' },
-    { href: '/dashboard/cashier', label: t('nav.cashierApp'), icon: 'qr' },
     support,
   ];
 
+  // One counter entry: "Serve customers". The Cashier app page (open/install the cashier app, sign-in sessions, activity, cashier accounts) is reached
+  // from inside Serve customers, not from a second tab.
   // Cashier: Serve customers is the home and the only workspace; no administrative navigation at all.
   // Unavailable (permissions unconfirmed): nothing privileged is implied; only support and sign-out.
   // Management: only destinations the effective permissions allow.
   const items: WorkspaceNavItem[] =
     kind === 'cashier'
-      ? [{ href: CASHIER_HOME, label: t('nav.serve'), icon: 'qr', hardNavigation: true }, { href: '/dashboard/cashier', label: t('nav.cashierApp'), icon: 'qr' }, support]
+      ? [{ href: CASHIER_HOME, label: t('nav.serve'), icon: 'qr', hardNavigation: true }, support]
       : kind === 'unavailable'
         ? [support]
         : all.filter((item) => {
