@@ -65,7 +65,7 @@ describe.skipIf(!databaseUrl)('business posts in the Community Feed and follows 
 
   async function newBusiness(label: string, owner: string) {
     const biz = (await q('insert into businesses(name, slug, status, default_locale) values ($1,$2,$3,$4) returning id',
-      [`Dist ${label} ${run}`, `dist-${label}-${run}`, 'active', 'en']))[0].id as string;
+      [`Dist ${label} ${tag}`, `dist-${label}-${tag}`, 'active', 'en']))[0].id as string;
     const category = (await q('select id from business_categories limit 1'))[0]?.id as string | undefined;
     if (category) await q('update businesses set category_id=$2 where id=$1', [biz, category]);
     const profiles = new BusinessProfileService(buildDb(client));
@@ -95,7 +95,7 @@ describe.skipIf(!databaseUrl)('business posts in the Community Feed and follows 
     await client.connect();
     const admin = createRepositories(buildDb(client));
     const user = async (label: string) => (await admin.users.create({
-      email: `dist-${label}-${run}@example.test`, fullName: label, passwordHash: await pbkdf2Hash('unused-password-1', 1000), status: 'active',
+      email: `dist-${label}-${tag}@example.test`, fullName: label, passwordHash: await pbkdf2Hash('unused-password-1', 1000), status: 'active',
     })).id;
     ownerA = await user('ownerA'); ownerB = await user('ownerB'); mod1 = await user('mod1'); mod2 = await user('mod2');
     const customer = async (verified: boolean) => (await q(
@@ -111,19 +111,19 @@ describe.skipIf(!databaseUrl)('business posts in the Community Feed and follows 
   afterAll(async () => { await client?.end(); });
 
   it('an approved business post reaches a signed-in customer under the published business name and profile handle, with a closed DTO', async () => {
-    await publishPost(bizA, ownerA, `Fresh croissants every morning from seven ${run}.`);
+    await publishPost(bizA, ownerA, `Fresh croissants every morning from seven ${tag}.`);
     const res = await feed();
     expect(res.status, res.text).toBe(200);
     expect(res.cache).toBe('private, no-store');
-    const item = (res.data as Feed).items.find((i) => i.body.includes(`Fresh croissants every morning from seven ${run}`));
+    const item = (res.data as Feed).items.find((i) => i.body.includes(`Fresh croissants every morning from seven ${tag}`));
     expect(item).toMatchObject({ contentClass: 'business_post', businessName: `Cafe A ${tag}`, businessHandle: handleA });
     expect(Object.keys(item!).sort()).toEqual(['body', 'businessHandle', 'businessName', 'contentClass', 'contentLocale', 'handle', 'linkUrl', 'publishedAt']);
     expect(JSON.stringify(res.data)).not.toMatch(new RegExp(`${bizA}|${ownerA}|${mod2}`)); // no internal ids, authors or reviewers
   });
 
   it('every cause that must hide a business post hides it, with the same shape of answer', async () => {
-    await publishPost(bizA, ownerA, `Visibility probe text ${run}.`);
-    const visible = async (env: Record<string, unknown> = {}) => bodies(await feed({ env })).includes(`Visibility probe text ${run}.`);
+    await publishPost(bizA, ownerA, `Visibility probe text ${tag}.`);
+    const visible = async (env: Record<string, unknown> = {}) => bodies(await feed({ env })).includes(`Visibility probe text ${tag}.`);
     const state = async () => (await q('select publication_state s from business_public_profiles where business_id=$1', [bizA]))[0].s as string;
     expect(await visible()).toBe(true);
     expect(await visible({ NETWORK_BUSINESS_DISTRIBUTION_ENABLED: undefined })).toBe(false);
@@ -159,8 +159,8 @@ describe.skipIf(!databaseUrl)('business posts in the Community Feed and follows 
   });
 
   it('a post that is suspended, withdrawn, expired or only submitted/rejected is never shown; other businesses\' posts are unaffected', async () => {
-    const handle = await publishPost(bizA, ownerA, `Lifecycle probe text ${run}.`);
-    const shown = async () => bodies(await feed()).includes(`Lifecycle probe text ${run}.`);
+    const handle = await publishPost(bizA, ownerA, `Lifecycle probe text ${tag}.`);
+    const shown = async () => bodies(await feed()).includes(`Lifecycle probe text ${tag}.`);
     expect(await shown()).toBe(true);
     await moderation.suspend((await q('select id from network_posts where handle=$1', [handle]))[0].id, mod2, 'spam_or_duplicate');
     expect(await shown()).toBe(false);
@@ -171,15 +171,15 @@ describe.skipIf(!databaseUrl)('business posts in the Community Feed and follows 
     await posts.archive(bizA, handle);
     expect(await shown()).toBe(false);
 
-    const draft = await posts.createDraft(bizB, ownerB, { body: `Draft only, never submitted ${run}.`, contentLocale: 'en' });
-    const pending = await posts.createDraft(bizB, ownerB, { body: `Submitted, not yet approved ${run}.`, contentLocale: 'en' });
+    const draft = await posts.createDraft(bizB, ownerB, { body: `Draft only, never submitted ${tag}.`, contentLocale: 'en' });
+    const pending = await posts.createDraft(bizB, ownerB, { body: `Submitted, not yet approved ${tag}.`, contentLocale: 'en' });
     await posts.submit(bizB, pending.handle);
-    expect(bodies(await feed())).not.toEqual(expect.arrayContaining([`Draft only, never submitted ${run}.`, `Submitted, not yet approved ${run}.`]));
+    expect(bodies(await feed())).not.toEqual(expect.arrayContaining([`Draft only, never submitted ${tag}.`, `Submitted, not yet approved ${tag}.`]));
     expect(draft.handle).toBeTruthy();
   });
 
   it('follows: idempotent, own-only, bounded to published businesses; the Following filter returns only followed businesses', async () => {
-    await publishPost(bizB, ownerB, `News from business B ${run}.`);
+    await publishPost(bizB, ownerB, `News from business B ${tag}.`);
     expect((await call(`/follows/${handleA}`, { method: 'PUT', token: tok1 })).data).toEqual({ following: true });
     expect((await call(`/follows/${handleA}`, { method: 'PUT', token: tok1 })).data).toEqual({ following: true }); // idempotent
     expect(Number((await q('select count(*)::int n from network_follows where customer_id=$1', [cust1]))[0].n)).toBe(1);
@@ -190,7 +190,7 @@ describe.skipIf(!databaseUrl)('business posts in the Community Feed and follows 
     expect(bodies(following).every((b) => !b.includes('News from business B'))).toBe(true);
     expect(((following.data as Feed).items).every((i) => i.businessHandle === handleA)).toBe(true);
     expect(bodies(await feed({ token: tok2, path: '/feed?filter=following' }))).toEqual([]);
-    expect(bodies(await feed({ path: '/feed' }))).toEqual(expect.arrayContaining([`News from business B ${run}.`]));
+    expect(bodies(await feed({ path: '/feed' }))).toEqual(expect.arrayContaining([`News from business B ${tag}.`]));
     // unfollow, and unfollow again
     expect((await call(`/follows/${handleA}`, { method: 'DELETE', token: tok1 })).data).toEqual({ following: false });
     expect((await call(`/follows/${handleA}`, { method: 'DELETE', token: tok1 })).data).toEqual({ following: false });
@@ -234,7 +234,7 @@ describe.skipIf(!databaseUrl)('business posts in the Community Feed and follows 
   });
 
   it('the database refuses a follow of an unpublished business and any update of a follow (direct SQL)', async () => {
-    const other = (await q(`insert into businesses(name, slug, status) values ('NoProfile', $1, 'active') returning id`, [`dist-np-${run}`]))[0].id as string;
+    const other = (await q(`insert into businesses(name, slug, status) values ('NoProfile', $1, 'active') returning id`, [`dist-np-${tag}`]))[0].id as string;
     await expect(q('insert into network_follows(customer_id, business_id) values ($1,$2)', [cust1, other])).rejects.toThrow();
     await q('insert into network_follows(customer_id, business_id) values ($1,$2) on conflict do nothing', [cust1, bizA]);
     await expect(q('update network_follows set created_at = now() where customer_id=$1', [cust1])).rejects.toThrow(/never updated/);
