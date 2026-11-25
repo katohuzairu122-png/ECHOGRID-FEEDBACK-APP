@@ -7,6 +7,8 @@ import {
 } from '../db/schema';
 import { AppError } from '../lib/errors';
 import { IMPLEMENTED_BADGE_METRICS, parseBadgeRule, type BadgeRule } from './badge-rules';
+import { evaluateApprovedQualificationForBadge } from './badge-qualification-adapter';
+import { qualificationEvidenceConsumptions } from '../db/schema';
 
 export const REVOCATION_REASONS = ['evidence_reversed', 'fraud_confirmed', 'eligibility_lost', 'issued_in_error'] as const;
 export type RevocationReason = (typeof REVOCATION_REASONS)[number];
@@ -61,16 +63,24 @@ export class BadgeAwardService {
         let rule: BadgeRule;
         try { rule = parseBadgeRule(v.rule, type); } catch { continue; } // an unapproved/invalid rule never awards (fail closed)
         if (IMPLEMENTED_BADGE_METRICS[rule.metric] !== type) continue;
-        const ids = await sourceIds(db, rule, participantId);
+        // Shared-engine path: only while an APPROVED qualification rule exists for the key; otherwise nothing is awarded (fail closed).
+        const shared = rule.metric === 'approved_qualification' && type === 'customer' ? await evaluateApprovedQualificationForBadge(db, participantId, rule.ruleKey as string) : null;
+        const ids = rule.metric === 'approved_qualification' ? (shared?.evidenceIds ?? []) : await sourceIds(db, rule, participantId);
         if (ids.length < rule.threshold) continue;
         const [row] = await db.insert(tentashipBadgeAwards).values({
           definitionId: v.definitionId, definitionVersionId: v.id, participantType: type,
           customerId: type === 'customer' ? participantId : null, businessId: type === 'business' ? participantId : null,
           evidenceKind: rule.metric, evidenceRef: `${participantId}:${rule.metric}:${rule.threshold}`,
           evidenceHash: createHash('sha256').update(ids.join(',')).digest('hex'),
-          evidence: { metric: rule.metric, threshold: rule.threshold, observed: ids.length, ...(rule.windowDays === undefined ? {} : { windowDays: rule.windowDays }), ruleHash: v.ruleHash },
+          evidence: { metric: rule.metric, threshold: rule.threshold, observed: ids.length, ...(rule.windowDays === undefined ? {} : { windowDays: rule.windowDays }), ruleHash: v.ruleHash, ...(shared ? { qualificationRuleKey: rule.ruleKey, qualificationRuleVersionId: shared.ruleVersionId, qualificationSpecHash: shared.specHash, evidenceLevel: 'recorded' } : {}) },
         }).onConflictDoNothing().returning();
         if (!row) continue; // already awarded (or revoked): a revoked badge is never re-issued
+        if (shared) {
+          // The purchases that justified the badge are consumed under the shared rule, so they can never justify another badge (or referral) under it.
+          for (const id of shared.purchaseEvidenceIds) {
+            await db.insert(qualificationEvidenceConsumptions).values({ evidenceKind: 'purchase_event', evidenceId: id, ruleVersionId: shared.ruleVersionId, consumerKind: 'badge', consumerRef: row.id });
+          }
+        }
         await db.insert(auditLog).values({
           businessId: type === 'business' ? participantId : null, actorUserId: audit.actorUserId ?? null, action: 'tentaship_badge.awarded',
           entityType: 'tentaship_badge_award', entityId: row.id, metadata: { outcome: 'success', definitionKey: key, version: v.version, participantType: type },

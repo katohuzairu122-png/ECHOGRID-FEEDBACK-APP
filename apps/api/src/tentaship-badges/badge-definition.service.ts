@@ -1,6 +1,6 @@
 import { and, desc, eq, sql } from 'drizzle-orm';
 import type { Db } from '../db/client';
-import { auditLog, tentashipBadgeDefinitions, tentashipBadgeDefinitionVersions, type BadgeParticipantType } from '../db/schema';
+import { auditLog, qualificationRuleVersions, tentashipBadgeDefinitions, tentashipBadgeDefinitionVersions, type BadgeParticipantType } from '../db/schema';
 import { AppError } from '../lib/errors';
 import { hashRule, parseBadgeRule, BadgeRuleError } from './badge-rules';
 
@@ -21,6 +21,14 @@ function cleanText(map: Record<string, string>, max: number, requireEnglish: boo
   }
   if (requireEnglish && !out.en) throw new AppError(`An English ${label} is required.`, 400, 'VALIDATION_ERROR');
   return out;
+}
+
+/** An approved_qualification badge may exist only while an APPROVED shared rule version exists for its key (fail closed). */
+async function assertQualificationApproved(db: Db, rule: Record<string, unknown>): Promise<void> {
+  if (rule.metric !== 'approved_qualification') return;
+  const [row] = await db.select({ id: qualificationRuleVersions.id }).from(qualificationRuleVersions)
+    .where(and(eq(qualificationRuleVersions.ruleKey, String(rule.ruleKey)), eq(qualificationRuleVersions.approvalState, 'approved'))).limit(1);
+  if (!row) throw new AppError('No approved qualification rule exists for that key, so this badge cannot be used yet.', 422, 'BADGE_METRIC_BLOCKED');
 }
 
 const lockKey = (definitionId: string) => sql`hashtextextended(${'tentaship-badge-definition:' + definitionId}, 0)`;
@@ -50,6 +58,7 @@ export class BadgeDefinitionService {
   async createDefinition(input: { key: string; participantType: BadgeParticipantType } & BadgeContentInput, ctx: ActorContext) {
     const content = this.content(input, input.participantType);
     return this.db.transaction(async (tx) => {
+      await assertQualificationApproved(tx as unknown as Db, content.rule);
       const [definition] = await tx.insert(tentashipBadgeDefinitions)
         .values({ key: input.key, participantType: input.participantType, createdByUserId: ctx.actorUserId })
         .onConflictDoNothing().returning();
@@ -67,6 +76,7 @@ export class BadgeDefinitionService {
       const [definition] = await tx.select().from(tentashipBadgeDefinitions).where(eq(tentashipBadgeDefinitions.id, definitionId)).limit(1);
       if (!definition) throw new AppError('Badge not found.', 404, 'BADGE_NOT_FOUND');
       const content = this.content(input, definition.participantType);
+      await assertQualificationApproved(tx as unknown as Db, content.rule);
       const [latest] = await tx.select({ v: tentashipBadgeDefinitionVersions.version }).from(tentashipBadgeDefinitionVersions)
         .where(eq(tentashipBadgeDefinitionVersions.definitionId, definitionId)).orderBy(desc(tentashipBadgeDefinitionVersions.version)).limit(1);
       const version = (latest?.v ?? 0) + 1;
@@ -89,7 +99,8 @@ export class BadgeDefinitionService {
       if (fresh.status !== 'draft') throw conflict('Only a draft version can be activated.', 'BADGE_VERSION_NOT_DRAFT');
       const [definition] = await tx.select().from(tentashipBadgeDefinitions).where(eq(tentashipBadgeDefinitions.id, fresh.definitionId)).limit(1);
       // Re-validate at activation: the registry may have changed since the draft was written.
-      this.content({ names: fresh.names, descriptions: fresh.descriptions, rule: fresh.rule }, definition!.participantType);
+      const revalidated = this.content({ names: fresh.names, descriptions: fresh.descriptions, rule: fresh.rule }, definition!.participantType);
+      await assertQualificationApproved(tx as unknown as Db, revalidated.rule);
       const now = new Date();
       await tx.update(tentashipBadgeDefinitionVersions).set({ status: 'retired', retiredAt: now })
         .where(and(eq(tentashipBadgeDefinitionVersions.definitionId, fresh.definitionId), eq(tentashipBadgeDefinitionVersions.status, 'active')));
