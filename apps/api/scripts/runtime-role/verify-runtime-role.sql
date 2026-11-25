@@ -195,6 +195,8 @@ SELECT c.relname AS name, v.verb, 'PRIVILEGE_OUTSIDE_MANIFEST' AS violation
        ('messages', 'INSERT'),
        ('messages', 'SELECT'),
        ('messages', 'UPDATE'),
+       ('network_engagement_events', 'INSERT'),
+       ('network_engagement_events', 'SELECT'),
        ('network_follows', 'DELETE'),
        ('network_follows', 'INSERT'),
        ('network_follows', 'SELECT'),

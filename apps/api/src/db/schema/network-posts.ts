@@ -122,3 +122,31 @@ export const networkFollows = pgTable('network_follows', {
   primaryKey({ columns: [t.customerId, t.businessId] }),
   index('network_follows_business_idx').on(t.businessId, t.createdAt),
 ]);
+
+export const NETWORK_ENGAGEMENT_EVENT_TYPES = ['impression', 'engagement', 'follow', 'unfollow'] as const;
+export type NetworkEngagementEventType = (typeof NETWORK_ENGAGEMENT_EVENT_TYPES)[number];
+
+/**
+ * BCOMM-05 engagement events. Recorded ONLY by the server on behalf of a signed-in customer: an impression when the Feed returned a business
+ * post, an engagement when the customer opened the post's link, a follow/unfollow when the customer chose it. No business or staff role can write
+ * here. Repeats are impossible by construction: one impression/engagement per customer, subject and UTC day (unique index); follow and
+ * unfollow rows are real distinct actions. Deleted with the customer account (FK cascade); a retention period is an open Owner decision. Business
+ * users only ever read thresholded aggregates, never rows, customers or counts below the group size.
+ */
+export const networkEngagementEvents = pgTable('network_engagement_events', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  customerId: uuid('customer_id').notNull().references(() => customers.id, { onDelete: 'cascade' }),
+  businessId: uuid('business_id').notNull().references(() => businessPublicProfiles.businessId, { onDelete: 'restrict' }),
+  /** The post for impression/engagement; the business id itself for follow/unfollow (so the unique index is total). */
+  subjectId: uuid('subject_id').notNull(),
+  eventType: text('event_type').$type<NetworkEngagementEventType>().notNull(),
+  occurredAt: timestamp('occurred_at', { withTimezone: true }).notNull().defaultNow(),
+  eventDay: text('event_day').notNull().default(sql`to_char((now() AT TIME ZONE 'UTC')::date, 'YYYY-MM-DD')`),
+}, (t) => [
+  uniqueIndex('network_engagement_once_per_day_uq').on(t.customerId, t.eventType, t.subjectId, t.eventDay)
+    .where(sql`${t.eventType} IN ('impression','engagement')`),
+  index('network_engagement_business_idx').on(t.businessId, t.eventType, t.occurredAt),
+  index('network_engagement_subject_idx').on(t.subjectId, t.eventType),
+  check('network_engagement_type_valid', sql`${t.eventType} IN ('impression','engagement','follow','unfollow')`),
+  check('network_engagement_day_format', sql`${t.eventDay} ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'`),
+]);

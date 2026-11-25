@@ -12,6 +12,7 @@ import { AppError } from '../lib/errors';
 import { createDb } from '../db/client';
 import type { FeedSource } from './community-feed';
 import { createNetworkFeedSource } from '../network/network-feed-source';
+import { NetworkEngagementService } from '../network/network-engagement.service';
 import { isBusinessDistributionEnabled, isNetworkFeedEnabled } from '../network/network-flag';
 import { assertVerifiedPhone } from '../lib/customer-verification';
 import { createRepositories } from '../repositories';
@@ -45,6 +46,8 @@ export function createCommunityFeedRoutes(options: {
   openSource: (c: Context<Env>) => Promise<FeedSourceHandle>;
   /** Required: Network is a restricted feature. Throws PHONE_VERIFICATION_REQUIRED unless the session customer's phone is verified. */
   assertVerifiedPhone: (c: Context<Env>, customerId: string) => Promise<void>;
+  /** BCOMM-05: best-effort, idempotent impression recording for the business posts of a page. Never affects the response. */
+  recordImpressions?: (c: Context<Env>, customerId: string, businessPostHandles: string[]) => Promise<void>;
 }) {
   const routes = new Hono<Env>();
   routes.use('*', customerAuthenticate, rateLimitByCustomer());
@@ -81,6 +84,11 @@ export function createCommunityFeedRoutes(options: {
       handle?.release?.();
     }
 
+    // BCOMM-05: an impression is a business post RETURNED to this signed-in customer. A failure here is swallowed: the feed answer is unaffected.
+    const businessHandles = page.items.filter((i) => i.contentClass === 'business_post').map((i) => i.handle);
+    if (options.recordImpressions && businessHandles.length > 0) {
+      c.executionCtx.waitUntil(options.recordImpressions(c, c.get('customerId'), businessHandles).catch(() => undefined));
+    }
     c.header('Cache-Control', 'private, no-store');
     return ok(c, page);
   });
@@ -102,5 +110,13 @@ export const communityFeedRoutes = createCommunityFeedRoutes({
   openSource: async (c) => {
     const { db, close } = await createDb(c.env.HYPERDRIVE);
     return { source: createNetworkFeedSource(db), release: () => c.executionCtx.waitUntil(close()) };
+  },
+  recordImpressions: async (c, customerId, handles) => {
+    const { db, close } = await createDb(c.env.HYPERDRIVE);
+    try {
+      await new NetworkEngagementService(db).recordImpressions(customerId, handles);
+    } finally {
+      await close();
+    }
   },
 });

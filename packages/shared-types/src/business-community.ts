@@ -53,3 +53,32 @@ export interface BusinessCommunityParticipation {
 }
 
 export const COMMUNITY_AGGREGATE_MIN_GROUP_SIZE_FLOOR = 10;
+
+/**
+ * BCOMM-05 verified engagement insights for ONE business. Every figure is `shown` or `suppressed` by the server; a count is shown only when it
+ * comes from at least `minimumGroupSize` distinct customers, so a small audience can never be inferred. Nothing identifies a customer.
+ * `attribution` and `profileVisits` are explicit "not measured" states: no approved attribution model and no customer profile surface exist yet.
+ */
+export interface BusinessCommunityInsightPost {
+  handle: string;
+  excerpt: string;
+  impressions: CommunityFigure;
+  uniqueReach: CommunityFigure;
+  engagements: CommunityFigure;
+}
+export interface BusinessCommunityInsights {
+  rangeDays: 7 | 30 | 90;
+  /** UTC dates, inclusive of the start day and the current day. */
+  from: string;
+  to: string;
+  minimumGroupSize: number;
+  impressions: CommunityFigure;
+  uniqueReach: CommunityFigure;
+  engagements: CommunityFigure;
+  newFollowers: CommunityFigure;
+  currentFollowers: CommunityFigure;
+  posts: BusinessCommunityInsightPost[];
+  attribution: { state: 'not_measured' };
+  profileVisits: { state: 'not_measured' };
+}
+export const COMMUNITY_INSIGHT_RANGES = [7, 30, 90] as const;

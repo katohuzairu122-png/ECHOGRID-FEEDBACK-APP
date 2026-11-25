@@ -170,18 +170,44 @@
   },
   "insights": {
     "title": "Estadísticas",
-    "description": "Cómo rinde su actividad en la Comunidad.",
-    "unavailableTitle": "Las estadísticas aún no están disponibles",
-    "unavailable": "Todavía no se mide ninguna actividad de la Comunidad de su negocio, por lo que no se muestran cifras. Las medidas previstas se enumeran abajo; hoy no se registra ninguna.",
-    "plannedTitle": "Medidas previstas",
-    "planned": {
-      "impressions": "Impresiones de publicaciones",
-      "engagement": "Interacción con el contenido",
-      "visits": "Visitas al perfil del negocio",
-      "followers": "Nuevos seguidores",
-      "attribution": "Atribución de inscripciones de fidelidad",
-      "acquisition": "Captación de clientes mediante la Comunidad"
-    }
+    "description": "Cómo rinden sus publicaciones en la Comunidad, a partir de eventos registrados por la propia plataforma.",
+    "unavailableTitle": "No se pudieron cargar las estadísticas en este momento. Inténtelo de nuevo en breve.",
+    "forbidden": "Puede ver la Comunidad, pero su rol no permite ver las estadísticas.",
+    "rangeLabel": "Periodo",
+    "range": "Últimos {days} días",
+    "period": "Del {from} al {to} (días UTC)",
+    "suppressedShort": "Oculto: grupo pequeño",
+    "suppressed": "Oculto para proteger la privacidad: nunca se muestran cifras de menos de {min} clientes.",
+    "metrics": {
+      "impressions": {
+        "label": "Impresiones de publicaciones",
+        "hint": "Veces que sus publicaciones se mostraron a clientes con sesión iniciada (una vez por cliente, publicación y día)."
+      },
+      "reach": {
+        "label": "Alcance único",
+        "hint": "Clientes distintos a quienes se mostraron sus publicaciones."
+      },
+      "engagements": {
+        "label": "Aperturas de enlace",
+        "hint": "Veces que los clientes abrieron un enlace de sus publicaciones (una vez por cliente, publicación y día)."
+      },
+      "newFollowers": {
+        "label": "Nuevos seguidores",
+        "hint": "Clientes que eligieron seguir su negocio en este periodo."
+      },
+      "followers": {
+        "label": "Seguidores actuales",
+        "hint": "Clientes que siguen actualmente su negocio."
+      }
+    },
+    "postsTitle": "Sus publicaciones recientes",
+    "postsEmpty": "Aún no hay publicaciones publicadas.",
+    "notMeasuredTitle": "Aún no se mide",
+    "notMeasured": {
+      "visits": "Visitas al perfil: los clientes todavía no tienen una página de perfil que visitar, así que no se cuenta ninguna.",
+      "attribution": "Atribución de inscripciones de fidelidad y captación: no hay un modelo de atribución aprobado, así que no se muestra ninguna cifra de conversión."
+    },
+    "privacy": "Nunca verá qué clientes fueron alcanzados, lo siguieron o abrieron un enlace. Las cifras cubren solo publicaciones mostradas en el feed de la Comunidad."
   },
   "states": {
     "loading": "Cargando la Comunidad…",
