@@ -1081,6 +1081,39 @@
    ],
    "reason": "OWNER-INVITE-01: owner-issued customer invitations; UPDATE is the one-time revocation only, enforced by a database guard; no DELETE/TRUNCATE"
   },
+  "qualification_rule_versions": {
+   "class": "RUNTIME",
+   "verbs": [
+    "INSERT",
+    "SELECT",
+    "UPDATE"
+   ],
+   "reason": "TSH-02: shared qualification rules; immutable content, UPDATE is the approval/retirement move only (database guard); no route approves a rule in this block; no DELETE/TRUNCATE"
+  },
+  "qualification_evidence_consumptions": {
+   "class": "RUNTIME",
+   "verbs": [
+    "INSERT",
+    "SELECT"
+   ],
+   "reason": "TSH-02: append-only record of evidence consumed by a qualification; no UPDATE/DELETE/TRUNCATE"
+  },
+  "customer_referrals": {
+   "class": "RUNTIME",
+   "verbs": [
+    "INSERT",
+    "SELECT"
+   ],
+   "reason": "TSH-02: immutable referral attribution, one per referred customer; no UPDATE/DELETE/TRUNCATE"
+  },
+  "customer_referral_events": {
+   "class": "RUNTIME",
+   "verbs": [
+    "INSERT",
+    "SELECT"
+   ],
+   "reason": "TSH-02: append-only referral lifecycle with database-validated transitions; verified needs an approved rule; no UPDATE/DELETE/TRUNCATE"
+  },
   "customer_deletion_requests": {
    "class": "RUNTIME",
    "verbs": [

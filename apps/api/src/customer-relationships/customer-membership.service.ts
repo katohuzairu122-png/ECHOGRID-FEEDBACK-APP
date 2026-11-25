@@ -6,6 +6,7 @@ import { AppError } from '../lib/errors';
 import { isUniqueViolation } from '../lib/pg-errors';
 import { assertVerifiedPhone } from '../lib/customer-verification';
 import { endActiveMembership, lockCustomerBusinessRelationship } from './membership-lifecycle';
+import { recordBusinessInvitationAttribution } from '../qualification/referral.service';
 import { assertOwnerInvitationUsable } from '../customer-invitations/customer-invitation.service';
 import { assertInviteCashierAuthorized, readVerificationState, type JoinAttribution } from './onboarding-attribution';
 
@@ -215,6 +216,14 @@ export class CustomerMembershipService {
           occurredAt,
           auditLogId,
         });
+        // TSH-02: an invitation acceptance is recorded as a BUSINESS INVITATION attribution (an acquisition channel, never a customer referral).
+        // Idempotent and once per customer ever; it awards nothing.
+        if (attribution.source === 'remote_invitation' || attribution.source === 'cashier_assisted') {
+          await recordBusinessInvitationAttribution(tx, {
+            customerId: input.customerId, businessId: input.businessId,
+            provenanceKind: attribution.source === 'remote_invitation' ? 'owner_invitation' : 'cashier_assisted_invitation', provenanceRef: attribution.reference,
+          });
+        }
       }
 
       return { membership, loyaltyAccount };

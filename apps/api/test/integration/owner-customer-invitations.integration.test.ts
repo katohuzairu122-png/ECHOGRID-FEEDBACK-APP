@@ -159,6 +159,10 @@ describe.skipIf(!databaseUrl)('OWNER-INVITE-01 owner-issued customer invitations
       expect(joined.status, JSON.stringify(joined)).toBe(201);
       const [ev] = await events(c.id);
       expect(ev).toMatchObject({ source: 'remote_invitation', branch_id: a2, cashier_user_id: null, reference: inv.id });
+      // TSH-02: the acceptance is recorded as a BUSINESS INVITATION attribution (an acquisition channel), never as a customer referral, and awards nothing.
+      const [attr] = await q(`SELECT * FROM customer_referrals WHERE referred_customer_id = $1`, [c.id]);
+      expect(attr).toMatchObject({ referral_type: 'business_invitation', referring_customer_id: null, business_id: bizA, provenance_kind: 'owner_invitation', provenance_ref: inv.id });
+      expect((await q(`SELECT event_type FROM customer_referral_events WHERE referral_id = $1`, [attr.id])).map((r) => r.event_type)).toEqual(['attributed']);
       const after = (await q(`SELECT (SELECT count(*)::int FROM customers) AS customers, (SELECT count(*)::int FROM community_memberships WHERE customer_id = $1) AS community, (SELECT count(*)::int FROM tentaship_badge_awards WHERE customer_id = $1) AS badges`, [c.id]))[0];
       expect(after).toEqual({ ...before, customers: before.customers }); // no new platform identity, no Community, no badge
       expect((await q(`SELECT points FROM loyalty_accounts WHERE customer_id = $1 AND business_id = $2`, [c.id, bizA]))[0].points).toBe(0);
