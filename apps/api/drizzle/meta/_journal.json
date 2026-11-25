@@ -659,6 +659,13 @@
       "when": 1795614319586,
       "tag": "0093_network_engagement_events",
       "breakpoints": true
+    },
+    {
+      "idx": 94,
+      "version": "7",
+      "when": 1795622081810,
+      "tag": "0094_business_closure_requests",
+      "breakpoints": true
     }
   ]
 }

@@ -63,19 +63,19 @@ const nowSeconds = () => Math.floor(Date.now() / 1000);
  * `access`, so it can never verify as an access token (and it deliberately does not use the cashier scope claim names, so the scope guard never mistakes it for a cashier token), and it is bound to a user and a business so it is useless for another.
  * This is password re-entry, NOT multi-factor authentication.
  */
-export async function signAdminReauthProof(userId: string, businessId: string, secret: string): Promise<{ proof: string; expiresAt: Date }> {
+export async function signAdminReauthProof(userId: string, businessId: string, secret: string, type: string = REAUTH_TYPE): Promise<{ proof: string; expiresAt: Date }> {
   const iat = nowSeconds();
   const exp = iat + REAUTH_PROOF_TTL_SECONDS;
-  const proof = await sign({ sub: userId, biz: businessId, type: REAUTH_TYPE, iat, exp }, secret, 'HS256');
+  const proof = await sign({ sub: userId, biz: businessId, type, iat, exp }, secret, 'HS256');
   return { proof, expiresAt: new Date(exp * 1000) };
 }
 
 /** True only for a valid, unexpired proof issued to exactly this user for exactly this business. */
-export async function verifyAdminReauthProof(proof: string | undefined, userId: string, businessId: string, secret: string): Promise<boolean> {
+export async function verifyAdminReauthProof(proof: string | undefined, userId: string, businessId: string, secret: string, type: string = REAUTH_TYPE): Promise<boolean> {
   if (!proof) return false;
   try {
     const p = (await verify(proof, secret, 'HS256')) as { sub?: unknown; biz?: unknown; type?: unknown; exp?: unknown };
-    return p.type === REAUTH_TYPE && p.sub === userId && p.biz === businessId && typeof p.exp === 'number' && p.exp > nowSeconds();
+    return p.type === type && p.sub === userId && p.biz === businessId && typeof p.exp === 'number' && p.exp > nowSeconds();
   } catch {
     return false;
   }

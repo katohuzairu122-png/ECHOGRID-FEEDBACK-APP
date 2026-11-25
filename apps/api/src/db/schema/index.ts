@@ -25,6 +25,7 @@ export * from './fraud-signals';
 export * from './customers';
 export * from './customer-sanctions';
 export * from './customer-deletion-requests';
+export * from './business-closure-requests';
 export * from './community-pilot-eligibility';
 export * from './business-customer-memberships';
 export * from './customer-onboarding-events';
