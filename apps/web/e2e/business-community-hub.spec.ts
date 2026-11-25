@@ -20,6 +20,7 @@ async function createOwner(page: Page, label: string) {
   await expect(page).toHaveURL('/dashboard');
   await page.getByLabel('Business name').fill(`Hub ${unique}`);
   await page.getByRole('button', { name: 'Create business' }).click();
+  await page.waitForURL('**/dashboard/community'); // the business now exists and the new default home has loaded
   await collapseDevelopmentBadge(page); // the development-only issue badge must not cover fixed workspace controls
   return { email, businessName: `Hub ${unique}` };
 }
