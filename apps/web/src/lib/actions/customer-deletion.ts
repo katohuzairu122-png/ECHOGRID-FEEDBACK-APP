@@ -60,12 +60,15 @@ export async function requestCustomerDeletionAction(
     const verified = await callCustomerAuthApi('/customer-account/deletion/reauth', {
       bearer: token, body: { currentPassword: password },
     });
+    if (process.env.CUSTOMER_AUTH_R5_TEST_ONLY === 'true') console.info('[CUST-DEL-02 isolated acceptance] reauth status', verified.status);
     if (verified.status === 429) return { error: 'rate_limited' };
     if (verified.status === 401 || verified.status === 400) return { error: 'invalid' };
     if (verified.status !== 204) return { error: 'unavailable' };
     const filed = await callCustomerAuthApi('/customer-account/deletion', { bearer: token });
+    if (process.env.CUSTOMER_AUTH_R5_TEST_ONLY === 'true') console.info('[CUST-DEL-02 isolated acceptance] request status', filed.status);
     if (filed.status !== 201 && filed.status !== 200) return { error: 'unavailable' };
     await clearCompatibleCustomerSession();
+    if (process.env.CUSTOMER_AUTH_R5_TEST_ONLY === 'true') console.info('[CUST-DEL-02 isolated acceptance] browser cookies cleared');
   } catch (error) {
     rethrowControlFlow(error);
     return { error: 'unavailable' };
