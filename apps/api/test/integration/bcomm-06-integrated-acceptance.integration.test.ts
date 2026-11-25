@@ -91,11 +91,11 @@ describe.skipIf(!databaseUrl)('BCOMM-06 integrated acceptance (disposable Postgr
     await client.connect();
     const admin = createRepositories(buildDb(client));
     for (const k of ['ownerA', 'staffA', 'ownerB', 'mod1', 'mod2']) {
-      id[k] = (await admin.users.create({ email: `b6-${k}-${run}@example.test`, fullName: k, passwordHash: await pbkdf2Hash('unused-password-1', 1000), status: 'active' })).id;
+      id[k] = (await admin.users.create({ email: `b6-${k}-${tag}@example.test`, fullName: k, passwordHash: await pbkdf2Hash('unused-password-1', 1000), status: 'active' })).id;
       tok[k] = await signAccessToken(id[k]!, STAFF_SECRET);
     }
-    bizA = (await admin.businesses.create({ name: `B6 A ${run}`, slug: `b6-a-${run}` })).id;
-    bizB = (await admin.businesses.create({ name: `B6 B ${run}`, slug: `b6-b-${run}` })).id;
+    bizA = (await admin.businesses.create({ name: `B6 A ${tag}`, slug: `b6-a-${tag}` })).id;
+    bizB = (await admin.businesses.create({ name: `B6 B ${tag}`, slug: `b6-b-${tag}` })).id;
     const provisioning = new RoleProvisioningService(admin);
     for (const [biz, owner] of [[bizA, id.ownerA!], [bizB, id.ownerB!]] as const) {
       const roles = await provisioning.seedDefaultRoles(biz, owner);
@@ -113,14 +113,14 @@ describe.skipIf(!databaseUrl)('BCOMM-06 integrated acceptance (disposable Postgr
 
   it('THE JOURNEY: draft -> submit -> moderation -> feed -> follow -> engagement -> insights, with every actor boundary holding', async () => {
     // 3-4. the owner writes a post and edits the draft
-    const created = await call('/network/business-posts', { method: 'POST', body: body(`Journey post ${run}`), ...asOwner() });
+    const created = await call('/network/business-posts', { method: 'POST', body: body(`Journey post ${tag}`), ...asOwner() });
     expect(created.status, created.text).toBe(201);
     const handle = created.data.handle as string;
-    expect((await call(`/network/business-posts/${handle}/draft`, { method: 'PUT', body: body(`Journey post v2 ${run}`), ...asOwner() })).data.body).toContain('v2');
+    expect((await call(`/network/business-posts/${handle}/draft`, { method: 'PUT', body: body(`Journey post v2 ${tag}`), ...asOwner() })).data.body).toContain('v2');
     // 5. submitted; the customer feed shows nothing yet
     expect((await call(`/network/business-posts/${handle}/submit`, { method: 'POST', ...asOwner() })).data.stage).toBe('awaiting_review');
     const beforeApproval = await call('/network/feed', { token: customers[0]!.token });
-    expect(JSON.stringify(beforeApproval.data)).not.toContain(`Journey post v2 ${run}`);
+    expect(JSON.stringify(beforeApproval.data)).not.toContain(`Journey post v2 ${tag}`);
     // 6-7. platform moderation: the author cannot approve, a different platform user can; then it is eligible
     const rev = await revisionOf(handle);
     await expect(moderation.approve(rev, id.ownerA!)).rejects.toMatchObject({ code: 'NETWORK_SELF_APPROVAL' });
@@ -128,7 +128,7 @@ describe.skipIf(!databaseUrl)('BCOMM-06 integrated acceptance (disposable Postgr
     // 8. every customer discovers it in the canonical Feed, under the published business name
     for (const c of customers) {
       const feed = await call('/network/feed', { token: c.token });
-      const item = (feed.data.items as any[]).find((i) => i.body === `Journey post v2 ${run}`);
+      const item = (feed.data.items as any[]).find((i) => i.body === `Journey post v2 ${tag}`);
       expect(item, feed.text).toMatchObject({ contentClass: 'business_post', businessName: `Cafe A ${tag}`, businessHandle: handleA });
     }
     // 10-11. voluntary follow and an engagement (link open); a follow does NOT enroll, consent or message
@@ -167,11 +167,11 @@ describe.skipIf(!databaseUrl)('BCOMM-06 integrated acceptance (disposable Postgr
   });
 
   it('CONTAINMENT: each control closes only its own capability and never destroys history', async () => {
-    const created = await call('/network/business-posts', { method: 'POST', body: body(`Containment post ${run}`), ...asOwner() });
+    const created = await call('/network/business-posts', { method: 'POST', body: body(`Containment post ${tag}`), ...asOwner() });
     const handle = created.data.handle as string;
     await call(`/network/business-posts/${handle}/submit`, { method: 'POST', ...asOwner() });
     await moderation.approve(await revisionOf(handle), id.mod2!);
-    const visible = async (env?: Record<string, unknown>) => JSON.stringify((await call('/network/feed', { token: customers[0]!.token, ...(env ? { env } : {}) })).data).includes(`Containment post ${run}`);
+    const visible = async (env?: Record<string, unknown>) => JSON.stringify((await call('/network/feed', { token: customers[0]!.token, ...(env ? { env } : {}) })).data).includes(`Containment post ${tag}`);
     expect(await visible()).toBe(true);
     const postsBefore = Number((await q('select count(*)::int n from network_posts where business_id=$1', [bizA]))[0].n);
     const revisionsBefore = Number((await q('select count(*)::int n from network_post_revisions r join network_posts p on p.id=r.post_id where p.business_id=$1', [bizA]))[0].n);
