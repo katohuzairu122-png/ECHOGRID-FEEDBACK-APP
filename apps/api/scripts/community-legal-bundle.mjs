@@ -5,6 +5,7 @@
  * Content hash = SHA-256 over the UTF-8 bytes of the file, the same function the Community terms authority uses (hashCommunityTermsContent).
  * This is NOT a publication: no id, no dates, no approval, nothing is seeded. manifestHash is deliberately absent until a real publication id and dates exist.
  */
+import { Buffer } from 'node:buffer';
 import { createHash } from 'node:crypto';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
