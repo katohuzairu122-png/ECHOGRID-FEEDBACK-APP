@@ -178,8 +178,10 @@ test('keyboard operation, and opening the hub sends no write request (no enrollm
   expect(writes).toEqual([]);
 });
 
-test('sign-in keeps secure return URLs and never leaves the site; the new default home is Community', async ({ page }) => {
+test('sign-in keeps secure return URLs and never leaves the site; the new default home is Community', async ({ page, context }) => {
   await page.setViewportSize({ width: 1280, height: 900 });
+  // A genuinely fresh visitor: the shared owner's cookies (added for every test) would make /signup bounce to the dashboard.
+  await context.clearCookies();
   const { email } = await createOwner(page, 'returnurl');
   await page.getByRole('button', { name: 'Log out' }).click();
   await expect(page).toHaveURL(/\/login/);
