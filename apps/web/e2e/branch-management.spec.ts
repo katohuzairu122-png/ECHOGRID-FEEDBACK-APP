@@ -27,6 +27,9 @@ test('signup, create a business, create a branch, see it listed', async ({ page 
   await page.getByLabel('Business name').fill(`E2E Business ${unique}`);
   await page.getByRole('button', { name: 'Create business' }).click();
 
+  // BCOMM-01: a new owner lands on the Community hub; these specs exercise the Business Overview, which keeps its own destination.
+  await expect(page.getByRole('heading', { name: 'Community', exact: true })).toBeVisible();
+  await page.goto('/dashboard/overview');
   await expect(page.getByRole('heading', { name: 'Business Overview', exact: true })).toBeVisible();
   await expect(page.getByText(`E2E Business ${unique}`, { exact: true }).first()).toBeVisible();
 

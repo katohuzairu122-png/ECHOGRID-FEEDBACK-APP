@@ -58,6 +58,7 @@ import { fraudSignalRoutes } from './fraud/fraud-signal.routes';
 import { surveyRoutes } from './surveys/survey.routes';
 import { surveyCustomerRoutes } from './surveys/survey-customer.routes';
 import { communityCustomerRoutes } from './community/community-customer.routes';
+import { communityBusinessRoutes } from './community/community-business.routes';
 import { communityFeedRoutes } from './community/community-feed.routes';
 import { platformNetworkModerationRoutes } from './platform/network-moderation.routes';
 import { communityPointCustomerRoutes } from './community/community-point-customer.routes';
@@ -210,6 +211,8 @@ api.route('/fraud-signals', fraudSignalRoutes);
 // run staff authentication for /surveys/me/* just like the loyalty customer/staff split.
 api.route('/surveys/me', surveyCustomerRoutes);
 api.route('/community/me', communityCustomerRoutes);
+// BCOMM-01: read-only rollout status for the business Community hub (business-wide managers only; data-free).
+api.route('/community/business', communityBusinessRoutes);
 // COMMUNITY-01: read-only, customer-authenticated feed foundation. Empty source only (no approved publication policy).
 api.route('/network', communityFeedRoutes);
 api.route('/community-points/me', communityPointCustomerRoutes);

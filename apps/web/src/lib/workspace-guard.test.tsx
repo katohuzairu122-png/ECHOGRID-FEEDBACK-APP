@@ -14,7 +14,7 @@ vi.mock('./permissions', async () => ({
   getMyAccess: () => access(),
 }));
 
-import { CASHIER_HOME, managementGate, programmeGate } from './workspace-guard';
+import { CASHIER_HOME, COMMUNITY_HOME, OVERVIEW_HOME, communityHubGate, managementGate, programmeGate } from './workspace-guard';
 
 const STAFF = ['business:view', 'branches:view', 'loyalty:serve'];
 const variantOf = (node: unknown) => (node as { props: { variant: string } }).props.variant;
@@ -46,5 +46,28 @@ describe('workspace guards', () => {
     set(true, ...STAFF, 'analytics:view');
     expect(await managementGate()).toBeNull();
     expect(variantOf(await programmeGate())).toBe('forbidden');
+  });
+
+  describe('BCOMM-01 communityHubGate', () => {
+    it('names the two homes', () => {
+      expect(COMMUNITY_HOME).toBe('/dashboard/community');
+      expect(OVERVIEW_HOME).toBe('/dashboard/overview');
+    });
+    it('sends counter staff to the cashier home, never to Community or another privileged page', async () => {
+      set(true, ...STAFF);
+      await expect(communityHubGate()).rejects.toThrow('REDIRECT:' + CASHIER_HOME);
+      expect(redirect).not.toHaveBeenCalledWith(COMMUNITY_HOME);
+    });
+    it('shows the unavailable state for unknown permissions and the forbidden state for a view-only management user', async () => {
+      set(false, 'business:manage_settings', 'analytics:view');
+      expect(variantOf(await communityHubGate())).toBe('unavailable');
+      set(true, 'business:view', 'feedback:view', 'messages:view');
+      expect(variantOf(await communityHubGate())).toBe('forbidden');
+      expect(redirect).not.toHaveBeenCalled();
+    });
+    it('lets an owner or manager through', async () => {
+      set(true, 'business:view', 'business:manage_settings', 'analytics:view');
+      expect(await communityHubGate()).toBeNull();
+    });
   });
 });

@@ -6,11 +6,12 @@ import {
   WorkspaceNavigation,
   type WorkspaceNavItem,
 } from '@/components/workspace/workspace-navigation';
-import { classifyWorkspace, getMyAccess } from '@/lib/permissions';
-import { CASHIER_HOME } from '@/lib/workspace-guard';
+import { canViewCommunityHub, classifyWorkspace, getMyAccess } from '@/lib/permissions';
+import { CASHIER_HOME, COMMUNITY_HOME, OVERVIEW_HOME } from '@/lib/workspace-guard';
 
 /** Permission each management destination needs to appear. Presentation only: the API enforces each one. */
 const REQUIRED: Record<string, string | undefined> = {
+  // '/dashboard/community' is gated by canViewCommunityHub (any of several permissions), not by a single key.
   '/dashboard/loyalty/scan': 'loyalty:serve',
   '/dashboard/cashier': 'loyalty:serve',
   '/dashboard/feedback': 'feedback:view',
@@ -32,12 +33,15 @@ export async function DashboardNav() {
   const kind = classifyWorkspace(access);
   const support: WorkspaceNavItem = { href: '/support', label: t('nav.support'), icon: 'chat' };
 
+  // BCOMM-01: Community is the FIRST item (one entry, no duplicates). Customers and rewards live inside Loyalty, so Loyalty carries them; the
+  // Business Overview keeps its own destination. The mobile bar shows the first three items plus More, so it reads Community, Loyalty, Feedback.
   const all: WorkspaceNavItem[] = [
-    { href: '/dashboard', label: t('overview.title'), icon: 'store' },
-    { href: '/dashboard/loyalty/scan', label: t('nav.serve'), icon: 'qr', hardNavigation: true },
-    { href: '/dashboard/feedback', label: t('nav.feedback'), icon: 'chat' },
+    { href: COMMUNITY_HOME, label: t('nav.community'), icon: 'users' },
     { href: '/dashboard/loyalty', label: t('nav.loyalty'), icon: 'star' },
+    { href: '/dashboard/feedback', label: t('nav.feedback'), icon: 'chat' },
+    { href: '/dashboard/loyalty/scan', label: t('nav.serve'), icon: 'qr', hardNavigation: true },
     { href: '/dashboard/analytics', label: t('nav.analytics'), icon: 'chart' },
+    { href: OVERVIEW_HOME, label: t('overview.title'), icon: 'store' },
     { href: '/dashboard/branches', label: t('nav.branches'), icon: 'store' },
     { href: '/dashboard/settlements', label: t('nav.settlements'), icon: 'gift' },
     { href: '/dashboard/surveys', label: t('nav.surveys'), icon: 'chart' },
@@ -59,14 +63,15 @@ export async function DashboardNav() {
       : kind === 'unavailable'
         ? [support]
         : all.filter((item) => {
+            if (item.href === COMMUNITY_HOME) return canViewCommunityHub(access);
             const need = REQUIRED[item.href];
             return !need || access.permissions.has(need);
           });
 
   return (
     <WorkspaceNavigation
-      home={kind === 'cashier' ? CASHIER_HOME : '/dashboard'}
-      {...(kind === 'cashier' ? { primaryCount: 1 } : {})}
+      home={kind === 'cashier' ? CASHIER_HOME : canViewCommunityHub(access) ? COMMUNITY_HOME : OVERVIEW_HOME}
+      {...(kind === 'cashier' ? { primaryCount: 1 } : kind === 'management' ? { primaryCount: 3 } : {})}
       label={t('overview.workspace')}
       menuLabel={t('nav.menu')}
       moreLabel={t('nav.more')}

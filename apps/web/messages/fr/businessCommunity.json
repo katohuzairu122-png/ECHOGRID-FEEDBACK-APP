@@ -1,0 +1,121 @@
+{
+  "title": "Communauté",
+  "hubLabel": "Espace Communauté",
+  "tagline": "Un seul compte. Toutes vos fidélités.",
+  "intro": "Entrez en contact avec vos clients, développez votre audience et bâtissez des relations durables grâce à la Communauté Echo Grid.",
+  "workspace": "Espace de travail",
+  "tabs": {
+    "label": "Sections de la Communauté",
+    "home": "Accueil",
+    "participation": "Participation",
+    "posts": "Mes publications",
+    "insights": "Statistiques"
+  },
+  "status": {
+    "title": "État du déploiement",
+    "description": "Ce qui est ouvert en ce moment. Cela reflète les réglages réels de la plateforme et ne change que lorsqu'Echo Grid ouvre une fonctionnalité.",
+    "capabilities": {
+      "enrollment": "Adhésion des clients",
+      "feed": "Activité de la Communauté",
+      "publishing": "Publication par les commerces"
+    },
+    "state": {
+      "open": "Ouvert",
+      "closed": "Pas encore disponible",
+      "unknown": "État indisponible"
+    },
+    "closedNote": "La Communauté n'est pas encore disponible. Consulter cette page n'inscrit ni vous ni aucun client, et rien n'est publié.",
+    "openNote": "Les clients peuvent désormais choisir de rejoindre la Communauté. La participation est toujours volontaire et chaque client décide pour lui-même.",
+    "unknownNote": "Nous n'avons pas pu lire l'état du déploiement ; rien n'est donc supposé disponible. Réessayez plus tard."
+  },
+  "summary": {
+    "title": "Résumé de la participation",
+    "eligible": "Clients fidélité",
+    "participants": "Participants à la Communauté",
+    "rate": "Taux de participation",
+    "unavailable": "Pas encore disponible",
+    "hint": "Affiché ici seulement lorsqu'un total approuvé et protégeant la vie privée existera.",
+    "link": "Ouvrir Participation"
+  },
+  "feed": {
+    "title": "Activité de la Communauté",
+    "empty": "L'activité de la Communauté apparaîtra ici lorsque la Communauté sera disponible.",
+    "openNotice": "Le fil de la Communauté pour les clients est ouvert, mais l'activité destinée aux commerces n'est pas encore disponible."
+  },
+  "about": {
+    "title": "À propos de la Communauté Echo Grid",
+    "what": {
+      "title": "De quoi s'agit-il",
+      "body": "La Communauté Echo Grid est un espace partagé qui relie les clients et les commerces du réseau Echo Grid."
+    },
+    "differs": {
+      "title": "En quoi elle diffère de votre programme de fidélité",
+      "body": "Votre programme de fidélité appartient à votre commerce. La Communauté est distincte : rejoindre votre programme de fidélité ne fait jamais d'un client un membre de la Communauté."
+    },
+    "benefit": {
+      "title": "Comment votre commerce peut en profiter",
+      "body": "À terme, la Communauté vise à aider les clients à découvrir des commerces et les commerces à toucher des personnes qui ont choisi de participer. Ce n'est pas encore disponible."
+    },
+    "voluntary": {
+      "title": "La participation est volontaire",
+      "body": "Un client ne rejoint la Communauté que s'il le choisit, avec son propre accord explicite. Lire cette page n'inscrit jamais personne."
+    },
+    "publishing": {
+      "title": "La publication, plus tard",
+      "body": "À l'avenir, des commerces approuvés pourraient partager des actualités. La publication n'est pas encore disponible et chaque publication serait modérée."
+    },
+    "privacy": {
+      "title": "Vie privée des clients",
+      "body": "Vous ne verrez jamais que des totaux concernant vos propres clients, jamais qui a adhéré ni ce qu'un client fait ailleurs."
+    },
+    "rollout": {
+      "title": "Disponibilité actuelle",
+      "body": "Consultez l'état du déploiement ci-dessus pour savoir ce qui est ouvert aujourd'hui."
+    }
+  },
+  "participation": {
+    "title": "Participation",
+    "description": "Combien de vos clients fidélité participent à la Communauté.",
+    "unavailableTitle": "Les chiffres de participation ne sont pas encore disponibles",
+    "unavailable": "Cette section affichera uniquement des totaux : vos clients fidélité, combien participent à la Communauté et la part qu'ils représentent. Aucun chiffre n'est affiché tant que ce rapport n'est pas disponible.",
+    "privacy": "Vous ne verrez jamais quels clients ont adhéré, leurs points, ni rien sur les clients d'autres commerces. Les petits groupes seront masqués afin que personne ne puisse être identifié.",
+    "metrics": {
+      "eligible": "Clients fidélité",
+      "participants": "Participants à la Communauté",
+      "rate": "Taux de participation"
+    },
+    "unavailableShort": "Pas encore disponible"
+  },
+  "posts": {
+    "title": "Mes publications",
+    "description": "Les actualités que votre commerce partage avec la Communauté.",
+    "unavailableTitle": "Les publications de commerce ne sont pas encore disponibles",
+    "unavailable": "Lorsque la publication par les commerces sera disponible, vous pourrez rédiger des brouillons, voir lesquelles sont publiées ou en cours de vérification et archiver les plus anciennes. Rien ne peut être écrit ni publié aujourd'hui.",
+    "statesTitle": "Ce que vous pourrez gérer",
+    "states": {
+      "drafts": "Brouillons",
+      "published": "Publiées",
+      "review": "En cours de vérification",
+      "archived": "Archivées"
+    }
+  },
+  "insights": {
+    "title": "Statistiques",
+    "description": "Les résultats de votre activité dans la Communauté.",
+    "unavailableTitle": "Les statistiques ne sont pas encore disponibles",
+    "unavailable": "Aucune activité de la Communauté n'est encore mesurée pour votre commerce ; aucun chiffre n'est donc affiché. Les mesures prévues sont listées ci-dessous ; aucune n'est suivie aujourd'hui.",
+    "plannedTitle": "Mesures prévues",
+    "planned": {
+      "impressions": "Affichages des publications",
+      "engagement": "Engagement avec le contenu",
+      "visits": "Visites du profil du commerce",
+      "followers": "Nouveaux abonnés",
+      "attribution": "Attribution des adhésions à la fidélité",
+      "acquisition": "Acquisition de clients grâce à la Communauté"
+    }
+  },
+  "states": {
+    "loading": "Chargement de la Communauté…",
+    "error": "Cette section n'a pas pu être chargée. Réessayez plus tard."
+  }
+}

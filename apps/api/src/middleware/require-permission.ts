@@ -25,3 +25,21 @@ export function requirePermission(key: string) {
     await next();
   });
 }
+
+/**
+ * Guards a route behind AT LEAST ONE of several permission keys (BCOMM-01: the business Community hub is open to anyone who manages
+ * the business). Same mounting order as requirePermission. Reports every acceptable key, never which ones the caller holds.
+ */
+export function requireAnyPermission(keys: readonly string[]) {
+  return createMiddleware<{
+    Bindings: Bindings;
+    Variables: AuthVariables & TenantVariables;
+  }>(async (c, next) => {
+    assertTenantAuthorizationContext(c.var);
+    const held = c.get('permissions');
+    if (!keys.some((key) => held.has(key))) {
+      throw new AppError('Missing required permission.', 403, 'PERMISSION_DENIED', { requiredAnyOf: [...keys] });
+    }
+    await next();
+  });
+}
