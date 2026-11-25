@@ -19,6 +19,8 @@ describe.skipIf(!process.env.DATABASE_URL)('TB-04 upgrade 0093 -> 0095 with lega
   const rollbackSql = readFileSync(resolve(__dirname, '../../../../docs/architecture/builds/TENTASHIP/rollback/0094_0095_rollback.sql'), 'utf8');
   const journal = JSON.parse(readFileSync(join(folder, 'meta/_journal.json'), 'utf8')) as { entries: { idx: number; tag: string }[] };
   const first = journal.entries.find((e) => e.tag === '0094_business_closure_requests')!;
+  // The migration under test ends at 0095. Later migrations (0096+) must not change what this suite proves, so every upgrade is pinned to 0095, not to the journal's last entry.
+  const last = journal.entries.find((e) => e.tag === '0095_tentaship_badges')!;
   const NEW_TABLES = ['business_closure_requests', 'tentaship_badge_definitions', 'tentaship_badge_definition_versions', 'tentaship_badge_awards', 'tentaship_badge_revocations'];
   const LEGACY = ['customers', 'businesses', 'users', 'loyalty_accounts', 'community_point_accounts', 'community_point_rules', 'community_point_award_decisions'];
   let admin: Client; let c: Client; const dirs: string[] = [];
@@ -66,7 +68,7 @@ describe.skipIf(!process.env.DATABASE_URL)('TB-04 upgrade 0093 -> 0095 with lega
   });
 
   it('upgrading to 0095 preserves every legacy row byte-for-byte and adds only the new, empty, guarded tables', async () => {
-    await upgrade(folder);
+    await upgrade(folderUpTo(last.idx));
     expect(await fingerprint()).toEqual(before);
     const after = await tables();
     expect(after.filter((t) => !tablesBefore.includes(t)).sort()).toEqual([...NEW_TABLES].sort());
@@ -98,7 +100,7 @@ describe.skipIf(!process.env.DATABASE_URL)('TB-04 upgrade 0093 -> 0095 with lega
     }
     // Ledger bookkeeping per the script header: remove the two newest drizzle rows, then upgrade again.
     await c.query(`DELETE FROM drizzle.__drizzle_migrations WHERE id IN (SELECT id FROM drizzle.__drizzle_migrations ORDER BY created_at DESC LIMIT 2)`);
-    await upgrade(folder);
+    await upgrade(folderUpTo(last.idx));
     expect((await tables()).filter((t) => !tablesBefore.includes(t)).sort()).toEqual([...NEW_TABLES].sort());
     expect(await fingerprint()).toEqual(before);
   });
