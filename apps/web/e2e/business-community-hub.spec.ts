@@ -29,7 +29,7 @@ async function setBusinessLanguage(page: Page, locale: string) {
   await page.goto('/dashboard/settings');
   await page.getByLabel('Language').selectOption(locale);
   await page.getByRole('button', { name: 'Save settings' }).click();
-  await page.waitForResponse((response) => response.request().method() === 'POST' && response.ok());
+  await expect(page.getByText('Settings saved.')).toBeVisible(); // wait for the real save, not for any request (the dev server also posts)
   await page.reload(); // the page shell (language, direction) is resolved per request from the saved business language
   await expect(page.locator('html')).toHaveAttribute('lang', locale);
 }
@@ -78,7 +78,7 @@ test('an owner lands on the Community hub; it is honest while Community is disab
   const tabs = page.getByRole('navigation', { name: 'Community sections' });
   await tabs.getByRole('link', { name: 'Participation' }).click();
   await expect(page).toHaveURL('/dashboard/community/participation');
-  await expect(page.getByTestId('community-participation').getByText('Not available yet')).toHaveCount(3);
+  await expect(page.getByTestId('community-participation').getByText('Not available yet', { exact: true })).toHaveCount(3);
   await tabs.getByRole('link', { name: 'My Posts' }).click();
   await expect(page.getByText('Business posts are not available yet')).toBeVisible();
   await expect(page.getByTestId('community-hub').locator('input, textarea, select, form')).toHaveCount(0);
