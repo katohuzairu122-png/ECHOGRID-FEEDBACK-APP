@@ -1,16 +1,12 @@
 import { test, expect } from '@playwright/test';
 import { collapseDevelopmentBadge } from './helpers/development-chrome';
+import { signUpBusinessOwner } from './helpers/signup';
 
 test('Business Overview uses empty API data honestly and keeps navigation responsive', async ({
   page,
 }, testInfo) => {
   const unique = Date.now();
-  await page.goto('/signup?role=business');
-  await page.getByLabel('Full name').fill('Workspace UI Test');
-  await page.getByLabel('Email').fill(`workspace-${unique}@example.test`);
-  await page.getByLabel('Password', { exact: true }).fill('a-strong-test-password');
-  await page.getByLabel(/I agree to the Terms of Service/).check();
-  await page.getByRole('button', { name: 'Create account' }).click();
+  await signUpBusinessOwner(page, { fullName: 'Workspace UI Test', email: `workspace-${unique}@example.test`, password: 'a-strong-test-password' });
   await page.getByLabel('Business name').fill(`Workspace ${unique}`);
   await page.getByRole('button', { name: 'Create business' }).click();
   // BCOMM-01: a new owner lands on the Community hub; these specs exercise the Business Overview, which keeps its own destination.
