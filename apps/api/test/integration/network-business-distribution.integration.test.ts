@@ -238,6 +238,10 @@ describe.skipIf(!databaseUrl)('business posts in the Community Feed and follows 
     await expect(q('update network_follows set created_at = now() where customer_id=$1', [cust1])).rejects.toThrow(/never updated/);
   });
 
+  it('a follow table truncate is refused, like every other guarded network table', async () => {
+    await expect(q('truncate network_follows')).rejects.toThrow(/TRUNCATE_DENIED|NETWORK_TRUNCATE/);
+  });
+
   it('keyset pagination over mixed official and business posts is stable and complete', async () => {
     const seen: string[] = [];
     let cursor: string | null = null;

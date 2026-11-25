@@ -30,3 +30,8 @@ CREATE TRIGGER network_follow_guard_trg BEFORE INSERT OR UPDATE ON network_follo
   FOR EACH ROW EXECUTE FUNCTION network_follow_guard();
 --> statement-breakpoint
 ALTER TABLE network_follows ENABLE ALWAYS TRIGGER network_follow_guard_trg;
+--> statement-breakpoint
+CREATE TRIGGER network_follows_no_truncate BEFORE TRUNCATE ON network_follows
+  FOR EACH STATEMENT EXECUTE FUNCTION network_truncate_denied();
+--> statement-breakpoint
+ALTER TABLE network_follows ENABLE ALWAYS TRIGGER network_follows_no_truncate;
