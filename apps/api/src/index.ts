@@ -16,6 +16,7 @@ import { cashierSessionRoutes } from './cashier-sessions/cashier-sessions.routes
 import { cashierAccountRoutes } from './cashier-accounts/cashier-accounts.routes';
 import { businessClosureRoutes } from './business-closure/business-closure.routes';
 import { platformBusinessClosureRoutes } from './platform/business-closure.routes';
+import { platformTentashipBadgeRoutes } from './platform/tentaship-badge.routes';
 import { cashierActivityRoutes } from './cashier-activity/cashier-activity.routes';
 import { businessRoutes } from './businesses/business.routes';
 import { businessCategoryRoutes } from './businesses/business-category.routes';
@@ -256,6 +257,8 @@ api.route('/platform/community-pilot', platformCommunityPilotRoutes);
 api.route('/platform/orphan-settlements', platformOrphanSettlementRoutes);
 // BIZ-CLOSE-01: read-only platform-admin visibility of closure requests.
 api.route('/platform/business-closure', platformBusinessClosureRoutes);
+// TB-02: Tentaship Badges definition administration (platform admin). Every path is a generic 404 unless TENTASHIP_BADGES_ENABLED === 'true'.
+api.route('/platform/tentaship-badges', platformTentashipBadgeRoutes);
 // Operations diagnostics -- admin-only, and the only platform prefix that
 // WRITES nothing and READS nothing. See ops.routes.ts for why it is gated
 // tighter than audit-log (which admits all three roles).

@@ -666,6 +666,13 @@
       "when": 1795622081810,
       "tag": "0094_business_closure_requests",
       "breakpoints": true
+    },
+    {
+      "idx": 95,
+      "version": "7",
+      "when": 1795623027080,
+      "tag": "0095_tentaship_badges",
+      "breakpoints": true
     }
   ]
 }

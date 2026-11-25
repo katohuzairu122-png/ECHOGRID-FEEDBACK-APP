@@ -144,6 +144,10 @@ DECLARE
     ['survey_versions', 'INSERT, SELECT, UPDATE'],
     ['surveys', 'INSERT, SELECT, UPDATE'],
     ['team_invitations', 'INSERT, SELECT, UPDATE'],
+    ['tentaship_badge_awards', 'INSERT, SELECT'],
+    ['tentaship_badge_definition_versions', 'INSERT, SELECT, UPDATE'],
+    ['tentaship_badge_definitions', 'INSERT, SELECT'],
+    ['tentaship_badge_revocations', 'INSERT, SELECT'],
     ['user_business_roles', 'INSERT, SELECT, UPDATE'],
     ['users', 'INSERT, SELECT, UPDATE'],
     ['visit_sessions', 'INSERT, SELECT, UPDATE']
