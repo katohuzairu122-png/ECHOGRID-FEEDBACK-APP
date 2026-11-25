@@ -6,7 +6,7 @@ import type { Pbkdf2Worker } from '../auth/pbkdf2-worker';
 import { createRepositories } from '../repositories';
 import { auditLog, branches, businesses, permissions, refreshTokens, rolePermissions, roles, userBusinessRoles, users } from '../db/schema';
 import {
-  generateBusinessCode, generateInitialPassword, isAcceptablePassword, normalizeUsername,
+  generateBusinessCode, isAcceptablePassword, normalizeUsername,
   MIN_PASSWORD_LENGTH, MAX_PASSWORD_LENGTH,
 } from './credentials';
 
@@ -86,18 +86,7 @@ export class ManagedCashierService {
     return { cashierCode: business.cashierCode, rotatedAt: business.cashierCodeRotatedAt };
   }
 
-  /** D-3: owner-rotatable code. Rotating changes only how NEW sign-ins find the business; it is not a credential. */
-  async rotateBusinessCode(input: { businessId: string; actorUserId: string }): Promise<{ cashierCode: string }> {
-    return this.db.transaction(async (tx) => {
-      const code = await this.assignFreshCode(tx, input.businessId);
-      await tx.insert(auditLog).values({
-        businessId: input.businessId, actorUserId: input.actorUserId, action: 'cashier_code.rotated',
-        entityType: 'business', entityId: input.businessId, metadata: {},
-      });
-      return { cashierCode: code };
-    });
-  }
-
+  /** The business code is permanent: this runs only when the business has none yet (its first cashier account). */
   private async assignFreshCode(tx: Transaction, businessId: string): Promise<string> {
     for (let attempt = 0; attempt < 5; attempt++) {
       const candidate = generateBusinessCode();
@@ -122,18 +111,14 @@ export class ManagedCashierService {
    */
   async createAccount(input: {
     businessId: string; actorUserId: string; username: string; displayName: string; branchIds: readonly string[];
-    accessMode: BranchAccessMode; password?: string | undefined;
-  }): Promise<{ account: ManagedCashierSummary; initialPassword: string | null; cashierCode: string }> {
+    accessMode: BranchAccessMode; password: string;
+  }): Promise<{ account: ManagedCashierSummary; cashierCode: string }> {
     const branchIds = validateBranchAssignment(input.accessMode, input.branchIds);
     const username = normalizeUsername(input.username);
     if (!username) throw new AppError('Username must be 3 to 32 characters: lowercase letters, digits, dot, underscore or hyphen.', 422, 'CASHIER_USERNAME_INVALID');
     const displayName = input.displayName.trim();
     if (displayName.length < 1 || displayName.length > 120) throw new AppError('A display name of 1 to 120 characters is required.', 422, 'CASHIER_DISPLAY_NAME_INVALID');
-    const supplied = input.password !== undefined;
-    if (supplied && !isAcceptablePassword(input.password)) {
-      throw new AppError(`A password of ${MIN_PASSWORD_LENGTH} to ${MAX_PASSWORD_LENGTH} characters is required.`, 422, 'CASHIER_PASSWORD_INVALID');
-    }
-    const password = supplied ? (input.password as string) : generateInitialPassword();
+    const password = requireChosenPassword(input.password, username);
     // Hashed BEFORE the transaction: PBKDF2 is slow and must not hold row locks.
     const passwordHash = await this.hasher.hash(password, PASSWORD_ITERATIONS);
 
@@ -161,14 +146,13 @@ export class ManagedCashierService {
       await tx.insert(auditLog).values({
         businessId: input.businessId, actorUserId: input.actorUserId, action: 'cashier_account.created',
         entityType: 'user', entityId: userRow.id,
-        metadata: { username, accessMode: input.accessMode, branchIds, credentialSource: supplied ? 'administrator_supplied' : 'generated' },
+        metadata: { username, accessMode: input.accessMode, branchIds, credentialSource: 'administrator_supplied' },
       });
       return { userRow, cashierCode, chosen };
     });
 
     return {
       account: this.summarise(created.userRow, created.chosen),
-      initialPassword: supplied ? null : password,
       cashierCode: created.cashierCode,
     };
   }
@@ -269,13 +253,11 @@ export class ManagedCashierService {
 
   /** D-5: sets a new credential and revokes every active session of this identity, in one transaction. */
   async resetCredential(input: {
-    businessId: string; accountId: string; actorUserId: string; password?: string | undefined;
-  }): Promise<{ initialPassword: string | null }> {
-    const supplied = input.password !== undefined;
-    if (supplied && !isAcceptablePassword(input.password)) {
-      throw new AppError(`A password of ${MIN_PASSWORD_LENGTH} to ${MAX_PASSWORD_LENGTH} characters is required.`, 422, 'CASHIER_PASSWORD_INVALID');
-    }
-    const password = supplied ? (input.password as string) : generateInitialPassword();
+    businessId: string; accountId: string; actorUserId: string; password: string;
+  }): Promise<{ changed: true }> {
+    const existing = await createRepositories(this.db).users.findManagedById(input.businessId, input.accountId);
+    if (!existing) throw notFound();
+    const password = requireChosenPassword(input.password, existing.loginUsername);
     const passwordHash = await this.hasher.hash(password, PASSWORD_ITERATIONS);
     await this.db.transaction(async (tx) => {
       const [row] = await tx.update(users).set({
@@ -287,10 +269,10 @@ export class ManagedCashierService {
       const revoked = await createRepositories(tx).refreshTokens.revokeAllForUser(input.accountId);
       await tx.insert(auditLog).values({
         businessId: input.businessId, actorUserId: input.actorUserId, action: 'cashier_account.credential_reset',
-        entityType: 'user', entityId: input.accountId, metadata: { sessionsRevoked: revoked, credentialSource: supplied ? 'administrator_supplied' : 'generated' },
+        entityType: 'user', entityId: input.accountId, metadata: { sessionsRevoked: revoked, credentialSource: 'administrator_supplied' },
       });
     });
-    return { initialPassword: supplied ? null : password };
+    return { changed: true };
   }
 
   async changeUsername(input: { businessId: string; accountId: string; actorUserId: string; username: string }): Promise<ManagedCashierSummary> {
@@ -385,3 +367,15 @@ export class ManagedCashierService {
 
 /** A syntactically valid hash no real credential matches, so an unknown administrator costs the same verification time. */
 const DUMMY = 'pbkdf2$600000$AAAAAAAAAAAAAAAAAAAAAA==$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=';
+
+
+/** The owner chooses every cashier password (nothing is generated). 8 to 128 characters, and never the same as the sign-in name. */
+function requireChosenPassword(raw: unknown, username: string | null): string {
+  if (!isAcceptablePassword(raw)) {
+    throw new AppError(`A password of ${MIN_PASSWORD_LENGTH} to ${MAX_PASSWORD_LENGTH} characters is required.`, 422, 'CASHIER_PASSWORD_INVALID');
+  }
+  if (username && raw.trim().toLowerCase() === username.toLowerCase()) {
+    throw new AppError('The password must not be the same as the username.', 422, 'CASHIER_PASSWORD_INVALID');
+  }
+  return raw;
+}

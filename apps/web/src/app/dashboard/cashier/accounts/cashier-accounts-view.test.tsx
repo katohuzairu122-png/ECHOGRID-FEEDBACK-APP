@@ -3,11 +3,11 @@ import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { renderWithIntl } from '@/test-utils';
 
 const m = vi.hoisted(() => ({
-  create: vi.fn(), reauth: vi.fn(), reset: vi.fn(), status: vi.fn(), branches: vi.fn(), rotate: vi.fn(),
+  create: vi.fn(), reauth: vi.fn(), reset: vi.fn(), status: vi.fn(), branches: vi.fn(),
 }));
 vi.mock('@/lib/actions/cashier-accounts', () => ({
   createCashierAccountAction: m.create, cashierReauthAction: m.reauth, resetCashierCredentialAction: m.reset,
-  cashierAccountStatusAction: m.status, setCashierBranchesAction: m.branches, rotateCashierCodeAction: m.rotate,
+  cashierAccountStatusAction: m.status, setCashierBranchesAction: m.branches,
 }));
 
 import { CashierAccountsView } from './cashier-accounts-view';
@@ -63,7 +63,9 @@ describe('cashier accounts view', () => {
   });
 
   const nameBox = () => screen.getByLabelText("Cashier's name");
-  const createdCredential = { username: 'amina', password: 'Gen3ratedPass1234567890', cashierCode: 'ABCDEFGHJK' };
+  const passwordBox = () => screen.getByLabelText('Password for this cashier');
+  const choosePassword = (value = 'my chosen pass 1') => fireEvent.change(passwordBox(), { target: { value } });
+  const createdCredential = { username: 'amina', cashierCode: 'ABCDEFGHJK' };
 
   it('simplest case, one branch: only a name is asked; the branch is shown as text; the password is asked for in a dialog right there', async () => {
     m.reauth.mockResolvedValue({ status: 'reauthenticated' });
@@ -73,25 +75,30 @@ describe('cashier accounts view', () => {
     expect(screen.queryByLabelText('Several branches')).not.toBeInTheDocument();
     expect(screen.queryByLabelText('Buddy 1')).not.toBeInTheDocument();
     expect(screen.queryByLabelText(/^Username/)).not.toBeInTheDocument();
-    expect(screen.queryByLabelText(/^Password/)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/^Password to confirm/)).not.toBeInTheDocument(); // asked only in the dialog, after Create
+    expect(passwordBox()).toHaveAttribute('type', 'password'); // the owner chooses the cashier's password
     fireEvent.change(nameBox(), { target: { value: 'Amina' } });
+    choosePassword();
     fireEvent.click(screen.getByRole('button', { name: 'Create cashier' }));
     expect(m.reauth).not.toHaveBeenCalled(); // nothing happens until the owner confirms in the dialog
     fireEvent.change(await screen.findByLabelText('Password to confirm'), { target: { value: 'owner-password' } });
     fireEvent.click(screen.getByRole('button', { name: 'Confirm and create' }));
-    expect(await screen.findByText('Save this sign-in now')).toBeInTheDocument();
+    expect(await screen.findByText('Cashier account ready')).toBeInTheDocument();
     expect((m.reauth.mock.calls[0]![1] as FormData).get('password')).toBe('owner-password');
     const sent = m.create.mock.calls[0]![1] as FormData;
     expect(sent.get('username')).toBe('amina');
     expect(sent.get('displayName')).toBe('Amina');
     expect(sent.get('accessMode')).toBe('single');
     expect(sent.getAll('branchId')).toEqual(['b1']);
-    expect(sent.get('password')).toBeNull(); // always generated
-    expect(screen.getByText('Gen3ratedPass1234567890')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'I have saved it' }));
-    await waitFor(() => expect(screen.queryByText('Gen3ratedPass1234567890')).not.toBeInTheDocument());
+    expect(sent.get('cashierPassword')).toBe('my chosen pass 1'); // exactly what the owner typed
+    expect(sent.get('password')).toBeNull(); // the owner's own password is never sent with the create
+    expect(screen.queryByText('my chosen pass 1')).not.toBeInTheDocument(); // the chosen password is never shown back
+    expect(screen.getByText('The password you chose')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Done' }));
+    await waitFor(() => expect(screen.queryByText('Cashier account ready')).not.toBeInTheDocument());
     expect(screen.getByText('The cashier was created.')).toBeInTheDocument();
     expect((nameBox() as HTMLInputElement).value).toBe('');
+    expect((passwordBox() as HTMLInputElement).value).toBe('');
   });
 
   it('several branches: all are ticked by default; unticking leaves the rest, and one left means single access', async () => {
@@ -103,10 +110,11 @@ describe('cashier accounts view', () => {
     fireEvent.click(within(create).getByLabelText('Harbour'));
     fireEvent.click(within(create).getByLabelText('Airport'));
     fireEvent.change(nameBox(), { target: { value: 'Roaming Rita' } });
+    choosePassword();
     fireEvent.click(screen.getByRole('button', { name: 'Create cashier' }));
     fireEvent.change(await screen.findByLabelText('Password to confirm'), { target: { value: 'pw' } });
     fireEvent.click(screen.getByRole('button', { name: 'Confirm and create' }));
-    await screen.findByText('Save this sign-in now');
+    await screen.findByText('Cashier account ready');
     const sent = m.create.mock.calls[0]![1] as FormData;
     expect(sent.getAll('branchId')).toEqual(['b1']);
     expect(sent.get('accessMode')).toBe('single');
@@ -122,6 +130,12 @@ describe('cashier accounts view', () => {
     for (const b of ['Main', 'Harbour', 'Airport']) fireEvent.click(within(create).getByLabelText(b));
     fireEvent.change(nameBox(), { target: { value: 'Amina' } });
     fireEvent.click(screen.getByRole('button', { name: 'Create cashier' }));
+    expect(screen.getByText('Choose a password of 8 or more characters.')).toBeInTheDocument();
+    choosePassword('seven77'); // one short of the minimum
+    fireEvent.click(screen.getByRole('button', { name: 'Create cashier' }));
+    expect(screen.getByText('Choose a password of 8 or more characters.')).toBeInTheDocument();
+    choosePassword('eight888');
+    fireEvent.click(screen.getByRole('button', { name: 'Create cashier' }));
     expect(screen.getByText('Tick at least one branch.')).toBeInTheDocument();
     expect(m.reauth).not.toHaveBeenCalled();
     expect(m.create).not.toHaveBeenCalled();
@@ -131,6 +145,7 @@ describe('cashier accounts view', () => {
     m.reauth.mockResolvedValue({ status: 'failed', error: 'UNAUTHENTICATED' });
     view([], 'ABCDEFGHJK', [{ id: 'b1', name: 'Buddy 1' }]);
     fireEvent.change(nameBox(), { target: { value: 'Amina' } });
+    choosePassword();
     fireEvent.click(screen.getByRole('button', { name: 'Create cashier' }));
     fireEvent.change(await screen.findByLabelText('Password to confirm'), { target: { value: 'wrong' } });
     fireEvent.click(screen.getByRole('button', { name: 'Confirm and create' }));
@@ -145,10 +160,11 @@ describe('cashier accounts view', () => {
       .mockResolvedValueOnce({ status: 'created', credential: { ...createdCredential, username: 'amina47' } });
     view([], 'ABCDEFGHJK', [{ id: 'b1', name: 'Buddy 1' }]);
     fireEvent.change(nameBox(), { target: { value: 'Amina' } });
+    choosePassword();
     fireEvent.click(screen.getByRole('button', { name: 'Create cashier' }));
     fireEvent.change(await screen.findByLabelText('Password to confirm'), { target: { value: 'pw' } });
     fireEvent.click(screen.getByRole('button', { name: 'Confirm and create' }));
-    expect(await screen.findByText('Save this sign-in now')).toBeInTheDocument();
+    expect(await screen.findByText('Cashier account ready')).toBeInTheDocument();
     expect(m.create).toHaveBeenCalledTimes(2);
     expect((m.create.mock.calls[0]![1] as FormData).get('username')).toBe('amina');
     expect((m.create.mock.calls[1]![1] as FormData).get('username')).toMatch(/^amina\d{2}$/);
@@ -159,6 +175,7 @@ describe('cashier accounts view', () => {
     m.create.mockResolvedValue({ status: 'failed', error: 'SOMETHING_SECRET_INTERNAL' });
     view([], 'ABCDEFGHJK', [{ id: 'b1', name: 'Buddy 1' }]);
     fireEvent.change(nameBox(), { target: { value: 'Amina' } });
+    choosePassword();
     fireEvent.click(screen.getByRole('button', { name: 'Create cashier' }));
     fireEvent.change(await screen.findByLabelText('Password to confirm'), { target: { value: 'pw' } });
     fireEvent.click(screen.getByRole('button', { name: 'Confirm and create' }));
@@ -179,13 +196,15 @@ describe('cashier accounts view', () => {
     m.create.mockResolvedValue({ status: 'created', credential: createdCredential });
     view([], 'ABCDEFGHJK', [{ id: 'b1', name: 'Buddy 1' }]);
     fireEvent.change(nameBox(), { target: { value: 'Amina' } });
+    choosePassword();
     fireEvent.click(screen.getByRole('button', { name: 'Create cashier' }));
     fireEvent.change(await screen.findByLabelText('Password to confirm'), { target: { value: 'pw' } });
     fireEvent.click(screen.getByRole('button', { name: 'Confirm and create' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Copy sign-in details' }));
     await waitFor(() => expect(writeText).toHaveBeenCalledTimes(1));
-    expect(writeText.mock.calls[0]![0]).toContain('Gen3ratedPass1234567890');
+    expect(writeText.mock.calls[0]![0]).toContain('ABCDEFGHJK');
     expect(writeText.mock.calls[0]![0]).toContain('amina');
+    expect(writeText.mock.calls[0]![0]).not.toContain('my chosen pass 1'); // the password is never copied or shown
     expect(await screen.findByText('Copied')).toBeInTheDocument();
   });
 
@@ -226,16 +245,72 @@ describe('cashier accounts view', () => {
     view([account({})]);
     fireEvent.click(screen.getByRole('button', { name: 'Revoke access' }));
     fireEvent.click(screen.getByRole('button', { name: 'Disable' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Reset password' }));
-    expect(window.confirm).toHaveBeenCalledTimes(3);
+    expect(window.confirm).toHaveBeenCalledTimes(2);
     expect(m.status).not.toHaveBeenCalled();
     expect(m.reset).not.toHaveBeenCalled();
   });
 
-  it('a reset shows the new password once', async () => {
-    m.reset.mockResolvedValue({ status: 'credentialReset', credential: { username: 'till1', password: 'ResetPass1234567890abc' } });
+  it('the owner types the new password and confirms with their own, in one dialog; nothing is generated or shown', async () => {
+    m.reauth.mockResolvedValue({ status: 'reauthenticated' });
+    m.reset.mockResolvedValue({ status: 'credentialReset' });
     view([account({})]);
-    fireEvent.click(screen.getByRole('button', { name: 'Reset password' }));
-    expect(await screen.findByText('ResetPass1234567890abc')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Change password' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Change the password for Front till' });
+    fireEvent.change(within(dialog).getByLabelText('New password'), { target: { value: 'a brand new one 9' } });
+    fireEvent.change(within(dialog).getByLabelText('Password to confirm'), { target: { value: 'owner-password' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Change password' }));
+    expect(await screen.findByText('Password changed. Front till was signed out of every device. Tell them the new password.')).toBeInTheDocument();
+    expect((m.reauth.mock.calls[0]![1] as FormData).get('password')).toBe('owner-password');
+    const sent = m.reset.mock.calls[0]![1] as FormData;
+    expect(sent.get('accountId')).toBe('a1');
+    expect(sent.get('newPassword')).toBe('a brand new one 9');
+    expect(screen.queryByText('a brand new one 9')).not.toBeInTheDocument();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('a new password under 8 characters is refused before anything is sent, and a wrong owner password changes nothing', async () => {
+    m.reauth.mockResolvedValue({ status: 'failed', error: 'INVALID_CREDENTIALS' });
+    view([account({})]);
+    fireEvent.click(screen.getByRole('button', { name: 'Change password' }));
+    const dialog = await screen.findByRole('dialog');
+    fireEvent.change(within(dialog).getByLabelText('Password to confirm'), { target: { value: 'owner-password' } });
+    fireEvent.change(within(dialog).getByLabelText('New password'), { target: { value: 'short' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Change password' }));
+    expect(await within(dialog).findByText('Choose a password of 8 or more characters.')).toBeInTheDocument();
+    expect(m.reauth).not.toHaveBeenCalled();
+    fireEvent.change(within(dialog).getByLabelText('New password'), { target: { value: 'long enough pw' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Change password' }));
+    expect(await within(dialog).findByText('That password is not correct.')).toBeInTheDocument();
+    expect(m.reset).not.toHaveBeenCalled();
+  });
+
+  it('a password the API refuses is explained in plain words inside the dialog', async () => {
+    m.reauth.mockResolvedValue({ status: 'reauthenticated' });
+    m.reset.mockResolvedValue({ status: 'failed', error: 'CASHIER_PASSWORD_INVALID' });
+    view([account({})]);
+    fireEvent.click(screen.getByRole('button', { name: 'Change password' }));
+    const dialog = await screen.findByRole('dialog');
+    fireEvent.change(within(dialog).getByLabelText('New password'), { target: { value: 'till1till1' } });
+    fireEvent.change(within(dialog).getByLabelText('Password to confirm'), { target: { value: 'owner-password' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Change password' }));
+    expect(await within(dialog).findByText('Use 8 to 128 characters, and not the same as the username.')).toBeInTheDocument();
+  });
+
+  it('the Show button lets the owner see what they typed, and hides it again', () => {
+    view([], 'ABCDEFGHJK', [{ id: 'b1', name: 'Buddy 1' }]);
+    choosePassword('visible check 1');
+    expect(passwordBox()).toHaveAttribute('type', 'password');
+    fireEvent.click(screen.getByRole('button', { name: 'Show' }));
+    expect(passwordBox()).toHaveAttribute('type', 'text');
+    expect((passwordBox() as HTMLInputElement).value).toBe('visible check 1');
+    fireEvent.click(screen.getByRole('button', { name: 'Hide' }));
+    expect(passwordBox()).toHaveAttribute('type', 'password');
+  });
+
+  it('the business code is permanent: it is shown with a note that it never changes, and there is no control to change it', () => {
+    view([account({})]);
+    expect(screen.getByTestId('business-code')).toHaveTextContent('ABCDEFGHJK');
+    expect(screen.getByText(/The code never changes/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /business code/i })).not.toBeInTheDocument();
   });
 });

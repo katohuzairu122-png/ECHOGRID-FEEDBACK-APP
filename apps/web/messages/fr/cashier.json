@@ -181,19 +181,16 @@
       },
       "code": {
         "title": "Code d'entreprise",
-        "hint": "Les caissiers se connectent avec ce code, leur nom d'utilisateur et leur mot de passe. Ce n'est pas un secret, mais changez-le s'il est partagé par erreur.",
-        "none": "Créé avec votre premier compte caissier.",
-        "rotate": "Changer le code d'entreprise",
-        "confirmRotate": "Changer le code d'entreprise ? Les caissiers auront besoin du nouveau code à leur prochaine connexion. Les caissiers connectés ne sont pas déconnectés.",
-        "rotated": "Le code d'entreprise a été changé."
+        "hint": "Les caissiers se connectent avec ce code, leur nom d'utilisateur et le mot de passe que vous avez choisi. Le code ne change jamais et n'est pas secret.",
+        "none": "Créé avec votre premier compte caissier."
       },
       "create": {
         "title": "Ajouter un caissier",
         "username": "Nom d'utilisateur",
         "usernameHint": "3 à 32 caractères : lettres minuscules, chiffres, point, tiret bas ou tiret.",
         "displayName": "Nom ou libellé de l'employé",
-        "password": "Mot de passe (facultatif)",
-        "passwordHint": "Laissez vide pour générer un mot de passe sûr. Si vous en choisissez un, il doit compter au moins 8 caractères.",
+        "password": "Mot de passe de ce caissier",
+        "passwordHint": "C'est vous qui le choisissez. Au moins 8 caractères ; lettres, chiffres et symboles sont acceptés. Communiquez-le vous-même au caissier.",
         "submit": "Créer le caissier",
         "created": "Le caissier a été créé.",
         "name": "Nom du caissier",
@@ -210,7 +207,10 @@
         "confirmSubmit": "Confirmer et créer",
         "creating": "Création…",
         "cancel": "Annuler",
-        "confirmWrong": "Ce mot de passe n'est pas correct."
+        "confirmWrong": "Ce mot de passe n'est pas correct.",
+        "passwordShow": "Afficher",
+        "passwordHide": "Masquer",
+        "passwordNeeds": "Choisissez un mot de passe d'au moins 8 caractères."
       },
       "assign": {
         "mode": "Accès aux succursales",
@@ -245,8 +245,7 @@
         "editBranches": "Succursales",
         "saveBranches": "Enregistrer les succursales",
         "cancel": "Annuler",
-        "resetCredential": "Réinitialiser le mot de passe",
-        "confirmReset": "Réinitialiser le mot de passe de ce caissier ? Ses sessions en cours prennent fin et vous verrez le nouveau mot de passe une seule fois.",
+        "resetCredential": "Changer le mot de passe",
         "disable": "Désactiver",
         "confirmDisable": "Désactiver ce compte ? Il est déconnecté maintenant et ne peut plus se connecter tant que vous ne le réactivez pas.",
         "enable": "Activer",
@@ -254,16 +253,21 @@
         "signOut": "Déconnecter les appareils",
         "confirmSignOut": "Déconnecter ce caissier de tous ses appareils ?",
         "revoke": "Révoquer l'accès",
-        "confirmRevoke": "Révoquer ce compte définitivement ? Cette action est irréversible."
+        "confirmRevoke": "Révoquer ce compte définitivement ? Cette action est irréversible.",
+        "changePasswordTitle": "Changer le mot de passe de {name}",
+        "changePasswordHint": "Choisissez un nouveau mot de passe. Le caissier sera déconnecté de tous ses appareils.",
+        "newPassword": "Nouveau mot de passe",
+        "changePasswordSubmit": "Changer le mot de passe",
+        "changePasswordDone": "Mot de passe modifié. {name} a été déconnecté de tous ses appareils. Communiquez-lui le nouveau mot de passe."
       },
       "credential": {
-        "title": "Enregistrez cet accès maintenant",
-        "warning": "Ce mot de passe n'est affiché qu'une seule fois et ne peut pas être retrouvé. Transmettez-le au caissier de façon sécurisée.",
+        "title": "Compte caissier prêt",
+        "warning": "Donnez ces informations au caissier. Le mot de passe est celui que vous avez choisi ; il n'est pas affiché ici et ne peut pas être récupéré, seulement modifié.",
         "code": "Code d'entreprise",
         "username": "Nom d'utilisateur",
         "password": "Mot de passe",
         "setByYou": "Le mot de passe que vous avez choisi",
-        "dismiss": "Je l'ai enregistré",
+        "dismiss": "Terminé",
         "copy": "Copier les identifiants",
         "copied": "Copié"
       },
@@ -272,7 +276,7 @@
         "REAUTH_REQUIRED": "Confirmez votre mot de passe ci-dessus, puis réessayez.",
         "CASHIER_USERNAME_TAKEN": "Ce nom d'utilisateur est déjà utilisé dans cette entreprise.",
         "CASHIER_USERNAME_INVALID": "Les noms d'utilisateur comptent 3 à 32 caractères : lettres minuscules, chiffres, point, tiret bas ou tiret.",
-        "CASHIER_PASSWORD_INVALID": "Les mots de passe doivent compter de 8 à 128 caractères.",
+        "CASHIER_PASSWORD_INVALID": "Utilisez de 8 à 128 caractères, et pas le même mot de passe que le nom d'utilisateur.",
         "CASHIER_BRANCH_ASSIGNMENT_INVALID": "Choisissez une succursale pour l'accès simple, ou au moins deux pour plusieurs.",
         "CASHIER_BRANCH_NOT_FOUND": "Une des succursales choisies est introuvable.",
         "CASHIER_ACCOUNT_STATE_CONFLICT": "Ce n'est pas possible dans l'état actuel du compte.",

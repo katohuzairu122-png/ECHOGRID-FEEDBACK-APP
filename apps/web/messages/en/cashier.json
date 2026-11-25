@@ -181,19 +181,16 @@
       },
       "code": {
         "title": "Business code",
-        "hint": "Cashiers sign in with this code, their username and their password. It is not a secret, but change it if it is shared by mistake.",
-        "none": "Created with your first cashier account.",
-        "rotate": "Change business code",
-        "confirmRotate": "Change the business code? Cashiers will need the new code the next time they sign in. Signed-in cashiers are not signed out.",
-        "rotated": "The business code was changed."
+        "hint": "Cashiers sign in with this code, their username and the password you chose. The code never changes, and it is not a secret.",
+        "none": "Created with your first cashier account."
       },
       "create": {
         "title": "Add a cashier",
         "username": "Username",
         "usernameHint": "3 to 32 characters: lowercase letters, numbers, dot, underscore or hyphen.",
         "displayName": "Name or employee label",
-        "password": "Password (optional)",
-        "passwordHint": "Leave empty to generate a secure password. If you set one, it must be at least 8 characters.",
+        "password": "Password for this cashier",
+        "passwordHint": "You choose it. At least 8 characters; letters, numbers and symbols are all fine. Tell the cashier this password yourself.",
         "submit": "Create cashier",
         "created": "The cashier was created.",
         "name": "Cashier's name",
@@ -210,7 +207,10 @@
         "confirmSubmit": "Confirm and create",
         "creating": "Creating…",
         "cancel": "Cancel",
-        "confirmWrong": "That password is not correct."
+        "confirmWrong": "That password is not correct.",
+        "passwordShow": "Show",
+        "passwordHide": "Hide",
+        "passwordNeeds": "Choose a password of 8 or more characters."
       },
       "assign": {
         "mode": "Branch access",
@@ -245,8 +245,7 @@
         "editBranches": "Branches",
         "saveBranches": "Save branches",
         "cancel": "Cancel",
-        "resetCredential": "Reset password",
-        "confirmReset": "Reset this cashier's password? Their current sessions end and you will see the new password once.",
+        "resetCredential": "Change password",
         "disable": "Disable",
         "confirmDisable": "Disable this account? It is signed out now and cannot sign in until you enable it.",
         "enable": "Enable",
@@ -254,16 +253,21 @@
         "signOut": "Sign out devices",
         "confirmSignOut": "Sign this cashier out of every device?",
         "revoke": "Revoke access",
-        "confirmRevoke": "Revoke this account permanently? This cannot be undone."
+        "confirmRevoke": "Revoke this account permanently? This cannot be undone.",
+        "changePasswordTitle": "Change the password for {name}",
+        "changePasswordHint": "Choose a new password. The cashier is signed out of every device.",
+        "newPassword": "New password",
+        "changePasswordSubmit": "Change password",
+        "changePasswordDone": "Password changed. {name} was signed out of every device. Tell them the new password."
       },
       "credential": {
-        "title": "Save this sign-in now",
-        "warning": "This password is shown only once and cannot be recovered. Give it to the cashier securely.",
+        "title": "Cashier account ready",
+        "warning": "Give the cashier these details. The password is the one you chose; it is not shown here and cannot be recovered, only changed.",
         "code": "Business code",
         "username": "Username",
         "password": "Password",
         "setByYou": "The password you chose",
-        "dismiss": "I have saved it",
+        "dismiss": "Done",
         "copy": "Copy sign-in details",
         "copied": "Copied"
       },
@@ -272,7 +276,7 @@
         "REAUTH_REQUIRED": "Confirm your password above, then try again.",
         "CASHIER_USERNAME_TAKEN": "That username is already used in this business.",
         "CASHIER_USERNAME_INVALID": "Usernames are 3 to 32 characters: lowercase letters, numbers, dot, underscore or hyphen.",
-        "CASHIER_PASSWORD_INVALID": "Passwords must be 8 to 128 characters.",
+        "CASHIER_PASSWORD_INVALID": "Use 8 to 128 characters, and not the same as the username.",
         "CASHIER_BRANCH_ASSIGNMENT_INVALID": "Choose one branch for single access, or at least two for several.",
         "CASHIER_BRANCH_NOT_FOUND": "One of the chosen branches was not found.",
         "CASHIER_ACCOUNT_STATE_CONFLICT": "That is not possible for the account's current status.",

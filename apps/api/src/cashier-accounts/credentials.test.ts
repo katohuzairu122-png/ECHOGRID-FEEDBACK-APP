@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { sign } from 'hono/jwt';
 import {
-  BUSINESS_CODE_ALPHABET, INITIAL_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH, LOCKOUT_DURATION_MS, LOCKOUT_MAX_FAILURES, LOCKOUT_WINDOW_MS,
-  REAUTH_PROOF_TTL_SECONDS, generateBusinessCode, generateInitialPassword, isAcceptablePassword, normalizeBusinessCode, normalizeUsername,
+  BUSINESS_CODE_ALPHABET, MIN_PASSWORD_LENGTH, LOCKOUT_DURATION_MS, LOCKOUT_MAX_FAILURES, LOCKOUT_WINDOW_MS,
+  REAUTH_PROOF_TTL_SECONDS, generateBusinessCode, isAcceptablePassword, normalizeBusinessCode, normalizeUsername,
   signAdminReauthProof, verifyAdminReauthProof,
 } from './credentials';
 import { verifyAccessToken } from '../auth/jwt';
@@ -14,7 +14,6 @@ const BIZ = '22222222-2222-4222-8222-222222222222';
 describe('owner-ruled policy constants (D-5)', () => {
   it('match the approved policy', () => {
     expect(MIN_PASSWORD_LENGTH).toBe(8);
-    expect(INITIAL_PASSWORD_LENGTH).toBe(24);
     expect(LOCKOUT_MAX_FAILURES).toBe(5);
     expect(LOCKOUT_WINDOW_MS).toBe(15 * 60 * 1000);
     expect(LOCKOUT_DURATION_MS).toBe(15 * 60 * 1000);
@@ -58,16 +57,6 @@ describe('username namespace (D-3)', () => {
 });
 
 describe('credentials (D-5)', () => {
-  it('generates 24-character unambiguous random passwords that do not repeat', () => {
-    const seen = new Set<string>();
-    for (let i = 0; i < 300; i++) {
-      const pw = generateInitialPassword();
-      expect(pw).toHaveLength(24);
-      expect(pw).toMatch(/^[A-HJ-NP-Za-km-z2-9]{24}$/);
-      seen.add(pw);
-    }
-    expect(seen.size).toBe(300);
-  });
   it('accepts 8 to 128 characters only', () => {
     expect(isAcceptablePassword('1234567')).toBe(false);
     expect(isAcceptablePassword('12345678')).toBe(true);
