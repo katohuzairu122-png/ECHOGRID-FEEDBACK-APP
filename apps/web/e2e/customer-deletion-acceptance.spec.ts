@@ -52,7 +52,12 @@ test('CUST-DEL-02 — password step-up, request, revocation, restricted dashboar
   await page.getByLabel('Password', { exact: true }).fill(password);
   await page.getByRole('button', { name: 'Sign in', exact: true }).click();
   try {
+    try {
     await expect(page).toHaveURL(/\/loyalty\/deletion\/pending/);
+  } catch (error) {
+    const alerts = await page.getByRole('alert').allTextContents();
+    throw new Error(`Pending-account sign-in failed; validation category: ${alerts.join(' | ') || 'none'}; original: ${String(error)}`);
+  }
   } catch {
     const errors = await page.locator('p[role="alert"]').allTextContents();
     throw new Error(`Pending sign-in did not navigate; error category: ${errors.join(' | ') || 'none'}`);
