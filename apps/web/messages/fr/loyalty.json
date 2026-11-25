@@ -232,6 +232,7 @@
       "pendingTitle": "Votre demande de suppression est en attente",
       "pendingDescription": "Vous pouvez restaurer votre compte jusqu'au {date}. Vos adhésions et soldes sont conservés pendant ce délai.",
       "restore": "Restaurer mon compte",
+      "restoreExpired": "La période de restauration est terminée. Le responsable de la confidentialité doit examiner la demande ; aucune suppression automatique n'a eu lieu.",
       "signOut": "Se déconnecter",
       "errors": {
         "invalid": "Confirmez votre mot de passe et votre consentement.",
