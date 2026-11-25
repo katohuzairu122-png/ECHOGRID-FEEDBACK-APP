@@ -29,6 +29,8 @@ async function setBusinessLanguage(page: Page, locale: string) {
   await page.goto('/dashboard/settings');
   await page.getByLabel('Language').selectOption(locale);
   await page.getByRole('button', { name: 'Save settings' }).click();
+  await page.waitForResponse((response) => response.request().method() === 'POST' && response.ok());
+  await page.reload(); // the page shell (language, direction) is resolved per request from the saved business language
   await expect(page.locator('html')).toHaveAttribute('lang', locale);
 }
 
@@ -39,7 +41,9 @@ function trackPageErrors(page: Page) {
   return errors;
 }
 
-const sidebar = (page: Page) => page.getByRole('navigation', { name: 'Business workspace', exact: true });
+/** Desktop: the vertical sidebar ("Dashboard navigation"). Mobile: the bottom bar ("Business workspace"); only one is visible at a time. */
+const sidebar = (page: Page) => page.getByRole('navigation', { name: 'Dashboard navigation', exact: true });
+const bottomBar = (page: Page) => page.getByRole('navigation', { name: 'Business workspace', exact: true });
 
 test('an owner lands on the Community hub; it is honest while Community is disabled; Business Overview stays reachable (desktop)', async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 1280, height: 900 });
@@ -101,7 +105,7 @@ test('mobile: the bar reads Community, Loyalty, Feedback and More; the Overview 
   await createOwner(page, 'mobile');
   await collapseDevelopmentBadge(page);
   await expect(page).toHaveURL('/dashboard/community');
-  const bottom = sidebar(page);
+  const bottom = bottomBar(page);
   await expect(bottom.getByRole('link')).toHaveCount(3);
   await expect(bottom.getByRole('link', { name: 'Community', exact: true })).toHaveAttribute('aria-current', 'page');
   await expect(bottom.getByRole('link', { name: 'Loyalty', exact: true })).toBeVisible();
@@ -139,6 +143,7 @@ test('sign-in keeps secure return URLs and never leaves the site; the new defaul
   await page.setViewportSize({ width: 1280, height: 900 });
   const { email } = await createOwner(page, 'returnurl');
   await page.getByRole('button', { name: 'Log out' }).click();
+  await expect(page).toHaveURL(/\/login/);
   const signIn = async (next: string) => {
     await page.goto(`/login?next=${encodeURIComponent(next)}`);
     await page.getByLabel('Email').fill(email);
@@ -148,10 +153,12 @@ test('sign-in keeps secure return URLs and never leaves the site; the new defaul
   await signIn('/dashboard/feedback'); // an authorized deep link is honoured
   await expect(page).toHaveURL('/dashboard/feedback');
   await page.getByRole('button', { name: 'Log out' }).click();
+  await expect(page).toHaveURL(/\/login/);
   await signIn('//evil.example/phish'); // an open-redirect attempt falls back to the normal home
   await expect(page).toHaveURL('/dashboard/community');
   expect(new URL(page.url()).origin).toBe('http://localhost:3000');
   await page.getByRole('button', { name: 'Log out' }).click();
+  await expect(page).toHaveURL(/\/login/);
   await signIn('/dashboard'); // the ordinary destination
   await expect(page).toHaveURL('/dashboard/community');
 });
