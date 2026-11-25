@@ -36,7 +36,10 @@ BEGIN
     SELECT count(DISTINCT approver_user_id) INTO approvals
       FROM network_revision_approvals WHERE revision_id = rev.id AND approver_user_id <> rev.created_by;
     IF approvals < needed THEN
-      RAISE EXCEPTION 'publication needs % distinct approver(s) (has %)', needed, approvals USING ERRCODE = 'integrity_constraint_violation';
+      IF NEW.content_class = 'official' THEN
+        RAISE EXCEPTION 'publication needs two distinct approvers (has %)', approvals USING ERRCODE = 'integrity_constraint_violation';
+      END IF;
+      RAISE EXCEPTION 'a business post needs one distinct platform approver (has %)', approvals USING ERRCODE = 'integrity_constraint_violation';
     END IF;
     -- A business post may only go live while its business has a PUBLISHED public profile and is active (NETWORK-00 section 4).
     IF NEW.content_class = 'business' AND NOT EXISTS (
