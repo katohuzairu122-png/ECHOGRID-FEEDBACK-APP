@@ -8,6 +8,13 @@ import type { CommunityFeedResult } from './community-feed-types';
 export const COMMUNITY_FEED_PAGE_SIZE = 20;
 const CURSOR = /^[A-Za-z0-9_-]{1,200}$/;
 
+export type FeedFilter = 'all' | 'following';
+/** Only the two documented values are accepted; anything else is the default view. */
+export function sanitizeFeedFilter(raw: string | string[] | undefined): FeedFilter {
+  const value = Array.isArray(raw) ? raw[0] : raw;
+  return value === 'following' ? 'following' : 'all';
+}
+
 /** Accepts only a well-formed opaque cursor; anything else is dropped (first page), never forwarded. */
 export function sanitizeFeedCursor(raw: string | string[] | undefined): string | null {
   const value = Array.isArray(raw) ? raw[0] : raw;
@@ -18,9 +25,10 @@ export function sanitizeFeedCursor(raw: string | string[] | undefined): string |
  * One read of the customer feed. customerApiFetch redirects to the customer login on a 401 (control flow,
  * re-thrown); an explicit phone requirement is distinct from other 403 denials; anything else -> `unavailable`. A failure is never turned into an empty feed.
  */
-export async function getCommunityFeed(cursor: string | null = null): Promise<CommunityFeedResult> {
+export async function getCommunityFeed(cursor: string | null = null, filter: FeedFilter = 'all'): Promise<CommunityFeedResult> {
   const query = new URLSearchParams({ limit: String(COMMUNITY_FEED_PAGE_SIZE) });
   if (cursor) query.set('cursor', cursor);
+  if (filter === 'following') query.set('filter', 'following');
   try {
     const raw = await customerApiFetch<unknown>(`/network/feed?${query}`, {
       cache: 'no-store',

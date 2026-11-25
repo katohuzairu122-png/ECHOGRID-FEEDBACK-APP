@@ -1,5 +1,6 @@
 import { notFound } from 'next/navigation';
-import { getCommunityFeed, sanitizeFeedCursor } from '@/lib/community-feed';
+import { getCommunityFeed, sanitizeFeedCursor, sanitizeFeedFilter } from '@/lib/community-feed';
+import { getFollowedHandles } from '@/lib/community-follows';
 import { getNetworkFeedEnabled } from '@/lib/network-status';
 import { CommunityFeedView } from './community-feed-view';
 
@@ -14,7 +15,9 @@ interface CommunityFeedPageProps {
 export default async function CommunityFeedPage({ searchParams }: CommunityFeedPageProps) {
   // Feed disabled (default): the route does not exist for the customer, same as a path that was never built.
   if (!(await getNetworkFeedEnabled())) notFound();
-  const cursor = sanitizeFeedCursor((await searchParams).cursor);
-  const result = await getCommunityFeed(cursor);
-  return <CommunityFeedView result={result} cursor={cursor} />;
+  const params = await searchParams;
+  const cursor = sanitizeFeedCursor(params.cursor);
+  const filter = sanitizeFeedFilter(params.filter);
+  const [result, followed] = await Promise.all([getCommunityFeed(cursor, filter), getFollowedHandles()]);
+  return <CommunityFeedView result={result} cursor={cursor} filter={filter} followed={followed} />;
 }

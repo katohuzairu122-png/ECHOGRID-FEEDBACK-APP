@@ -3,6 +3,7 @@ import { useFormatter, useTranslations } from 'next-intl';
 import type { CommunityFeedResult } from '@/lib/community-feed-types';
 import styles from '../community-sections.module.css';
 import { FeedRefreshButton } from './feed-refresh-button';
+import { FollowButton } from './follow-button';
 
 const FEED_PATH = '/loyalty/dashboard/community/feed';
 
@@ -19,8 +20,14 @@ function safeHttpsHref(value: string | null): string | null {
 export function CommunityFeedView({
   result,
   cursor = null,
+  filter = 'all',
+  followed = null,
 }: {
   result: CommunityFeedResult;
+  /** BCOMM-04: the current view. `following` shows only businesses the customer chose to follow. */
+  filter?: 'all' | 'following';
+  /** The customer's own followed business handles, or null when unknown (no follow control is then shown). */
+  followed?: Set<string> | null;
   /** The cursor this page was loaded with (null on the first page); only used to offer a way back to the start. */
   cursor?: string | null;
 }) {
@@ -30,6 +37,7 @@ export function CommunityFeedView({
   // Fixed account route and Feed-only return path. Never accept a client-supplied destination or verification flag.
   const returnPath = cursor && /^[A-Za-z0-9_-]{1,200}$/.test(cursor)
     ? `${FEED_PATH}?cursor=${encodeURIComponent(cursor)}` : FEED_PATH;
+  const nextHref = (cursorValue: string) => `${FEED_PATH}?${filter === 'following' ? 'filter=following&' : ''}cursor=${encodeURIComponent(cursorValue)}`;
   const verificationHref = `/loyalty/dashboard/phone?next=${encodeURIComponent(returnPath)}`;
 
   return (
@@ -39,6 +47,13 @@ export function CommunityFeedView({
         <h1 id="community-feed-title">{t('feed.title')}</h1>
         <p>{t('feed.description')}</p>
       </header>
+
+      {result.status === 'ready' && (
+        <nav aria-label={t('feed.filterLabel')} className={styles.feedActions}>
+          <Link className={styles.action} href={FEED_PATH} aria-current={filter === 'all' ? 'page' : undefined}>{t('feed.filterAll')}</Link>
+          <Link className={styles.action} href={`${FEED_PATH}?filter=following`} aria-current={filter === 'following' ? 'page' : undefined}>{t('feed.filterFollowing')}</Link>
+        </nav>
+      )}
 
       {(result.status === 'ready' || result.status === 'unavailable') && (
         <div className={styles.feedActions}>
@@ -65,8 +80,8 @@ export function CommunityFeedView({
         </div>
       ) : result.data.items.length === 0 ? (
         <div className={styles.state} data-state="empty">
-          <h2>{t('feed.empty.title')}</h2>
-          <p>{t('feed.empty.body')}</p>
+          <h2>{filter === 'following' ? t('feed.followingEmpty.title') : t('feed.empty.title')}</h2>
+          <p>{filter === 'following' ? t('feed.followingEmpty.body') : t('feed.empty.body')}</p>
         </div>
       ) : (
         <>
@@ -89,6 +104,9 @@ export function CommunityFeedView({
                       </time>
                     </div>
                     <p className={styles.cardBody}>{item.body}</p>
+                    {item.contentClass === 'business_post' && item.businessHandle && followed ? (
+                      <FollowButton handle={item.businessHandle} following={followed.has(item.businessHandle)} name={item.businessName ?? t('feed.business')} />
+                    ) : null}
                     {href && (
                       <a
                         className={styles.cardLink}
@@ -107,7 +125,7 @@ export function CommunityFeedView({
           {result.data.nextCursor && (
             <Link
               className={styles.action}
-              href={`${FEED_PATH}?cursor=${encodeURIComponent(result.data.nextCursor)}`}
+              href={nextHref(result.data.nextCursor)}
             >
               {t('feed.loadMore')}
             </Link>

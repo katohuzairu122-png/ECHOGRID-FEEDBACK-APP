@@ -461,7 +461,23 @@
         "business": "Novedad de un negocio",
         "openLink": "Abrir enlace",
         "publishedOn": "Publicado el {date}",
-        "listLabel": "Novedades de la Comunidad"
+        "listLabel": "Novedades de la Comunidad",
+        "filterLabel": "Vista del feed",
+        "filterAll": "Todas las novedades",
+        "filterFollowing": "Siguiendo",
+        "follow": "Seguir",
+        "following": "Siguiendo",
+        "followLabel": "Seguir a {name}",
+        "unfollowLabel": "Dejar de seguir a {name}",
+        "followingEmpty": {
+          "title": "Aún no sigue a ningún negocio con novedades",
+          "body": "Siga un negocio desde una novedad de «Todas las novedades». Seguir solo le permite ver sus novedades aquí: no lo inscribe en su programa de fidelidad, no comparte sus datos ni le envía mensajes."
+        },
+        "followErrors": {
+          "unavailable": "No se pudo cambiar esto ahora. Inténtelo de nuevo.",
+          "limit": "Sigue al máximo de negocios permitido. Deje de seguir a uno primero.",
+          "gone": "Este negocio ya no está disponible."
+        }
       }
     },
     "surveys": {

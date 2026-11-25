@@ -6,6 +6,7 @@ import { CommunityFeedView } from './community-feed-view';
 
 const { refresh } = vi.hoisted(() => ({ refresh: vi.fn() }));
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh }) }));
+vi.mock('@/lib/actions/community-follows', () => ({ setFollowAction: vi.fn() }));
 beforeEach(() => refresh.mockClear());
 
 const item = (over: Partial<CommunityFeedItem> = {}): CommunityFeedItem => ({
@@ -140,5 +141,36 @@ describe('CommunityFeedView', () => {
     expect(screen.getByRole('status')).toHaveTextContent('not available with your current access');
     expect(screen.queryByRole('button')).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Latest updates' })).not.toBeInTheDocument();
+  });
+});
+
+describe('CommunityFeedView follows (BCOMM-04)', () => {
+  const HANDLE = 'AbCdEfGhIjKlMnOpQrStUv';
+  const business = (over: Partial<CommunityFeedItem> = {}) => item({ contentClass: 'business_post', businessName: 'Cafe Aroma', businessHandle: HANDLE, body: 'Fresh croissants.', linkUrl: null, ...over });
+  const page = (items: CommunityFeedItem[]) => ({ status: 'ready' as const, data: { items, nextCursor: null } });
+
+  it('offers Follow on a business post (not on an official one), Following when already followed, and nothing when the state is unknown', () => {
+    const { unmount } = renderWithIntl(<CommunityFeedView result={page([item(), business()])} followed={new Set()} />);
+    expect(screen.getAllByRole('button', { name: /Follow/ })).toHaveLength(1);
+    expect(screen.getByRole('button', { name: 'Follow Cafe Aroma' })).toHaveAttribute('aria-pressed', 'false');
+    unmount();
+    const followed = renderWithIntl(<CommunityFeedView result={page([business()])} followed={new Set([HANDLE])} />);
+    expect(screen.getByRole('button', { name: 'Stop following Cafe Aroma' })).toHaveAttribute('aria-pressed', 'true');
+    followed.unmount();
+    renderWithIntl(<CommunityFeedView result={page([business()])} followed={null} />);
+    expect(screen.queryByRole('button', { name: /ollow/ })).toBeNull(); // unknown state: no control that could lie
+  });
+
+  it('has an All / Following switch with the current view marked; the Following view says plainly that a follow is not a membership', () => {
+    renderWithIntl(<CommunityFeedView result={page([])} filter="following" followed={new Set()} />);
+    const nav = screen.getByRole('navigation', { name: 'Feed view' });
+    expect(within(nav).getByRole('link', { name: 'Following' })).toHaveAttribute('aria-current', 'page');
+    expect(within(nav).getByRole('link', { name: 'All updates' })).not.toHaveAttribute('aria-current');
+    expect(screen.getByText(/does not sign you up for its loyalty program, share your details or send you messages/)).toBeInTheDocument();
+  });
+
+  it('keeps the Following view when loading more', () => {
+    renderWithIntl(<CommunityFeedView result={{ status: 'ready', data: { items: [business()], nextCursor: 'abc_123' } }} filter="following" followed={new Set([HANDLE])} />);
+    expect(screen.getByRole('link', { name: 'Load more' })).toHaveAttribute('href', '/loyalty/dashboard/community/feed?filter=following&cursor=abc_123');
   });
 });

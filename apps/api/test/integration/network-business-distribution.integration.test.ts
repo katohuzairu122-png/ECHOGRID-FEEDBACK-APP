@@ -145,7 +145,14 @@ describe.skipIf(!databaseUrl)('business posts in the Community Feed and follows 
     await profiles.liftSuspension(bizA, { userId: mod1, role: 'platform_admin' });
     expect(await state()).toBe('unpublished'); // lifting a suspension never re-publishes by itself
     expect(await visible(), 'unpublished profile').toBe(false);
-    await profiles.republish(bizA, { userId: ownerA, role: 'business' });
+    // Back to published only through a fresh review, exactly as for any profile.
+    const draft = await profiles.saveDraft(bizA, { userId: ownerA, role: 'business' }, {
+      websiteUrl: 'https://cafe.example',
+      translations: [{ locale: 'en', displayName: `Cafe A ${run}`, summary: 'Coffee', description: 'Fresh coffee daily.' }],
+      locations: [{ kind: 'place', label: 'Main shop', countryCode: 'GB', city: 'London' }],
+    });
+    const sub = await profiles.submit(bizA, { userId: ownerA, role: 'business' }, draft.revisionId!);
+    await profiles.approve(draft.revisionId!, { userId: mod1, role: 'platform_admin' }, sub.digest);
     expect(await visible()).toBe(true);
   });
 

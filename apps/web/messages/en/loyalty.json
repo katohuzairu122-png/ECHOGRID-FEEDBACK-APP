@@ -461,7 +461,23 @@
         "business": "Business update",
         "openLink": "Open link",
         "publishedOn": "Published {date}",
-        "listLabel": "Community feed updates"
+        "listLabel": "Community feed updates",
+        "filterLabel": "Feed view",
+        "filterAll": "All updates",
+        "filterFollowing": "Following",
+        "follow": "Follow",
+        "following": "Following",
+        "followLabel": "Follow {name}",
+        "unfollowLabel": "Stop following {name}",
+        "followingEmpty": {
+          "title": "You are not following anyone with updates yet",
+          "body": "Follow a business from an update in All updates. Following only lets you see its updates here: it does not sign you up for its loyalty program, share your details or send you messages."
+        },
+        "followErrors": {
+          "unavailable": "This could not be changed right now. Try again.",
+          "limit": "You are following the maximum number of businesses. Stop following one first.",
+          "gone": "This business is no longer available."
+        }
       }
     },
     "surveys": {

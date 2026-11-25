@@ -461,7 +461,23 @@
         "business": "Actualité d’un commerce",
         "openLink": "Ouvrir le lien",
         "publishedOn": "Publié le {date}",
-        "listLabel": "Actualités du fil de la Communauté"
+        "listLabel": "Actualités du fil de la Communauté",
+        "filterLabel": "Affichage du fil",
+        "filterAll": "Toutes les actualités",
+        "filterFollowing": "Abonnements",
+        "follow": "Suivre",
+        "following": "Suivi",
+        "followLabel": "Suivre {name}",
+        "unfollowLabel": "Ne plus suivre {name}",
+        "followingEmpty": {
+          "title": "Vous ne suivez encore aucun commerce avec des actualités",
+          "body": "Suivez un commerce depuis une actualité de « Toutes les actualités ». Suivre vous permet seulement de voir ses actualités ici : cela ne vous inscrit pas à son programme de fidélité, ne partage pas vos informations et ne vous envoie aucun message."
+        },
+        "followErrors": {
+          "unavailable": "Impossible de modifier cela pour le moment. Réessayez.",
+          "limit": "Vous suivez le nombre maximal de commerces. Cessez d'en suivre un d'abord.",
+          "gone": "Ce commerce n'est plus disponible."
+        }
       }
     },
     "surveys": {
