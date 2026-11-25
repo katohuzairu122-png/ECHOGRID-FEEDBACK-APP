@@ -57,15 +57,15 @@ function trackPageErrors(page: Page) {
 
 /**
  * Sign-ups are rate limited per minute by the API, and every spec in this suite signs people up. So this file creates ONE shared owner (cookies are
- * reused by each test's own browser context) plus one fresh owner for the onboarding and sign-in test: 2 sign-ups instead of one per test.
+ * reused by each test's own browser context) and the sign-in test logs that same owner in (logins use a separate limiter key): 1 sign-up for the whole file.
  */
-let shared: { cookies: Awaited<ReturnType<BrowserContext['cookies']>>; businessName: string } | undefined;
+let shared: { cookies: Awaited<ReturnType<BrowserContext['cookies']>>; businessName: string; email: string } | undefined;
 
 test.beforeAll(async ({ browser }) => {
   const context = await browser.newContext();
   const page = await context.newPage();
   const owner = await createOwner(page, 'shared');
-  shared = { cookies: await context.cookies(), businessName: owner.businessName };
+  shared = { cookies: await context.cookies(), businessName: owner.businessName, email: owner.email };
   await context.close();
 });
 
@@ -180,11 +180,9 @@ test('keyboard operation, and opening the hub sends no write request (no enrollm
 
 test('sign-in keeps secure return URLs and never leaves the site; the new default home is Community', async ({ page, context }) => {
   await page.setViewportSize({ width: 1280, height: 900 });
-  // A genuinely fresh visitor: the shared owner's cookies (added for every test) would make /signup bounce to the dashboard.
+  // Start signed out: the shared owner's cookies (added for every test) are cleared, then the same owner signs in.
   await context.clearCookies();
-  const { email } = await createOwner(page, 'returnurl');
-  await page.getByRole('button', { name: 'Log out' }).click();
-  await expect(page).toHaveURL(/\/login/);
+  const { email } = shared!;
   const signIn = async (next: string) => {
     await page.goto(`/login?next=${encodeURIComponent(next)}`);
     await page.getByLabel('Email').fill(email);
