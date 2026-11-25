@@ -3,7 +3,8 @@ import { getTranslations } from 'next-intl/server';
 import { Button } from '@/components/ui';
 import { hasCustomerSession } from '@/lib/customer-session';
 import { customerLogoutAction } from '@/lib/actions/customer-auth';
-import { getCustomerDeletionStatus, isCustomerDeletionWebEnabled } from '@/lib/actions/customer-deletion';
+import { getCustomerDeletionStatus } from '@/lib/actions/customer-deletion';
+import { isCustomerDeletionWebEnabled } from '@/lib/customer-deletion-config';
 import { CustomerDeletionRestoreForm } from './restore-form';
 
 export const dynamic = 'force-dynamic';
