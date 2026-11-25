@@ -22,7 +22,7 @@ describe('badge rule: closed declarative schema', () => {
     expect(parseBadgeRule({ metric: 'published_business_posts', threshold: 5, windowDays: 90 }, 'business')).toEqual({ metric: 'published_business_posts', threshold: 5, windowDays: 90 });
   });
 
-  it.each([
+  it.each<[unknown, string]>([
     [{}, 'missing fields'], [{ metric: 'community_survey_completions' }, 'no threshold'], [{ metric: 'community_survey_completions', threshold: 0 }, 'zero'],
     [{ metric: 'community_survey_completions', threshold: 1.5 }, 'fraction'], [{ metric: 'community_survey_completions', threshold: 100001 }, 'too large'],
     [{ metric: 'community_survey_completions', threshold: 1, extra: 1 }, 'extra key'], [{ metric: 'community_survey_completions', threshold: 1, windowDays: 0 }, 'bad window'],
