@@ -76,7 +76,10 @@ export async function requestCustomerDeletionAction(
   redirect('/loyalty/login?next=%2Floyalty%2Fdeletion%2Fpending');
 }
 
-export async function restoreCustomerDeletionAction(): Promise<CustomerDeletionState> {
+export async function restoreCustomerDeletionAction(
+  _previous: CustomerDeletionState,
+  _formData: FormData,
+): Promise<CustomerDeletionState> {
   if (!isCustomerDeletionWebEnabled()) return { error: 'unavailable' };
   const token = await getCustomerToken();
   if (!token) return { error: 'unavailable' };
