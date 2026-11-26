@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { chainAudit, SelectionError, selectEntrants, uniformBelow, type RandomBytes } from './shuffle-selection';
+import { chainAudit, SelectionError, selectEntrants, uniformBelow, verifyChain, verifySelection, type RandomBytes } from './shuffle-selection';
 
 const seq = (vals: number[]): RandomBytes => { let i = 0; return () => { const v = vals[i++ % vals.length]!; return new Uint8Array([(v >>> 24) & 255, (v >>> 16) & 255, (v >>> 8) & 255, v & 255]); }; };
 const ids = (n: number) => Array.from({ length: n }, (_, i) => `c${String(i).padStart(3, '0')}`);
@@ -34,8 +34,33 @@ describe('selection primitive (isolated, synthetic)', () => {
     const exp = 10_000; const chi = counts.reduce((s, c) => s + (c - exp) ** 2 / exp, 0);
     expect(chi).toBeLessThan(18.5); // df=4, p≈0.001
   });
-  it('audit chain is tamper-evident', () => {
-    const g = chainAudit(null, { a: 1 }); const n = chainAudit(g.hash, { b: 2 });
-    expect(n.prev).toBe(g.hash); expect(chainAudit(g.hash, { b: 3 }).hash).not.toBe(n.hash); expect(chainAudit(null, { a: 1 }).hash).toBe(g.hash);
+  it('REGRESSION: the audit hash commits nested event fields (a key-list replacer used to drop them)', () => {
+    const a = chainAudit(null, { kind: 'selection', detail: { winners: ['x'], count: 1 } });
+    const b = chainAudit(null, { kind: 'selection', detail: { winners: ['y'], count: 1 } });
+    expect(a.hash).not.toBe(b.hash);
+    expect(chainAudit(null, { z: 1, a: { q: 2, b: 3 } }).hash).toBe(chainAudit(null, { a: { b: 3, q: 2 }, z: 1 }).hash);
+    expect(() => chainAudit(null, { a: undefined })).toThrow(TypeError);
+  });
+  it('audit chain is tamper-evident: edit, removal, insertion and reorder are all detected', () => {
+    const l1 = chainAudit(null, { a: { n: 1 } }); const l2 = chainAudit(l1.hash, { b: { n: 2 } }); const l3 = chainAudit(l2.hash, { c: { n: 3 } });
+    expect(verifyChain([l1, l2, l3])).toBe(true);
+    expect(verifyChain([])).toBe(true);
+    expect(verifyChain([l1, { ...l2, event: { b: { n: 9 } } }, l3])).toBe(false);
+    expect(verifyChain([l1, l3])).toBe(false);
+    expect(verifyChain([l1, l3, l2])).toBe(false);
+    expect(verifyChain([l2, l3])).toBe(false);
+    expect(verifyChain([l1, chainAudit(l1.hash, { x: 1 }), l2])).toBe(false);
+  });
+  it('recorded evidence verifies by deterministic replay; any tampering is rejected', () => {
+    const input = { entrantIds: ids(12), winnerCount: 3 };
+    const r = selectEntrants(input);
+    expect(verifySelection(input, r)).toBe(true);
+    const other = ids(12).filter((x) => !r.selectedIds.includes(x))[0]!;
+    expect(verifySelection(input, { ...r, selectedIds: [other, ...r.selectedIds.slice(1)] })).toBe(false);
+    expect(verifySelection(input, { ...r, resultCommitment: 'a'.repeat(64) })).toBe(false);
+    expect(verifySelection(input, { ...r, transcript: r.transcript.slice(1) })).toBe(false);
+    expect(verifySelection(input, { ...r, transcript: [...r.transcript, '00000000'] })).toBe(false);
+    expect(verifySelection({ ...input, winnerCount: 4 }, r)).toBe(false);
+    expect(verifySelection({ entrantIds: [...ids(11), 'zzz'], winnerCount: 3 }, r)).toBe(false);
   });
 });
