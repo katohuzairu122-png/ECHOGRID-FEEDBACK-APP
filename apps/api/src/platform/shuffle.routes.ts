@@ -11,6 +11,7 @@ import { AppError } from '../lib/errors';
 import { tentashipShuffleGate } from '../shuffle/shuffle-gate';
 import { ShuffleCampaignService } from '../shuffle/shuffle-campaign.service';
 import { ShuffleParticipationService } from '../shuffle/shuffle-participation.service';
+import { SHUFFLE_METRIC_DEFINITIONS, TentashipAnalytics } from '../analytics/tentaship-analytics';
 
 type Env = { Bindings: Bindings; Variables: AuthVariables & PlatformVariables & AuditVariables };
 
@@ -139,3 +140,11 @@ platformShuffleRoutes.post('/entries/:id/synthetic/cancel', async (c) => {
   c.set('auditAlreadyRecorded', true);
   return ok(c, await withParticipation(c, (s) => s.cancelEntry(idOf(c), b.reason, actor(c))));
 });
+
+/** TSH-07: aggregate, definition-backed analytics for a campaign version (platform admin). Unsupported metrics are explicitly unavailable, never zero. */
+platformShuffleRoutes.get('/versions/:id/analytics', async (c) => {
+  c.header('Cache-Control', 'no-store');
+  const { db, close } = await createDb(c.env.HYPERDRIVE);
+  try { return ok(c, await new TentashipAnalytics(db).shuffleVersion(idOf(c), { includeGovernance: true })); } finally { c.executionCtx.waitUntil(close()); }
+});
+platformShuffleRoutes.get('/metric-definitions', (c) => { c.header('Cache-Control', 'no-store'); return ok(c, SHUFFLE_METRIC_DEFINITIONS); });
