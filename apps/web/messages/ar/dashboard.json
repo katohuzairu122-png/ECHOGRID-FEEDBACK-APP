@@ -259,7 +259,10 @@
       "OPEN_REWARD_CLAIMS": "بعض مطالبات المكافآت لم تُسوَّ بعد.",
       "ACTIVE_SUBSCRIPTION": "لدى النشاط اشتراك نشط.",
       "ACTIVE_CASHIER_SESSIONS": "ما زالت جلسات الكاشير مفتوحة.",
-      "COMMUNITY_CONTENT_PUBLISHED": "لدى النشاط منشورات منشورة في المجتمع."
+      "COMMUNITY_CONTENT_PUBLISHED": "لدى النشاط منشورات منشورة في المجتمع.",
+      "ACTIVE_SPONSORSHIPS": "لدى النشاط رعايات نشطة.",
+      "UNITS_AWAITING_COLLECTION": "لا تزال وحدات مرعيّة بانتظار الاستلام.",
+      "OPEN_GOVERNANCE_CASES": "لا تزال حالات احتيال أو نزاع مفتوحة."
     },
     "obligationsTitle": "ما يجب تسويته",
     "obligations": {
@@ -272,7 +275,10 @@
       "activeCashierSessions": "جلسات كاشير مفتوحة",
       "staffMembers": "أعضاء الفريق",
       "publishedCommunityPosts": "منشورات المجتمع",
-      "communityFollowers": "متابعو المجتمع"
+      "communityFollowers": "متابعو المجتمع",
+      "activeSponsorships": "رعايات نشطة",
+      "unitsAwaitingCollection": "وحدات مرعيّة بانتظار الاستلام",
+      "openGovernanceCases": "حالات احتيال أو نزاع مفتوحة"
     },
     "pendingTitle": "يوجد طلب إغلاق مفتوح",
     "pendingBody": "تم الطلب في {date}. تم إشعار فريق المنصة. لم يُحذف أو يتغيّر أي شيء.",

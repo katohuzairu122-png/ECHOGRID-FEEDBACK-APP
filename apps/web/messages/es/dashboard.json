@@ -259,7 +259,10 @@
       "OPEN_REWARD_CLAIMS": "Algunas reclamaciones de recompensas aún no están liquidadas.",
       "ACTIVE_SUBSCRIPTION": "El negocio tiene una suscripción activa.",
       "ACTIVE_CASHIER_SESSIONS": "Aún hay sesiones de cajero abiertas.",
-      "COMMUNITY_CONTENT_PUBLISHED": "El negocio tiene publicaciones de Comunidad publicadas."
+      "COMMUNITY_CONTENT_PUBLISHED": "El negocio tiene publicaciones de Comunidad publicadas.",
+      "ACTIVE_SPONSORSHIPS": "El negocio tiene patrocinios activos.",
+      "UNITS_AWAITING_COLLECTION": "Hay unidades patrocinadas pendientes de recogida.",
+      "OPEN_GOVERNANCE_CASES": "Hay casos de fraude o disputa abiertos."
     },
     "obligationsTitle": "Lo que habría que resolver",
     "obligations": {
@@ -272,7 +275,10 @@
       "activeCashierSessions": "Sesiones de cajero abiertas",
       "staffMembers": "Miembros del equipo",
       "publishedCommunityPosts": "Publicaciones de Comunidad",
-      "communityFollowers": "Seguidores de Comunidad"
+      "communityFollowers": "Seguidores de Comunidad",
+      "activeSponsorships": "Patrocinios activos",
+      "unitsAwaitingCollection": "Unidades patrocinadas pendientes de recogida",
+      "openGovernanceCases": "Casos de fraude o disputa abiertos"
     },
     "pendingTitle": "Hay una solicitud de cierre abierta",
     "pendingBody": "Solicitada el {date}. Se avisó al equipo de la plataforma. No se ha eliminado ni cambiado nada.",

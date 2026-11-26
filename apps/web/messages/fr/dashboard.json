@@ -259,7 +259,10 @@
       "OPEN_REWARD_CLAIMS": "Certaines demandes de récompense ne sont pas encore réglées.",
       "ACTIVE_SUBSCRIPTION": "L'entreprise a un abonnement actif.",
       "ACTIVE_CASHIER_SESSIONS": "Des sessions de caissier sont encore ouvertes.",
-      "COMMUNITY_CONTENT_PUBLISHED": "L'entreprise a des publications Communauté publiées."
+      "COMMUNITY_CONTENT_PUBLISHED": "L'entreprise a des publications Communauté publiées.",
+      "ACTIVE_SPONSORSHIPS": "L'entreprise a des parrainages actifs.",
+      "UNITS_AWAITING_COLLECTION": "Des unités parrainées attendent encore leur retrait.",
+      "OPEN_GOVERNANCE_CASES": "Des dossiers de fraude ou de litige sont encore ouverts."
     },
     "obligationsTitle": "Ce qu'il faudrait régler",
     "obligations": {
@@ -272,7 +275,10 @@
       "activeCashierSessions": "Sessions de caissier ouvertes",
       "staffMembers": "Membres de l'équipe",
       "publishedCommunityPosts": "Publications Communauté",
-      "communityFollowers": "Abonnés Communauté"
+      "communityFollowers": "Abonnés Communauté",
+      "activeSponsorships": "Parrainages actifs",
+      "unitsAwaitingCollection": "Unités parrainées en attente de retrait",
+      "openGovernanceCases": "Dossiers de fraude ou de litige ouverts"
     },
     "pendingTitle": "Une demande de fermeture est ouverte",
     "pendingBody": "Demandée le {date}. L'équipe de la plateforme a été prévenue. Rien n'a été supprimé ni modifié.",
