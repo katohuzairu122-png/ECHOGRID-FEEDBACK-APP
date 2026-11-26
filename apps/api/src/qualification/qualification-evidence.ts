@@ -13,19 +13,20 @@ import type { PathwayMeasure, QualificationPathway } from './qualification-spec'
  */
 export async function measureRecordedPurchases(
   db: Db,
-  input: { customerId: string; pathway: QualificationPathway; ruleVersionId: string; consumerKind: 'referral' | 'badge' | 'campaign'; since?: Date | null },
+  input: { customerId: string; pathway: QualificationPathway; ruleVersionId: string; consumerKind: 'referral' | 'badge' | 'campaign'; since?: Date | null; between?: { start: Date; end: Date } | null },
 ): Promise<PathwayMeasure> {
   const { pathway } = input;
   const since = pathway.sinceAttribution ? input.since ?? null : null;
   if (pathway.sinceAttribution && !since) return { observed: 0, evidenceIds: [] }; // no attribution moment known: count nothing (fail closed)
   const amount = pathway.minAmount === undefined ? sql`` : sql`and pe.qualifying_amount >= ${pathway.minAmount}::numeric and b.default_currency = ${pathway.currency}`;
   const sinceSql = since ? sql`and pe.occurred_at >= ${since.toISOString()}::timestamptz` : sql``;
+  const betweenSql = input.between ? sql`and pe.occurred_at >= ${input.between.start.toISOString()}::timestamptz and pe.occurred_at < ${input.between.end.toISOString()}::timestamptz` : sql``;
   const windowSql = pathway.windowDays === undefined ? sql`` : sql`and pe.occurred_at >= now() - make_interval(days => ${pathway.windowDays})`;
   const res = await db.execute<{ id: string }>(sql`
     select pe.id
     from loyalty_purchase_events pe
     join businesses b on b.id = pe.business_id and b.status = 'active'
-    where pe.customer_id = ${input.customerId} and pe.payment_status = 'confirmed' ${amount} ${sinceSql} ${windowSql}
+    where pe.customer_id = ${input.customerId} and pe.payment_status = 'confirmed' ${amount} ${sinceSql} ${betweenSql} ${windowSql}
       and not exists (
         select 1 from qualification_evidence_consumptions c
         where c.evidence_kind = 'purchase_event' and c.evidence_id = pe.id and c.rule_version_id = ${input.ruleVersionId} and c.consumer_kind = ${input.consumerKind}

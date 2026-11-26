@@ -687,6 +687,13 @@
       "when": 1795630220136,
       "tag": "0097_qualification_referrals",
       "breakpoints": true
+    },
+    {
+      "idx": 98,
+      "version": "7",
+      "when": 1795655571126,
+      "tag": "0098_shuffle_campaigns",
+      "breakpoints": true
     }
   ]
 }
