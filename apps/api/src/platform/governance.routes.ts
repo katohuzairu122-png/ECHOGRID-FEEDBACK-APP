@@ -12,6 +12,7 @@ import { AppError } from '../lib/errors';
 import { isTentashipShuffleEnabled } from '../shuffle/shuffle-flag';
 import { isTentashipDropsEnabled } from '../drops/drops-flag';
 import { GovernanceService } from '../governance/governance.service';
+import { FraudSignals, UNAVAILABLE_SIGNALS } from '../governance/fraud-signals';
 
 type Env = { Bindings: Bindings; Variables: AuthVariables & PlatformVariables & AuditVariables };
 
@@ -31,7 +32,7 @@ const ack = { syntheticAcknowledged: z.literal(true) };
 const plain = z.object(ack).strict();
 const reason = z.object({ ...ack, reason: z.string().trim().min(10).max(1000) }).strict();
 const openSchema = z.object({ ...ack, kind: z.enum(['fraud', 'dispute']), subjectType: z.enum(['shuffle_campaign_version', 'shuffle_entry', 'shuffle_selection', 'drop_sponsorship', 'drop_reservation']), subjectId: z.uuid(),
-  classification: z.enum(['suspected_duplicate_participation', 'suspected_fabricated_evidence', 'allocation_dispute', 'collection_dispute', 'other']), summary: z.string().trim().min(1).max(1000), relatedCaseId: z.uuid().nullish() }).strict();
+  classification: z.enum(['suspected_duplicate_participation', 'suspected_fabricated_evidence', 'suspected_self_referral', 'suspected_referral_cycle', 'suspected_qualification_manipulation', 'suspected_duplicate_allocation', 'suspected_inventory_manipulation', 'suspected_evidence_tampering', 'allocation_dispute', 'collection_dispute', 'other']), summary: z.string().trim().min(1).max(1000), relatedCaseId: z.uuid().nullish() }).strict();
 const evidenceSchema = z.object({ ...ack, kind: z.enum(['note', 'reference']), body: z.string().trim().min(1).max(2000) }).strict();
 const decideSchema = z.object({ ...ack, decision: z.enum(['upheld', 'overturned', 'no_action']), reason: z.string().trim().min(10).max(1000) }).strict();
 const overrideSchema = z.object({ ...ack, scope: z.enum(['cancel_entry_before_selection', 'release_reserved_hold']), targetId: z.uuid(), justification: z.string().trim().min(10).max(1000), expiresAt: z.string().datetime() }).strict();
@@ -44,7 +45,7 @@ async function svc<T>(c: Context<Env>, fn: (s: GovernanceService) => Promise<T>)
 const done = (c: Context<Env>) => c.set('auditAlreadyRecorded', true);
 const brief = (r: { id: string; status: string }) => ({ id: r.id, status: r.status });
 
-platformGovernanceRoutes.post('/cases', async (c) => { const { syntheticAcknowledged: _a, ...b } = await parseJsonBody(c.req.raw, openSchema); const r = await svc(c, (s) => s.openCase(b, actor(c))); done(c); return ok(c, brief(r), 201); });
+platformGovernanceRoutes.post('/cases', async (c) => { const { syntheticAcknowledged: _a, ...b } = await parseJsonBody(c.req.raw, openSchema); const r = await svc(c, (s) => s.openCaseOnce(b, actor(c))); done(c); return ok(c, { ...brief(r.case), created: r.created }, r.created ? 201 : 200); });
 platformGovernanceRoutes.get('/cases/:id', async (c) => { c.header('Cache-Control', 'no-store'); return ok(c, await svc(c, (s) => s.getCase(idOf(c)))); });
 platformGovernanceRoutes.get('/cases/:id/chain', async (c) => { c.header('Cache-Control', 'no-store'); return ok(c, await svc(c, (s) => s.verifyChain(idOf(c)))); });
 platformGovernanceRoutes.post('/cases/:id/evidence', async (c) => { const { syntheticAcknowledged: _a, ...b } = await parseJsonBody(c.req.raw, evidenceSchema); const r = await svc(c, (s) => s.submitEvidence(idOf(c), b, actor(c))); done(c); return ok(c, { id: r.id, contentHash: r.contentHash }, 201); });
@@ -58,3 +59,21 @@ platformGovernanceRoutes.post('/overrides/:id/approve', async (c) => { await par
 platformGovernanceRoutes.post('/overrides/:id/reject', async (c) => { const b = await parseJsonBody(c.req.raw, reason); done(c); return ok(c, brief(await svc(c, (s) => s.rejectOverride(idOf(c), b.reason, actor(c))))); });
 platformGovernanceRoutes.post('/overrides/:id/cancel', async (c) => { const b = await parseJsonBody(c.req.raw, reason); done(c); return ok(c, brief(await svc(c, (s) => s.cancelOverride(idOf(c), b.reason, actor(c))))); });
 platformGovernanceRoutes.post('/overrides/:id/execute', async (c) => { await parseJsonBody(c.req.raw, plain); const r = await svc(c, (s) => s.executeOverride(idOf(c), actor(c))); done(c); return ok(c, { ...brief(r.override), created: r.created }); });
+
+/** Fraud SIGNALS (read-only detectors; no thresholds, no automatic action). Shuffle scans need the Shuffle control, sponsorship scans the Drops control. */
+const need = (c: Context<Env>, f: 'shuffle' | 'drops') => { if (!(f === 'shuffle' ? isTentashipShuffleEnabled(c.env) : isTentashipDropsEnabled(c.env))) throw new AppError('Not found.', 404, 'NOT_FOUND'); };
+async function scan<T>(c: Context<Env>, fn: (s: FraudSignals) => Promise<T>): Promise<T> {
+  const { db, close } = await createDb(c.env.HYPERDRIVE);
+  try { return await fn(new FraudSignals(db)); } finally { c.executionCtx.waitUntil(close()); }
+}
+platformGovernanceRoutes.get('/signals/shuffle/:id', async (c) => { need(c, 'shuffle'); c.header('Cache-Control', 'no-store'); return ok(c, { signals: await scan(c, (s) => s.scanShuffleVersion(idOf(c))), unavailable: UNAVAILABLE_SIGNALS }); });
+platformGovernanceRoutes.get('/signals/sponsorship/:id', async (c) => { need(c, 'drops'); c.header('Cache-Control', 'no-store'); return ok(c, { signals: await scan(c, (s) => s.scanSponsorship(idOf(c))), unavailable: UNAVAILABLE_SIGNALS }); });
+platformGovernanceRoutes.get('/signals/referrals', async (c) => { c.header('Cache-Control', 'no-store'); return ok(c, { signals: await scan(c, (s) => s.scanReferrals()), unavailable: UNAVAILABLE_SIGNALS }); });
+const fromSignalSchema = z.object({ ...ack, scope: z.object({ type: z.enum(['shuffle_version', 'sponsorship', 'referrals']), id: z.uuid().optional() }).strict(), signalKey: z.string().regex(/^[0-9a-f]{64}$/),
+  subjectType: z.enum(['shuffle_campaign_version', 'shuffle_entry', 'shuffle_selection', 'drop_sponsorship', 'drop_reservation']), subjectId: z.uuid() }).strict();
+platformGovernanceRoutes.post('/cases/from-signal', async (c) => {
+  const { syntheticAcknowledged: _a, ...b } = await parseJsonBody(c.req.raw, fromSignalSchema);
+  if (b.scope.type !== 'referrals' && !b.scope.id) throw new AppError('A scope id is required.', 422, 'VALIDATION_ERROR');
+  const r = await svc(c, (s) => s.openCaseFromSignal({ scope: b.scope.id ? { type: b.scope.type, id: b.scope.id } : { type: b.scope.type }, signalKey: b.signalKey, subjectType: b.subjectType, subjectId: b.subjectId }, actor(c)));
+  done(c); return ok(c, { ...brief(r.case), created: r.created }, r.created ? 201 : 200);
+});
