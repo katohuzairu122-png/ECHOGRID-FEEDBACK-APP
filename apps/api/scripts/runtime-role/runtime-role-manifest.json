@@ -1114,6 +1114,31 @@
    ],
    "reason": "TSH-02: append-only referral lifecycle with database-validated transitions; verified needs an approved rule; no UPDATE/DELETE/TRUNCATE"
   },
+  "shuffle_campaigns": {
+   "class": "RUNTIME",
+   "verbs": [
+    "INSERT",
+    "SELECT",
+    "UPDATE"
+   ],
+   "reason": "TSH-03: campaign shell; UPDATE is the controlled status move only (database guard); no DELETE/TRUNCATE; no participation or publication exists"
+  },
+  "shuffle_campaign_versions": {
+   "class": "RUNTIME",
+   "verbs": [
+    "INSERT",
+    "SELECT"
+   ],
+   "reason": "TSH-03: immutable campaign configuration versions; release_state is always not_released; no UPDATE/DELETE/TRUNCATE"
+  },
+  "shuffle_eligibility_snapshots": {
+   "class": "RUNTIME",
+   "verbs": [
+    "INSERT",
+    "SELECT"
+   ],
+   "reason": "TSH-03: append-only eligibility snapshots; admits nobody; no UPDATE/DELETE/TRUNCATE"
+  },
   "customer_deletion_requests": {
    "class": "RUNTIME",
    "verbs": [

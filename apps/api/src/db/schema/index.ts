@@ -29,6 +29,7 @@ export * from './business-closure-requests';
 export * from './tentaship-badges';
 export * from './customer-invitations';
 export * from './qualification';
+export * from './shuffle';
 export * from './community-pilot-eligibility';
 export * from './business-customer-memberships';
 export * from './customer-onboarding-events';
