@@ -48,5 +48,45 @@
     "newBadges": "{count, plural, one {You earned a new badge.} other {You earned # new badges.}}",
     "noneNew": "No new badges right now.",
     "failed": "We could not check right now. Nothing was changed. Please try again."
+  },
+  "tentashipCampaign": {
+    "title": "Tentaship Shuffle",
+    "unavailable": "This feature is not available right now.",
+    "statusLabel": "Campaign status",
+    "status": {
+      "draft": "Active",
+      "suspended": "Paused",
+      "cancelled": "Cancelled"
+    },
+    "eligibility": {
+      "title": "Your eligibility",
+      "met": "The recorded evidence meets this campaign's requirements.",
+      "notMet": "The recorded evidence does not meet this campaign's requirements yet.",
+      "notEvaluated": "Your eligibility has not been checked for this campaign.",
+      "note": "Eligibility is checked by the server from recorded evidence. It is not an invitation or an entry."
+    },
+    "termsVersion": "Terms version {version}",
+    "disclosureTitle": "How the outcome is determined",
+    "disclosureRef": "Disclosure reference {hash}",
+    "participation": {
+      "title": "Your participation",
+      "none": "No participation recorded.",
+      "invited": "Invited",
+      "accepted": "Accepted",
+      "admitted": "Participation recorded",
+      "declined": "Declined",
+      "expired": "Expired",
+      "withdrawn": "Withdrawn",
+      "cancelled": "Cancelled"
+    },
+    "outcomeNotice": "Outcomes are recorded by the server. Nothing on this screen decides or changes an outcome.",
+    "allocation": {
+      "title": "Outcome and collection",
+      "notRecorded": "No outcome has been recorded."
+    },
+    "history": {
+      "title": "History",
+      "empty": "No history yet."
+    }
   }
 }

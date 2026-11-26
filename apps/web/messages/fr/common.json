@@ -48,5 +48,45 @@
     "newBadges": "{count, plural, one {Vous avez obtenu un nouveau badge.} other {Vous avez obtenu # nouveaux badges.}}",
     "noneNew": "Aucun nouveau badge pour le moment.",
     "failed": "Vérification impossible pour le moment. Rien n'a été modifié. Veuillez réessayer."
+  },
+  "tentashipCampaign": {
+    "title": "Tentaship Shuffle",
+    "unavailable": "Cette fonctionnalité n'est pas disponible pour le moment.",
+    "statusLabel": "Statut de la campagne",
+    "status": {
+      "draft": "Active",
+      "suspended": "En pause",
+      "cancelled": "Annulée"
+    },
+    "eligibility": {
+      "title": "Votre éligibilité",
+      "met": "Les preuves enregistrées répondent aux exigences de cette campagne.",
+      "notMet": "Les preuves enregistrées ne répondent pas encore aux exigences de cette campagne.",
+      "notEvaluated": "Votre éligibilité n'a pas été vérifiée pour cette campagne.",
+      "note": "Le serveur vérifie l'éligibilité à partir des preuves enregistrées. Ce n'est ni une invitation ni une participation."
+    },
+    "termsVersion": "Version des conditions {version}",
+    "disclosureTitle": "Comment le résultat est déterminé",
+    "disclosureRef": "Référence de la divulgation {hash}",
+    "participation": {
+      "title": "Votre participation",
+      "none": "Aucune participation enregistrée.",
+      "invited": "Invité",
+      "accepted": "Acceptée",
+      "admitted": "Participation enregistrée",
+      "declined": "Refusée",
+      "expired": "Expirée",
+      "withdrawn": "Retirée",
+      "cancelled": "Annulée"
+    },
+    "outcomeNotice": "Les résultats sont enregistrés par le serveur. Rien sur cet écran ne décide ni ne modifie un résultat.",
+    "allocation": {
+      "title": "Résultat et retrait",
+      "notRecorded": "Aucun résultat n'a été enregistré."
+    },
+    "history": {
+      "title": "Historique",
+      "empty": "Aucun historique pour le moment."
+    }
   }
 }

@@ -8,6 +8,7 @@ import { AppError } from '../lib/errors';
 import { canonicalJson, chainAudit, verifyChain, type AuditLink } from '../lib/audit-chain';
 import { ShuffleParticipationService } from '../shuffle/shuffle-participation.service';
 import { DropSponsorshipService } from '../drops/drop-sponsorship.service';
+import { FraudSignals } from './fraud-signals';
 
 export type Actor = { actorUserId: string; ipAddress?: string | null; userAgent?: string | null };
 export type Enabled = { shuffle: boolean; drops: boolean };
@@ -68,18 +69,40 @@ export class GovernanceService {
     const [e] = await tx.select({ s: dropReservations.sponsorshipId }).from(dropReservations).where(eq(dropReservations.id, id)).limit(1); if (!e) throw notFound(); return { campaignVersionId: null, sponsorshipId: e.s };
   }
 
-  async openCase(input: { kind: 'fraud' | 'dispute'; subjectType: SubjectType; subjectId: string; classification: string; summary: string; relatedCaseId?: string | null | undefined }, ctx: Actor) {
+  async openCase(input: Parameters<GovernanceService['openCaseOnce']>[0], ctx: Actor) { return (await this.openCaseOnce(input, ctx)).case; }
+
+  /** Opens a case, or returns the existing NOT-CLOSED case of the same kind for the same subject (duplicate prevention; the partial unique index is the backstop). */
+  async openCaseOnce(input: { kind: 'fraud' | 'dispute'; subjectType: SubjectType; subjectId: string; classification: string; summary: string; relatedCaseId?: string | null | undefined }, ctx: Actor) {
     this.assertFamily(this.family(input.subjectType));
     if (!input.summary.trim() || input.summary.length > 1000) throw bad('The summary must be 1 to 1000 characters.');
     return this.db.transaction(async (tx) => {
       const db = tx as unknown as Db;
+      await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`governance_open:${input.kind}:${input.subjectType}:${input.subjectId}`}, 0))`);
+      const [existing] = await tx.select().from(governanceCases).where(and(eq(governanceCases.kind, input.kind), eq(governanceCases.subjectType, input.subjectType), eq(governanceCases.subjectId, input.subjectId), sql`${governanceCases.status} <> 'closed'`)).limit(1);
+      if (existing) return { case: existing, created: false };
       const refs = await this.resolve(db, input.subjectType, input.subjectId);
       try {
         const [c] = await tx.insert(governanceCases).values({ kind: input.kind, subjectType: input.subjectType, subjectId: input.subjectId, ...refs, classification: input.classification, summary: input.summary.trim(), relatedCaseId: input.relatedCaseId ?? null, openedByUserId: ctx.actorUserId }).returning();
         await this.append(db, c!.id, { type: 'opened', kind: input.kind, subjectType: input.subjectType, subjectId: input.subjectId, classification: input.classification }, ctx);
-        return c!;
+        return { case: c!, created: true };
       } catch (e) { return mapGuard(e); }
     });
+  }
+
+  /**
+   * Opens a FRAUD case from a detected signal. The signal is re-detected on the server (a client cannot supply or forge one); the signal itself is stored as
+   * append-only reference evidence. Nothing is penalized or reversed: this only starts a human review.
+   */
+  async openCaseFromSignal(input: { scope: { type: 'shuffle_version' | 'sponsorship' | 'referrals'; id?: string }; signalKey: string; subjectType: SubjectType; subjectId: string }, ctx: Actor) {
+    this.assertFamily(this.family(input.subjectType));
+    const detector = new FraudSignals(this.db);
+    const found = input.scope.type === 'referrals' ? await detector.scanReferrals()
+      : input.scope.type === 'shuffle_version' ? await detector.scanShuffleVersion(input.scope.id as string) : await detector.scanSponsorship(input.scope.id as string);
+    const signal = found.find((x) => x.key === input.signalKey);
+    if (!signal) throw conflict('That signal is not currently detected.', 'SIGNAL_NOT_PRESENT');
+    const opened = await this.openCaseOnce({ kind: 'fraud', subjectType: input.subjectType, subjectId: input.subjectId, classification: signal.classification, summary: `Signal ${signal.code}: ${signal.detail}` }, ctx);
+    if (opened.created) await this.submitEvidence(opened.case.id, { kind: 'reference', body: canonicalJson({ signalKey: signal.key, code: signal.code, refs: signal.refs }) }, ctx);
+    return opened;
   }
 
   async submitEvidence(caseId: string, input: { kind: 'note' | 'reference'; body: string }, ctx: Actor) {

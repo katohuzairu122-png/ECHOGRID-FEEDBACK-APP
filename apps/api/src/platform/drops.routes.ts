@@ -10,6 +10,7 @@ import { ok } from '../lib/response';
 import { AppError } from '../lib/errors';
 import { tentashipDropsGate } from '../drops/drops-gate';
 import { DropSponsorshipService } from '../drops/drop-sponsorship.service';
+import { DROP_METRIC_DEFINITIONS, TentashipAnalytics } from '../analytics/tentaship-analytics';
 
 type Env = { Bindings: Bindings; Variables: AuthVariables & PlatformVariables & AuditVariables };
 
@@ -96,3 +97,11 @@ platformDropsRoutes.post('/reservations/:id/synthetic/release', async (c) => {
 });
 platformDropsRoutes.get('/sponsorships/:id/evidence', async (c) => { c.header('Cache-Control', 'no-store'); return ok(c, await withService(c, (s) => s.verifyEvidence(idOf(c)))); });
 platformDropsRoutes.get('/businesses/:id/sponsorships', async (c) => { c.header('Cache-Control', 'no-store'); return ok(c, await withService(c, (s) => s.listForBusiness(idOf(c)))); });
+
+/** TDP-04: internal sponsorship analytics (platform admin). NO sponsor-facing analytics route exists until the Owner approves the sponsor permission model. */
+platformDropsRoutes.get('/sponsorships/:id/analytics', async (c) => {
+  c.header('Cache-Control', 'no-store');
+  const { db, close } = await createDb(c.env.HYPERDRIVE);
+  try { return ok(c, await new TentashipAnalytics(db).dropSponsorship(idOf(c))); } finally { c.executionCtx.waitUntil(close()); }
+});
+platformDropsRoutes.get('/metric-definitions', (c) => { c.header('Cache-Control', 'no-store'); return ok(c, DROP_METRIC_DEFINITIONS); });
