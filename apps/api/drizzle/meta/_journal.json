@@ -680,6 +680,13 @@
       "when": 1795628046291,
       "tag": "0096_customer_invitations",
       "breakpoints": true
+    },
+    {
+      "idx": 97,
+      "version": "7",
+      "when": 1795630220136,
+      "tag": "0097_qualification_referrals",
+      "breakpoints": true
     }
   ]
 }

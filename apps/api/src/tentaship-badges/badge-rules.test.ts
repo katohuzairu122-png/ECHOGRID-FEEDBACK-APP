@@ -45,6 +45,14 @@ describe('badge rule: closed declarative schema', () => {
     expect(() => parseBadgeRule({ metric: 'community_survey_completions', threshold: 1 }, 'business')).toThrow(/participant/);
   });
 
+  it('approved_qualification needs a ruleKey, threshold 1 and no window; ruleKey belongs to that metric only', () => {
+    expect(parseBadgeRule({ metric: 'approved_qualification', threshold: 1, ruleKey: 'first_purchase' }, 'customer')).toEqual({ metric: 'approved_qualification', threshold: 1, ruleKey: 'first_purchase' });
+    for (const bad of [{ metric: 'approved_qualification', threshold: 1 }, { metric: 'approved_qualification', threshold: 2, ruleKey: 'first_purchase' }, { metric: 'approved_qualification', threshold: 1, ruleKey: 'first_purchase', windowDays: 5 }, { metric: 'community_survey_completions', threshold: 1, ruleKey: 'first_purchase' }, { metric: 'approved_qualification', threshold: 1, ruleKey: 'Bad Key' }]) {
+      expect(() => parseBadgeRule(bad, 'customer'), JSON.stringify(bad)).toThrow(BadgeRuleError);
+    }
+    expect(() => parseBadgeRule({ metric: 'approved_qualification', threshold: 1, ruleKey: 'first_purchase' }, 'business')).toThrow(/participant/);
+  });
+
   it('implemented and blocked registries never overlap', () => {
     for (const m of Object.keys(IMPLEMENTED_BADGE_METRICS)) expect(Object.hasOwn(BLOCKED_BADGE_METRICS, m)).toBe(false);
   });

@@ -14,6 +14,13 @@ import type { BadgeParticipantType } from '../db/schema';
 export const IMPLEMENTED_BADGE_METRICS = {
   /** Customer: count of this customer's Community survey-completion award decisions that are currently `awarded` (reversed ones do not count). */
   community_survey_completions: 'customer',
+  /**
+   * Customer: the customer satisfies the APPROVED shared qualification rule `ruleKey` (TSH-02 / QUAL-PURCHASE-01), evaluated by the one shared
+   * engine from verified server evidence. It is usable ONLY while an approved rule version exists for that key (checked when a definition is
+   * created or activated, and again at every evaluation): with none, a badge using it cannot exist, activate or award. Referral-based and
+   * purchase-based badges are therefore unavailable until the Owner approves the underlying definitions.
+   */
+  approved_qualification: 'customer',
   /** Business: count of this business's own Community posts that reached publication and are not suspended by moderation. */
   published_business_posts: 'business',
 } as const satisfies Record<string, BadgeParticipantType>;
@@ -34,11 +41,12 @@ export class BadgeRuleError extends Error {
   }
 }
 
-export type BadgeRule = { metric: ImplementedBadgeMetric; threshold: number; windowDays?: number };
+export type BadgeRule = { metric: ImplementedBadgeMetric; threshold: number; windowDays?: number; ruleKey?: string };
 
 const shape = z.object({
   metric: z.string().min(1).max(64),
   threshold: z.number().int().min(1).max(100_000),
+  ruleKey: z.string().regex(/^[a-z][a-z0-9_]{2,63}$/).optional(),
   windowDays: z.number().int().min(1).max(3650).optional(),
 }).strict();
 
@@ -46,7 +54,7 @@ const shape = z.object({
 export function parseBadgeRule(raw: unknown, participantType: BadgeParticipantType): BadgeRule {
   const parsed = shape.safeParse(raw);
   if (!parsed.success) throw new BadgeRuleError('BADGE_RULE_INVALID', 'The rule must be {metric, threshold, windowDays?} with whole numbers and no other fields.');
-  const { metric, threshold, windowDays } = parsed.data;
+  const { metric, threshold, windowDays, ruleKey } = parsed.data;
   if (Object.hasOwn(BLOCKED_BADGE_METRICS, metric)) {
     throw new BadgeRuleError('BADGE_METRIC_BLOCKED', BLOCKED_BADGE_METRICS[metric as keyof typeof BLOCKED_BADGE_METRICS]);
   }
@@ -54,11 +62,13 @@ export function parseBadgeRule(raw: unknown, participantType: BadgeParticipantTy
   if (IMPLEMENTED_BADGE_METRICS[metric as ImplementedBadgeMetric] !== participantType) {
     throw new BadgeRuleError('BADGE_METRIC_PARTICIPANT_MISMATCH', 'This metric does not apply to that participant type.');
   }
-  return { metric: metric as ImplementedBadgeMetric, threshold, ...(windowDays === undefined ? {} : { windowDays }) };
+  if ((metric === 'approved_qualification') !== (ruleKey !== undefined)) throw new BadgeRuleError('BADGE_RULE_INVALID', 'ruleKey belongs to the approved_qualification metric, and that metric needs it.');
+  if (metric === 'approved_qualification' && (threshold !== 1 || windowDays !== undefined)) throw new BadgeRuleError('BADGE_RULE_INVALID', 'approved_qualification takes threshold 1 and no window (the shared rule defines them).');
+  return { metric: metric as ImplementedBadgeMetric, threshold, ...(windowDays === undefined ? {} : { windowDays }), ...(ruleKey === undefined ? {} : { ruleKey }) };
 }
 
 /** Canonical JSON (fixed key order) so the same rule always hashes the same. */
 export function canonicalRuleJson(rule: BadgeRule): string {
-  return JSON.stringify({ metric: rule.metric, threshold: rule.threshold, ...(rule.windowDays === undefined ? {} : { windowDays: rule.windowDays }) });
+  return JSON.stringify({ metric: rule.metric, threshold: rule.threshold, ...(rule.windowDays === undefined ? {} : { windowDays: rule.windowDays }), ...(rule.ruleKey === undefined ? {} : { ruleKey: rule.ruleKey }) });
 }
 export const hashRule = (rule: BadgeRule): string => createHash('sha256').update(canonicalRuleJson(rule)).digest('hex');
