@@ -458,6 +458,31 @@ describe.skipIf(!process.env.DATABASE_URL)('customer recovery orchestration (int
       ))[0]!.consumed_at).toEqual(consumedBefore); // replay remains denied
     });
 
+    it('LOCK ORDER regression: cancel takes the customer row BEFORE the attempt row (the order complete() uses), so it never holds the attempt while waiting for the customer (no 40P01)', async () => {
+      fresh();
+      const c = await customer(43);
+      const code = (await issueCodes(c.id))[0]!;
+      const id = await start(c);
+      await emailFactor(id);
+      await h.svc.verifyCodeFactor({ attemptId: id, sourceKey: SRC, code });
+      await setHoldIn(id, -1);
+      const token = h.notices.find((n) => n.kind === 'hold_started')!.cancelToken!;
+      // A second connection plays complete(): it holds the CUSTOMER row lock first.
+      await client2.query('BEGIN');
+      try {
+        await client2.query('SELECT id FROM customers WHERE id = $1 FOR UPDATE', [c.id]);
+        const pending = h.svc.cancel({ attemptId: id, token, sourceKey: SRC }); // must now wait on the customer lock
+        await new Promise((r) => setTimeout(r, 400));
+        // Before the fix cancel had already locked the attempt row, so this NOWAIT lock failed (55P03) and a blocking one deadlocked.
+        await expect(client2.query('SELECT id FROM customer_recovery_attempts WHERE id = $1 FOR UPDATE NOWAIT', [id])).resolves.toBeDefined();
+        await client2.query('COMMIT');
+        expect(await pending).toEqual({ ok: true });
+      } finally {
+        await client2.query('ROLLBACK').catch(() => undefined);
+      }
+      expect((await attempt(id)).status).toBe('cancelled');
+    });
+
     it('cancellation and completion race to one terminal state; consumed code stays consumed', async () => {
       fresh();
       const other = harness(client2);

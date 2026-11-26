@@ -247,4 +247,72 @@ describe.skipIf(!databaseUrl)('OWNER-INVITE-01 owner-issued customer invitations
       await expect(q(`UPDATE customer_invitations SET revoked_at = NULL, revoked_by_user_id = NULL WHERE id = $1`, [inv.id])).rejects.toThrow(/IMMUTABLE/);
     });
   });
+
+  describe('independent security review (Batch 03): adversarial cases', () => {
+    it('token cross-use: an invitation can never act as an access token, and an access token can never act as an invitation', async () => {
+      const inv = await issue();
+      const asBearer = await http('GET', '/customer-invitations', { token: inv.token, businessId: bizA });
+      expect([401, 403]).toContain(asBearer.status); // refused either as not-an-access-token or because its brid claim looks like a cashier scope
+      const asCustomer = await http('GET', '/customer-memberships', { token: inv.token });
+      expect([401, 403, 404]).toContain(asCustomer.status);
+      const c = await customer();
+      const staffAsInvite = await accept(c.token, ownerAToken);
+      expect(staffAsInvite.error?.code).toBe('ONBOARDING_INVITE_INVALID');
+      expect(await events(c.id)).toHaveLength(0);
+    });
+
+    it('issuer authority is re-checked at use: a disabled issuer, or one who lost cashier:manage, ends the invitations they issued', async () => {
+      const prov = new RoleProvisioningService(repos);
+      const issuer = (await repos.users.create({ email: `oi-iss-${run}-${++seq}@example.test`, fullName: 'i', passwordHash: 'x', status: 'active' })).id;
+      const roles = await prov.seedDefaultRoles(bizA, ownerA).catch(async () => null);
+      const adminRole = (await q(`SELECT id FROM roles WHERE business_id = $1 AND name = 'Admin' LIMIT 1`, [bizA]))[0].id as string;
+      await q(`INSERT INTO user_business_roles (user_id, business_id, role_id) VALUES ($1,$2,$3)`, [issuer, bizA, adminRole]);
+      void roles;
+      const issuerToken = await signAccessToken(issuer, SECRET);
+      const made = await http('POST', '/customer-invitations', { token: issuerToken, businessId: bizA, body: { branchId: a1 } });
+      expect(made.status, JSON.stringify(made)).toBe(201);
+      const token = tokenOf(made.data.inviteUrl);
+      // 1) the issuer's business role is removed: the invitation stops working
+      await q(`UPDATE user_business_roles SET deleted_at = now() WHERE user_id = $1 AND business_id = $2`, [issuer, bizA]);
+      const c1 = await customer();
+      expect((await accept(c1.token, token)).error?.code).toBe('ONBOARDING_INVITE_INVALID');
+      expect(await events(c1.id)).toHaveLength(0);
+      // 2) role restored but the account is disabled: still refused
+      await q(`UPDATE user_business_roles SET deleted_at = NULL WHERE user_id = $1 AND business_id = $2`, [issuer, bizA]);
+      await q(`UPDATE users SET status = 'deactivated' WHERE id = $1`, [issuer]);
+      expect((await accept(c1.token, token)).error?.code).toBe('ONBOARDING_INVITE_INVALID');
+      // 3) a disabled issuer cannot create new ones either
+      expect((await http('POST', '/customer-invitations', { token: issuerToken, businessId: bizA, body: { branchId: a1 } })).status).toBeGreaterThanOrEqual(401);
+      await q(`UPDATE users SET status = 'active' WHERE id = $1`, [issuer]);
+      expect((await accept(c1.token, token)).status).toBe(201); // authority restored: the same invitation works once
+    });
+
+    it('a branch that is archived after issuing ends the invitation (branch reassignment cannot silently move attribution)', async () => {
+      const spare = (await repos.branches.create({ businessId: bizA, name: 'Spare', slug: `spare-${++seq}` })).id;
+      const inv = await issue(spare);
+      await q(`UPDATE branches SET status = 'archived' WHERE id = $1`, [spare]);
+      const c = await customer();
+      expect((await accept(c.token, inv.token)).error?.code).toBe('ONBOARDING_INVITE_INVALID');
+      expect((await preview(c.token, inv.token)).status).toBe(400);
+      expect(await events(c.id)).toHaveLength(0);
+    });
+
+    it('customer deletion compatibility: a customer with a pending deletion request cannot accept an invitation', async () => {
+      const c = await customer(); const inv = await issue();
+      await q(`INSERT INTO customer_deletion_requests (customer_id, requested_at, scheduled_for) VALUES ($1, now(), now() + interval '30 days')`, [c.id]);
+      const r = await accept(c.token, inv.token);
+      expect(r.status).toBe(403); expect(r.error?.code).toBe('ACCOUNT_DELETION_PENDING');
+      expect(await events(c.id)).toHaveLength(0);
+      expect(await q(`SELECT 1 FROM business_customer_memberships WHERE customer_id = $1`, [c.id])).toHaveLength(0);
+    });
+
+    it('a cashier session on a DIFFERENT business, or the owner of another business, cannot revoke or list this business\'s invitations (no oracle)', async () => {
+      const inv = await issue();
+      const foreign = await http('POST', `/customer-invitations/${inv.id}/revoke`, { token: ownerBToken, businessId: bizB });
+      expect(foreign.status).toBe(404);
+      expect((await q(`SELECT revoked_at FROM customer_invitations WHERE id = $1`, [inv.id]))[0].revoked_at).toBeNull();
+      const unknown = await http('POST', `/customer-invitations/${randomUUID()}/revoke`, { token: ownerBToken, businessId: bizB });
+      expect(unknown.status).toBe(404); expect(unknown.error?.code).toBe(foreign.error?.code); // indistinguishable: no existence oracle
+    });
+  });
 });
