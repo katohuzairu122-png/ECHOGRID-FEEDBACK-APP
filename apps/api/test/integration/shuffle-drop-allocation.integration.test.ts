@@ -130,4 +130,17 @@ describe.skipIf(!databaseUrl)('TSH-04 selection -> allocation integration (real 
     } finally { await f.q(`DROP TRIGGER aaa_sd_fail ON shuffle_drop_allocations`); await f.q(`DROP FUNCTION sd_fail()`); }
     const r2 = await alloc(s.versionId, s.sponsorshipId); expect(r2.data.linked).toBe(2);
   });
+
+  it('TAMPER-EVIDENT LINKS (TSH-01 section 8): every link has exactly one Shuffle chain event; a deleted or invented link row is detected and blocks further allocation', async () => {
+    const s = await setup(2, 2);
+    expect((await f.part.verifyEvidence(s.versionId)).linksOk).toBeNull(); // nothing linked yet
+    await alloc(s.versionId, s.sponsorshipId);
+    const ev = await f.part.verifyEvidence(s.versionId); expect(ev).toMatchObject({ chainOk: true, selectionOk: true, linksOk: true });
+    expect(Number((await f.q(`SELECT count(*)::int n FROM shuffle_allocation_events WHERE campaign_version_id=$1 AND event->>'type'='drop_allocation_linked'`, [s.versionId]))[0].n)).toBe(2);
+    const row = (await f.q(`SELECT id FROM shuffle_drop_allocations WHERE campaign_version_id=$1 LIMIT 1`, [s.versionId]))[0].id as string;
+    await f.q(`ALTER TABLE shuffle_drop_allocations DISABLE TRIGGER shuffle_drop_allocations_guard_trg`);
+    try { await f.q(`DELETE FROM shuffle_drop_allocations WHERE id=$1`, [row]); } finally { await f.q(`ALTER TABLE shuffle_drop_allocations ENABLE ALWAYS TRIGGER shuffle_drop_allocations_guard_trg`); }
+    expect((await f.part.verifyEvidence(s.versionId)).linksOk).toBe(false); // the chain still records a link that no longer exists
+    const r = await alloc(s.versionId, s.sponsorshipId); expect(r.status).toBe(409); expect(r.error?.code).toBe('SELECTION_EVIDENCE_INVALID');
+  });
 });
