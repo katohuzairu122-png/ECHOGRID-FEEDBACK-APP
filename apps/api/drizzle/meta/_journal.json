@@ -722,6 +722,13 @@
       "when": 1795664880897,
       "tag": "0102_governance_fraud_signals_dedup",
       "breakpoints": true
+    },
+    {
+      "idx": 103,
+      "version": "7",
+      "when": 1795673506873,
+      "tag": "0103_shuffle_drop_allocations",
+      "breakpoints": true
     }
   ]
 }
