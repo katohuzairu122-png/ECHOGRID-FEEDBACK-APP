@@ -9,7 +9,7 @@ import { platformDropsRoutes } from '../../src/platform/drops.routes';
 import { platformGovernanceRoutes } from '../../src/platform/governance.routes';
 import { signCashierAccessToken } from '../../src/auth/jwt';
 import { DROP_METRIC_DEFINITIONS, DROP_METRIC_KINDS, TentashipAnalytics } from '../../src/analytics/tentaship-analytics';
-import { reconcileDropInventory } from '../../src/analytics/drop-inventory-reconciliation';
+import { checkDropInventory } from '../../src/analytics/drop-inventory-reconciliation';
 import { buildDb } from '../../src/db/client';
 import { DropSponsorshipService } from '../../src/drops/drop-sponsorship.service';
 import { makeFixtures, SECRET } from './helpers/tentaship-fixtures';
@@ -44,7 +44,7 @@ describe.skipIf(!databaseUrl)('TDP-04 inventory reconciliation, analytics and co
   let client: Client; let f: ReturnType<typeof makeFixtures>; let admin: { id: string; token: string }; let reviewer: { id: string; token: string }; let plain: { id: string; token: string };
   let biz: string; let bizB: string; let rule: string; let an: TentashipAnalytics;
   const scen = (o: { quantity: number; reserve?: number; allocate?: number; windowMs?: number }) => f.dropScenario({ creatorId: admin.id, reviewerId: reviewer.id, businessId: biz, ruleId: rule, quantity: o.quantity, ...(o.reserve !== undefined ? { reserve: o.reserve } : {}), ...(o.allocate !== undefined ? { allocate: o.allocate } : {}), ...(o.windowMs !== undefined ? { collectionWindowEndMs: o.windowMs } : {}) });
-  const rec = (id: string) => reconcileDropInventory(f.db, id);
+  const rec = (id: string) => checkDropInventory(f.db, id);
   const counts = async (id: string) => (await f.q(`SELECT (SELECT count(*)::int FROM drop_reservations WHERE sponsorship_id=$1) r, (SELECT count(*)::int FROM drop_events WHERE sponsorship_id=$1) e, (SELECT reserved||'/'||allocated||'/'||collected||'/'||expired FROM drop_inventory WHERE sponsorship_id=$1) i`, [id]))[0];
   const tamper = async (trigger: string, table: string, sql: string, params: unknown[]) => { await f.q(`ALTER TABLE ${table} DISABLE TRIGGER ${trigger}`); try { await f.q(sql, params); } finally { await f.q(`ALTER TABLE ${table} ENABLE ALWAYS TRIGGER ${trigger}`); } };
 

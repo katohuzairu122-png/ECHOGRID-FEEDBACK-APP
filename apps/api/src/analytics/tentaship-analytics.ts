@@ -4,7 +4,7 @@ import {
   dropEvents, dropSponsorships, governanceCases, shuffleCampaignVersions, shuffleEligibilitySnapshots, shuffleEntries, shuffleInvitations, shuffleSelectionResults,
 } from '../db/schema';
 import { AppError } from '../lib/errors';
-import { reconcileDropInventory } from './drop-inventory-reconciliation';
+import { checkDropInventory } from './drop-inventory-reconciliation';
 
 /**
  * TDP-04 / TSH-07 aggregate analytics. EVERY number is derived from canonical records (no competing balance is stored) and has a documented definition below.
@@ -68,7 +68,7 @@ export class TentashipAnalytics {
   async dropSponsorship(sponsorshipId: string) {
     const [s] = await this.db.select({ id: dropSponsorships.id, businessId: dropSponsorships.businessId, status: dropSponsorships.status }).from(dropSponsorships).where(eq(dropSponsorships.id, sponsorshipId)).limit(1);
     if (!s) throw new AppError('Sponsorship not found.', 404, 'SPONSORSHIP_NOT_FOUND');
-    const rec = await reconcileDropInventory(this.db, sponsorshipId);
+    const rec = await checkDropInventory(this.db, sponsorshipId);
     if (!rec.current || !rec.historical) return { sponsorshipId, status: s.status, metrics: null, reason: 'NO_INVENTORY_UNTIL_APPROVED' as const };
     const everAllocated = rec.current.collected + rec.current.allocated + rec.current.expiredUnreturned;
     return {

@@ -11,7 +11,7 @@ import { AppError } from '../lib/errors';
 import { tentashipDropsGate } from '../drops/drops-gate';
 import { DropSponsorshipService } from '../drops/drop-sponsorship.service';
 import { DROP_METRIC_DEFINITIONS, DROP_METRIC_KINDS, TentashipAnalytics } from '../analytics/tentaship-analytics';
-import { reconcileDropInventory } from '../analytics/drop-inventory-reconciliation';
+import { checkDropInventory } from '../analytics/drop-inventory-reconciliation';
 import { dropEventReferences } from '../analytics/drop-event-references';
 
 type Env = { Bindings: Bindings; Variables: AuthVariables & PlatformVariables & AuditVariables };
@@ -115,7 +115,7 @@ platformDropsRoutes.get('/metric-definitions', (c) => { c.header('Cache-Control'
 platformDropsRoutes.get('/sponsorships/:id/reconciliation', async (c) => {
   c.header('Cache-Control', 'no-store');
   const { db, close } = await createDb(c.env.HYPERDRIVE);
-  try { return ok(c, await reconcileDropInventory(db, idOf(c))); } finally { c.executionCtx.waitUntil(close()); }
+  try { return ok(c, await checkDropInventory(db, idOf(c))); } finally { c.executionCtx.waitUntil(close()); }
 });
 platformDropsRoutes.get('/sponsorships/:id/event-references', async (c) => {
   c.header('Cache-Control', 'no-store');

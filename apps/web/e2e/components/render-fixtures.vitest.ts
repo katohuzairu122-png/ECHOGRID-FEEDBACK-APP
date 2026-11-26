@@ -23,7 +23,7 @@ const hiddenReport = { ...report, metrics: { ...report.metrics, reserved: { avai
 const campaign = { campaignId: 'c1', status: 'draft', termsVersion: 'draft-1', disclosure: { en: 'The outcome is determined by the server after the entry deadline.', ar: 'يحدد الخادم النتيجة بعد الموعد النهائي للدخول.' }, disclosureHash: 'a'.repeat(64), eligibility: 'met', participation: 'admitted', outcomeRecorded: false };
 
 // postcss is a dependency of @tailwindcss/postcss, not of this app: resolve it from that package (strict pnpm layout).
-const postcss = createRequire(createRequire(__filename).resolve('@tailwindcss/postcss'))('postcss') as typeof import('postcss').default;
+const postcss = createRequire(createRequire(__filename).resolve('@tailwindcss/postcss'))('postcss') as (plugins: unknown[]) => { process(css: string, o: { from: string }): Promise<{ css: string }> };
 
 describe('render static fixtures for the real-browser spec', () => {
   it('writes every fixture', async () => {
@@ -32,7 +32,7 @@ describe('render static fixtures for the real-browser spec', () => {
     expect(css.length).toBeGreaterThan(1000);
     mkdirSync(FIXTURE_DIR, { recursive: true });
     const page = (locale: keyof typeof LOCALES, body: React.ReactElement) => {
-      const markup = renderToStaticMarkup(createElement(NextIntlClientProvider, { locale, timeZone: 'UTC', messages: { common: LOCALES[locale] } }, body));
+      const markup = renderToStaticMarkup(createElement(NextIntlClientProvider as never, { locale, timeZone: 'UTC', messages: { common: LOCALES[locale] } } as never, body));
       return `<!doctype html><html lang="${locale}" dir="${locale === 'ar' ? 'rtl' : 'ltr'}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><style>${css}</style></head><body class="bg-neutral-50 p-4"><main class="mx-auto max-w-xl space-y-4">${markup}</main></body></html>`;
     };
     for (const locale of Object.keys(LOCALES) as (keyof typeof LOCALES)[]) {

@@ -25,7 +25,7 @@ export interface Reconciliation {
 }
 const n = (v: unknown) => Number(v ?? 0);
 
-export async function reconcileDropInventory(db: Db, sponsorshipId: string): Promise<Reconciliation> {
+export async function checkDropInventory(db: Db, sponsorshipId: string): Promise<Reconciliation> {
   const [s] = await db.select({ id: dropSponsorships.id, status: dropSponsorships.status, approvedVersionId: dropSponsorships.approvedVersionId }).from(dropSponsorships).where(eq(dropSponsorships.id, sponsorshipId)).limit(1);
   if (!s) throw new AppError('Sponsorship not found.', 404, 'SPONSORSHIP_NOT_FOUND');
   const [inv] = await db.select().from(dropInventory).where(eq(dropInventory.sponsorshipId, sponsorshipId)).limit(1);

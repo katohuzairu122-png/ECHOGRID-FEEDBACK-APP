@@ -3,7 +3,7 @@ import { sql } from 'drizzle-orm';
 import type { Db } from '../db/client';
 import { canonicalJson } from '../lib/audit-chain';
 import { ShuffleParticipationService } from '../shuffle/shuffle-participation.service';
-import { reconcileDropInventory } from '../analytics/drop-inventory-reconciliation';
+import { checkDropInventory } from '../analytics/drop-inventory-reconciliation';
 
 /**
  * TSH-08 fraud SIGNALS: read-only detectors over canonical evidence (no new data is stored here). A signal is INFORMATION for a human reviewer:
@@ -70,7 +70,7 @@ export class FraudSignals {
     for (const d of dup) out.push(mk('duplicate_allocation', d.ids, 'More than one live reservation or allocation exists for one customer on one sponsorship.'));
     // ONE source for inventory truth: every FAILED reconciliation check becomes its own signal (a chain failure is tampering; any other failure is inventory inconsistency).
     // Detection is read-only: nothing is repaired, adjusted or reversed.
-    const rec = await reconcileDropInventory(this.db, sponsorshipId);
+    const rec = await checkDropInventory(this.db, sponsorshipId);
     for (const c of rec.checks.filter((x) => !x.ok)) {
       if (c.code === 'chain_verifies') out.push(mk('evidence_chain_broken', [sponsorshipId], 'The sponsorship evidence chain does not verify.'));
       else if (c.code !== 'no_duplicate_live_units') out.push(mk('inventory_inconsistent', [sponsorshipId, c.code], `Reconciliation check ${c.code} failed: expected ${String(c.expected)}, actual ${String(c.actual)}.`));
