@@ -112,11 +112,6 @@ BEGIN
 END;
 $$;
 --> statement-breakpoint
-CREATE OR REPLACE FUNCTION governance_has_role(p_user uuid, p_role text) RETURNS boolean
-LANGUAGE sql STABLE
-SET search_path = pg_catalog, public
-AS $$ SELECT EXISTS (SELECT 1 FROM governance_operators WHERE user_id = p_user AND role = p_role AND active) $$;
---> statement-breakpoint
 CREATE OR REPLACE FUNCTION governance_cases_guard() RETURNS trigger
 LANGUAGE plpgsql
 SET search_path = pg_catalog, public
@@ -153,7 +148,7 @@ BEGIN
     RETURN NEW;
   END IF;
   IF OLD.status IN ('open','escalated') AND NEW.status = 'under_review' THEN
-    IF NEW.reviewer_user_id IS NULL OR NEW.reviewer_user_id = OLD.opened_by_user_id OR NOT governance_has_role(NEW.reviewer_user_id, need_role) THEN
+    IF NEW.reviewer_user_id IS NULL OR NEW.reviewer_user_id = OLD.opened_by_user_id OR NOT EXISTS (SELECT 1 FROM governance_operators go_ WHERE go_.user_id = NEW.reviewer_user_id AND go_.role = need_role AND go_.active) THEN
       RAISE EXCEPTION 'GOVERNANCE_REVIEWER_NOT_ALLOWED (an assigned %, who did not open the case, is required)', need_role USING ERRCODE = 'integrity_constraint_violation';
     END IF;
     IF NEW.decision IS NOT NULL OR NEW.escalation_reason IS DISTINCT FROM OLD.escalation_reason THEN RAISE EXCEPTION 'GOVERNANCE_CASE_IMMUTABLE (review fields)' USING ERRCODE = 'integrity_constraint_violation'; END IF;
@@ -161,7 +156,7 @@ BEGIN
   END IF;
   IF OLD.status = 'under_review' AND NEW.status = 'decided' THEN
     IF NEW.reviewer_user_id IS DISTINCT FROM OLD.reviewer_user_id OR NEW.decided_by_user_id IS DISTINCT FROM OLD.reviewer_user_id OR NEW.decided_by_user_id = OLD.opened_by_user_id
-       OR NOT governance_has_role(NEW.decided_by_user_id, need_role) THEN
+       OR NOT EXISTS (SELECT 1 FROM governance_operators go_ WHERE go_.user_id = NEW.decided_by_user_id AND go_.role = need_role AND go_.active) THEN
       RAISE EXCEPTION 'GOVERNANCE_DECIDER_NOT_ALLOWED (the assigned reviewer must decide, must not have opened the case and must hold the operator role)' USING ERRCODE = 'integrity_constraint_violation';
     END IF;
     IF OLD.subject_type LIKE 'shuffle_%' THEN
@@ -224,7 +219,7 @@ BEGIN
   IF TG_OP = 'INSERT' THEN
     SELECT status INTO c_status FROM governance_cases WHERE id = NEW.case_id;
     IF NEW.status <> 'requested' OR NEW.approved_by_user_id IS NOT NULL OR NEW.expires_at <= now() OR c_status IS NULL OR c_status NOT IN ('under_review','decided')
-       OR NOT governance_has_role(NEW.requested_by_user_id, 'fraud_investigator') THEN
+       OR NOT EXISTS (SELECT 1 FROM governance_operators go_ WHERE go_.user_id = NEW.requested_by_user_id AND go_.role = 'fraud_investigator' AND go_.active) THEN
       RAISE EXCEPTION 'GOVERNANCE_OVERRIDE_NOT_ALLOWED (needs a case under review or decided, an assigned fraud investigator as requester and a future expiry)' USING ERRCODE = 'integrity_constraint_violation';
     END IF;
     RETURN NEW;
@@ -234,7 +229,7 @@ BEGIN
     RAISE EXCEPTION 'GOVERNANCE_OVERRIDE_IMMUTABLE (identity)' USING ERRCODE = 'integrity_constraint_violation';
   END IF;
   IF OLD.status = 'requested' AND NEW.status = 'approved' THEN
-    IF NEW.approved_by_user_id IS NULL OR NEW.approved_by_user_id = OLD.requested_by_user_id OR NOT governance_has_role(NEW.approved_by_user_id, 'dispute_resolver') OR OLD.expires_at <= now() THEN
+    IF NEW.approved_by_user_id IS NULL OR NEW.approved_by_user_id = OLD.requested_by_user_id OR NOT EXISTS (SELECT 1 FROM governance_operators go_ WHERE go_.user_id = NEW.approved_by_user_id AND go_.role = 'dispute_resolver' AND go_.active) OR OLD.expires_at <= now() THEN
       RAISE EXCEPTION 'GOVERNANCE_APPROVAL_NOT_ALLOWED (a different assigned dispute resolver, before expiry, is required)' USING ERRCODE = 'integrity_constraint_violation';
     END IF;
   ELSIF OLD.status = 'approved' AND NEW.status = 'executed' THEN
