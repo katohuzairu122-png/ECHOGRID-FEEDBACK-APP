@@ -1059,6 +1059,10 @@ export function createCustomerRecoveryService(config: {
         return FAIL;
       const digest = await cancelDigest(input.attemptId, input.token);
       const cancelled = await config.db.transaction(async (tx) => {
+        // LOCK ORDER (customer row, THEN attempt row) must match complete(): that path locks the customer FOR UPDATE and only then updates the
+        // attempt. Updating the attempt first and taking the customer lock later (the audit insert's foreign key needs it) lets a concurrent
+        // cancel and complete each wait on the other: PostgreSQL deadlock 40P01.
+        if (customerId) await tx.select({ id: customers.id }).from(customers).where(eq(customers.id, customerId)).for('update');
         const [row] = await tx
           .update(customerRecoveryAttempts)
           .set({ status: 'cancelled', endedAt: sql`now()`, endedReason: 'cancelled_by_customer' })
