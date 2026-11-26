@@ -10,6 +10,7 @@ import { ok } from '../lib/response';
 import { AppError } from '../lib/errors';
 import { tentashipShuffleGate } from '../shuffle/shuffle-gate';
 import { ShuffleCampaignService } from '../shuffle/shuffle-campaign.service';
+import { ShuffleParticipationService } from '../shuffle/shuffle-participation.service';
 
 type Env = { Bindings: Bindings; Variables: AuthVariables & PlatformVariables & AuditVariables };
 
@@ -80,3 +81,61 @@ platformShuffleRoutes.post('/versions/:id/snapshots', async (c) => {
   return ok(c, { qualified: r.snapshot.qualified, created: r.created, evaluatedAt: r.snapshot.evaluatedAt.toISOString() }, r.created ? 201 : 200);
 });
 platformShuffleRoutes.get('/versions/:id/snapshots', async (c) => { c.header('Cache-Control', 'no-store'); return ok(c, await withService(c, (s) => s.snapshotCounts(idOf(c)))); });
+
+/**
+ * TSH-05 / TSH-04 SYNTHETIC HARNESS. Platform-admin only, behind the same control. These routes act on behalf of SYNTHETIC customers for isolated
+ * verification: the database fixes synthetic = true on every row and versions are never released, so they can never carry real participation. There is
+ * no customer-facing route. Every call must state `syntheticAcknowledged: true`.
+ */
+const synth = z.literal(true);
+const issueSchema = z.object({ syntheticAcknowledged: synth, customerId: z.uuid(), expiresAt: iso }).strict();
+const ackSchema = z.object({ syntheticAcknowledged: synth }).strict();
+const acceptSchema = z.object({ syntheticAcknowledged: synth, termsVersion: z.string().min(1).max(64), disclosureHash: z.string().regex(/^[0-9a-f]{64}$/) }).strict();
+const reasonSchema = z.object({ syntheticAcknowledged: synth, reason: z.string().trim().min(1).max(500) }).strict();
+const selectionSchema = z.object({ syntheticAcknowledged: synth, winnerCount: z.number().int().min(1) }).strict();
+async function withParticipation<T>(c: Context<Env>, fn: (s: ShuffleParticipationService) => Promise<T>): Promise<T> {
+  const { db, close } = await createDb(c.env.HYPERDRIVE);
+  try { return await fn(new ShuffleParticipationService(db)); } finally { c.executionCtx.waitUntil(close()); }
+}
+platformShuffleRoutes.post('/versions/:id/synthetic/invitations', async (c) => {
+  const b = await parseJsonBody(c.req.raw, issueSchema);
+  const r = await withParticipation(c, (s) => s.issueInvitation(idOf(c), b.customerId, new Date(b.expiresAt), actor(c)));
+  c.set('auditAlreadyRecorded', true);
+  return ok(c, { id: r.invitation.id, status: r.invitation.status, created: r.created }, r.created ? 201 : 200);
+});
+platformShuffleRoutes.post('/versions/:id/synthetic/expire', async (c) => {
+  await parseJsonBody(c.req.raw, ackSchema);
+  c.set('auditAlreadyRecorded', true);
+  return ok(c, await withParticipation(c, (s) => s.expireDue(idOf(c), actor(c))));
+});
+platformShuffleRoutes.post('/versions/:id/synthetic/selection', async (c) => {
+  const b = await parseJsonBody(c.req.raw, selectionSchema);
+  const r = await withParticipation(c, (s) => s.runSyntheticSelection(idOf(c), b.winnerCount, actor(c)));
+  c.set('auditAlreadyRecorded', true);
+  return ok(c, { created: r.created, entrantCount: r.result.entrantCount, winnerCount: r.result.winnerCount, inputCommitment: r.result.inputCommitment, resultCommitment: r.result.resultCommitment }, r.created ? 201 : 200);
+});
+platformShuffleRoutes.get('/versions/:id/evidence', async (c) => { c.header('Cache-Control', 'no-store'); return ok(c, await withParticipation(c, (s) => s.verifyEvidence(idOf(c)))); });
+platformShuffleRoutes.get('/versions/:id/participation-counts', async (c) => { c.header('Cache-Control', 'no-store'); return ok(c, await withParticipation(c, (s) => s.counts(idOf(c)))); });
+for (const op of ['view', 'decline'] as const) {
+  platformShuffleRoutes.post(`/invitations/:id/synthetic/${op}`, async (c) => {
+    await parseJsonBody(c.req.raw, ackSchema);
+    c.set('auditAlreadyRecorded', true);
+    return ok(c, await withParticipation(c, (s) => (op === 'view' ? s.markViewed(idOf(c), actor(c)) : s.decline(idOf(c), actor(c)))));
+  });
+}
+platformShuffleRoutes.post('/invitations/:id/synthetic/accept', async (c) => {
+  const b = await parseJsonBody(c.req.raw, acceptSchema);
+  const r = await withParticipation(c, (s) => s.accept(idOf(c), { termsVersion: b.termsVersion, disclosureHash: b.disclosureHash }, actor(c)));
+  c.set('auditAlreadyRecorded', true);
+  return ok(c, { entryId: r.entry.id, status: r.entry.status, created: r.created }, r.created ? 201 : 200);
+});
+platformShuffleRoutes.post('/invitations/:id/synthetic/withdraw', async (c) => {
+  const b = await parseJsonBody(c.req.raw, reasonSchema);
+  c.set('auditAlreadyRecorded', true);
+  return ok(c, await withParticipation(c, (s) => s.withdraw(idOf(c), b.reason, actor(c))));
+});
+platformShuffleRoutes.post('/entries/:id/synthetic/cancel', async (c) => {
+  const b = await parseJsonBody(c.req.raw, reasonSchema);
+  c.set('auditAlreadyRecorded', true);
+  return ok(c, await withParticipation(c, (s) => s.cancelEntry(idOf(c), b.reason, actor(c))));
+});
