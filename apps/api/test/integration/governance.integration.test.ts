@@ -53,7 +53,8 @@ describe.skipIf(!databaseUrl)('TSH-08 governance (real HTTP, real PostgreSQL)', 
     biz = await f.business('gv');
     await f.q(`UPDATE qualification_rule_versions SET approval_state='retired', retired_at=now() WHERE approval_state <> 'retired'`);
     rule = await f.rule(creator.id);
-    await f.q(`UPDATE governance_operators SET active = false, revoked_at = now(), revoked_by_user_id = (SELECT id FROM users ORDER BY created_at LIMIT 1), revocation_reason = 'synthetic test reset' WHERE revoked_at IS NULL`); // operators are empty/disabled by default await f.ensurePolicies();
+    await f.q(`UPDATE governance_operators SET active = false, revoked_at = now(), revoked_by_user_id = (SELECT id FROM users ORDER BY created_at LIMIT 1), revocation_reason = 'synthetic test reset' WHERE revoked_at IS NULL`);
+    await f.ensurePolicies(); // approved synthetic policies exist, but with NO operator assigned nothing can still be done (operators are empty/disabled by default)
   });
   afterAll(async () => { await f.q(`UPDATE qualification_rule_versions SET approval_state='retired', retired_at=now() WHERE approval_state <> 'retired'`).catch(() => undefined); await f.q(`UPDATE governance_operators SET active = false, revoked_at = now(), revoked_by_user_id = (SELECT id FROM users ORDER BY created_at LIMIT 1), revocation_reason = 'synthetic test reset' WHERE revoked_at IS NULL`).catch(() => undefined); await client?.end(); });
 
