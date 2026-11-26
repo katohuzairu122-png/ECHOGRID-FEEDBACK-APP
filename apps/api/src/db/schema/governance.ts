@@ -6,7 +6,10 @@ import { dropSponsorships } from './drops';
 
 export const GOVERNANCE_CASE_KINDS = ['fraud', 'dispute'] as const;
 export const GOVERNANCE_SUBJECT_TYPES = ['shuffle_campaign_version', 'shuffle_entry', 'shuffle_selection', 'drop_sponsorship', 'drop_reservation'] as const;
-export const GOVERNANCE_CLASSIFICATIONS = ['suspected_duplicate_participation', 'suspected_fabricated_evidence', 'allocation_dispute', 'collection_dispute', 'other'] as const;
+export const GOVERNANCE_CLASSIFICATIONS = [
+  'suspected_duplicate_participation', 'suspected_fabricated_evidence', 'suspected_self_referral', 'suspected_referral_cycle', 'suspected_qualification_manipulation',
+  'suspected_duplicate_allocation', 'suspected_inventory_manipulation', 'suspected_evidence_tampering', 'allocation_dispute', 'collection_dispute', 'other',
+] as const;
 export const GOVERNANCE_CASE_STATUSES = ['open', 'escalated', 'under_review', 'decided', 'closed'] as const;
 export const GOVERNANCE_DECISIONS = ['upheld', 'overturned', 'no_action'] as const;
 export const GOVERNANCE_OPERATOR_ROLES = ['fraud_investigator', 'dispute_resolver'] as const;
@@ -57,9 +60,11 @@ export const governanceCases = pgTable(
   (t) => [
     index('governance_cases_subject_idx').on(t.subjectType, t.subjectId),
     index('governance_cases_status_idx').on(t.status, t.kind),
+    // DUPLICATE PREVENTION: at most one not-yet-closed case of a kind per subject (a second report is the same case, never a new one).
+    uniqueIndex('governance_cases_one_open_uq').on(t.kind, t.subjectType, t.subjectId).where(sql`${t.status} <> 'closed'`),
     check('governance_cases_kind', sql`${t.kind} IN ('fraud','dispute')`),
     check('governance_cases_subject_type', sql`${t.subjectType} IN ('shuffle_campaign_version','shuffle_entry','shuffle_selection','drop_sponsorship','drop_reservation')`),
-    check('governance_cases_classification', sql`${t.classification} IN ('suspected_duplicate_participation','suspected_fabricated_evidence','allocation_dispute','collection_dispute','other')`),
+    check('governance_cases_classification', sql`${t.classification} IN ('suspected_duplicate_participation','suspected_fabricated_evidence','suspected_self_referral','suspected_referral_cycle','suspected_qualification_manipulation','suspected_duplicate_allocation','suspected_inventory_manipulation','suspected_evidence_tampering','allocation_dispute','collection_dispute','other')`),
     check('governance_cases_status', sql`${t.status} IN ('open','escalated','under_review','decided','closed')`),
     check('governance_cases_family', sql`(${t.subjectType} LIKE 'shuffle_%' AND ${t.campaignVersionId} IS NOT NULL AND ${t.sponsorshipId} IS NULL) OR (${t.subjectType} LIKE 'drop_%' AND ${t.sponsorshipId} IS NOT NULL AND ${t.campaignVersionId} IS NULL)`),
     check('governance_cases_text', sql`char_length(${t.summary}) BETWEEN 1 AND 1000`),
