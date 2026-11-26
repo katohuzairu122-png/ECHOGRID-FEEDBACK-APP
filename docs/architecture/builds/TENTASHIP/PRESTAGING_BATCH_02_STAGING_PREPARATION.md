@@ -1,4 +1,4 @@
-# Pre-staging batch 02: consolidated staging preparation (PREPARED, NOT EXECUTED)
+# Pre-staging batches 02 and 03: consolidated staging preparation (PREPARED, NOT EXECUTED)
 
 Nothing below has been run against staging or production. Every step needs the Owner's explicit instruction.
 
@@ -41,3 +41,37 @@ Owner A and Owner B (two businesses), a Manager (A), a cashier (A, one branch), 
 
 ## 8. Production restrictions
 Production deployment, migration and any control activation require separate explicit Owner instruction. `TENTASHIP_BADGES_ENABLED` must stay off in production until the Owner decisions in TB_02_03_04 are made. No real business is closed and no customer data deleted by any step here. CUST-DEL-03 stays on hold (needs a named privacy operator, named approver, approved retention and legal-hold policies, reviewed migration).
+
+
+---
+
+## Batch 03 update (prepared, not executed)
+
+### 1b. PR dependency order (Batch 03)
+Merged: #590-#595. Open at the time of writing: #596 (recovery cancel lock order, independent), #597 (invitation security-review tests, independent), #598 (TSH-02 + QUAL-PURCHASE-01, **migration 0097**), #599 (badge qualification integration, **stacked on #598**: merge #598 first, then update #599 from main). #596 and #597 have no dependency on the others.
+
+### 2b. Migration manifest additions
+| # | Tag | Nature | Content |
+|---|---|---|---|
+| 0096 | customer_invitations | additive | owner-issued customer invitations + guard; unique index making a `remote_invitation` single-use on `customer_onboarding_events` |
+| 0097 | qualification_referrals | additive (PR #598, not yet merged) | shared qualification rule versions, evidence consumptions, referral attributions and events, with guards |
+Full pending chain on shared databases: 0088-0097 (0088-0096 in main; 0097 after #598). Verify the deployed ledger read-only before applying; do not assume which are pending. Upgrade evidence on disposable PostgreSQL 16: 0093 -> 0095 and 0095 -> 0097 byte-for-byte legacy preservation, with rollback (`rollback/0094_0095_rollback.sql`, `rollback/0096_0097_rollback.sql`) and re-apply. PostgreSQL 18 evidence comes from the hosted PG18 checks (migration replay, tenant-reference pre-check).
+
+### 3b. Feature-control inventory (all OFF; none set in any checked-in config)
+Unchanged list from batch 02, plus the reservations: `TENTASHIP_SHUFFLE_ENABLED` and `TENTASHIP_DROPS_ENABLED` are **not implemented yet** (no Shuffle or Drops runtime exists). Owner invitations, referral attribution and the shared qualification engine add NO control: invitations are an authorised owner action (`cashier:manage`), attribution is recorded as a side effect of an invitation acceptance and awards nothing, and final qualification is disabled by the absence of an approved rule (no route approves one).
+
+### 4b. Runtime-role verification
+`node scripts/runtime-role/generate.mjs --check` must pass; new RUNTIME entries: `customer_invitations` (INSERT, SELECT, UPDATE = revocation only), `qualification_rule_versions` (INSERT, SELECT, UPDATE = approval/retirement only), `qualification_evidence_consumptions`, `customer_referrals`, `customer_referral_events` (INSERT, SELECT). Run `verify-runtime-role.sql` read-only after any migration.
+
+### 6b. Synthetic accounts (additions)
+Owner A with two branches; an Admin (has `cashier:manage`); a Manager (must be refused on invitations); a cashier with one branch (must be refused); three synthetic customers (one invited by owner link, one with a pending deletion request, one with recorded purchases).
+
+### 7b. Acceptance scenarios (additions)
+- Invitations: owner creates (default 24 h, max 168 h), copies link and QR, customer accepts with explicit consent, second customer refused, revoke before use works, revoke after use refused, expired/revoked/tampered tokens refused with the generic error, Manager and cashier refused, a pending-deletion customer refused, branch archived ends the invitation. Acceptance grants no Community membership, reward or badge.
+- Referral attribution: an accepted invitation yields one `business_invitation` attribution; no customer referral exists; `qualify` is refused with `QUALIFICATION_NOT_APPROVED` while no rule is approved.
+- Qualification (disposable ONLY): with a synthetic approved rule, a qualifying recorded purchase verifies a referral once; refunded, reversed, earlier, below-minimum and other-currency evidence never counts; concurrent calls collapse to one result. A synthetic rule must never be approved on staging or production.
+- Badges with the shared engine: no approved rule means a purchase-based badge cannot be created or awarded; retiring the rule stops new awards and revokes nothing.
+- Recovery: cancel and complete race without deadlock (lock order fix in #596).
+
+### 8b. Production restrictions (additions)
+No qualification rule may be approved, and no referral may be verified, in any shared environment until the Owner approves D02-D06. Badges stay off. No Shuffle or Drops code exists to activate.
