@@ -25379,7 +25379,7 @@
         },
         "drop_versions_windows": {
           "name": "drop_versions_windows",
-          "value": "\"drop_sponsorship_versions\".\"collection_window_end\" > \"drop_sponsorship_versions\".\"collection_window_start\" AND \"drop_sponsorship_versions\".\"offer_expires_at\" > \"drop_sponsorship_versions\".\"created_at\" - interval '1 day'"
+          "value": "\"drop_sponsorship_versions\".\"collection_window_end\" > \"drop_sponsorship_versions\".\"collection_window_start\" AND \"drop_sponsorship_versions\".\"offer_expires_at\" > \"drop_sponsorship_versions\".\"created_at\""
         },
         "drop_versions_text": {
           "name": "drop_versions_text",
