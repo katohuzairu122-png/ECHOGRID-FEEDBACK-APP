@@ -342,6 +342,8 @@ SELECT c.relname AS name, v.verb, 'PRIVILEGE_OUTSIDE_MANIFEST' AS violation
        ('shuffle_invitations', 'INSERT'),
        ('shuffle_invitations', 'SELECT'),
        ('shuffle_invitations', 'UPDATE'),
+       ('shuffle_notification_deliveries', 'INSERT'),
+       ('shuffle_notification_deliveries', 'SELECT'),
        ('shuffle_notification_intents', 'INSERT'),
        ('shuffle_notification_intents', 'SELECT'),
        ('shuffle_selection_results', 'INSERT'),
