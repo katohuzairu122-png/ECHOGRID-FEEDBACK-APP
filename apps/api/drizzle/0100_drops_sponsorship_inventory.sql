@@ -239,6 +239,8 @@ BEGIN
 END;
 $$;
 --> statement-breakpoint
+REVOKE ALL ON FUNCTION drop_reservations_guard() FROM PUBLIC;
+--> statement-breakpoint
 CREATE OR REPLACE FUNCTION drop_events_chain() RETURNS trigger
 LANGUAGE plpgsql
 SET search_path = pg_catalog, public
