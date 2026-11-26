@@ -143,5 +143,57 @@
       "NOT_SUPPORTED_BY_EVIDENCE": "الأدلة المسجلة لا تدعم هذا الرقم.",
       "other": "هذا الرقم غير متاح."
     }
+  },
+  "tentashipSponsorApplication": {
+    "title": "طلب الرعاية",
+    "unavailable": "هذه المعلومات غير متاحة حاليًا.",
+    "statusLabel": "حالة الطلب",
+    "status": {
+      "submitted": "تم التقديم",
+      "under_review": "قيد المراجعة",
+      "approved": "تمت الموافقة",
+      "rejected": "غير موافق عليه",
+      "withdrawn": "تم السحب",
+      "suspended": "موقوف",
+      "revoked": "ملغى"
+    },
+    "reasonLabel": "السبب المسجل",
+    "changedLabel": "آخر تغيير للحالة",
+    "note": "يجب الموافقة على الراعي قبل عرض أي رعاية. لا تنشئ هذه الصفحة رعاية ولا تمنح أي صلاحية."
+  },
+  "tentashipGovernance": {
+    "title": "ملخص الحالة",
+    "unavailable": "هذه المعلومات غير متاحة حاليًا.",
+    "kindLabel": "نوع الحالة",
+    "kind": {
+      "fraud": "مراجعة احتيال",
+      "dispute": "نزاع"
+    },
+    "statusLabel": "حالة الملف",
+    "status": {
+      "open": "مفتوحة",
+      "escalated": "مصعّدة",
+      "under_review": "قيد المراجعة",
+      "decided": "تم البت فيها",
+      "closed": "مغلقة"
+    },
+    "decisionLabel": "القرار",
+    "decision": {
+      "upheld": "مؤيَّد",
+      "overturned": "منقوض",
+      "no_action": "لا إجراء"
+    },
+    "decisionNone": "لا يوجد قرار مسجل.",
+    "evidenceLabel": "عناصر الأدلة",
+    "policyLabel": "سياسة القرار",
+    "policyNone": "لا توجد سياسة مسجلة.",
+    "policyVersion": "الإصدار {version}",
+    "chainLabel": "سجل الأدلة",
+    "chain": {
+      "ok": "تم التحقق",
+      "broken": "فشل التحقق",
+      "unknown": "لم يتم التحقق"
+    },
+    "note": "يتخذ القرارات مراجعون معيَّنون وفق سياسة معتمدة. لا يمكن لهذه الصفحة اتخاذ قرار أو تجاوزه أو تغيير أي حالة."
   }
 }

@@ -143,5 +143,57 @@
       "NOT_SUPPORTED_BY_EVIDENCE": "The recorded evidence does not support this figure.",
       "other": "This figure is not available."
     }
+  },
+  "tentashipSponsorApplication": {
+    "title": "Sponsor application",
+    "unavailable": "This information is not available right now.",
+    "statusLabel": "Application status",
+    "status": {
+      "submitted": "Submitted",
+      "under_review": "Under review",
+      "approved": "Approved",
+      "rejected": "Not approved",
+      "withdrawn": "Withdrawn",
+      "suspended": "Suspended",
+      "revoked": "Revoked"
+    },
+    "reasonLabel": "Recorded reason",
+    "changedLabel": "Status last changed",
+    "note": "A sponsor must be approved before a sponsorship can be offered. This page does not create a sponsorship or grant any access."
+  },
+  "tentashipGovernance": {
+    "title": "Case summary",
+    "unavailable": "This information is not available right now.",
+    "kindLabel": "Case type",
+    "kind": {
+      "fraud": "Fraud review",
+      "dispute": "Dispute"
+    },
+    "statusLabel": "Case status",
+    "status": {
+      "open": "Open",
+      "escalated": "Escalated",
+      "under_review": "Under review",
+      "decided": "Decided",
+      "closed": "Closed"
+    },
+    "decisionLabel": "Decision",
+    "decision": {
+      "upheld": "Upheld",
+      "overturned": "Overturned",
+      "no_action": "No action"
+    },
+    "decisionNone": "No decision recorded.",
+    "evidenceLabel": "Evidence items",
+    "policyLabel": "Decision policy",
+    "policyNone": "No policy recorded.",
+    "policyVersion": "Version {version}",
+    "chainLabel": "Evidence log",
+    "chain": {
+      "ok": "Verified",
+      "broken": "Verification failed",
+      "unknown": "Not verified"
+    },
+    "note": "Decisions are made by assigned reviewers under an approved policy. This page cannot decide, override or change a case."
   }
 }
