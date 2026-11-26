@@ -49,7 +49,7 @@ Rollback files are in `docs/architecture/builds/TENTASHIP/rollback/`. They are e
 | API unit suite (final stack head) | 286 files / 4,484 tests PASS |
 | Web unit suite | 179 files / 1,465 tests PASS (on #618 head) |
 | Full PostgreSQL integration, fresh database, stack head before G12 | 167 files PASS, 1 skipped; 1,935 tests PASS, 42 skipped by design |
-| Full PostgreSQL integration after G12 | see §3a |
+| Full PostgreSQL integration after G12 | 167 files PASS, 1 skipped; 1,936 tests PASS, 42 skipped by design |
 | Typecheck incl. test config (api), web typecheck, eslint on changed code | PASS (existing console warnings only) |
 | `db:check` (drizzle drift) and runtime-role `--check` | PASS on every migration branch |
 | Release rehearsal (fresh 0000–0106, prefix 0000–0087 → 0106, all rollback files newest-first) | REHEARSAL_PASSED_LOCAL_DISPOSABLE_ONLY, ledger 107 |
@@ -59,7 +59,7 @@ Rollback files are in `docs/architecture/builds/TENTASHIP/rollback/`. They are e
 | Hosted CI | #614 head 636dbd3: all 28 checks green incl. PG18 (after fixing the test-setup defect in a8c76f1); #618 head f88fc36: green. Stacked PRs (#615–#617, #619, #620) receive hosted CI only after being retargeted to `main`. Final merged-head CI on `main`: UNKNOWN until the Owner merges. |
 
 ### 3a. Full integration after G12
-{{INT2}}
+Full PostgreSQL integration on a freshly rebuilt database at the final stack head (after the G12 correction): 167 files PASS, 1 skipped; 1,936 tests PASS, 42 skipped by design (EXIT 0).
 
 ### 3b. Defects found and corrected during this run
 1. `governance.integration` setup call was appended to a `//` comment (CI failure on #614, PG18 and Typecheck & Test) — fixed; `ensurePolicies` made idempotent on a fresh database.
