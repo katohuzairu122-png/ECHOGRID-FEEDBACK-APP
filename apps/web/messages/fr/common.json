@@ -143,5 +143,57 @@
       "NOT_SUPPORTED_BY_EVIDENCE": "Les preuves enregistrées ne permettent pas ce chiffre.",
       "other": "Ce chiffre n'est pas disponible."
     }
+  },
+  "tentashipSponsorApplication": {
+    "title": "Demande de sponsor",
+    "unavailable": "Cette information n'est pas disponible pour le moment.",
+    "statusLabel": "Statut de la demande",
+    "status": {
+      "submitted": "Soumise",
+      "under_review": "En cours d'examen",
+      "approved": "Approuvée",
+      "rejected": "Non approuvée",
+      "withdrawn": "Retirée",
+      "suspended": "Suspendue",
+      "revoked": "Révoquée"
+    },
+    "reasonLabel": "Motif enregistré",
+    "changedLabel": "Dernier changement de statut",
+    "note": "Un sponsor doit être approuvé avant qu'un parrainage puisse être proposé. Cette page ne crée aucun parrainage et n'accorde aucun accès."
+  },
+  "tentashipGovernance": {
+    "title": "Résumé du dossier",
+    "unavailable": "Cette information n'est pas disponible pour le moment.",
+    "kindLabel": "Type de dossier",
+    "kind": {
+      "fraud": "Examen de fraude",
+      "dispute": "Litige"
+    },
+    "statusLabel": "Statut du dossier",
+    "status": {
+      "open": "Ouvert",
+      "escalated": "Escaladé",
+      "under_review": "En cours d'examen",
+      "decided": "Tranché",
+      "closed": "Clos"
+    },
+    "decisionLabel": "Décision",
+    "decision": {
+      "upheld": "Confirmée",
+      "overturned": "Annulée",
+      "no_action": "Aucune action"
+    },
+    "decisionNone": "Aucune décision enregistrée.",
+    "evidenceLabel": "Éléments de preuve",
+    "policyLabel": "Politique de décision",
+    "policyNone": "Aucune politique enregistrée.",
+    "policyVersion": "Version {version}",
+    "chainLabel": "Journal des preuves",
+    "chain": {
+      "ok": "Vérifié",
+      "broken": "Échec de la vérification",
+      "unknown": "Non vérifié"
+    },
+    "note": "Les décisions sont prises par des examinateurs désignés selon une politique approuvée. Cette page ne peut ni décider, ni passer outre, ni modifier un dossier."
   }
 }
