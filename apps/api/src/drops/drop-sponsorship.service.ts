@@ -194,14 +194,18 @@ export class DropSponsorshipService {
 
   async release(reservationId: string, reason: string, ctx: Actor) {
     if (!reason.trim()) throw bad('A reason is required.', 'REASON_REQUIRED');
-    return this.db.transaction(async (tx) => {
-      const db = tx as unknown as Db; const r = await this.load(db, reservationId);
-      if (r.status === 'released') return { status: 'released' as const };
-      if (r.status !== 'reserved') throw conflict('An allocated unit is never silently withdrawn; only a reserved hold can be released.', 'RESERVATION_TRANSITION_NOT_ALLOWED');
-      await tx.update(dropReservations).set({ status: 'released', statusReason: reason.trim() }).where(eq(dropReservations.id, r.id));
-      await this.append(db, r.sponsorshipId, { type: 'released', reservationId: r.id, reason: reason.trim() }, ctx);
-      return { status: 'released' as const };
-    });
+    return this.db.transaction(async (tx) => this.releaseWithin(tx as unknown as Db, reservationId, reason, ctx));
+  }
+
+  /** The release itself, usable inside a caller's transaction (TSH-08 two-person override). Only a RESERVED hold can be released; an allocated unit never is. */
+  async releaseWithin(db: Db, reservationId: string, reason: string, ctx: Actor) {
+    if (!reason.trim()) throw bad('A reason is required.', 'REASON_REQUIRED');
+    const r = await this.load(db, reservationId);
+    if (r.status === 'released') return { status: 'released' as const };
+    if (r.status !== 'reserved') throw conflict('An allocated unit is never silently withdrawn; only a reserved hold can be released.', 'RESERVATION_TRANSITION_NOT_ALLOWED');
+    await db.update(dropReservations).set({ status: 'released', statusReason: reason.trim() }).where(eq(dropReservations.id, r.id));
+    await this.append(db, r.sponsorshipId, { type: 'released', reservationId: r.id, reason: reason.trim() }, ctx);
+    return { status: 'released' as const };
   }
 
   /**

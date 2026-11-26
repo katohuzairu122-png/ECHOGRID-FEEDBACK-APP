@@ -708,6 +708,13 @@
       "when": 1795657174562,
       "tag": "0100_drops_sponsorship_inventory",
       "breakpoints": true
+    },
+    {
+      "idx": 101,
+      "version": "7",
+      "when": 1795657908039,
+      "tag": "0101_governance_cases_overrides",
+      "breakpoints": true
     }
   ]
 }
