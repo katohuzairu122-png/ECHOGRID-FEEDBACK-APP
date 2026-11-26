@@ -49,10 +49,10 @@ describe.skipIf(!databaseUrl)('TSH-08 governance completion (real HTTP, real Pos
     biz = await f.business('gc');
     await f.q(`UPDATE qualification_rule_versions SET approval_state='retired', retired_at=now() WHERE approval_state <> 'retired'`);
     rule = await f.rule(creator.id);
-    await f.q(`UPDATE governance_operators SET active = false`);
+    await f.q(`UPDATE governance_operators SET active = false, revoked_at = now(), revoked_by_user_id = (SELECT id FROM users ORDER BY created_at LIMIT 1), revocation_reason = 'synthetic test reset' WHERE revoked_at IS NULL`);
     await f.operator(investigator.id, 'fraud_investigator'); await f.operator(resolver.id, 'dispute_resolver'); await f.operator(resolver2.id, 'dispute_resolver');
   });
-  afterAll(async () => { await f.q(`UPDATE qualification_rule_versions SET approval_state='retired', retired_at=now() WHERE approval_state <> 'retired'`).catch(() => undefined); await f.q(`UPDATE governance_operators SET active = false`).catch(() => undefined); await client?.end(); });
+  afterAll(async () => { await f.q(`UPDATE qualification_rule_versions SET approval_state='retired', retired_at=now() WHERE approval_state <> 'retired'`).catch(() => undefined); await f.q(`UPDATE governance_operators SET active = false, revoked_at = now(), revoked_by_user_id = (SELECT id FROM users ORDER BY created_at LIMIT 1), revocation_reason = 'synthetic test reset' WHERE revoked_at IS NULL`).catch(() => undefined); await client?.end(); });
 
   it('DUPLICATE PREVENTION: one not-closed case per kind and subject (idempotent open, concurrency-safe, DB backstop); a closed case allows a new one; fraud and dispute are separate kinds', async () => {
     const s = await f.shuffleScenario({ creatorId: creator.id, businessId: biz, ruleId: rule, entries: 1 }); const entry = s.entryIds[0]!;

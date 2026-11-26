@@ -729,6 +729,13 @@
       "when": 1795673506873,
       "tag": "0103_shuffle_drop_allocations",
       "breakpoints": true
+    },
+    {
+      "idx": 104,
+      "version": "7",
+      "when": 1795676109824,
+      "tag": "0104_governance_operator_lifecycle_decision_policies",
+      "breakpoints": true
     }
   ]
 }

@@ -27,10 +27,10 @@ describe.skipIf(!databaseUrl)('TSH-09 integrated synthetic lifecycle (real Postg
     biz = await f.business('ia');
     await f.q(`UPDATE qualification_rule_versions SET approval_state='retired', retired_at=now() WHERE approval_state <> 'retired'`);
     rule = await f.rule(admin.id);
-    await f.q(`UPDATE governance_operators SET active = false`);
+    await f.q(`UPDATE governance_operators SET active = false, revoked_at = now(), revoked_by_user_id = (SELECT id FROM users ORDER BY created_at LIMIT 1), revocation_reason = 'synthetic test reset' WHERE revoked_at IS NULL`);
     await f.operator(investigator.id, 'fraud_investigator'); await f.operator(resolver.id, 'dispute_resolver');
   });
-  afterAll(async () => { await f.q(`UPDATE qualification_rule_versions SET approval_state='retired', retired_at=now() WHERE approval_state <> 'retired'`).catch(() => undefined); await f.q(`UPDATE governance_operators SET active = false`).catch(() => undefined); await client?.end(); });
+  afterAll(async () => { await f.q(`UPDATE qualification_rule_versions SET approval_state='retired', retired_at=now() WHERE approval_state <> 'retired'`).catch(() => undefined); await f.q(`UPDATE governance_operators SET active = false, revoked_at = now(), revoked_by_user_id = (SELECT id FROM users ORDER BY created_at LIMIT 1), revocation_reason = 'synthetic test reset' WHERE revoked_at IS NULL`).catch(() => undefined); await client?.end(); });
 
   it('the whole technically authorized lifecycle: configuration -> version -> evaluation -> snapshot -> invitation -> acceptance -> participation -> selection -> allocation -> collection -> analytics -> governance -> evidence', async () => {
     const gov = new GovernanceService(f.db, { shuffle: true, drops: true }); const an = new TentashipAnalytics(f.db);

@@ -1313,6 +1313,20 @@
     "SELECT"
    ],
    "reason": "TSH-04: append-only provenance linking a SELECTED entry to its Drops allocation (synthetic only); the unit state and inventory stay on drop_reservations/drop_inventory"
+  },
+  "governance_decision_policies": {
+   "class": "RUNTIME",
+   "verbs": [
+    "SELECT"
+   ],
+   "reason": "G5: Owner-approved decision policy versions (read by the runtime; authored and approved by privileged tooling only)"
+  },
+  "governance_operator_events": {
+   "class": "RUNTIME",
+   "verbs": [
+    "SELECT"
+   ],
+   "reason": "G5: append-only operator assignment/revocation audit (read by the runtime; written by privileged tooling only)"
   }
  }
 }

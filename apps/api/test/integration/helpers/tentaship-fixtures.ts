@@ -5,6 +5,7 @@ import { createRepositories } from '../../../src/repositories';
 import { ShuffleCampaignService } from '../../../src/shuffle/shuffle-campaign.service';
 import { ShuffleParticipationService } from '../../../src/shuffle/shuffle-participation.service';
 import { DropSponsorshipService } from '../../../src/drops/drop-sponsorship.service';
+import { GovernanceDecisionPolicyService } from '../../../src/governance/governance-policy.service';
 import { hashSpec, parseQualificationSpec } from '../../../src/qualification/qualification-spec';
 import { signAccessToken } from '../../../src/auth/jwt';
 
@@ -30,8 +31,23 @@ export function makeFixtures(client: Client) {
     if (admin) await q(`UPDATE users SET platform_role='admin' WHERE id=$1`, [id]);
     return { id, token: await signAccessToken(id, SECRET) };
   }
-  async function operator(userId: string, role: 'fraud_investigator' | 'dispute_resolver') {
-    await q(`INSERT INTO governance_operators (user_id, role) VALUES ($1,$2) ON CONFLICT DO NOTHING`, [userId, role]);
+  let granter: string | null = null;
+  /** Synthetic approved decision policies (structural rules only) exist for every kind and family so decisions and overrides can be exercised; production has none until the Owner approves them. */
+  async function ensurePolicies() {
+    const have = new Set((await q(`SELECT kind || ':' || subject_family AS k FROM governance_decision_policies WHERE approval_state = 'approved'`)).map((r) => r.k as string));
+    const author = await user(`pol-author`, false); const approver = await user(`pol-approver`, false);
+    const svc = new GovernanceDecisionPolicyService(db);
+    for (const family of ['shuffle', 'drops'] as const) for (const kind of ['fraud', 'dispute', 'override'] as const) {
+      if (have.has(`${kind}:${family}`)) continue;
+      const params = kind === 'override' ? { allowedScopes: ['cancel_entry_before_selection', 'release_reserved_hold'] } : { allowedDecisions: ['upheld', 'overturned', 'no_action'], minEvidenceItems: 0 };
+      const d = await svc.createDraft({ policyKey: `syn_${kind}_${family}_${tag}`.slice(0, 60), kind, subjectFamily: family, parameters: params }, ctx(author.id));
+      await svc.approve(d.id, ctx(approver.id));
+    }
+  }
+  async function operator(userId: string, role: 'fraud_investigator' | 'dispute_resolver', o: { scope?: 'shuffle' | 'drops' | 'both'; expiresAt?: Date | null } = {}) {
+    if (!granter) { granter = (await user('op-granter', false)).id; await ensurePolicies(); }
+    await q(`UPDATE governance_operators SET active=false, revoked_at=now(), revoked_by_user_id=$2, revocation_reason='synthetic fixture reset' WHERE user_id=$1 AND role=$3 AND revoked_at IS NULL`, [userId, granter, role]);
+    return (await q(`INSERT INTO governance_operators (user_id, role, scope, expires_at, assigned_by_user_id) VALUES ($1,$2,$3,$4,$5) RETURNING id`, [userId, role, o.scope ?? 'both', o.expiresAt ?? null, granter]))[0].id as string;
   }
   async function rule(approverId: string, approved = true) {
     const spec = parseQualificationSpec({ combinator: 'ALL', pathways: [{ metric: 'recorded_purchases', threshold: 1 }] });
@@ -88,5 +104,5 @@ export function makeFixtures(client: Client) {
     }
     return { sponsorshipId: id, reservationIds, customers };
   }
-  return { db, repos, q, ctx, user, operator, rule, business, customer, shuffle, part, drops, shuffleScenario, dropScenario, key };
+  return { db, repos, q, ctx, user, operator, ensurePolicies, rule, business, customer, shuffle, part, drops, shuffleScenario, dropScenario, key };
 }
