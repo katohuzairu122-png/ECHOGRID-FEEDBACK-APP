@@ -1348,6 +1348,14 @@
     "SELECT"
    ],
    "reason": "G6: Owner-approved fulfilment policy versions (read by the runtime; authored by privileged tooling only)"
+  },
+  "shuffle_notification_deliveries": {
+   "class": "RUNTIME",
+   "verbs": [
+    "INSERT",
+    "SELECT"
+   ],
+   "reason": "G2: append-only synthetic delivery-decision history for held Shuffle notification intents"
   }
  }
 }

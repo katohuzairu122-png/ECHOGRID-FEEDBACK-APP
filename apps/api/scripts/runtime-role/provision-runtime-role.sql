@@ -155,6 +155,7 @@ DECLARE
     ['shuffle_entries', 'INSERT, SELECT, UPDATE'],
     ['shuffle_invitation_events', 'INSERT, SELECT'],
     ['shuffle_invitations', 'INSERT, SELECT, UPDATE'],
+    ['shuffle_notification_deliveries', 'INSERT, SELECT'],
     ['shuffle_notification_intents', 'INSERT, SELECT'],
     ['shuffle_selection_results', 'INSERT, SELECT'],
     ['sponsor_application_events', 'SELECT'],
