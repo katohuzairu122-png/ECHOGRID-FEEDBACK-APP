@@ -327,6 +327,8 @@ SELECT c.relname AS name, v.verb, 'PRIVILEGE_OUTSIDE_MANIFEST' AS violation
        ('shuffle_campaigns', 'INSERT'),
        ('shuffle_campaigns', 'SELECT'),
        ('shuffle_campaigns', 'UPDATE'),
+       ('shuffle_drop_allocations', 'INSERT'),
+       ('shuffle_drop_allocations', 'SELECT'),
        ('shuffle_eligibility_snapshots', 'INSERT'),
        ('shuffle_eligibility_snapshots', 'SELECT'),
        ('shuffle_entries', 'INSERT'),

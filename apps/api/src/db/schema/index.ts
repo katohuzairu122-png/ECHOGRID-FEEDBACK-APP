@@ -88,3 +88,4 @@ export * from './b2b-participation';
 export * from './community-terms';
 export * from './drops';
 export * from './governance';
+export * from './shuffle-drops-link';

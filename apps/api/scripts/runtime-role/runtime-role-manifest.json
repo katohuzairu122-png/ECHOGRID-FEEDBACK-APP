@@ -1305,6 +1305,14 @@
     "UPDATE"
    ],
    "reason": "TSH-08: two-person override machine; UPDATE is the guarded status; no DELETE/TRUNCATE"
+  },
+  "shuffle_drop_allocations": {
+   "class": "RUNTIME",
+   "verbs": [
+    "INSERT",
+    "SELECT"
+   ],
+   "reason": "TSH-04: append-only provenance linking a SELECTED entry to its Drops allocation (synthetic only); the unit state and inventory stay on drop_reservations/drop_inventory"
   }
  }
 }

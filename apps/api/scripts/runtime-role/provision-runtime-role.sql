@@ -147,6 +147,7 @@ DECLARE
     ['shuffle_allocation_events', 'INSERT, SELECT'],
     ['shuffle_campaign_versions', 'INSERT, SELECT'],
     ['shuffle_campaigns', 'INSERT, SELECT, UPDATE'],
+    ['shuffle_drop_allocations', 'INSERT, SELECT'],
     ['shuffle_eligibility_snapshots', 'INSERT, SELECT'],
     ['shuffle_entries', 'INSERT, SELECT, UPDATE'],
     ['shuffle_invitation_events', 'INSERT, SELECT'],
