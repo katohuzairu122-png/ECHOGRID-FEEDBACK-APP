@@ -54,5 +54,25 @@ for (const locale of ['en', 'ar', 'es', 'fr'] as const) {
       expect(text).not.toMatch(/guarantee|garant|prize|premio|prix|odds|جائزة|مضمون/);
       if (SHOTS) await page.screenshot({ path: path.join(SHOTS, `campaign-${locale}-${info.project.name}.png`), fullPage: true });
     });
+
+    test(`governance and sponsor components render recorded values, mirrored in RTL, with no controls (${locale})`, async ({ page }, info) => {
+      await open(page, 'governance', locale);
+      expect(await page.evaluate(() => getComputedStyle(document.documentElement).direction)).toBe(locale === 'ar' ? 'rtl' : 'ltr');
+      expect(await noOverflow(page)).toBe(true);
+      for (const id of ['sponsor-application', 'sponsor-status', 'sponsor-reason', 'governance-case', 'case-decision', 'case-evidence', 'case-chain']) await expect(page.getByTestId(id)).toBeVisible();
+      const row = page.getByTestId('case-status').locator('xpath=..'); const dt = await row.locator('dt').boundingBox(); const dd = await row.locator('dd').boundingBox();
+      if (locale === 'ar') expect(dt!.x).toBeGreaterThan(dd!.x); else expect(dt!.x).toBeLessThan(dd!.x);
+      expect(await page.locator('a, button, input, select, textarea, form').count()).toBe(0);
+      await expect(page.getByTestId('case-chain')).not.toHaveAttribute('role', 'alert');
+      if (SHOTS) await page.screenshot({ path: path.join(SHOTS, `governance-${locale}-${info.project.name}.png`), fullPage: true });
+    });
+
+    test(`a failed evidence-log verification is an alert and an unrecorded decision is explicit (${locale})`, async ({ page }) => {
+      await open(page, 'governance-broken', locale);
+      expect(await noOverflow(page)).toBe(true);
+      await expect(page.getByTestId('case-chain')).toHaveAttribute('role', 'alert');
+      expect(await page.getByTestId('case-decision').innerText()).not.toMatch(/^\s*$/);
+      expect(await page.getByTestId('case-policy').innerText()).not.toMatch(/[0-9٠-٩]/);
+    });
   });
 }

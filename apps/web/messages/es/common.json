@@ -143,5 +143,57 @@
       "NOT_SUPPORTED_BY_EVIDENCE": "La evidencia registrada no respalda esta cifra.",
       "other": "Esta cifra no está disponible."
     }
+  },
+  "tentashipSponsorApplication": {
+    "title": "Solicitud de patrocinador",
+    "unavailable": "Esta información no está disponible en este momento.",
+    "statusLabel": "Estado de la solicitud",
+    "status": {
+      "submitted": "Enviada",
+      "under_review": "En revisión",
+      "approved": "Aprobada",
+      "rejected": "No aprobada",
+      "withdrawn": "Retirada",
+      "suspended": "Suspendida",
+      "revoked": "Revocada"
+    },
+    "reasonLabel": "Motivo registrado",
+    "changedLabel": "Último cambio de estado",
+    "note": "Un patrocinador debe estar aprobado antes de poder ofrecer un patrocinio. Esta página no crea un patrocinio ni concede ningún acceso."
+  },
+  "tentashipGovernance": {
+    "title": "Resumen del caso",
+    "unavailable": "Esta información no está disponible en este momento.",
+    "kindLabel": "Tipo de caso",
+    "kind": {
+      "fraud": "Revisión de fraude",
+      "dispute": "Disputa"
+    },
+    "statusLabel": "Estado del caso",
+    "status": {
+      "open": "Abierto",
+      "escalated": "Escalado",
+      "under_review": "En revisión",
+      "decided": "Resuelto",
+      "closed": "Cerrado"
+    },
+    "decisionLabel": "Decisión",
+    "decision": {
+      "upheld": "Confirmada",
+      "overturned": "Revocada",
+      "no_action": "Sin acción"
+    },
+    "decisionNone": "No hay ninguna decisión registrada.",
+    "evidenceLabel": "Elementos de evidencia",
+    "policyLabel": "Política de decisión",
+    "policyNone": "No hay ninguna política registrada.",
+    "policyVersion": "Versión {version}",
+    "chainLabel": "Registro de evidencia",
+    "chain": {
+      "ok": "Verificado",
+      "broken": "Falló la verificación",
+      "unknown": "No verificado"
+    },
+    "note": "Las decisiones las toman revisores asignados conforme a una política aprobada. Esta página no puede decidir, anular ni modificar un caso."
   }
 }
