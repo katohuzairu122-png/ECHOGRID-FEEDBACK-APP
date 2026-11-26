@@ -1,0 +1,186 @@
+{
+  "status": "DRAFT — NOT LEGALLY APPROVED — NOT FOR PUBLICATION",
+  "canonicalLocale": "en",
+  "hashAlgorithm": "sha256-utf8",
+  "publication": {
+    "id": null,
+    "version": null,
+    "publishedAt": null,
+    "effectiveAt": null,
+    "approval": null,
+    "manifestHash": null
+  },
+  "translationApproval": {
+    "en": null,
+    "fr": null,
+    "es": null,
+    "ar": null
+  },
+  "documents": [
+    {
+      "name": "tentaship-participation-terms",
+      "registerItems": [
+        "L-1",
+        "L-2",
+        "L-3",
+        "L-4"
+      ],
+      "artifacts": [
+        {
+          "locale": "en",
+          "file": "tentaship-participation-terms.en.md",
+          "bytes": 1296,
+          "contentHash": "edf10c0104d79264450d599d437bcb73d382f3927c46715c35fc45f80b504a29"
+        },
+        {
+          "locale": "fr",
+          "file": "tentaship-participation-terms.fr.md",
+          "bytes": 1592,
+          "contentHash": "881f4833804c719fcab1ed27bd5c003ca7e55d73039a550c56f5b7458fe5cfcf"
+        },
+        {
+          "locale": "es",
+          "file": "tentaship-participation-terms.es.md",
+          "bytes": 1500,
+          "contentHash": "c7fedcf4a68b414f5b015c3ae665d998a369cb08a894fb49c6ce244fb8a1898f"
+        },
+        {
+          "locale": "ar",
+          "file": "tentaship-participation-terms.ar.md",
+          "bytes": 1957,
+          "contentHash": "b9e9a4ac17a714e0434f35b2f89dbc01e438b0aa12afc5dadc801386bce94d13"
+        }
+      ]
+    },
+    {
+      "name": "tentaship-privacy-supplement",
+      "registerItems": [
+        "L-5"
+      ],
+      "artifacts": [
+        {
+          "locale": "en",
+          "file": "tentaship-privacy-supplement.en.md",
+          "bytes": 897,
+          "contentHash": "76b9c8aae8a96eb2095ed6d10a735ea194d2e5835881e87aa5cf89a2d964c8a9"
+        },
+        {
+          "locale": "fr",
+          "file": "tentaship-privacy-supplement.fr.md",
+          "bytes": 1157,
+          "contentHash": "8d41ceafc7f4d8c4503e6f4b6c49c0a7400112dac07c71e3698c6ee139f83387"
+        },
+        {
+          "locale": "es",
+          "file": "tentaship-privacy-supplement.es.md",
+          "bytes": 1077,
+          "contentHash": "57376306126ea8759c6d4528f124108cb632b045d809572f96952a243a16bb83"
+        },
+        {
+          "locale": "ar",
+          "file": "tentaship-privacy-supplement.ar.md",
+          "bytes": 1388,
+          "contentHash": "93336b39557b111055767d88300260c07704113408ba1ceded0637f14c5faca0"
+        }
+      ]
+    },
+    {
+      "name": "tentaship-marketing-consent",
+      "registerItems": [
+        "L-5"
+      ],
+      "artifacts": [
+        {
+          "locale": "en",
+          "file": "tentaship-marketing-consent.en.md",
+          "bytes": 812,
+          "contentHash": "767f21c198a559a3e32a38c2dfe30c677389f775143a614da58ec8c04e168d3d"
+        },
+        {
+          "locale": "fr",
+          "file": "tentaship-marketing-consent.fr.md",
+          "bytes": 1016,
+          "contentHash": "49e1f031d3657e7197c7f84f50ae5e72519919920437566393fc44466f1b42cb"
+        },
+        {
+          "locale": "es",
+          "file": "tentaship-marketing-consent.es.md",
+          "bytes": 972,
+          "contentHash": "9b07ede6460cb7b1d2a2e9e446c0bd163884494e7332060b14c6190a6bde5dba"
+        },
+        {
+          "locale": "ar",
+          "file": "tentaship-marketing-consent.ar.md",
+          "bytes": 1234,
+          "contentHash": "de5d671482e80518e7c42b7067a752d356862b2eef50bf67309dd84529711b59"
+        }
+      ]
+    },
+    {
+      "name": "tentaship-sponsor-terms",
+      "registerItems": [
+        "L-3",
+        "L-6"
+      ],
+      "artifacts": [
+        {
+          "locale": "en",
+          "file": "tentaship-sponsor-terms.en.md",
+          "bytes": 1093,
+          "contentHash": "8ebb327b4143c25a10fb1234f96d8c937297bb5f785c5e52f7da9c2771a311d2"
+        },
+        {
+          "locale": "fr",
+          "file": "tentaship-sponsor-terms.fr.md",
+          "bytes": 1372,
+          "contentHash": "9f85ada2352d7f88f96737724193a76bc372a6556930b2980e8724d25ceb1b1b"
+        },
+        {
+          "locale": "es",
+          "file": "tentaship-sponsor-terms.es.md",
+          "bytes": 1314,
+          "contentHash": "fb2d0577388c5e2b2d19f5c3333e8b45c73ddd36248cf988ba6e08b8fd139e2a"
+        },
+        {
+          "locale": "ar",
+          "file": "tentaship-sponsor-terms.ar.md",
+          "bytes": 1657,
+          "contentHash": "c77a02389f6300222a822a1e177a78ec84b8eb90389bfe4daf6f8e938103e884"
+        }
+      ]
+    },
+    {
+      "name": "tentaship-free-route-statement",
+      "registerItems": [
+        "L-2",
+        "L-4"
+      ],
+      "artifacts": [
+        {
+          "locale": "en",
+          "file": "tentaship-free-route-statement.en.md",
+          "bytes": 725,
+          "contentHash": "72ed496a29d942bc06990653959ff2e4d632fb74456c1976fd235685eaf6eaef"
+        },
+        {
+          "locale": "fr",
+          "file": "tentaship-free-route-statement.fr.md",
+          "bytes": 907,
+          "contentHash": "4ccafd1f56fa5f444e0582076de0a9037a2a8fb84fa102ec8c30542a50d8c963"
+        },
+        {
+          "locale": "es",
+          "file": "tentaship-free-route-statement.es.md",
+          "bytes": 859,
+          "contentHash": "05b8457f671091126a53eca2ae0a5b691b19808f9591bad7e9ba21fba3d4f837"
+        },
+        {
+          "locale": "ar",
+          "file": "tentaship-free-route-statement.ar.md",
+          "bytes": 1124,
+          "contentHash": "86c622863e7a330b8ec1705c2de7aec81d3cfb96c243e8d41d627657d78bb968"
+        }
+      ]
+    }
+  ]
+}
