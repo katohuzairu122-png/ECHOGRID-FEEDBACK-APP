@@ -1,0 +1,3 @@
+ALTER TABLE "governance_cases" DROP CONSTRAINT "governance_cases_classification";--> statement-breakpoint
+CREATE UNIQUE INDEX "governance_cases_one_open_uq" ON "governance_cases" USING btree ("kind","subject_type","subject_id") WHERE "governance_cases"."status" <> 'closed';--> statement-breakpoint
+ALTER TABLE "governance_cases" ADD CONSTRAINT "governance_cases_classification" CHECK ("governance_cases"."classification" IN ('suspected_duplicate_participation','suspected_fabricated_evidence','suspected_self_referral','suspected_referral_cycle','suspected_qualification_manipulation','suspected_duplicate_allocation','suspected_inventory_manipulation','suspected_evidence_tampering','allocation_dispute','collection_dispute','other'));

@@ -1264,6 +1264,47 @@
     "SELECT"
    ],
    "reason": "TDP-02: hash-chained append-only evidence; linkage enforced by trigger"
+  },
+  "governance_operators": {
+   "class": "RUNTIME",
+   "verbs": [
+    "SELECT"
+   ],
+   "reason": "TSH-08: operator assignments are an Owner grant; runtime READ only (no INSERT/UPDATE grant); empty by default so review/decision/override stay disabled"
+  },
+  "governance_cases": {
+   "class": "RUNTIME",
+   "verbs": [
+    "INSERT",
+    "SELECT",
+    "UPDATE"
+   ],
+   "reason": "TSH-08: synthetic-only fraud/dispute cases; UPDATE is the guarded status machine; decisions never rewritten; no DELETE/TRUNCATE"
+  },
+  "governance_case_evidence": {
+   "class": "RUNTIME",
+   "verbs": [
+    "INSERT",
+    "SELECT"
+   ],
+   "reason": "TSH-08: append-only case evidence"
+  },
+  "governance_events": {
+   "class": "RUNTIME",
+   "verbs": [
+    "INSERT",
+    "SELECT"
+   ],
+   "reason": "TSH-08: hash-chained append-only case log; linkage enforced by trigger"
+  },
+  "governance_overrides": {
+   "class": "RUNTIME",
+   "verbs": [
+    "INSERT",
+    "SELECT",
+    "UPDATE"
+   ],
+   "reason": "TSH-08: two-person override machine; UPDATE is the guarded status; no DELETE/TRUNCATE"
   }
  }
 }

@@ -20,6 +20,7 @@ import { platformBusinessClosureRoutes } from './platform/business-closure.route
 import { platformTentashipBadgeRoutes } from './platform/tentaship-badge.routes';
 import { platformShuffleRoutes } from './platform/shuffle.routes';
 import { platformDropsRoutes } from './platform/drops.routes';
+import { platformGovernanceRoutes } from './platform/governance.routes';
 import { customerTentashipBadgeRoutes, businessTentashipBadgeRoutes } from './tentaship-badges/badge-routes';
 import { cashierActivityRoutes } from './cashier-activity/cashier-activity.routes';
 import { businessRoutes } from './businesses/business.routes';
@@ -269,6 +270,8 @@ api.route('/platform/tentaship-badges', platformTentashipBadgeRoutes);
 api.route('/platform/shuffle', platformShuffleRoutes);
 // TDP-02: Tentaship Drops sponsorship and inventory (platform admin, synthetic harness). Generic 404 unless TENTASHIP_DROPS_ENABLED === 'true'. No payments, sponsor or customer routes.
 api.route('/platform/drops', platformDropsRoutes);
+// TSH-08: synthetic fraud/dispute governance. Generic 404 unless TENTASHIP_SHUFFLE_ENABLED or TENTASHIP_DROPS_ENABLED === 'true'; each subject family needs its own control. No operator-assignment route.
+api.route('/platform/governance', platformGovernanceRoutes);
 // TB-03: customer and business badge reads + server-side evaluation. Generic 404 unless TENTASHIP_BADGES_ENABLED === 'true'.
 api.route('/tentaship-badges/me', customerTentashipBadgeRoutes);
 api.route('/tentaship-badges/business', businessTentashipBadgeRoutes);

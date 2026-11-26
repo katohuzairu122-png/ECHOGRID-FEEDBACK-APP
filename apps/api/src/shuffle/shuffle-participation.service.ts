@@ -153,17 +153,20 @@ export class ShuffleParticipationService {
 
   async cancelEntry(entryId: string, reason: string, ctx: Actor) {
     if (!reason.trim()) throw new AppError('A reason is required.', 422, 'REASON_REQUIRED');
-    return this.db.transaction(async (tx) => {
-      const db = tx as unknown as Db;
-      const [e] = await tx.select().from(shuffleEntries).where(eq(shuffleEntries.id, entryId)).for('update').limit(1);
-      if (!e) throw notFound('Entry not found.', 'ENTRY_NOT_FOUND');
-      if (e.status === 'cancelled') return { status: 'cancelled' as const };
-      const [sel] = await tx.select({ id: shuffleSelectionResults.id }).from(shuffleSelectionResults).where(eq(shuffleSelectionResults.campaignVersionId, e.campaignVersionId)).limit(1);
-      if (sel) throw conflict('After a selection is recorded an entry can only change through an approved dispute process (D-5); no silent revocation.', 'ENTRY_LOCKED_AFTER_SELECTION');
-      await tx.update(shuffleEntries).set({ status: 'cancelled', statusReason: reason.trim(), statusChangedAt: new Date() }).where(eq(shuffleEntries.id, entryId));
-      await this.append(db, e.campaignVersionId, { type: 'entry_cancelled', entryId, reason: reason.trim() }, ctx);
-      return { status: 'cancelled' as const };
-    });
+    return this.db.transaction(async (tx) => this.cancelEntryWithin(tx as unknown as Db, entryId, reason, ctx));
+  }
+
+  /** The cancellation itself, usable inside a caller's transaction (TSH-08 two-person override). Locked after a selection is recorded (D-5). */
+  async cancelEntryWithin(tx: Db, entryId: string, reason: string, ctx: Actor) {
+    if (!reason.trim()) throw new AppError('A reason is required.', 422, 'REASON_REQUIRED');
+    const [e] = await tx.select().from(shuffleEntries).where(eq(shuffleEntries.id, entryId)).for('update').limit(1);
+    if (!e) throw notFound('Entry not found.', 'ENTRY_NOT_FOUND');
+    if (e.status === 'cancelled') return { status: 'cancelled' as const };
+    const [sel] = await tx.select({ id: shuffleSelectionResults.id }).from(shuffleSelectionResults).where(eq(shuffleSelectionResults.campaignVersionId, e.campaignVersionId)).limit(1);
+    if (sel) throw conflict('After a selection is recorded an entry can only change through an approved dispute process (D-5); no silent revocation.', 'ENTRY_LOCKED_AFTER_SELECTION');
+    await tx.update(shuffleEntries).set({ status: 'cancelled', statusReason: reason.trim(), statusChangedAt: new Date() }).where(eq(shuffleEntries.id, entryId));
+    await this.append(tx, e.campaignVersionId, { type: 'entry_cancelled', entryId, reason: reason.trim() }, ctx);
+    return { status: 'cancelled' as const };
   }
 
   /**
