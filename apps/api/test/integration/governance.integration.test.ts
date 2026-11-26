@@ -53,9 +53,10 @@ describe.skipIf(!databaseUrl)('TSH-08 governance (real HTTP, real PostgreSQL)', 
     biz = await f.business('gv');
     await f.q(`UPDATE qualification_rule_versions SET approval_state='retired', retired_at=now() WHERE approval_state <> 'retired'`);
     rule = await f.rule(creator.id);
-    await f.q(`UPDATE governance_operators SET active = false`); // operators are empty/disabled by default
+    await f.q(`UPDATE governance_operators SET active = false, revoked_at = now(), revoked_by_user_id = (SELECT id FROM users ORDER BY created_at LIMIT 1), revocation_reason = 'synthetic test reset' WHERE revoked_at IS NULL`);
+    await f.ensurePolicies(); // approved synthetic policies exist, but with NO operator assigned nothing can still be done (operators are empty/disabled by default)
   });
-  afterAll(async () => { await f.q(`UPDATE qualification_rule_versions SET approval_state='retired', retired_at=now() WHERE approval_state <> 'retired'`).catch(() => undefined); await f.q(`UPDATE governance_operators SET active = false`).catch(() => undefined); await client?.end(); });
+  afterAll(async () => { await f.q(`UPDATE qualification_rule_versions SET approval_state='retired', retired_at=now() WHERE approval_state <> 'retired'`).catch(() => undefined); await f.q(`UPDATE governance_operators SET active = false, revoked_at = now(), revoked_by_user_id = (SELECT id FROM users ORDER BY created_at LIMIT 1), revocation_reason = 'synthetic test reset' WHERE revoked_at IS NULL`).catch(() => undefined); await client?.end(); });
 
   it('control matrix: 404 before authentication when neither control is "true"; each subject family needs ITS OWN control; admin only', async () => {
     const id = '00000000-0000-4000-8000-000000000001';
@@ -87,7 +88,7 @@ describe.skipIf(!databaseUrl)('TSH-08 governance (real HTTP, real PostgreSQL)', 
     await f.operator(plain.id, 'dispute_resolver'); // (an Owner-side grant in a disposable DB)
     await expect(f.q(`DELETE FROM governance_operators WHERE user_id = $1`, [plain.id])).rejects.toThrow(/APPEND_ONLY/);
     await expect(f.q(`UPDATE governance_operators SET role = 'fraud_investigator' WHERE user_id = $1`, [plain.id])).rejects.toThrow(/IMMUTABLE/);
-    await f.q(`UPDATE governance_operators SET active = false WHERE user_id = $1`, [plain.id]);
+    await f.q(`UPDATE governance_operators SET active = false, revoked_at = now(), revoked_by_user_id = $1, revocation_reason = 'synthetic test reset' WHERE user_id = $1`, [plain.id]);
   });
 
   it('case lifecycle with separation of duties: opener cannot review, the campaign creator cannot decide, only the assigned reviewer decides, decisions are never rewritten', async () => {

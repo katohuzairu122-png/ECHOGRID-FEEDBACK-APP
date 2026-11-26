@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, integer, timestamp, jsonb, boolean, index, uniqueIndex, unique, check } from 'drizzle-orm/pg-core';
+import { type AnyPgColumn, pgTable, uuid, text, integer, timestamp, jsonb, boolean, index, uniqueIndex, unique, check } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import { users } from './users';
 import { shuffleCampaignVersions } from './shuffle';
@@ -29,8 +29,23 @@ export const governanceOperators = pgTable(
     role: text('role').notNull(),
     active: boolean('active').notNull().default(true),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    /** G5 lifecycle: which subject families the assignment covers, when it starts and (optionally) expires, who granted it and, if ended, who revoked it and why. */
+    scope: text('scope').notNull().default('both'),
+    validFrom: timestamp('valid_from', { withTimezone: true }).notNull().defaultNow(),
+    expiresAt: timestamp('expires_at', { withTimezone: true }),
+    assignedByUserId: uuid('assigned_by_user_id').references(() => users.id, { onDelete: 'restrict' }),
+    revokedAt: timestamp('revoked_at', { withTimezone: true }),
+    revokedByUserId: uuid('revoked_by_user_id').references(() => users.id, { onDelete: 'restrict' }),
+    revocationReason: text('revocation_reason'),
   },
-  (t) => [uniqueIndex('governance_operators_user_role_uq').on(t.userId, t.role), check('governance_operators_role', sql`${t.role} IN ('fraud_investigator','dispute_resolver')`)],
+  (t) => [
+    // One CURRENT (not revoked) assignment per user and role; a revoked assignment stays as history and a new one is a new row.
+    uniqueIndex('governance_operators_current_uq').on(t.userId, t.role).where(sql`${t.revokedAt} IS NULL`),
+    check('governance_operators_role', sql`${t.role} IN ('fraud_investigator','dispute_resolver')`),
+    check('governance_operators_scope', sql`${t.scope} IN ('shuffle','drops','both')`),
+    check('governance_operators_window', sql`${t.expiresAt} IS NULL OR ${t.expiresAt} > ${t.validFrom}`),
+    check('governance_operators_revocation_shape', sql`(${t.revokedAt} IS NULL AND ${t.revokedByUserId} IS NULL AND ${t.revocationReason} IS NULL) OR (${t.revokedAt} IS NOT NULL AND ${t.revokedByUserId} IS NOT NULL AND char_length(${t.revocationReason}) >= 10 AND ${t.active} = false)`),
+  ],
 );
 
 /** Synthetic-only fraud and dispute case. Related references are derived and validated by the database. Nothing here changes a campaign, entry, selection or unit by itself. */
@@ -54,6 +69,8 @@ export const governanceCases = pgTable(
     decisionReason: text('decision_reason'),
     decidedByUserId: uuid('decided_by_user_id').references(() => users.id, { onDelete: 'restrict' }),
     decidedAt: timestamp('decided_at', { withTimezone: true }),
+    /** G5: the approved, immutable decision-policy version this decision was made under (required to decide). */
+    decisionPolicyId: uuid('decision_policy_id').references((): AnyPgColumn => governanceDecisionPolicies.id, { onDelete: 'restrict' }),
     synthetic: boolean('synthetic').notNull().default(true),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
@@ -139,4 +156,62 @@ export const governanceOverrides = pgTable(
     check('governance_overrides_approval_shape', sql`(${t.status} IN ('approved','executed')) = (${t.approvedByUserId} IS NOT NULL) OR ${t.status} IN ('expired','cancelled')`),
     check('governance_overrides_synthetic', sql`${t.synthetic} = true`),
   ],
+);
+
+
+export const GOVERNANCE_POLICY_KINDS = ['fraud', 'dispute', 'override'] as const;
+export const GOVERNANCE_POLICY_FAMILIES = ['shuffle', 'drops'] as const;
+export const GOVERNANCE_POLICY_STATES = ['draft', 'approved', 'retired'] as const;
+
+/**
+ * G5 immutable, versioned decision policy. It carries STRUCTURAL rules only (which decisions or override scopes are allowed, how much evidence must exist, how long an override may live):
+ * no fraud threshold, dispute SLA or customer penalty is invented here. A decision (fraud/dispute) or override request is refused unless an APPROVED policy exists for its kind and
+ * subject family. Approval needs a different person from the author; an approved policy is never edited, only superseded by a new version; at most one approved policy per kind and family.
+ * Empty by default: the Owner authors and approves production policies (synthetic ones exist only in disposable test databases).
+ */
+export const governanceDecisionPolicies = pgTable(
+  'governance_decision_policies',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    policyKey: text('policy_key').notNull(),
+    version: integer('version').notNull(),
+    kind: text('kind').notNull(),
+    subjectFamily: text('subject_family').notNull(),
+    parameters: jsonb('parameters').$type<Record<string, unknown>>().notNull(),
+    parametersHash: text('parameters_hash').notNull(),
+    approvalState: text('approval_state').notNull().default('draft'),
+    createdByUserId: uuid('created_by_user_id').notNull().references(() => users.id, { onDelete: 'restrict' }),
+    approvedByUserId: uuid('approved_by_user_id').references(() => users.id, { onDelete: 'restrict' }),
+    approvedAt: timestamp('approved_at', { withTimezone: true }),
+    retiredAt: timestamp('retired_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    unique('governance_decision_policies_version_uq').on(t.policyKey, t.version),
+    uniqueIndex('governance_decision_policies_one_approved_uq').on(t.kind, t.subjectFamily).where(sql`${t.approvalState} = 'approved'`),
+    check('governance_decision_policies_kind', sql`${t.kind} IN ('fraud','dispute','override')`),
+    check('governance_decision_policies_family', sql`${t.subjectFamily} IN ('shuffle','drops')`),
+    check('governance_decision_policies_state', sql`${t.approvalState} IN ('draft','approved','retired')`),
+    check('governance_decision_policies_hash', sql`${t.parametersHash} ~ '^[0-9a-f]{64}$' AND ${t.version} >= 1`),
+    check('governance_decision_policies_params', sql`jsonb_typeof(${t.parameters}) = 'object' AND (
+      (${t.kind} IN ('fraud','dispute') AND jsonb_typeof(${t.parameters}->'allowedDecisions') = 'array' AND jsonb_typeof(${t.parameters}->'minEvidenceItems') = 'number')
+      OR (${t.kind} = 'override' AND jsonb_typeof(${t.parameters}->'allowedScopes') = 'array'))`),
+    check('governance_decision_policies_approval_shape', sql`(${t.approvalState} = 'draft' AND ${t.approvedByUserId} IS NULL AND ${t.approvedAt} IS NULL AND ${t.retiredAt} IS NULL)
+      OR (${t.approvalState} = 'approved' AND ${t.approvedByUserId} IS NOT NULL AND ${t.approvedByUserId} <> ${t.createdByUserId} AND ${t.approvedAt} IS NOT NULL AND ${t.retiredAt} IS NULL)
+      OR (${t.approvalState} = 'retired' AND ${t.retiredAt} IS NOT NULL)`),
+  ],
+);
+
+/** G5 append-only operator-assignment audit (assigned, revoked). The assignment row itself is the current state; this is the evidence trail. */
+export const governanceOperatorEvents = pgTable(
+  'governance_operator_events',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    operatorId: uuid('operator_id').notNull().references(() => governanceOperators.id, { onDelete: 'restrict' }),
+    eventType: text('event_type').notNull(),
+    actorUserId: uuid('actor_user_id').notNull().references(() => users.id, { onDelete: 'restrict' }),
+    detail: jsonb('detail').$type<Record<string, unknown>>().notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('governance_operator_events_operator_idx').on(t.operatorId, t.createdAt), check('governance_operator_events_type', sql`${t.eventType} IN ('assigned','revoked')`)],
 );

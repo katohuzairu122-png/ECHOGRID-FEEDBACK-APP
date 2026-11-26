@@ -9,6 +9,7 @@ import { canonicalJson, chainAudit, verifyChain, type AuditLink } from '../lib/a
 import { ShuffleParticipationService } from '../shuffle/shuffle-participation.service';
 import { DropSponsorshipService } from '../drops/drop-sponsorship.service';
 import { FraudSignals } from './fraud-signals';
+import { GovernanceDecisionPolicyService } from './governance-policy.service';
 
 export type Actor = { actorUserId: string; ipAddress?: string | null; userAgent?: string | null };
 export type Enabled = { shuffle: boolean; drops: boolean };
@@ -28,6 +29,8 @@ function mapGuard(e: unknown): never {
   if (m.includes('TRANSITION_NOT_ALLOWED')) throw conflict('That status change is not allowed from the current status.', 'TRANSITION_NOT_ALLOWED');
   if (m.includes('EVIDENCE_NOT_ALLOWED')) throw conflict('The case is closed; evidence can no longer be added.', 'CASE_CLOSED');
   if (m.includes('governance_overrides_open_target_uq')) throw conflict('An override for that target is already open.', 'OVERRIDE_ALREADY_OPEN');
+  if (m.includes('GOVERNANCE_POLICY_REQUIRED')) throw conflict('No approved decision policy covers this action, so it is refused until the Owner approves one.', 'POLICY_NOT_APPROVED');
+  if (m.includes('GOVERNANCE_POLICY_VIOLATION')) throw bad('The action is not allowed by the approved decision policy.', 'POLICY_VIOLATION');
   if (m.includes('REASON_REQUIRED')) throw bad('A reason of at least 10 characters is required.', 'REASON_REQUIRED');
   throw e;
 }
@@ -133,8 +136,12 @@ export class GovernanceService {
   escalate(caseId: string, reason: string, ctx: Actor) { return this.move(caseId, { status: 'escalated', escalationReason: reason.trim() }, { type: 'escalated', reason: reason.trim() }, ctx, ['open']); }
   /** The acting operator becomes the reviewer (the database requires the assigned role for this kind of case and that they did not open it). */
   startReview(caseId: string, ctx: Actor) { return this.move(caseId, { status: 'under_review', reviewerUserId: ctx.actorUserId }, { type: 'review_started', reviewerUserId: ctx.actorUserId }, ctx, ['open', 'escalated']); }
-  decide(caseId: string, decision: 'upheld' | 'overturned' | 'no_action', reason: string, ctx: Actor) {
-    return this.move(caseId, { status: 'decided', decision, decisionReason: reason.trim(), decidedByUserId: ctx.actorUserId, decidedAt: new Date() }, { type: 'decided', decision, reason: reason.trim() }, ctx, ['under_review']);
+  /** A decision is recorded under the approved policy version for its kind and subject family; with none approved it is refused (POLICY_NOT_APPROVED). */
+  async decide(caseId: string, decision: 'upheld' | 'overturned' | 'no_action', reason: string, ctx: Actor) {
+    const c = await this.caseRow(this.db, caseId);
+    const policy = await new GovernanceDecisionPolicyService(this.db).effectiveFor(c.kind as 'fraud' | 'dispute', this.family(c.subjectType as SubjectType));
+    if (!policy) throw conflict('No approved decision policy covers this action, so it is refused until the Owner approves one.', 'POLICY_NOT_APPROVED');
+    return this.move(caseId, { status: 'decided', decision, decisionReason: reason.trim(), decidedByUserId: ctx.actorUserId, decidedAt: new Date(), decisionPolicyId: policy.id }, { type: 'decided', decision, reason: reason.trim(), policyId: policy.id, policyVersion: policy.version }, ctx, ['under_review']);
   }
   close(caseId: string, ctx: Actor) { return this.move(caseId, { status: 'closed' }, { type: 'closed' }, ctx, ['decided']); }
 
@@ -143,9 +150,13 @@ export class GovernanceService {
     return sha(canonicalJson(rows.map((r) => r.h)));
   }
 
-  private async isOperator(tx: Db, userId: string) {
-    const [r] = await tx.select({ id: governanceOperators.id }).from(governanceOperators).where(and(eq(governanceOperators.userId, userId), eq(governanceOperators.active, true))).limit(1);
-    return !!r;
+  /** An operator is EFFECTIVE only while not revoked, within its validity window and with a scope that covers the case's subject family (the database enforces the same rule). */
+  private async isOperator(tx: Db, userId: string, caseId: string) {
+    const r = await tx.execute<{ ok: boolean }>(sql`
+      SELECT EXISTS (SELECT 1 FROM governance_operators o JOIN governance_cases c ON c.id = ${caseId}
+        WHERE o.user_id = ${userId} AND o.active AND o.revoked_at IS NULL AND o.valid_from <= now() AND (o.expires_at IS NULL OR o.expires_at > now())
+          AND o.scope IN ('both', CASE WHEN c.subject_type LIKE 'shuffle_%' THEN 'shuffle' ELSE 'drops' END)) AS ok`);
+    return r.rows[0]?.ok === true;
   }
 
   /** Request a scoped override. The target must belong to the case's own campaign/sponsorship; the evidence set is hashed so approval cannot be given on stale evidence. */
@@ -192,7 +203,7 @@ export class GovernanceService {
     return this.db.transaction(async (tx) => {
       const db = tx as unknown as Db; const o = await this.override(db, id);
       if (o.status === to) return o;
-      if (!(await this.isOperator(db, ctx.actorUserId))) throw new AppError('An assigned operator is required.', 403, 'OPERATOR_NOT_ASSIGNED');
+      if (!(await this.isOperator(db, ctx.actorUserId, o.caseId))) throw new AppError('An assigned operator is required.', 403, 'OPERATOR_NOT_ASSIGNED');
       try {
         const [row] = await tx.update(governanceOverrides).set({ status: to }).where(eq(governanceOverrides.id, id)).returning();
         await this.append(db, o.caseId, { type: `override_${to}`, overrideId: id, reason: reason.trim() }, ctx);
@@ -209,7 +220,7 @@ export class GovernanceService {
       const db = tx as unknown as Db; const o = await this.override(db, id);
       if (o.status === 'executed') return { override: o, created: false };
       if (o.status !== 'approved') throw conflict('Only an approved override can be executed.', 'TRANSITION_NOT_ALLOWED');
-      if (!(await this.isOperator(db, ctx.actorUserId))) throw new AppError('An assigned operator is required.', 403, 'OPERATOR_NOT_ASSIGNED');
+      if (!(await this.isOperator(db, ctx.actorUserId, o.caseId))) throw new AppError('An assigned operator is required.', 403, 'OPERATOR_NOT_ASSIGNED');
       if (o.evidenceHash !== (await this.evidenceHash(db, o.caseId))) throw conflict('The case evidence changed after the approval.', 'OVERRIDE_EVIDENCE_STALE');
       try {
         const [row] = await tx.update(governanceOverrides).set({ status: 'executed' }).where(eq(governanceOverrides.id, id)).returning();
