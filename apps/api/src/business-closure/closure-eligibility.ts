@@ -17,6 +17,10 @@ export const CLOSURE_OBLIGATION_KEYS = [
   'staffMembers',
   'publishedCommunityPosts',
   'communityFollowers',
+  // G9 Tentaship obligations (counts only; no policy for their resolution is invented)
+  'activeSponsorships',
+  'unitsAwaitingCollection',
+  'openGovernanceCases',
 ] as const;
 export type ClosureObligationKey = (typeof CLOSURE_OBLIGATION_KEYS)[number];
 export type ClosureObligations = Record<ClosureObligationKey, number>;
@@ -29,6 +33,9 @@ export const CLOSURE_BLOCKER_CODES = [
   'ACTIVE_SUBSCRIPTION',
   'ACTIVE_CASHIER_SESSIONS',
   'COMMUNITY_CONTENT_PUBLISHED',
+  'ACTIVE_SPONSORSHIPS',
+  'UNITS_AWAITING_COLLECTION',
+  'OPEN_GOVERNANCE_CASES',
 ] as const;
 export type ClosureBlockerCode = (typeof CLOSURE_BLOCKER_CODES)[number];
 
@@ -50,6 +57,9 @@ export function evaluateClosureEligibility(obligations: ClosureObligations): Clo
   if (obligations.activeSubscriptions > 0) blockers.push('ACTIVE_SUBSCRIPTION');
   if (obligations.activeCashierSessions > 0) blockers.push('ACTIVE_CASHIER_SESSIONS');
   if (obligations.publishedCommunityPosts > 0) blockers.push('COMMUNITY_CONTENT_PUBLISHED');
+  if (obligations.activeSponsorships > 0) blockers.push('ACTIVE_SPONSORSHIPS');
+  if (obligations.unitsAwaitingCollection > 0) blockers.push('UNITS_AWAITING_COLLECTION');
+  if (obligations.openGovernanceCases > 0) blockers.push('OPEN_GOVERNANCE_CASES');
   return { processing: 'blocked', blockers, obligations };
 }
 

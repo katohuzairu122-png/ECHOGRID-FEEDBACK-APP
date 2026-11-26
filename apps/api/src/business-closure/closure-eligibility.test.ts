@@ -16,6 +16,12 @@ describe('BIZ-CLOSE-01 eligibility', () => {
     ]);
   });
 
+  it('G9: Tentaship obligations (active sponsorships, units awaiting collection, open governance cases) are blockers; no resolution policy is invented', () => {
+    const o = { ...emptyObligations(), activeSponsorships: 1, unitsAwaitingCollection: 2, openGovernanceCases: 1 };
+    expect(evaluateClosureEligibility(o).blockers).toEqual(['CLOSURE_POLICY_NOT_APPROVED', 'ACTIVE_SPONSORSHIPS', 'UNITS_AWAITING_COLLECTION', 'OPEN_GOVERNANCE_CASES']);
+    expect(evaluateClosureEligibility(o).processing).toBe('blocked');
+  });
+
   it('informational counts (members, staff, followers, balances) are reported but are not blockers on their own', () => {
     const o = { ...emptyObligations(), activeMemberships: 9, staffMembers: 3, communityFollowers: 7, customerPointBalances: 4 };
     expect(evaluateClosureEligibility(o).blockers).toEqual(['CLOSURE_POLICY_NOT_APPROVED']);

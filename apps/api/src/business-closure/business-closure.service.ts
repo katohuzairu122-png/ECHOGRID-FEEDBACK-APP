@@ -42,7 +42,10 @@ export class BusinessClosureService {
         (select count(*) from refresh_tokens where client = 'cashier' and business_id = ${businessId} and revoked_at is null and expires_at > now()) as active_cashier_sessions,
         (select count(distinct user_id) from user_business_roles where business_id = ${businessId}) as staff_members,
         (select count(*) from network_posts where content_class = 'business' and business_id = ${businessId} and state in ('published','suspended')) as published_community_posts,
-        (select count(*) from network_follows where business_id = ${businessId}) as community_followers
+        (select count(*) from network_follows where business_id = ${businessId}) as community_followers,
+        (select count(*) from drop_sponsorships where business_id = ${businessId} and status in ('submitted','under_review','approved','scheduled','available','suspended')) as active_sponsorships,
+        (select count(*) from drop_reservations r join drop_sponsorships ds on ds.id = r.sponsorship_id where ds.business_id = ${businessId} and r.status in ('reserved','allocated')) as units_awaiting_collection,
+        (select count(*) from governance_cases gc where gc.status <> 'closed' and gc.sponsorship_id in (select id from drop_sponsorships where business_id = ${businessId})) as open_governance_cases
     `);
     const row = rows.rows?.[0] ?? {};
     const out = emptyObligations();
@@ -52,6 +55,7 @@ export class BusinessClosureService {
       openOrphanRewardClaims: 'open_orphan_reward_claims', activeSubscriptions: 'active_subscriptions',
       activeCashierSessions: 'active_cashier_sessions', staffMembers: 'staff_members',
       publishedCommunityPosts: 'published_community_posts', communityFollowers: 'community_followers',
+      activeSponsorships: 'active_sponsorships', unitsAwaitingCollection: 'units_awaiting_collection', openGovernanceCases: 'open_governance_cases',
     };
     for (const key of CLOSURE_OBLIGATION_KEYS) out[key] = Number(row[columns[key]] ?? 0);
     return out;

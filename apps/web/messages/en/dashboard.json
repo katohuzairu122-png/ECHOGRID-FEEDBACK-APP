@@ -259,7 +259,10 @@
       "OPEN_REWARD_CLAIMS": "Some reward claims are not settled yet.",
       "ACTIVE_SUBSCRIPTION": "The business has an active subscription.",
       "ACTIVE_CASHIER_SESSIONS": "Cashier sessions are still signed in.",
-      "COMMUNITY_CONTENT_PUBLISHED": "The business has published Community posts."
+      "COMMUNITY_CONTENT_PUBLISHED": "The business has published Community posts.",
+      "ACTIVE_SPONSORSHIPS": "The business has active sponsorships.",
+      "UNITS_AWAITING_COLLECTION": "Sponsored units are still awaiting collection.",
+      "OPEN_GOVERNANCE_CASES": "Fraud or dispute cases are still open."
     },
     "obligationsTitle": "What would need to be resolved",
     "obligations": {
@@ -272,7 +275,10 @@
       "activeCashierSessions": "Signed-in cashier sessions",
       "staffMembers": "Team members",
       "publishedCommunityPosts": "Published Community posts",
-      "communityFollowers": "Community followers"
+      "communityFollowers": "Community followers",
+      "activeSponsorships": "Active sponsorships",
+      "unitsAwaitingCollection": "Sponsored units awaiting collection",
+      "openGovernanceCases": "Open fraud or dispute cases"
     },
     "pendingTitle": "A closure request is open",
     "pendingBody": "Requested on {date}. The platform team has been notified. Nothing has been deleted or changed.",

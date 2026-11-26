@@ -2,6 +2,7 @@
 export const CLOSURE_OBLIGATION_KEYS = [
   'pendingRedemptions', 'customerPointBalances', 'customerPointsOutstanding', 'activeMemberships', 'openOrphanRewardClaims',
   'activeSubscriptions', 'activeCashierSessions', 'staffMembers', 'publishedCommunityPosts', 'communityFollowers',
+  'activeSponsorships', 'unitsAwaitingCollection', 'openGovernanceCases',
 ] as const;
 export type ClosureObligationKey = (typeof CLOSURE_OBLIGATION_KEYS)[number];
 

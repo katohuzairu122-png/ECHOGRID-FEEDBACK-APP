@@ -10,7 +10,7 @@ vi.mock('@/lib/actions/business-closure', () => ({
 import { ClosureView } from './closure-view';
 import type { BusinessClosureStatusDto } from '@/lib/business-closure-types';
 
-const obligations = { pendingRedemptions: 0, customerPointBalances: 1, customerPointsOutstanding: 120, activeMemberships: 3, openOrphanRewardClaims: 0, activeSubscriptions: 1, activeCashierSessions: 0, staffMembers: 2, publishedCommunityPosts: 0, communityFollowers: 5 };
+const obligations = { pendingRedemptions: 0, customerPointBalances: 1, customerPointsOutstanding: 120, activeMemberships: 3, openOrphanRewardClaims: 0, activeSubscriptions: 1, activeCashierSessions: 0, staffMembers: 2, publishedCommunityPosts: 0, communityFollowers: 5, activeSponsorships: 0, unitsAwaitingCollection: 0, openGovernanceCases: 0 };
 const status = (over: Partial<BusinessClosureStatusDto> = {}): BusinessClosureStatusDto => ({
   request: null, eligibility: { processing: 'blocked', blockers: ['CLOSURE_POLICY_NOT_APPROVED', 'CUSTOMER_POINTS_OUTSTANDING', 'ACTIVE_SUBSCRIPTION'], obligations }, ...over,
 });
