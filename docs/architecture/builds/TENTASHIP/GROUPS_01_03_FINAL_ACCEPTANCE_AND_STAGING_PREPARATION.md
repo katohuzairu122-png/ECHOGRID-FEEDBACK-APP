@@ -2,14 +2,15 @@
 
 Nothing here has been run against staging or production. Every shared-database, deployment and activation step needs the Owner's explicit instruction. Statuses use the Owner's classification set.
 
-## 1. PR dependency order (all open PRs are drafts; CI pending where stated in the final report)
-`main` already contains #590-#601 (incl. #596 deadlock fix, #597 security cases, #598/#599 qualification). Merge in THIS order, updating each from main after the previous merge:
-1. #602 TSH-03 campaign foundation (migration 0098)
-2. #603 TSH-04 isolated selection primitive (no migration; stacked on #602)
-3. #604 TSH-05 synthetic invitations/entries/selection record (migration 0099; stacked)
-4. #605 TDP-02 sponsorship and atomic inventory (migration 0100; stacked)
-5. TDP-03 collection verification (no migration; stacked on #605)
-Stacked PRs show earlier commits until their parents merge. `docs/.../TSH_*` documents are authoritative for their blocks.
+## 1. PR dependency order (draft PRs; the Owner has already merged #602, #603 and #604)
+`main` contains #590-#604 (incl. #596 deadlock fix, #597 security cases, #598/#599 qualification, #602-#604 Shuffle foundations through 0099). Merge the REMAINING stack in THIS order, updating each from main after the previous merge (squash merges make the stacked branches conflict on journal/manifest: resolve by keeping the branch version, which is a strict superset):
+1. #605 TDP-02 sponsorship and atomic inventory (migration 0100)
+2. #606 TDP-03 collection verification (no migration) + the Groups 01-03 acceptance docs
+3. #607 TSH-08 governance (migration 0101)
+4. #608 TDP-04 sponsor analytics + TSH-07 aggregate analytics (no migration)
+5. #609 TSH-09 integrated synthetic acceptance (test only)
+6. #610 TSH-06 interface foundations (web only)
+Only the Owner merges.
 
 ## 2. Complete migration manifest (apply in ONE ordered run; all create-only)
 | # | Tag | Nature | Content |
@@ -20,10 +21,11 @@ Stacked PRs show earlier commits until their parents merge. `docs/.../TSH_*` doc
 | 0098 | shuffle_campaigns | additive | campaigns, immutable versions (fixed not_released), eligibility snapshots |
 | 0099 | shuffle_participation | additive | synthetic-only invitations, entries, held notification intents, hash-chained events, selection results |
 | 0100 | drops_sponsorship_inventory | additive | sponsorships, immutable versions, inventory, reservations, hash-chained events (no payment fields) |
-Journal on main = 98 entries (0000-0097); after the stack = 101 (0000-0100). The shared ledger on staging/production holds 0000-0087 (88 rows) per the earlier batches: pending range 0088-0100 (13 migrations). Verify the ACTUAL deployed ledger before applying (UNKNOWN from this environment). No other branch carries a migration above 0097.
+| 0101 | governance_cases_overrides | additive | operator assignments (empty, Owner grant), synthetic fraud/dispute cases, append-only evidence, hash-chained case log, two-person overrides (two safe scopes only) |
+Journal on main = 100 entries (0000-0099); after the stack = 102 (0000-0101). The shared ledger on staging/production holds 0000-0087 (88 rows) per the earlier batches: pending range 0088-0101 (14 migrations). 0100 and 0101 are on #605 and #607; the parallel workstream has stated it allocates no migration identifier. Verify the ACTUAL deployed ledger before applying (UNKNOWN from this environment). No other branch carries a migration above 0097.
 
 Evidence (disposable databases only): fresh install of 0000-0100 on PG16 (`echogrid_test`) and PG18 (`echogrid_ci_pg18_r21`); upgrade from the 0097 baseline (rollback then re-apply: ledger 98 -> 101, 14 shuffle_/drop_ tables recreated); rollback `rollback/0098_0100_rollback.sql` removed all 14 tables and all functions; runtime-role manifest `--check` OK; tenant-reference pre-check on PG18 NO_TENANT_MISMATCH_FOUND with no unclassified references.
-Rollback docs: `rollback/0094_0095_rollback.sql`, `0096_0097_rollback.sql`, `0098_0100_rollback.sql` (each destroys data created since upgrade: back up first).
+Rollback docs: `rollback/0094_0095_rollback.sql`, `0096_0097_rollback.sql`, `0098_0100_rollback.sql`, `0101_rollback.sql` (verified on a scratch database: 5 governance tables and all functions removed, then 0098-0100 removed; re-apply from the 0097 baseline verified for 0098-0100) (each destroys data created since upgrade: back up first).
 
 ## 3. Feature-control inventory (every control OFF; none set in any checked-in wrangler config; each exact-string `"true"` only, server-side, fail-closed)
 - Community/network: `NETWORK_FEED_ENABLED`, `NETWORK_BUSINESS_PUBLISHING_ENABLED`, `NETWORK_BUSINESS_DISTRIBUTION_ENABLED`, `COMMUNITY_MEMBERSHIP_JOIN_ENABLED`, `COMMUNITY_MEMBERSHIP_REJOIN_ENABLED`, `COMMUNITY_MEMBERSHIP_RESTORE_ENABLED`, `COMMUNITY_MEMBERSHIP_CLEARANCE_ENABLED`.
@@ -31,7 +33,7 @@ Rollback docs: `rollback/0094_0095_rollback.sql`, `0096_0097_rollback.sql`, `009
 Other controls named in earlier batches (e.g. an optional daily post cap) are listed in PRESTAGING_BATCH_02_STAGING_PREPARATION.md. Control names above were taken from the source, not guessed.
 
 ## 4. Restore point and procedure (before any shared-database step)
-Neon snapshot of the target branch (record id and time) and a branch from it; rehearse the restore on a scratch branch; dry-run the whole pending range on a scratch branch restored from the snapshot, confirm the ledger count (88 -> 101) and run the runtime-role verifier. Rollback = the three rollback files above in reverse, in a transaction, plus deleting the matching ledger rows.
+Neon snapshot of the target branch (record id and time) and a branch from it; rehearse the restore on a scratch branch; dry-run the whole pending range on a scratch branch restored from the snapshot, confirm the ledger count (88 -> 102) and run the runtime-role verifier. Rollback = the three rollback files above in reverse, in a transaction, plus deleting the matching ledger rows.
 
 ## 5. Staging procedure (Owner-run, in order)
 1. Owner merges section 1 PRs in order (CI green on each head). 2. Snapshot. 3. Dry run on a scratch branch. 4. Apply on staging. 5. Provision/verify the runtime role (`provision-runtime-role.sql`, `verify-runtime-role.sql`). 6. Deploy API then web. 7. Run the synthetic journeys below with every Tentaship control OFF, confirm 404s, then (only on a further Owner instruction) turn ONE control on for a synthetic run and off again. Activation of any control, real campaigns, real winners, real rewards and sponsor payments are NOT part of this procedure.
@@ -52,7 +54,23 @@ Customer registration (email first); business authentication; Cashier App (eight
 Not independently re-reviewed this batch: closure execution (blocked), badge ledger beyond existing tests, web UI (none added).
 
 ## 8. Block classification (evidence in the final report)
-See the final report section F/G. In short: TSH-03, TSH-04, TSH-05, TDP-02, TDP-03 are IMPLEMENTED — VALIDATION PENDING (hosted CI). TSH-06, TSH-07, TSH-08, TSH-09, TDP-04 are not complete and are classified individually in the report.
+See the final completion report. All technically authorized blocks (TSH-03..TSH-09 except real UI wiring, TDP-02..TDP-04) are implemented; hosted CI decides VERIFIED. Policy-blocked execution is never classified complete.
 
 ## 9. Decisions and approvals still required
 Legal L-1..L-6 (lottery/gambling classification, consumer protection, privacy, tax, sponsor contract terms, jurisdiction) and product D-3..D-5 are unchanged and unresolved in the repository. Also required before any real execution: approved qualification rules (D02-D06), sponsor onboarding and permission keys (`drops:*`, `shuffle:*`), notification/marketing-consent policy for Shuffle, Mode B no-reward wording, minimum aggregate group size, retention periods, fraud/dispute operating owners, fulfilment SLAs.
+
+## 10. Final feature batch: additional findings and evidence
+| # | Area | Finding | Status |
+|---|---|---|---|
+| 8 | PG18 restricted-broker check | `drop_reservations_guard()` (SECURITY DEFINER) kept the default PUBLIC EXECUTE; CI failed `GATE2_B1_UNEXPECTED_EXISTING_DEFINER_EXECUTE`. Locally reproduced by `runtime-role-security` once the DB was rebuilt. | FIXED (REVOKE ALL FROM PUBLIC, the 0052/0054/0059/0061 pattern); regression = existing runtime-role + PG18 CI checks |
+| 9 | PG18 broker callable-function check | `governance_has_role()` was a plain function callable by the restricted broker role (`GATE2_B411_BROKER_CALLABLE_FUNCTIONS`). | FIXED: guards inline the equivalent EXISTS over `governance_operators` (runtime role has SELECT); no helper function exists |
+| 10 | db:check drift | 0100 snapshot stale after a hand edit of one CHECK. | FIXED (snapshot aligned); `check-migrations-current.mjs` OK on every branch |
+| 11 | Stale local test DB | Migrations edited after local apply produced 2 local runtime-role failures. | Local DB rebuilt fresh (drop/create/migrate/seed/seed:plans); suite green |
+
+TSH-08: operators (`governance_operators`) are EMPTY BY DEFAULT with SELECT-only runtime access and no assignment route, so review, decision and override execution stay disabled until the Owner assigns fraud investigators and dispute resolvers. Override scopes are only `cancel_entry_before_selection` and `release_reserved_hold`; there is no scope to void an allocation, replace a selected participant or rewrite selection evidence. Requester != approver (database CHECK and guard), the approver must be an assigned dispute resolver, approval is bound to the case-evidence hash (stale evidence refuses), overrides expire, are single-use and execute atomically with the action.
+
+Analytics (TDP-04/TSH-07): metric definitions are served by `/platform/drops/metric-definitions` and `/platform/shuffle/metric-definitions` and every metric is computed from canonical records (no competing balance). Unsupported metrics (revenue, ROAS, LTV, incremental sales, profitability, Shuffle allocation/collection) are `{available:false}`. The sponsor-scoped view is an internal service; no external sponsor route exists until the Owner approves the sponsor permission model. Its privacy threshold is an explicit required input (not the Business Community threshold of 10, not a campaign minimum) with all-or-nothing suppression to stop differencing.
+
+TSH-06: an isolated, unrouted customer campaign card in four languages (Arabic uses a rtl container and logical classes; key parity tested) and a read-only platform Shuffle console. Neither has any join/enter/claim/release control and neither advertises odds, prizes or guarantees. Sponsor interface: NOT BUILT (permission model unapproved).
+
+Local verification this segment (disposable PostgreSQL 16, synthetic data; hosted results are separate): API unit 281 files / 4454 tests PASS; web unit 177 files / 1445 tests PASS; full PG16 integration 158 files PASS / 1899 tests PASS / 42 skipped by design (on the freshly rebuilt DB); new integration files: governance 8, analytics 4, integrated acceptance 3, drops 11, shuffle participation 10, shuffle campaigns 14; runtime-role manifest `--check`, `db:check`, `tsc` (api, api tests, web) and eslint clean. NOT RUN locally: PostgreSQL 18 integration/restricted-role suites (hosted CI runs them), Chromium desktop/mobile/Arabic browser tests for the new components (none are routed; jsdom RTL assertions only), a verified production web build (see the final report).
