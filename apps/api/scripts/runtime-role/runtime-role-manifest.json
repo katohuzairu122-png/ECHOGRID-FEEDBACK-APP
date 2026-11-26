@@ -1172,6 +1172,56 @@
     "SELECT"
    ],
    "reason": "BCOMM-05 append-only engagement evidence: the server inserts impression/engagement/follow/unfollow events for a signed-in customer and reads thresholded aggregates for the owning business; no UPDATE (database guard) and no DELETE except the customer-account cascade"
+  },
+  "shuffle_invitations": {
+   "class": "RUNTIME",
+   "verbs": [
+    "INSERT",
+    "SELECT",
+    "UPDATE"
+   ],
+   "reason": "TSH-05: synthetic-only invitation; UPDATE is the guarded status machine; no DELETE/TRUNCATE"
+  },
+  "shuffle_invitation_events": {
+   "class": "RUNTIME",
+   "verbs": [
+    "INSERT",
+    "SELECT"
+   ],
+   "reason": "TSH-05: append-only invitation transition log"
+  },
+  "shuffle_notification_intents": {
+   "class": "RUNTIME",
+   "verbs": [
+    "INSERT",
+    "SELECT"
+   ],
+   "reason": "TSH-05: informational in-app intents held (never delivered); append-only"
+  },
+  "shuffle_entries": {
+   "class": "RUNTIME",
+   "verbs": [
+    "INSERT",
+    "SELECT",
+    "UPDATE"
+   ],
+   "reason": "TSH-05: synthetic-only entries; UPDATE is the guarded status machine with capacity check; no DELETE/TRUNCATE"
+  },
+  "shuffle_allocation_events": {
+   "class": "RUNTIME",
+   "verbs": [
+    "INSERT",
+    "SELECT"
+   ],
+   "reason": "TSH-04/08: hash-chained append-only evidence; chain linkage enforced by trigger"
+  },
+  "shuffle_selection_results": {
+   "class": "RUNTIME",
+   "verbs": [
+    "INSERT",
+    "SELECT"
+   ],
+   "reason": "TSH-04: one append-only synthetic selection record per version with replay-verifiable transcript"
   }
  }
 }
