@@ -20,7 +20,7 @@ app.onError(errorHandler);
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Envelope = { data?: any; error?: { code: string; message: string } };
 type Flags = { shuffle?: string | undefined; drops?: string | undefined };
-async function http(method: string, path: string, o: { token?: string | undefined; body?: unknown; flags?: Flags } = {}): Promise<{ status: number } & Envelope> {
+async function http(method: string, path: string, o: { token?: string | undefined; body?: unknown; flags?: Flags | undefined } = {}): Promise<{ status: number } & Envelope> {
   const pending: Promise<unknown>[] = []; const headers = new Headers();
   if (o.token) headers.set('Authorization', `Bearer ${o.token}`);
   if (o.body !== undefined && method !== 'GET') headers.set('Content-Type', 'application/json');
@@ -81,8 +81,8 @@ describe.skipIf(!databaseUrl)('TSH-04 selection -> allocation integration (real 
     const s = await setup(1, 1);
     for (const flags of [{ shuffle: 'true' }, { drops: 'true' }, { shuffle: 'TRUE', drops: 'true' }, {}] as Flags[]) expect((await alloc(s.versionId, s.sponsorshipId, flags, '')).status).toBe(404);
     expect((await alloc(s.versionId, s.sponsorshipId, undefined, plain.token)).status).toBe(403);
-    const cashier = await signCashierAccessToken({ cashierId: crypto.randomUUID(), businessId: biz, sessionId: crypto.randomUUID(), permissions: [] } as never, SECRET).catch(() => 'bad');
-    expect([401, 403, 404]).toContain((await alloc(s.versionId, s.sponsorshipId, undefined, cashier)).status);
+    const cashier = await signCashierAccessToken(admin.id, SECRET, { sessionId: '00000000-0000-4000-8000-000000000002', businessId: biz });
+    const cr = await alloc(s.versionId, s.sponsorshipId, undefined, cashier); expect(cr.status).toBe(403); expect(cr.error?.code).toBe('CASHIER_ROUTE_DENIED');
     const noSel = await f.shuffleScenario({ creatorId: admin.id, businessId: biz, ruleId: rule, entries: 1, min: 1 });
     const r = await alloc(noSel.versionId, s.sponsorshipId); expect(r.status).toBe(409); expect(r.error?.code).toBe('SELECTION_NOT_RECORDED');
   });
