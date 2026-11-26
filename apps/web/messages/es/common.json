@@ -88,5 +88,60 @@
       "title": "Historial",
       "empty": "Aún no hay historial."
     }
+  },
+  "tentashipDropsReport": {
+    "title": "Informe de patrocinio de Tentaship Drops",
+    "unavailable": "Este informe no está disponible en este momento.",
+    "noInventory": "El inventario existe solo después de aprobar el patrocinio.",
+    "notice": "Solo cifras agregadas. No se identifica a ningún cliente y nada aquí es una medida de ingresos, retorno o captación.",
+    "overview": {
+      "title": "Resumen del patrocinio",
+      "statusLabel": "Estado",
+      "status": {
+        "draft": "Borrador",
+        "submitted": "Enviado",
+        "under_review": "En revisión",
+        "approved": "Aprobado",
+        "scheduled": "Programado",
+        "available": "Disponible",
+        "suspended": "En pausa",
+        "cancelled": "Cancelado",
+        "expired": "Caducado"
+      }
+    },
+    "inventory": {
+      "title": "Inventario actual",
+      "total": "Unidades patrocinadas",
+      "available": "Disponibles",
+      "reserved": "Retenidas (reservadas)",
+      "allocated": "Asignadas",
+      "collected": "Recogidas",
+      "expiredUnreturned": "Caducadas sin recoger",
+      "note": "Las unidades cuyo plazo de recogida pasó sin recogerse no vuelven al inventario disponible."
+    },
+    "activity": {
+      "title": "Actividad de reservas (historial)",
+      "created": "Reservas creadas",
+      "released": "Retenciones liberadas",
+      "expired": "Retenciones caducadas",
+      "note": "El historial es actividad a lo largo del tiempo. No es un saldo de inventario adicional."
+    },
+    "collection": {
+      "title": "Asignación y recogida",
+      "outstanding": "Pendientes de recoger",
+      "completionRate": "Recogida completada"
+    },
+    "reconciliation": {
+      "title": "Conciliación del inventario",
+      "ok": "El inventario concilia con las reservas y la evidencia registradas.",
+      "review": "El inventario no concilia. No se hace ninguna corrección automática; se requiere revisión."
+    },
+    "unavailableMetric": "No disponible",
+    "reason": {
+      "NO_ALLOCATION_YET": "Aún no se ha asignado ninguna unidad.",
+      "SUPPRESSED_SMALL_GROUP": "Oculto para proteger la privacidad: el grupo es demasiado pequeño para mostrarse.",
+      "NOT_SUPPORTED_BY_EVIDENCE": "La evidencia registrada no respalda esta cifra.",
+      "other": "Esta cifra no está disponible."
+    }
   }
 }

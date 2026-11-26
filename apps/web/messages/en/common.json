@@ -88,5 +88,60 @@
       "title": "History",
       "empty": "No history yet."
     }
+  },
+  "tentashipDropsReport": {
+    "title": "Tentaship Drops sponsorship report",
+    "unavailable": "This report is not available right now.",
+    "noInventory": "Inventory exists only after the sponsorship is approved.",
+    "notice": "Aggregate figures only. No customer is identified, and nothing here is a revenue, return or acquisition measure.",
+    "overview": {
+      "title": "Sponsorship overview",
+      "statusLabel": "Status",
+      "status": {
+        "draft": "Draft",
+        "submitted": "Submitted",
+        "under_review": "Under review",
+        "approved": "Approved",
+        "scheduled": "Scheduled",
+        "available": "Available",
+        "suspended": "Paused",
+        "cancelled": "Cancelled",
+        "expired": "Expired"
+      }
+    },
+    "inventory": {
+      "title": "Inventory now",
+      "total": "Sponsored units",
+      "available": "Available",
+      "reserved": "Held (reserved)",
+      "allocated": "Allocated",
+      "collected": "Collected",
+      "expiredUnreturned": "Expired uncollected",
+      "note": "Units whose collection window passed without collection are not returned to the available inventory."
+    },
+    "activity": {
+      "title": "Reservation activity (history)",
+      "created": "Reservations created",
+      "released": "Holds released",
+      "expired": "Holds expired",
+      "note": "History is activity over time. It is not an additional inventory balance."
+    },
+    "collection": {
+      "title": "Allocation and collection",
+      "outstanding": "Awaiting collection",
+      "completionRate": "Collection completion"
+    },
+    "reconciliation": {
+      "title": "Inventory reconciliation",
+      "ok": "The inventory reconciles with the recorded reservations and evidence.",
+      "review": "The inventory does not reconcile. No automatic correction is made; a review is required."
+    },
+    "unavailableMetric": "Not available",
+    "reason": {
+      "NO_ALLOCATION_YET": "No unit has been allocated yet.",
+      "SUPPRESSED_SMALL_GROUP": "Hidden to protect privacy: the group is too small to show.",
+      "NOT_SUPPORTED_BY_EVIDENCE": "The recorded evidence does not support this figure.",
+      "other": "This figure is not available."
+    }
   }
 }
