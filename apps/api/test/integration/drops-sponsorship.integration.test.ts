@@ -250,4 +250,28 @@ describe.skipIf(!databaseUrl)('TDP-02 Drops sponsorship and atomic inventory (re
       expect((await as(reviewer, 'GET', `/sponsorships/${id}/evidence`)).data.chainOk).toBe(false);
     } finally { await q(`ALTER TABLE drop_events ENABLE ALWAYS TRIGGER drop_events_append_only_trg`); }
   });
+
+  it('TDP-03 collection verification: only an allocated unit, only inside the window, idempotent, recorded with the verifier, never reversible, no liability created', async () => {
+    const id = await available({ quantityTotal: 2 }); const c1 = await eligible(); const c2 = await eligible();
+    const r1 = await reserve(id, c1);
+    const early = await as(reviewer, 'POST', `/reservations/${r1.data.id}/synthetic/collect`, ACK);
+    expect(early.error?.code).toBe('RESERVATION_TRANSITION_NOT_ALLOWED'); // reserved, not allocated
+    await as(reviewer, 'POST', `/reservations/${r1.data.id}/synthetic/allocate`, ACK);
+    const ok1 = await as(reviewer, 'POST', `/reservations/${r1.data.id}/synthetic/collect`, ACK);
+    expect(ok1.status, JSON.stringify(ok1)).toBe(200); expect(ok1.data).toEqual({ status: 'collected', created: true });
+    expect((await as(reviewer, 'POST', `/reservations/${r1.data.id}/synthetic/collect`, ACK)).data.created).toBe(false);
+    expect(await inv(id)).toMatchObject({ reserved: 0, allocated: 0, collected: 1 });
+    await expect(q(`UPDATE drop_reservations SET status = 'allocated' WHERE id = $1`, [r1.data.id])).rejects.toThrow(/TRANSITION_NOT_ALLOWED/);
+    await expect(q(`UPDATE drop_reservations SET status = 'expired' WHERE id = $1`, [r1.data.id])).rejects.toThrow(/TRANSITION_NOT_ALLOWED/);
+    expect((await as(reviewer, 'POST', `/reservations/${r1.data.id}/synthetic/release`, { ...ACK, reason: 'x' })).error?.code).toBe('RESERVATION_TRANSITION_NOT_ALLOWED');
+    const ev = await q(`SELECT event FROM drop_events WHERE sponsorship_id = $1 AND event->>'type' = 'collected'`, [id]);
+    expect(ev).toHaveLength(1); expect(ev[0].event.verifiedByUserId).toBe(reviewerId);
+    expect((await as(reviewer, 'GET', `/sponsorships/${id}/evidence`)).data).toMatchObject({ chainOk: true, inventoryConsistent: true });
+    // outside the window: a window that has not opened yet
+    const later = await available({ quantityTotal: 1, collectionWindowStart: iso(60_000), collectionWindowEnd: iso(86_400_000) });
+    const r2 = await reserve(later, c2); await as(reviewer, 'POST', `/reservations/${r2.data.id}/synthetic/allocate`, ACK);
+    expect((await as(reviewer, 'POST', `/reservations/${r2.data.id}/synthetic/collect`, ACK)).error?.code).toBe('COLLECTION_WINDOW_CLOSED');
+    expect((await as(plainToken, 'POST', `/reservations/${r2.data.id}/synthetic/collect`, ACK)).status).toBe(403);
+    expect((await q(`SELECT status FROM drop_reservations WHERE id = $1`, [r2.data.id]))[0].status).toBe('allocated');
+  });
 });

@@ -86,6 +86,10 @@ platformDropsRoutes.post('/reservations/:id/synthetic/allocate', async (c) => {
   const r = await withService(c, (s) => s.allocate(idOf(c), actor(c)));
   done(c); return ok(c, { status: r.status });
 });
+platformDropsRoutes.post('/reservations/:id/synthetic/collect', async (c) => {
+  await parseJsonBody(c.req.raw, plainSchema);
+  done(c); return ok(c, await withService(c, (s) => s.collect(idOf(c), actor(c))));
+});
 platformDropsRoutes.post('/reservations/:id/synthetic/release', async (c) => {
   const b = await parseJsonBody(c.req.raw, reasonSchema);
   done(c); return ok(c, await withService(c, (s) => s.release(idOf(c), b.reason, actor(c))));

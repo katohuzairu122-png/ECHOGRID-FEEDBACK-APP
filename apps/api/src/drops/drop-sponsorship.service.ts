@@ -204,6 +204,26 @@ export class DropSponsorshipService {
     });
   }
 
+  /**
+   * TDP-03 collection verification (synthetic): allocated -> collected, only inside the published collection window and only by the verifying actor, whose
+   * identity is recorded on the evidence chain. No automatic debt or liability follows (D-5): this records a verified collection and nothing else.
+   * Idempotent. A real fulfilment permission for counter staff needs the Owner's decision (cashiers get only fulfilment verification, never more).
+   */
+  async collect(reservationId: string, ctx: Actor) {
+    return this.db.transaction(async (tx) => {
+      const db = tx as unknown as Db; const r = await this.load(db, reservationId);
+      if (r.status === 'collected') return { status: 'collected' as const, created: false };
+      if (r.status !== 'allocated') throw conflict('Only an allocated unit can be collected.', 'RESERVATION_TRANSITION_NOT_ALLOWED');
+      const s = await this.sponsorship(db, r.sponsorshipId);
+      const [ver] = s.approvedVersionId ? await tx.select().from(dropSponsorshipVersions).where(eq(dropSponsorshipVersions.id, s.approvedVersionId)).limit(1) : [];
+      const now = new Date();
+      if (!ver || now < ver.collectionWindowStart || now >= ver.collectionWindowEnd) throw conflict('Collection is only possible inside the published collection window.', 'COLLECTION_WINDOW_CLOSED');
+      await tx.update(dropReservations).set({ status: 'collected' }).where(eq(dropReservations.id, r.id));
+      await this.append(db, r.sponsorshipId, { type: 'collected', reservationId: r.id, verifiedByUserId: ctx.actorUserId }, ctx);
+      return { status: 'collected' as const, created: true };
+    });
+  }
+
   /** Releases holds whose time has passed (returns units to the pool) and expires uncollected allocations after the collection window. */
   async expireDue(sponsorshipId: string, ctx: Actor) {
     return this.db.transaction(async (tx) => {
