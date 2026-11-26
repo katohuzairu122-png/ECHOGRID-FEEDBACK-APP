@@ -35,10 +35,11 @@ export function makeFixtures(client: Client) {
   /** Synthetic approved decision policies (structural rules only) exist for every kind and family so decisions and overrides can be exercised; production has none until the Owner approves them. */
   async function ensurePolicies() {
     const have = new Set((await q(`SELECT kind || ':' || subject_family AS k FROM governance_decision_policies WHERE approval_state = 'approved'`)).map((r) => r.k as string));
-    const author = await user(`pol-author`, false); const approver = await user(`pol-approver`, false);
+    const missing = (['shuffle', 'drops'] as const).flatMap((family) => (['fraud', 'dispute', 'override'] as const).map((kind) => ({ family, kind }))).filter((x) => !have.has(`${x.kind}:${x.family}`));
+    if (missing.length === 0) return;
+    const author = await user(`pol-author-${++seq}`, false); const approver = await user(`pol-approver-${seq}`, false);
     const svc = new GovernanceDecisionPolicyService(db);
-    for (const family of ['shuffle', 'drops'] as const) for (const kind of ['fraud', 'dispute', 'override'] as const) {
-      if (have.has(`${kind}:${family}`)) continue;
+    for (const { family, kind } of missing) {
       const params = kind === 'override' ? { allowedScopes: ['cancel_entry_before_selection', 'release_reserved_hold'] } : { allowedDecisions: ['upheld', 'overturned', 'no_action'], minEvidenceItems: 0 };
       const d = await svc.createDraft({ policyKey: `syn_${kind}_${family}_${tag}`.slice(0, 60), kind, subjectFamily: family, parameters: params }, ctx(author.id));
       await svc.approve(d.id, ctx(approver.id));
