@@ -10,7 +10,9 @@ import { ok } from '../lib/response';
 import { AppError } from '../lib/errors';
 import { tentashipDropsGate } from '../drops/drops-gate';
 import { DropSponsorshipService } from '../drops/drop-sponsorship.service';
-import { DROP_METRIC_DEFINITIONS, TentashipAnalytics } from '../analytics/tentaship-analytics';
+import { DROP_METRIC_DEFINITIONS, DROP_METRIC_KINDS, TentashipAnalytics } from '../analytics/tentaship-analytics';
+import { reconcileDropInventory } from '../analytics/drop-inventory-reconciliation';
+import { dropEventReferences } from '../analytics/drop-event-references';
 
 type Env = { Bindings: Bindings; Variables: AuthVariables & PlatformVariables & AuditVariables };
 
@@ -105,3 +107,21 @@ platformDropsRoutes.get('/sponsorships/:id/analytics', async (c) => {
   try { return ok(c, await new TentashipAnalytics(db).dropSponsorship(idOf(c))); } finally { c.executionCtx.waitUntil(close()); }
 });
 platformDropsRoutes.get('/metric-definitions', (c) => { c.header('Cache-Control', 'no-store'); return ok(c, DROP_METRIC_DEFINITIONS); });
+
+/**
+ * TDP-04: canonical inventory reconciliation (READ-ONLY: it reports, it never repairs) and identity-free event references for TSH-07. Platform admin only, behind the Drops
+ * control; there is no export, sponsor-facing or write route here.
+ */
+platformDropsRoutes.get('/sponsorships/:id/reconciliation', async (c) => {
+  c.header('Cache-Control', 'no-store');
+  const { db, close } = await createDb(c.env.HYPERDRIVE);
+  try { return ok(c, await reconcileDropInventory(db, idOf(c))); } finally { c.executionCtx.waitUntil(close()); }
+});
+platformDropsRoutes.get('/sponsorships/:id/event-references', async (c) => {
+  c.header('Cache-Control', 'no-store');
+  const after = z.coerce.number().int().min(0).safeParse(c.req.query('afterSeq') ?? '0');
+  if (!after.success) throw new AppError('afterSeq must be a non-negative whole number.', 422, 'VALIDATION_ERROR');
+  const { db, close } = await createDb(c.env.HYPERDRIVE);
+  try { return ok(c, await dropEventReferences(db, idOf(c), { afterSeq: after.data })); } finally { c.executionCtx.waitUntil(close()); }
+});
+platformDropsRoutes.get('/metric-kinds', (c) => { c.header('Cache-Control', 'no-store'); return ok(c, DROP_METRIC_KINDS); });
