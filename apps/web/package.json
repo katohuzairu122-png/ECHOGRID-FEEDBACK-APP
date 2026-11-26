@@ -12,7 +12,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
-    "test:e2e:remote": "playwright test --config playwright.remote.config.ts"
+    "test:e2e:remote": "playwright test --config playwright.remote.config.ts",
+    "test:components": "vitest run -c vitest.components.config.ts && playwright test -c playwright.components.config.ts"
   },
   "dependencies": {
     "@base-ui-components/react": "^1.0.0-beta.0",

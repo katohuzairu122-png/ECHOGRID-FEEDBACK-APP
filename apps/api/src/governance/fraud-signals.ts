@@ -3,8 +3,7 @@ import { sql } from 'drizzle-orm';
 import type { Db } from '../db/client';
 import { canonicalJson } from '../lib/audit-chain';
 import { ShuffleParticipationService } from '../shuffle/shuffle-participation.service';
-import { DropSponsorshipService } from '../drops/drop-sponsorship.service';
-import { TentashipAnalytics } from '../analytics/tentaship-analytics';
+import { checkDropInventory } from '../analytics/drop-inventory-reconciliation';
 
 /**
  * TSH-08 fraud SIGNALS: read-only detectors over canonical evidence (no new data is stored here). A signal is INFORMATION for a human reviewer:
@@ -69,11 +68,13 @@ export class FraudSignals {
     const out: FraudSignal[] = [];
     const dup = await rows<{ customer_id: string; ids: string[] }>(this.db, sql`select customer_id, array_agg(id::text order by id) as ids from drop_reservations where sponsorship_id = ${sponsorshipId} and status in ('reserved','allocated','collected') group by customer_id having count(*) > 1`);
     for (const d of dup) out.push(mk('duplicate_allocation', d.ids, 'More than one live reservation or allocation exists for one customer on one sponsorship.'));
-    const ev = await new DropSponsorshipService(this.db).verifyEvidence(sponsorshipId);
-    if (!ev.chainOk) out.push(mk('evidence_chain_broken', [sponsorshipId], 'The sponsorship evidence chain does not verify.'));
-    if (!ev.inventoryConsistent) out.push(mk('inventory_inconsistent', [sponsorshipId], 'The inventory counters do not equal the counts derived from reservations and evidence.'));
-    const a = await new TentashipAnalytics(this.db).dropSponsorship(sponsorshipId);
-    if (a.metrics && a.metrics.reconciled === false && ev.inventoryConsistent) out.push(mk('inventory_inconsistent', [sponsorshipId], 'The analytics reconciliation disagrees with the inventory counters.'));
+    // ONE source for inventory truth: every FAILED reconciliation check becomes its own signal (a chain failure is tampering; any other failure is inventory inconsistency).
+    // Detection is read-only: nothing is repaired, adjusted or reversed.
+    const rec = await checkDropInventory(this.db, sponsorshipId);
+    for (const c of rec.checks.filter((x) => !x.ok)) {
+      if (c.code === 'chain_verifies') out.push(mk('evidence_chain_broken', [sponsorshipId], 'The sponsorship evidence chain does not verify.'));
+      else if (c.code !== 'no_duplicate_live_units') out.push(mk('inventory_inconsistent', [sponsorshipId, c.code], `Reconciliation check ${c.code} failed: expected ${String(c.expected)}, actual ${String(c.actual)}.`));
+    }
     return out;
   }
 }
