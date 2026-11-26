@@ -292,6 +292,7 @@ export interface Bindings {
   NETWORK_FEED_ENABLED?: string;
   /** TSH-03: Tentaship Shuffle control. Disabled unless exactly "true" (independent of Badges, Drops and Community). Not set in wrangler.toml. */
   TENTASHIP_SHUFFLE_ENABLED?: string | undefined;
+  TENTASHIP_DROPS_ENABLED?: string | undefined;
   /** TB-02: Tentaship Badges control. Disabled unless exactly "true" (independent of every Community control). Not set in wrangler.toml. */
   TENTASHIP_BADGES_ENABLED?: string | undefined;
   /** BCOMM-03: business post authoring/submission control. Disabled unless exactly "true". Not set in wrangler.toml. */
