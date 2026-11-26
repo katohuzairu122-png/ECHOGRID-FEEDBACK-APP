@@ -5,6 +5,7 @@ import { createRepositories } from '../../../src/repositories';
 import { ShuffleCampaignService } from '../../../src/shuffle/shuffle-campaign.service';
 import { ShuffleParticipationService } from '../../../src/shuffle/shuffle-participation.service';
 import { DropSponsorshipService } from '../../../src/drops/drop-sponsorship.service';
+import { SponsorApplicationService } from '../../../src/sponsors/sponsor-application.service';
 import { GovernanceDecisionPolicyService } from '../../../src/governance/governance-policy.service';
 import { hashSpec, parseQualificationSpec } from '../../../src/qualification/qualification-spec';
 import { signAccessToken } from '../../../src/auth/jwt';
@@ -55,6 +56,15 @@ export function makeFixtures(client: Client) {
     if (approved) await q(`UPDATE qualification_rule_versions SET approval_state='approved', approved_at=now(), approved_by_user_id=$2 WHERE id=$1`, [id, approverId]);
     return id;
   }
+  let sponsorUsers: { submitter: string; reviewer: string } | null = null;
+  /** A synthetic APPROVED sponsor application for a business (idempotent): Drops needs an approved sponsor before a sponsorship opens or takes a new reservation. */
+  async function sponsor(businessId: string) {
+    if (!sponsorUsers) sponsorUsers = { submitter: (await user('sp-submitter', false)).id, reviewer: (await user('sp-reviewer', true)).id };
+    const svc = new SponsorApplicationService(db);
+    if (await svc.isApproved(businessId)) return;
+    const a = await svc.submit(businessId, 'Synthetic sponsor application.', ctx(sponsorUsers.submitter));
+    await svc.startReview(a.id, ctx(sponsorUsers.reviewer)); await svc.approve(a.id, ctx(sponsorUsers.reviewer));
+  }
   async function business(label: string) { return (await repos.businesses.create({ name: `${label} ${tag}`, slug: `${label}-${run}`.slice(0, 60) })).id; }
   async function customer(opts: { businessId?: string; purchase?: boolean } = {}) {
     const id = (await repos.customers.create({ phone: `+1556${String(Date.now()).slice(-5)}${String(++seq).padStart(2, '0')}` })).id;
@@ -89,6 +99,7 @@ export function makeFixtures(client: Client) {
 
   /** A synthetic available sponsorship (creator and reviewer must differ) with optional reservations/allocations for eligible customers. */
   async function dropScenario(o: { creatorId: string; reviewerId: string; businessId: string; ruleId: string; quantity: number; reserve?: number; allocate?: number; collectionWindowEndMs?: number }) {
+    await sponsor(o.businessId);
     const c = await drops.create({
       key: key('dp'), businessId: o.businessId, productName: 'Synthetic item', description: 'A synthetic, non-commercial test unit.', quantityTotal: o.quantity, collectionMethod: 'In person', collectionLocation: 'Synthetic counter',
       collectionWindowStart: new Date(Date.now() - 3_600_000), collectionWindowEnd: new Date(Date.now() + (o.collectionWindowEndMs ?? 86_400_000)), offerExpiresAt: new Date(Date.now() + 86_400_000), qualificationRuleVersionId: o.ruleId,
@@ -104,5 +115,5 @@ export function makeFixtures(client: Client) {
     }
     return { sponsorshipId: id, reservationIds, customers };
   }
-  return { db, repos, q, ctx, user, operator, ensurePolicies, rule, business, customer, shuffle, part, drops, shuffleScenario, dropScenario, key };
+  return { db, repos, q, ctx, user, operator, ensurePolicies, sponsor, rule, business, customer, shuffle, part, drops, shuffleScenario, dropScenario, key };
 }

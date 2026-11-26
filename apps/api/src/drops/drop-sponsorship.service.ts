@@ -5,6 +5,7 @@ import {
   auditLog, businesses, dropEvents, dropInventory, dropReservations, dropSponsorshipVersions, dropSponsorships, qualificationRuleVersions, type DropSponsorshipStatus,
 } from '../db/schema';
 import { AppError } from '../lib/errors';
+import { SponsorApplicationService } from '../sponsors/sponsor-application.service';
 import { canonicalJson, chainAudit, verifyChain, type AuditLink } from '../lib/audit-chain';
 import { evaluateRuleForCustomer } from '../qualification/qualification-evaluator';
 
@@ -116,6 +117,7 @@ export class DropSponsorshipService {
         if (m.includes('TRANSITION_NOT_ALLOWED')) throw conflict(`A sponsorship cannot move from ${s.status} to ${target}.`, 'SPONSORSHIP_TRANSITION_NOT_ALLOWED');
         if (m.includes('REVIEW_REQUIRED')) throw new AppError('An independent reviewer approving the latest version is required.', 403, 'SEPARATION_OF_DUTIES');
         if (m.includes('NOT_READY')) throw conflict('The sponsorship needs an approved version and inventory.', 'SPONSORSHIP_NOT_READY');
+        if (m.includes('DROP_SPONSOR_NOT_APPROVED')) throw conflict('The sponsor needs an approved (not suspended or revoked) sponsor application.', 'SPONSOR_NOT_APPROVED');
         throw e;
       }
     });
@@ -145,6 +147,7 @@ export class DropSponsorshipService {
       if (prior) return { reservation: prior, created: false };
       const s = await this.sponsorship(db, sponsorshipId);
       if (s.status !== 'available') throw conflict('The sponsorship is not available.', 'SPONSORSHIP_NOT_AVAILABLE');
+      if (!(await new SponsorApplicationService(db).isApproved(s.businessId))) throw conflict('The sponsor is not approved (or is suspended or revoked), so no new reservation can be made.', 'SPONSOR_NOT_APPROVED');
       const { evidence, ver } = await this.evaluate(db, sponsorshipId, customerId);
       if (ver.offerExpiresAt <= new Date()) throw conflict('The offer has expired.', 'OFFER_EXPIRED');
       if (!(holdExpiresAt > new Date()) || holdExpiresAt > ver.offerExpiresAt) throw bad('The hold must expire in the future and not after the offer expires.', 'HOLD_EXPIRY_INVALID');
