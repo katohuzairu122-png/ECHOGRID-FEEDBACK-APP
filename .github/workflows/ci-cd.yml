@@ -305,6 +305,9 @@ jobs:
       - name: Install Chromium
         run: pnpm --filter @echo-grid-feedback/web exec playwright install --with-deps chromium
 
+      - name: Contained component browser acceptance (TSH-06 / TDP-04)
+        run: pnpm --filter @echo-grid-feedback/web test:components
+
       - name: Block 2D browser verification
         run: pnpm block14:e2e
 

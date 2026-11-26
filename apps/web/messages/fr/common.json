@@ -88,5 +88,60 @@
       "title": "Historique",
       "empty": "Aucun historique pour le moment."
     }
+  },
+  "tentashipDropsReport": {
+    "title": "Rapport de parrainage Tentaship Drops",
+    "unavailable": "Ce rapport n'est pas disponible pour le moment.",
+    "noInventory": "L'inventaire n'existe qu'une fois le parrainage approuvé.",
+    "notice": "Chiffres agrégés uniquement. Aucun client n'est identifié et rien ici n'est une mesure de revenu, de retour ou d'acquisition.",
+    "overview": {
+      "title": "Aperçu du parrainage",
+      "statusLabel": "Statut",
+      "status": {
+        "draft": "Brouillon",
+        "submitted": "Soumis",
+        "under_review": "En cours d'examen",
+        "approved": "Approuvé",
+        "scheduled": "Planifié",
+        "available": "Disponible",
+        "suspended": "En pause",
+        "cancelled": "Annulé",
+        "expired": "Expiré"
+      }
+    },
+    "inventory": {
+      "title": "Inventaire actuel",
+      "total": "Unités parrainées",
+      "available": "Disponibles",
+      "reserved": "Retenues (réservées)",
+      "allocated": "Attribuées",
+      "collected": "Retirées",
+      "expiredUnreturned": "Expirées non retirées",
+      "note": "Les unités dont le délai de retrait est passé sans retrait ne retournent pas dans l'inventaire disponible."
+    },
+    "activity": {
+      "title": "Activité des réservations (historique)",
+      "created": "Réservations créées",
+      "released": "Retenues libérées",
+      "expired": "Retenues expirées",
+      "note": "L'historique est une activité dans le temps. Ce n'est pas un solde d'inventaire supplémentaire."
+    },
+    "collection": {
+      "title": "Attribution et retrait",
+      "outstanding": "En attente de retrait",
+      "completionRate": "Retraits effectués"
+    },
+    "reconciliation": {
+      "title": "Rapprochement de l'inventaire",
+      "ok": "L'inventaire concorde avec les réservations et les preuves enregistrées.",
+      "review": "L'inventaire ne concorde pas. Aucune correction automatique n'est faite ; un examen est requis."
+    },
+    "unavailableMetric": "Non disponible",
+    "reason": {
+      "NO_ALLOCATION_YET": "Aucune unité n'a encore été attribuée.",
+      "SUPPRESSED_SMALL_GROUP": "Masqué pour protéger la vie privée : le groupe est trop petit pour être affiché.",
+      "NOT_SUPPORTED_BY_EVIDENCE": "Les preuves enregistrées ne permettent pas ce chiffre.",
+      "other": "Ce chiffre n'est pas disponible."
+    }
   }
 }

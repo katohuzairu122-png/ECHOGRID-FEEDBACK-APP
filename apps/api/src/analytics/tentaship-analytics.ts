@@ -1,9 +1,10 @@
 import { and, asc, eq, sql } from 'drizzle-orm';
 import type { Db } from '../db/client';
 import {
-  dropEvents, dropInventory, dropReservations, dropSponsorships, governanceCases, shuffleCampaignVersions, shuffleEligibilitySnapshots, shuffleEntries, shuffleInvitations, shuffleSelectionResults,
+  dropEvents, dropSponsorships, governanceCases, shuffleCampaignVersions, shuffleEligibilitySnapshots, shuffleEntries, shuffleInvitations, shuffleSelectionResults,
 } from '../db/schema';
 import { AppError } from '../lib/errors';
+import { checkDropInventory } from './drop-inventory-reconciliation';
 
 /**
  * TDP-04 / TSH-07 aggregate analytics. EVERY number is derived from canonical records (no competing balance is stored) and has a documented definition below.
@@ -22,11 +23,18 @@ export const DROP_METRIC_DEFINITIONS = {
   collected: 'drop_inventory.collected: reservations whose collection was verified inside the collection window.',
   allocationsExpired: 'drop_inventory.expired: allocated units not collected before the collection window ended; never returned to the pool.',
   available: 'total - reserved - allocated - collected - allocationsExpired (units a new reservation could still take).',
+  reservationsCreated: 'HISTORICAL: every reservation ever created (one per customer per sponsorship); each is in exactly one state, so the states sum to this number. It is activity, not an inventory balance.',
   holdsReleased: 'count of reservations in status released (hold released before allocation, including failed eligibility re-checks and approved overrides).',
   holdsExpired: 'count of hold_expired events on the sponsorship evidence chain (a hold whose time passed before allocation).',
   outstandingCollection: 'allocated: units allocated and still collectable.',
   collectionCompletionRate: 'collected / (collected + allocated + allocationsExpired): the share of units EVER allocated that were collected. Unavailable when no unit was ever allocated.',
-  reconciled: 'true when the inventory counters equal the counts derived independently from drop_reservations and the evidence chain.',
+  reconciled: 'true when EVERY check of the canonical inventory reconciliation passes (counters vs counts derived independently from reservations and the evidence chain). A failure is reported, never repaired.',
+} as const;
+
+/** current = what the units are now; historical = activity over time (never an extra balance); derived = computed from current states; integrity = a verification result. */
+export const DROP_METRIC_KINDS = {
+  total: 'current', available: 'current', reserved: 'current', allocated: 'current', collected: 'current', allocationsExpired: 'current', outstandingCollection: 'current',
+  reservationsCreated: 'historical', holdsReleased: 'historical', holdsExpired: 'historical', collectionCompletionRate: 'derived', reconciled: 'integrity',
 } as const;
 
 export const SHUFFLE_METRIC_DEFINITIONS = {
@@ -60,22 +68,16 @@ export class TentashipAnalytics {
   async dropSponsorship(sponsorshipId: string) {
     const [s] = await this.db.select({ id: dropSponsorships.id, businessId: dropSponsorships.businessId, status: dropSponsorships.status }).from(dropSponsorships).where(eq(dropSponsorships.id, sponsorshipId)).limit(1);
     if (!s) throw new AppError('Sponsorship not found.', 404, 'SPONSORSHIP_NOT_FOUND');
-    const [inv] = await this.db.select().from(dropInventory).where(eq(dropInventory.sponsorshipId, sponsorshipId)).limit(1);
-    if (!inv) return { sponsorshipId, status: s.status, metrics: null, reason: 'NO_INVENTORY_UNTIL_APPROVED' as const };
-    const released = await count(this.db, sql`select count(*)::int as n from drop_reservations where sponsorship_id = ${sponsorshipId} and status = 'released'`);
-    const holdExpired = await count(this.db, sql`select count(*)::int as n from drop_events where sponsorship_id = ${sponsorshipId} and event->>'type' = 'hold_expired'`);
-    const allocExpired = await count(this.db, sql`select count(*)::int as n from drop_events where sponsorship_id = ${sponsorshipId} and event->>'type' = 'allocation_expired'`);
-    const byStatus = await this.db.select({ status: dropReservations.status, n: sql<number>`count(*)::int` }).from(dropReservations).where(eq(dropReservations.sponsorshipId, sponsorshipId)).groupBy(dropReservations.status);
-    const by = (k: string) => Number(byStatus.find((x) => x.status === k)?.n ?? 0);
-    const available = inv.totalQuantity - inv.reserved - inv.allocated - inv.collected - inv.expired;
-    const everAllocated = inv.collected + inv.allocated + inv.expired;
+    const rec = await checkDropInventory(this.db, sponsorshipId);
+    if (!rec.current || !rec.historical) return { sponsorshipId, status: s.status, metrics: null, reason: 'NO_INVENTORY_UNTIL_APPROVED' as const };
+    const everAllocated = rec.current.collected + rec.current.allocated + rec.current.expiredUnreturned;
     return {
-      sponsorshipId, businessId: s.businessId, status: s.status,
+      sponsorshipId, businessId: s.businessId, status: s.status, kinds: DROP_METRIC_KINDS,
       metrics: {
-        total: inv.totalQuantity, reserved: inv.reserved, allocated: inv.allocated, collected: inv.collected, allocationsExpired: inv.expired, available,
-        holdsReleased: released, holdsExpired: holdExpired, outstandingCollection: inv.allocated,
-        collectionCompletionRate: everAllocated === 0 ? unavailable('NO_ALLOCATION_YET') : inv.collected / everAllocated,
-        reconciled: inv.reserved === by('reserved') && inv.allocated === by('allocated') && inv.collected === by('collected') && inv.expired === allocExpired && available >= 0,
+        total: rec.current.total, reserved: rec.current.reserved, allocated: rec.current.allocated, collected: rec.current.collected, allocationsExpired: rec.current.expiredUnreturned, available: rec.current.available,
+        reservationsCreated: rec.historical.reservationsCreated, holdsReleased: rec.historical.holdsReleased, holdsExpired: rec.historical.holdsExpired, outstandingCollection: rec.current.allocated,
+        collectionCompletionRate: everAllocated === 0 ? unavailable('NO_ALLOCATION_YET') : rec.current.collected / everAllocated,
+        reconciled: rec.ok,
       },
     };
   }
@@ -91,12 +93,12 @@ export class TentashipAnalytics {
     const full = await this.dropSponsorship(sponsorshipId);
     if (!full.metrics) return { sponsorshipId, status: full.status, metrics: null, reason: full.reason };
     const m = full.metrics;
-    const population = m.reserved + m.allocated + m.collected + m.allocationsExpired + m.holdsReleased + m.holdsExpired;
+    const population = m.reservationsCreated;
     if (population > 0 && population < opts.minimumGroupSize) {
       const hidden = unavailable('SUPPRESSED_SMALL_GROUP');
-      return { sponsorshipId, status: full.status, metrics: { total: m.total, reserved: hidden, allocated: hidden, collected: hidden, allocationsExpired: hidden, available: hidden, holdsReleased: hidden, holdsExpired: hidden, outstandingCollection: hidden, collectionCompletionRate: hidden, reconciled: m.reconciled } };
+      return { sponsorshipId, status: full.status, kinds: DROP_METRIC_KINDS, metrics: { total: m.total, reserved: hidden, allocated: hidden, collected: hidden, allocationsExpired: hidden, available: hidden, reservationsCreated: hidden, holdsReleased: hidden, holdsExpired: hidden, outstandingCollection: hidden, collectionCompletionRate: hidden, reconciled: m.reconciled } };
     }
-    return { sponsorshipId, status: full.status, metrics: m };
+    return { sponsorshipId, status: full.status, kinds: DROP_METRIC_KINDS, metrics: m };
   }
 
   /** Per-version Shuffle analytics (platform view). The lifecycle events are DIFFERENT and are never merged. */
