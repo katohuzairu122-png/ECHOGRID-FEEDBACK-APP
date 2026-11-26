@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { SponsorApplicationService } from '../../src/sponsors/sponsor-application.service';
 import { Hono } from 'hono';
 import { Client } from 'pg';
 import { randomUUID } from 'node:crypto';
@@ -90,6 +91,7 @@ describe.skipIf(!databaseUrl)('TDP-02 Drops sponsorship and atomic inventory (re
     creatorId = await mk(`dp-creator-${run}@example.test`, true); reviewerId = await mk(`dp-reviewer-${run}@example.test`, true); const plain = await mk(`dp-plain-${run}@example.test`, false);
     creator = await signAccessToken(creatorId, SECRET); reviewer = await signAccessToken(reviewerId, SECRET); plainToken = await signAccessToken(plain, SECRET);
     bizA = (await repos.businesses.create({ name: `Drops A ${tag}`, slug: `dpa-${run}` })).id; bizB = (await repos.businesses.create({ name: `Drops B ${tag}`, slug: `dpb-${run}` })).id;
+    await (async () => { const sp = new SponsorApplicationService(buildDb(client)); const sub = (await repos.users.create({ email: `sp-sub-${run}@example.test`, fullName: 'sp-sub', passwordHash: 'x', status: 'active' })).id; const rev = (await repos.users.create({ email: `sp-rev-${run}@example.test`, fullName: 'sp-rev', passwordHash: 'x', status: 'active' })).id; await q(`UPDATE users SET platform_role='admin' WHERE id=$1`, [rev]); for (const b of [bizA, bizB]) { const a = await sp.submit(b, 'Synthetic sponsor application.', { actorUserId: sub }); await sp.startReview(a.id, { actorUserId: rev }); await sp.approve(a.id, { actorUserId: rev }); } })();
     await q(`UPDATE qualification_rule_versions SET approval_state='retired', retired_at=now() WHERE approval_state <> 'retired'`);
     approved = await mkRule(true);
   });

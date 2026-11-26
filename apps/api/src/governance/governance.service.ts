@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { and, asc, eq, sql } from 'drizzle-orm';
 import type { Db } from '../db/client';
 import {
-  auditLog, dropReservations, governanceCaseEvidence, governanceCases, governanceEvents, governanceOperators, governanceOverrides, shuffleEntries, shuffleSelectionResults,
+  auditLog, dropReservations, governanceCaseEvidence, governanceCases, governanceEvents, governanceOverrides, shuffleEntries, shuffleSelectionResults,
 } from '../db/schema';
 import { AppError } from '../lib/errors';
 import { canonicalJson, chainAudit, verifyChain, type AuditLink } from '../lib/audit-chain';

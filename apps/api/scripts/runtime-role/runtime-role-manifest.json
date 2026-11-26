@@ -1327,6 +1327,27 @@
     "SELECT"
    ],
    "reason": "G5: append-only operator assignment/revocation audit (read by the runtime; written by privileged tooling only)"
+  },
+  "sponsor_applications": {
+   "class": "RUNTIME",
+   "verbs": [
+    "SELECT"
+   ],
+   "reason": "G6: synthetic sponsor application state (read by the runtime; written by privileged tooling only; no route)"
+  },
+  "sponsor_application_events": {
+   "class": "RUNTIME",
+   "verbs": [
+    "SELECT"
+   ],
+   "reason": "G6: append-only sponsor application audit (read by the runtime)"
+  },
+  "drop_fulfilment_policies": {
+   "class": "RUNTIME",
+   "verbs": [
+    "SELECT"
+   ],
+   "reason": "G6: Owner-approved fulfilment policy versions (read by the runtime; authored by privileged tooling only)"
   }
  }
 }

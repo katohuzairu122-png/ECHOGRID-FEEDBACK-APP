@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { and, asc, desc, eq } from 'drizzle-orm';
 import { z } from 'zod';
 import type { Db } from '../db/client';
-import { GOVERNANCE_DECISIONS, GOVERNANCE_OVERRIDE_SCOPES, GOVERNANCE_POLICY_FAMILIES, GOVERNANCE_POLICY_KINDS, governanceDecisionPolicies } from '../db/schema';
+import { GOVERNANCE_DECISIONS, GOVERNANCE_OVERRIDE_SCOPES, type GOVERNANCE_POLICY_FAMILIES, type GOVERNANCE_POLICY_KINDS, governanceDecisionPolicies } from '../db/schema';
 import { AppError } from '../lib/errors';
 import { canonicalJson } from '../lib/audit-chain';
 
