@@ -1,5 +1,8 @@
 # Final consolidated registers (Owner decisions, legal, operations, translations)
 
+> **Update 2026-11-26 (R0):** the Owner's rulings on G-D1…G-D11 and the operating structure O-1…O-12 are recorded, with their implementation and evidence status, in `OWNER_RULINGS_R0_2026-11-26.md`. L-1…L-6 and H-1…H-4 remain PENDING; D02–D05 are not yet individually ruled. O-6 targets (RPO ≤ 1 h, RTO ≤ 4 h, PITR 7 days, daily backups, 30-day retention) are approved for feasibility assessment only; see `R1_INFRASTRUCTURE_PREFLIGHT_2026-11-26.md` §6. The earlier statement that production "RPO ≤ 24 h is not met" is withdrawn: PITR retention is not an RPO, and 24 h was only a proposal. The "Owner ruling: PENDING" markers below are historical and are superseded by the R0 record where a ruling is recorded.
+
+
 Date: 2026-11-26. Nothing here is approved; no approval is implied, and none has been fabricated. Existing rulings D-1..D-6 (TB-01/TSH-01) and the D01–D14 rows of `DECISION_REGISTER_BATCH_03.md` are NOT reopened; this register adds the decisions created by G1–G12 and re-states, once, the blockers the Owner must resolve. For every row the answer to "can development proceed?" is recorded as what was actually built behind fail-closed controls.
 
 ## A. Owner decision register (new, from G1–G12)

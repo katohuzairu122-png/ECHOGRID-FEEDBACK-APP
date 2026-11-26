@@ -1,20 +1,21 @@
 # Final release preparation record (G1–G12)
 
-Date: 2026-11-26. **Preparation only. Nothing in this document has been executed against any shared environment.** No merge, deployment, staging or production migration, remote branch, Cloudflare change, activation, real campaign, real operator assignment or legal publication has been performed.
+Date: 2026-11-26 (refreshed). **Preparation only. Nothing in this document has been executed against any shared environment.** No merge, deployment, staging or production migration, remote branch, Cloudflare change, activation, real campaign, real operator assignment or legal publication has been performed.
 
-## 1. Repository state this record describes
-`main` = `bafed5c` (TSH-04, #613, merged by the Owner). Open stack of draft PRs (each stacked on the previous; CI for stacked PRs runs only when a PR targets `main`, so hosted CI results exist only for #614 and #618 until the parents merge):
+## 1. Repository state this record describes (refreshed 2026-11-26)
+`main` = `e940ddb4f7f01ee740611964c8753f1a89f850c4`. **All pull requests #612–#621 are merged and none is open** (#615 merged into a stale branch; its content reached `main` through #621). CI on `main` at `e940ddb` completed successfully. The earlier stack table and suggested merge order are obsolete and have been removed.
 
-| PR | Group | Head | Base | Migration |
-|---|---|---|---|---|
-| #614 | G5 operator assignments + decision policies | `636dbd3` | main | 0104 |
-| #615 | G6 sponsor onboarding + fulfilment policy | `9feee2a` | #614 | 0105 |
-| #616 | G2 notification delivery persistence | `82cb6cb` | #615 | 0106 |
-| #617 | G4 acquisition evidence reader | `b56f943` | #616 | none |
-| #618 | G3 contained governance/sponsor components | `f88fc36` | main | none |
-| #619 | G8/G9 deletion readiness + closure obligations | `a1ce971` | #617 | none |
-| #620 | G10 legal drafts, config tests, rehearsal script, registers + this record + G12 chain-event correction | `12d6543 + this record` | #619 | none |
-Suggested merge order: #614 → #615 → #616 → #617 → #619 → #620, and #618 at any time. After each squash merge, merge `main` into the next branch (the content is identical, so it merges cleanly) and retarget it to `main` so hosted CI runs; verify the net diff against `main` before the Owner merges.
+| Merged | Group | Migration |
+|---|---|---|
+| #614 | G5 operator assignments + decision policies | 0104 |
+| #621 | G6 sponsor onboarding + fulfilment policy | 0105 |
+| #616 | G2 notification delivery persistence | 0106 |
+| #617 | G4 acquisition evidence reader | none |
+| #618 | G3 contained governance/sponsor components | none |
+| #619 | G8/G9 deletion readiness + closure obligations | none |
+| #620 | G10 legal drafts, rehearsal, config tests; G12 chain-event correction; registers | none |
+
+**Staging authorization scope:** the Community record P-1 ("0088–0090") is superseded for the Tentaship release by **0088–0106 (19 migrations; ledger 88 → 107)**. The exact refreshed request and pre-checks are in `R1_INFRASTRUCTURE_PREFLIGHT_2026-11-26.md` §8. Owner rulings are recorded in `OWNER_RULINGS_R0_2026-11-26.md`.
 
 ## 2. Migration manifest (pending range on shared environments: 0088 → 0106 = 19 migrations; ledger 88 → 107)
 Hashes are SHA-256 (first 16 hex) of the committed SQL files. A shared-environment ledger is verified by the READ-ONLY procedure in §4, never assumed.
