@@ -19,6 +19,7 @@ import { businessClosureRoutes } from './business-closure/business-closure.route
 import { platformBusinessClosureRoutes } from './platform/business-closure.routes';
 import { platformTentashipBadgeRoutes } from './platform/tentaship-badge.routes';
 import { platformShuffleRoutes } from './platform/shuffle.routes';
+import { platformDropsRoutes } from './platform/drops.routes';
 import { customerTentashipBadgeRoutes, businessTentashipBadgeRoutes } from './tentaship-badges/badge-routes';
 import { cashierActivityRoutes } from './cashier-activity/cashier-activity.routes';
 import { businessRoutes } from './businesses/business.routes';
@@ -266,6 +267,8 @@ api.route('/platform/business-closure', platformBusinessClosureRoutes);
 api.route('/platform/tentaship-badges', platformTentashipBadgeRoutes);
 // TSH-03: Tentaship Shuffle campaign configuration (platform admin). Every path is a generic 404 unless TENTASHIP_SHUFFLE_ENABLED === 'true'. No participation or release exists.
 api.route('/platform/shuffle', platformShuffleRoutes);
+// TDP-02: Tentaship Drops sponsorship and inventory (platform admin, synthetic harness). Generic 404 unless TENTASHIP_DROPS_ENABLED === 'true'. No payments, sponsor or customer routes.
+api.route('/platform/drops', platformDropsRoutes);
 // TB-03: customer and business badge reads + server-side evaluation. Generic 404 unless TENTASHIP_BADGES_ENABLED === 'true'.
 api.route('/tentaship-badges/me', customerTentashipBadgeRoutes);
 api.route('/tentaship-badges/business', businessTentashipBadgeRoutes);

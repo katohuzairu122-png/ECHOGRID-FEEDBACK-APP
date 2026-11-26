@@ -1222,6 +1222,48 @@
     "SELECT"
    ],
    "reason": "TSH-04: one append-only synthetic selection record per version with replay-verifiable transcript"
+  },
+  "drop_sponsorships": {
+   "class": "RUNTIME",
+   "verbs": [
+    "INSERT",
+    "SELECT",
+    "UPDATE"
+   ],
+   "reason": "TDP-02: synthetic-only sponsorship; UPDATE is the guarded offer status machine with independent review; no DELETE/TRUNCATE"
+  },
+  "drop_sponsorship_versions": {
+   "class": "RUNTIME",
+   "verbs": [
+    "INSERT",
+    "SELECT"
+   ],
+   "reason": "TDP-02: immutable descriptive sponsorship versions (draft only); no price/payment fields"
+  },
+  "drop_inventory": {
+   "class": "RUNTIME",
+   "verbs": [
+    "INSERT",
+    "SELECT"
+   ],
+   "reason": "TDP-02: single authoritative inventory row; counters change only via the reservation trigger (no runtime UPDATE grant)"
+  },
+  "drop_reservations": {
+   "class": "RUNTIME",
+   "verbs": [
+    "INSERT",
+    "SELECT",
+    "UPDATE"
+   ],
+   "reason": "TDP-02: allocation state machine; UPDATE is the guarded unit status; atomic inventory via trigger; no DELETE/TRUNCATE"
+  },
+  "drop_events": {
+   "class": "RUNTIME",
+   "verbs": [
+    "INSERT",
+    "SELECT"
+   ],
+   "reason": "TDP-02: hash-chained append-only evidence; linkage enforced by trigger"
   }
  }
 }

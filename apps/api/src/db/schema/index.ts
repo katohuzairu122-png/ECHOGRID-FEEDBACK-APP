@@ -86,3 +86,4 @@ export * from './business-profiles';
 export * from './b2b-participation';
 
 export * from './community-terms';
+export * from './drops';
