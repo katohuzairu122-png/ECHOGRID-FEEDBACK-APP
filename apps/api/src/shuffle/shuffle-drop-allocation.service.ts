@@ -28,7 +28,7 @@ export class ShuffleDropAllocationService {
     if (!sel) throw conflict('No selection has been recorded for this campaign version.', 'SELECTION_NOT_RECORDED');
     // the selection must verify (chain + replay) BEFORE anything is allocated from it
     const ev = await new ShuffleParticipationService(this.db).verifyEvidence(versionId);
-    if (!ev.chainOk || ev.selectionOk !== true) throw conflict('The recorded selection evidence does not verify, so nothing is allocated from it.', 'SELECTION_EVIDENCE_INVALID');
+    if (!ev.chainOk || ev.selectionOk !== true || ev.linksOk === false) throw conflict('The recorded selection evidence does not verify, so nothing is allocated from it.', 'SELECTION_EVIDENCE_INVALID');
     const entries = await this.db.select({ id: shuffleEntries.id, customerId: shuffleEntries.customerId, status: shuffleEntries.status }).from(shuffleEntries).where(inArray(shuffleEntries.id, sel.selectedEntryIds));
     const outcomes: EntryOutcome[] = [];
     for (const e of [...entries].sort((a, b) => a.id.localeCompare(b.id))) outcomes.push(await this.one(sel.id, versionId, sponsorshipId, e, holdExpiresAt, ctx));
@@ -51,6 +51,7 @@ export class ShuffleDropAllocationService {
         const res = await drops.allocate(reserved.reservation.id, ctx);                           // re-validates eligibility immediately before allocation
         void res;
         await db.insert(shuffleDropAllocations).values({ selectionResultId: selectionId, campaignVersionId: versionId, entryId: e.id, customerId: e.customerId, sponsorshipId, reservationId: reserved.reservation.id, createdByUserId: ctx.actorUserId });
+        await new ShuffleParticipationService(db).recordChainEvent(db, versionId, { type: 'drop_allocation_linked', entryId: e.id, sponsorshipId, reservationId: reserved.reservation.id }, ctx); // tamper-evident link (TSH-01 section 8)
         await db.insert(auditLog).values({ businessId: null, actorUserId: ctx.actorUserId, action: 'shuffle_drop_allocation.linked', entityType: 'shuffle_campaign', entityId: versionId, metadata: { outcome: 'success', synthetic: true, entryId: e.id, sponsorshipId, reservationId: reserved.reservation.id }, ipAddress: ctx.ipAddress ?? null, userAgent: ctx.userAgent ?? null });
         return { entryId: e.id, outcome: 'linked' as const, reservationId: reserved.reservation.id };
       });

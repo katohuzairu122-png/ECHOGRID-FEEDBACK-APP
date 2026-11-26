@@ -2,7 +2,7 @@ import { and, asc, eq, sql } from 'drizzle-orm';
 import type { Db } from '../db/client';
 import {
   auditLog, qualificationRuleVersions, shuffleAllocationEvents, shuffleCampaignVersions, shuffleCampaigns, shuffleEligibilitySnapshots, shuffleEntries,
-  shuffleInvitationEvents, shuffleInvitations, shuffleNotificationIntents, shuffleSelectionResults, type ShuffleInvitationStatus,
+  shuffleDropAllocations, shuffleInvitationEvents, shuffleInvitations, shuffleNotificationIntents, shuffleSelectionResults, type ShuffleInvitationStatus,
 } from '../db/schema';
 import { AppError } from '../lib/errors';
 import { evaluateRuleForCustomer } from '../qualification/qualification-evaluator';
@@ -29,6 +29,9 @@ export class ShuffleParticipationService {
   }
 
   private async lock(tx: Db, key: string) { await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${key}, 0))`); }
+
+  /** Appends one event to the version's hash chain (serialised per version). Used by the selection->allocation orchestration so the link is tamper-evident (TSH-01 section 8). */
+  recordChainEvent(tx: Db, versionId: string, event: Record<string, unknown>, ctx: Actor) { return this.append(tx, versionId, event, ctx); }
 
   private async append(tx: Db, versionId: string, event: Record<string, unknown>, ctx: Actor) {
     await this.lock(tx, `shuffle_chain:${versionId}`);
@@ -208,7 +211,11 @@ export class ShuffleParticipationService {
       selectionOk = !!ev && ev.inputCommitment === sel.inputCommitment && ev.resultCommitment === sel.resultCommitment && Array.isArray(ev.entrantIds)
         && verifySelection({ entrantIds: ev.entrantIds, winnerCount: sel.winnerCount }, { selectedIds: sel.selectedEntryIds, entrantCount: sel.entrantCount, inputCommitment: sel.inputCommitment, resultCommitment: sel.resultCommitment, transcript: sel.transcript });
     }
-    return { events: links.length, chainOk, selectionRecorded: !!sel, selectionOk };
+    // G12: every recorded selection->allocation link must have exactly one chain event and vice versa (a deleted or invented link row is detected)
+    const linkEvents = links.filter((l) => l.event.type === 'drop_allocation_linked').map((l) => String(l.event.reservationId)).sort();
+    const linkRows = (await this.db.select({ r: shuffleDropAllocations.reservationId }).from(shuffleDropAllocations).where(eq(shuffleDropAllocations.campaignVersionId, versionId))).map((x) => x.r).sort();
+    const linksOk: boolean | null = linkEvents.length === 0 && linkRows.length === 0 ? null : JSON.stringify(linkEvents) === JSON.stringify(linkRows);
+    return { events: links.length, chainOk, selectionRecorded: !!sel, selectionOk, linksOk };
   }
 
   async counts(versionId: string) {
