@@ -150,7 +150,7 @@ export default function LoginPage() {
           </form>
           <p className={styles.signup}>
             {t('noAccount')}{' '}
-            <Link href={`/signup?next=${encodeURIComponent(next)}`} className={styles.textLink}>
+            <Link href={next.startsWith('/invite/') ? `/signup?next=${encodeURIComponent(next)}` : '/signup'} className={styles.textLink}>
               {t('signupLink')}
             </Link>
           </p>
