@@ -32,6 +32,7 @@ import { NotificationService } from '../notifications/notification.service';
 import { LoyaltyActionResolver } from './loyalty-action-resolver';
 import { LoyaltyProgramService } from './programs/program.service';
 import { listAvailableEntitlements, redeemAccountEntitlement } from './programs/entitlement.service';
+import { assertRewardCanChange } from './programs/reward-usage.service';
 import { getPurchase, listPurchases } from './programs/purchase-history.service';
 import { previewPurchases, isProgramAvailable } from '@echo-grid-feedback/shared-types';
 import { z } from 'zod';
@@ -586,6 +587,13 @@ loyaltyRoutes.post('/rewards', requirePermission('rewards:manage'), requireBusin
 loyaltyRoutes.patch('/rewards/:id', requirePermission('rewards:manage'), requireBusinessWideAccess, async (c) => {
   const body = await parseJsonBody(c.req.raw, updateRewardSchema);
   return withDb(c, async (db) => {
+    // LPC-09: a reward the active programme pays out cannot be switched off, or changed to a type the programme does not allow, from under it.
+    const current = await createRepositories(db).loyaltyRewards.findById(c.req.param('id'), c.get('businessId'));
+    const switchedOff = body.status !== undefined && body.status !== 'active' && body.status !== current?.status;
+    const retyped = body.type !== undefined && current !== undefined && body.type !== current.type;
+    if (switchedOff || retyped) {
+      await assertRewardCanChange(db, { businessId: c.get('businessId'), rewardId: c.req.param('id'), change: 'deactivate' });
+    }
     const reward = await new LoyaltyRewardService(createRepositories(db)).update(
       c.req.param('id'),
       c.get('businessId'),
@@ -600,6 +608,7 @@ loyaltyRoutes.patch('/rewards/:id', requirePermission('rewards:manage'), require
 loyaltyRoutes.delete('/rewards/:id', requirePermission('rewards:manage'), requireBusinessWideAccess, async (c) => {
   const id = c.req.param('id');
   return withDb(c, async (db) => {
+    await assertRewardCanChange(db, { businessId: c.get('businessId'), rewardId: id, change: 'remove' });
     await new LoyaltyRewardService(createRepositories(db)).remove(id, c.get('businessId'), c.get('userId'));
     c.set('auditMetadata', { action: 'loyalty.reward_removed', entityType: 'loyalty_reward', entityId: id });
     return c.body(null, 204);
