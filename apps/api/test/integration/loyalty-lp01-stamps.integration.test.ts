@@ -7,6 +7,7 @@ import { LoyaltyAccountService } from '../../src/loyalty/loyalty-account.service
 import { LoyaltyProgramService } from '../../src/loyalty/programs/program.service';
 import { consumeEntitlement } from '../../src/loyalty/programs/stamp.service';
 import { listAvailableEntitlements, redeemAccountEntitlement } from '../../src/loyalty/programs/entitlement.service';
+import { customerProgrammeCard } from '../../src/loyalty/programs/programme-card.service';
 import { appDbOf } from '../helpers/runtime-db';
 
 /** LP-01 Buy X, get Y free: stamp card behaviour on a disposable PostgreSQL database (RW-D4). */
@@ -191,6 +192,28 @@ describe.skipIf(!process.env.DATABASE_URL)('LP-01 stamp card (integration)', () 
     await expect(redeemAccountEntitlement(db, { businessId, accountId: account, entitlementId: listed[0]!.id, redeemedBy: ownerId, branchId })).resolves.toMatchObject({ rewardId });
     await expect(redeemAccountEntitlement(db, { businessId, accountId: account, entitlementId: listed[0]!.id, redeemedBy: ownerId, branchId })).rejects.toMatchObject({ code: 'ENTITLEMENT_NOT_AVAILABLE' });
     expect(await listAvailableEntitlements(db, { businessId, accountId: account, branchId })).toEqual([]);
+  });
+
+  it('LPC-07: the customer sees their own stamps and waiting rewards, and nothing of anyone else', async () => {
+    const db = buildDb(admin);
+    const account = await member();
+    const other = await member();
+    const customerOf = async (accountId: string) => (await admin.query(`select customer_id from loyalty_accounts where id=$1`, [accountId])).rows[0].customer_id as string;
+    for (const i of [1, 2]) await buy(loyalty, account, 5, `lpc7-${run}-${i}`);
+    const card = await customerProgrammeCard(db, { customerId: await customerOf(account), businessId });
+    expect(card.programme).toMatchObject({ type: 'LP-01', view: { kind: 'stamps', stamps: 2, threshold: 3, rewardId } });
+    expect(card.programme!.rewardNames[rewardId]).toBe('Free coffee');
+    expect(card.earnedRewards).toEqual([]);
+    await buy(loyalty, account, 5, `lpc7-${run}-3`);
+    const done = await customerProgrammeCard(db, { customerId: await customerOf(account), businessId });
+    expect(done.programme!.view).toMatchObject({ stamps: 0, completedCards: 1 });
+    expect(done.earnedRewards).toEqual([{ rewardName: 'Free coffee', expiresAt: null }]);
+    expect(JSON.stringify(done)).not.toMatch(/loyaltyAccountId|customerId|"id"/);
+    // Another customer has their own empty card; a non-member and another business's customer get a uniform not-found.
+    const theirs = await customerProgrammeCard(db, { customerId: await customerOf(other), businessId });
+    expect(theirs.programme!.view).toMatchObject({ stamps: 0, completedCards: 0 });
+    expect(theirs.earnedRewards).toEqual([]);
+    await expect(customerProgrammeCard(db, { customerId: await customerOf(account), businessId: otherBusinessId })).rejects.toMatchObject({ code: 'LOYALTY_ACCOUNT_NOT_FOUND' });
   });
 
   it('the database rejects an entitlement or progress row that crosses businesses', async () => {
