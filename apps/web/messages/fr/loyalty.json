@@ -217,7 +217,20 @@
         "redemptionNote": "La remise d’une récompense nécessite le code QR du client. Scannez-le pour l’échanger.",
         "done": "Action terminée. Recherchez à nouveau le client avant une autre action."
       },
-      "cashierAppLink": "Application caissier : l’ouvrir ou l’installer, sessions de connexion et comptes caissiers"
+      "cashierAppLink": "Application caissier : l’ouvrir ou l’installer, sessions de connexion et comptes caissiers",
+      "card": {
+        "title": "Carte du membre",
+        "points": "Points",
+        "visits": "Visites",
+        "lastVisit": "Dernière visite : {date}",
+        "rewardsTitle": "Récompenses",
+        "noRewards": "Ce commerce n’a pas encore configuré de récompenses.",
+        "cost": "{count} points",
+        "ready": "Prêt à échanger",
+        "needMore": "Encore {count} points nécessaires",
+        "notMemberTitle": "Pas encore membre",
+        "notMemberBody": "Ce client n’a pas rejoint ce commerce. Demandez-lui de scanner le code QR du commerce et de s’inscrire, puis scannez de nouveau son code QR."
+      }
     }
   },
   "customer": {

@@ -217,7 +217,20 @@
         "redemptionNote": "La entrega de una recompensa requiere el código QR del cliente. Escanéelo para canjear.",
         "done": "Acción completada. Busque de nuevo al cliente antes de otra acción."
       },
-      "cashierAppLink": "Aplicación de caja: abrirla o instalarla, sesiones de acceso y cuentas de cajero"
+      "cashierAppLink": "Aplicación de caja: abrirla o instalarla, sesiones de acceso y cuentas de cajero",
+      "card": {
+        "title": "Tarjeta del miembro",
+        "points": "Puntos",
+        "visits": "Visitas",
+        "lastVisit": "Última visita: {date}",
+        "rewardsTitle": "Recompensas",
+        "noRewards": "Este negocio aún no ha configurado recompensas.",
+        "cost": "{count} puntos",
+        "ready": "Listo para canjear",
+        "needMore": "Faltan {count} puntos",
+        "notMemberTitle": "Aún no es miembro",
+        "notMemberBody": "Este cliente no se ha unido a este negocio. Pídale que escanee el código QR del negocio y se una; luego escanee su código QR de nuevo."
+      }
     }
   },
   "customer": {

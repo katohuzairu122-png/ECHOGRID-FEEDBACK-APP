@@ -19,6 +19,24 @@ export type LoyaltyResolvedAction =
   | 'REQUEST_ORPHAN_SETTLEMENT_ACCESS'
   | 'SETTLE_ORPHAN_REWARD';
 
+/**
+ * What a cashier sees after scanning a member's QR: the member's card at THIS business only. Deliberately minimal: a first name
+ * (never an id, phone or email), the points balance, the tier name, visit count and the active points rewards of this business with
+ * whether the balance already covers them. It is returned only to a staff member who may serve loyalty AND only for an active
+ * membership at the scanning business, so it can never reveal another business's relationship or any orphan value.
+ */
+export interface StaffCustomerCard {
+  displayName: string;
+  points: number;
+  tier: { name: string } | null;
+  visitCount: number;
+  lastVisitAt: string | null;
+  rewards: Array<{ id: string; name: string; pointsCost: number; enoughPoints: boolean; pointsNeeded: number }>;
+}
+
+/** The cashier card lists at most this many rewards (cheapest first); a business rarely has more, and the screen must stay short. */
+const STAFF_CARD_MAX_REWARDS = 12;
+
 export interface ResolvedSurveyCampaign {
   campaignId: string;
   surveyId: string;
@@ -40,6 +58,8 @@ export class LoyaltyActionResolver {
       | 'surveys'
       | 'businesses'
       | 'orphanRewardClaims'
+      | 'loyaltyTiers'
+      | 'loyaltyRewards'
     >,
     private readonly secrets: Pick<Bindings, 'QR_TOKEN_SECRET' | 'QR_TOKEN_SECRET_PREVIOUS'>,
   ) {}
@@ -48,11 +68,14 @@ export class LoyaltyActionResolver {
     customerQrToken: string;
     businessId: string;
     permissions: Set<string>;
+    /** The scanning branch, so a branch-specific reward is listed only where it can be redeemed. */
+    branchId?: string | undefined;
   }): Promise<{
     customerId: string;
     loyaltyAccountId: string | null;
     membershipStatus: 'active' | 'none';
     actions: LoyaltyResolvedAction[];
+    card: StaffCustomerCard | null;
   }> {
     let payload;
     try {
@@ -93,11 +116,57 @@ export class LoyaltyActionResolver {
       actions.push('REQUEST_ORPHAN_SETTLEMENT_ACCESS');
     }
 
+    const card =
+      membership && account && actions.includes('VIEW_ALLOWED_MEMBERSHIP_STATE')
+        ? await this.buildStaffCard(customer.fullName, account, input.businessId, input.branchId)
+        : null;
+
     return {
       customerId: customer.id,
       loyaltyAccountId: account?.id ?? null,
       membershipStatus: membership ? 'active' : 'none',
       actions,
+      card,
+    };
+  }
+
+  private async buildStaffCard(
+    fullName: string | null | undefined,
+    account: { points: number; tierId: string | null; visitCount: number; lastVisitAt: Date | null; status: string },
+    businessId: string,
+    branchId: string | undefined,
+  ): Promise<StaffCustomerCard> {
+    const firstName = fullName?.trim().split(/\s+/)[0];
+    const tier = account.tierId ? await this.repos.loyaltyTiers.findById(account.tierId, businessId) : undefined;
+    const now = Date.now();
+    const rewards = (await this.repos.loyaltyRewards.listForBusiness(businessId))
+      .filter(
+        (reward) =>
+          reward.type === 'points' &&
+          reward.pointsCost !== null &&
+          (reward.branchId === null || reward.branchId === branchId) &&
+          (!reward.startDate || reward.startDate.getTime() <= now) &&
+          (!reward.expiryDate || reward.expiryDate.getTime() > now),
+      )
+      .slice(0, STAFF_CARD_MAX_REWARDS)
+      .map((reward) => {
+        const pointsCost = reward.pointsCost as number;
+        const enoughPoints = account.status !== 'suspended' && account.points >= pointsCost;
+        return {
+          id: reward.id,
+          name: reward.name,
+          pointsCost,
+          enoughPoints,
+          pointsNeeded: Math.max(0, pointsCost - account.points),
+        };
+      });
+    return {
+      displayName: firstName ? firstName : 'Member',
+      points: account.points,
+      tier: tier ? { name: tier.name } : null,
+      visitCount: account.visitCount,
+      lastVisitAt: account.lastVisitAt ? account.lastVisitAt.toISOString() : null,
+      rewards,
     };
   }
 
