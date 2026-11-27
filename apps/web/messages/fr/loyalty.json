@@ -666,6 +666,23 @@
         "orbit": "Orbite"
       }
     },
+    "scanBusiness": {
+      "title": "Rejoindre un commerce",
+      "body": "Scannez le code QR d’un commerce avec votre caméra pour rejoindre son programme de fidélité. Le scan ouvre seulement la page du commerce ; vous choisissez de le rejoindre ou non.",
+      "start": "Scanner un code QR de commerce",
+      "notBusinessQr": "Ce n’est pas un code QR de commerce. Dirigez la caméra vers le code QR affiché par le commerce.",
+      "scan": "Scanner un code QR de commerce",
+      "scanLarge": "Scanner un code QR de commerce",
+      "stop": "Arrêter la caméra",
+      "scanning": "Dirigez la caméra vers le code QR du commerce.",
+      "unsupported": "Le scan par caméra n’est pas disponible dans ce navigateur. Ouvrez l’application caméra de votre téléphone et scannez le code QR du commerce.",
+      "insecure": "La caméra nécessite une connexion sécurisée (HTTPS). Ouvrez l’application caméra de votre téléphone et scannez le code QR du commerce.",
+      "cameraDenied": "La caméra n’a pas pu être ouverte. Autorisez l’accès à la caméra dans les réglages du navigateur et réessayez.",
+      "cameraRequesting": "En attente de l’autorisation de la caméra…",
+      "cameraMissing": "Aucune caméra n’a été trouvée sur cet appareil.",
+      "cameraUnavailable": "La caméra n’a pas pu démarrer. Fermez les autres applications qui l’utilisent et réessayez.",
+      "viewfinder": "Vue de la caméra pour scanner un code QR de commerce"
+    },
     "wallet": {
       "title": "Mes programmes de fidélité",
       "intro": "Un seul compte pour tous les programmes de fidélité que vous avez rejoints. Chaque entreprise garde sa propre adhésion, ses points et ses récompenses.",

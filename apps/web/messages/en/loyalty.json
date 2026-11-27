@@ -666,6 +666,23 @@
         "orbit": "Orbit"
       }
     },
+    "scanBusiness": {
+      "title": "Join a business",
+      "body": "Scan a business’s QR code with your camera to join its loyalty programme. Scanning only opens the business page; you choose whether to join.",
+      "start": "Scan a business QR code",
+      "notBusinessQr": "That is not a business QR code. Point the camera at the QR code shown by the business.",
+      "scan": "Scan a business QR code",
+      "scanLarge": "Scan a business QR code",
+      "stop": "Stop camera",
+      "scanning": "Point the camera at the business’s QR code.",
+      "unsupported": "Camera scanning is not available in this browser. Open your phone’s camera app and scan the business QR code instead.",
+      "insecure": "The camera needs a secure (HTTPS) connection. Open your phone’s camera app and scan the business QR code instead.",
+      "cameraDenied": "The camera could not be opened. Allow camera access in your browser settings and try again.",
+      "cameraRequesting": "Waiting for camera permission…",
+      "cameraMissing": "No camera was found on this device.",
+      "cameraUnavailable": "The camera could not start. Close other apps using it and try again.",
+      "viewfinder": "Camera view for scanning a business QR code"
+    },
     "wallet": {
       "title": "My loyalties",
       "intro": "One account for every loyalty program you have joined. Each business keeps its own membership, points and rewards.",

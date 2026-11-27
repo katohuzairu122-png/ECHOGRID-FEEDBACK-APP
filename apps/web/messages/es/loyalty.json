@@ -666,6 +666,23 @@
         "orbit": "Órbita"
       }
     },
+    "scanBusiness": {
+      "title": "Únete a un negocio",
+      "body": "Escanea el código QR de un negocio con tu cámara para unirte a su programa de fidelidad. Escanear solo abre la página del negocio; tú decides si te unes.",
+      "start": "Escanear un código QR de negocio",
+      "notBusinessQr": "Ese no es un código QR de negocio. Apunta la cámara al código QR que muestra el negocio.",
+      "scan": "Escanear un código QR de negocio",
+      "scanLarge": "Escanear un código QR de negocio",
+      "stop": "Detener la cámara",
+      "scanning": "Apunta la cámara al código QR del negocio.",
+      "unsupported": "El escaneo con cámara no está disponible en este navegador. Abre la app de cámara de tu teléfono y escanea el código QR del negocio.",
+      "insecure": "La cámara necesita una conexión segura (HTTPS). Abre la app de cámara de tu teléfono y escanea el código QR del negocio.",
+      "cameraDenied": "No se pudo abrir la cámara. Permite el acceso a la cámara en los ajustes del navegador e inténtalo de nuevo.",
+      "cameraRequesting": "Esperando permiso de la cámara…",
+      "cameraMissing": "No se encontró ninguna cámara en este dispositivo.",
+      "cameraUnavailable": "No se pudo iniciar la cámara. Cierra otras apps que la usen e inténtalo de nuevo.",
+      "viewfinder": "Vista de la cámara para escanear un código QR de negocio"
+    },
     "wallet": {
       "title": "Mis programas de fidelidad",
       "intro": "Una sola cuenta para todos los programas de fidelidad a los que te has unido. Cada negocio conserva su propia membresía, puntos y recompensas.",

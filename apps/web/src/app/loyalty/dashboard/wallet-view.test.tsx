@@ -1,8 +1,11 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { screen, within } from '@testing-library/react';
 import { renderWithIntl } from '@/test-utils';
 import type { LoyaltyAccountDto } from '@echo-grid-feedback/shared-types';
 import { LoyaltyWalletUnavailable, LoyaltyWalletView } from './wallet-view';
+
+// The wallet now hosts the scan-a-business card, which uses the router only when a code is scanned.
+vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn() }) }));
 
 const account = (
   over: Partial<LoyaltyAccountDto> & { id: string; businessId: string },
@@ -65,6 +68,16 @@ describe('LoyaltyWalletView', () => {
     ).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /join/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('list')).not.toBeInTheDocument();
+  });
+
+  it('offers an in-app business QR scan button, with and without memberships', () => {
+    const { unmount } = renderWithIntl(<LoyaltyWalletView entries={[]} />);
+    expect(screen.getByRole('button', { name: /scan a business qr code/i })).toBeInTheDocument();
+    unmount();
+    renderWithIntl(
+      <LoyaltyWalletView entries={[{ account: account({ id: 'a1', businessId: 'b1' }), businessName: 'Cafe One' }]} />,
+    );
+    expect(screen.getByRole('button', { name: /scan a business qr code/i })).toBeInTheDocument();
   });
 
   it('keeps the QR and settlements shortcuts, translated, and shows singular and never-visited text', () => {

@@ -23,12 +23,15 @@ function getDetectorCtor(): BarcodeDetectorCtor | undefined {
 export function QrCameraScanner({
   onDetect,
   large = false,
+  namespace = 'loyalty.staff.serve',
 }: {
   onDetect: (value: string) => void;
+  /** Message namespace for the scanner's wording (cashier wording by default; the customer account passes its own). */
+  namespace?: 'loyalty.staff.serve' | 'loyalty.customer.scanBusiness';
   /** Cashier landing: one very large primary Scan button. */
   large?: boolean;
 }) {
-  const t = useTranslations('loyalty.staff.serve');
+  const t = useTranslations(namespace as 'loyalty.staff.serve');
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
