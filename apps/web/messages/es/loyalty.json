@@ -1070,6 +1070,7 @@
     "form": {
       "chooseReward": "Elige una recompensa",
       "noRewards": "Crea primero una recompensa activa de artículo gratis, descuento o cupón (Fidelidad, Recompensas); los premios se eligen de tu catálogo.",
+      "createRewardLink": "Crear una recompensa",
       "pointsPerUnit": "Puntos por {currency} gastado",
       "pointsPerUnitHint": "Entero o decimal, por ejemplo 1,5. Las fracciones de punto se descartan.",
       "pointsPerCheckin": "Puntos por registro de visita",
