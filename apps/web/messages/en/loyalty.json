@@ -263,6 +263,8 @@
       }
     },
     "shell": {
+      "signedInAs": "Signed in as",
+      "myProfile": "My profile",
       "brand": "My loyalties",
       "logout": "Log out"
     },
@@ -622,6 +624,47 @@
         }
       },
       "surveyFallback": "Survey"
+    },
+    "profile": {
+      "title": "My profile",
+      "description": "How you appear on the platform. Your account details and security are under Settings.",
+      "unavailableTitle": "Profile is not available right now",
+      "unavailableBody": "Please try again later. Your sign-in and loyalty accounts are not affected.",
+      "noName": "No name set",
+      "signedInWith": "Signed in with {login}",
+      "editTitle": "Edit your profile",
+      "privacy": "Your profile is private. A business you have joined can see only your display name and avatar.",
+      "avatarLabel": "Avatar",
+      "avatarHint": "Choose an avatar. With none, your initials are shown.",
+      "avatarNone": "Initials",
+      "displayNameLabel": "Display name",
+      "displayNameHint": "Letters, numbers, spaces and . ' - _ only. No links or email addresses.",
+      "bioLabel": "Bio",
+      "bioHint": "A short note about you, up to 280 characters. Only you can see it.",
+      "save": "Save profile",
+      "saving": "Saving…",
+      "saved": "Profile saved.",
+      "settingsLink": "Account details and security are in Settings",
+      "errors": {
+        "invalid_name": "That display name is not allowed. Use letters, numbers, spaces and . ' - _ only, and no links or email addresses.",
+        "invalid_bio": "The bio is too long or contains characters that are not allowed.",
+        "invalid": "Check your choices and try again.",
+        "unavailable": "The profile could not be saved. Try again later."
+      },
+      "avatars": {
+        "sun": "Sun",
+        "moon": "Moon",
+        "star": "Star",
+        "leaf": "Leaf",
+        "wave": "Wave",
+        "flame": "Flame",
+        "bolt": "Lightning",
+        "heart": "Heart",
+        "cloud": "Cloud",
+        "peak": "Peak",
+        "bloom": "Bloom",
+        "orbit": "Orbit"
+      }
     },
     "wallet": {
       "title": "My loyalties",

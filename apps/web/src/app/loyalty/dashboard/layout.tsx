@@ -8,6 +8,8 @@ import { WorkspaceShell } from '@/components/workspace/workspace-shell';
 import { WorkspaceNavigation } from '@/components/workspace/workspace-navigation';
 import { isCustomerDeletionWebEnabled } from '@/lib/customer-deletion-config';
 import { getCustomerDeletionStatus } from '@/lib/actions/customer-deletion';
+import { loadGlobalProfile } from '@/lib/global-profile-server';
+import { SignedInAs } from '@/components/profile/signed-in-as';
 
 /** Customer counterpart to app/dashboard/layout.tsx -- same defense-in-depth
  * shape (middleware already scopes /loyalty as public, so this layout is
@@ -26,12 +28,18 @@ export default async function LoyaltyDashboardLayout({ children }: { children: R
 
   const t = await getTranslations('loyalty.customer.shell');
   const shell = await getTranslations('common.workspace');
+  const profile = await loadGlobalProfile();
 
   return (
     <WorkspaceShell
       footer={null}
       skipLabel={shell('skip')}
-      context={<p className="text-sm font-semibold">{shell('customer')}</p>}
+      context={
+        <SignedInAs
+          profile={profile}
+          labels={{ fallback: shell('customer'), signedInAs: t('signedInAs'), profile: t('myProfile') }}
+        />
+      }
       navigation={
         <WorkspaceNavigation
           home="/loyalty/dashboard"
@@ -51,6 +59,7 @@ export default async function LoyaltyDashboardLayout({ children }: { children: R
             { href: '/loyalty/dashboard/surveys', label: shell('surveys'), icon: 'chart' },
             { href: '/loyalty/dashboard/qr', label: shell('qr'), icon: 'qr' },
             { href: '/loyalty/dashboard/settlements', label: shell('settlements'), icon: 'gift' },
+            { href: '/loyalty/dashboard/profile', label: t('myProfile'), icon: 'users' },
             { href: '/loyalty/dashboard/settings', label: shell('settings'), icon: 'settings' },
             { href: '/support', label: shell('support'), icon: 'chat' },
           ]}
