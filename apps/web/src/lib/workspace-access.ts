@@ -57,6 +57,14 @@ export function isCounterStaff(access: MyAccess): boolean {
   return classifyWorkspace(access) === 'cashier';
 }
 
+/**
+ * LPC-10: who is shown the purchase-reversal screens: management workspaces holding loyalty:adjust (the permission the API requires, business-wide).
+ * Presentation only: the API enforces the same permission, and a cashier token is refused there. Fails closed.
+ */
+export function canReversePurchase(access: MyAccess): boolean {
+  return access.known && classifyWorkspace(access) === 'management' && access.permissions.has('loyalty:adjust');
+}
+
 /** Programme configuration (tiers, rewards, manual adjustment): requires rewards:manage. Fails closed. */
 export function canConfigureProgramme(access: MyAccess): boolean {
   return access.known && access.permissions.has('rewards:manage');

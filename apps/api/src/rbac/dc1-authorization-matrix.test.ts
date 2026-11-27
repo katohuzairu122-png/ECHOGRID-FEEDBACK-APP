@@ -242,6 +242,9 @@ const ROUTES: Route[] = [
     body: { points: 5, notes: 'x' },
     allowedFor: 'adjust',
   },
+  { label: 'purchase history', method: 'GET', path: '/loyalty/purchases', allowedFor: 'adjust' },
+  { label: 'purchase detail', method: 'GET', path: '/loyalty/purchases/6f0f1c5e-0000-4000-8000-000000000004', allowedFor: 'adjust' },
+  { label: 'purchase reversal preview', method: 'GET', path: '/loyalty/purchases/6f0f1c5e-0000-4000-8000-000000000004/reversal-preview', allowedFor: 'adjust' },
   { label: 'purchase reverse', method: 'POST', path: '/loyalty/purchases/6f0f1c5e-0000-4000-8000-000000000004/reverse', body: { reason: 'Refunded at the counter' }, allowedFor: 'adjust' },
   { label: 'settings read', method: 'GET', path: '/loyalty/settings', allowedFor: 'programmeRead' },
   { label: 'tiers read', method: 'GET', path: '/loyalty/tiers', allowedFor: 'programmeRead' },
@@ -476,6 +479,8 @@ describe('route-to-permission matrix', () => {
     for (const label of [
       'manual adjustment',
       'purchase reverse',
+      'purchase history',
+      'purchase reversal preview',
       'record purchase',
       'resolve QR',
       'account directory',
@@ -574,6 +579,11 @@ describe('no customer-directory or enumeration route exists', () => {
         '/programmes',
         '/programmes/:id',
         '/programmes/:id/history',
+        // LPC-10: the Owner's purchase history for reversals. Reviewed: loyalty:adjust plus business-wide access (never a cashier), always scoped to the
+        // caller's business, paged (max 50), and showing customer names only as the existing account directory already does.
+        '/purchases',
+        '/purchases/:purchaseEventId',
+        '/purchases/:purchaseEventId/reversal-preview',
         '/redemptions/:code',
         '/rewards',
         '/rewards/:id/dashboard',

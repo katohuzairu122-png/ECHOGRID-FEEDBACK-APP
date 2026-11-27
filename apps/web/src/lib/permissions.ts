@@ -7,6 +7,7 @@ import { classifyWorkspace, type MyAccess } from './workspace-access';
 export type { MyAccess, WorkspaceKind } from './workspace-access';
 export {
   canConfigureProgramme,
+  canReversePurchase,
   canViewCommunityHub,
   classifyWorkspace,
   isCounterStaff,
