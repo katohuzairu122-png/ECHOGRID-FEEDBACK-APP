@@ -10,6 +10,7 @@ import {
 import type { Database } from '../../db/client';
 import {
   businesses,
+  loyaltyRewards,
   loyaltyProgramEvents,
   loyaltyProgramProgress,
   loyaltyProgramSetup,
@@ -110,6 +111,7 @@ export class LoyaltyProgramService {
       await this.lockBusiness(tx, businessId);
       const currency = await this.currencyOf(tx, businessId);
       const checked = this.requireValidConfig(input.type, input.config, currency);
+      await this.requireValidReferences(tx, businessId, input.type, checked);
       const [program] = await tx
         .insert(loyaltyPrograms)
         .values({ businessId, type: input.type as LoyaltyProgramType, status: 'draft', currentVersion: 1, createdBy: actorUserId })
@@ -132,6 +134,7 @@ export class LoyaltyProgramService {
       }
       const currency = await this.currencyOf(tx, businessId);
       const checked = this.requireValidConfig(program.type, config, currency);
+      await this.requireValidReferences(tx, businessId, program.type, checked);
       const version = program.currentVersion + 1;
       await this.insertVersion(tx, program, version, checked, actorUserId);
       const nextStatus: LoyaltyProgramStatus = program.status === 'active' ? 'active' : 'draft';
@@ -154,7 +157,7 @@ export class LoyaltyProgramService {
       if (program.status !== 'draft') throw new AppError('Only a draft programme can be validated.', 409, 'PROGRAM_NOT_VALIDATABLE');
       const config = await this.currentConfig(tx, program);
       const currency = await this.currencyOf(tx, businessId);
-      this.requireValidConfig(program.type, config, currency);
+      await this.requireValidReferences(tx, businessId, program.type, this.requireValidConfig(program.type, config, currency));
       const [updated] = await tx.update(loyaltyPrograms).set({ status: 'validated', updatedAt: new Date() }).where(eq(loyaltyPrograms.id, program.id)).returning();
       if (!updated) throw new Error('Update returned no row');
       await this.recordEvent(tx, updated, { eventType: 'validated', fromStatus: 'draft', toStatus: 'validated', version: updated.currentVersion, actorUserId });
@@ -179,7 +182,7 @@ export class LoyaltyProgramService {
         throw new AppError('This programme is not available for activation.', 422, 'PROGRAM_UNAVAILABLE');
       }
       const config = await this.currentConfig(tx, target);
-      this.requireValidConfig(target.type, config, await this.currencyOf(tx, businessId));
+      await this.requireValidReferences(tx, businessId, target.type, this.requireValidConfig(target.type, config, await this.currencyOf(tx, businessId)));
 
       const now = new Date();
       const [current] = await tx
@@ -282,7 +285,9 @@ export class LoyaltyProgramService {
   /** Validates a configuration for the preview screen without storing anything. */
   async checkConfig(businessId: string, type: string, config: unknown): Promise<{ config: Record<string, unknown>; currency: string }> {
     const currency = await this.currencyOf(this.db, businessId);
-    return { config: this.requireValidConfig(type, config, currency), currency };
+    const checked = this.requireValidConfig(type, config, currency);
+    await this.requireValidReferences(this.db, businessId, type, checked);
+    return { config: checked, currency };
   }
 
   /** Records that a new business chose Configure Later: it can join and be served, but earns nothing until a programme is active. */
@@ -337,6 +342,21 @@ export class LoyaltyProgramService {
     const result = validateProgramConfig(type, config, { currency });
     if (!result.ok) throw new ProgramConfigError(result.errors);
     return result.config;
+  }
+
+  /** Checks what a configuration points at: an LP-01 card must entitle the customer to an ACTIVE free-item reward of THIS business. */
+  private async requireValidReferences(tx: Executor, businessId: string, type: string, config: Record<string, unknown>): Promise<void> {
+    if (type !== 'LP-01') return;
+    const [reward] = await tx
+      .select({ type: loyaltyRewards.type, status: loyaltyRewards.status })
+      .from(loyaltyRewards)
+      .where(and(eq(loyaltyRewards.id, String(config.rewardId)), eq(loyaltyRewards.businessId, businessId), eq(loyaltyRewards.isDeleted, false)))
+      .limit(1);
+    if (!reward || reward.status !== 'active' || reward.type !== 'free_item') {
+      throw new ProgramConfigError([
+        { path: 'rewardId', code: 'REWARD_NOT_FOUND', message: 'Choose an active free-item reward from this business\'s reward catalogue.' },
+      ]);
+    }
   }
 
   private async insertVersion(tx: Tx, program: LoyaltyProgramRow, version: number, config: Record<string, unknown>, actorUserId: string) {
