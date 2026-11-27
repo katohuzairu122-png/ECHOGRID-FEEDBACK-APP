@@ -8,6 +8,7 @@ import type {
   LoyaltyRewardDto,
   LoyaltyTierDto,
   BusinessPublicDto,
+  CustomerProgrammeCardDto,
   ConversationWithBusinessDto,
 } from '@echo-grid-feedback/shared-types';
 import { customerApiFetch } from '@/lib/customer-api-client';
@@ -17,6 +18,7 @@ import { rethrowControlFlow } from '@/lib/rethrow-control-flow';
 import { Badge, Card, CardContent, CardHeader, CardTitle, Progress } from '@/components/ui';
 import { LeaveMembership } from './leave-membership';
 import { RewardCard } from './reward-card';
+import { CustomerProgrammeCard } from '@/components/loyalty-programme-card/customer-programme-card';
 
 interface LoyaltyAccountSummary {
   account: LoyaltyAccountDto;
@@ -38,7 +40,7 @@ export default async function LoyaltyBusinessPage({ params }: LoyaltyBusinessPag
     throw err;
   }
 
-  const [business, rewards, tiers, unreadMessageCount, membership] = await Promise.all([
+  const [business, rewards, tiers, unreadMessageCount, membership, programmeCard] = await Promise.all([
     publicApiFetch<BusinessPublicDto>(`/businesses/${businessId}/public`),
     customerApiFetch<LoyaltyRewardDto[]>(`/loyalty/me/rewards/${businessId}`),
     customerApiFetch<LoyaltyTierDto[]>(`/loyalty/me/tiers/${businessId}`),
@@ -52,6 +54,11 @@ export default async function LoyaltyBusinessPage({ params }: LoyaltyBusinessPag
     // offered. A failure here must not break the page (the API still refuses anything the customer
     // is not entitled to), but a session redirect raised by customerApiFetch must still go through.
     customerApiFetch<CustomerMembershipDto>(`/customer-memberships/${businessId}`).catch((err: unknown) => {
+      rethrowControlFlow(err);
+      return null;
+    }),
+    // LPC-07: the programme card is extra detail. An API that predates it, or any failure, must never break the page.
+    customerApiFetch<CustomerProgrammeCardDto>(`/loyalty/me/accounts/${businessId}/programme`).catch((err: unknown) => {
       rethrowControlFlow(err);
       return null;
     }),
@@ -128,6 +135,8 @@ export default async function LoyaltyBusinessPage({ params }: LoyaltyBusinessPag
           )}
         </CardContent>
       </Card>
+
+      {programmeCard ? <CustomerProgrammeCard card={programmeCard} /> : null}
 
       {!canRedeem && (
         <Card>

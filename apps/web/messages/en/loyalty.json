@@ -289,6 +289,77 @@
         "leaveError": "Unable to leave right now. Please try again.",
         "leftNotice": "You left this loyalty program. Your points are saved and come back if you rejoin by scanning the business's QR code.",
         "inactiveNotice": "Your membership with this business is not active, so rewards are unavailable. Please contact the business."
+      },
+      "programme": {
+        "title": "Your rewards programme",
+        "aReward": "a reward",
+        "stamps": {
+          "expired": "Your card has expired. The next purchase starts a new one.",
+          "count": "{stamps} of {threshold} stamps",
+          "reward": "Complete the card to earn: {reward}",
+          "expires": "Stamps valid until {date}",
+          "completed": "Cards completed: {count}"
+        },
+        "milestones": {
+          "current": {
+            "purchases": "{value} qualifying purchases so far",
+            "spend": "{value} {currency} spent so far",
+            "visits": "{value} visits so far"
+          },
+          "step": {
+            "purchases": "At {value} purchases: {reward}",
+            "spend": "At {value} {currency}: {reward}",
+            "visits": "At {value} visits: {reward}"
+          },
+          "achieved": "Earned",
+          "locked": "Not yet"
+        },
+        "streak": {
+          "progress": {
+            "day": "{streak} of {required} days in a row",
+            "week": "{streak} of {required} weeks in a row"
+          },
+          "reward": "Keep the streak going to earn: {reward}",
+          "grace": {
+            "day": "You can miss up to {count} day(s) without losing your streak.",
+            "week": "You can miss up to {count} week(s) without losing your streak."
+          }
+        },
+        "missions": {
+          "objective": {
+            "purchases": "{current} of {target} purchases",
+            "spend": "{current} of {target} {currency} spent",
+            "visits": "{current} of {target} visits"
+          },
+          "reward": "Reward: {reward}",
+          "status": {
+            "not_started": "Not started",
+            "active": "In progress",
+            "completed": "Completed",
+            "expired": "Time ran out"
+          },
+          "ends": "ends {date}"
+        },
+        "offpeak": {
+          "intro": "Earn extra points at these times:",
+          "multiplier": "{value}× points",
+          "bonus": "+{points} bonus points",
+          "until": "Offer runs until {date}"
+        },
+        "days": {
+          "sun": "Sun",
+          "mon": "Mon",
+          "tue": "Tue",
+          "wed": "Wed",
+          "thu": "Thu",
+          "fri": "Fri",
+          "sat": "Sat"
+        },
+        "earned": {
+          "title": "Rewards waiting for you",
+          "hint": "Show this screen to the cashier to receive them.",
+          "expires": "use by {date}"
+        }
       }
     },
     "rewardCard": {

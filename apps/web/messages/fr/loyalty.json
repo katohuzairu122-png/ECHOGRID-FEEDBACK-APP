@@ -289,6 +289,77 @@
         "leaveError": "Impossible de quitter le programme pour le moment. Veuillez réessayer.",
         "leftNotice": "Vous avez quitté ce programme de fidélité. Vos points sont conservés et vous sont rendus si vous rejoignez de nouveau le programme en scannant le QR code de l'entreprise.",
         "inactiveNotice": "Votre adhésion auprès de cette entreprise n'est pas active, les récompenses sont donc indisponibles. Veuillez contacter l'entreprise."
+      },
+      "programme": {
+        "title": "Votre programme de récompenses",
+        "aReward": "une récompense",
+        "stamps": {
+          "expired": "Votre carte a expiré. Le prochain achat en commence une nouvelle.",
+          "count": "{stamps} tampons sur {threshold}",
+          "reward": "Complétez la carte pour gagner : {reward}",
+          "expires": "Tampons valables jusqu'au {date}",
+          "completed": "Cartes complétées : {count}"
+        },
+        "milestones": {
+          "current": {
+            "purchases": "{value} achats éligibles jusqu'ici",
+            "spend": "{value} {currency} dépensés jusqu'ici",
+            "visits": "{value} visites jusqu'ici"
+          },
+          "step": {
+            "purchases": "À {value} achats : {reward}",
+            "spend": "À {value} {currency} : {reward}",
+            "visits": "À {value} visites : {reward}"
+          },
+          "achieved": "Gagnée",
+          "locked": "Pas encore"
+        },
+        "streak": {
+          "progress": {
+            "day": "{streak} jours de suite sur {required}",
+            "week": "{streak} semaines de suite sur {required}"
+          },
+          "reward": "Gardez la série pour gagner : {reward}",
+          "grace": {
+            "day": "Vous pouvez manquer jusqu'à {count} jour(s) sans perdre votre série.",
+            "week": "Vous pouvez manquer jusqu'à {count} semaine(s) sans perdre votre série."
+          }
+        },
+        "missions": {
+          "objective": {
+            "purchases": "{current} achats sur {target}",
+            "spend": "{current} sur {target} {currency} dépensés",
+            "visits": "{current} visites sur {target}"
+          },
+          "reward": "Récompense : {reward}",
+          "status": {
+            "not_started": "Pas commencée",
+            "active": "En cours",
+            "completed": "Terminée",
+            "expired": "Temps écoulé"
+          },
+          "ends": "se termine le {date}"
+        },
+        "offpeak": {
+          "intro": "Gagnez des points en plus à ces horaires :",
+          "multiplier": "{value}× points",
+          "bonus": "+{points} points bonus",
+          "until": "Offre valable jusqu'au {date}"
+        },
+        "days": {
+          "sun": "dim",
+          "mon": "lun",
+          "tue": "mar",
+          "wed": "mer",
+          "thu": "jeu",
+          "fri": "ven",
+          "sat": "sam"
+        },
+        "earned": {
+          "title": "Récompenses qui vous attendent",
+          "hint": "Montrez cet écran au caissier pour les recevoir.",
+          "expires": "à utiliser avant le {date}"
+        }
       }
     },
     "rewardCard": {
