@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { signUpBusinessOwner } from './helpers/signup';
+import { signUpBusinessOwner, skipProgrammeSetup } from './helpers/signup';
 
 /** Regression: portalled dialogs must stay readable in the dark workspace (white popup + light text was unreadable). */
 test('dialogs in the dark workspace have a dark surface and readable title text', async ({
@@ -9,6 +9,7 @@ test('dialogs in the dark workspace have a dark surface and readable title text'
   await signUpBusinessOwner(page, { fullName: 'Dialog Theme Test', email: `dialog-theme-${unique}@example.test`, password: 'a-strong-test-password' });
   await page.getByLabel('Business name').fill(`Dialog ${unique}`);
   await page.getByRole('button', { name: 'Create business' }).click();
+  await skipProgrammeSetup(page);
   // BCOMM-01: a new owner lands on the Community hub; these specs exercise the Business Overview, which keeps its own destination.
   await expect(page.getByRole('heading', { name: 'Community', exact: true })).toBeVisible();
   await page.goto('/dashboard/overview');

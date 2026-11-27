@@ -9,7 +9,8 @@
       "settings": "Paramètres",
       "navigationLabel": "Rubriques de fidélité",
       "customerQr": "QR client",
-      "settlements": "Règlement des récompenses orphelines"
+      "settlements": "Règlement des récompenses orphelines",
+      "programme": "Programme"
     },
     "accounts": {
       "emptyTitle": "Aucun membre pour le moment",
@@ -788,6 +789,290 @@
       "codesRevoked": "Codes de récupération révoqués.",
       "revokeRecoveryCodes": "Révoquer les codes de récupération",
       "saveCodesTitle": "Enregistrez vos codes"
+    }
+  },
+  "programmes": {
+    "title": "Programme de fidélité",
+    "subtitle": "Comment vos clients gagnent. Choisissez un programme principal, configurez-le et changez-en quand vous le souhaitez.",
+    "setup": {
+      "title": "Choisissez votre programme de fidélité",
+      "intro": "Choisissez comment les clients gagnent dans votre commerce. Vous pourrez le modifier plus tard.",
+      "later": "Configurer plus tard",
+      "laterNote": "Les clients peuvent adhérer, mais ne gagnent rien tant que vous n’avez pas activé un programme."
+    },
+    "none": {
+      "title": "Aucun programme de fidélité n’est actif",
+      "body": "Les clients peuvent adhérer et être servis, mais ne gagnent rien tant que vous n’activez pas un programme ci-dessous."
+    },
+    "choose": {
+      "title": "Choisissez un programme",
+      "body": "Sélectionnez un programme pour le configurer. Rien ne démarre avant votre confirmation d’activation."
+    },
+    "switch": {
+      "title": "Changer de programme",
+      "body": "Choisissez un autre programme pour le préparer. Il ne remplace l’actuel qu’après votre confirmation d’activation."
+    },
+    "configure": {
+      "title": "Configurer le programme"
+    },
+    "cards": {
+      "title": "Programmes de fidélité",
+      "current": "Actuel",
+      "unavailable": "Indisponible",
+      "select": "Sélectionner",
+      "edit": "Modifier",
+      "reason": {
+        "IN_DEVELOPMENT": "Pas encore disponible : ce programme est encore en construction.",
+        "NEEDS_ITEM_LEVEL_EVIDENCE": "Pas encore disponible : il faut des données d’achat vérifiées par article, que la plateforme ne capture pas encore.",
+        "NEEDS_OWNER_DECISION": "Pas encore disponible : une décision de la plateforme est nécessaire."
+      }
+    },
+    "types": {
+      "LP-01": {
+        "name": "Achetez X, recevez Y gratuit",
+        "summary": "Les clients collectent un tampon par achat éligible ; une carte complète donne un article gratuit.",
+        "example": "Exemple : achetez 4 cafés, le 5e est offert.",
+        "needs": "Nécessite : tampons par carte, une récompense d’article gratuit et l’expiration des tampons."
+      },
+      "LP-02": {
+        "name": "Points fixes par achat",
+        "summary": "Chaque achat éligible rapporte le même nombre de points, quel qu’en soit le prix.",
+        "example": "Exemple : chaque achat éligible rapporte 10 points.",
+        "needs": "Nécessite : points par achat et un montant minimum facultatif."
+      },
+      "LP-03": {
+        "name": "Dépensez et gagnez",
+        "summary": "Les clients gagnent des points en proportion de leurs dépenses.",
+        "example": "Exemple : chaque 1 KWD dépensé rapporte 10 points.",
+        "needs": "Nécessite : points par unité monétaire."
+      },
+      "LP-04": {
+        "name": "Récompenses par paliers",
+        "summary": "Les clients débloquent des récompenses en atteignant des paliers d’achats, de visites ou de dépenses.",
+        "example": "Exemple : effectuez 20 visites éligibles pour débloquer une récompense.",
+        "needs": "Nécessite : un type de palier, des seuils croissants et une récompense pour chacun."
+      },
+      "LP-05": {
+        "name": "Récompenses de séries",
+        "summary": "Les clients gagnent une récompense pour une activité éligible sur des jours ou semaines consécutifs.",
+        "example": "Exemple : venez cinq jours de suite.",
+        "needs": "Nécessite : la période, combien de suite et une récompense. Utilise le fuseau horaire de votre commerce."
+      },
+      "LP-06": {
+        "name": "Récompenses heures creuses",
+        "summary": "Des points bonus pour les achats faits aux heures calmes que vous choisissez.",
+        "example": "Exemple : points supplémentaires entre 14 h et 17 h.",
+        "needs": "Nécessite : jours de la semaine, plages horaires (heure locale du commerce) et un bonus."
+      },
+      "LP-07": {
+        "name": "Missions et défis",
+        "summary": "De courts défis avec une date limite et une récompense.",
+        "example": "Exemple : effectuez 3 achats éligibles en 7 jours.",
+        "needs": "Nécessite : un objectif, une cible, une date limite et une récompense."
+      },
+      "LP-08": {
+        "name": "Fidélité par produit",
+        "summary": "Des récompenses pour l’achat de produits précis.",
+        "example": "Exemple : achetez cinq produits de boulangerie pour gagner une récompense.",
+        "needs": "Nécessite des données d’achat vérifiées par article, pas encore disponibles."
+      }
+    },
+    "status": {
+      "draft": "Brouillon",
+      "validated": "Validé",
+      "active": "Actif",
+      "inactive": "En pause",
+      "retired": "Retiré"
+    },
+    "active": {
+      "version": "Version de la configuration",
+      "since": "Actif depuis",
+      "legacy": "Règles de gain existantes",
+      "legacyNote": "Ce programme reproduit le gain que votre commerce avait déjà. Le modifier crée une nouvelle version qui ne s’applique qu’aux achats futurs.",
+      "edit": "Modifier la configuration"
+    },
+    "others": {
+      "title": "Autres programmes"
+    },
+    "actions": {
+      "preview": "Aperçu",
+      "saveDraft": "Enregistrer le brouillon",
+      "activate": "Valider et activer",
+      "working": "En cours…",
+      "pause": "Mettre le programme en pause",
+      "resume": "Reprendre",
+      "retire": "Retirer"
+    },
+    "confirmLabel": {
+      "pause": "Je confirme",
+      "retire": "Je confirme",
+      "activate-existing": "Je confirme"
+    },
+    "activation": {
+      "title": "Avant d’activer",
+      "keeps": "Ce qui reste : le solde de points de chaque client, les transactions passées, les récompenses gagnées, les niveaux et l’historique des programmes précédents.",
+      "changes": "Ce qui change : les nouveaux achats et visites suivent ce programme dès son activation. Les gains passés ne sont jamais réécrits.",
+      "consent": "La progression du programme précédent est conservée mais pas convertie (les tampons ne deviennent pas des points). Les clients rejoignent le nouveau programme à leur prochaine activité éligible, dans le cadre de leur consentement existant.",
+      "replaces": "Cela remplacera le programme actif : {name}.",
+      "confirm": "Je comprends et je veux activer ce programme.",
+      "ownerOnly": "Seul le propriétaire du commerce peut activer, mettre en pause ou changer le programme."
+    },
+    "preview": {
+      "title": "Ce que verront les clients",
+      "purchase": "Achat",
+      "earns": "Gagne",
+      "points": "{count, plural, one {# point} other {# points}}",
+      "notQualifying": "Non éligible",
+      "note": "Cet aperçu utilise les mêmes règles que la caisse.",
+      "lines": {
+        "lp01": "Une carte de {n} tampons donne la récompense.",
+        "lp04_purchases": "Après {n} achats, une récompense se débloque.",
+        "lp04_visits": "Après {n} visites, une récompense se débloque.",
+        "lp04_spend": "Après {n} dépensés, une récompense se débloque.",
+        "lp05_day": "{n} jours de suite donnent la récompense.",
+        "lp05_week": "{n} semaines de suite donnent la récompense.",
+        "lp06": "Bonus entre {start} et {end} sur {days} jours sélectionnés.",
+        "lp07": "Mission {name} : atteindre {target} en {days} jours."
+      }
+    },
+    "saved": {
+      "draft": "Brouillon enregistré.",
+      "activated": "Programme activé.",
+      "paused": "Programme en pause. Les clients ne gagnent rien tant qu’un programme n’est pas actif.",
+      "retired": "Programme retiré."
+    },
+    "errors": {
+      "NO_BUSINESS": "Aucun commerce actif.",
+      "UNAVAILABLE": "Ce programme n’est pas disponible.",
+      "INVALID": "Veuillez corriger la configuration.",
+      "OWNER_REQUIRED": "Seul le propriétaire du commerce peut le faire.",
+      "NOT_ALLOWED": "Ce changement n’est pas autorisé dans l’état actuel du programme.",
+      "FAILED": "Une erreur est survenue. Réessayez.",
+      "CONFIRM_REQUIRED": "Veuillez cocher la case de confirmation."
+    },
+    "issues": {
+      "generic": "Vérifiez cette valeur.",
+      "invalid_type": "Saisissez une valeur du bon type.",
+      "too_small": "Cette valeur est trop petite.",
+      "too_big": "Cette valeur est trop grande.",
+      "invalid_value": "Cette valeur n’est pas autorisée.",
+      "invalid_format": "Cette valeur n’a pas le bon format.",
+      "custom": "Vérifiez cette valeur.",
+      "unrecognized_keys": "Champ inattendu.",
+      "TOO_MANY_DECIMALS": "Trop de décimales pour votre devise.",
+      "INVALID_FORMAT": "Saisissez un nombre simple.",
+      "NOT_POSITIVE": "Doit être supérieur à zéro.",
+      "TOO_LARGE": "Cette valeur dépasse le maximum.",
+      "INVALID_RATE": "Saisissez un taux valide.",
+      "NOT_ASCENDING": "Les seuils doivent augmenter, chacun supérieur au précédent.",
+      "OVERLAP": "Les plages horaires ne doivent pas se chevaucher.",
+      "BAD_WINDOW": "Une plage doit se terminer après son début, le même jour.",
+      "BAD_RANGE": "La date de fin ne doit pas précéder la date de début.",
+      "DUPLICATE": "Les noms doivent être uniques.",
+      "NOT_APPLICABLE": "Ce réglage ne s’applique pas ici.",
+      "REWARD_NOT_FOUND": "Choisissez une récompense active de votre catalogue.",
+      "PROGRAM_UNAVAILABLE": "Ce programme n’est pas disponible.",
+      "server": "Le serveur n’a pas accepté cette configuration."
+    },
+    "history": {
+      "title": "Historique du programme",
+      "versions": "{count, plural, one {# version de configuration conservée} other {# versions de configuration conservées}}",
+      "events": {
+        "created": "Créé",
+        "version_created": "Nouvelle version de configuration",
+        "validated": "Validé",
+        "activated": "Activé",
+        "deactivated": "Mis en pause",
+        "retired": "Retiré",
+        "switched_to": "Activé comme nouveau programme",
+        "switched_from": "Remplacé par un autre programme",
+        "legacy_backfill": "Créé à partir de vos règles de gain existantes"
+      }
+    },
+    "form": {
+      "chooseReward": "Choisissez une récompense",
+      "noRewards": "Créez d’abord une récompense active (article gratuit, remise ou bon) dans Fidélité, Récompenses ; les lots se choisissent dans votre catalogue.",
+      "pointsPerUnit": "Points par {currency} dépensé",
+      "pointsPerUnitHint": "Entier ou décimal, par exemple 1,5. Les fractions de point sont ignorées.",
+      "pointsPerCheckin": "Points par enregistrement de visite",
+      "pointsPerCheckinHint": "Points pour chaque enregistrement par QR ; 0 pour aucun.",
+      "pointsPerPurchase": "Points par achat éligible",
+      "pointsPerPurchaseHint": "Identiques pour chaque achat éligible, quel que soit le montant.",
+      "minimumAmount": "Achat minimum ({currency}, facultatif)",
+      "minimumAmountHint": "Les achats inférieurs ne rapportent rien.",
+      "checkinDistinct": "Points par enregistrement de visite (distincts des achats) ; 0 pour aucun.",
+      "stampThreshold": "Tampons par carte",
+      "stampThresholdHint": "La carte est complète à ce nombre de tampons (2 à 50). Un tampon par reçu éligible.",
+      "freeItemReward": "Récompense d’article gratuit",
+      "freeItemHint": "Une récompense active d’article gratuit de votre catalogue.",
+      "stampMinimumHint": "Les reçus inférieurs ne donnent pas de tampon.",
+      "stampExpiry": "Expiration des tampons",
+      "stampExpiryHint": "Vous devez choisir : les tampons n’expirent jamais ou expirent après un nombre de jours.",
+      "expiryNever": "N’expirent jamais",
+      "expiryDays": "Expirent après un nombre de jours",
+      "expiryDaysLabel": "Jours après le premier tampon",
+      "resetOnCompletion": "Quand une carte est complète, le client gagne la récompense et repart d’une carte vide.",
+      "milestoneMetric": "Type de palier",
+      "notATier": "Les paliers débloquent des récompenses. Ce ne sont pas des niveaux d’adhésion et ils ne changent jamais le niveau d’un client.",
+      "metricPurchases": "Nombre d’achats",
+      "metricVisits": "Nombre de visites (enregistrements)",
+      "metricSpend": "Total dépensé ({currency})",
+      "milestones": "Paliers",
+      "threshold": "Palier {n} : seuil",
+      "ascendingHint": "Chaque seuil doit être supérieur au précédent.",
+      "milestoneReward": "Palier {n} : récompense",
+      "addRow": "Ajouter un palier",
+      "removeRow": "Retirer le dernier",
+      "streakPeriod": "Période",
+      "periodDay": "Jours",
+      "periodWeek": "Semaines (du lundi au dimanche)",
+      "requiredPeriods": "Périodes consécutives",
+      "requiredPeriodsHint": "De 2 à 365.",
+      "gracePeriods": "Périodes manquées tolérées",
+      "graceHint": "0 signifie aucun trou ; jusqu’à 3.",
+      "streakEvidence": "Ce qui compte",
+      "localTimeNote": "Les jours et semaines suivent le fuseau horaire de votre commerce.",
+      "evidenceVisit": "Un enregistrement de visite par QR",
+      "evidencePurchase": "Un achat éligible",
+      "streakReward": "Récompense",
+      "effectiveFrom": "Début (facultatif)",
+      "effectiveUntil": "Fin (facultatif)",
+      "localDateHint": "Les dates suivent le fuseau horaire de votre commerce.",
+      "windows": "Plages d’heures creuses",
+      "windowsHint": "Les heures sont l’heure locale de votre commerce. Les plages ne doivent pas se chevaucher ; scindez une plage qui passe minuit.",
+      "windowDays": "Jours de la plage {n}",
+      "day1": "Lun",
+      "day2": "Mar",
+      "day3": "Mer",
+      "day4": "Jeu",
+      "day5": "Ven",
+      "day6": "Sam",
+      "day7": "Dim",
+      "windowStart": "De",
+      "windowEnd": "Jusqu’à (exclu)",
+      "bonusType": "Type de bonus",
+      "bonusMultiplier": "Multiplicateur des points de base",
+      "bonusFixed": "Points bonus fixes",
+      "bonusValue": "Valeur du bonus",
+      "bonusValueHint": "Un multiplicateur de 1 à 10, ou un nombre entier de points.",
+      "addWindow": "Ajouter une plage",
+      "removeWindow": "Retirer la dernière",
+      "currencyNote": "Les montants sont en {currency}. Le serveur décide de l’éligibilité d’après l’heure de l’achat ; un caissier ne peut pas la modifier.",
+      "missions": "Missions",
+      "missionsHint": "Chaque mission a un objectif, une date limite comptée depuis la première activité éligible du client et une récompense. Les notes et avis ne peuvent jamais être un objectif.",
+      "missionKey": "Nom de la mission",
+      "missionKeyHint": "Minuscules, chiffres et tirets, par exemple trois-en-sept.",
+      "missionObjective": "Objectif",
+      "objectivePurchases": "Nombre d’achats",
+      "objectiveSpend": "Total dépensé ({currency})",
+      "objectiveVisits": "Nombre de visites",
+      "missionTarget": "Cible",
+      "missionDays": "Jours pour la terminer",
+      "missionDaysHint": "De 1 à 365.",
+      "missionMinimumHint": "Uniquement pour les objectifs d’achats.",
+      "missionReward": "Récompense",
+      "addMission": "Ajouter une mission",
+      "removeMission": "Retirer la dernière"
     }
   }
 }

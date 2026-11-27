@@ -1,6 +1,6 @@
 import { test, expect, type BrowserContext, type Page } from '@playwright/test';
 import { collapseDevelopmentBadge } from './helpers/development-chrome';
-import { signUpBusinessOwner } from './helpers/signup';
+import { signUpBusinessOwner, skipProgrammeSetup } from './helpers/signup';
 
 /**
  * BCOMM-01: the business Community hub in a real browser. Synthetic owner accounts only. Community stays DISABLED in this environment (no
@@ -16,6 +16,7 @@ async function createOwner(page: Page, label: string) {
   await expect(page).toHaveURL('/dashboard');
   await page.getByLabel('Business name').fill(`Hub ${unique}`);
   await page.getByRole('button', { name: 'Create business' }).click();
+  await skipProgrammeSetup(page);
   await page.waitForURL('**/dashboard/community'); // the business now exists and the new default home has loaded
   await collapseDevelopmentBadge(page); // the development-only issue badge must not cover fixed workspace controls
   return { email, businessName: `Hub ${unique}` };
