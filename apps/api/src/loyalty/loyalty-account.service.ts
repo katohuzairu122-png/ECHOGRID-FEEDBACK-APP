@@ -8,6 +8,7 @@ import {
 import { AppError } from '../lib/errors';
 import { MoneyError, formatMoney, minorFromStored, currencyExponent, parseMoney } from '@echo-grid-feedback/shared-types';
 import { resolveActiveProgramme } from './programs/program.service';
+import { recordPurchaseStamp } from './programs/stamp.service';
 import { computeCheckinEarning, computePurchaseEarning, type EarningProvenance } from './programs/earning';
 import { assertCashierSessionBound, type CashierSessionBinding } from '../cashier-sessions/session-binding';
 import {
@@ -246,11 +247,26 @@ export class LoyaltyAccountService {
       }
 
       const settings = await repos.loyaltySettings.getOrCreateDefaults(input.businessId);
+      const resolvedProgramme = await resolveActiveProgramme(tx, input.businessId);
       const earning = computePurchaseEarning(
-        await resolveActiveProgramme(tx, input.businessId),
+        resolvedProgramme,
         { pointsPerCheckin: settings.pointsPerCheckin, pointsPerCurrencyUnit: settings.pointsPerCurrencyUnit },
         { amountMinor, currency },
       );
+
+      if (resolvedProgramme.kind === 'programme' && resolvedProgramme.type === 'LP-01') {
+        await recordPurchaseStamp(tx, {
+          businessId: input.businessId,
+          programId: resolvedProgramme.programId,
+          programVersion: resolvedProgramme.version,
+          config: resolvedProgramme.config,
+          loyaltyAccountId: account.id,
+          customerId: account.customerId,
+          purchaseEventId: event.id,
+          occurredAt: event.occurredAt,
+          fact: { amountMinor, currency },
+        });
+      }
 
       const updated = await this.applyEarning(repos, account, 'purchase', earning.points, {
         purchaseAmount: amount,

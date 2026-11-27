@@ -24,7 +24,7 @@ export interface ProgramRegistryEntry {
  * The canonical availability registry (LOYALTY-PROGRAMME-COMPLETION section 4). A programme is selectable ONLY when its earning behaviour,
  * customer progress, reward integration and tests are complete. Move a type into this set in the same change that completes it, never earlier.
  */
-const AVAILABLE_PROGRAM_TYPES: ReadonlySet<LoyaltyProgramType> = new Set<LoyaltyProgramType>(['LP-02', 'LP-03']);
+const AVAILABLE_PROGRAM_TYPES: ReadonlySet<LoyaltyProgramType> = new Set<LoyaltyProgramType>(['LP-01', 'LP-02', 'LP-03']);
 const UNAVAILABLE_REASONS: Readonly<Partial<Record<LoyaltyProgramType, ProgramUnavailableReason>>> = {
   // LP-08 needs verified item-level purchase evidence that the platform does not capture (RW-D3). It stays unavailable regardless of code.
   'LP-08': 'NEEDS_ITEM_LEVEL_EVIDENCE',
@@ -67,7 +67,25 @@ export const lp02ConfigSchema = z.strictObject({
 });
 export type Lp02Config = z.infer<typeof lp02ConfigSchema>;
 
-export type ProgramConfig = Lp02Config | Lp03Config;
+/**
+ * LP-01 Buy X, get Y free (RW-D4): one digital stamp per verified eligible receipt, a configurable threshold, and a free-item reward from the
+ * business's own catalogue. Expiry and reset are REQUIRED fields, never defaulted: the Owner must state them before the programme can be activated
+ * (`stampExpiryDays: null` means "stamps never expire", said explicitly).
+ */
+export const lp01ConfigSchema = z.strictObject({
+  stampThreshold: z.number().int().min(2).max(50),
+  /** The free-item reward (RW-03) the completed card entitles the customer to. Existence and type are checked against the business catalogue. */
+  rewardId: z.uuid(),
+  /** Optional minimum receipt amount for a stamp, in the business currency's own precision. */
+  minimumPurchaseAmount: z.string().trim().min(1).max(20).optional(),
+  /** The card expires this many days after its FIRST stamp; the stamps are then discarded. null = never (explicit). */
+  stampExpiryDays: z.number().int().min(1).max(3650).nullable(),
+  /** What happens to the card when it is completed: it starts again from zero. */
+  resetPolicy: z.literal('on_completion'),
+});
+export type Lp01Config = z.infer<typeof lp01ConfigSchema>;
+
+export type ProgramConfig = Lp01Config | Lp02Config | Lp03Config;
 
 export interface ProgramConfigIssue {
   readonly path: string;
@@ -111,6 +129,20 @@ export function validateProgramConfig(type: string, raw: unknown, context: { cur
       issues.push(moneyIssue('pointsPerCurrencyUnit', error));
     }
     return { ok: false, errors: issues };
+  }
+
+  if (type === 'LP-01') {
+    const parsed = lp01ConfigSchema.safeParse(raw);
+    if (!parsed.success) return { ok: false, errors: schemaIssues(parsed.error) };
+    const config: Record<string, unknown> = { ...parsed.data };
+    if (parsed.data.minimumPurchaseAmount !== undefined) {
+      try {
+        config.minimumPurchaseAmount = formatMoney(parseMoney(parsed.data.minimumPurchaseAmount, context.currency), context.currency);
+      } catch (error) {
+        issues.push(moneyIssue('minimumPurchaseAmount', error));
+      }
+    }
+    return issues.length === 0 ? { ok: true, config } : { ok: false, errors: issues };
   }
 
   // LP-02
@@ -159,6 +191,14 @@ export function earnForPurchase(type: LoyaltyProgramType, config: Record<string,
     }
     return { points: Number(config.pointsPerPurchase), qualifying: true };
   }
+  if (type === 'LP-01') {
+    // A stamp programme earns stamps, not points: the purchase is recorded with zero points and its stamp is handled by the stamp engine.
+    const minimum = config.minimumPurchaseAmount;
+    if (typeof minimum === 'string' && fact.amountMinor < parseMoney(minimum, fact.currency)) {
+      return { points: 0, qualifying: false, reason: 'BELOW_MINIMUM' };
+    }
+    return { points: 0, qualifying: true };
+  }
   return { points: 0, qualifying: false, reason: 'NO_POINTS_PROGRAM' };
 }
 
@@ -189,3 +229,67 @@ export function previewPurchases(
 }
 
 export { currencyExponent };
+
+
+// ---- LP-01 stamp card (pure) -----------------------------------------------------------------------------------------------------------
+
+export interface StampState {
+  readonly stamps: number;
+  /** The number of cards completed so far. */
+  readonly cycle: number;
+  /** When the current card got its first stamp (ISO), or null for an empty card. */
+  readonly cycleStartedAt: string | null;
+}
+export const EMPTY_STAMP_STATE: StampState = Object.freeze({ stamps: 0, cycle: 0, cycleStartedAt: null });
+
+export interface StampOutcome {
+  readonly state: StampState;
+  /** A stamp was added for this receipt. */
+  readonly stamped: boolean;
+  /** The previous card had passed its expiry and its stamps were discarded before this receipt counted. */
+  readonly expiredStamps: number;
+  /** This stamp completed a card: the customer earned the reward and the card restarted. */
+  readonly completedCycle: number | null;
+  readonly reason?: 'BELOW_MINIMUM';
+}
+
+/** Reads a persisted counters object defensively: anything unexpected is treated as an empty card, never as a larger one. */
+export function stampStateFrom(counters: Record<string, unknown> | null | undefined): StampState {
+  const stamps = Number(counters?.stamps);
+  const cycle = Number(counters?.cycle);
+  const startedAt = counters?.cycleStartedAt;
+  return {
+    stamps: Number.isInteger(stamps) && stamps >= 0 ? stamps : 0,
+    cycle: Number.isInteger(cycle) && cycle >= 0 ? cycle : 0,
+    cycleStartedAt: typeof startedAt === 'string' && !Number.isNaN(Date.parse(startedAt)) ? startedAt : null,
+  };
+}
+
+const DAY_MS = 86_400_000;
+
+/**
+ * Applies ONE verified receipt to a stamp card. `now` is the SERVER time of the recorded purchase event: neither a cashier nor a customer can supply
+ * it. One receipt yields at most one stamp (the caller enforces one application per purchase event); an expired card is emptied first.
+ */
+export function applyStamp(config: Record<string, unknown>, state: StampState, fact: PurchaseFact & { readonly now: Date }): StampOutcome {
+  const minimum = config.minimumPurchaseAmount;
+  if (typeof minimum === 'string' && fact.amountMinor < parseMoney(minimum, fact.currency)) {
+    return { state, stamped: false, expiredStamps: 0, completedCycle: null, reason: 'BELOW_MINIMUM' };
+  }
+  const threshold = Number(config.stampThreshold);
+  const expiryDays = config.stampExpiryDays;
+  let working = state;
+  let expiredStamps = 0;
+  if (typeof expiryDays === 'number' && working.cycleStartedAt !== null && working.stamps > 0) {
+    if (fact.now.getTime() > Date.parse(working.cycleStartedAt) + expiryDays * DAY_MS) {
+      expiredStamps = working.stamps;
+      working = { stamps: 0, cycle: working.cycle, cycleStartedAt: null };
+    }
+  }
+  const stamps = working.stamps + 1;
+  const cycleStartedAt = working.cycleStartedAt ?? fact.now.toISOString();
+  if (stamps >= threshold) {
+    return { state: { stamps: 0, cycle: working.cycle + 1, cycleStartedAt: null }, stamped: true, expiredStamps, completedCycle: working.cycle + 1 };
+  }
+  return { state: { stamps, cycle: working.cycle, cycleStartedAt }, stamped: true, expiredStamps, completedCycle: null };
+}
