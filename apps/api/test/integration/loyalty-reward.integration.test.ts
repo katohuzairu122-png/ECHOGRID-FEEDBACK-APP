@@ -127,7 +127,7 @@ describe.skipIf(!process.env.DATABASE_URL)('LoyaltyRewardService (integration)',
 
     expect(updated.maxBudget).toBe('750.000'); // the one field this patch touched
     expect(updated.type).toBe('voucher'); // everything else survives untouched
-    expect(updated.rewardValue).toBe('20.00');
+    expect(updated.rewardValue).toBe('20.000');
     expect(updated.maxRewardsPerDay).toBe(5);
     expect(updated.cooldownSeconds).toBe(300);
   });
