@@ -25,7 +25,7 @@ describe('loyalty terminology (LPC-11)', () => {
       const balance = m.staff.serve.card.points;
       expect(new Set([earned, redeemable, balance]).size, locale).toBe(3);
       // the customer page names the same concept the cashier card does
-      expect((m.customer.businessDashboard as Record<string, string>).rewardsHeading, locale).toBe(redeemable);
+      expect((m.customer.businessDashboard as unknown as Record<string, string>).rewardsHeading, locale).toBe(redeemable);
     }
   });
 
@@ -35,7 +35,7 @@ describe('loyalty terminology (LPC-11)', () => {
     expect(en.staff.serve.earned.title).toBe('Earned rewards');
     expect(en.customer.businessDashboard.programme).toBeTruthy();
     expect(JSON.stringify(en.purchases)).toMatch(/revers/i);
-    const tier = (en.customer.businessDashboard as Record<string, string>).progressToNextTier;
+    const tier = (en.customer.businessDashboard as unknown as Record<string, string>).progressToNextTier;
     expect(tier).toContain('tier');
     expect(tier).not.toContain('pts');
   });
