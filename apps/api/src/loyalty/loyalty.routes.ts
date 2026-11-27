@@ -34,6 +34,7 @@ import { LoyaltyProgramService } from './programs/program.service';
 import { listAvailableEntitlements, redeemAccountEntitlement } from './programs/entitlement.service';
 import { moneyScaleFor } from './money-storage';
 import { assertRewardCanChange } from './programs/reward-usage.service';
+import { getPurchase, listPurchases } from './programs/purchase-history.service';
 import { previewPurchases, isProgramAvailable } from '@echo-grid-feedback/shared-types';
 import { z } from 'zod';
 import { CustomerLookupService, LOOKUP_PURCHASE_AUDIT } from './customer-lookup.service';
@@ -324,6 +325,38 @@ loyaltyRoutes.post(
 // LPC-08: reverse one confirmed purchase (refund or mistaken receipt). Owner and managers only (loyalty:adjust, business-wide); a cashier token is
 // refused by the cashier route allow-list. Owner-approved rules: the balance never goes below zero, unused rewards are revoked, and a reward already
 // handed over stays given and is flagged for review.
+// LPC-10: the Owner's purchase history, one purchase with its reversal state, and an exact preview of a reversal. Same authority as the reversal
+// itself (loyalty:adjust, business-wide); a cashier token is refused by the route allow-list. Reads only: nothing here changes any record.
+const purchaseListQuery = z.object({
+  status: z.enum(['confirmed', 'reversed']).optional(),
+  accountId: z.uuid().optional(),
+  limit: z.coerce.number().int().min(1).max(50).default(25),
+  offset: z.coerce.number().int().min(0).max(100_000).default(0),
+});
+loyaltyRoutes.get('/purchases', requirePermission('loyalty:adjust'), requireBusinessWideAccess, async (c) => {
+  const q = purchaseListQuery.parse(Object.fromEntries(new URL(c.req.url).searchParams));
+  return withDb(c, async (db) => ok(c, await listPurchases(db, { businessId: c.get('businessId'), ...q })));
+});
+loyaltyRoutes.get('/purchases/:purchaseEventId', requirePermission('loyalty:adjust'), requireBusinessWideAccess, async (c) => {
+  const purchaseEventId = z.uuid().parse(c.req.param('purchaseEventId'));
+  return withDb(c, async (db) => ok(c, await getPurchase(db, c.get('businessId'), purchaseEventId)));
+});
+loyaltyRoutes.get('/purchases/:purchaseEventId/reversal-preview', requirePermission('loyalty:adjust'), requireBusinessWideAccess, async (c) => {
+  const purchaseEventId = z.uuid().parse(c.req.param('purchaseEventId'));
+  return withDb(c, async (db) => {
+    const r = await new LoyaltyAccountService(db).previewPurchaseReversal({ businessId: c.get('businessId'), purchaseEventId, reason: 'preview', actorUserId: c.get('userId') });
+    return ok(c, {
+      purchaseEventId,
+      pointsEarned: r.pointsEarned,
+      pointsReversed: r.pointsReversed,
+      pointsShortfall: r.pointsShortfall,
+      rewardImpact: r.progress.rewardImpact,
+      frozenProgrammes: r.progress.frozenProgrammes,
+      needsReview: r.progress.usedEntitlementIds.length > 0 || r.pointsShortfall > 0,
+    });
+  });
+});
+
 const reversePurchaseSchema = z.object({ reason: z.string().trim().min(3).max(200) }).strict();
 loyaltyRoutes.post('/purchases/:purchaseEventId/reverse', requirePermission('loyalty:adjust'), requireBusinessWideAccess, async (c) => {
   const purchaseEventId = z.uuid().parse(c.req.param('purchaseEventId'));
@@ -350,6 +383,7 @@ loyaltyRoutes.post('/purchases/:purchaseEventId/reverse', requirePermission('loy
       pointsShortfall: result.pointsShortfall,
       revokedRewards: result.progress.revokedEntitlements,
       rewardsAlreadyUsed: result.progress.usedEntitlementIds.length,
+      rewardImpact: result.progress.rewardImpact,
       needsReview: result.progress.usedEntitlementIds.length > 0 || result.pointsShortfall > 0,
     });
   });

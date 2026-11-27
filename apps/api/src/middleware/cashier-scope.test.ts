@@ -45,6 +45,13 @@ const EXPECTED_ALLOWED = [
 ].sort();
 
 describe('cashier route allow-list (exact, default deny)', () => {
+  it('LPC-10: a cashier token can never reach purchase history, reversal preview or reversal (refused before any handler runs)', () => {
+    const id = '6f0f1c5e-0000-4000-8000-000000000004';
+    for (const [method, path] of [
+      ['GET', '/loyalty/purchases'], ['GET', `/loyalty/purchases/${id}`], ['GET', `/loyalty/purchases/${id}/reversal-preview`], ['POST', `/loyalty/purchases/${id}/reverse`],
+    ] as const) expect(isCashierRouteAllowed(method, path), `${method} ${path}`).toBe(false);
+  });
+
   it('has exactly the nine counter routes (the onboarding-invite issuer is NOT a cashier function)', () => {
     expect(CASHIER_ALLOWED_ROUTES.map((r) => r.label).sort()).toEqual(
       EXPECTED_ALLOWED.map((s) => s.replace('/api/v1', '')).sort(),
