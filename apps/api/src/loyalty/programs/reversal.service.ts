@@ -128,8 +128,19 @@ export async function reversePurchaseProgress(
     for (const entitlement of entitlements) {
       if (next.grants.has(entitlement.sourceKey)) continue;
       if (entitlement.status === 'available') {
-        await tx.update(loyaltyProgramEntitlements).set({ status: 'reversed' }).where(and(eq(loyaltyProgramEntitlements.id, entitlement.id), eq(loyaltyProgramEntitlements.status, 'available')));
-        result.revokedEntitlements += 1;
+        // LPC-15: the revocation counts only what the database really changed. A hand-over that commits between the read above and this update leaves
+        // zero rows to revoke; the reward is then reported as already used (flagged for review) instead of as revoked.
+        const revoked = await tx
+          .update(loyaltyProgramEntitlements)
+          .set({ status: 'reversed' })
+          .where(and(eq(loyaltyProgramEntitlements.id, entitlement.id), eq(loyaltyProgramEntitlements.status, 'available')))
+          .returning({ id: loyaltyProgramEntitlements.id });
+        if (revoked.length > 0) {
+          result.revokedEntitlements += 1;
+        } else {
+          const [current] = await tx.select({ status: loyaltyProgramEntitlements.status }).from(loyaltyProgramEntitlements).where(eq(loyaltyProgramEntitlements.id, entitlement.id)).limit(1);
+          if (current?.status === 'redeemed') result.usedEntitlementIds.push(entitlement.id);
+        }
       } else if (entitlement.status === 'redeemed') {
         result.usedEntitlementIds.push(entitlement.id);
       }
