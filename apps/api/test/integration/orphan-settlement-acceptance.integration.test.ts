@@ -183,7 +183,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
       expect(view.claim.sourceRewardType).toBe('voucher');
       expect(view.claim.reward.name).toContain('Reservation voucher');
-      expect(view.claim.reward.value).toBe('15.00');
+      expect(view.claim.reward.value).toBe('15.000'); // three decimals since migration 0108 (LPC-14)
       expect(view.receivingBusinessId).toBe(receivingBusinessId);
 
       expect('customerId' in view).toBe(false);
