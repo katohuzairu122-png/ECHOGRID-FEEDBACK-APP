@@ -29,6 +29,9 @@ async function get(path: string, call: Call = {}) {
   const env = {
     HYPERDRIVE: { connectionString: process.env.APP_RUNTIME_DATABASE_URL ?? databaseUrl },
     JWT_ACCESS_SECRET: SECRET,
+    // An impersonation token is only accepted while impersonation is enabled (a disabled flag answers every such token with 401 before routing).
+    // The platform route must still refuse it with 403 when it IS accepted, which is the behaviour this test asserts.
+    PLATFORM_IMPERSONATION_ENABLED: 'true',
     API_RATE_LIMITER: { limit: async () => ({ success: true }) },
   } as unknown as Bindings;
   const response = await app.request(`/api/v1${path}`, { headers }, env,
