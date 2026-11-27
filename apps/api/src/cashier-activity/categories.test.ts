@@ -12,6 +12,7 @@ describe('cashier activity categorisation', () => {
     expect(categorize(ACTION.purchase, marked())?.categories).toEqual(['points_issued']);
     expect(categorize(ACTION.purchaseViaLookup, marked())?.categories).toEqual(['points_issued']);
     expect(categorize(ACTION.redemptionConfirmed, marked())?.categories).toEqual(['redemption_attempt', 'redemption_success']);
+    expect(categorize(ACTION.entitlementRedeemed, marked())?.categories).toEqual(['redemption_attempt', 'redemption_success']);
     expect(categorize(ACTION.redemptionRejected, marked())?.categories).toEqual(['redemption_attempt', 'redemption_failure']);
     expect(categorize(ACTION.redemptionLookup, marked({ outcome: 'success' }))?.categories).toEqual(['redemption_attempt']);
     expect(categorize(ACTION.redemptionLookup, marked({ outcome: 'failure' }))?.categories).toEqual(['redemption_attempt', 'redemption_failure']);

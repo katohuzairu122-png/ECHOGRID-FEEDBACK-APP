@@ -231,6 +231,12 @@
         "needMore": "{count} more points needed",
         "notMemberTitle": "Not a member yet",
         "notMemberBody": "This customer has not joined this business. Ask them to scan the business QR code and join, then scan their QR code again."
+      },
+      "earned": {
+        "title": "Earned rewards",
+        "hint": "Rewards this customer has earned. Hand over the item, then tap the button. Each reward can be handed over once.",
+        "handOver": "Hand over",
+        "expires": "Use by {date}"
       }
     }
   },

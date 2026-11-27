@@ -231,6 +231,12 @@
         "needMore": "Encore {count} points nécessaires",
         "notMemberTitle": "Pas encore membre",
         "notMemberBody": "Ce client n’a pas rejoint ce commerce. Demandez-lui de scanner le code QR du commerce et de s’inscrire, puis scannez de nouveau son code QR."
+      },
+      "earned": {
+        "title": "Récompenses gagnées",
+        "hint": "Récompenses gagnées par ce client. Remettez l'article, puis appuyez sur le bouton. Chaque récompense ne peut être remise qu'une fois.",
+        "handOver": "Remettre",
+        "expires": "À utiliser avant le {date}"
       }
     }
   },

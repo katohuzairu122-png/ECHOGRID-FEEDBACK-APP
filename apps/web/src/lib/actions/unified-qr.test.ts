@@ -281,6 +281,24 @@ describe('staff QR action authorization', () => {
       }),
     );
   });
+  it('hands over an earned programme reward through the freshly resolved account only', async () => {
+    const id = '6f0f1c5e-0000-4000-8000-000000000003';
+    const state = await staffQrTransactionAction('qr', 'branch', 'business', {}, form({ operation: 'redeem-entitlement', entitlementId: id, accountId: 'foreign' }));
+    expect(state.success).toBe(true);
+    expect(mocks.api).toHaveBeenLastCalledWith(
+      `/loyalty/accounts/account/entitlements/${id}/redeem`,
+      expect.objectContaining({ businessId: 'business', branchId: 'branch', method: 'POST' }),
+    );
+  });
+  it('refuses a reward hand-over without the redeem permission or with a malformed id, and calls nothing', async () => {
+    mocks.api.mockResolvedValueOnce({ ...result, actions: ['VALIDATE_PURCHASE'] });
+    const denied = await staffQrTransactionAction('qr', '', 'business', {}, form({ operation: 'redeem-entitlement', entitlementId: '6f0f1c5e-0000-4000-8000-000000000003' }));
+    expect(denied.error).toContain('not permitted');
+    mocks.api.mockResolvedValueOnce(result);
+    const bad = await staffQrTransactionAction('qr', '', 'business', {}, form({ operation: 'redeem-entitlement', entitlementId: '../x' }));
+    expect(bad.error).toContain('Choose a reward');
+    expect(mocks.api).toHaveBeenCalledTimes(2); // only the two re-resolutions
+  });
   it('does not expose or confirm another customer’s redemption', async () => {
     mocks.api
       .mockResolvedValueOnce(result)

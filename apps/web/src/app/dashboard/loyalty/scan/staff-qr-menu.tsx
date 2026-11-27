@@ -1,7 +1,7 @@
 'use client';
 
 import { useActionState, useEffect, useRef } from 'react';
-import { useTranslations } from 'next-intl';
+import { useFormatter, useTranslations } from 'next-intl';
 import { QrCameraScanner } from '@/components/qr-camera-scanner';
 import { staffUnifiedQrAction, type StaffQrState } from '@/lib/actions/unified-qr';
 import { Button, Input, Label } from '@/components/ui';
@@ -128,6 +128,9 @@ function ResolvedMenu({
     <div className="space-y-4">
     {result.card ? <CustomerCard card={result.card} /> : null}
     {result.membershipStatus === 'none' ? <NotAMemberNotice /> : null}
+    {result.actions.includes('REDEEM_REWARD') && result.card?.earnedRewards?.length ? (
+      <EarnedRewards state={state} action={action} pending={pending} />
+    ) : null}
     <div className="space-y-4 rounded-xl border bg-white p-5">
       {result.actions.includes('VIEW_ALLOWED_MEMBERSHIP_STATE') && (
         <p>Membership in this business: {result.membershipStatus}</p>
@@ -200,6 +203,37 @@ function ResolvedMenu({
       )}
     </div>
     </div>
+  );
+}
+
+/** Programme rewards the member has earned (stamp card, milestones, streaks, missions...). One tap hands one over; the API refuses a second try. */
+function EarnedRewards({ state, action, pending }: { state: StaffQrState; action: (form: FormData) => void; pending: boolean }) {
+  const t = useTranslations('loyalty.staff.serve.earned');
+  const format = useFormatter();
+  const rewards = state.result?.card?.earnedRewards ?? [];
+  return (
+    <section aria-label={t('title')} className="space-y-3 rounded-xl border bg-white p-5" data-testid="earned-rewards">
+      <h2 className="font-semibold">{t('title')}</h2>
+      <p className="text-sm text-neutral-600">{t('hint')}</p>
+      <ul className="space-y-2">
+        {rewards.map((reward) => (
+          <li key={reward.id} className="flex items-center justify-between gap-3 rounded-lg border px-3 py-2">
+            <div className="min-w-0">
+              <p className="truncate text-sm font-medium text-neutral-900">{reward.name}</p>
+              {reward.expiresAt ? (
+                <p className="text-xs text-neutral-500">{t('expires', { date: format.dateTime(new Date(reward.expiresAt), { dateStyle: 'medium' }) })}</p>
+              ) : null}
+            </div>
+            <form action={action}>
+              <QrContextFields state={state} />
+              <input type="hidden" name="operation" value="redeem-entitlement" />
+              <input type="hidden" name="entitlementId" value={reward.id} />
+              <Button disabled={pending || state.success} data-testid="hand-over">{t('handOver')}</Button>
+            </form>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 
