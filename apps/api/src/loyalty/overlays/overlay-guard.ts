@@ -1,4 +1,4 @@
-import { toMilli } from '../money-storage';
+import { toMilli } from './exact-decimal';
 
 /**
  * LPC-12/13: the enforcement boundaries a promotional overlay must pass, as PURE, policy-neutral checks. Nothing here awards anything, reads a
