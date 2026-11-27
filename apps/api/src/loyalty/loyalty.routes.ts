@@ -31,6 +31,7 @@ import { LoyaltyRedemptionService } from './loyalty-redemption.service';
 import { NotificationService } from '../notifications/notification.service';
 import { LoyaltyActionResolver } from './loyalty-action-resolver';
 import { LoyaltyProgramService } from './programs/program.service';
+import { listAvailableEntitlements, redeemAccountEntitlement } from './programs/entitlement.service';
 import { previewPurchases, isProgramAvailable } from '@echo-grid-feedback/shared-types';
 import { z } from 'zod';
 import { CustomerLookupService, LOOKUP_PURCHASE_AUDIT } from './customer-lookup.service';
@@ -206,6 +207,27 @@ loyaltyRoutes.post('/accounts/:id/purchase', requirePermission('loyalty:serve'),
       action: 'loyalty.purchase_recorded',
     });
     return ok(c, account);
+  });
+});
+
+// ---- LPC-05: cashier hands over earned programme rewards ---------------------------------------------------------
+// The cashier works from the scanned customer's account; they can list and redeem earned rewards but never change a programme.
+loyaltyRoutes.get('/accounts/:id/entitlements', requirePermission('loyalty:serve'), async (c) => {
+  const accountId = z.uuid().parse(c.req.param('id'));
+  return withDb(c, async (db) => ok(c, await listAvailableEntitlements(db, {
+    businessId: c.get('businessId'), accountId, branchId: c.get('branchId'),
+  })));
+});
+
+loyaltyRoutes.post('/accounts/:id/entitlements/:entitlementId/redeem', requirePermission('loyalty:serve'), async (c) => {
+  const accountId = z.uuid().parse(c.req.param('id'));
+  const entitlementId = z.uuid().parse(c.req.param('entitlementId'));
+  return withDb(c, async (db) => {
+    const redeemed = await redeemAccountEntitlement(db, {
+      businessId: c.get('businessId'), accountId, entitlementId, redeemedBy: c.get('userId'), branchId: c.get('branchId'),
+    });
+    c.set('auditMetadata', { action: 'loyalty.entitlement_redeemed', entityType: 'loyalty_account', entityId: accountId, details: { entitlementId, rewardId: redeemed.rewardId } });
+    return ok(c, { id: redeemed.id, rewardId: redeemed.rewardId, status: 'redeemed' });
   });
 });
 
