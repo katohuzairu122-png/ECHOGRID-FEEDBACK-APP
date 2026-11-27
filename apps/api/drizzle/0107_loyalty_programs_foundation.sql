@@ -189,8 +189,9 @@ BEGIN
   END IF;
   IF TG_TABLE_NAME = 'loyalty_program_progress_events' THEN
     IF NOT EXISTS (SELECT 1 FROM loyalty_accounts a WHERE a.id = NEW.loyalty_account_id AND a.business_id = NEW.business_id)
-       OR NOT EXISTS (SELECT 1 FROM loyalty_program_progress p WHERE p.id = NEW.progress_id AND p.program_id = NEW.program_id AND p.loyalty_account_id = NEW.loyalty_account_id AND p.business_id = NEW.business_id) THEN
-      RAISE EXCEPTION 'LOYALTY_PROGRAM_TENANT_MISMATCH: the entry does not belong to this business, programme and account' USING ERRCODE = 'integrity_constraint_violation';
+       OR NOT EXISTS (SELECT 1 FROM loyalty_program_progress p WHERE p.id = NEW.progress_id AND p.program_id = NEW.program_id AND p.loyalty_account_id = NEW.loyalty_account_id AND p.business_id = NEW.business_id)
+       OR (NEW.purchase_event_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM loyalty_purchase_events e WHERE e.id = NEW.purchase_event_id AND e.business_id = NEW.business_id AND e.loyalty_account_id = NEW.loyalty_account_id)) THEN
+      RAISE EXCEPTION 'LOYALTY_PROGRAM_TENANT_MISMATCH: the entry does not belong to this business, programme, account and purchase' USING ERRCODE = 'integrity_constraint_violation';
     END IF;
   END IF;
   RETURN NEW;

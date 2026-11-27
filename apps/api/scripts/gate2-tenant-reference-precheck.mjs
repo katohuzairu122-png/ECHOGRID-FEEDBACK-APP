@@ -33,6 +33,13 @@ export const SPEC = [
   ['fraud_signals', 'feedback', 'feedback_id', 'STRAIGHT'],
   ['loyalty_accounts', 'business_customer_memberships', 'membership_id', 'STRAIGHT'],
   ['loyalty_accounts', 'loyalty_tiers', 'tier_id', 'OPTIONAL_FK_SET_NULL'],
+  // LOYALTY-PROGRAMME-COMPLETION (0107): every programme-owned row is tenant-checked by its own guard trigger (account, reward, progress and purchase must belong to the same business).
+  ['loyalty_program_entitlements', 'loyalty_accounts', 'loyalty_account_id', 'GUARDED_BY_TRIGGER'],
+  ['loyalty_program_entitlements', 'loyalty_rewards', 'reward_id', 'GUARDED_BY_TRIGGER'],
+  ['loyalty_program_progress', 'loyalty_accounts', 'loyalty_account_id', 'GUARDED_BY_TRIGGER'],
+  ['loyalty_program_progress_events', 'loyalty_accounts', 'loyalty_account_id', 'GUARDED_BY_TRIGGER'],
+  ['loyalty_program_progress_events', 'loyalty_program_progress', 'progress_id', 'GUARDED_BY_TRIGGER'],
+  ['loyalty_program_progress_events', 'loyalty_purchase_events', 'purchase_event_id', 'GUARDED_BY_TRIGGER'],
   ['loyalty_purchase_events', 'branches', 'branch_id', 'OPTIONAL_FK_SET_NULL'],
   ['loyalty_purchase_events', 'business_customer_memberships', 'membership_id', 'STRAIGHT'],
   ['loyalty_purchase_events', 'loyalty_accounts', 'loyalty_account_id', 'STRAIGHT'],
