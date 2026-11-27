@@ -26,6 +26,10 @@ test('landing sign in, registration, failed login, session login, logout and pro
   await expect(page).toHaveURL(/\/forgot-password$/);
   await page.goto('/login');
   await page.getByRole('link', { name: 'Sign up', exact: true }).click();
+  // Registration now asks first which kind of account is wanted (a customer must not land on the owner form by accident).
+  await expect(page.getByRole('heading', { name: 'Choose how to participate on Echo Grid' })).toBeVisible();
+  await page.getByRole('link', { name: 'Create a business account' }).click();
+  await expect(page.getByText('Business owner account')).toBeVisible();
   await page.getByLabel('Full name').fill('Login UI Test');
   await page.getByLabel('Email', { exact: true }).fill(email);
   await page.getByLabel('Password', { exact: true }).fill(password);
