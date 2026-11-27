@@ -227,10 +227,9 @@ describe.skipIf(!process.env.DATABASE_URL)('loyalty programmes (integration)', (
     ).rejects.toThrow(/LOYALTY_PROGRAM_TENANT_MISMATCH/);
   });
 
-  it('Configure Later: a new business can enrol and be served but earns nothing until a programme is active', async () => {
+  it('Configure Later: a business created through registration can enrol and be served but earns nothing until a programme is active', async () => {
     const later = (await new BusinessService(appDbOf(buildDb(admin))).createBusiness({ name: `LPC later ${run}` } as never, ownerId)).businessId;
-    await programmes.markConfigureLater(later);
-    expect(await programmes.setupState(later)).toBe('pending');
+    expect(await programmes.setupState(later)).toBe('pending'); // set by registration itself, with no extra call
     const member = await makeMember(later);
     const result = await buy(member.accountId, 20, `later-${run}`, later);
     expect(result.account.points).toBe(0);

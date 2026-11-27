@@ -14,6 +14,7 @@ export async function LoyaltySubnav() {
     { href: '/dashboard/loyalty', label: t('accounts') },
     ...(configure
       ? [
+          { href: '/dashboard/loyalty/programme', label: t('programme') },
           { href: '/dashboard/loyalty/tiers', label: t('tiers') },
           { href: '/dashboard/loyalty/rewards', label: t('rewards') },
         ]
