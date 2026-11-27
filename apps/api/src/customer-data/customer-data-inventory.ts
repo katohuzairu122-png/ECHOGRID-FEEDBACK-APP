@@ -19,6 +19,7 @@ export const CUSTOMER_DATA_INVENTORY: readonly CustomerDataEntry[] = [
   e('business_customer_memberships', 'customer_id', 'relationship_consent'), e('community_memberships', 'customer_id', 'relationship_consent'), e('network_follows', 'customer_id', 'relationship_consent'),
   e('conversations', 'customer_id', 'relationship_consent'), e('notification_preferences', 'customer_id', 'relationship_consent'), e('consent_grants', 'customer_id', 'relationship_consent'),
   e('loyalty_accounts', 'customer_id', 'loyalty_financial_ledger'), e('loyalty_accounts', 'referred_by_customer_id', 'loyalty_financial_ledger'), e('loyalty_purchase_events', 'customer_id', 'loyalty_financial_ledger', true),
+  e('loyalty_program_progress', 'customer_id', 'loyalty_financial_ledger'), // LPC-01: per-account programme counters (stamps, streaks, missions); frozen, never deleted by the platform
   e('orphan_reward_claims', 'customer_id', 'loyalty_financial_ledger'), e('orphan_settlements', 'customer_id', 'loyalty_financial_ledger'), e('orphan_settlement_events', 'customer_id', 'loyalty_financial_ledger', true),
   e('community_point_accounts', 'customer_id', 'loyalty_financial_ledger'), e('community_point_award_decisions', 'customer_id', 'loyalty_financial_ledger', true), e('community_point_transactions', 'customer_id', 'loyalty_financial_ledger', true),
   e('customer_referrals', 'referred_customer_id', 'evidence_reference'), e('customer_referrals', 'referring_customer_id', 'evidence_reference'), e('customer_onboarding_events', 'customer_id', 'evidence_reference', true),
