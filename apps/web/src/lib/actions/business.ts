@@ -40,7 +40,9 @@ export async function createBusinessAction(
   // output, which doesn't yet reflect the business just created -- redirect
   // would land on a stale dashboard missing the new business entirely.
   revalidatePath('/dashboard');
-  redirect('/dashboard');
+  // LOYALTY-PROGRAMME-COMPLETION: registration continues into the loyalty programme step (with a "Configure later" exit); the business
+  // already earns nothing until a programme is active, so skipping it never applies an earning policy silently.
+  redirect('/dashboard/loyalty/programme?setup=1');
 }
 
 // ---- Settings (i18n & Multi-Currency Block 3) ------------------------------

@@ -9,7 +9,8 @@
       "settings": "Settings",
       "navigationLabel": "Loyalty sections",
       "customerQr": "Customer QR",
-      "settlements": "Orphan settlement"
+      "settlements": "Orphan settlement",
+      "programme": "Programme"
     },
     "accounts": {
       "emptyTitle": "No loyalty members yet",
@@ -788,6 +789,290 @@
       "codesRevoked": "Recovery codes revoked.",
       "revokeRecoveryCodes": "Revoke recovery codes",
       "saveCodesTitle": "Save your recovery codes"
+    }
+  },
+  "programmes": {
+    "title": "Loyalty programme",
+    "subtitle": "How your customers earn. Choose one primary programme, configure it and switch it when you need to.",
+    "setup": {
+      "title": "Choose your loyalty programme",
+      "intro": "Pick how customers earn at your business. You can change it later.",
+      "later": "Configure later",
+      "laterNote": "Customers can still join, but they earn nothing until you activate a programme."
+    },
+    "none": {
+      "title": "No loyalty programme is active",
+      "body": "Customers can join and be served, but they earn nothing until you activate a programme below."
+    },
+    "choose": {
+      "title": "Choose a programme",
+      "body": "Select a programme to configure it. Nothing starts until you confirm the activation."
+    },
+    "switch": {
+      "title": "Switch programme",
+      "body": "Pick a different programme to prepare it. It only replaces the current one when you confirm its activation."
+    },
+    "configure": {
+      "title": "Configure the programme"
+    },
+    "cards": {
+      "title": "Loyalty programmes",
+      "current": "Current",
+      "unavailable": "Not available",
+      "select": "Select",
+      "edit": "Edit",
+      "reason": {
+        "IN_DEVELOPMENT": "Not available yet: this programme is still being built.",
+        "NEEDS_ITEM_LEVEL_EVIDENCE": "Not available yet: it needs verified item-level purchase data, which the platform does not capture yet.",
+        "NEEDS_OWNER_DECISION": "Not available yet: it needs a platform decision first."
+      }
+    },
+    "types": {
+      "LP-01": {
+        "name": "Buy X, get Y free",
+        "summary": "Customers collect a stamp for each eligible purchase; a completed card earns a free item.",
+        "example": "Example: buy 4 coffees and the 5th is free.",
+        "needs": "Needs: stamps per card, a free-item reward and how stamps expire."
+      },
+      "LP-02": {
+        "name": "Fixed points per purchase",
+        "summary": "Every qualifying purchase earns the same number of points, whatever it costs.",
+        "example": "Example: every qualifying purchase earns 10 points.",
+        "needs": "Needs: points per purchase and an optional minimum amount."
+      },
+      "LP-03": {
+        "name": "Spend and earn",
+        "summary": "Customers earn points in proportion to what they spend.",
+        "example": "Example: every 1 KWD spent earns 10 points.",
+        "needs": "Needs: points per currency unit."
+      },
+      "LP-04": {
+        "name": "Milestone rewards",
+        "summary": "Customers unlock rewards when they reach purchase, visit or spending milestones.",
+        "example": "Example: complete 20 qualifying visits to unlock a reward.",
+        "needs": "Needs: a milestone type, ascending thresholds and a reward for each."
+      },
+      "LP-05": {
+        "name": "Streak rewards",
+        "summary": "Customers earn a reward for qualifying activity in consecutive days or weeks.",
+        "example": "Example: visit on five consecutive days.",
+        "needs": "Needs: the period, how many in a row and a reward. Uses your business timezone."
+      },
+      "LP-06": {
+        "name": "Off-peak rewards",
+        "summary": "Bonus points for purchases made in the quiet times you choose.",
+        "example": "Example: extra points between 2 PM and 5 PM.",
+        "needs": "Needs: weekdays, time windows (business local time) and a bonus."
+      },
+      "LP-07": {
+        "name": "Missions and challenges",
+        "summary": "Short challenges with a deadline and a reward.",
+        "example": "Example: complete 3 qualifying purchases within 7 days.",
+        "needs": "Needs: an objective, a target, a deadline and a reward."
+      },
+      "LP-08": {
+        "name": "Product-specific loyalty",
+        "summary": "Rewards for buying specific products.",
+        "example": "Example: buy five bakery products to earn a reward.",
+        "needs": "Needs verified item-level purchase data, which is not available yet."
+      }
+    },
+    "status": {
+      "draft": "Draft",
+      "validated": "Validated",
+      "active": "Active",
+      "inactive": "Paused",
+      "retired": "Retired"
+    },
+    "active": {
+      "version": "Configuration version",
+      "since": "Active since",
+      "legacy": "Existing earning rules",
+      "legacyNote": "This programme reproduces the earning your business already had. Changing it creates a new version that applies only to future purchases.",
+      "edit": "Edit configuration"
+    },
+    "others": {
+      "title": "Other programmes"
+    },
+    "actions": {
+      "preview": "Preview",
+      "saveDraft": "Save draft",
+      "activate": "Validate and activate",
+      "working": "Working…",
+      "pause": "Pause programme",
+      "resume": "Resume",
+      "retire": "Retire"
+    },
+    "confirmLabel": {
+      "pause": "I confirm",
+      "retire": "I confirm",
+      "activate-existing": "I confirm"
+    },
+    "activation": {
+      "title": "Before you activate",
+      "keeps": "What stays: every customer's points balance, past transactions, earned rewards, tiers and the history of earlier programmes.",
+      "changes": "What changes: new purchases and visits follow this programme from the moment you activate it. Past earnings are never rewritten.",
+      "consent": "Progress from the previous programme is kept but not converted (stamps do not become points). Customers join the new programme with their next qualifying activity, within their existing consent.",
+      "replaces": "This will replace the active programme: {name}.",
+      "confirm": "I understand and want to activate this programme.",
+      "ownerOnly": "Only the business Owner can activate, pause or switch the programme."
+    },
+    "preview": {
+      "title": "What customers will see",
+      "purchase": "Purchase",
+      "earns": "Earns",
+      "points": "{count, plural, one {# point} other {# points}}",
+      "notQualifying": "Does not qualify",
+      "note": "This preview uses the same rules as the till.",
+      "lines": {
+        "lp01": "A card of {n} stamps earns the reward.",
+        "lp04_purchases": "After {n} purchases a reward unlocks.",
+        "lp04_visits": "After {n} visits a reward unlocks.",
+        "lp04_spend": "After spending {n} a reward unlocks.",
+        "lp05_day": "{n} days in a row earns the reward.",
+        "lp05_week": "{n} weeks in a row earns the reward.",
+        "lp06": "Bonus between {start} and {end} on {days} selected days.",
+        "lp07": "Mission {name}: reach {target} within {days} days."
+      }
+    },
+    "saved": {
+      "draft": "Draft saved.",
+      "activated": "Programme activated.",
+      "paused": "Programme paused. Customers earn nothing until one is active.",
+      "retired": "Programme retired."
+    },
+    "errors": {
+      "NO_BUSINESS": "No active business.",
+      "UNAVAILABLE": "This programme is not available.",
+      "INVALID": "Please correct the configuration.",
+      "OWNER_REQUIRED": "Only the business Owner can do this.",
+      "NOT_ALLOWED": "This change is not allowed in the programme's current state.",
+      "FAILED": "Something went wrong. Try again.",
+      "CONFIRM_REQUIRED": "Please tick the confirmation box."
+    },
+    "issues": {
+      "generic": "Check this value.",
+      "invalid_type": "Enter a value of the right type.",
+      "too_small": "This value is too small.",
+      "too_big": "This value is too large.",
+      "invalid_value": "This value is not allowed.",
+      "invalid_format": "This value is not in the right format.",
+      "custom": "Check this value.",
+      "unrecognized_keys": "Unexpected field.",
+      "TOO_MANY_DECIMALS": "Too many decimal places for your currency.",
+      "INVALID_FORMAT": "Enter a plain number.",
+      "NOT_POSITIVE": "Must be greater than zero.",
+      "TOO_LARGE": "This value is above the maximum.",
+      "INVALID_RATE": "Enter a valid rate.",
+      "NOT_ASCENDING": "Thresholds must go up, each higher than the one before.",
+      "OVERLAP": "Time windows must not overlap.",
+      "BAD_WINDOW": "A window must end after it starts on the same day.",
+      "BAD_RANGE": "The end date must not be before the start date.",
+      "DUPLICATE": "Names must be unique.",
+      "NOT_APPLICABLE": "This setting does not apply here.",
+      "REWARD_NOT_FOUND": "Choose an active reward from your catalogue.",
+      "PROGRAM_UNAVAILABLE": "This programme is not available.",
+      "server": "The server did not accept this configuration."
+    },
+    "history": {
+      "title": "Programme history",
+      "versions": "{count, plural, one {# configuration version} other {# configuration versions}} kept",
+      "events": {
+        "created": "Created",
+        "version_created": "New configuration version",
+        "validated": "Validated",
+        "activated": "Activated",
+        "deactivated": "Paused",
+        "retired": "Retired",
+        "switched_to": "Activated as the new programme",
+        "switched_from": "Replaced by another programme",
+        "legacy_backfill": "Created from your existing earning rules"
+      }
+    },
+    "form": {
+      "chooseReward": "Choose a reward",
+      "noRewards": "Create an active free-item, discount or voucher reward first (Loyalty, Rewards); prizes are chosen from your catalogue.",
+      "pointsPerUnit": "Points per {currency} spent",
+      "pointsPerUnitHint": "Whole or decimal, for example 1.5. Fractions of a point are dropped.",
+      "pointsPerCheckin": "Points per check-in",
+      "pointsPerCheckinHint": "Points for each QR check-in; 0 for none.",
+      "pointsPerPurchase": "Points per qualifying purchase",
+      "pointsPerPurchaseHint": "The same for every qualifying purchase, whatever the amount.",
+      "minimumAmount": "Minimum purchase ({currency}, optional)",
+      "minimumAmountHint": "Purchases below this earn nothing.",
+      "checkinDistinct": "Points per check-in (separate from purchases); 0 for none.",
+      "stampThreshold": "Stamps per card",
+      "stampThresholdHint": "The card is complete at this many stamps (2 to 50). One stamp per eligible receipt.",
+      "freeItemReward": "Free item reward",
+      "freeItemHint": "An active free-item reward from your catalogue.",
+      "stampMinimumHint": "Receipts below this do not earn a stamp.",
+      "stampExpiry": "Stamp expiry",
+      "stampExpiryHint": "You must choose: stamps either never expire or expire after a number of days.",
+      "expiryNever": "Never expire",
+      "expiryDays": "Expire after a number of days",
+      "expiryDaysLabel": "Days after the first stamp",
+      "resetOnCompletion": "When a card is completed the customer earns the reward and starts a new card from zero.",
+      "milestoneMetric": "Milestone type",
+      "notATier": "Milestones unlock rewards. They are not membership tiers and never change a customer's tier.",
+      "metricPurchases": "Number of purchases",
+      "metricVisits": "Number of visits (check-ins)",
+      "metricSpend": "Total spent ({currency})",
+      "milestones": "Milestones",
+      "threshold": "Milestone {n}: threshold",
+      "ascendingHint": "Each threshold must be higher than the one before.",
+      "milestoneReward": "Milestone {n}: reward",
+      "addRow": "Add milestone",
+      "removeRow": "Remove last",
+      "streakPeriod": "Period",
+      "periodDay": "Days",
+      "periodWeek": "Weeks (Monday to Sunday)",
+      "requiredPeriods": "Periods in a row",
+      "requiredPeriodsHint": "2 to 365.",
+      "gracePeriods": "Missed periods allowed",
+      "graceHint": "0 means no gaps; up to 3.",
+      "streakEvidence": "What counts",
+      "localTimeNote": "Days and weeks use your business timezone.",
+      "evidenceVisit": "A QR check-in",
+      "evidencePurchase": "A qualifying purchase",
+      "streakReward": "Reward",
+      "effectiveFrom": "Starts on (optional)",
+      "effectiveUntil": "Ends on (optional)",
+      "localDateHint": "Dates are in your business timezone.",
+      "windows": "Off-peak windows",
+      "windowsHint": "Times are your business local time. Windows must not overlap; split a window that crosses midnight.",
+      "windowDays": "Days for window {n}",
+      "day1": "Mon",
+      "day2": "Tue",
+      "day3": "Wed",
+      "day4": "Thu",
+      "day5": "Fri",
+      "day6": "Sat",
+      "day7": "Sun",
+      "windowStart": "From",
+      "windowEnd": "Until (not included)",
+      "bonusType": "Bonus type",
+      "bonusMultiplier": "Multiplier on the base points",
+      "bonusFixed": "Fixed bonus points",
+      "bonusValue": "Bonus value",
+      "bonusValueHint": "A multiplier from 1 to 10, or a whole number of points.",
+      "addWindow": "Add window",
+      "removeWindow": "Remove last",
+      "currencyNote": "Amounts are in {currency}. The server decides eligibility from the purchase time; a cashier cannot change it.",
+      "missions": "Missions",
+      "missionsHint": "Each mission has a goal, a deadline counted from the customer's first qualifying activity, and a reward. Ratings and reviews can never be a goal.",
+      "missionKey": "Mission name",
+      "missionKeyHint": "Lowercase letters, numbers and dashes, for example three-in-seven.",
+      "missionObjective": "Goal",
+      "objectivePurchases": "Number of purchases",
+      "objectiveSpend": "Total spent ({currency})",
+      "objectiveVisits": "Number of visits",
+      "missionTarget": "Target",
+      "missionDays": "Days to complete",
+      "missionDaysHint": "1 to 365.",
+      "missionMinimumHint": "Only for purchase goals.",
+      "missionReward": "Reward",
+      "addMission": "Add mission",
+      "removeMission": "Remove last"
     }
   }
 }

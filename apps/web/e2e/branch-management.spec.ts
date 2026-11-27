@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { signUpBusinessOwner } from './helpers/signup';
+import { signUpBusinessOwner, skipProgrammeSetup } from './helpers/signup';
 
 /**
  * One critical-path smoke test covering the full stack the Vitest/jsdom
@@ -22,6 +22,7 @@ test('signup, create a business, create a branch, see it listed', async ({ page 
 
   await page.getByLabel('Business name').fill(`E2E Business ${unique}`);
   await page.getByRole('button', { name: 'Create business' }).click();
+  await skipProgrammeSetup(page);
 
   // BCOMM-01: a new owner lands on the Community hub; these specs exercise the Business Overview, which keeps its own destination.
   await expect(page.getByRole('heading', { name: 'Community', exact: true })).toBeVisible();

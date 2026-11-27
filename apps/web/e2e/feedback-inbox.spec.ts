@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { signUpBusinessOwner } from './helpers/signup';
+import { signUpBusinessOwner, skipProgrammeSetup } from './helpers/signup';
 
 test('Feedback Inbox: honest empty state, keyboard access and responsive layout', async ({
   page,
@@ -8,6 +8,7 @@ test('Feedback Inbox: honest empty state, keyboard access and responsive layout'
   await signUpBusinessOwner(page, { fullName: 'Inbox UI Test', email: `inbox-ui-${unique}@example.test`, password: 'a-strong-test-password' });
   await page.getByLabel('Business name').fill(`Inbox ${unique}`);
   await page.getByRole('button', { name: 'Create business' }).click();
+  await skipProgrammeSetup(page);
   // BCOMM-01: a new owner lands on the Community hub; these specs exercise the Business Overview, which keeps its own destination.
   await expect(page.getByRole('heading', { name: 'Community', exact: true })).toBeVisible();
   await page.goto('/dashboard/overview');

@@ -9,7 +9,8 @@
       "settings": "Configuración",
       "navigationLabel": "Secciones de fidelización",
       "customerQr": "QR del cliente",
-      "settlements": "Liquidación de recompensas huérfanas"
+      "settlements": "Liquidación de recompensas huérfanas",
+      "programme": "Programa"
     },
     "accounts": {
       "emptyTitle": "Aún no hay miembros",
@@ -788,6 +789,290 @@
       "codesRevoked": "Códigos de recuperación revocados.",
       "revokeRecoveryCodes": "Revocar códigos de recuperación",
       "saveCodesTitle": "Guarda tus códigos"
+    }
+  },
+  "programmes": {
+    "title": "Programa de fidelidad",
+    "subtitle": "Cómo ganan tus clientes. Elige un programa principal, configúralo y cámbialo cuando lo necesites.",
+    "setup": {
+      "title": "Elige tu programa de fidelidad",
+      "intro": "Elige cómo ganan los clientes en tu negocio. Puedes cambiarlo más adelante.",
+      "later": "Configurar más tarde",
+      "laterNote": "Los clientes pueden unirse, pero no ganan nada hasta que actives un programa."
+    },
+    "none": {
+      "title": "No hay ningún programa de fidelidad activo",
+      "body": "Los clientes pueden unirse y ser atendidos, pero no ganan nada hasta que actives un programa abajo."
+    },
+    "choose": {
+      "title": "Elige un programa",
+      "body": "Selecciona un programa para configurarlo. Nada empieza hasta que confirmes la activación."
+    },
+    "switch": {
+      "title": "Cambiar de programa",
+      "body": "Elige otro programa para prepararlo. Solo sustituye al actual cuando confirmes su activación."
+    },
+    "configure": {
+      "title": "Configurar el programa"
+    },
+    "cards": {
+      "title": "Programas de fidelidad",
+      "current": "Actual",
+      "unavailable": "No disponible",
+      "select": "Seleccionar",
+      "edit": "Editar",
+      "reason": {
+        "IN_DEVELOPMENT": "Aún no disponible: este programa todavía se está construyendo.",
+        "NEEDS_ITEM_LEVEL_EVIDENCE": "Aún no disponible: necesita datos verificados de compra por artículo, que la plataforma todavía no captura.",
+        "NEEDS_OWNER_DECISION": "Aún no disponible: necesita antes una decisión de la plataforma."
+      }
+    },
+    "types": {
+      "LP-01": {
+        "name": "Compra X, lleva Y gratis",
+        "summary": "Los clientes reúnen un sello por cada compra válida; una tarjeta completa da un artículo gratis.",
+        "example": "Ejemplo: compra 4 cafés y el 5.º es gratis.",
+        "needs": "Necesita: sellos por tarjeta, una recompensa de artículo gratis y cuándo caducan los sellos."
+      },
+      "LP-02": {
+        "name": "Puntos fijos por compra",
+        "summary": "Cada compra válida da los mismos puntos, cueste lo que cueste.",
+        "example": "Ejemplo: cada compra válida da 10 puntos.",
+        "needs": "Necesita: puntos por compra y un importe mínimo opcional."
+      },
+      "LP-03": {
+        "name": "Gasta y gana",
+        "summary": "Los clientes ganan puntos en proporción a lo que gastan.",
+        "example": "Ejemplo: cada 1 KWD gastado da 10 puntos.",
+        "needs": "Necesita: puntos por unidad de moneda."
+      },
+      "LP-04": {
+        "name": "Recompensas por hitos",
+        "summary": "Los clientes desbloquean recompensas al alcanzar hitos de compras, visitas o gasto.",
+        "example": "Ejemplo: completa 20 visitas válidas para desbloquear una recompensa.",
+        "needs": "Necesita: un tipo de hito, umbrales ascendentes y una recompensa para cada uno."
+      },
+      "LP-05": {
+        "name": "Recompensas por rachas",
+        "summary": "Los clientes ganan una recompensa por actividad válida en días o semanas consecutivos.",
+        "example": "Ejemplo: visita cinco días seguidos.",
+        "needs": "Necesita: el período, cuántos seguidos y una recompensa. Usa la zona horaria de tu negocio."
+      },
+      "LP-06": {
+        "name": "Recompensas en horas valle",
+        "summary": "Puntos extra por compras en las horas tranquilas que elijas.",
+        "example": "Ejemplo: puntos extra entre las 14:00 y las 17:00.",
+        "needs": "Necesita: días de la semana, franjas horarias (hora local del negocio) y un bono."
+      },
+      "LP-07": {
+        "name": "Misiones y retos",
+        "summary": "Retos cortos con fecha límite y recompensa.",
+        "example": "Ejemplo: completa 3 compras válidas en 7 días.",
+        "needs": "Necesita: un objetivo, una meta, una fecha límite y una recompensa."
+      },
+      "LP-08": {
+        "name": "Fidelidad por producto",
+        "summary": "Recompensas por comprar productos concretos.",
+        "example": "Ejemplo: compra cinco productos de panadería para ganar una recompensa.",
+        "needs": "Necesita datos verificados de compra por artículo, que aún no están disponibles."
+      }
+    },
+    "status": {
+      "draft": "Borrador",
+      "validated": "Validado",
+      "active": "Activo",
+      "inactive": "En pausa",
+      "retired": "Retirado"
+    },
+    "active": {
+      "version": "Versión de configuración",
+      "since": "Activo desde",
+      "legacy": "Reglas de ganancia existentes",
+      "legacyNote": "Este programa reproduce la ganancia que tu negocio ya tenía. Cambiarlo crea una versión nueva que solo se aplica a compras futuras.",
+      "edit": "Editar configuración"
+    },
+    "others": {
+      "title": "Otros programas"
+    },
+    "actions": {
+      "preview": "Vista previa",
+      "saveDraft": "Guardar borrador",
+      "activate": "Validar y activar",
+      "working": "Trabajando…",
+      "pause": "Pausar programa",
+      "resume": "Reanudar",
+      "retire": "Retirar"
+    },
+    "confirmLabel": {
+      "pause": "Lo confirmo",
+      "retire": "Lo confirmo",
+      "activate-existing": "Lo confirmo"
+    },
+    "activation": {
+      "title": "Antes de activar",
+      "keeps": "Qué se mantiene: el saldo de puntos de cada cliente, las transacciones pasadas, las recompensas ganadas, los niveles y el historial de programas anteriores.",
+      "changes": "Qué cambia: las compras y visitas nuevas siguen este programa desde que lo actives. Lo ganado antes nunca se reescribe.",
+      "consent": "El progreso del programa anterior se conserva pero no se convierte (los sellos no se vuelven puntos). Los clientes se incorporan al nuevo programa con su siguiente actividad válida, dentro de su consentimiento actual.",
+      "replaces": "Esto sustituirá al programa activo: {name}.",
+      "confirm": "Lo entiendo y quiero activar este programa.",
+      "ownerOnly": "Solo el propietario del negocio puede activar, pausar o cambiar el programa."
+    },
+    "preview": {
+      "title": "Lo que verán los clientes",
+      "purchase": "Compra",
+      "earns": "Gana",
+      "points": "{count, plural, one {# punto} other {# puntos}}",
+      "notQualifying": "No cumple los requisitos",
+      "note": "Esta vista previa usa las mismas reglas que la caja.",
+      "lines": {
+        "lp01": "Una tarjeta de {n} sellos da la recompensa.",
+        "lp04_purchases": "Tras {n} compras se desbloquea una recompensa.",
+        "lp04_visits": "Tras {n} visitas se desbloquea una recompensa.",
+        "lp04_spend": "Tras gastar {n} se desbloquea una recompensa.",
+        "lp05_day": "{n} días seguidos dan la recompensa.",
+        "lp05_week": "{n} semanas seguidas dan la recompensa.",
+        "lp06": "Bono entre las {start} y las {end} en {days} días seleccionados.",
+        "lp07": "Misión {name}: alcanza {target} en {days} días."
+      }
+    },
+    "saved": {
+      "draft": "Borrador guardado.",
+      "activated": "Programa activado.",
+      "paused": "Programa en pausa. Los clientes no ganan nada hasta que haya uno activo.",
+      "retired": "Programa retirado."
+    },
+    "errors": {
+      "NO_BUSINESS": "No hay un negocio activo.",
+      "UNAVAILABLE": "Este programa no está disponible.",
+      "INVALID": "Corrige la configuración.",
+      "OWNER_REQUIRED": "Solo el propietario del negocio puede hacerlo.",
+      "NOT_ALLOWED": "Este cambio no está permitido en el estado actual del programa.",
+      "FAILED": "Algo salió mal. Inténtalo de nuevo.",
+      "CONFIRM_REQUIRED": "Marca la casilla de confirmación."
+    },
+    "issues": {
+      "generic": "Revisa este valor.",
+      "invalid_type": "Introduce un valor del tipo correcto.",
+      "too_small": "Este valor es demasiado pequeño.",
+      "too_big": "Este valor es demasiado grande.",
+      "invalid_value": "Este valor no está permitido.",
+      "invalid_format": "Este valor no tiene el formato correcto.",
+      "custom": "Revisa este valor.",
+      "unrecognized_keys": "Campo inesperado.",
+      "TOO_MANY_DECIMALS": "Demasiados decimales para tu moneda.",
+      "INVALID_FORMAT": "Introduce un número sencillo.",
+      "NOT_POSITIVE": "Debe ser mayor que cero.",
+      "TOO_LARGE": "Este valor supera el máximo.",
+      "INVALID_RATE": "Introduce una tasa válida.",
+      "NOT_ASCENDING": "Los umbrales deben subir: cada uno mayor que el anterior.",
+      "OVERLAP": "Las franjas horarias no deben solaparse.",
+      "BAD_WINDOW": "Una franja debe terminar después de empezar el mismo día.",
+      "BAD_RANGE": "La fecha final no puede ser anterior a la inicial.",
+      "DUPLICATE": "Los nombres deben ser únicos.",
+      "NOT_APPLICABLE": "Este ajuste no se aplica aquí.",
+      "REWARD_NOT_FOUND": "Elige una recompensa activa de tu catálogo.",
+      "PROGRAM_UNAVAILABLE": "Este programa no está disponible.",
+      "server": "El servidor no aceptó esta configuración."
+    },
+    "history": {
+      "title": "Historial del programa",
+      "versions": "{count, plural, one {# versión de configuración conservada} other {# versiones de configuración conservadas}}",
+      "events": {
+        "created": "Creado",
+        "version_created": "Nueva versión de configuración",
+        "validated": "Validado",
+        "activated": "Activado",
+        "deactivated": "En pausa",
+        "retired": "Retirado",
+        "switched_to": "Activado como nuevo programa",
+        "switched_from": "Sustituido por otro programa",
+        "legacy_backfill": "Creado a partir de tus reglas de ganancia existentes"
+      }
+    },
+    "form": {
+      "chooseReward": "Elige una recompensa",
+      "noRewards": "Crea primero una recompensa activa de artículo gratis, descuento o cupón (Fidelidad, Recompensas); los premios se eligen de tu catálogo.",
+      "pointsPerUnit": "Puntos por {currency} gastado",
+      "pointsPerUnitHint": "Entero o decimal, por ejemplo 1,5. Las fracciones de punto se descartan.",
+      "pointsPerCheckin": "Puntos por registro de visita",
+      "pointsPerCheckinHint": "Puntos por cada registro con QR; 0 para ninguno.",
+      "pointsPerPurchase": "Puntos por compra válida",
+      "pointsPerPurchaseHint": "Los mismos para cada compra válida, sea cual sea el importe.",
+      "minimumAmount": "Compra mínima ({currency}, opcional)",
+      "minimumAmountHint": "Las compras por debajo de este importe no ganan nada.",
+      "checkinDistinct": "Puntos por registro de visita (aparte de las compras); 0 para ninguno.",
+      "stampThreshold": "Sellos por tarjeta",
+      "stampThresholdHint": "La tarjeta se completa con esta cantidad de sellos (2 a 50). Un sello por recibo válido.",
+      "freeItemReward": "Recompensa de artículo gratis",
+      "freeItemHint": "Una recompensa activa de artículo gratis de tu catálogo.",
+      "stampMinimumHint": "Los recibos por debajo de este importe no dan sello.",
+      "stampExpiry": "Caducidad de los sellos",
+      "stampExpiryHint": "Debes elegir: los sellos nunca caducan o caducan tras un número de días.",
+      "expiryNever": "Nunca caducan",
+      "expiryDays": "Caducan tras un número de días",
+      "expiryDaysLabel": "Días desde el primer sello",
+      "resetOnCompletion": "Al completar una tarjeta, el cliente gana la recompensa y empieza otra desde cero.",
+      "milestoneMetric": "Tipo de hito",
+      "notATier": "Los hitos desbloquean recompensas. No son niveles de membresía y nunca cambian el nivel del cliente.",
+      "metricPurchases": "Número de compras",
+      "metricVisits": "Número de visitas (registros)",
+      "metricSpend": "Total gastado ({currency})",
+      "milestones": "Hitos",
+      "threshold": "Hito {n}: umbral",
+      "ascendingHint": "Cada umbral debe ser mayor que el anterior.",
+      "milestoneReward": "Hito {n}: recompensa",
+      "addRow": "Añadir hito",
+      "removeRow": "Quitar el último",
+      "streakPeriod": "Período",
+      "periodDay": "Días",
+      "periodWeek": "Semanas (de lunes a domingo)",
+      "requiredPeriods": "Períodos seguidos",
+      "requiredPeriodsHint": "De 2 a 365.",
+      "gracePeriods": "Períodos perdidos permitidos",
+      "graceHint": "0 significa sin huecos; hasta 3.",
+      "streakEvidence": "Qué cuenta",
+      "localTimeNote": "Los días y las semanas usan la zona horaria de tu negocio.",
+      "evidenceVisit": "Un registro de visita con QR",
+      "evidencePurchase": "Una compra válida",
+      "streakReward": "Recompensa",
+      "effectiveFrom": "Empieza el (opcional)",
+      "effectiveUntil": "Termina el (opcional)",
+      "localDateHint": "Las fechas están en la zona horaria de tu negocio.",
+      "windows": "Franjas de horas valle",
+      "windowsHint": "Las horas son la hora local de tu negocio. Las franjas no deben solaparse; divide una que cruce la medianoche.",
+      "windowDays": "Días de la franja {n}",
+      "day1": "Lun",
+      "day2": "Mar",
+      "day3": "Mié",
+      "day4": "Jue",
+      "day5": "Vie",
+      "day6": "Sáb",
+      "day7": "Dom",
+      "windowStart": "Desde",
+      "windowEnd": "Hasta (no incluida)",
+      "bonusType": "Tipo de bono",
+      "bonusMultiplier": "Multiplicador de los puntos base",
+      "bonusFixed": "Puntos de bono fijos",
+      "bonusValue": "Valor del bono",
+      "bonusValueHint": "Un multiplicador de 1 a 10, o un número entero de puntos.",
+      "addWindow": "Añadir franja",
+      "removeWindow": "Quitar la última",
+      "currencyNote": "Los importes están en {currency}. El servidor decide la elegibilidad según la hora de la compra; un cajero no puede cambiarla.",
+      "missions": "Misiones",
+      "missionsHint": "Cada misión tiene una meta, una fecha límite contada desde la primera actividad válida del cliente y una recompensa. Las valoraciones y reseñas nunca pueden ser una meta.",
+      "missionKey": "Nombre de la misión",
+      "missionKeyHint": "Minúsculas, números y guiones, por ejemplo tres-en-siete.",
+      "missionObjective": "Meta",
+      "objectivePurchases": "Número de compras",
+      "objectiveSpend": "Total gastado ({currency})",
+      "objectiveVisits": "Número de visitas",
+      "missionTarget": "Objetivo",
+      "missionDays": "Días para completarla",
+      "missionDaysHint": "De 1 a 365.",
+      "missionMinimumHint": "Solo para metas de compras.",
+      "missionReward": "Recompensa",
+      "addMission": "Añadir misión",
+      "removeMission": "Quitar la última"
     }
   }
 }

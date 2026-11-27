@@ -1,6 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 import { collapseDevelopmentBadge } from './helpers/development-chrome';
-import { signUpBusinessOwner } from './helpers/signup';
+import { signUpBusinessOwner, skipProgrammeSetup } from './helpers/signup';
 
 /**
  * BIZ-CLOSE-01 in a real browser: the owner's closure REQUEST. Synthetic owner only; no real business is closed (a request closes nothing).
@@ -23,6 +23,7 @@ test('the owner reviews the blocked state, confirms, files, sees it pending, wit
   await expect(page).toHaveURL('/dashboard');
   await page.getByLabel('Business name').fill(BUSINESS);
   await page.getByRole('button', { name: 'Create business' }).click();
+  await skipProgrammeSetup(page);
   await page.waitForURL('**/dashboard/community');
   await collapseDevelopmentBadge(page);
 

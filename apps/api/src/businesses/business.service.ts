@@ -1,4 +1,5 @@
 import type { Database } from '../db/client';
+import { loyaltyProgramSetup } from '../db/schema';
 import { createRepositories, type Business } from '../repositories';
 import { RoleProvisioningService } from '../rbac/role-provisioning.service';
 import { SubscriptionProvisioningService } from '../billing/subscription-provisioning.service';
@@ -102,6 +103,11 @@ export class BusinessService {
       // takes the plan catalog to be seeded.
       const subscriptionProvisioning = new SubscriptionProvisioningService(repos);
       await subscriptionProvisioning.provisionTrial(business.id, ownerId);
+
+      // LOYALTY-PROGRAMME-COMPLETION: a business created through registration starts on "Configure Later". It can enrol members and be served,
+      // but earns nothing until its Owner activates a programme: no earning policy is applied silently. (Businesses that existed before
+      // programmes keep earning through their backfilled legacy programme.)
+      await tx.insert(loyaltyProgramSetup).values({ businessId: business.id, state: 'pending' }).onConflictDoNothing();
 
       return { businessId: business.id, ownerRoleId, slug: business.slug, replayed: false };
     });

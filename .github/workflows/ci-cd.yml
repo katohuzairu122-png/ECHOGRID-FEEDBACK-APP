@@ -45,9 +45,9 @@ jobs:
   verify:
     name: Typecheck & Test
     runs-on: ubuntu-latest
-    # The integration tier adds a few minutes; 20 bounds a hung job instead
-    # of letting it sit on GitHub's 6-hour default.
-    timeout-minutes: 20
+    # The integration tier adds a few minutes; main now takes 17-19 min, so the
+    # bound is 30 to stop slow runners cancelling a healthy job (still bounds a hung job).
+    timeout-minutes: 30
 
     services:
       # Pinned to 16 to match the Neon compute this schema actually runs on.
