@@ -1,7 +1,9 @@
 import { and, asc, desc, eq, sql } from 'drizzle-orm';
 import {
+  allowedRewardTypes,
   isProgramAvailable,
   programRegistry,
+  programRewardIds,
   validateProgramConfig,
   type LoyaltyProgramStatus,
   type LoyaltyProgramType,
@@ -10,7 +12,6 @@ import {
 import type { Database } from '../../db/client';
 import {
   businesses,
-  loyaltyRewards,
   loyaltyProgramEvents,
   loyaltyProgramProgress,
   loyaltyProgramSetup,
@@ -20,6 +21,7 @@ import {
   userBusinessRoles,
 } from '../../db/schema';
 import { AppError } from '../../lib/errors';
+import { loadRewardsForValidation } from './progress.service';
 
 type Tx = Parameters<Parameters<Database['transaction']>[0]>[0];
 type Executor = Database | Tx;
@@ -344,18 +346,24 @@ export class LoyaltyProgramService {
     return result.config;
   }
 
-  /** Checks what a configuration points at: an LP-01 card must entitle the customer to an ACTIVE free-item reward of THIS business. */
+  /**
+   * Checks what a configuration points at: every reward must exist in THIS business, be active and be of a type the programme may award (an LP-01
+   * card entitles a free item; the other programmes an earned free item, discount or voucher, never a points-cost reward).
+   */
   private async requireValidReferences(tx: Executor, businessId: string, type: string, config: Record<string, unknown>): Promise<void> {
-    if (type !== 'LP-01') return;
-    const [reward] = await tx
-      .select({ type: loyaltyRewards.type, status: loyaltyRewards.status })
-      .from(loyaltyRewards)
-      .where(and(eq(loyaltyRewards.id, String(config.rewardId)), eq(loyaltyRewards.businessId, businessId), eq(loyaltyRewards.isDeleted, false)))
-      .limit(1);
-    if (!reward || reward.status !== 'active' || reward.type !== 'free_item') {
-      throw new ProgramConfigError([
-        { path: 'rewardId', code: 'REWARD_NOT_FOUND', message: 'Choose an active free-item reward from this business\'s reward catalogue.' },
-      ]);
+    const ids = [...new Set(programRewardIds(type, config))];
+    if (ids.length === 0) return;
+    const found = await loadRewardsForValidation(tx, businessId, ids);
+    const allowed = allowedRewardTypes(type);
+    const bad = ids.filter((id) => {
+      const reward = found.find((r) => r.id === id);
+      return !reward || reward.status !== 'active' || !allowed.includes(reward.type);
+    });
+    if (bad.length > 0) {
+      const message = type === 'LP-01'
+        ? "Choose an active free-item reward from this business's reward catalogue."
+        : "Choose active free-item, discount or voucher rewards from this business's reward catalogue.";
+      throw new ProgramConfigError([{ path: type === 'LP-01' || type === 'LP-05' ? 'rewardId' : 'rewards', code: 'REWARD_NOT_FOUND', message }]);
     }
   }
 

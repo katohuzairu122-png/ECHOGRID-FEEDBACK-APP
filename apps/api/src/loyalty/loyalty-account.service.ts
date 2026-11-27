@@ -9,6 +9,7 @@ import { AppError } from '../lib/errors';
 import { MoneyError, formatMoney, minorFromStored, currencyExponent, parseMoney } from '@echo-grid-feedback/shared-types';
 import { resolveActiveProgramme } from './programs/program.service';
 import { recordPurchaseStamp } from './programs/stamp.service';
+import { recordProgrammeProgress } from './programs/progress.service';
 import { computeCheckinEarning, computePurchaseEarning, type EarningProvenance } from './programs/earning';
 import { assertCashierSessionBound, type CashierSessionBinding } from '../cashier-sessions/session-binding';
 import {
@@ -135,17 +136,36 @@ export class LoyaltyAccountService {
       }
 
       const settings = await repos.loyaltySettings.getOrCreateDefaults(businessId);
-      const earning = computeCheckinEarning(await resolveActiveProgramme(tx, businessId), {
+      const resolvedProgramme = await resolveActiveProgramme(tx, businessId);
+      const earning = computeCheckinEarning(resolvedProgramme, {
         pointsPerCheckin: settings.pointsPerCheckin,
         pointsPerCurrencyUnit: settings.pointsPerCurrencyUnit,
       });
-      return this.applyEarning(repos, account, 'checkin', earning.points, {
+      const ledgerId = crypto.randomUUID();
+      const updated = await this.applyEarning(repos, account, 'checkin', earning.points, {
+        id: ledgerId,
         relatedQrCodeId: qrCodeId,
         visitSessionId,
         recordVisit: true,
         ...(earning.provenance ? { provenance: earning.provenance } : {}),
         ...(earning.note ? { notes: earning.note } : {}),
       });
+      if (resolvedProgramme.kind === 'programme' && ['LP-04', 'LP-05', 'LP-07'].includes(resolvedProgramme.type)) {
+        const business = await repos.businesses.findById(businessId);
+        await recordProgrammeProgress(tx, {
+          businessId,
+          programId: resolvedProgramme.programId,
+          programVersion: resolvedProgramme.version,
+          type: resolvedProgramme.type as 'LP-04' | 'LP-05' | 'LP-07',
+          config: resolvedProgramme.config,
+          loyaltyAccountId: account.id,
+          customerId: account.customerId,
+          eventKey: `checkin:${ledgerId}`,
+          event: { kind: 'visit', occurredAt: new Date() },
+          timeZone: business?.defaultTimezone ?? 'UTC',
+        });
+      }
+      return updated;
     });
   }
 
@@ -251,7 +271,7 @@ export class LoyaltyAccountService {
       const earning = computePurchaseEarning(
         resolvedProgramme,
         { pointsPerCheckin: settings.pointsPerCheckin, pointsPerCurrencyUnit: settings.pointsPerCurrencyUnit },
-        { amountMinor, currency },
+        { amountMinor, currency, occurredAt: event.occurredAt, timeZone: business.defaultTimezone },
       );
 
       if (resolvedProgramme.kind === 'programme' && resolvedProgramme.type === 'LP-01') {
@@ -265,6 +285,20 @@ export class LoyaltyAccountService {
           purchaseEventId: event.id,
           occurredAt: event.occurredAt,
           fact: { amountMinor, currency },
+        });
+      } else if (resolvedProgramme.kind === 'programme' && ['LP-04', 'LP-05', 'LP-07'].includes(resolvedProgramme.type)) {
+        await recordProgrammeProgress(tx, {
+          businessId: input.businessId,
+          programId: resolvedProgramme.programId,
+          programVersion: resolvedProgramme.version,
+          type: resolvedProgramme.type as 'LP-04' | 'LP-05' | 'LP-07',
+          config: resolvedProgramme.config,
+          loyaltyAccountId: account.id,
+          customerId: account.customerId,
+          eventKey: `purchase:${event.id}`,
+          purchaseEventId: event.id,
+          event: { kind: 'purchase', amountMinor, currency, occurredAt: event.occurredAt },
+          timeZone: business.defaultTimezone,
         });
       }
 
@@ -441,6 +475,7 @@ export class LoyaltyAccountService {
       createdBy?: string | undefined;
       recordVisit?: boolean | undefined;
       provenance?: EarningProvenance | undefined;
+      id?: string | undefined;
     },
   ): Promise<LoyaltyAccount> {
     let updated = await repos.loyaltyAccounts.applyPointsDelta(account.id, points, {
@@ -457,6 +492,7 @@ export class LoyaltyAccountService {
     }
 
     await repos.loyaltyTransactions.create({
+      ...(extra.id ? { id: extra.id } : {}),
       loyaltyAccountId: account.id,
       type,
       points,
