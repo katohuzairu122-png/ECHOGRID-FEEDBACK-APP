@@ -10,7 +10,8 @@
       "navigationLabel": "Secciones de fidelización",
       "customerQr": "QR del cliente",
       "settlements": "Liquidación de recompensas huérfanas",
-      "programme": "Programa"
+      "programme": "Programa",
+      "purchases": "Compras"
     },
     "accounts": {
       "emptyTitle": "Aún no hay miembros",
@@ -221,10 +222,10 @@
       "cashierAppLink": "Aplicación de caja: abrirla o instalarla, sesiones de acceso y cuentas de cajero",
       "card": {
         "title": "Tarjeta del miembro",
-        "points": "Puntos",
+        "points": "Saldo de puntos",
         "visits": "Visitas",
         "lastVisit": "Última visita: {date}",
-        "rewardsTitle": "Recompensas",
+        "rewardsTitle": "Recompensas canjeables",
         "noRewards": "Este negocio aún no ha configurado recompensas.",
         "cost": "{count} puntos",
         "ready": "Listo para canjear",
@@ -280,10 +281,10 @@
     "businessDashboard": {
       "messages": "Mensajes",
       "notificationPreferences": "Preferencias de notificaciones →",
-      "points": "{points} pts",
-      "progressToNextTier": "{remaining} pts para {tierName}",
+      "points": "{points} puntos",
+      "progressToNextTier": "{remaining} puntos para el nivel {tierName}",
       "topTierReached": "Nivel máximo alcanzado",
-      "rewardsHeading": "Recompensas",
+      "rewardsHeading": "Recompensas canjeables",
       "recentActivityHeading": "Actividad reciente",
       "backToWallet": "← Mis programas de fidelidad",
       "membership": {
@@ -1150,6 +1151,82 @@
       "missionReward": "Recompensa",
       "addMission": "Añadir misión",
       "removeMission": "Quitar la última"
+    }
+  },
+  "purchases": {
+    "title": "Compras y reversiones",
+    "subtitle": "Revisa una compra y revócala si fue reembolsada o registrada por error. Las reversiones nunca borran nada: el historial se conserva.",
+    "empty": "No hay compras que mostrar.",
+    "unnamed": "Cliente",
+    "review": "Revisar",
+    "details": "Detalles",
+    "previous": "Anterior",
+    "next": "Siguiente",
+    "reverseTitle": "Revertir una compra",
+    "back": "Volver a compras",
+    "columns": {
+      "date": "Fecha",
+      "customer": "Cliente",
+      "amount": "Importe",
+      "points": "Puntos ganados",
+      "status": "Estado",
+      "action": "Acción"
+    },
+    "status": {
+      "confirmed": "Confirmada",
+      "refunded": "Reembolsada",
+      "reversed": "Revertida"
+    },
+    "filters": {
+      "label": "Filtrar compras",
+      "all": "Todas",
+      "confirmed": "Confirmadas",
+      "reversed": "Revertidas (historial)"
+    },
+    "detail": {
+      "title": "Compra original",
+      "channel": "Canal",
+      "pointsEarned": "Puntos ganados"
+    },
+    "impact": {
+      "title": "Qué hará revertir esta compra",
+      "points": "Se retirarán {count, plural, one {# punto} other {# puntos}} del saldo del cliente.",
+      "shortfall": "{count, plural, one {# punto} other {# puntos}} no se pueden retirar porque el cliente ya los gastó. El saldo se detiene en cero y queda registrado.",
+      "noRewards": "No se ve afectada ninguna recompensa ganada.",
+      "revoked": "Recompensa ganada retirada (aún no recibida): {reward}",
+      "alreadyUsed": "Recompensa ya entregada, por lo que se mantiene: {reward}. Esta reversión quedará marcada para revisión.",
+      "frozen": "Un programa desactivado conserva su progreso sin cambios.",
+      "rules": "Reglas del propietario: una recompensa ya entregada se mantiene, el saldo de puntos nunca baja de cero y los cajeros no pueden revertir compras.",
+      "unavailable": "No se pudo calcular el impacto, por lo que esta compra no se puede revertir desde aquí ahora."
+    },
+    "form": {
+      "title": "Revertir esta compra",
+      "reason": "Motivo (obligatorio)",
+      "reasonHint": "De 3 a 200 caracteres. Se guarda con la reversión.",
+      "confirm": "Entiendo que esto revierte la compra y no se puede deshacer.",
+      "submit": "Revertir compra",
+      "submitting": "Revirtiendo…"
+    },
+    "result": {
+      "title": "Compra revertida",
+      "points": "{count, plural, one {# punto retirado} other {# puntos retirados}}.",
+      "shortfall": "{count, plural, one {# punto no se pudo retirar} other {# puntos no se pudieron retirar}} (ya gastados).",
+      "needsReview": "Requiere revisión: se entregó una recompensa o no se pudieron recuperar puntos."
+    },
+    "reversedRecord": {
+      "title": "Esta compra fue revertida",
+      "when": "Revertida el {date}.",
+      "final": "Una reversión es definitiva y queda en el historial. No se puede repetir."
+    },
+    "errors": {
+      "NO_BUSINESS": "Elige primero un negocio.",
+      "REASON_REQUIRED": "Escribe un motivo de 3 a 200 caracteres.",
+      "CONFIRM_REQUIRED": "Marca la confirmación para continuar.",
+      "ALREADY_REVERSED": "Esta compra ya fue revertida.",
+      "NOT_FOUND": "No se encontró esta compra.",
+      "NOT_ALLOWED": "No tienes permiso para revertir compras.",
+      "CANNOT_REPRODUCE": "El progreso de este cliente no se puede recalcular con seguridad, así que la compra no se revirtió. Ajusta los puntos manualmente.",
+      "FAILED": "No se pudo revertir la compra. No se cambió nada. Inténtalo de nuevo."
     }
   }
 }

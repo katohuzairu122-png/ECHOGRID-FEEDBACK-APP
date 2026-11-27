@@ -10,7 +10,8 @@
       "navigationLabel": "Rubriques de fidélité",
       "customerQr": "QR client",
       "settlements": "Règlement des récompenses orphelines",
-      "programme": "Programme"
+      "programme": "Programme",
+      "purchases": "Achats"
     },
     "accounts": {
       "emptyTitle": "Aucun membre pour le moment",
@@ -221,10 +222,10 @@
       "cashierAppLink": "Application caissier : l’ouvrir ou l’installer, sessions de connexion et comptes caissiers",
       "card": {
         "title": "Carte du membre",
-        "points": "Points",
+        "points": "Solde de points",
         "visits": "Visites",
         "lastVisit": "Dernière visite : {date}",
-        "rewardsTitle": "Récompenses",
+        "rewardsTitle": "Récompenses échangeables",
         "noRewards": "Ce commerce n’a pas encore configuré de récompenses.",
         "cost": "{count} points",
         "ready": "Prêt à échanger",
@@ -280,10 +281,10 @@
     "businessDashboard": {
       "messages": "Messages",
       "notificationPreferences": "Préférences de notifications →",
-      "points": "{points} pts",
-      "progressToNextTier": "{remaining} pts avant {tierName}",
+      "points": "{points} points",
+      "progressToNextTier": "{remaining} points avant le niveau {tierName}",
       "topTierReached": "Niveau maximum atteint",
-      "rewardsHeading": "Récompenses",
+      "rewardsHeading": "Récompenses échangeables",
       "recentActivityHeading": "Activité récente",
       "backToWallet": "← Mes programmes de fidélité",
       "membership": {
@@ -1150,6 +1151,82 @@
       "missionReward": "Récompense",
       "addMission": "Ajouter une mission",
       "removeMission": "Retirer la dernière"
+    }
+  },
+  "purchases": {
+    "title": "Achats et annulations",
+    "subtitle": "Consultez un achat et annulez-le s'il a été remboursé ou saisi par erreur. Une annulation ne supprime jamais rien : l'historique est conservé.",
+    "empty": "Aucun achat à afficher.",
+    "unnamed": "Client",
+    "review": "Examiner",
+    "details": "Détails",
+    "previous": "Précédent",
+    "next": "Suivant",
+    "reverseTitle": "Annuler un achat",
+    "back": "Retour aux achats",
+    "columns": {
+      "date": "Date",
+      "customer": "Client",
+      "amount": "Montant",
+      "points": "Points gagnés",
+      "status": "Statut",
+      "action": "Action"
+    },
+    "status": {
+      "confirmed": "Confirmé",
+      "refunded": "Remboursé",
+      "reversed": "Annulé"
+    },
+    "filters": {
+      "label": "Filtrer les achats",
+      "all": "Tous",
+      "confirmed": "Confirmés",
+      "reversed": "Annulés (historique)"
+    },
+    "detail": {
+      "title": "Achat d'origine",
+      "channel": "Canal",
+      "pointsEarned": "Points gagnés"
+    },
+    "impact": {
+      "title": "Ce que fera l'annulation de cet achat",
+      "points": "Retirer {count, plural, one {# point} other {# points}} du solde du client.",
+      "shortfall": "{count, plural, one {# point ne peut pas être retiré} other {# points ne peuvent pas être retirés}} car le client les a déjà dépensés. Le solde s'arrête à zéro et cela est enregistré.",
+      "noRewards": "Aucune récompense gagnée n'est concernée.",
+      "revoked": "Récompense gagnée retirée (pas encore reçue) : {reward}",
+      "alreadyUsed": "Récompense déjà remise, elle reste donc acquise : {reward}. Cette annulation sera signalée pour examen.",
+      "frozen": "Un programme désactivé conserve sa progression inchangée.",
+      "rules": "Règles du propriétaire : une récompense déjà remise reste acquise, le solde de points ne passe jamais sous zéro et les caissiers ne peuvent pas annuler d'achats.",
+      "unavailable": "L'impact n'a pas pu être calculé : cet achat ne peut pas être annulé d'ici pour le moment."
+    },
+    "form": {
+      "title": "Annuler cet achat",
+      "reason": "Motif (obligatoire)",
+      "reasonHint": "De 3 à 200 caractères. Il est conservé avec l'annulation.",
+      "confirm": "Je comprends que cela annule l'achat et que c'est irréversible.",
+      "submit": "Annuler l'achat",
+      "submitting": "Annulation…"
+    },
+    "result": {
+      "title": "Achat annulé",
+      "points": "{count, plural, one {# point retiré} other {# points retirés}}.",
+      "shortfall": "{count, plural, one {# point n'a pas pu être retiré} other {# points n'ont pas pu être retirés}} (déjà dépensés).",
+      "needsReview": "À examiner : une récompense a déjà été remise ou des points n'ont pas pu être récupérés."
+    },
+    "reversedRecord": {
+      "title": "Cet achat a été annulé",
+      "when": "Annulé le {date}.",
+      "final": "Une annulation est définitive et reste dans l'historique. Elle ne peut pas être répétée."
+    },
+    "errors": {
+      "NO_BUSINESS": "Choisissez d'abord une entreprise.",
+      "REASON_REQUIRED": "Saisissez un motif de 3 à 200 caractères.",
+      "CONFIRM_REQUIRED": "Cochez la confirmation pour continuer.",
+      "ALREADY_REVERSED": "Cet achat a déjà été annulé.",
+      "NOT_FOUND": "Cet achat est introuvable.",
+      "NOT_ALLOWED": "Vous n'avez pas l'autorisation d'annuler des achats.",
+      "CANNOT_REPRODUCE": "La progression de ce client ne peut pas être recalculée en toute sécurité : l'achat n'a pas été annulé. Ajustez les points manuellement.",
+      "FAILED": "L'achat n'a pas pu être annulé. Rien n'a été modifié. Réessayez."
     }
   }
 }
