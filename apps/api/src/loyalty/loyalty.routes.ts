@@ -75,6 +75,13 @@ loyaltyRoutes.post('/actions/resolve-customer', requirePermission('loyalty:serve
       permissions: c.get('permissions'),
       ...(c.get('branchId') ? { branchId: c.get('branchId') } : {}),
     });
+    // LPC-06: the card also lists the programme rewards this member has earned and not yet received, so the cashier can hand them over.
+    if (result.card && result.loyaltyAccountId) {
+      const earned = await listAvailableEntitlements(db, {
+        businessId: c.get('businessId'), accountId: result.loyaltyAccountId, branchId: c.get('branchId'),
+      });
+      result.card = { ...result.card, earnedRewards: earned.map((e) => ({ id: e.id, name: e.rewardName, expiresAt: e.expiresAt })) };
+    }
     return ok(c, result);
   });
 });

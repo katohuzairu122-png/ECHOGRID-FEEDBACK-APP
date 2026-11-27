@@ -22,6 +22,8 @@ export interface StaffCustomerCardDto {
   visitCount: number;
   lastVisitAt: string | null;
   rewards: { id: string; name: string; pointsCost: number; enoughPoints: boolean; pointsNeeded: number }[];
+  /** Programme rewards the member has earned and not yet received (LPC-06). Absent from an API that predates them. */
+  earnedRewards?: { id: string; name: string; expiresAt: string | null }[];
 }
 export interface StaffQrResult {
   customerId: string;
@@ -223,6 +225,17 @@ export async function staffQrTransactionAction(
         }),
       });
       return { ...verifiedState, success: true, purchaseCompleted: true };
+    }
+    if (operation === 'redeem-entitlement') {
+      // A reward the programme granted: the API re-checks business, account, branch, expiry and single use.
+      if (!result.actions.includes('REDEEM_REWARD')) throw new ApiError('Reward redemption is not permitted.', 403);
+      const entitlementId = String(form.get('entitlementId') ?? '').trim();
+      if (!/^[0-9a-f-]{36}$/i.test(entitlementId)) throw new ApiError('Choose a reward to hand over.', 422);
+      await apiFetch(`/loyalty/accounts/${result.loyaltyAccountId}/entitlements/${entitlementId}/redeem`, {
+        ...scope,
+        method: 'POST',
+      });
+      return { ...verifiedState, success: true };
     }
     if (!result.actions.includes('REDEEM_REWARD') || !['lookup', 'confirm'].includes(operation)) {
       throw new ApiError('Reward redemption is not permitted.', 403);

@@ -231,6 +231,12 @@
         "needMore": "Faltan {count} puntos",
         "notMemberTitle": "Aún no es miembro",
         "notMemberBody": "Este cliente no se ha unido a este negocio. Pídale que escanee el código QR del negocio y se una; luego escanee su código QR de nuevo."
+      },
+      "earned": {
+        "title": "Recompensas ganadas",
+        "hint": "Recompensas que este cliente ha ganado. Entrega el artículo y pulsa el botón. Cada recompensa se entrega una sola vez.",
+        "handOver": "Entregar",
+        "expires": "Válida hasta {date}"
       }
     }
   },
