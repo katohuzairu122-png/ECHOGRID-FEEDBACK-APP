@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { currencyExponent, formatMoney, MoneyError, parseMoney, parseRate, pointsFor } from './loyalty-money';
+import { earnOffPeak, isValidTimeZone, validateLp04, validateLp05, validateLp06, validateLp07, ENTITLEMENT_REWARD_TYPES } from './loyalty-engines';
 
 /**
  * Primary loyalty programmes (LP-01..LP-08), shared by the API and the web app so the customer-earning PREVIEW and the backend use exactly
@@ -24,7 +25,7 @@ export interface ProgramRegistryEntry {
  * The canonical availability registry (LOYALTY-PROGRAMME-COMPLETION section 4). A programme is selectable ONLY when its earning behaviour,
  * customer progress, reward integration and tests are complete. Move a type into this set in the same change that completes it, never earlier.
  */
-const AVAILABLE_PROGRAM_TYPES: ReadonlySet<LoyaltyProgramType> = new Set<LoyaltyProgramType>(['LP-01', 'LP-02', 'LP-03']);
+const AVAILABLE_PROGRAM_TYPES: ReadonlySet<LoyaltyProgramType> = new Set<LoyaltyProgramType>(['LP-01', 'LP-02', 'LP-03', 'LP-04', 'LP-05', 'LP-06', 'LP-07']);
 const UNAVAILABLE_REASONS: Readonly<Partial<Record<LoyaltyProgramType, ProgramUnavailableReason>>> = {
   // LP-08 needs verified item-level purchase evidence that the platform does not capture (RW-D3). It stays unavailable regardless of code.
   'LP-08': 'NEEDS_ITEM_LEVEL_EVIDENCE',
@@ -112,6 +113,10 @@ export function validateProgramConfig(type: string, raw: unknown, context: { cur
   if (!isProgramAvailable(type)) {
     return { ok: false, errors: [{ path: 'type', code: 'PROGRAM_UNAVAILABLE', message: 'This programme is not available for activation.' }] };
   }
+  if (type === 'LP-04' || type === 'LP-05' || type === 'LP-06' || type === 'LP-07') {
+    const result = type === 'LP-04' ? validateLp04(raw, context.currency) : type === 'LP-05' ? validateLp05(raw, context.currency) : type === 'LP-06' ? validateLp06(raw) : validateLp07(raw, context.currency);
+    return result.ok ? { ok: true, config: result.config } : { ok: false, errors: result.errors };
+  }
   const issues: ProgramConfigIssue[] = [];
   const schemaIssues = (error: z.ZodError) => error.issues.map((i) => ({ path: i.path.join('.') || 'config', code: i.code, message: i.message }));
 
@@ -171,6 +176,9 @@ export interface PurchaseFact {
   /** The verified qualifying amount in the business currency's minor units. */
   readonly amountMinor: bigint;
   readonly currency: string;
+  /** The SERVER-recorded purchase instant and the business IANA timezone: required by time-dependent programmes (LP-06), ignored by the rest. */
+  readonly occurredAt?: Date;
+  readonly timeZone?: string;
 }
 export interface EarningResult {
   readonly points: number;
@@ -191,6 +199,12 @@ export function earnForPurchase(type: LoyaltyProgramType, config: Record<string,
     }
     return { points: Number(config.pointsPerPurchase), qualifying: true };
   }
+  if (type === 'LP-06') {
+    if (!fact.occurredAt || !fact.timeZone || !isValidTimeZone(fact.timeZone)) {
+      throw new MoneyError('INVALID_FORMAT', 'An off-peak programme needs the recorded purchase time and a valid business timezone.');
+    }
+    return { points: earnOffPeak(config, fact.amountMinor, fact.currency, fact.occurredAt, fact.timeZone).points, qualifying: true };
+  }
   if (type === 'LP-01') {
     // A stamp programme earns stamps, not points: the purchase is recorded with zero points and its stamp is handled by the stamp engine.
     const minimum = config.minimumPurchaseAmount;
@@ -199,12 +213,27 @@ export function earnForPurchase(type: LoyaltyProgramType, config: Record<string,
     }
     return { points: 0, qualifying: true };
   }
+  if (type === 'LP-04' || type === 'LP-05' || type === 'LP-07') {
+    // Progress programmes earn rewards through their own engine, not points.
+    return { points: 0, qualifying: true };
+  }
   return { points: 0, qualifying: false, reason: 'NO_POINTS_PROGRAM' };
+}
+
+/** The reward ids a configuration points at, and the reward types each programme may point at (an earned prize is never a points-cost reward). */
+export function programRewardIds(type: string, config: Record<string, unknown>): string[] {
+  if (type === 'LP-01' || type === 'LP-05') return [String(config.rewardId)];
+  if (type === 'LP-04') return (config.milestones as { rewardId: string }[]).map((m) => m.rewardId);
+  if (type === 'LP-07') return (config.missions as { rewardId: string }[]).map((m) => m.rewardId);
+  return [];
+}
+export function allowedRewardTypes(type: string): readonly string[] {
+  return type === 'LP-01' ? ['free_item'] : ENTITLEMENT_REWARD_TYPES;
 }
 
 /** Points a check-in earns. Programmes without a check-in setting earn none; this is deliberately distinct from per-purchase earning. */
 export function earnForCheckin(type: LoyaltyProgramType, config: Record<string, unknown>): number {
-  if (type === 'LP-03' || type === 'LP-02') return Number(config.pointsPerCheckin ?? 0);
+  if (type === 'LP-03' || type === 'LP-02' || type === 'LP-06') return Number(config.pointsPerCheckin ?? 0);
   return 0;
 }
 

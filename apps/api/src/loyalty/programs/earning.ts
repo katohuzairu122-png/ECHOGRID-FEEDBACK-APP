@@ -1,4 +1,4 @@
-import { earnForCheckin, earnForPurchase, parseRate, pointsFor } from '@echo-grid-feedback/shared-types';
+import { earnForCheckin, earnForPurchase, parseRate, pointsFor, type PurchaseFact } from '@echo-grid-feedback/shared-types';
 import type { ResolvedProgramme } from './program.service';
 
 /** The programme (and configuration version) that produced an earning, stored on the ledger row for provenance. */
@@ -26,7 +26,7 @@ export interface LegacySettings {
 export function computePurchaseEarning(
   resolved: ResolvedProgramme,
   legacy: LegacySettings,
-  fact: { amountMinor: bigint; currency: string },
+  fact: PurchaseFact,
 ): ComputedEarning {
   if (resolved.kind === 'implicit_legacy') {
     return { points: pointsFor(fact.amountMinor, fact.currency, parseRate(legacy.pointsPerCurrencyUnit)), provenance: null };

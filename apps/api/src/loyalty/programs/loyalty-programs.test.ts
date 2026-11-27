@@ -25,10 +25,11 @@ describe('programme registry', () => {
       expect(Boolean(entry.unavailableReason)).toBe(!entry.available);
     }
   });
-  it('LP-08 is blocked on item-level evidence and the rest wait on development', () => {
+  it('only LP-08 is blocked, on item-level evidence', () => {
     const byType = Object.fromEntries(programRegistry().map((r) => [r.type, r]));
     expect(byType['LP-08']?.unavailableReason).toBe('NEEDS_ITEM_LEVEL_EVIDENCE');
-    expect(byType['LP-04']?.unavailableReason).toBe('IN_DEVELOPMENT');
+    expect(byType['LP-04']?.available).toBe(true);
+    expect(programRegistry().filter((r) => !r.available).map((r) => r.type)).toEqual(['LP-08']);
     expect(isProgramAvailable('LP-99')).toBe(false);
     expect(isProgramAvailable('')).toBe(false);
   });
@@ -37,7 +38,7 @@ describe('programme registry', () => {
 describe('validateProgramConfig', () => {
   it('never validates an unavailable programme', () => {
     expect(validateProgramConfig('LP-08', {}, { currency: 'USD' })).toMatchObject({ ok: false, errors: [{ code: 'PROGRAM_UNAVAILABLE' }] });
-    expect(validateProgramConfig('LP-04', {}, { currency: 'USD' })).toMatchObject({ ok: false, errors: [{ code: 'PROGRAM_UNAVAILABLE' }] });
+    expect(validateProgramConfig('LP-08', {}, { currency: 'USD' })).toMatchObject({ ok: false, errors: [{ code: 'PROGRAM_UNAVAILABLE' }] });
   });
   it('LP-03 normalises the rate and defaults check-in points to none', () => {
     expect(validateProgramConfig('LP-03', { pointsPerCurrencyUnit: ' 1.5 ' }, { currency: 'USD' })).toEqual({
@@ -83,9 +84,10 @@ describe('earning (pure)', () => {
     expect(earnForCheckin('LP-02', { pointsPerPurchase: 10, pointsPerCheckin: 3 })).toBe(3);
     expect(earnForCheckin('LP-03', { pointsPerCurrencyUnit: '1', pointsPerCheckin: 5 })).toBe(5);
     expect(earnForCheckin('LP-04', {})).toBe(0);
+    expect(earnForCheckin('LP-06', { pointsPerCheckin: 4 })).toBe(4);
   });
   it('a programme type without an earning engine earns nothing and is never treated as a points rule', () => {
-    expect(earnForPurchase('LP-04', {}, usd('10.00'))).toEqual({ points: 0, qualifying: false, reason: 'NO_POINTS_PROGRAM' });
+    expect(earnForPurchase('LP-08', {}, usd('10.00'))).toEqual({ points: 0, qualifying: false, reason: 'NO_POINTS_PROGRAM' });
   });
 });
 
