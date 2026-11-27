@@ -32,7 +32,7 @@ export const loyaltyPurchaseEvents = pgTable(
     idempotencyKey: text('idempotency_key').notNull(),
     externalReference: text('external_reference'),
     channel: text('channel').$type<LoyaltyPurchaseChannel>().notNull().default('branch'),
-    qualifyingAmount: numeric('qualifying_amount', { precision: 10, scale: 2 }).notNull(),
+    qualifyingAmount: numeric('qualifying_amount', { precision: 11, scale: 3 }).notNull(),
     paymentStatus: text('payment_status').notNull().default('confirmed'),
     occurredAt: timestamp('occurred_at', { withTimezone: true }).notNull().defaultNow(),
     createdBy: uuid('created_by'),

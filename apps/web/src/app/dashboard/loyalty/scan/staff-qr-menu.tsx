@@ -151,8 +151,8 @@ function ResolvedMenu({
             id="purchaseAmount"
             name="purchaseAmount"
             type="number"
-            min="0.01"
-            step="0.01"
+            min="0.001"
+            step="0.001"
             required
           />
           <Button disabled={pending || state.purchaseCompleted}>Confirm verified purchase</Button>
@@ -290,8 +290,8 @@ function LookupMenu({
             id="lookupPurchaseAmount"
             name="purchaseAmount"
             type="number"
-            min="0.01"
-            step="0.01"
+            min="0.001"
+            step="0.001"
             required
           />
           <Button disabled={pending || state.purchaseCompleted}>{t('confirmPurchase')}</Button>

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { toCents, wouldExceedBudget } from './budget-limit';
+import { toMilli, wouldExceedBudget } from './budget-limit';
 
 /**
  * WHY THESE ARE UNIT TESTS AND NOT MORE INTEGRATION TESTS (audit P0-5)
@@ -16,31 +16,37 @@ import { toCents, wouldExceedBudget } from './budget-limit';
  * tests" but "their decision arithmetic has never been walked to its
  * boundaries, because the tier that covers them is too slow to walk it".
  */
-describe('toCents', () => {
-  it('converts the numeric(10,2) values that break float multiplication', () => {
-    expect(toCents('8.30')).toBe(830);
-    expect(toCents('0.10')).toBe(10);
-    expect(toCents('1.10')).toBe(110);
-    expect(toCents('0.07')).toBe(7);
-    expect(toCents('9.10')).toBe(910);
-    expect(toCents('99.60')).toBe(9960);
+describe('toMilli (exact thousandths, LPC-14)', () => {
+  it('converts the values that break float multiplication, for two and three decimals', () => {
+    expect(toMilli('8.30')).toBe(8300n);
+    expect(toMilli('0.10')).toBe(100n);
+    expect(toMilli('99.60')).toBe(99600n);
+    expect(toMilli('8.305')).toBe(8305n);
+    expect(toMilli('0.001')).toBe(1n);
+    expect(toMilli('5')).toBe(5000n);
   });
 
-  it('handles whole numbers, zero-ish values and the column maximum', () => {
-    expect(toCents('0.01')).toBe(1);
-    expect(toCents('5')).toBe(500);
-    expect(toCents('20.00')).toBe(2000);
-    expect(toCents('99999999.99')).toBe(9999999999);
-    // Still inside Number.MAX_SAFE_INTEGER, so the multiplication in
-    // wouldExceedBudget cannot lose precision at the column's ceiling.
-    expect(9999999999).toBeLessThan(Number.MAX_SAFE_INTEGER);
+  it('handles the column maximum without losing a digit', () => {
+    expect(toMilli('99999999.999')).toBe(99_999_999_999n);
   });
 
-  it('accepts a number as well as a string', () => {
-    // Drizzle hands numeric over as a string, but the service layer's own
-    // create path (loyalty-reward.service.ts) takes numbers.
-    expect(toCents(8.3)).toBe(830);
-    expect(toCents(0.07)).toBe(7);
+  it('accepts a number as well as a string, and refuses a fourth decimal or an exponent instead of rounding', () => {
+    expect(toMilli(8.3)).toBe(8300n);
+    expect(toMilli(0.07)).toBe(70n);
+    expect(() => toMilli('1.2345')).toThrow();
+    expect(() => toMilli(1e21)).toThrow();
+    expect(() => toMilli('-1')).toThrow();
+  });
+});
+
+describe('wouldExceedBudget with three-decimal (KWD) values', () => {
+  it('is exact at the boundary: 3 x 0.333 fits 0.999 and the next claim does not', () => {
+    expect(wouldExceedBudget({ alreadyIssued: 2, rewardValue: '0.333', maxBudget: '0.999' })).toBe(false);
+    expect(wouldExceedBudget({ alreadyIssued: 3, rewardValue: '0.333', maxBudget: '0.999' })).toBe(true);
+  });
+  it('one thousandth over the budget is refused (cents arithmetic would have called this a fit)', () => {
+    expect(wouldExceedBudget({ alreadyIssued: 0, rewardValue: '10.001', maxBudget: '10.000' })).toBe(true);
+    expect(wouldExceedBudget({ alreadyIssued: 0, rewardValue: '10.000', maxBudget: '10.000' })).toBe(false);
   });
 });
 

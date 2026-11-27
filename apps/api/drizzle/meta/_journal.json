@@ -757,6 +757,13 @@
       "when": 1795755623255,
       "tag": "0107_loyalty_programs_foundation",
       "breakpoints": true
+    },
+    {
+      "idx": 108,
+      "version": "7",
+      "when": 1795780989742,
+      "tag": "0108_kwd_three_decimal_storage",
+      "breakpoints": true
     }
   ]
 }

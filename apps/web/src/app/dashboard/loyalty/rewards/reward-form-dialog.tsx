@@ -152,8 +152,8 @@ export function RewardFormDialog({ reward, branches, trigger }: RewardFormDialog
                 id="rewardValue"
                 name="rewardValue"
                 type="number"
-                min="0.01"
-                step="0.01"
+                min="0.001"
+                step="0.001"
                 defaultValue={reward?.rewardValue ?? undefined}
               />
             </div>
@@ -256,8 +256,8 @@ export function RewardFormDialog({ reward, branches, trigger }: RewardFormDialog
               id="maxBudget"
               name="maxBudget"
               type="number"
-              min="0.01"
-              step="0.01"
+              min="0.001"
+              step="0.001"
               defaultValue={reward?.maxBudget ?? undefined}
             />
           </div>

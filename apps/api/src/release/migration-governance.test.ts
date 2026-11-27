@@ -59,6 +59,10 @@ describe('no hard-coded migration pins (the guard itself)', () => {
     expect(kinds("tag === '0072_customer_verified_login_email'")).toEqual(['LAST_TAG']);
     expect(kinds("localhost:5432 postgres 18 timeout 73000 migrations")).toEqual([]);
     expect(kinds("const port = 73; // unrelated")).toEqual([]);
+    // Identifiers and ranges are not counts: DEV-73, "DEV-71\u201373" (en dash) and a range with a hyphen.
+    expect(kinds('describe("DEV-71\u201373 offline migration manifest")')).toEqual([]);
+    expect(kinds('it("DEV-73 rejects a bad journal")')).toEqual([]);
+    expect(kinds('// migrations 70-73')).toEqual([]);
   });
   it('flags a script that queries __drizzle_migrations without the shared module, accepts one that imports it', () => {
     const q = "await c.query('SELECT count(*) FROM drizzle.__drizzle_migrations')";

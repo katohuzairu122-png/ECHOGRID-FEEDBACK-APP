@@ -61,7 +61,7 @@ export const loyaltyTransactions = pgTable(
     // table -- this ledger row's own existence must never depend on whether
     // a since-deleted feedback row still exists.
     feedbackId: uuid('feedback_id').references(() => feedback.id, { onDelete: 'set null' }),
-    purchaseAmount: numeric('purchase_amount', { precision: 10, scale: 2 }), // legacy/raw purchase amount projection
+    purchaseAmount: numeric('purchase_amount', { precision: 11, scale: 3 }), // legacy/raw purchase amount projection
     // LOYALTY-PROGRAMME-COMPLETION: the programme and configuration version that generated this earning. NULL for rows written before programmes
     // existed and for non-programme entries (adjustments, redemptions, referral and birthday overlays).
     programId: uuid('program_id').references(() => loyaltyPrograms.id, { onDelete: 'restrict' }),

@@ -32,6 +32,7 @@ import { NotificationService } from '../notifications/notification.service';
 import { LoyaltyActionResolver } from './loyalty-action-resolver';
 import { LoyaltyProgramService } from './programs/program.service';
 import { listAvailableEntitlements, redeemAccountEntitlement } from './programs/entitlement.service';
+import { moneyScaleFor } from './money-storage';
 import { previewPurchases, isProgramAvailable } from '@echo-grid-feedback/shared-types';
 import { z } from 'zod';
 import { CustomerLookupService, LOOKUP_PURCHASE_AUDIT } from './customer-lookup.service';
@@ -129,7 +130,7 @@ function sessionBindingOf(c: Context<Env>): { cashierSession?: CashierSessionBin
 }
 
 type PurchaseInput = {
-  purchaseAmount: number;
+  purchaseAmount: number | string;
   idempotencyKey: string;
   externalReference?: string | undefined;
   channel: LoyaltyPurchaseChannel;
@@ -543,7 +544,7 @@ loyaltyRoutes.get('/rewards', requirePermission('loyalty:view'), requireBusiness
 loyaltyRoutes.post('/rewards', requirePermission('rewards:manage'), requireBusinessWideAccess, async (c) => {
   const body = await parseJsonBody(c.req.raw, createRewardSchema);
   return withDb(c, async (db) => {
-    const reward = await new LoyaltyRewardService(createRepositories(db)).create(c.get('businessId'), body, c.get('userId'));
+    const reward = await new LoyaltyRewardService(createRepositories(db), (id) => moneyScaleFor(db, id)).create(c.get('businessId'), body, c.get('userId'));
     c.set('auditMetadata', { action: 'loyalty.reward_created', entityType: 'loyalty_reward', entityId: reward.id });
     return ok(c, reward, 201);
   });
@@ -552,7 +553,7 @@ loyaltyRoutes.post('/rewards', requirePermission('rewards:manage'), requireBusin
 loyaltyRoutes.patch('/rewards/:id', requirePermission('rewards:manage'), requireBusinessWideAccess, async (c) => {
   const body = await parseJsonBody(c.req.raw, updateRewardSchema);
   return withDb(c, async (db) => {
-    const reward = await new LoyaltyRewardService(createRepositories(db)).update(
+    const reward = await new LoyaltyRewardService(createRepositories(db), (id) => moneyScaleFor(db, id)).update(
       c.req.param('id'),
       c.get('businessId'),
       body,

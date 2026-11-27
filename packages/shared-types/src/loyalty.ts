@@ -21,7 +21,12 @@ export const loyaltyPurchaseChannelSchema = z.enum([
 ]);
 
 export const recordPurchaseSchema = z.object({
-  purchaseAmount: z.number().positive().max(1_000_000),
+  // LPC-14: a JSON number, or its decimal TEXT for exactness (a currency with three decimals, such as KWD, never has to pass through a double).
+  // Precision beyond the business currency's own is refused by the service, never rounded.
+  purchaseAmount: z.union([
+    z.number().positive().max(1_000_000),
+    z.string().trim().regex(/^\d{1,7}(\.\d{1,3})?$/).refine((v) => Number(v) > 0 && Number(v) <= 1_000_000, 'Amount out of range'),
+  ]),
   idempotencyKey: z.string().trim().min(8).max(200),
   externalReference: z.string().trim().min(1).max(200).optional(),
   channel: loyaltyPurchaseChannelSchema.default('other'),

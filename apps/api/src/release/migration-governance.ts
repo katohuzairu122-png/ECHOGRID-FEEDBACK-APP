@@ -16,9 +16,10 @@ export function findHardCodedMigrationPins(
   lines.forEach((text, i) => {
     const line = i + 1;
     if (text.includes(facts.lastTag)) findings.push({ line, kind: 'LAST_TAG', text: text.trim() });
-    // A number is a pin only on a line that talks about migrations/journal entries, so ports, versions and PG majors do not trip it.
+    // A number is a pin only on a line that talks about migrations/journal entries, so ports, versions and PG majors do not trip it. Hyphens and
+    // dashes (including the en dash of a range such as "DEV-107\u2013109") mark identifiers and ranges, not a count.
     if (/migrat|journal|entries/i.test(text)) {
-      for (const m of text.matchAll(/(?<![\w.:-])(\d{2,3})(?![\w.:-])/g)) {
+      for (const m of text.matchAll(/(?<![\w.:\u2010-\u2015-])(\d{2,3})(?![\w.:\u2010-\u2015-])/g)) {
         const n = Number(m[1]);
         if (n === facts.count) findings.push({ line, kind: 'COUNT', text: text.trim() });
         else if (n === lastIndex && /\[\s*\d+\s*\]|entries|index/i.test(text)) findings.push({ line, kind: 'LAST_INDEX', text: text.trim() });
