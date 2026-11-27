@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { canConfigureProgramme, canViewCommunityHub, classifyWorkspace, isCounterStaff } from './workspace-access';
+import { canConfigureProgramme, canReversePurchase, canViewCommunityHub, classifyWorkspace, isCounterStaff } from './workspace-access';
 
 const access = (known: boolean, ...p: string[]) => ({ known, permissions: new Set(p) });
 // D-C1 default Staff (cashier) and the historical default (an unreconciled role).
@@ -69,5 +69,17 @@ describe('BCOMM-01 canViewCommunityHub (presentation; the API route enforces the
   it('a cashier who somehow also holds a management permission is a management user, never counter staff', () => {
     expect(classifyWorkspace(access(true, 'loyalty:serve', 'analytics:view'))).toBe('management');
     expect(canViewCommunityHub(access(true, 'loyalty:serve', 'analytics:view'))).toBe(true);
+  });
+});
+
+describe('purchase reversal visibility (LPC-10; the API enforces loyalty:adjust itself)', () => {
+  it('is shown to a management workspace that holds loyalty:adjust', () => {
+    expect(canReversePurchase(access(true, ...STAFF, 'loyalty:adjust'))).toBe(true);
+  });
+  it('is never shown to counter staff, to management without loyalty:adjust, or when permissions are unknown', () => {
+    expect(canReversePurchase(access(true, ...STAFF))).toBe(false);
+    expect(canReversePurchase(access(true, ...STAFF, 'rewards:manage'))).toBe(false);
+    expect(canReversePurchase(access(false, 'loyalty:adjust'))).toBe(false);
+    expect(canReversePurchase(access(true, ...LEGACY_STAFF))).toBe(false);
   });
 });

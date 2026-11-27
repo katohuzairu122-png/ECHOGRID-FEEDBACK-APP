@@ -6,6 +6,7 @@ import { BusinessService } from '../../src/businesses/business.service';
 import { LoyaltyAccountService } from '../../src/loyalty/loyalty-account.service';
 import { LoyaltyProgramService } from '../../src/loyalty/programs/program.service';
 import { consumeEntitlement } from '../../src/loyalty/programs/stamp.service';
+import { getPurchase, listPurchases } from '../../src/loyalty/programs/purchase-history.service';
 import { appDbOf } from '../helpers/runtime-db';
 
 /** LPC-08 purchase reversal on a disposable PostgreSQL database (Owner rules: stop at zero, flag used rewards, never delete). */
@@ -155,5 +156,45 @@ describe.skipIf(!process.env.DATABASE_URL)('purchase reversal (integration)', ()
     await expect(reverse(f, `x-${run}-2`)).rejects.toMatchObject({ code: 'PROGRESS_REPLAY_MISMATCH' });
     expect(await points(f)).toBe(before);
     expect((await admin.query(`select payment_status from loyalty_purchase_events where business_id=$1 and idempotency_key=$2`, [f.businessId, `x-${run}-2`])).rows[0].payment_status).toBe('confirmed');
+  });
+
+  it('LPC-10: the preview shows exactly what the reversal then does, and changes nothing itself', async () => {
+    const f = await fixture('LP-01', (r) => ({ stampThreshold: 3, rewardId: r.a, stampExpiryDays: null, resetPolicy: 'on_completion' }));
+    for (const i of [1, 2, 3]) await buy(f, 5, `pv-${run}-${i}`);
+    const id = await eventId(f, `pv-${run}-3`);
+    const snapshot = async () => JSON.stringify([
+      await points(f), await counters(f), await entitlements(f),
+      (await admin.query(`select payment_status from loyalty_purchase_events where id=$1`, [id])).rows[0].payment_status,
+      (await admin.query(`select count(*)::int c from loyalty_transactions where loyalty_account_id=$1`, [f.accountId])).rows[0].c,
+      (await admin.query(`select count(*)::int c from loyalty_program_progress_events where loyalty_account_id=$1`, [f.accountId])).rows[0].c,
+    ]);
+    const before = await snapshot();
+    const preview = await loyalty.previewPurchaseReversal({ businessId: f.businessId, purchaseEventId: id, reason: 'preview', actorUserId: ownerId });
+    expect(await snapshot()).toBe(before);
+    expect(preview.progress.rewardImpact).toEqual([{ rewardName: 'Reward A', outcome: 'revoked' }]);
+    const real = await loyalty.reversePurchase({ businessId: f.businessId, purchaseEventId: id, reason: 'Refunded', actorUserId: ownerId });
+    expect({ ...real, progress: real.progress.rewardImpact }).toEqual({ ...preview, progress: preview.progress.rewardImpact });
+    await expect(loyalty.previewPurchaseReversal({ businessId: f.businessId, purchaseEventId: id, reason: 'again', actorUserId: ownerId })).rejects.toMatchObject({ code: 'PURCHASE_ALREADY_REVERSED' });
+  });
+
+  it('LPC-10: the purchase history is business-scoped, filterable, exact, and shows the reversal with its shortfall', async () => {
+    const f = await fixture('LP-03', () => ({ pointsPerCurrencyUnit: '1' }));
+    const other = await fixture('LP-03', () => ({ pointsPerCurrencyUnit: '1' }));
+    await buy(f, 12.5, `h-${run}-1`);
+    await buy(f, 50, `h-${run}-2`);
+    await buy(other, 99, `h-${run}-o`);
+    await loyalty.adjustPoints(f.businessId, f.accountId, -40, 'spent', ownerId);
+    await reverse(f, `h-${run}-2`);
+    const all = await listPurchases(buildDb(admin), { businessId: f.businessId, limit: 10, offset: 0 });
+    expect(all.items).toHaveLength(2);
+    expect(all.items.map((p) => p.amount)).not.toContain('99.00');
+    expect(all.items.every((p) => p.accountId === f.accountId)).toBe(true);
+    const reversed = all.items.find((p) => p.status === 'reversed')!;
+    expect(reversed).toMatchObject({ amount: '50.00', pointsEarned: 50, reversal: { pointsReversed: 22, pointsShortfall: 28 } });
+    expect(typeof reversed.amount).toBe('string');
+    expect((await listPurchases(buildDb(admin), { businessId: f.businessId, status: 'confirmed', limit: 10, offset: 0 })).items.map((p) => p.amount)).toEqual(['12.50']);
+    expect((await listPurchases(buildDb(admin), { businessId: f.businessId, limit: 1, offset: 0 })).hasMore).toBe(true);
+    await expect(getPurchase(buildDb(admin), other.businessId, reversed.id)).rejects.toMatchObject({ code: 'PURCHASE_NOT_FOUND' });
+    expect(await getPurchase(buildDb(admin), f.businessId, reversed.id)).toMatchObject({ status: 'reversed' });
   });
 });

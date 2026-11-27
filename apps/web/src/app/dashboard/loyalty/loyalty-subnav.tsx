@@ -1,5 +1,5 @@
 import { getTranslations } from 'next-intl/server';
-import { canConfigureProgramme, classifyWorkspace, getMyAccess } from '@/lib/permissions';
+import { canConfigureProgramme, canReversePurchase, classifyWorkspace, getMyAccess } from '@/lib/permissions';
 import { LoyaltySubnavLinks } from './loyalty-subnav-links';
 import styles from './loyalty-visual.module.css';
 
@@ -10,6 +10,7 @@ export async function LoyaltySubnav() {
   // Counter staff work from Serve customers; the administrative sub-navigation is not shown to them.
   if (classifyWorkspace(access) === 'cashier') return null;
   const configure = canConfigureProgramme(access);
+  const reverse = canReversePurchase(access);
   const items = [
     { href: '/dashboard/loyalty', label: t('accounts') },
     ...(configure
@@ -19,6 +20,7 @@ export async function LoyaltySubnav() {
           { href: '/dashboard/loyalty/rewards', label: t('rewards') },
         ]
       : []),
+    ...(reverse ? [{ href: '/dashboard/loyalty/purchases', label: t('purchases') }] : []),
     { href: '/dashboard/loyalty/redeem', label: t('redeem') },
     { href: '/dashboard/loyalty/scan', label: t('customerQr') },
     { href: '/dashboard/settlements', label: t('settlements') },

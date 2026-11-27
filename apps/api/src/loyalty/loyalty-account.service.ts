@@ -40,6 +40,22 @@ export interface LoyaltyAccountSummary {
  * because every earning/spending method needs a transaction spanning the
  * account update and the ledger insert.
  */
+export interface ReversePurchaseInput { businessId: string; purchaseEventId: string; reason: string; actorUserId: string }
+export interface PurchaseReversalResult {
+  purchaseEventId: string;
+  accountId: string;
+  pointsEarned: number;
+  pointsReversed: number;
+  pointsShortfall: number;
+  progress: ProgressReversalResult;
+}
+/** Carries the result out of a deliberately rolled-back preview transaction. */
+class PreviewComplete extends Error {
+  constructor(readonly result: PurchaseReversalResult) {
+    super('preview complete');
+  }
+}
+
 export class LoyaltyAccountService {
   constructor(private readonly db: Database) {}
 
@@ -383,55 +399,66 @@ export class LoyaltyAccountService {
    * that was ALREADY handed over stays given and is flagged for review. Exactly one caller can win (conditional status change), and nothing is
    * deleted: the ledger gets a negative adjustment and the purchase event is marked reversed.
    */
-  async reversePurchase(input: { businessId: string; purchaseEventId: string; reason: string; actorUserId: string }): Promise<{
-    purchaseEventId: string;
-    accountId: string;
-    pointsEarned: number;
-    pointsReversed: number;
-    pointsShortfall: number;
-    progress: ProgressReversalResult;
-  }> {
-    return this.db.transaction(async (tx) => {
-      const repos = createRepositories(tx);
-      const [flipped] = await tx
-        .update(loyaltyPurchaseEvents)
-        .set({ paymentStatus: 'reversed' })
-        .where(and(eq(loyaltyPurchaseEvents.id, input.purchaseEventId), eq(loyaltyPurchaseEvents.businessId, input.businessId), eq(loyaltyPurchaseEvents.paymentStatus, 'confirmed')))
-        .returning({ id: loyaltyPurchaseEvents.id, loyaltyAccountId: loyaltyPurchaseEvents.loyaltyAccountId });
-      if (!flipped) {
-        const [existing] = await tx.select({ status: loyaltyPurchaseEvents.paymentStatus }).from(loyaltyPurchaseEvents).where(and(eq(loyaltyPurchaseEvents.id, input.purchaseEventId), eq(loyaltyPurchaseEvents.businessId, input.businessId))).limit(1);
-        if (!existing) throw new AppError('Purchase not found.', 404, 'PURCHASE_NOT_FOUND');
-        throw new AppError('This purchase was already reversed.', 409, 'PURCHASE_ALREADY_REVERSED');
-      }
-      const account = await repos.loyaltyAccounts.lockForUpdate(flipped.loyaltyAccountId, input.businessId);
-      if (!account) throw new AppError('Loyalty account not found.', 404, 'LOYALTY_ACCOUNT_NOT_FOUND');
-      const [business] = await tx.select({ currency: businesses.defaultCurrency, timeZone: businesses.defaultTimezone }).from(businesses).where(eq(businesses.id, input.businessId)).limit(1);
-      if (!business) throw new AppError('Business not found.', 404, 'BUSINESS_NOT_FOUND');
+  async reversePurchase(input: ReversePurchaseInput): Promise<PurchaseReversalResult> {
+    return this.db.transaction((tx) => this.reversePurchaseIn(tx, input));
+  }
 
-      const earnedRows = await tx
-        .select({ points: loyaltyTransactions.points, programId: loyaltyTransactions.programId, programVersion: loyaltyTransactions.programVersion })
-        .from(loyaltyTransactions)
-        .where(and(eq(loyaltyTransactions.purchaseEventId, input.purchaseEventId), eq(loyaltyTransactions.loyaltyAccountId, account.id), eq(loyaltyTransactions.type, 'purchase')));
-      const pointsEarned = earnedRows.reduce((sum, row) => sum + row.points, 0);
-      const pointsReversed = Math.max(0, Math.min(pointsEarned, account.points));
-      const pointsShortfall = Math.max(0, pointsEarned) - pointsReversed;
-      const origin = earnedRows.find((row) => row.programId !== null);
-      if (pointsReversed > 0) {
-        await this.applyEarning(repos, account, 'adjustment', -pointsReversed, {
-          notes: `Reversal of purchase ${input.purchaseEventId}: ${input.reason}${pointsShortfall > 0 ? ` (${pointsShortfall} points could not be taken back: already spent)` : ''}`,
-          createdBy: input.actorUserId,
-          ...(origin?.programId && origin.programVersion !== null ? { provenance: { programId: origin.programId, programVersion: origin.programVersion } } : {}),
-        });
-      }
-      const progress = await reversePurchaseProgress(tx, {
-        businessId: input.businessId,
-        loyaltyAccountId: account.id,
-        purchaseEventId: input.purchaseEventId,
-        timeZone: business.timeZone,
-        currency: business.currency,
+  /**
+   * LPC-10: exactly what reversePurchase would do, without doing it. It runs the real reversal inside a transaction that is always rolled back, so
+   * the preview can never differ from the result, and nothing is written (no ledger row, status change, entitlement change or progress event).
+   */
+  async previewPurchaseReversal(input: ReversePurchaseInput): Promise<PurchaseReversalResult> {
+    try {
+      await this.db.transaction(async (tx) => {
+        throw new PreviewComplete(await this.reversePurchaseIn(tx, input));
       });
-      return { purchaseEventId: input.purchaseEventId, accountId: account.id, pointsEarned, pointsReversed, pointsShortfall, progress };
+    } catch (error) {
+      if (error instanceof PreviewComplete) return error.result;
+      throw error;
+    }
+    throw new AppError('Preview did not complete.', 500, 'PREVIEW_FAILED');
+  }
+
+  private async reversePurchaseIn(tx: Parameters<Parameters<Database['transaction']>[0]>[0], input: ReversePurchaseInput): Promise<PurchaseReversalResult> {
+    const repos = createRepositories(tx);
+    const [flipped] = await tx
+      .update(loyaltyPurchaseEvents)
+      .set({ paymentStatus: 'reversed' })
+      .where(and(eq(loyaltyPurchaseEvents.id, input.purchaseEventId), eq(loyaltyPurchaseEvents.businessId, input.businessId), eq(loyaltyPurchaseEvents.paymentStatus, 'confirmed')))
+      .returning({ id: loyaltyPurchaseEvents.id, loyaltyAccountId: loyaltyPurchaseEvents.loyaltyAccountId });
+    if (!flipped) {
+      const [existing] = await tx.select({ status: loyaltyPurchaseEvents.paymentStatus }).from(loyaltyPurchaseEvents).where(and(eq(loyaltyPurchaseEvents.id, input.purchaseEventId), eq(loyaltyPurchaseEvents.businessId, input.businessId))).limit(1);
+      if (!existing) throw new AppError('Purchase not found.', 404, 'PURCHASE_NOT_FOUND');
+      throw new AppError('This purchase was already reversed.', 409, 'PURCHASE_ALREADY_REVERSED');
+    }
+    const account = await repos.loyaltyAccounts.lockForUpdate(flipped.loyaltyAccountId, input.businessId);
+    if (!account) throw new AppError('Loyalty account not found.', 404, 'LOYALTY_ACCOUNT_NOT_FOUND');
+    const [business] = await tx.select({ currency: businesses.defaultCurrency, timeZone: businesses.defaultTimezone }).from(businesses).where(eq(businesses.id, input.businessId)).limit(1);
+    if (!business) throw new AppError('Business not found.', 404, 'BUSINESS_NOT_FOUND');
+
+    const earnedRows = await tx
+      .select({ points: loyaltyTransactions.points, programId: loyaltyTransactions.programId, programVersion: loyaltyTransactions.programVersion })
+      .from(loyaltyTransactions)
+      .where(and(eq(loyaltyTransactions.purchaseEventId, input.purchaseEventId), eq(loyaltyTransactions.loyaltyAccountId, account.id), eq(loyaltyTransactions.type, 'purchase')));
+    const pointsEarned = earnedRows.reduce((sum, row) => sum + row.points, 0);
+    const pointsReversed = Math.max(0, Math.min(pointsEarned, account.points));
+    const pointsShortfall = Math.max(0, pointsEarned) - pointsReversed;
+    const origin = earnedRows.find((row) => row.programId !== null);
+    if (pointsReversed > 0) {
+      await this.applyEarning(repos, account, 'adjustment', -pointsReversed, {
+        notes: `Reversal of purchase ${input.purchaseEventId}: ${input.reason}${pointsShortfall > 0 ? ` (${pointsShortfall} points could not be taken back: already spent)` : ''}`,
+        createdBy: input.actorUserId,
+        ...(origin?.programId && origin.programVersion !== null ? { provenance: { programId: origin.programId, programVersion: origin.programVersion } } : {}),
+      });
+    }
+    const progress = await reversePurchaseProgress(tx, {
+      businessId: input.businessId,
+      loyaltyAccountId: account.id,
+      purchaseEventId: input.purchaseEventId,
+      timeZone: business.timeZone,
+      currency: business.currency,
     });
+    return { purchaseEventId: input.purchaseEventId, accountId: account.id, pointsEarned, pointsReversed, pointsShortfall, progress };
   }
 
   async getAccount(accountId: string, businessId: string): Promise<LoyaltyAccount> {
