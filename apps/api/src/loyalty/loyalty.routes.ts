@@ -69,6 +69,7 @@ loyaltyRoutes.post('/actions/resolve-customer', requirePermission('loyalty:serve
       customerQrToken: body.customerQrToken,
       businessId: c.get('businessId'),
       permissions: c.get('permissions'),
+      ...(c.get('branchId') ? { branchId: c.get('branchId') } : {}),
     });
     return ok(c, result);
   });

@@ -14,11 +14,22 @@ import { classifyCashierInput } from '@/lib/cashier-identifier';
 
 export type { StaffQrErrorKind };
 
+/** The member's card at the scanning business, as the API returns it to staff who may serve loyalty. First name only; never an id or contact detail. */
+export interface StaffCustomerCardDto {
+  displayName: string;
+  points: number;
+  tier: { name: string } | null;
+  visitCount: number;
+  lastVisitAt: string | null;
+  rewards: { id: string; name: string; pointsCost: number; enoughPoints: boolean; pointsNeeded: number }[];
+}
 export interface StaffQrResult {
   customerId: string;
   loyaltyAccountId: string | null;
   membershipStatus: 'active' | 'none';
   actions: LoyaltyResolvedActionDto[];
+  /** Absent from an API that predates the card; null for a non-member or staff who may not serve loyalty. */
+  card?: StaffCustomerCardDto | null;
 }
 export interface StaffQrState {
   token?: string;

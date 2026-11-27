@@ -10,6 +10,20 @@ const BRANCH_ID = crypto.randomUUID();
 const CUSTOMER_ID = crypto.randomUUID();
 const MEMBERSHIP_ID = crypto.randomUUID();
 const ACCOUNT_ID = crypto.randomUUID();
+const TIER_ID = crypto.randomUUID();
+const OTHER_BRANCH_ID = crypto.randomUUID();
+const future = new Date(Date.now() + 86_400_000);
+const past = new Date(Date.now() - 86_400_000);
+/** Cheapest first, as the repository returns them. */
+const rewardRows = [
+  { id: 'r-free-coffee', businessId: BUSINESS_ID, branchId: null, name: 'Free coffee', type: 'points', pointsCost: 100, startDate: null, expiryDate: null },
+  { id: 'r-pastry', businessId: BUSINESS_ID, branchId: null, name: 'Pastry', type: 'points', pointsCost: 150, startDate: null, expiryDate: null },
+  { id: 'r-other-branch', businessId: BUSINESS_ID, branchId: OTHER_BRANCH_ID, name: 'Other branch only', type: 'points', pointsCost: 50, startDate: null, expiryDate: null },
+  { id: 'r-this-branch', businessId: BUSINESS_ID, branchId: BRANCH_ID, name: 'This branch only', type: 'points', pointsCost: 60, startDate: null, expiryDate: null },
+  { id: 'r-expired', businessId: BUSINESS_ID, branchId: null, name: 'Expired', type: 'points', pointsCost: 10, startDate: null, expiryDate: past },
+  { id: 'r-not-started', businessId: BUSINESS_ID, branchId: null, name: 'Not started', type: 'points', pointsCost: 10, startDate: future, expiryDate: null },
+  { id: 'r-voucher', businessId: BUSINESS_ID, branchId: null, name: 'Voucher', type: 'voucher', pointsCost: null, startDate: null, expiryDate: null },
+].sort((a, b) => (a.pointsCost ?? 0) - (b.pointsCost ?? 0));
 const QR_ID = crypto.randomUUID();
 
 type Audience =
@@ -46,7 +60,7 @@ function createRepos(
   /** A membership the customer holds that is not active (left, suspended, ...). */
   otherMembershipStatus?: string,
 ) {
-  const customer = { id: CUSTOMER_ID, status: 'active', qrRevocationEpoch: 0 };
+  const customer = { id: CUSTOMER_ID, status: 'active', qrRevocationEpoch: 0, fullName: 'Amina Yusuf Al-Rashid' };
   const membership = activeMembership
     ? {
         id: MEMBERSHIP_ID,
@@ -69,6 +83,11 @@ function createRepos(
         customerId: CUSTOMER_ID,
         businessId: BUSINESS_ID,
         membershipId: MEMBERSHIP_ID,
+        points: 120,
+        tierId: TIER_ID,
+        visitCount: 7,
+        lastVisitAt: new Date('2026-11-20T10:00:00.000Z'),
+        status: 'active',
       }
     : undefined;
   const qrCode = {
@@ -133,6 +152,16 @@ function createRepos(
         return id === BUSINESS_ID
           ? { id: BUSINESS_ID, status: receivingBusinessStatus, isDeleted: false }
           : undefined;
+      },
+    },
+    loyaltyTiers: {
+      async findById(id: string, businessId: string) {
+        return id === TIER_ID && businessId === BUSINESS_ID ? { id: TIER_ID, businessId, name: 'Silver' } : undefined;
+      },
+    },
+    loyaltyRewards: {
+      async listForBusiness(businessId: string) {
+        return businessId === BUSINESS_ID ? rewardRows : [];
       },
     },
     orphanRewardClaims: {
@@ -461,5 +490,65 @@ describe('LoyaltyActionResolver', () => {
     });
     expect(activeMember.actions).not.toContain('TAKE_SURVEY');
     expect(activeMember.surveyCampaigns).toEqual([]);
+  });
+
+  describe('cashier customer card (staff scan)', () => {
+    const scan = async (permissions: string[], activeMembership = true, branchId: string | null = BRANCH_ID) =>
+      resolver(activeMembership).resolveCustomerForStaff({
+        customerQrToken: await signCustomerQrToken(CUSTOMER_ID, SECRET),
+        businessId: BUSINESS_ID,
+        permissions: new Set(permissions),
+        ...(branchId ? { branchId } : {}),
+      });
+
+    it('shows a member their first name, balance, tier, visits and the rewards of this business', async () => {
+      const { card } = await scan(['loyalty:serve']);
+      expect(card).toMatchObject({
+        displayName: 'Amina',
+        points: 120,
+        tier: { name: 'Silver' },
+        visitCount: 7,
+        lastVisitAt: '2026-11-20T10:00:00.000Z',
+      });
+      expect(card?.rewards.map((r) => [r.name, r.pointsCost, r.enoughPoints, r.pointsNeeded])).toEqual([
+        ['This branch only', 60, true, 0],
+        ['Free coffee', 100, true, 0],
+        ['Pastry', 150, false, 30],
+      ]);
+    });
+
+    it('lists only points rewards that are live, business-wide or for the scanning branch', async () => {
+      const names = (await scan(['loyalty:serve'])).card?.rewards.map((r) => r.name) ?? [];
+      expect(names).not.toContain('Expired');
+      expect(names).not.toContain('Not started');
+      expect(names).not.toContain('Voucher');
+      expect(names).not.toContain('Other branch only');
+      const noBranch = (await scan(['loyalty:serve'], true, null)).card?.rewards.map((r) => r.name) ?? [];
+      expect(noBranch).not.toContain('This branch only');
+    });
+
+    it('never exposes identifiers, contact details or another business on the card', async () => {
+      const { card } = await scan(['loyalty:serve']);
+      expect(Object.keys(card ?? {}).sort()).toEqual(['displayName', 'lastVisitAt', 'points', 'rewards', 'tier', 'visitCount']);
+      const text = JSON.stringify(card);
+      expect(text).not.toContain(CUSTOMER_ID);
+      expect(text).not.toContain('Al-Rashid');
+    });
+
+    it('returns no card for a non-member, or for staff who may not serve loyalty', async () => {
+      expect((await scan(['loyalty:serve'], false)).card).toBeNull();
+      expect((await scan(['settlement:view'])).card).toBeNull();
+      expect((await scan([])).card).toBeNull();
+    });
+
+    it('returns no card at a different business even for the same customer', async () => {
+      const result = await resolver(true).resolveCustomerForStaff({
+        customerQrToken: await signCustomerQrToken(CUSTOMER_ID, SECRET),
+        businessId: crypto.randomUUID(),
+        permissions: new Set(['loyalty:serve']),
+        branchId: BRANCH_ID,
+      });
+      expect(result.card).toBeNull();
+    });
   });
 });

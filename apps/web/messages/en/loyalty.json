@@ -217,7 +217,20 @@
         "redemptionNote": "Reward handoff needs the customer’s QR code. Scan it to redeem a reward.",
         "done": "Action completed. Look the customer up again before another action."
       },
-      "cashierAppLink": "Cashier app: open or install it, sign-in sessions and cashier accounts"
+      "cashierAppLink": "Cashier app: open or install it, sign-in sessions and cashier accounts",
+      "card": {
+        "title": "Member card",
+        "points": "Points",
+        "visits": "Visits",
+        "lastVisit": "Last visit: {date}",
+        "rewardsTitle": "Rewards",
+        "noRewards": "This business has not set up any rewards yet.",
+        "cost": "{count} points",
+        "ready": "Ready to redeem",
+        "needMore": "{count} more points needed",
+        "notMemberTitle": "Not a member yet",
+        "notMemberBody": "This customer has not joined this business. Ask them to scan the business QR code and join, then scan their QR code again."
+      }
     }
   },
   "customer": {

@@ -5,6 +5,7 @@ import { useTranslations } from 'next-intl';
 import { QrCameraScanner } from '@/components/qr-camera-scanner';
 import { staffUnifiedQrAction, type StaffQrState } from '@/lib/actions/unified-qr';
 import { Button, Input, Label } from '@/components/ui';
+import { CustomerCard, NotAMemberNotice } from './customer-card';
 
 export function StaffQrMenu({
   contexts,
@@ -124,6 +125,9 @@ function ResolvedMenu({
   const result = state.result!;
   const outcome = state;
   return (
+    <div className="space-y-4">
+    {result.card ? <CustomerCard card={result.card} /> : null}
+    {result.membershipStatus === 'none' ? <NotAMemberNotice /> : null}
     <div className="space-y-4 rounded-xl border bg-white p-5">
       {result.actions.includes('VIEW_ALLOWED_MEMBERSHIP_STATE') && (
         <p>Membership in this business: {result.membershipStatus}</p>
@@ -194,6 +198,7 @@ function ResolvedMenu({
       {outcome.success && (
         <p role="status">Action completed. Resolve the QR again before another action.</p>
       )}
+    </div>
     </div>
   );
 }
