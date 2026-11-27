@@ -25,6 +25,7 @@ import { platformGovernanceRoutes } from './platform/governance.routes';
 import { customerTentashipBadgeRoutes, businessTentashipBadgeRoutes } from './tentaship-badges/badge-routes';
 import { cashierActivityRoutes } from './cashier-activity/cashier-activity.routes';
 import { businessRoutes } from './businesses/business.routes';
+import { b2bRoutes } from './b2b/b2b.routes';
 import { businessCategoryRoutes } from './businesses/business-category.routes';
 import { teamRoutes } from './team/team.routes';
 import { branchRoutes } from './branches/branch.routes';
@@ -47,6 +48,7 @@ import { loyaltyCustomerRoutes } from './loyalty/loyalty-customer.routes';
 import { analyticsRoutes } from './analytics/analytics.routes';
 import { notificationsRoutes } from './notifications/notifications.routes';
 import { platformBusinessRoutes } from './platform/business-directory.routes';
+import { platformB2bRoutes } from './platform/b2b.routes';
 import { platformCustomerRoutes } from './platform/customer-directory.routes';
 import { platformAuditLogRoutes } from './platform/audit-log.routes';
 import { platformBillingPlansRoutes } from './platform/billing-plans.routes';
@@ -183,6 +185,8 @@ api.route('/business-closure', businessClosureRoutes);
 api.route('/customer-invitations', customerInvitationRoutes);
 api.route('/cashier-activity', cashierActivityRoutes);
 api.route('/businesses', businessRoutes);
+// SPLIT 09: own-business participation visibility; this route is read-only and fail-closed by absence of an enrollment row.
+api.route('/b2b', b2bRoutes);
 api.route('/business-categories', businessCategoryRoutes);
 api.route('/team', teamRoutes);
 api.route('/branches', branchRoutes);
@@ -249,6 +253,8 @@ api.route('/partner-credits/consent', partnerConsentRoutes);
 // matching the loyalty/loyalty-customer split's precedent of separate route
 // files per concern within the same feature.
 api.route('/platform/businesses', platformBusinessRoutes);
+// SPLIT 09: platform-admin read-only enrollment oversight; no terms activation or moderation writes are exposed here.
+api.route('/platform/b2b', platformB2bRoutes);
 api.route('/platform/customers', platformCustomerRoutes);
 api.route('/platform/audit-log', platformAuditLogRoutes);
 // Billing Block 10 -- two files, one prefix each, same split precedent as
