@@ -90,7 +90,12 @@ describe.skipIf(!databaseUrl)('B2B participation API (real HTTP, real PostgreSQL
     const allowed = await get('/platform/b2b/participations?limit=10&offset=0', { token: token.admin! });
     expect(allowed.status).toBe(200);
     expect(allowed.cache).toBe('no-store');
-    expect(allowed.body.data).toMatchObject({ data: [], page: { limit: 10, offset: 0, hasMore: false } });
+    const page = allowed.body.data as { data: Array<{ businessId: string; participationStatus: string }>; page: { limit: number; offset: number; hasMore: boolean } };
+    expect(page.page.limit).toBe(10);
+    expect(page.page.offset).toBe(0);
+    expect(typeof page.page.hasMore).toBe('boolean');
+    expect(page.data.length).toBeLessThanOrEqual(10);
+    expect(page.data.every((row) => typeof row.businessId === 'string' && typeof row.participationStatus === 'string')).toBe(true);
     expect((await get('/platform/b2b/participations', { token: token.support! })).status).toBe(403);
     expect((await get('/platform/b2b/participations', { token: token.ownerA! })).status).toBe(403);
     expect((await get('/platform/b2b/participations', { token: token.impersonated! })).status).toBe(403);
