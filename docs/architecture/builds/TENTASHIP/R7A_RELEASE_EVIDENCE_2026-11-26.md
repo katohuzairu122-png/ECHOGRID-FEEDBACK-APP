@@ -28,7 +28,7 @@ A restore of either snapshot was **not** exercised on this release. Earlier snap
 | `db:verify:production` exact hash matches | 94 | 99 |
 | Hash differences vs repository | only the documented reconciliation set (`CF2_MIGRATION_RECONCILIATION.md`) | same |
 | Grants to PUBLIC on the new tables | none | none |
-The ledger on both environments was later confirmed at 107 (the journal now has 108 entries; migration 0107 is on `main` and was **not** applied to either environment).
+Re-verified read-only on 2026-11-27 (`select count(*) from drizzle.__drizzle_migrations`): staging **107**, production **107**; `pg_roles` has **no** `echogrid_app_runtime` on either; the connecting role is `neondb_owner` on both. The journal now has 108 entries: migration 0107 is on `main` and was **not** applied to either environment.
 
 ## 4. Data-preservation evidence (counts before and after the migration)
 - Staging: audit log 522, users 50, customers 3 — unchanged by the migration.
