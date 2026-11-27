@@ -207,6 +207,8 @@ const ROUTES: Route[] = [
     body: { purchaseAmount: 5, idempotencyKey: 'k-0000001', channel: 'other' },
     allowedFor: 'serve',
   },
+  { label: 'entitlements list', method: 'GET', path: '/loyalty/accounts/6f0f1c5e-0000-4000-8000-000000000002/entitlements', allowedFor: 'serve' },
+  { label: 'entitlement redeem', method: 'POST', path: '/loyalty/accounts/6f0f1c5e-0000-4000-8000-000000000002/entitlements/6f0f1c5e-0000-4000-8000-000000000003/redeem', body: {}, allowedFor: 'serve' },
   {
     label: 'redemption lookup',
     method: 'GET',
@@ -563,6 +565,8 @@ describe('no customer-directory or enumeration route exists', () => {
       [
         '/accounts',
         '/accounts/:id',
+        // LPC-05: one account's earned rewards, reached by an account id the cashier already holds (scan/lookup); not an enumeration.
+        '/accounts/:id/entitlements',
         '/accounts/:id/transactions',
         // LOYALTY-PROGRAMME-COMPLETION: the business's OWN programme configuration (no customer data). Reviewed: loyalty:view plus business-wide access.
         '/programmes',

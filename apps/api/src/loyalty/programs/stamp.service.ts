@@ -100,7 +100,7 @@ export async function recordPurchaseStamp(
 /** Atomically uses an earned entitlement: it can be redeemed once, by this business only, and never after it has been used, expired or reversed. */
 export async function consumeEntitlement(
   db: Database,
-  input: { businessId: string; entitlementId: string; redeemedBy: string },
+  input: { businessId: string; entitlementId: string; redeemedBy: string; loyaltyAccountId?: string },
 ): Promise<{ id: string; rewardId: string; loyaltyAccountId: string }> {
   const [row] = await db
     .update(loyaltyProgramEntitlements)
@@ -110,6 +110,7 @@ export async function consumeEntitlement(
         eq(loyaltyProgramEntitlements.id, input.entitlementId),
         eq(loyaltyProgramEntitlements.businessId, input.businessId),
         eq(loyaltyProgramEntitlements.status, 'available'),
+        ...(input.loyaltyAccountId ? [eq(loyaltyProgramEntitlements.loyaltyAccountId, input.loyaltyAccountId)] : []),
         sql`(${loyaltyProgramEntitlements.expiresAt} IS NULL OR ${loyaltyProgramEntitlements.expiresAt} > now())`,
       ),
     )

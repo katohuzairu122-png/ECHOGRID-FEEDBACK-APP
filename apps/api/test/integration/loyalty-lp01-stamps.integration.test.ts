@@ -6,6 +6,7 @@ import { BusinessService } from '../../src/businesses/business.service';
 import { LoyaltyAccountService } from '../../src/loyalty/loyalty-account.service';
 import { LoyaltyProgramService } from '../../src/loyalty/programs/program.service';
 import { consumeEntitlement } from '../../src/loyalty/programs/stamp.service';
+import { listAvailableEntitlements, redeemAccountEntitlement } from '../../src/loyalty/programs/entitlement.service';
 import { appDbOf } from '../helpers/runtime-db';
 
 /** LP-01 Buy X, get Y free: stamp card behaviour on a disposable PostgreSQL database (RW-D4). */
@@ -160,6 +161,36 @@ describe.skipIf(!process.env.DATABASE_URL)('LP-01 stamp card (integration)', () 
     // The database also refuses to reopen a used entitlement or delete it.
     await expect(admin.query(`update loyalty_program_entitlements set status='available' where id=$1`, [entitlement.id])).rejects.toThrow(/LOYALTY_ENTITLEMENT_FINAL/);
     await expect(admin.query(`delete from loyalty_program_entitlements where id=$1`, [entitlement.id])).rejects.toThrow(/LOYALTY_ENTITLEMENT_NOT_DELETABLE/);
+  });
+
+  it('LPC-05: a cashier lists and redeems an earned reward for the scanned account only, once, at an allowed branch', async () => {
+    const db = buildDb(admin);
+    const account = await member();
+    const stranger = await member();
+    for (const i of [1, 2, 3]) await buy(loyalty, account, 5, `lpc5-${run}-${i}`);
+    const listed = await listAvailableEntitlements(db, { businessId, accountId: account, branchId });
+    expect(listed).toHaveLength(1);
+    expect(listed[0]).toMatchObject({ rewardId, rewardName: 'Free coffee', rewardType: 'free_item' });
+    expect(await listAvailableEntitlements(db, { businessId, accountId: stranger, branchId })).toEqual([]);
+    // Another business cannot see or use this account's reward (uniform not-found / not-available).
+    await expect(listAvailableEntitlements(db, { businessId: otherBusinessId, accountId: account })).rejects.toMatchObject({ code: 'LOYALTY_ACCOUNT_NOT_FOUND' });
+    await expect(redeemAccountEntitlement(db, { businessId, accountId: stranger, entitlementId: listed[0]!.id, redeemedBy: ownerId, branchId })).rejects.toMatchObject({ code: 'ENTITLEMENT_NOT_AVAILABLE' });
+    // A reward limited to a different branch cannot be handed over here.
+    const otherBranch = (await repos.branches.create({ businessId, name: 'Other', slug: `lp01-b2-${run}` })).id;
+    await admin.query(`update loyalty_rewards set branch_id=$1 where id=$2`, [otherBranch, rewardId]);
+    try {
+      expect(await listAvailableEntitlements(db, { businessId, accountId: account, branchId })).toEqual([]);
+      await expect(redeemAccountEntitlement(db, { businessId, accountId: account, entitlementId: listed[0]!.id, redeemedBy: ownerId, branchId })).rejects.toMatchObject({ code: 'ENTITLEMENT_NOT_AVAILABLE' });
+    } finally {
+      await admin.query(`update loyalty_rewards set branch_id=null where id=$1`, [rewardId]);
+    }
+    // A suspended account is refused; an active one redeems exactly once.
+    await admin.query(`update loyalty_accounts set status='suspended' where id=$1`, [account]);
+    await expect(redeemAccountEntitlement(db, { businessId, accountId: account, entitlementId: listed[0]!.id, redeemedBy: ownerId, branchId })).rejects.toMatchObject({ code: 'LOYALTY_ACCOUNT_SUSPENDED' });
+    await admin.query(`update loyalty_accounts set status='active' where id=$1`, [account]);
+    await expect(redeemAccountEntitlement(db, { businessId, accountId: account, entitlementId: listed[0]!.id, redeemedBy: ownerId, branchId })).resolves.toMatchObject({ rewardId });
+    await expect(redeemAccountEntitlement(db, { businessId, accountId: account, entitlementId: listed[0]!.id, redeemedBy: ownerId, branchId })).rejects.toMatchObject({ code: 'ENTITLEMENT_NOT_AVAILABLE' });
+    expect(await listAvailableEntitlements(db, { businessId, accountId: account, branchId })).toEqual([]);
   });
 
   it('the database rejects an entitlement or progress row that crosses businesses', async () => {
