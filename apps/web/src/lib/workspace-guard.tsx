@@ -2,7 +2,7 @@ import 'server-only';
 import type { ReactNode } from 'react';
 import { redirect } from 'next/navigation';
 import { RestrictedPanel } from '@/components/workspace/restricted-panel';
-import { canConfigureProgramme, canViewCommunityHub, classifyWorkspace, getMyAccess } from './permissions';
+import { canConfigureProgramme, canReversePurchase, canViewCommunityHub, classifyWorkspace, getMyAccess } from './permissions';
 
 /** The cashier's only workspace and home. */
 export const CASHIER_HOME = '/dashboard/loyalty/scan';
@@ -21,6 +21,16 @@ export async function managementGate(): Promise<ReactNode | null> {
   const kind = classifyWorkspace(await getMyAccess());
   if (kind === 'cashier') redirect(CASHIER_HOME);
   if (kind === 'unavailable') return <RestrictedPanel variant="unavailable" />;
+  return null;
+}
+
+/** LPC-10: gate for the purchase-reversal screens: loyalty:adjust in a management workspace. The API enforces the same permission. */
+export async function reversalGate(): Promise<ReactNode | null> {
+  const access = await getMyAccess();
+  const kind = classifyWorkspace(access);
+  if (kind === 'cashier') redirect(CASHIER_HOME);
+  if (kind === 'unavailable') return <RestrictedPanel variant="unavailable" />;
+  if (!canReversePurchase(access)) return <RestrictedPanel variant="forbidden" />;
   return null;
 }
 

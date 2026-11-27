@@ -7,6 +7,7 @@ import {
   loyaltyProgramProgressEvents,
   loyaltyProgramVersions,
   loyaltyPrograms,
+  loyaltyRewards,
   loyaltyPurchaseEvents,
   loyaltyTransactions,
 } from '../../db/schema';
@@ -20,6 +21,8 @@ export interface ProgressReversalResult {
   revokedEntitlements: number;
   /** Entitlements the history no longer supports but that were ALREADY handed over: kept, and flagged for the Owner to review. */
   usedEntitlementIds: string[];
+  /** What the reversal does to each affected reward, by catalogue name, for the Owner's confirmation screen. */
+  rewardImpact: { rewardName: string; outcome: 'revoked' | 'already_used' }[];
   /** Programmes whose progress is frozen (switched away): their counters never change, so nothing was adjusted there. */
   frozenProgrammes: number;
 }
@@ -35,7 +38,7 @@ export async function reversePurchaseProgress(
   tx: Tx,
   input: { businessId: string; loyaltyAccountId: string; purchaseEventId: string; timeZone: string; currency: string },
 ): Promise<ProgressReversalResult> {
-  const result: ProgressReversalResult = { programmesAdjusted: 0, revokedEntitlements: 0, usedEntitlementIds: [], frozenProgrammes: 0 };
+  const result: ProgressReversalResult = { programmesAdjusted: 0, revokedEntitlements: 0, usedEntitlementIds: [], rewardImpact: [], frozenProgrammes: 0 };
   const touched = await tx
     .selectDistinct({ programId: loyaltyProgramProgressEvents.programId })
     .from(loyaltyProgramProgressEvents)
@@ -122,16 +125,19 @@ export async function reversePurchaseProgress(
     const next = replayProgress(type, withoutThis, input.timeZone);
 
     const entitlements = await tx
-      .select({ id: loyaltyProgramEntitlements.id, sourceKey: loyaltyProgramEntitlements.sourceKey, status: loyaltyProgramEntitlements.status })
+      .select({ id: loyaltyProgramEntitlements.id, sourceKey: loyaltyProgramEntitlements.sourceKey, status: loyaltyProgramEntitlements.status, rewardName: loyaltyRewards.name })
       .from(loyaltyProgramEntitlements)
+      .innerJoin(loyaltyRewards, eq(loyaltyRewards.id, loyaltyProgramEntitlements.rewardId))
       .where(and(eq(loyaltyProgramEntitlements.programId, programId), eq(loyaltyProgramEntitlements.loyaltyAccountId, input.loyaltyAccountId)));
     for (const entitlement of entitlements) {
       if (next.grants.has(entitlement.sourceKey)) continue;
       if (entitlement.status === 'available') {
         await tx.update(loyaltyProgramEntitlements).set({ status: 'reversed' }).where(and(eq(loyaltyProgramEntitlements.id, entitlement.id), eq(loyaltyProgramEntitlements.status, 'available')));
         result.revokedEntitlements += 1;
+        result.rewardImpact.push({ rewardName: entitlement.rewardName, outcome: 'revoked' });
       } else if (entitlement.status === 'redeemed') {
         result.usedEntitlementIds.push(entitlement.id);
+        result.rewardImpact.push({ rewardName: entitlement.rewardName, outcome: 'already_used' });
       }
     }
 

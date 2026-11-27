@@ -10,7 +10,8 @@
       "navigationLabel": "Loyalty sections",
       "customerQr": "Customer QR",
       "settlements": "Orphan settlement",
-      "programme": "Programme"
+      "programme": "Programme",
+      "purchases": "Purchases"
     },
     "accounts": {
       "emptyTitle": "No loyalty members yet",
@@ -221,10 +222,10 @@
       "cashierAppLink": "Cashier app: open or install it, sign-in sessions and cashier accounts",
       "card": {
         "title": "Member card",
-        "points": "Points",
+        "points": "Points balance",
         "visits": "Visits",
         "lastVisit": "Last visit: {date}",
-        "rewardsTitle": "Rewards",
+        "rewardsTitle": "Redeemable rewards",
         "noRewards": "This business has not set up any rewards yet.",
         "cost": "{count} points",
         "ready": "Ready to redeem",
@@ -280,10 +281,10 @@
     "businessDashboard": {
       "messages": "Messages",
       "notificationPreferences": "Notification preferences →",
-      "points": "{points} pts",
-      "progressToNextTier": "{remaining} pts to {tierName}",
+      "points": "{points} points",
+      "progressToNextTier": "{remaining} points to the {tierName} tier",
       "topTierReached": "Top tier reached",
-      "rewardsHeading": "Rewards",
+      "rewardsHeading": "Redeemable rewards",
       "recentActivityHeading": "Recent activity",
       "backToWallet": "← My loyalties",
       "membership": {
@@ -1150,6 +1151,82 @@
       "missionReward": "Reward",
       "addMission": "Add mission",
       "removeMission": "Remove last"
+    }
+  },
+  "purchases": {
+    "title": "Purchases and reversals",
+    "subtitle": "Review a purchase and reverse it if it was refunded or recorded by mistake. Reversals never delete anything: the history stays.",
+    "empty": "No purchases to show.",
+    "unnamed": "Customer",
+    "review": "Review",
+    "details": "Details",
+    "previous": "Previous",
+    "next": "Next",
+    "reverseTitle": "Reverse a purchase",
+    "back": "Back to purchases",
+    "columns": {
+      "date": "Date",
+      "customer": "Customer",
+      "amount": "Amount",
+      "points": "Points earned",
+      "status": "Status",
+      "action": "Action"
+    },
+    "status": {
+      "confirmed": "Confirmed",
+      "refunded": "Refunded",
+      "reversed": "Reversed"
+    },
+    "filters": {
+      "label": "Filter purchases",
+      "all": "All",
+      "confirmed": "Confirmed",
+      "reversed": "Reversed (history)"
+    },
+    "detail": {
+      "title": "Original purchase",
+      "channel": "Channel",
+      "pointsEarned": "Points earned"
+    },
+    "impact": {
+      "title": "What reversing this purchase will do",
+      "points": "Take back {count, plural, one {# point} other {# points}} from the customer's balance.",
+      "shortfall": "{count, plural, one {# point} other {# points}} cannot be taken back because the customer has already spent them. The balance stops at zero and this is recorded.",
+      "noRewards": "No earned rewards are affected.",
+      "revoked": "Earned reward withdrawn (not yet received): {reward}",
+      "alreadyUsed": "Reward already handed over, so it stays given: {reward}. This reversal will be flagged for review.",
+      "frozen": "A programme that was switched off keeps its progress unchanged.",
+      "rules": "Rules set by the business owner: a reward already handed over stays given, the points balance never goes below zero, and cashiers cannot reverse purchases.",
+      "unavailable": "The impact could not be calculated, so this purchase cannot be reversed from here right now."
+    },
+    "form": {
+      "title": "Reverse this purchase",
+      "reason": "Reason (required)",
+      "reasonHint": "3 to 200 characters. It is stored with the reversal.",
+      "confirm": "I understand this reverses the purchase and cannot be undone.",
+      "submit": "Reverse purchase",
+      "submitting": "Reversing…"
+    },
+    "result": {
+      "title": "Purchase reversed",
+      "points": "{count, plural, one {# point} other {# points}} taken back.",
+      "shortfall": "{count, plural, one {# point} other {# points}} could not be taken back (already spent).",
+      "needsReview": "Needs review: a reward was already handed over or points could not be recovered."
+    },
+    "reversedRecord": {
+      "title": "This purchase was reversed",
+      "when": "Reversed on {date}.",
+      "final": "A reversal is final and is kept in the history. It cannot be repeated."
+    },
+    "errors": {
+      "NO_BUSINESS": "Choose a business first.",
+      "REASON_REQUIRED": "Enter a reason of 3 to 200 characters.",
+      "CONFIRM_REQUIRED": "Tick the confirmation to continue.",
+      "ALREADY_REVERSED": "This purchase was already reversed.",
+      "NOT_FOUND": "This purchase could not be found.",
+      "NOT_ALLOWED": "You do not have permission to reverse purchases.",
+      "CANNOT_REPRODUCE": "This customer's progress cannot be recalculated safely, so the purchase was not reversed. Adjust points manually instead.",
+      "FAILED": "The purchase could not be reversed. Nothing was changed. Try again."
     }
   }
 }
