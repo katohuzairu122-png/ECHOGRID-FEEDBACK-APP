@@ -273,13 +273,14 @@ describe.skipIf(!process.env.DATABASE_URL)('loyalty programmes (integration)', (
     expect(versions).toEqual([{ program_version: 1, points: 6 }, { program_version: 2, points: 15 }]);
   });
 
-  it('refuses amounts the currency or the ledger cannot hold exactly instead of rounding them', async () => {
+  it('accepts a third KWD decimal now that storage holds it, and still refuses what the currency cannot hold, instead of rounding', async () => {
     const kwd = (await repos.businesses.create({ name: `LPC kwd ${run}`, slug: `lpc-kwd-${run}`, defaultCurrency: 'KWD' } as never)).id;
     await repos.loyaltySettings.getOrCreateDefaults(kwd);
     const member = await makeMember(kwd);
-    await expect(buy(member.accountId, 1.005, `kwd-${run}-1`, kwd)).rejects.toMatchObject({ code: 'AMOUNT_PRECISION_NOT_SUPPORTED', status: 422 });
+    // LPC-14 / migration 0108: the ledger stores three decimals, so 1.005 KWD is held exactly (it was refused while the columns had two).
+    expect((await buy(member.accountId, 1.005, `kwd-${run}-1`, kwd)).account.points).toBe(1); // floor(1.005 x 1)
     await expect(buy(member.accountId, 1.0001, `kwd-${run}-2`, kwd)).rejects.toMatchObject({ code: 'INVALID_PURCHASE_AMOUNT', status: 422 });
-    expect((await buy(member.accountId, 1.5, `kwd-${run}-3`, kwd)).account.points).toBe(1); // floor(1.500 x 1)
+    expect((await buy(member.accountId, 1.5, `kwd-${run}-3`, kwd)).account.points).toBe(2); // 1 + floor(1.500 x 1)
     const usd = await makeMember(businessId);
     await expect(buy(usd.accountId, 9.999, `usd-${run}`)).rejects.toMatchObject({ code: 'INVALID_PURCHASE_AMOUNT' });
     await expect(buy(usd.accountId, 0.1 + 0.2, `usd2-${run}`)).rejects.toMatchObject({ code: 'INVALID_PURCHASE_AMOUNT' });

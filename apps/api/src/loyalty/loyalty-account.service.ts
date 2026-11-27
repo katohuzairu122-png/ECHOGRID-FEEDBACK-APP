@@ -10,6 +10,7 @@ import { MoneyError, formatMoney, minorFromStored, currencyExponent, parseMoney 
 import { resolveActiveProgramme } from './programs/program.service';
 import { recordPurchaseStamp } from './programs/stamp.service';
 import { recordProgrammeProgress } from './programs/progress.service';
+import { moneyStorageScale } from './money-storage';
 import { reversePurchaseProgress, type ProgressReversalResult } from './programs/reversal.service';
 import { computeCheckinEarning, computePurchaseEarning, type EarningProvenance } from './programs/earning';
 import { assertCashierSessionBound, type CashierSessionBinding } from '../cashier-sessions/session-binding';
@@ -228,7 +229,8 @@ export class LoyaltyAccountService {
     businessId: string;
     branchId?: string;
     accountId: string;
-    purchaseAmount: number;
+    /** A decimal number or, for exactness, its decimal text. */
+    purchaseAmount: number | string;
     idempotencyKey: string;
     externalReference?: string;
     channel: LoyaltyPurchaseChannel;
@@ -249,7 +251,7 @@ export class LoyaltyAccountService {
       const business = await repos.businesses.findById(input.businessId);
       if (!business) throw new AppError('Business not found.', 404, 'BUSINESS_NOT_FOUND');
       const currency = business.defaultCurrency;
-      const amountMinor = this.parseQualifyingAmount(input.purchaseAmount, currency);
+      const amountMinor = this.parseQualifyingAmount(input.purchaseAmount, currency, await moneyStorageScale(tx));
       const amount = formatMoney(amountMinor, currency).replace(/(\.\d\d)0$/, '$1');
       const { event, inserted } = await repos.loyaltyPurchaseEvents.createIdempotent({
         businessId: input.businessId,
@@ -335,7 +337,7 @@ export class LoyaltyAccountService {
    * Exact qualifying amount in minor units. More precision than the currency allows is REFUSED, never rounded (RW-D7). Until the storage
    * columns are widened for three-decimal currencies, an amount whose third decimal is not zero cannot be stored exactly and is refused too.
    */
-  private parseQualifyingAmount(value: number, currency: string): bigint {
+  private parseQualifyingAmount(value: number | string, currency: string, storageScale: number): bigint {
     let minor: bigint;
     try {
       minor = parseMoney(value, currency);
@@ -346,9 +348,11 @@ export class LoyaltyAccountService {
       throw error;
     }
     const exponent = currencyExponent(currency);
-    if (exponent > 2 && minor % 10n ** BigInt(exponent - 2) !== 0n) {
+    // LPC-14: the database stores `storageScale` decimals (2 until migration 0108 is applied, 3 afterwards). An amount that needs more is refused,
+    // never rounded: PostgreSQL would otherwise round it silently on insert.
+    if (exponent > storageScale && minor % 10n ** BigInt(exponent - storageScale) !== 0n) {
       throw new AppError(
-        `This amount needs ${exponent} decimal places, which the loyalty ledger cannot store yet. Enter it with two decimals.`,
+        `This amount needs ${exponent} decimal places, which the loyalty ledger cannot store yet. Enter it with ${storageScale} decimals.`,
         422,
         'AMOUNT_PRECISION_NOT_SUPPORTED',
       );

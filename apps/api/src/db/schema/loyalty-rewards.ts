@@ -78,7 +78,7 @@ export const loyaltyRewards = pgTable(
     // unchanged) -- only the schema/repository level relaxed.
     pointsCost: integer('points_cost'),
     // Generic numeric value for non-points types -- see scoping decision 1.
-    rewardValue: numeric('reward_value', { precision: 10, scale: 2 }),
+    rewardValue: numeric('reward_value', { precision: 11, scale: 3 }),
     status: text('status').notNull().default('active'),
     startDate: timestamp('start_date', { withTimezone: true }),
     expiryDate: timestamp('expiry_date', { withTimezone: true }),
@@ -86,7 +86,7 @@ export const loyaltyRewards = pgTable(
     // Monetary cap on total campaign spend -- same precision/scale as
     // loyalty_transactions.purchase_amount, this codebase's existing
     // money-column precedent.
-    maxBudget: numeric('max_budget', { precision: 10, scale: 2 }),
+    maxBudget: numeric('max_budget', { precision: 11, scale: 3 }),
     // Which one-reward-per-X rule this campaign declares -- config only,
     // see scoping decision 3. NULL = no additional rule beyond the type's
     // own natural mechanics (e.g. points redemption is limited only by

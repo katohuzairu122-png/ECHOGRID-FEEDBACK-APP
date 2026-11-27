@@ -99,8 +99,8 @@ export function AccountDialog({ accountId, customerLabel }: AccountDialogProps) 
                 id="purchaseAmount"
                 name="purchaseAmount"
                 type="number"
-                min="0.01"
-                step="0.01"
+                min="0.001"
+                step="0.001"
                 required
               />
             </div>

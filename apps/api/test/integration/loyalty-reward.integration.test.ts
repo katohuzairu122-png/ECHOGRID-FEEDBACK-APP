@@ -85,8 +85,8 @@ describe.skipIf(!process.env.DATABASE_URL)('LoyaltyRewardService (integration)',
 
     expect(persisted).toMatchObject({
       type: 'discount',
-      rewardValue: '12.50',
-      maxBudget: '1000.00',
+      rewardValue: '12.500', // numeric(11,3) since migration 0108 (LPC-14): the same value, now stored with three decimals
+      maxBudget: '1000.000',
       limitPer: 'visit',
       cooldownSeconds: 30,
     });
@@ -125,9 +125,9 @@ describe.skipIf(!process.env.DATABASE_URL)('LoyaltyRewardService (integration)',
 
     const updated = await service.update(created.id, businessA, { maxBudget: 750 }, STAFF_ACTOR_ID);
 
-    expect(updated.maxBudget).toBe('750.00'); // the one field this patch touched
+    expect(updated.maxBudget).toBe('750.000'); // the one field this patch touched
     expect(updated.type).toBe('voucher'); // everything else survives untouched
-    expect(updated.rewardValue).toBe('20.00');
+    expect(updated.rewardValue).toBe('20.000');
     expect(updated.maxRewardsPerDay).toBe(5);
     expect(updated.cooldownSeconds).toBe(300);
   });

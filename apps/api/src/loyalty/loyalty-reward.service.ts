@@ -1,4 +1,5 @@
 import type { Repositories, LoyaltyReward } from '../repositories';
+import { fromMilli, milliToNumber, MoneyTextError, toMilli } from './money-storage';
 import { AppError } from '../lib/errors';
 
 /** Rounds a currency amount to 2 decimal places -- guards
@@ -23,6 +24,19 @@ import { AppError } from '../lib/errors';
  * above. */
 function roundMoney(amount: number): number {
   return Math.round(amount * 100) / 100;
+}
+
+/** LPC-14: exact `count x value` (and differences) in integer thousandths, converted to a display number only at the very end. */
+const exactTotal = (count: number, value: string | number): bigint => BigInt(count) * toMilli(value);
+
+/** Exact decimal text for a reward amount, refusing (never rounding) more decimals than `scale`. */
+function moneyText(value: number, scale: number, field: string): string {
+  try {
+    return fromMilli(toMilli(value), scale);
+  } catch (error) {
+    if (error instanceof MoneyTextError) throw new AppError(`${field} may have at most ${scale} decimal places.`, 422, 'INVALID_REWARD_AMOUNT');
+    throw error;
+  }
 }
 
 type RewardType = 'points' | 'discount' | 'free_item' | 'voucher';
@@ -170,6 +184,12 @@ export interface CampaignDashboard {
 export class LoyaltyRewardService {
   constructor(
     private readonly repos: Pick<Repositories, 'loyaltyRewards' | 'branches' | 'loyaltyTransactions'>,
+    /**
+     * LPC-14: how many decimals this business may use for reward values and budgets (its currency's exponent, capped by what the database can store
+     * today). Routes pass the real answer; callers that do not (tests, tooling) get 2, the conservative pre-migration value, and a third decimal
+     * is refused rather than rounded.
+     */
+    private readonly moneyScale: (businessId: string) => Promise<number> = async () => 2,
   ) {}
 
   /** Customer-facing catalog and the staff config screen both call this;
@@ -190,7 +210,7 @@ export class LoyaltyRewardService {
       description: input.description,
       pointsCost: input.pointsCost,
       createdBy,
-      ...this.convertCampaignFields(input),
+      ...(await this.convertCampaignFields(input, businessId)),
     });
   }
 
@@ -209,7 +229,7 @@ export class LoyaltyRewardService {
         description: patch.description,
         pointsCost: patch.pointsCost,
         status: patch.status,
-        ...this.convertCampaignFields(patch),
+        ...(await this.convertCampaignFields(patch, businessId)),
       },
       updatedBy,
     );
@@ -239,12 +259,13 @@ export class LoyaltyRewardService {
     ]);
     const branchName = branch?.name ?? null;
 
-    const rewardValue = reward.rewardValue !== null ? Number(reward.rewardValue) : null;
-    const budgetTotal = reward.maxBudget !== null ? Number(reward.maxBudget) : null;
-    const budgetUsed = rewardValue !== null ? roundMoney(totalCount * rewardValue) : null;
-    const budgetRemaining =
-      budgetTotal !== null && budgetUsed !== null ? roundMoney(budgetTotal - budgetUsed) : null;
-    const outstandingLiability = rewardValue !== null ? roundMoney(outstandingCount * rewardValue) : null;
+    // LPC-14: every figure is computed in exact integer thousandths; the numbers below are display conversions of those exact results.
+    const usedMilli = reward.rewardValue !== null ? exactTotal(totalCount, reward.rewardValue) : null;
+    const totalMilli = reward.maxBudget !== null ? toMilli(reward.maxBudget) : null;
+    const budgetTotal = totalMilli !== null ? milliToNumber(totalMilli) : null;
+    const budgetUsed = usedMilli !== null ? milliToNumber(usedMilli) : null;
+    const budgetRemaining = totalMilli !== null && usedMilli !== null ? milliToNumber(totalMilli - usedMilli) : null;
+    const outstandingLiability = reward.rewardValue !== null ? milliToNumber(exactTotal(outstandingCount, reward.rewardValue)) : null;
     const redemptionRate = totalCount > 0 ? redeemedCount / totalCount : null;
 
     return {
@@ -300,16 +321,18 @@ export class LoyaltyRewardService {
    * `null.toFixed(2)` throws, so copying that guard as-is would crash on
    * exactly the "clear the budget cap" case Block 6.8.3 exists to
    * support, not just fail to convert it. */
-  private convertCampaignFields(input: RewardCampaignFields) {
+  private async convertCampaignFields(input: RewardCampaignFields, businessId: string) {
+    const needsScale = input.rewardValue !== undefined || (input.maxBudget !== undefined && input.maxBudget !== null);
+    const scale = needsScale ? await this.moneyScale(businessId) : 2;
     return {
       branchId: input.branchId,
       type: input.type,
-      rewardValue: input.rewardValue !== undefined ? input.rewardValue.toFixed(2) : undefined,
+      rewardValue: input.rewardValue !== undefined ? moneyText(input.rewardValue, scale, 'The reward value') : undefined,
       startDate: input.startDate !== undefined ? new Date(input.startDate) : undefined,
       expiryDate: input.expiryDate !== undefined ? new Date(input.expiryDate) : undefined,
       maxRewardsPerDay: input.maxRewardsPerDay,
       maxBudget:
-        input.maxBudget === undefined ? undefined : input.maxBudget === null ? null : input.maxBudget.toFixed(2),
+        input.maxBudget === undefined ? undefined : input.maxBudget === null ? null : moneyText(input.maxBudget, scale, 'The maximum budget'),
       limitPer: input.limitPer,
       limitPeriodDays: input.limitPeriodDays,
       cooldownSeconds: input.cooldownSeconds,

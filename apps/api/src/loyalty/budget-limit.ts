@@ -1,5 +1,7 @@
+import { toMilli as toMilliExact } from './money-storage';
+
 /**
- * The maxBudget enforcement decision, in exact integer cents.
+ * The maxBudget enforcement decision, in exact integer thousandths (LPC-14; it was integer cents while the columns had two decimals).
  *
  * WHAT THIS FIXES
  * LoyaltyRedemptionService.checkDailyAndBudgetLimits compared raw IEEE 754
@@ -46,51 +48,28 @@
  * representable value for which this needs to round at all.
  */
 
-const CENTS_PER_UNIT = 100;
-
 /**
- * A `numeric(10, 2)` column value as an integer number of cents.
- *
- * Exact for every value the column can store. Math.round is doing nothing
- * interesting here -- it only absorbs the `x * 100` float artifact (e.g.
- * 8.30 * 100 = 830.0000000000001) for a value that is already known to
- * have at most 2dp. It is NOT a general-purpose money parser: hand it three
- * decimal places and it silently truncates, which is safe here only because
- * the schema forbids them.
- *
- * Max magnitude is numeric(10,2) -> 99,999,999.99 -> 9,999,999,999 cents,
- * comfortably inside Number.MAX_SAFE_INTEGER, so the multiplication below
- * cannot lose precision either.
+ * LPC-14: exact thousandths, not cents. Migration 0108 widens both columns to three decimals (KWD has three), so integer cents would truncate the
+ * third decimal. The comparison is still exact integer arithmetic (BigInt), never binary floating point, for every value the columns can hold.
  */
-export function toCents(value: string | number): number {
-  return Math.round(Number(value) * CENTS_PER_UNIT);
+export function toMilli(value: string | number): bigint {
+  return toMilliExact(value);
 }
 
 export interface BudgetCheckInput {
   /** Redemptions of this reward that already exist. */
   alreadyIssued: number;
-  /** numeric(10,2) as Drizzle hands it over: a string, or null. */
+  /** numeric(11, 3) as Drizzle hands it over: a decimal string, or null. */
   rewardValue: string | null;
   maxBudget: string | null;
 }
 
 /**
- * True when issuing ONE MORE redemption would take total spend past
- * maxBudget.
- *
- * Returns false when either column is null, preserving the existing
- * behaviour exactly: a 'points'-type reward has a null rewardValue, so
- * maxBudget is a deliberate no-op for it (confirmed with the project owner
- * -- see the integration suite's "redeem does not enforce maxBudget for a
- * points-type reward, even when maxBudget is set"). That is a product
- * decision this fix must not quietly change.
- *
- * Boundary: spending EXACTLY the budget is allowed; one cent beyond is not.
- * `>` not `>=`, matching what the float version intended.
+ * True when issuing ONE MORE redemption would take total spend past maxBudget. Returns false when either column is null, preserving the existing
+ * behaviour exactly (a 'points'-type reward has a null rewardValue, so maxBudget is a deliberate no-op for it, confirmed with the project owner).
+ * Boundary: spending EXACTLY the budget is allowed; one thousandth beyond is not.
  */
 export function wouldExceedBudget({ alreadyIssued, rewardValue, maxBudget }: BudgetCheckInput): boolean {
   if (maxBudget === null || rewardValue === null) return false;
-
-  const projectedCents = (alreadyIssued + 1) * toCents(rewardValue);
-  return projectedCents > toCents(maxBudget);
+  return BigInt(alreadyIssued + 1) * toMilliExact(rewardValue) > toMilliExact(maxBudget);
 }
