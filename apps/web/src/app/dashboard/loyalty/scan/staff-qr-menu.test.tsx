@@ -45,6 +45,49 @@ describe('StaffQrMenu (cashier Serve customers)', () => {
     expect(field.selectionEnd).toBe(field.value.length);
   });
 
+  it('lists earned programme rewards and submits one hand-over for the chosen reward', async () => {
+    const serveAction = vi.fn<typeof staffUnifiedQrAction>().mockResolvedValueOnce({
+      businessId: 'business',
+      branchId: '',
+      token: 'signed.customer.qr',
+      result: {
+        customerId: 'customer',
+        loyaltyAccountId: 'account',
+        membershipStatus: 'active',
+        actions: ['VIEW_ALLOWED_MEMBERSHIP_STATE', 'REDEEM_REWARD'],
+        card: {
+          displayName: 'Amina', points: 0, tier: null, visitCount: 3, lastVisitAt: null, rewards: [],
+          earnedRewards: [{ id: '6f0f1c5e-0000-4000-8000-000000000003', name: 'Free coffee', expiresAt: null }],
+        },
+      },
+    }).mockResolvedValue({ success: true });
+    const user = userEvent.setup();
+    render(<StaffQrMenu contexts={[{ branchId: null, branchName: null }]} serveAction={serveAction} />);
+    await user.type(screen.getByLabelText(/Find customer/i, { selector: 'input[name="token"]' }), 'signed.customer.qr');
+    await user.click(screen.getByRole('button', { name: 'Find customer' }));
+    const section = await screen.findByTestId('earned-rewards');
+    expect(section).toHaveTextContent('Free coffee');
+    await user.click(screen.getByTestId('hand-over'));
+    const form = serveAction.mock.calls.at(-1)![1];
+    expect(form.get('operation')).toBe('redeem-entitlement');
+    expect(form.get('entitlementId')).toBe('6f0f1c5e-0000-4000-8000-000000000003');
+    expect(form.get('token')).toBe('signed.customer.qr');
+  });
+
+  it('shows no earned-rewards section when the member has none or the cashier may not redeem', async () => {
+    const result = { customerId: 'c', loyaltyAccountId: 'a', membershipStatus: 'active' as const };
+    const card = { displayName: 'Amina', points: 0, tier: null, visitCount: 1, lastVisitAt: null, rewards: [], earnedRewards: [] };
+    const serveAction = vi.fn<typeof staffUnifiedQrAction>().mockResolvedValue({
+      businessId: 'business', branchId: '', token: 't', result: { ...result, actions: ['VIEW_ALLOWED_MEMBERSHIP_STATE', 'REDEEM_REWARD'], card },
+    });
+    const user = userEvent.setup();
+    render(<StaffQrMenu contexts={[{ branchId: null, branchName: null }]} serveAction={serveAction} />);
+    await user.type(screen.getByLabelText(/Find customer/i, { selector: 'input[name="token"]' }), 't');
+    await user.click(screen.getByRole('button', { name: 'Find customer' }));
+    await screen.findByTestId('customer-card');
+    expect(screen.queryByTestId('earned-rewards')).toBeNull();
+  });
+
   it('offers scan and the scan field, with no photo upload', () => {
     const { container } = render(<StaffQrMenu contexts={[{ branchId: null, branchName: null }]} />);
     expect(screen.getByRole('button', { name: 'Scan' })).toBeInTheDocument();

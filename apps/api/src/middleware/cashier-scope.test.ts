@@ -36,6 +36,7 @@ const EXPECTED_ALLOWED = [
   'GET /api/v1/auth/me',
   'GET /api/v1/businesses/me',
   'GET /api/v1/loyalty/redemptions/:code',
+  'POST /api/v1/loyalty/accounts/:id/entitlements/:entitlementId/redeem',
   'POST /api/v1/loyalty/accounts/:id/purchase',
   'POST /api/v1/loyalty/actions/lookup-customer',
   'POST /api/v1/loyalty/actions/lookup-purchase',
@@ -44,7 +45,7 @@ const EXPECTED_ALLOWED = [
 ].sort();
 
 describe('cashier route allow-list (exact, default deny)', () => {
-  it('has exactly the eight counter routes (the onboarding-invite issuer is NOT a cashier function)', () => {
+  it('has exactly the nine counter routes (the onboarding-invite issuer is NOT a cashier function)', () => {
     expect(CASHIER_ALLOWED_ROUTES.map((r) => r.label).sort()).toEqual(
       EXPECTED_ALLOWED.map((s) => s.replace('/api/v1', '')).sort(),
     );
