@@ -53,7 +53,10 @@ export async function requestEmailRegistrationAction(_prev: EmailAuthState, form
   if (password !== passwordConfirmation) return { error: 'password_mismatch' };
   const minLength = getCustomerPasswordMinLength();
   if (minLength !== null && passwordLength(password) < minLength) return { error: 'password_too_short', minLength };
-  const next = safeInternalPath(String(formData.get('next') ?? '/loyalty/dashboard'), '/loyalty/dashboard');
+  // The API only accepts customer destinations (/loyalty/...); a staff destination such as /dashboard (carried over from a business
+  // login link) would be rejected with 400 and show a generic "check the details" error, so fall back to the customer home.
+  const requestedNext = safeInternalPath(String(formData.get('next') ?? '/loyalty/dashboard'), '/loyalty/dashboard');
+  const next = requestedNext.startsWith('/loyalty/') ? requestedNext : '/loyalty/dashboard';
   try {
     // Transmit signup fields only to the attribution-protected API. The API hashes and
     // encrypts them before emailing the confirmation; no raw password is persisted.

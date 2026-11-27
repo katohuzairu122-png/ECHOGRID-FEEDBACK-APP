@@ -109,13 +109,13 @@ describe('LoginPage', () => {
     );
   });
 
-  it('preserves the existing internal return destination through registration', async () => {
+  it('sends non-invitation sign-ups to the account-type chooser', async () => {
     window.history.replaceState({}, '', '/login?next=%2Fdashboard%2Fbranches');
     renderWithIntl(<LoginPage />);
     await waitFor(() =>
       expect(screen.getByRole('link', { name: 'Sign up' })).toHaveAttribute(
         'href',
-        '/signup?next=%2Fdashboard%2Fbranches',
+        '/signup',
       ),
     );
   });
@@ -125,7 +125,7 @@ describe('LoginPage', () => {
     renderWithIntl(<LoginPage />);
     expect(screen.getByRole('link', { name: 'Sign up' })).toHaveAttribute(
       'href',
-      '/signup?next=%2Fdashboard',
+      '/signup',
     );
     expect(screen.getAllByRole('link', { name: /Back to home/ })[0]).toHaveAttribute('href', '/');
     expect(screen.getByRole('link', { name: 'Privacy' })).toHaveAttribute('href', '/privacy');

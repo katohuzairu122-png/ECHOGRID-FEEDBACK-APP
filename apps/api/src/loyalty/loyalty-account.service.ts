@@ -10,13 +10,15 @@ import { MoneyError, formatMoney, minorFromStored, currencyExponent, parseMoney 
 import { resolveActiveProgramme } from './programs/program.service';
 import { recordPurchaseStamp } from './programs/stamp.service';
 import { recordProgrammeProgress } from './programs/progress.service';
+import { reversePurchaseProgress, type ProgressReversalResult } from './programs/reversal.service';
 import { computeCheckinEarning, computePurchaseEarning, type EarningProvenance } from './programs/earning';
 import { assertCashierSessionBound, type CashierSessionBinding } from '../cashier-sessions/session-binding';
 import {
   assertMembershipGate,
   evaluateMembershipGate,
 } from '../customer-relationships/membership-gate';
-import type { LoyaltyPurchaseChannel } from '../db/schema';
+import { businesses, loyaltyPurchaseEvents, loyaltyTransactions, type LoyaltyPurchaseChannel } from '../db/schema';
+import { and, eq } from 'drizzle-orm';
 
 export interface EnrollInput {
   customerId: string;
@@ -372,6 +374,63 @@ export class LoyaltyAccountService {
         notes,
         createdBy: staffUserId,
       });
+    });
+  }
+
+  /**
+   * LPC-08: reverses one confirmed purchase (a refund or a mistaken receipt). Owner-approved rules: the points the purchase earned are taken back
+   * but the balance never goes below zero (the shortfall is recorded), progress and unused rewards the purchase earned are revoked, and a reward
+   * that was ALREADY handed over stays given and is flagged for review. Exactly one caller can win (conditional status change), and nothing is
+   * deleted: the ledger gets a negative adjustment and the purchase event is marked reversed.
+   */
+  async reversePurchase(input: { businessId: string; purchaseEventId: string; reason: string; actorUserId: string }): Promise<{
+    purchaseEventId: string;
+    accountId: string;
+    pointsEarned: number;
+    pointsReversed: number;
+    pointsShortfall: number;
+    progress: ProgressReversalResult;
+  }> {
+    return this.db.transaction(async (tx) => {
+      const repos = createRepositories(tx);
+      const [flipped] = await tx
+        .update(loyaltyPurchaseEvents)
+        .set({ paymentStatus: 'reversed' })
+        .where(and(eq(loyaltyPurchaseEvents.id, input.purchaseEventId), eq(loyaltyPurchaseEvents.businessId, input.businessId), eq(loyaltyPurchaseEvents.paymentStatus, 'confirmed')))
+        .returning({ id: loyaltyPurchaseEvents.id, loyaltyAccountId: loyaltyPurchaseEvents.loyaltyAccountId });
+      if (!flipped) {
+        const [existing] = await tx.select({ status: loyaltyPurchaseEvents.paymentStatus }).from(loyaltyPurchaseEvents).where(and(eq(loyaltyPurchaseEvents.id, input.purchaseEventId), eq(loyaltyPurchaseEvents.businessId, input.businessId))).limit(1);
+        if (!existing) throw new AppError('Purchase not found.', 404, 'PURCHASE_NOT_FOUND');
+        throw new AppError('This purchase was already reversed.', 409, 'PURCHASE_ALREADY_REVERSED');
+      }
+      const account = await repos.loyaltyAccounts.lockForUpdate(flipped.loyaltyAccountId, input.businessId);
+      if (!account) throw new AppError('Loyalty account not found.', 404, 'LOYALTY_ACCOUNT_NOT_FOUND');
+      const [business] = await tx.select({ currency: businesses.defaultCurrency, timeZone: businesses.defaultTimezone }).from(businesses).where(eq(businesses.id, input.businessId)).limit(1);
+      if (!business) throw new AppError('Business not found.', 404, 'BUSINESS_NOT_FOUND');
+
+      const earnedRows = await tx
+        .select({ points: loyaltyTransactions.points, programId: loyaltyTransactions.programId, programVersion: loyaltyTransactions.programVersion })
+        .from(loyaltyTransactions)
+        .where(and(eq(loyaltyTransactions.purchaseEventId, input.purchaseEventId), eq(loyaltyTransactions.loyaltyAccountId, account.id), eq(loyaltyTransactions.type, 'purchase')));
+      const pointsEarned = earnedRows.reduce((sum, row) => sum + row.points, 0);
+      const pointsReversed = Math.max(0, Math.min(pointsEarned, account.points));
+      const pointsShortfall = Math.max(0, pointsEarned) - pointsReversed;
+      const origin = earnedRows.find((row) => row.programId !== null);
+      if (pointsReversed > 0) {
+        await this.applyEarning(repos, account, 'adjustment', -pointsReversed, {
+          notes: `Reversal of purchase ${input.purchaseEventId}: ${input.reason}${pointsShortfall > 0 ? ` (${pointsShortfall} points could not be taken back: already spent)` : ''}`,
+          createdBy: input.actorUserId,
+          ...(origin?.programId && origin.programVersion !== null ? { provenance: { programId: origin.programId, programVersion: origin.programVersion } } : {}),
+        });
+      }
+      const progress = await reversePurchaseProgress(tx, {
+        businessId: input.businessId,
+        loyaltyAccountId: account.id,
+        purchaseEventId: input.purchaseEventId,
+        timeZone: business.timeZone,
+        currency: business.currency,
+      });
+      return { purchaseEventId: input.purchaseEventId, accountId: account.id, pointsEarned, pointsReversed, pointsShortfall, progress };
     });
   }
 

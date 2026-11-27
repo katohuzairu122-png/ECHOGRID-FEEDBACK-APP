@@ -32,6 +32,8 @@ export interface StaffCustomerCard {
   visitCount: number;
   lastVisitAt: string | null;
   rewards: Array<{ id: string; name: string; pointsCost: number; enoughPoints: boolean; pointsNeeded: number }>;
+  /** LPC-06: programme rewards this member has earned and not yet received (added by the route, not the resolver). */
+  earnedRewards?: Array<{ id: string; name: string; expiresAt: Date | null }>;
 }
 
 /** The cashier card lists at most this many rewards (cheapest first); a business rarely has more, and the screen must stay short. */

@@ -29,6 +29,7 @@ export function SignupForm() {
       <Logo variant="full" iconSize={40} />
       <Card className="w-full max-w-sm">
         <CardHeader>
+          <p className="w-fit rounded-full bg-brand-50 px-3 py-1 text-xs font-semibold text-brand-700">{t('businessBadge')}</p>
           <CardTitle>{t('title')}</CardTitle>
           <CardDescription>{t('description')}</CardDescription>
         </CardHeader>
@@ -85,6 +86,12 @@ export function SignupForm() {
             </Button>
           </form>
           <p className="mt-4 text-center text-sm text-neutral-500">
+            {t('customerPrompt')}{' '}
+            <Link href="/loyalty/join" className="font-medium text-brand-700 hover:underline">
+              {t('customerLink')}
+            </Link>
+          </p>
+          <p className="mt-2 text-center text-sm text-neutral-500">
             {t('hasAccount')}{' '}
             <Link href={`/login?next=${encodeURIComponent(next)}`} className="font-medium text-brand-700 hover:underline">
               {t('loginLink')}

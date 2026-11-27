@@ -36,10 +36,18 @@ describe('registration entry: choose how to participate (LANDING-ROLE-01)', () =
     expect(screen.queryByRole('link', { name: 'Join as a customer' })).not.toBeInTheDocument();
   });
 
-  it('goes straight to the owner form when the link already carries a destination (team invitations keep working)', async () => {
-    await renderPage({ next: '/dashboard/team' });
+  it('goes straight to the owner form for a team invitation, and labels it a business account with a customer escape', async () => {
+    await renderPage({ next: '/invite/abc' });
     expect(screen.getByLabelText('Password')).toBeRequired();
+    expect(screen.getByText('Business owner account')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Join as a customer instead' })).toHaveAttribute('href', '/loyalty/join');
     expect(screen.queryByText('Choose how to participate on Echo Grid')).not.toBeInTheDocument();
+  });
+
+  it('still asks which account type for any other destination (a customer must not land on the owner form by accident)', async () => {
+    await renderPage({ next: '/dashboard/team' });
+    expect(screen.getByRole('heading', { name: 'Choose how to participate on Echo Grid' })).toBeInTheDocument();
+    expect(screen.queryByLabelText('Password')).not.toBeInTheDocument();
   });
 
   it('ignores any other role value and an empty next (falls back to the chooser)', async () => {

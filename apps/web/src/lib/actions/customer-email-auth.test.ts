@@ -78,6 +78,15 @@ describe('customer email registration first step', () => {
     expect(JSON.stringify(result)).not.toContain('strong-registration-password-42');
   });
 
+  it('replaces a staff destination with the customer home so the API never rejects the signup with a 400', async () => {
+    h.api.mockResolvedValue({ status: 202, body: { accepted: true } });
+    for (const next of ['/dashboard', '/dashboard/team', '/loyalty']) {
+      h.api.mockClear();
+      expect(await requestEmailRegistrationAction({}, signup({ next }))).toEqual({ sent: true });
+      expect(h.api.mock.calls[0]![1].body.next).toBe('/loyalty/dashboard');
+    }
+  });
+
   it('rejects too-short signup passwords before proof issuance using the configured policy', async () => {
     process.env.CUSTOMER_PASSWORD_MIN_LENGTH = '12';
     expect(await requestEmailRegistrationAction({}, signup({ password: 'short', passwordConfirmation: 'short' })))

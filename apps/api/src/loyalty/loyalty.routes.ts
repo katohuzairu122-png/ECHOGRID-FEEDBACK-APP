@@ -32,6 +32,7 @@ import { NotificationService } from '../notifications/notification.service';
 import { LoyaltyActionResolver } from './loyalty-action-resolver';
 import { LoyaltyProgramService } from './programs/program.service';
 import { listAvailableEntitlements, redeemAccountEntitlement } from './programs/entitlement.service';
+import { assertRewardCanChange } from './programs/reward-usage.service';
 import { previewPurchases, isProgramAvailable } from '@echo-grid-feedback/shared-types';
 import { z } from 'zod';
 import { CustomerLookupService, LOOKUP_PURCHASE_AUDIT } from './customer-lookup.service';
@@ -75,6 +76,13 @@ loyaltyRoutes.post('/actions/resolve-customer', requirePermission('loyalty:serve
       permissions: c.get('permissions'),
       ...(c.get('branchId') ? { branchId: c.get('branchId') } : {}),
     });
+    // LPC-06: the card also lists the programme rewards this member has earned and not yet received, so the cashier can hand them over.
+    if (result.card && result.loyaltyAccountId) {
+      const earned = await listAvailableEntitlements(db, {
+        businessId: c.get('businessId'), accountId: result.loyaltyAccountId, branchId: c.get('branchId'),
+      });
+      result.card = { ...result.card, earnedRewards: earned.map((e) => ({ id: e.id, name: e.rewardName, expiresAt: e.expiresAt })) };
+    }
     return ok(c, result);
   });
 });
@@ -312,6 +320,40 @@ loyaltyRoutes.post(
   },
 );
 
+// LPC-08: reverse one confirmed purchase (refund or mistaken receipt). Owner and managers only (loyalty:adjust, business-wide); a cashier token is
+// refused by the cashier route allow-list. Owner-approved rules: the balance never goes below zero, unused rewards are revoked, and a reward already
+// handed over stays given and is flagged for review.
+const reversePurchaseSchema = z.object({ reason: z.string().trim().min(3).max(200) }).strict();
+loyaltyRoutes.post('/purchases/:purchaseEventId/reverse', requirePermission('loyalty:adjust'), requireBusinessWideAccess, async (c) => {
+  const purchaseEventId = z.uuid().parse(c.req.param('purchaseEventId'));
+  const body = await parseJsonBody(c.req.raw, reversePurchaseSchema);
+  return withDb(c, async (db) => {
+    const result = await new LoyaltyAccountService(db).reversePurchase({
+      businessId: c.get('businessId'), purchaseEventId, reason: body.reason, actorUserId: c.get('userId'),
+    });
+    c.set('auditMetadata', {
+      action: 'loyalty.purchase_reversed',
+      entityType: 'loyalty_account',
+      entityId: result.accountId,
+      details: {
+        purchaseEventId,
+        pointsReversed: result.pointsReversed,
+        pointsShortfall: result.pointsShortfall,
+        revokedRewards: result.progress.revokedEntitlements,
+        rewardsAlreadyUsed: result.progress.usedEntitlementIds,
+      },
+    });
+    return ok(c, {
+      purchaseEventId,
+      pointsReversed: result.pointsReversed,
+      pointsShortfall: result.pointsShortfall,
+      revokedRewards: result.progress.revokedEntitlements,
+      rewardsAlreadyUsed: result.progress.usedEntitlementIds.length,
+      needsReview: result.progress.usedEntitlementIds.length > 0 || result.pointsShortfall > 0,
+    });
+  });
+});
+
 // ---- Program settings (Block 3) ------------------------------------------
 
 // Drizzle types `numeric` columns as string (arbitrary precision, no float
@@ -511,6 +553,13 @@ loyaltyRoutes.post('/rewards', requirePermission('rewards:manage'), requireBusin
 loyaltyRoutes.patch('/rewards/:id', requirePermission('rewards:manage'), requireBusinessWideAccess, async (c) => {
   const body = await parseJsonBody(c.req.raw, updateRewardSchema);
   return withDb(c, async (db) => {
+    // LPC-09: a reward the active programme pays out cannot be switched off, or changed to a type the programme does not allow, from under it.
+    const current = await createRepositories(db).loyaltyRewards.findById(c.req.param('id'), c.get('businessId'));
+    const switchedOff = body.status !== undefined && body.status !== 'active' && body.status !== current?.status;
+    const retyped = body.type !== undefined && current !== undefined && body.type !== current.type;
+    if (switchedOff || retyped) {
+      await assertRewardCanChange(db, { businessId: c.get('businessId'), rewardId: c.req.param('id'), change: 'deactivate' });
+    }
     const reward = await new LoyaltyRewardService(createRepositories(db)).update(
       c.req.param('id'),
       c.get('businessId'),
@@ -525,6 +574,7 @@ loyaltyRoutes.patch('/rewards/:id', requirePermission('rewards:manage'), require
 loyaltyRoutes.delete('/rewards/:id', requirePermission('rewards:manage'), requireBusinessWideAccess, async (c) => {
   const id = c.req.param('id');
   return withDb(c, async (db) => {
+    await assertRewardCanChange(db, { businessId: c.get('businessId'), rewardId: id, change: 'remove' });
     await new LoyaltyRewardService(createRepositories(db)).remove(id, c.get('businessId'), c.get('userId'));
     c.set('auditMetadata', { action: 'loyalty.reward_removed', entityType: 'loyalty_reward', entityId: id });
     return c.body(null, 204);
