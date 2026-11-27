@@ -108,6 +108,15 @@
    ],
    "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
   },
+  "business_appearance": {
+   "class": "RUNTIME",
+   "verbs": [
+    "INSERT",
+    "SELECT",
+    "UPDATE"
+   ],
+   "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
+  },
   "business_categories": {
    "class": "RUNTIME",
    "verbs": [
