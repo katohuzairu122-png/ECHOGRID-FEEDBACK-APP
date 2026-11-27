@@ -36,6 +36,7 @@ import { CustomerMembershipService } from '../customer-relationships/customer-me
 import { toCustomerLoyaltyAccountDto } from '../customer-relationships/membership-dto';
 import { signCustomerQrToken, CUSTOMER_QR_TOKEN_TTL_SECONDS } from '../qr/customer-qr-token';
 import { LoyaltyActionResolver } from './loyalty-action-resolver';
+import { customerProgrammeCard } from './programs/programme-card.service';
 import { CustomerRepository } from '../repositories/customer.repository';
 import { CustomerCredentialRepository } from '../repositories/customer-credential.repository';
 import { maskPhone } from './customer-lookup.service';
@@ -153,6 +154,12 @@ loyaltyCustomerRoutes.get('/accounts/:businessId', async (c) => {
     }
     return ok(c, summary);
   });
+});
+
+// LPC-07: the customer's own view of this business's active programme (progress, public terms, rewards earned and waiting).
+loyaltyCustomerRoutes.get('/accounts/:businessId/programme', async (c) => {
+  const businessId = z.uuid().parse(c.req.param('businessId'));
+  return withDb(c, async (db) => ok(c, await customerProgrammeCard(db, { customerId: c.get('customerId'), businessId })));
 });
 
 // Second entry point to the same join as POST /customer-memberships/join, which
