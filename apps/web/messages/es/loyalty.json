@@ -222,10 +222,10 @@
       "cashierAppLink": "Aplicación de caja: abrirla o instalarla, sesiones de acceso y cuentas de cajero",
       "card": {
         "title": "Tarjeta del miembro",
-        "points": "Puntos",
+        "points": "Saldo de puntos",
         "visits": "Visitas",
         "lastVisit": "Última visita: {date}",
-        "rewardsTitle": "Recompensas",
+        "rewardsTitle": "Recompensas canjeables",
         "noRewards": "Este negocio aún no ha configurado recompensas.",
         "cost": "{count} puntos",
         "ready": "Listo para canjear",
@@ -281,10 +281,10 @@
     "businessDashboard": {
       "messages": "Mensajes",
       "notificationPreferences": "Preferencias de notificaciones →",
-      "points": "{points} pts",
-      "progressToNextTier": "{remaining} pts para {tierName}",
+      "points": "{points} puntos",
+      "progressToNextTier": "{remaining} puntos para el nivel {tierName}",
       "topTierReached": "Nivel máximo alcanzado",
-      "rewardsHeading": "Recompensas",
+      "rewardsHeading": "Recompensas canjeables",
       "recentActivityHeading": "Actividad reciente",
       "backToWallet": "← Mis programas de fidelidad",
       "membership": {

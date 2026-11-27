@@ -222,10 +222,10 @@
       "cashierAppLink": "Application caissier : l’ouvrir ou l’installer, sessions de connexion et comptes caissiers",
       "card": {
         "title": "Carte du membre",
-        "points": "Points",
+        "points": "Solde de points",
         "visits": "Visites",
         "lastVisit": "Dernière visite : {date}",
-        "rewardsTitle": "Récompenses",
+        "rewardsTitle": "Récompenses échangeables",
         "noRewards": "Ce commerce n’a pas encore configuré de récompenses.",
         "cost": "{count} points",
         "ready": "Prêt à échanger",
@@ -281,10 +281,10 @@
     "businessDashboard": {
       "messages": "Messages",
       "notificationPreferences": "Préférences de notifications →",
-      "points": "{points} pts",
-      "progressToNextTier": "{remaining} pts avant {tierName}",
+      "points": "{points} points",
+      "progressToNextTier": "{remaining} points avant le niveau {tierName}",
       "topTierReached": "Niveau maximum atteint",
-      "rewardsHeading": "Récompenses",
+      "rewardsHeading": "Récompenses échangeables",
       "recentActivityHeading": "Activité récente",
       "backToWallet": "← Mes programmes de fidélité",
       "membership": {
