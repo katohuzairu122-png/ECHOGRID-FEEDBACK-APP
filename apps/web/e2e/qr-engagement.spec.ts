@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { signUpBusinessOwner } from './helpers/signup';
+import { signUpBusinessOwner, skipProgrammeSetup } from './helpers/signup';
 
 /**
  * The full scan-to-inbox loop -- the single most important proof this
@@ -23,6 +23,7 @@ test('QR code scan to feedback inbox, end to end', async ({ page }) => {
 
   await page.getByLabel('Business name').fill(`QR E2E Business ${unique}`);
   await page.getByRole('button', { name: 'Create business' }).click();
+  await skipProgrammeSetup(page);
 
   // BCOMM-01: a new owner lands on the Community hub; these specs exercise the Business Overview, which keeps its own destination.
   await expect(page.getByRole('heading', { name: 'Community', exact: true })).toBeVisible();

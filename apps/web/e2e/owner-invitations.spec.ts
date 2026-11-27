@@ -1,6 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 import { collapseDevelopmentBadge } from './helpers/development-chrome';
-import { signUpBusinessOwner } from './helpers/signup';
+import { signUpBusinessOwner, skipProgrammeSetup } from './helpers/signup';
 
 /**
  * OWNER-INVITE-01 in a real browser: customer invitations inside the owner-facing Cashier App (desktop, 375 px mobile, Arabic RTL). Synthetic owner only.
@@ -26,6 +26,7 @@ test('owner creates, shares and revokes a customer invitation inside the Cashier
   await expect(page).toHaveURL('/dashboard');
   await page.getByLabel('Business name').fill(`Invite ${unique.replace(/[0-9]/g, (d) => 'ghijklmnop'[Number(d)] as string)}`);
   await page.getByRole('button', { name: 'Create business' }).click();
+  await skipProgrammeSetup(page);
   await page.waitForURL('**/dashboard/community');
   await collapseDevelopmentBadge(page);
   const { auth, businessId } = await ownerAuth(page);
