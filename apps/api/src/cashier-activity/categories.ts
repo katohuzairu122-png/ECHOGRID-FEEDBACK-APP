@@ -28,6 +28,7 @@ export const ACTION = {
   redemptionLookup: 'cashier.redemption_lookup',
   redemptionConfirmed: 'loyalty.redemption_confirmed',
   redemptionRejected: 'cashier.redemption_rejected',
+  entitlementRedeemed: 'loyalty.entitlement_redeemed',
   sessionRevoked: 'cashier_session.revoked',
   sessionRevokedAll: 'cashier_session.revoked_all',
   cashierLogin: 'auth.cashier_login',
@@ -59,6 +60,7 @@ export const MARKED_ACTIONS: readonly string[] = [
   ACTION.redemptionLookup,
   ACTION.redemptionConfirmed,
   ACTION.redemptionRejected,
+  ACTION.entitlementRedeemed,
   ACTION.authFailed,
   ACTION.authzFailed,
 ];
@@ -92,6 +94,7 @@ export function categorize(
         outcome: stated ?? 'success',
       };
     case ACTION.redemptionConfirmed:
+    case ACTION.entitlementRedeemed:
       return { categories: ['redemption_attempt', 'redemption_success'], outcome: 'success' };
     case ACTION.redemptionRejected:
       return { categories: ['redemption_attempt', 'redemption_failure'], outcome: 'failure' };
@@ -116,9 +119,9 @@ export function filterFor(category: CashierCategory): ActivityFilter[] {
     case 'points_issued':
       return [{ actions: [ACTION.purchase, ACTION.purchaseViaLookup] }];
     case 'redemption_attempt':
-      return [{ actions: [ACTION.redemptionLookup, ACTION.redemptionConfirmed, ACTION.redemptionRejected] }];
+      return [{ actions: [ACTION.redemptionLookup, ACTION.redemptionConfirmed, ACTION.entitlementRedeemed, ACTION.redemptionRejected] }];
     case 'redemption_success':
-      return [{ actions: [ACTION.redemptionConfirmed] }];
+      return [{ actions: [ACTION.redemptionConfirmed, ACTION.entitlementRedeemed] }];
     case 'redemption_failure':
       return [{ actions: [ACTION.redemptionRejected] }, { actions: [ACTION.redemptionLookup], outcome: 'failure' }];
     case 'session':

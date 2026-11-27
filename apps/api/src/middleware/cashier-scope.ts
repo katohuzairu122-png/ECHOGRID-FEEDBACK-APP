@@ -45,6 +45,12 @@ export const CASHIER_ALLOWED_ROUTES: readonly CashierRoute[] = [
     label: 'POST /loyalty/accounts/:id/purchase',
   },
   {
+    // LPC-05 / LPC-06: hands over one earned programme reward for the scanned account (the customer card lists them).
+    method: 'POST',
+    pattern: new RegExp(`^/loyalty/accounts/${PARAM}/entitlements/${PARAM}/redeem$`),
+    label: 'POST /loyalty/accounts/:id/entitlements/:entitlementId/redeem',
+  },
+  {
     method: 'GET',
     pattern: new RegExp(`^/loyalty/redemptions/${PARAM}$`),
     label: 'GET /loyalty/redemptions/:code',

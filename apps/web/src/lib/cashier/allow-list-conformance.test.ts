@@ -3,8 +3,8 @@ import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 /**
- * CASHIER-PWA-01 Group 2 conformance: everything the cashier app calls must be inside C2's locked eight-route
- * allow-list (apps/api/src/middleware/cashier-scope.ts: the eight counter routes; the former onboarding-invite route was withdrawn by CASHIER-FINAL-RECONCILIATION). The list is restated here on purpose: if a Group 2 change ever
+ * CASHIER-PWA-01 Group 2 conformance: everything the cashier app calls must be inside C2's locked nine-route
+ * allow-list (apps/api/src/middleware/cashier-scope.ts: the nine counter routes; the former onboarding-invite route was withdrawn by CASHIER-FINAL-RECONCILIATION). The list is restated here on purpose: if a Group 2 change ever
  * needs another endpoint, this test fails and the allow-list conflict must be reported, not silently widened.
  */
 const ALLOWED = new Set([
@@ -12,6 +12,7 @@ const ALLOWED = new Set([
   'POST /loyalty/actions/lookup-customer',
   'POST /loyalty/actions/lookup-purchase',
   'POST /loyalty/accounts/:p/purchase',
+  'POST /loyalty/accounts/:p/entitlements/:p/redeem',
   'GET /loyalty/redemptions/:p',
   'POST /loyalty/redemptions/:p/confirm',
   'GET /businesses/me',
@@ -32,7 +33,7 @@ function calls(source: string, fn: string): { method: string; path: string }[] {
   return out;
 }
 
-describe('cashier app stays inside the eight-route allow-list', () => {
+describe('cashier app stays inside the nine-route allow-list', () => {
   it('the reused Serve Customers actions only call allowed routes', () => {
     const unified = calls(read('lib/actions/unified-qr.ts'), 'apiFetch');
     expect(unified.length).toBeGreaterThanOrEqual(6);
