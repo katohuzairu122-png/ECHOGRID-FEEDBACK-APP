@@ -750,6 +750,13 @@
       "when": 1795677278079,
       "tag": "0106_shuffle_notification_deliveries",
       "breakpoints": true
+    },
+    {
+      "idx": 107,
+      "version": "7",
+      "when": 1795755623255,
+      "tag": "0107_loyalty_programs_foundation",
+      "breakpoints": true
     }
   ]
 }

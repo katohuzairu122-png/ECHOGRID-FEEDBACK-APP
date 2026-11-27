@@ -42,3 +42,5 @@ export * from './partner-credits';
 export * from './network-drafts';
 
 export * from './network-feed';
+export * from './loyalty-money';
+export * from './loyalty-programs';
