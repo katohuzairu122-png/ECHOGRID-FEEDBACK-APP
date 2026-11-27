@@ -1,4 +1,4 @@
-import type { Page } from '@playwright/test';
+import { expect, type Page } from '@playwright/test';
 
 /**
  * Business-owner sign-up through the real form. The API limits authentication requests per minute per source address, and the whole browser
@@ -31,4 +31,13 @@ export async function signUpBusinessOwner(page: Page, owner: OwnerSignUp) {
       await page.waitForTimeout(PAUSE_MS);
     }
   }
+}
+
+/**
+ * Creating a business now continues into the loyalty-programme step of registration (LOYALTY-PROGRAMME-COMPLETION). These specs are about other
+ * screens, so they take the step's own "Configure later" exit, which lands on the usual dashboard destination.
+ */
+export async function skipProgrammeSetup(page: Page) {
+  await expect(page).toHaveURL(/\/dashboard\/loyalty\/programme\?setup=1/);
+  await page.getByRole('link', { name: 'Configure later' }).click();
 }

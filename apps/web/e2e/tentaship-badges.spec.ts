@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { collapseDevelopmentBadge } from './helpers/development-chrome';
-import { signUpBusinessOwner } from './helpers/signup';
+import { signUpBusinessOwner, skipProgrammeSetup } from './helpers/signup';
 
 /**
  * TB-03 in a real browser (business side). TENTASHIP_BADGES_ENABLED is OFF in the default local/CI stack, so the default run proves the control is
@@ -16,6 +16,7 @@ test('the business Community home shows Tentaship Badges only while the control 
   await expect(page).toHaveURL('/dashboard');
   await page.getByLabel('Business name').fill(`Badges ${unique.replace(/[0-9]/g, (d) => 'ghijklmnop'[Number(d)] as string)}`);
   await page.getByRole('button', { name: 'Create business' }).click();
+  await skipProgrammeSetup(page);
   await page.waitForURL('**/dashboard/community');
   await collapseDevelopmentBadge(page);
   await expect(page.getByRole('heading', { name: 'About Community' }).or(page.getByTestId('community-about'))).toBeVisible();

@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { signUpBusinessOwner } from './helpers/signup';
+import { signUpBusinessOwner, skipProgrammeSetup } from './helpers/signup';
 
 /**
  * Staff-side loyalty program setup, end to end: signup -> business ->
@@ -27,6 +27,7 @@ test('staff sets up a loyalty tier, reward, and earning rates, end to end', asyn
 
   await page.getByLabel('Business name').fill(`Loyalty E2E Business ${unique}`);
   await page.getByRole('button', { name: 'Create business' }).click();
+  await skipProgrammeSetup(page);
 
   await page.getByRole('link', { name: 'Loyalty', exact: true }).click();
   await expect(page).toHaveURL('/dashboard/loyalty');
