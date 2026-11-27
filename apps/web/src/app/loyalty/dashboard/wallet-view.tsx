@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { useFormatter, useTranslations } from 'next-intl';
 import { Badge, Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui';
 import type { WalletEntry } from '@/lib/loyalty-wallet';
+import { ScanBusinessCard } from './scan-business-card';
 
 /**
  * The customer's loyalty wallet: one account, one card per business. Each business keeps its own membership,
@@ -24,6 +25,8 @@ export function LoyaltyWalletView({
         <h1 className="text-2xl font-semibold text-neutral-900">{t('title')}</h1>
         <p className="text-sm text-neutral-600">{t('intro')}</p>
       </header>
+
+      <ScanBusinessCard />
 
       <nav aria-label={t('actionsLabel')} className="flex flex-wrap gap-4">
         <Link href="/loyalty/dashboard/qr" className="text-brand-700 underline">
