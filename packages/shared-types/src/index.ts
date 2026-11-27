@@ -12,6 +12,7 @@ export * from './common';
 export * from './business-community';
 export * from './slug';
 export * from './i18n';
+export * from './profile';
 export * from './branches';
 export * from './business-categories';
 export * from './businesses';

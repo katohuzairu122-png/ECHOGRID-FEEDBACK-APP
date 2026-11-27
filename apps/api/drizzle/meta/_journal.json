@@ -764,6 +764,13 @@
       "when": 1795780989742,
       "tag": "0108_kwd_three_decimal_storage",
       "breakpoints": true
+    },
+    {
+      "idx": 109,
+      "version": "7",
+      "when": 1795801259975,
+      "tag": "0109_prof_global_profiles",
+      "breakpoints": true
     }
   ]
 }

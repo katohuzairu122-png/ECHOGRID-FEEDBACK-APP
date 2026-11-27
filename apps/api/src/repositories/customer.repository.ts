@@ -289,6 +289,23 @@ export class CustomerRepository extends BaseRepository {
     return row;
   }
 
+  /** PROF-01: the customer's own display name, bio and avatar key. A key set to null clears it; an undefined key is left alone. */
+  async setGlobalProfile(
+    id: string,
+    patch: { displayName?: string | null | undefined; bio?: string | null | undefined; avatarKey?: string | null | undefined },
+  ): Promise<Customer | undefined> {
+    const set: Partial<NewCustomer> = { updatedAt: new Date() };
+    if (patch.displayName !== undefined) set.displayName = patch.displayName;
+    if (patch.bio !== undefined) set.bio = patch.bio;
+    if (patch.avatarKey !== undefined) set.avatarKey = patch.avatarKey;
+    const [row] = await this.db
+      .update(customers)
+      .set(set)
+      .where(and(eq(customers.id, id), eq(customers.isDeleted, false)))
+      .returning();
+    return row;
+  }
+
   async updateProfile(
     id: string,
     patch: Partial<Pick<NewCustomer, 'fullName' | 'email' | 'birthday'>>,

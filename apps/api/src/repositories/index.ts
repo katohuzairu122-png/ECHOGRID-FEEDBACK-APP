@@ -40,6 +40,7 @@ import { LoyaltySettingsRepository } from './loyalty-settings.repository';
 import { NotificationPreferenceRepository } from './notification-preference.repository';
 import { NotificationRepository } from './notification.repository';
 import { BusinessNotificationSettingsRepository } from './business-notification-settings.repository';
+import { BusinessAppearanceRepository } from './business-appearance.repository';
 import { SubscriptionPlanRepository } from './subscription-plan.repository';
 import { BusinessSubscriptionRepository } from './business-subscription.repository';
 import { TeamInvitationRepository } from './team-invitation.repository';
@@ -157,6 +158,7 @@ export function createRepositories(db: Db) {
     notificationPreferences: new NotificationPreferenceRepository(db),
     notifications: new NotificationRepository(db),
     businessNotificationSettings: new BusinessNotificationSettingsRepository(db),
+    businessAppearance: new BusinessAppearanceRepository(db),
     subscriptionPlans: new SubscriptionPlanRepository(db),
     businessSubscriptions: new BusinessSubscriptionRepository(db),
     teamInvitations: new TeamInvitationRepository(db),

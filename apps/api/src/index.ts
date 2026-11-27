@@ -42,6 +42,8 @@ import { customerSessionLifecycleComposition } from './customer-auth/customer-se
 import { customerDeletionComposition } from './customer-account/customer-deletion.composition';
 import { customerMembershipRoutes } from './customer-relationships/customer-membership.routes';
 import { customerLanguageRoutes } from './customer-language/customer-language.routes';
+import { customerProfileRoutes } from './customer-profile/customer-profile.routes';
+import { businessAppearanceRoutes } from './business-appearance/business-appearance.routes';
 import { consentRoutes } from './consent/consent.routes';
 import { loyaltyRoutes } from './loyalty/loyalty.routes';
 import { loyaltyCustomerRoutes } from './loyalty/loyalty-customer.routes';
@@ -213,6 +215,8 @@ api.route('/customer-account', customerDeletionComposition);
 api.route('/customer-recovery', customerRecoveryRoutes);
 api.route('/customer-memberships', customerMembershipRoutes);
 api.route('/customer-language', customerLanguageRoutes);
+api.route('/customer-profile', customerProfileRoutes);
+api.route('/business-appearance', businessAppearanceRoutes);
 api.route('/consents', consentRoutes);
 // Customer subtrees must precede staff wildcard middleware at the parent.
 // Hono runs matching middleware in registration order; /loyalty/* also

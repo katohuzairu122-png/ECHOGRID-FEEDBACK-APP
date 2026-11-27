@@ -46,6 +46,7 @@ DECLARE
     ['benefit_reconciliation_attempts', 'INSERT, SELECT, UPDATE'],
     ['billing_partner_credit_applications', 'INSERT, SELECT'],
     ['branches', 'INSERT, SELECT, UPDATE'],
+    ['business_appearance', 'INSERT, SELECT, UPDATE'],
     ['business_categories', 'SELECT'],
     ['business_closure_requests', 'INSERT, SELECT, UPDATE'],
     ['business_customer_memberships', 'INSERT, SELECT, UPDATE'],
