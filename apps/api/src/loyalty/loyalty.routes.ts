@@ -30,6 +30,9 @@ import { LoyaltyRewardService } from './loyalty-reward.service';
 import { LoyaltyRedemptionService } from './loyalty-redemption.service';
 import { NotificationService } from '../notifications/notification.service';
 import { LoyaltyActionResolver } from './loyalty-action-resolver';
+import { LoyaltyProgramService } from './programs/program.service';
+import { previewPurchases, isProgramAvailable } from '@echo-grid-feedback/shared-types';
+import { z } from 'zod';
 import { CustomerLookupService, LOOKUP_PURCHASE_AUDIT } from './customer-lookup.service';
 import { AppError } from '../lib/errors';
 
@@ -313,7 +316,112 @@ loyaltyRoutes.patch('/settings', requirePermission('rewards:manage'), requireBus
       c.get('userId'),
     );
     c.set('auditMetadata', { action: 'loyalty.settings_updated', entityType: 'loyalty_settings', entityId: settings.id });
+    // An existing (legacy) business keeps earning under the rates it edits here: they become a new version of its legacy programme.
+    await new LoyaltyProgramService(db).syncLegacySettings(c.get('businessId'), c.get('userId'), {
+      pointsPerCurrencyUnit: settings.pointsPerCurrencyUnit,
+      pointsPerCheckin: settings.pointsPerCheckin,
+    });
     return ok(c, serializeSettings(settings));
+  });
+});
+
+
+// ---- Primary loyalty programmes (LOYALTY-PROGRAMME-COMPLETION, Group 01) ---------------------------------------------------------------
+// Configuration needs rewards:manage and business-wide access (a cashier holds neither). Activating, pausing, switching and retiring are
+// additionally limited to the business Owner by the service. Programme resolution for earning is server-side and never reads these routes.
+
+const programmeIdParam = z.uuid();
+const createProgrammeSchema = z.strictObject({ type: z.string().min(1).max(10), config: z.record(z.string(), z.unknown()) });
+const saveProgrammeConfigSchema = z.strictObject({ config: z.record(z.string(), z.unknown()) });
+const previewProgrammeSchema = z.strictObject({
+  type: z.string().min(1).max(10),
+  config: z.record(z.string(), z.unknown()),
+  amounts: z.array(z.string().min(1).max(20)).min(1).max(10),
+});
+const confirmSchema = z.strictObject({ confirm: z.literal(true) });
+
+loyaltyRoutes.get('/programmes', requirePermission('loyalty:view'), requireBusinessWideAccess, async (c) => {
+  return withDb(c, async (db) => {
+    const service = new LoyaltyProgramService(db);
+    const [programmes, setupState] = await Promise.all([service.list(c.get('businessId')), service.setupState(c.get('businessId'))]);
+    return ok(c, { registry: service.registry(), setupState, programmes });
+  });
+});
+
+loyaltyRoutes.post('/programmes', requirePermission('rewards:manage'), requireBusinessWideAccess, async (c) => {
+  const body = await parseJsonBody(c.req.raw, createProgrammeSchema);
+  return withDb(c, async (db) => {
+    const programme = await new LoyaltyProgramService(db).createDraft(c.get('businessId'), c.get('userId'), body);
+    c.set('auditMetadata', { action: 'loyalty.programme_created', entityType: 'loyalty_program', entityId: programme.id });
+    return ok(c, programme, 201);
+  });
+});
+
+loyaltyRoutes.post('/programmes/preview', requirePermission('rewards:manage'), requireBusinessWideAccess, async (c) => {
+  const body = await parseJsonBody(c.req.raw, previewProgrammeSchema);
+  return withDb(c, async (db) => {
+    const service = new LoyaltyProgramService(db);
+    const checked = await service.checkConfig(c.get('businessId'), body.type, body.config);
+    return ok(c, { config: checked.config, currency: checked.currency, examples: isProgramAvailable(body.type) ? previewPurchases(body.type, checked.config, checked.currency, body.amounts) : [] });
+  });
+});
+
+loyaltyRoutes.get('/programmes/:id', requirePermission('loyalty:view'), requireBusinessWideAccess, async (c) => {
+  const id = programmeIdParam.parse(c.req.param('id'));
+  return withDb(c, async (db) => ok(c, await new LoyaltyProgramService(db).get(c.get('businessId'), id)));
+});
+
+loyaltyRoutes.get('/programmes/:id/history', requirePermission('loyalty:view'), requireBusinessWideAccess, async (c) => {
+  const id = programmeIdParam.parse(c.req.param('id'));
+  return withDb(c, async (db) => ok(c, await new LoyaltyProgramService(db).history(c.get('businessId'), id)));
+});
+
+loyaltyRoutes.put('/programmes/:id/config', requirePermission('rewards:manage'), requireBusinessWideAccess, async (c) => {
+  const id = programmeIdParam.parse(c.req.param('id'));
+  const body = await parseJsonBody(c.req.raw, saveProgrammeConfigSchema);
+  return withDb(c, async (db) => {
+    const programme = await new LoyaltyProgramService(db).saveConfig(c.get('businessId'), c.get('userId'), id, body.config);
+    c.set('auditMetadata', { action: 'loyalty.programme_config_saved', entityType: 'loyalty_program', entityId: id });
+    return ok(c, programme);
+  });
+});
+
+loyaltyRoutes.post('/programmes/:id/validate', requirePermission('rewards:manage'), requireBusinessWideAccess, async (c) => {
+  const id = programmeIdParam.parse(c.req.param('id'));
+  return withDb(c, async (db) => {
+    const programme = await new LoyaltyProgramService(db).validate(c.get('businessId'), c.get('userId'), id);
+    c.set('auditMetadata', { action: 'loyalty.programme_validated', entityType: 'loyalty_program', entityId: id });
+    return ok(c, programme);
+  });
+});
+
+loyaltyRoutes.post('/programmes/:id/activate', requirePermission('rewards:manage'), requireBusinessWideAccess, async (c) => {
+  const id = programmeIdParam.parse(c.req.param('id'));
+  await parseJsonBody(c.req.raw, confirmSchema);
+  return withDb(c, async (db) => {
+    const result = await new LoyaltyProgramService(db).activate(c.get('businessId'), c.get('userId'), id);
+    c.set('auditMetadata', { action: 'loyalty.programme_activated', entityType: 'loyalty_program', entityId: id, details: { replaced: result.previous?.id ?? null } });
+    return ok(c, result);
+  });
+});
+
+loyaltyRoutes.post('/programmes/:id/deactivate', requirePermission('rewards:manage'), requireBusinessWideAccess, async (c) => {
+  const id = programmeIdParam.parse(c.req.param('id'));
+  await parseJsonBody(c.req.raw, confirmSchema);
+  return withDb(c, async (db) => {
+    const programme = await new LoyaltyProgramService(db).deactivate(c.get('businessId'), c.get('userId'), id);
+    c.set('auditMetadata', { action: 'loyalty.programme_deactivated', entityType: 'loyalty_program', entityId: id });
+    return ok(c, programme);
+  });
+});
+
+loyaltyRoutes.post('/programmes/:id/retire', requirePermission('rewards:manage'), requireBusinessWideAccess, async (c) => {
+  const id = programmeIdParam.parse(c.req.param('id'));
+  await parseJsonBody(c.req.raw, confirmSchema);
+  return withDb(c, async (db) => {
+    const programme = await new LoyaltyProgramService(db).retire(c.get('businessId'), c.get('userId'), id);
+    c.set('auditMetadata', { action: 'loyalty.programme_retired', entityType: 'loyalty_program', entityId: id });
+    return ok(c, programme);
   });
 });
 

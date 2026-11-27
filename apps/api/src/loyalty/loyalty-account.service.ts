@@ -6,6 +6,9 @@ import {
   type LoyaltyAccountWithCustomer,
 } from '../repositories';
 import { AppError } from '../lib/errors';
+import { MoneyError, formatMoney, minorFromStored, currencyExponent, parseMoney } from '@echo-grid-feedback/shared-types';
+import { resolveActiveProgramme } from './programs/program.service';
+import { computeCheckinEarning, computePurchaseEarning, type EarningProvenance } from './programs/earning';
 import { assertCashierSessionBound, type CashierSessionBinding } from '../cashier-sessions/session-binding';
 import {
   assertMembershipGate,
@@ -131,10 +134,16 @@ export class LoyaltyAccountService {
       }
 
       const settings = await repos.loyaltySettings.getOrCreateDefaults(businessId);
-      return this.applyEarning(repos, account, 'checkin', settings.pointsPerCheckin, {
+      const earning = computeCheckinEarning(await resolveActiveProgramme(tx, businessId), {
+        pointsPerCheckin: settings.pointsPerCheckin,
+        pointsPerCurrencyUnit: settings.pointsPerCurrencyUnit,
+      });
+      return this.applyEarning(repos, account, 'checkin', earning.points, {
         relatedQrCodeId: qrCodeId,
         visitSessionId,
         recordVisit: true,
+        ...(earning.provenance ? { provenance: earning.provenance } : {}),
+        ...(earning.note ? { notes: earning.note } : {}),
       });
     });
   }
@@ -198,7 +207,11 @@ export class LoyaltyAccountService {
         input.businessId,
       );
 
-      const amount = input.purchaseAmount.toFixed(2);
+      const business = await repos.businesses.findById(input.businessId);
+      if (!business) throw new AppError('Business not found.', 404, 'BUSINESS_NOT_FOUND');
+      const currency = business.defaultCurrency;
+      const amountMinor = this.parseQualifyingAmount(input.purchaseAmount, currency);
+      const amount = formatMoney(amountMinor, currency).replace(/(\.\d\d)0$/, '$1');
       const { event, inserted } = await repos.loyaltyPurchaseEvents.createIdempotent({
         businessId: input.businessId,
         branchId: input.branchId ?? null,
@@ -216,7 +229,7 @@ export class LoyaltyAccountService {
       if (!inserted) {
         const sameRequest =
           event.loyaltyAccountId === account.id &&
-          event.qualifyingAmount === amount &&
+          minorFromStored(event.qualifyingAmount, currency) === amountMinor &&
           event.branchId === (input.branchId ?? null) &&
           event.channel === input.channel &&
           event.externalReference === (input.externalReference ?? null) &&
@@ -233,15 +246,46 @@ export class LoyaltyAccountService {
       }
 
       const settings = await repos.loyaltySettings.getOrCreateDefaults(input.businessId);
-      const points = Math.floor(input.purchaseAmount * Number(settings.pointsPerCurrencyUnit));
+      const earning = computePurchaseEarning(
+        await resolveActiveProgramme(tx, input.businessId),
+        { pointsPerCheckin: settings.pointsPerCheckin, pointsPerCurrencyUnit: settings.pointsPerCurrencyUnit },
+        { amountMinor, currency },
+      );
 
-      const updated = await this.applyEarning(repos, account, 'purchase', points, {
+      const updated = await this.applyEarning(repos, account, 'purchase', earning.points, {
         purchaseAmount: amount,
         purchaseEventId: event.id,
         createdBy: input.staffUserId,
+        ...(earning.provenance ? { provenance: earning.provenance } : {}),
+        ...(earning.note ? { notes: earning.note } : {}),
       });
       return { account: updated, inserted: true };
     });
+  }
+
+  /**
+   * Exact qualifying amount in minor units. More precision than the currency allows is REFUSED, never rounded (RW-D7). Until the storage
+   * columns are widened for three-decimal currencies, an amount whose third decimal is not zero cannot be stored exactly and is refused too.
+   */
+  private parseQualifyingAmount(value: number, currency: string): bigint {
+    let minor: bigint;
+    try {
+      minor = parseMoney(value, currency);
+    } catch (error) {
+      if (error instanceof MoneyError) {
+        throw new AppError(error.message, 422, 'INVALID_PURCHASE_AMOUNT');
+      }
+      throw error;
+    }
+    const exponent = currencyExponent(currency);
+    if (exponent > 2 && minor % 10n ** BigInt(exponent - 2) !== 0n) {
+      throw new AppError(
+        `This amount needs ${exponent} decimal places, which the loyalty ledger cannot store yet. Enter it with two decimals.`,
+        422,
+        'AMOUNT_PRECISION_NOT_SUPPORTED',
+      );
+    }
+    return minor;
   }
 
   /** Manual staff correction (loyalty:manage) -- can be positive or
@@ -380,6 +424,7 @@ export class LoyaltyAccountService {
       notes?: string | undefined;
       createdBy?: string | undefined;
       recordVisit?: boolean | undefined;
+      provenance?: EarningProvenance | undefined;
     },
   ): Promise<LoyaltyAccount> {
     let updated = await repos.loyaltyAccounts.applyPointsDelta(account.id, points, {
@@ -403,6 +448,8 @@ export class LoyaltyAccountService {
       visitSessionId: extra.visitSessionId ?? null,
       purchaseAmount: extra.purchaseAmount ?? null,
       purchaseEventId: extra.purchaseEventId ?? null,
+      programId: extra.provenance?.programId ?? null,
+      programVersion: extra.provenance?.programVersion ?? null,
       notes: extra.notes ?? null,
       createdBy: extra.createdBy ?? null,
     });

@@ -242,6 +242,18 @@ const ROUTES: Route[] = [
   },
   { label: 'settings read', method: 'GET', path: '/loyalty/settings', allowedFor: 'programmeRead' },
   { label: 'tiers read', method: 'GET', path: '/loyalty/tiers', allowedFor: 'programmeRead' },
+  // LOYALTY-PROGRAMME-COMPLETION: primary programme configuration. Reads need loyalty:view, every change needs rewards:manage; the Staff (cashier)
+  // role holds neither. Activation, pausing and retiring are ALSO Owner-only inside the service (covered by the integration suite).
+  { label: 'programmes read', method: 'GET', path: '/loyalty/programmes', allowedFor: 'programmeRead' },
+  { label: 'programme read', method: 'GET', path: '/loyalty/programmes/6f0f1c5e-0000-4000-8000-000000000001', allowedFor: 'programmeRead' },
+  { label: 'programme history', method: 'GET', path: '/loyalty/programmes/6f0f1c5e-0000-4000-8000-000000000001/history', allowedFor: 'programmeRead' },
+  { label: 'programme create', method: 'POST', path: '/loyalty/programmes', body: {}, allowedFor: 'programmeWrite' },
+  { label: 'programme preview', method: 'POST', path: '/loyalty/programmes/preview', body: {}, allowedFor: 'programmeWrite' },
+  { label: 'programme config save', method: 'PUT', path: '/loyalty/programmes/6f0f1c5e-0000-4000-8000-000000000001/config', body: {}, allowedFor: 'programmeWrite' },
+  { label: 'programme validate', method: 'POST', path: '/loyalty/programmes/6f0f1c5e-0000-4000-8000-000000000001/validate', body: {}, allowedFor: 'programmeWrite' },
+  { label: 'programme activate', method: 'POST', path: '/loyalty/programmes/6f0f1c5e-0000-4000-8000-000000000001/activate', body: {}, allowedFor: 'programmeWrite' },
+  { label: 'programme deactivate', method: 'POST', path: '/loyalty/programmes/6f0f1c5e-0000-4000-8000-000000000001/deactivate', body: {}, allowedFor: 'programmeWrite' },
+  { label: 'programme retire', method: 'POST', path: '/loyalty/programmes/6f0f1c5e-0000-4000-8000-000000000001/retire', body: {}, allowedFor: 'programmeWrite' },
   { label: 'rewards read', method: 'GET', path: '/loyalty/rewards', allowedFor: 'programmeRead' },
   {
     label: 'reward dashboard',
@@ -552,6 +564,10 @@ describe('no customer-directory or enumeration route exists', () => {
         '/accounts',
         '/accounts/:id',
         '/accounts/:id/transactions',
+        // LOYALTY-PROGRAMME-COMPLETION: the business's OWN programme configuration (no customer data). Reviewed: loyalty:view plus business-wide access.
+        '/programmes',
+        '/programmes/:id',
+        '/programmes/:id/history',
         '/redemptions/:code',
         '/rewards',
         '/rewards/:id/dashboard',

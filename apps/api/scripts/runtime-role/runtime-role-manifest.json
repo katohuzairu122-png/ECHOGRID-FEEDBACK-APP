@@ -1356,6 +1356,66 @@
     "SELECT"
    ],
    "reason": "G2: append-only synthetic delivery-decision history for held Shuffle notification intents"
+  },
+  "loyalty_programs": {
+   "class": "RUNTIME",
+   "verbs": [
+    "INSERT",
+    "SELECT",
+    "UPDATE"
+   ],
+   "reason": "LOYALTY-PROGRAMME-COMPLETION: the business primary programme (one active per business, enforced by the database); a programme is retired, never deleted"
+  },
+  "loyalty_program_versions": {
+   "class": "RUNTIME",
+   "verbs": [
+    "INSERT",
+    "SELECT"
+   ],
+   "reason": "LOYALTY-PROGRAMME-COMPLETION: append-only immutable configuration versions; earning reads the current version"
+  },
+  "loyalty_program_events": {
+   "class": "RUNTIME",
+   "verbs": [
+    "INSERT",
+    "SELECT"
+   ],
+   "reason": "LOYALTY-PROGRAMME-COMPLETION: append-only programme lifecycle and activation history"
+  },
+  "loyalty_program_setup": {
+   "class": "RUNTIME",
+   "verbs": [
+    "INSERT",
+    "SELECT",
+    "UPDATE"
+   ],
+   "reason": "LOYALTY-PROGRAMME-COMPLETION: pending (Configure Later) or configured marker per business"
+  },
+  "loyalty_program_progress": {
+   "class": "RUNTIME",
+   "verbs": [
+    "INSERT",
+    "SELECT",
+    "UPDATE"
+   ],
+   "reason": "LOYALTY-PROGRAMME-COMPLETION: per-account programme counters, updated under a row lock; frozen when the programme is paused; never deleted"
+  },
+  "loyalty_program_progress_events": {
+   "class": "RUNTIME",
+   "verbs": [
+    "INSERT",
+    "SELECT"
+   ],
+   "reason": "LOYALTY-PROGRAMME-COMPLETION: append-only progress history with a unique source key (duplicate prevention)"
+  },
+  "loyalty_program_entitlements": {
+   "class": "RUNTIME",
+   "verbs": [
+    "INSERT",
+    "SELECT",
+    "UPDATE"
+   ],
+   "reason": "LOYALTY-PROGRAMME-COMPLETION: earned single-use programme rewards; only the status moves, once; never deleted"
   }
  }
 }

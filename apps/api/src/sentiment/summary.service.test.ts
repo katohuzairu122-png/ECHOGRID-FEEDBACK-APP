@@ -111,6 +111,8 @@ function makeLoyaltyTransaction(overrides: Partial<LoyaltyTransaction> = {}): Lo
     visitSessionId: null,
     feedbackId: null,
     purchaseAmount: null,
+    programId: null,
+    programVersion: null,
     purchaseEventId: null,
     redemptionCode: null,
     redemptionConfirmedAt: null,

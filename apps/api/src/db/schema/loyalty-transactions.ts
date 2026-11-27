@@ -6,6 +6,7 @@ import { qrCodes } from './qr-codes';
 import { visitSessions } from './visit-sessions';
 import { feedback } from './feedback';
 import { loyaltyPurchaseEvents } from './loyalty-purchase-events';
+import { loyaltyPrograms } from './loyalty-programs';
 
 /**
  * Append-only points ledger, mirroring `audit_log`'s design -- the source
@@ -61,6 +62,10 @@ export const loyaltyTransactions = pgTable(
     // a since-deleted feedback row still exists.
     feedbackId: uuid('feedback_id').references(() => feedback.id, { onDelete: 'set null' }),
     purchaseAmount: numeric('purchase_amount', { precision: 10, scale: 2 }), // legacy/raw purchase amount projection
+    // LOYALTY-PROGRAMME-COMPLETION: the programme and configuration version that generated this earning. NULL for rows written before programmes
+    // existed and for non-programme entries (adjustments, redemptions, referral and birthday overlays).
+    programId: uuid('program_id').references(() => loyaltyPrograms.id, { onDelete: 'restrict' }),
+    programVersion: integer('program_version'),
     purchaseEventId: uuid('purchase_event_id').references(() => loyaltyPurchaseEvents.id, { onDelete: 'restrict' }),
     redemptionCode: text('redemption_code').unique(), // set only for type='redemption'
     redemptionConfirmedAt: timestamp('redemption_confirmed_at', { withTimezone: true }),
@@ -140,5 +145,6 @@ export const loyaltyTransactions = pgTable(
       'loyalty_transactions_issuance_status_check',
       sql`${table.issuanceStatus} IS NULL OR ${table.issuanceStatus} IN ('pending', 'issued', 'redeemed', 'expired', 'reversed')`,
     ),
+    check('loyalty_transactions_program_provenance_check', sql`(${table.programId} IS NULL) = (${table.programVersion} IS NULL)`),
   ],
 );

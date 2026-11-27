@@ -90,3 +90,4 @@ export * from './drops';
 export * from './governance';
 export * from './shuffle-drops-link';
 export * from './sponsors';
+export * from './loyalty-programs';
