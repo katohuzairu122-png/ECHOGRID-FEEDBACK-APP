@@ -320,6 +320,40 @@ loyaltyRoutes.post(
   },
 );
 
+// LPC-08: reverse one confirmed purchase (refund or mistaken receipt). Owner and managers only (loyalty:adjust, business-wide); a cashier token is
+// refused by the cashier route allow-list. Owner-approved rules: the balance never goes below zero, unused rewards are revoked, and a reward already
+// handed over stays given and is flagged for review.
+const reversePurchaseSchema = z.object({ reason: z.string().trim().min(3).max(200) }).strict();
+loyaltyRoutes.post('/purchases/:purchaseEventId/reverse', requirePermission('loyalty:adjust'), requireBusinessWideAccess, async (c) => {
+  const purchaseEventId = z.uuid().parse(c.req.param('purchaseEventId'));
+  const body = await parseJsonBody(c.req.raw, reversePurchaseSchema);
+  return withDb(c, async (db) => {
+    const result = await new LoyaltyAccountService(db).reversePurchase({
+      businessId: c.get('businessId'), purchaseEventId, reason: body.reason, actorUserId: c.get('userId'),
+    });
+    c.set('auditMetadata', {
+      action: 'loyalty.purchase_reversed',
+      entityType: 'loyalty_account',
+      entityId: result.accountId,
+      details: {
+        purchaseEventId,
+        pointsReversed: result.pointsReversed,
+        pointsShortfall: result.pointsShortfall,
+        revokedRewards: result.progress.revokedEntitlements,
+        rewardsAlreadyUsed: result.progress.usedEntitlementIds,
+      },
+    });
+    return ok(c, {
+      purchaseEventId,
+      pointsReversed: result.pointsReversed,
+      pointsShortfall: result.pointsShortfall,
+      revokedRewards: result.progress.revokedEntitlements,
+      rewardsAlreadyUsed: result.progress.usedEntitlementIds.length,
+      needsReview: result.progress.usedEntitlementIds.length > 0 || result.pointsShortfall > 0,
+    });
+  });
+});
+
 // ---- Program settings (Block 3) ------------------------------------------
 
 // Drizzle types `numeric` columns as string (arbitrary precision, no float

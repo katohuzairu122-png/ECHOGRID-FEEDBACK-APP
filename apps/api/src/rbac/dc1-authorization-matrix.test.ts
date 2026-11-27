@@ -242,6 +242,7 @@ const ROUTES: Route[] = [
     body: { points: 5, notes: 'x' },
     allowedFor: 'adjust',
   },
+  { label: 'purchase reverse', method: 'POST', path: '/loyalty/purchases/6f0f1c5e-0000-4000-8000-000000000004/reverse', body: { reason: 'Refunded at the counter' }, allowedFor: 'adjust' },
   { label: 'settings read', method: 'GET', path: '/loyalty/settings', allowedFor: 'programmeRead' },
   { label: 'tiers read', method: 'GET', path: '/loyalty/tiers', allowedFor: 'programmeRead' },
   // LOYALTY-PROGRAMME-COMPLETION: primary programme configuration. Reads need loyalty:view, every change needs rewards:manage; the Staff (cashier)
@@ -474,6 +475,7 @@ describe('route-to-permission matrix', () => {
     mocks.permissions.mockResolvedValue(new Set(['loyalty:manage', 'loyalty:view']));
     for (const label of [
       'manual adjustment',
+      'purchase reverse',
       'record purchase',
       'resolve QR',
       'account directory',
