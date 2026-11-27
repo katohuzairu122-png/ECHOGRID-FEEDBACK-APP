@@ -35,6 +35,9 @@ function customer(status: Customer['status'] = 'active'): Customer {
   return {
     id: CUSTOMER_ID,
     qrRevocationEpoch: 0,
+    displayName: null,
+    bio: null,
+    avatarKey: null,
     phone: '+15551234567',
     fullName: null,
     email: null,

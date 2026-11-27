@@ -35,6 +35,9 @@ function createFakeRepos() {
         const customer: Customer = {
           id: crypto.randomUUID(),
           qrRevocationEpoch: 0,
+          displayName: null,
+          bio: null,
+          avatarKey: null,
           phone: input.phone ?? null,
           fullName: input.fullName ?? null,
           email: input.email ?? null,

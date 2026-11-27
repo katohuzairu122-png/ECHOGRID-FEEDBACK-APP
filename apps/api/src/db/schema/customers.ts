@@ -39,12 +39,21 @@ export const customers = pgTable(
     // Customer QR revocation (CUSTOMER-QR-ROTATION-01): a customer QR token carries the epoch it was issued under
     // and is rejected once the customer's epoch has moved on. Only the customer's own revoke action increments it.
     qrRevocationEpoch: integer('qr_revocation_epoch').notNull().default(0),
+    // PROF-01 (migration 0109): the customer's own global profile. All optional and private to the customer, except that a
+    // business may see display name + avatar of its own members. The avatar is a key into the built-in catalogue
+    // (shared-types CUSTOMER_AVATAR_KEYS); there is no uploaded file.
+    displayName: text('display_name'),
+    bio: text('bio'),
+    avatarKey: text('avatar_key'),
     ...auditColumns,
     ...softDeleteColumns,
   },
   (table) => [
     uniqueIndex('customers_phone_verified_unique').on(table.phone).where(sql`${table.phoneVerifiedAt} IS NOT NULL`),
     index('customers_phone_idx').on(table.phone),
+    check('customers_display_name_check', sql`${table.displayName} IS NULL OR char_length(${table.displayName}) BETWEEN 1 AND 60`),
+    check('customers_bio_check', sql`${table.bio} IS NULL OR char_length(${table.bio}) <= 280`),
+    check('customers_avatar_key_check', sql`${table.avatarKey} IS NULL OR ${table.avatarKey} ~ '^[a-z]{2,24}$'`),
     check('customers_status_check', sql`${table.status} IN ('active', 'suspended', 'banned')`),
     check(
       'customers_preferred_locale_check',

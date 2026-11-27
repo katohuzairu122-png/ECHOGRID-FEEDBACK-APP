@@ -53,6 +53,7 @@ export * from './loyalty-settings';
 export * from './notification-preferences';
 export * from './notifications';
 export * from './business-notification-settings';
+export * from './business-appearance';
 export * from './subscription-plans';
 export * from './business-subscriptions';
 export * from './team-invitations';
