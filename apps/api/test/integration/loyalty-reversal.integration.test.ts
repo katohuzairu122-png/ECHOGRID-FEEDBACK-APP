@@ -190,9 +190,9 @@ describe.skipIf(!process.env.DATABASE_URL)('purchase reversal (integration)', ()
     expect(all.items.map((p) => p.amount)).not.toContain('99.00');
     expect(all.items.every((p) => p.accountId === f.accountId)).toBe(true);
     const reversed = all.items.find((p) => p.status === 'reversed')!;
-    expect(reversed).toMatchObject({ amount: '50.00', pointsEarned: 50, reversal: { pointsReversed: 22, pointsShortfall: 28 } });
+    expect(reversed).toMatchObject({ amount: '50.000', pointsEarned: 50, reversal: { pointsReversed: 22, pointsShortfall: 28 } });
     expect(typeof reversed.amount).toBe('string');
-    expect((await listPurchases(buildDb(admin), { businessId: f.businessId, status: 'confirmed', limit: 10, offset: 0 })).items.map((p) => p.amount)).toEqual(['12.50']);
+    expect((await listPurchases(buildDb(admin), { businessId: f.businessId, status: 'confirmed', limit: 10, offset: 0 })).items.map((p) => p.amount)).toEqual(['12.500']);
     expect((await listPurchases(buildDb(admin), { businessId: f.businessId, limit: 1, offset: 0 })).hasMore).toBe(true);
     await expect(getPurchase(buildDb(admin), other.businessId, reversed.id)).rejects.toMatchObject({ code: 'PURCHASE_NOT_FOUND' });
     expect(await getPurchase(buildDb(admin), f.businessId, reversed.id)).toMatchObject({ status: 'reversed' });
