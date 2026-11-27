@@ -8,12 +8,13 @@ import { SignupForm } from './signup-form';
 
 /**
  * LANDING-ROLE-01: the registration entry asks FIRST how the person will use Echo Grid. A business owner continues to the existing owner form
- * (unchanged, at /signup?role=business); a loyalty customer goes to /loyalty/join and never sees the owner form. Links that already carry a
- * destination (?next=..., e.g. a team invitation) or ?role=business keep going straight to the owner form, so no existing flow changes.
+ * (unchanged, at /signup?role=business); a loyalty customer goes to /loyalty/join and never sees the owner form. Team invitation links (?next=/invite/...)
+ * and ?role=business go straight to the owner form; every other entry (including login's "Create account") sees the chooser.
  */
 export default async function SignupPage({ searchParams }: { searchParams: Promise<{ role?: string; next?: string }> }) {
   const { role, next } = await searchParams;
-  if (role === 'business' || (typeof next === 'string' && next.length > 0)) return <SignupForm />;
+  // Only a team invitation skips the chooser; any other ?next= must still ask which kind of account is wanted.
+  if (role === 'business' || (typeof next === 'string' && next.startsWith('/invite/'))) return <SignupForm />;
 
   const t = await getTranslations('auth.chooser');
   return (
