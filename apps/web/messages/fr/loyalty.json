@@ -1070,6 +1070,7 @@
     "form": {
       "chooseReward": "Choisissez une récompense",
       "noRewards": "Créez d’abord une récompense active (article gratuit, remise ou bon) dans Fidélité, Récompenses ; les lots se choisissent dans votre catalogue.",
+      "createRewardLink": "Créer une récompense",
       "pointsPerUnit": "Points par {currency} dépensé",
       "pointsPerUnitHint": "Entier ou décimal, par exemple 1,5. Les fractions de point sont ignorées.",
       "pointsPerCheckin": "Points par enregistrement de visite",

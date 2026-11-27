@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import { Button, Input, Label, Select } from '@/components/ui';
 
@@ -37,7 +38,12 @@ function RewardSelect({ name, rewards, value }: { name: string; rewards: PrizeRe
 }
 function NoRewardsNote({ rewards }: { rewards: PrizeReward[] }) {
   const t = useTranslations('loyalty.programmes.form');
-  return rewards.length === 0 ? <p className="text-sm text-warning" role="note">{t('noRewards')}</p> : null;
+  return rewards.length === 0 ? (
+    <p className="text-sm text-warning" role="note">
+      {t('noRewards')}{' '}
+      <Link href="/dashboard/loyalty/rewards" className="underline font-medium">{t('createRewardLink')}</Link>
+    </p>
+  ) : null;
 }
 function Field({ id, label, hint, children }: { id: string; label: string; hint?: string | undefined; children: React.ReactNode }) {
   return (

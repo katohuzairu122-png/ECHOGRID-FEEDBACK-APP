@@ -1070,6 +1070,7 @@
     "form": {
       "chooseReward": "Choose a reward",
       "noRewards": "Create an active free-item, discount or voucher reward first (Loyalty, Rewards); prizes are chosen from your catalogue.",
+      "createRewardLink": "Create a reward",
       "pointsPerUnit": "Points per {currency} spent",
       "pointsPerUnitHint": "Whole or decimal, for example 1.5. Fractions of a point are dropped.",
       "pointsPerCheckin": "Points per check-in",
