@@ -222,10 +222,10 @@
       "cashierAppLink": "Cashier app: open or install it, sign-in sessions and cashier accounts",
       "card": {
         "title": "Member card",
-        "points": "Points",
+        "points": "Points balance",
         "visits": "Visits",
         "lastVisit": "Last visit: {date}",
-        "rewardsTitle": "Rewards",
+        "rewardsTitle": "Redeemable rewards",
         "noRewards": "This business has not set up any rewards yet.",
         "cost": "{count} points",
         "ready": "Ready to redeem",
@@ -281,10 +281,10 @@
     "businessDashboard": {
       "messages": "Messages",
       "notificationPreferences": "Notification preferences →",
-      "points": "{points} pts",
-      "progressToNextTier": "{remaining} pts to {tierName}",
+      "points": "{points} points",
+      "progressToNextTier": "{remaining} points to the {tierName} tier",
       "topTierReached": "Top tier reached",
-      "rewardsHeading": "Rewards",
+      "rewardsHeading": "Redeemable rewards",
       "recentActivityHeading": "Recent activity",
       "backToWallet": "← My loyalties",
       "membership": {
