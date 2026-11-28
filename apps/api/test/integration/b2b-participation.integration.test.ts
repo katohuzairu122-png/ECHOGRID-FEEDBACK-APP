@@ -357,7 +357,7 @@ describe.skipIf(!process.env.DATABASE_URL)('B2B participation foundation (integr
     await sqlFails(
       `UPDATE b2b_participations SET status='left' WHERE business_id=$1`,
       [ids.bizA],
-      /b2b_participations_status_check|B2B_PARTICIPATION_TRANSITION_DENIED/,
+      /b2b_participations_status_check|B2B_PARTICIPATION_TRANSITION_DENIED|B2B_PARTICIPATION_WITHDRAWN_TERMINAL/,
     );
     await sqlFails(
       `UPDATE b2b_participations SET status='suspended' WHERE business_id=$1`,

@@ -25,6 +25,114 @@
    ],
    "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
   },
+  "b2b_abuse_reports": {
+   "class": "RUNTIME",
+   "verbs": [
+    "INSERT",
+    "SELECT",
+    "UPDATE"
+   ],
+   "reason": "Split 09 B2B network: service-layer access under business-level authorization; append-only records remain database-guarded"
+  },
+  "b2b_message_reads": {
+   "class": "RUNTIME",
+   "verbs": [
+    "INSERT",
+    "SELECT"
+   ],
+   "reason": "Split 09 B2B network: service-layer access under business-level authorization; append-only records remain database-guarded"
+  },
+  "b2b_messages": {
+   "class": "RUNTIME",
+   "verbs": [
+    "INSERT",
+    "SELECT"
+   ],
+   "reason": "Split 09 B2B network: service-layer access under business-level authorization; append-only records remain database-guarded"
+  },
+  "b2b_moderation_actions": {
+   "class": "RUNTIME",
+   "verbs": [
+    "INSERT",
+    "SELECT"
+   ],
+   "reason": "Split 09 B2B network: service-layer access under business-level authorization; append-only records remain database-guarded"
+  },
+  "b2b_notification_reads": {
+   "class": "RUNTIME",
+   "verbs": [
+    "INSERT",
+    "SELECT"
+   ],
+   "reason": "Split 09 B2B network: service-layer access under business-level authorization; append-only records remain database-guarded"
+  },
+  "b2b_notifications": {
+   "class": "RUNTIME",
+   "verbs": [
+    "INSERT",
+    "SELECT"
+   ],
+   "reason": "Split 09 B2B network: service-layer access under business-level authorization; append-only records remain database-guarded"
+  },
+  "b2b_participation_events": {
+   "class": "RUNTIME",
+   "verbs": [
+    "INSERT",
+    "SELECT"
+   ],
+   "reason": "Split 09 B2B network: service-layer access under business-level authorization; append-only records remain database-guarded"
+  },
+  "b2b_partnership_events": {
+   "class": "RUNTIME",
+   "verbs": [
+    "INSERT",
+    "SELECT"
+   ],
+   "reason": "Split 09 B2B network: service-layer access under business-level authorization; append-only records remain database-guarded"
+  },
+  "b2b_partnership_request_events": {
+   "class": "RUNTIME",
+   "verbs": [
+    "INSERT",
+    "SELECT"
+   ],
+   "reason": "Split 09 B2B network: service-layer access under business-level authorization; append-only records remain database-guarded"
+  },
+  "b2b_partnership_requests": {
+   "class": "RUNTIME",
+   "verbs": [
+    "INSERT",
+    "SELECT",
+    "UPDATE"
+   ],
+   "reason": "Split 09 B2B network: service-layer access under business-level authorization; append-only records remain database-guarded"
+  },
+  "b2b_partnerships": {
+   "class": "RUNTIME",
+   "verbs": [
+    "INSERT",
+    "SELECT",
+    "UPDATE"
+   ],
+   "reason": "Split 09 B2B network: service-layer access under business-level authorization; append-only records remain database-guarded"
+  },
+  "b2b_proposal_events": {
+   "class": "RUNTIME",
+   "verbs": [
+    "INSERT",
+    "SELECT"
+   ],
+   "reason": "Split 09 B2B network: service-layer access under business-level authorization; append-only records remain database-guarded"
+  },
+  "b2b_proposals": {
+   "class": "RUNTIME",
+   "verbs": [
+    "INSERT",
+    "SELECT",
+    "UPDATE"
+   ],
+   "reason": "Split 09 B2B network: service-layer access under business-level authorization; append-only records remain database-guarded"
+  },
   "b2b_participations": {
    "class": "RUNTIME",
    "verbs": [
