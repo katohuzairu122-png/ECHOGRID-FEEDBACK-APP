@@ -1,6 +1,7 @@
 {
   "nav": {
     "networkModeration": "Community moderation",
+    "businessNetwork": "Business Network",
     "brand": "Platform Admin",
     "directory": "Directory",
     "auditLog": "Audit Log",

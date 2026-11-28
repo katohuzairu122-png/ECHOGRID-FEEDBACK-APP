@@ -24,6 +24,7 @@ const REQUIRED: Record<string, string | undefined> = {
   '/dashboard/settings': 'business:manage_settings',
   '/dashboard/settings/team': 'team:view',
   '/dashboard/billing': 'billing:view',
+  '/dashboard/network': 'b2b:view',
 };
 
 export async function DashboardNav() {
@@ -44,8 +45,14 @@ export async function DashboardNav() {
     { href: '/dashboard/branches', label: t('nav.branches'), icon: 'store' },
     { href: '/dashboard/settlements', label: t('nav.settlements'), icon: 'gift' },
     { href: '/dashboard/surveys', label: t('nav.surveys'), icon: 'chart' },
-    { href: '/dashboard/messages', label: t('nav.messages'), icon: 'chat', badgeSource: 'staff-messages' },
+    {
+      href: '/dashboard/messages',
+      label: t('nav.messages'),
+      icon: 'chat',
+      badgeSource: 'staff-messages',
+    },
     { href: '/dashboard/notifications', label: t('nav.notifications'), icon: 'bell' },
+    { href: '/dashboard/network', label: t('nav.businessNetwork'), icon: 'users' },
     { href: '/dashboard/settings', label: t('nav.settings'), icon: 'settings' },
     { href: '/dashboard/settings/team', label: t('nav.team'), icon: 'users' },
     { href: '/dashboard/billing', label: t('nav.billing'), icon: 'shield' },
@@ -70,8 +77,18 @@ export async function DashboardNav() {
 
   return (
     <WorkspaceNavigation
-      home={kind === 'cashier' ? CASHIER_HOME : canViewCommunityHub(access) ? COMMUNITY_HOME : OVERVIEW_HOME}
-      {...(kind === 'cashier' ? { primaryCount: 1 } : kind === 'management' ? { primaryCount: 3 } : {})}
+      home={
+        kind === 'cashier'
+          ? CASHIER_HOME
+          : canViewCommunityHub(access)
+            ? COMMUNITY_HOME
+            : OVERVIEW_HOME
+      }
+      {...(kind === 'cashier'
+        ? { primaryCount: 1 }
+        : kind === 'management'
+          ? { primaryCount: 3 }
+          : {})}
       label={t('overview.workspace')}
       menuLabel={t('nav.menu')}
       moreLabel={t('nav.more')}

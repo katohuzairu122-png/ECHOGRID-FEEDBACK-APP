@@ -156,6 +156,9 @@ async function defaultRoleGrants(): Promise<Record<string, string[]>> {
     'profile:submit',
     'cashier:manage',
     'network:post',
+    'b2b:view',
+    'b2b:manage',
+    'b2b:message',
   ];
   const grants: Record<string, string[]> = {};
   const roleNames = new Map<string, string>();
@@ -207,8 +210,19 @@ const ROUTES: Route[] = [
     body: { purchaseAmount: 5, idempotencyKey: 'k-0000001', channel: 'other' },
     allowedFor: 'serve',
   },
-  { label: 'entitlements list', method: 'GET', path: '/loyalty/accounts/6f0f1c5e-0000-4000-8000-000000000002/entitlements', allowedFor: 'serve' },
-  { label: 'entitlement redeem', method: 'POST', path: '/loyalty/accounts/6f0f1c5e-0000-4000-8000-000000000002/entitlements/6f0f1c5e-0000-4000-8000-000000000003/redeem', body: {}, allowedFor: 'serve' },
+  {
+    label: 'entitlements list',
+    method: 'GET',
+    path: '/loyalty/accounts/6f0f1c5e-0000-4000-8000-000000000002/entitlements',
+    allowedFor: 'serve',
+  },
+  {
+    label: 'entitlement redeem',
+    method: 'POST',
+    path: '/loyalty/accounts/6f0f1c5e-0000-4000-8000-000000000002/entitlements/6f0f1c5e-0000-4000-8000-000000000003/redeem',
+    body: {},
+    allowedFor: 'serve',
+  },
   {
     label: 'redemption lookup',
     method: 'GET',
@@ -243,23 +257,96 @@ const ROUTES: Route[] = [
     allowedFor: 'adjust',
   },
   { label: 'purchase history', method: 'GET', path: '/loyalty/purchases', allowedFor: 'adjust' },
-  { label: 'purchase detail', method: 'GET', path: '/loyalty/purchases/6f0f1c5e-0000-4000-8000-000000000004', allowedFor: 'adjust' },
-  { label: 'purchase reversal preview', method: 'GET', path: '/loyalty/purchases/6f0f1c5e-0000-4000-8000-000000000004/reversal-preview', allowedFor: 'adjust' },
-  { label: 'purchase reverse', method: 'POST', path: '/loyalty/purchases/6f0f1c5e-0000-4000-8000-000000000004/reverse', body: { reason: 'Refunded at the counter' }, allowedFor: 'adjust' },
+  {
+    label: 'purchase detail',
+    method: 'GET',
+    path: '/loyalty/purchases/6f0f1c5e-0000-4000-8000-000000000004',
+    allowedFor: 'adjust',
+  },
+  {
+    label: 'purchase reversal preview',
+    method: 'GET',
+    path: '/loyalty/purchases/6f0f1c5e-0000-4000-8000-000000000004/reversal-preview',
+    allowedFor: 'adjust',
+  },
+  {
+    label: 'purchase reverse',
+    method: 'POST',
+    path: '/loyalty/purchases/6f0f1c5e-0000-4000-8000-000000000004/reverse',
+    body: { reason: 'Refunded at the counter' },
+    allowedFor: 'adjust',
+  },
   { label: 'settings read', method: 'GET', path: '/loyalty/settings', allowedFor: 'programmeRead' },
   { label: 'tiers read', method: 'GET', path: '/loyalty/tiers', allowedFor: 'programmeRead' },
   // LOYALTY-PROGRAMME-COMPLETION: primary programme configuration. Reads need loyalty:view, every change needs rewards:manage; the Staff (cashier)
   // role holds neither. Activation, pausing and retiring are ALSO Owner-only inside the service (covered by the integration suite).
-  { label: 'programmes read', method: 'GET', path: '/loyalty/programmes', allowedFor: 'programmeRead' },
-  { label: 'programme read', method: 'GET', path: '/loyalty/programmes/6f0f1c5e-0000-4000-8000-000000000001', allowedFor: 'programmeRead' },
-  { label: 'programme history', method: 'GET', path: '/loyalty/programmes/6f0f1c5e-0000-4000-8000-000000000001/history', allowedFor: 'programmeRead' },
-  { label: 'programme create', method: 'POST', path: '/loyalty/programmes', body: {}, allowedFor: 'programmeWrite' },
-  { label: 'programme preview', method: 'POST', path: '/loyalty/programmes/preview', body: {}, allowedFor: 'programmeWrite' },
-  { label: 'programme config save', method: 'PUT', path: '/loyalty/programmes/6f0f1c5e-0000-4000-8000-000000000001/config', body: {}, allowedFor: 'programmeWrite' },
-  { label: 'programme validate', method: 'POST', path: '/loyalty/programmes/6f0f1c5e-0000-4000-8000-000000000001/validate', body: {}, allowedFor: 'programmeWrite' },
-  { label: 'programme activate', method: 'POST', path: '/loyalty/programmes/6f0f1c5e-0000-4000-8000-000000000001/activate', body: {}, allowedFor: 'programmeWrite' },
-  { label: 'programme deactivate', method: 'POST', path: '/loyalty/programmes/6f0f1c5e-0000-4000-8000-000000000001/deactivate', body: {}, allowedFor: 'programmeWrite' },
-  { label: 'programme retire', method: 'POST', path: '/loyalty/programmes/6f0f1c5e-0000-4000-8000-000000000001/retire', body: {}, allowedFor: 'programmeWrite' },
+  {
+    label: 'programmes read',
+    method: 'GET',
+    path: '/loyalty/programmes',
+    allowedFor: 'programmeRead',
+  },
+  {
+    label: 'programme read',
+    method: 'GET',
+    path: '/loyalty/programmes/6f0f1c5e-0000-4000-8000-000000000001',
+    allowedFor: 'programmeRead',
+  },
+  {
+    label: 'programme history',
+    method: 'GET',
+    path: '/loyalty/programmes/6f0f1c5e-0000-4000-8000-000000000001/history',
+    allowedFor: 'programmeRead',
+  },
+  {
+    label: 'programme create',
+    method: 'POST',
+    path: '/loyalty/programmes',
+    body: {},
+    allowedFor: 'programmeWrite',
+  },
+  {
+    label: 'programme preview',
+    method: 'POST',
+    path: '/loyalty/programmes/preview',
+    body: {},
+    allowedFor: 'programmeWrite',
+  },
+  {
+    label: 'programme config save',
+    method: 'PUT',
+    path: '/loyalty/programmes/6f0f1c5e-0000-4000-8000-000000000001/config',
+    body: {},
+    allowedFor: 'programmeWrite',
+  },
+  {
+    label: 'programme validate',
+    method: 'POST',
+    path: '/loyalty/programmes/6f0f1c5e-0000-4000-8000-000000000001/validate',
+    body: {},
+    allowedFor: 'programmeWrite',
+  },
+  {
+    label: 'programme activate',
+    method: 'POST',
+    path: '/loyalty/programmes/6f0f1c5e-0000-4000-8000-000000000001/activate',
+    body: {},
+    allowedFor: 'programmeWrite',
+  },
+  {
+    label: 'programme deactivate',
+    method: 'POST',
+    path: '/loyalty/programmes/6f0f1c5e-0000-4000-8000-000000000001/deactivate',
+    body: {},
+    allowedFor: 'programmeWrite',
+  },
+  {
+    label: 'programme retire',
+    method: 'POST',
+    path: '/loyalty/programmes/6f0f1c5e-0000-4000-8000-000000000001/retire',
+    body: {},
+    allowedFor: 'programmeWrite',
+  },
   { label: 'rewards read', method: 'GET', path: '/loyalty/rewards', allowedFor: 'programmeRead' },
   {
     label: 'reward dashboard',
@@ -413,6 +500,14 @@ describe('default role grants (real RoleProvisioningService)', () => {
     expect(personas.Admin).toContain('network:post');
     expect(personas.Manager).not.toContain('network:post');
     expect(personas.Staff).not.toContain('network:post');
+  });
+  it('B2B view, management and partnership messaging are business-wide and never default to cashier Staff', () => {
+    for (const key of ['b2b:view', 'b2b:manage', 'b2b:message']) {
+      expect(personas.Owner, `Owner ${key}`).toContain(key);
+      expect(personas.Admin, `Admin ${key}`).toContain(key);
+      expect(personas.Manager, `Manager ${key}`).toContain(key);
+      expect(personas.Staff, `Staff ${key}`).not.toContain(key);
+    }
   });
   // CASHIER-AUTH-02A (D-4): cashier:manage defaults to Owner and Admin; a Manager only gets it if the Owner grants it, and
   // a cashier (Staff) never holds it.

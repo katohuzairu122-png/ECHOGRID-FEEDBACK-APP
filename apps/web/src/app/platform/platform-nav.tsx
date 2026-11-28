@@ -18,9 +18,18 @@ export async function PlatformNav({ role }: { role: PlatformRole }) {
       items={[
         { href: '/platform', label: t('brand'), icon: 'shield' },
         { href: '/platform/businesses', label: t('directory'), icon: 'store' },
-        ...(role === 'billing' ? [] : [{ href: '/platform/customers', label: t('customers'), icon: 'users' as const }]),
+        ...(role === 'billing'
+          ? []
+          : [{ href: '/platform/customers', label: t('customers'), icon: 'users' as const }]),
         ...(role === 'admin'
-          ? [{ href: moderationPath, label: t('networkModeration'), icon: 'shield' as const }]
+          ? [
+              { href: moderationPath, label: t('networkModeration'), icon: 'shield' as const },
+              {
+                href: '/platform/business-network',
+                label: t('businessNetwork'),
+                icon: 'users' as const,
+              },
+            ]
           : []),
         { href: '/platform/audit-log', label: t('auditLog'), icon: 'chart' },
         { href: '/platform/billing', label: t('billing'), icon: 'settings' },
