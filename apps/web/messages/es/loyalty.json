@@ -263,6 +263,8 @@
       }
     },
     "shell": {
+      "signedInAs": "Sesión iniciada como",
+      "myProfile": "Mi perfil",
       "brand": "Mi fidelidad",
       "logout": "Cerrar sesión"
     },
@@ -622,6 +624,47 @@
         }
       },
       "surveyFallback": "Encuesta"
+    },
+    "profile": {
+      "title": "Mi perfil",
+      "description": "Cómo apareces en la plataforma. Los datos de tu cuenta y la seguridad están en Ajustes.",
+      "unavailableTitle": "El perfil no está disponible ahora",
+      "unavailableBody": "Inténtalo de nuevo más tarde. Tu inicio de sesión y tus cuentas de fidelidad no se ven afectados.",
+      "noName": "Sin nombre",
+      "signedInWith": "Sesión iniciada con {login}",
+      "editTitle": "Edita tu perfil",
+      "privacy": "Tu perfil es privado. Un negocio al que te hayas unido solo ve tu nombre visible y tu avatar.",
+      "avatarLabel": "Avatar",
+      "avatarHint": "Elige un avatar. Si no eliges ninguno, se muestran tus iniciales.",
+      "avatarNone": "Iniciales",
+      "displayNameLabel": "Nombre visible",
+      "displayNameHint": "Solo letras, números, espacios y . ' - _. Sin enlaces ni correos.",
+      "bioLabel": "Biografía",
+      "bioHint": "Una nota breve sobre ti, de hasta 280 caracteres. Solo tú puedes verla.",
+      "save": "Guardar perfil",
+      "saving": "Guardando…",
+      "saved": "Perfil guardado.",
+      "settingsLink": "Los datos de la cuenta y la seguridad están en Ajustes",
+      "errors": {
+        "invalid_name": "Ese nombre visible no está permitido. Usa solo letras, números, espacios y . ' - _, sin enlaces ni correos.",
+        "invalid_bio": "La biografía es demasiado larga o contiene caracteres no permitidos.",
+        "invalid": "Revisa tus opciones e inténtalo de nuevo.",
+        "unavailable": "No se pudo guardar el perfil. Inténtalo más tarde."
+      },
+      "avatars": {
+        "sun": "Sol",
+        "moon": "Luna",
+        "star": "Estrella",
+        "leaf": "Hoja",
+        "wave": "Ola",
+        "flame": "Llama",
+        "bolt": "Rayo",
+        "heart": "Corazón",
+        "cloud": "Nube",
+        "peak": "Cima",
+        "bloom": "Flor",
+        "orbit": "Órbita"
+      }
     },
     "scanBusiness": {
       "title": "Únete a un negocio",

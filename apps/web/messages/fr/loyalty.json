@@ -263,6 +263,8 @@
       }
     },
     "shell": {
+      "signedInAs": "Connecté en tant que",
+      "myProfile": "Mon profil",
       "brand": "Ma fidélité",
       "logout": "Se déconnecter"
     },
@@ -622,6 +624,47 @@
         }
       },
       "surveyFallback": "Enquête"
+    },
+    "profile": {
+      "title": "Mon profil",
+      "description": "Comment vous apparaissez sur la plateforme. Les détails du compte et la sécurité sont dans Réglages.",
+      "unavailableTitle": "Le profil n’est pas disponible pour le moment",
+      "unavailableBody": "Réessayez plus tard. Votre connexion et vos comptes de fidélité ne sont pas affectés.",
+      "noName": "Aucun nom",
+      "signedInWith": "Connecté avec {login}",
+      "editTitle": "Modifier votre profil",
+      "privacy": "Votre profil est privé. Un commerce que vous avez rejoint ne voit que votre nom affiché et votre avatar.",
+      "avatarLabel": "Avatar",
+      "avatarHint": "Choisissez un avatar. Sans choix, vos initiales sont affichées.",
+      "avatarNone": "Initiales",
+      "displayNameLabel": "Nom affiché",
+      "displayNameHint": "Lettres, chiffres, espaces et . ' - _ uniquement. Aucun lien ni adresse e-mail.",
+      "bioLabel": "Bio",
+      "bioHint": "Une courte note sur vous, 280 caractères maximum. Vous seul pouvez la voir.",
+      "save": "Enregistrer le profil",
+      "saving": "Enregistrement…",
+      "saved": "Profil enregistré.",
+      "settingsLink": "Les détails du compte et la sécurité sont dans Réglages",
+      "errors": {
+        "invalid_name": "Ce nom affiché n’est pas autorisé. Utilisez uniquement lettres, chiffres, espaces et . ' - _, sans lien ni adresse e-mail.",
+        "invalid_bio": "La bio est trop longue ou contient des caractères non autorisés.",
+        "invalid": "Vérifiez vos choix et réessayez.",
+        "unavailable": "Le profil n’a pas pu être enregistré. Réessayez plus tard."
+      },
+      "avatars": {
+        "sun": "Soleil",
+        "moon": "Lune",
+        "star": "Étoile",
+        "leaf": "Feuille",
+        "wave": "Vague",
+        "flame": "Flamme",
+        "bolt": "Éclair",
+        "heart": "Cœur",
+        "cloud": "Nuage",
+        "peak": "Sommet",
+        "bloom": "Fleur",
+        "orbit": "Orbite"
+      }
     },
     "scanBusiness": {
       "title": "Rejoindre un commerce",

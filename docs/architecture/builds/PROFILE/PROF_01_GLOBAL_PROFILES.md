@@ -18,3 +18,6 @@ Unknown or retired keys are never returned or stored; a stored key outside the c
 
 ## Remaining blocks
 PROF-02 customer profile screen with avatar picker and a "signed in as" identity chip in the customer shell. PROF-03 business appearance screen and chip. PROF-04 business sees member name and avatar; customers see the business logo in the wallet and on the join page (adds the two keys to the public business read). PROF-05 photo and logo upload (needs storage, size and type limits, moderation, the BDPN amendment, and deployment authorization).
+
+## PROF-02 (customer screen, 2026-11-27)
+Web only, on top of PROF-01: `/loyalty/dashboard/profile` ("My profile": avatar picker with 12 built-in avatars or initials, display name, bio, privacy note), a "Signed in as" display in the customer header (avatar, name, masked login; falls back to the plain "Customer" label when the profile cannot be read, so the header never breaks), and a "My profile" navigation entry. Four languages. The page shows "Profile is not available right now" until migration 0109 is applied and the API serves `/customer-profile`; nothing else on the customer area depends on it. Account details and security stay under Settings (that existing screen is unchanged).
