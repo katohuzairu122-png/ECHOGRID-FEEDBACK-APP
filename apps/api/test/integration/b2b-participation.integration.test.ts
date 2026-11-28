@@ -320,17 +320,6 @@ describe.skipIf(!process.env.DATABASE_URL)('B2B participation foundation (integr
       [ids.bizA],
     );
     expect(moderation.rows[0].n).toBe(2);
-    const withdrawn = await svc.withdraw({ businessId: ids.bizA, actorUserId: ids.ownerA });
-    expect(withdrawn.status).toBe('withdrawn');
-    expect(await svc.isParticipating(ids.bizA)).toBe(false);
-    await expect(
-      svc.withdraw({ businessId: ids.bizA, actorUserId: ids.ownerA }),
-    ).rejects.toMatchObject({ code: 'B2B_PARTICIPATION_WITHDRAWAL_CONFLICT' });
-    const event = await client.query(
-      `SELECT count(*)::int AS n FROM b2b_participation_events WHERE participation_id=$1 AND event_type='withdrawn'`,
-      [withdrawn.id],
-    );
-    expect(event.rows[0].n).toBe(1);
   });
 
   it('database guards: immutable fields, no delete/truncate, active terms required, no self-acceptance by the enrolling admin', async () => {
@@ -357,7 +346,7 @@ describe.skipIf(!process.env.DATABASE_URL)('B2B participation foundation (integr
     await sqlFails(
       `UPDATE b2b_participations SET status='left' WHERE business_id=$1`,
       [ids.bizA],
-      /b2b_participations_status_check|B2B_PARTICIPATION_TRANSITION_DENIED|B2B_PARTICIPATION_WITHDRAWN_TERMINAL/,
+      /b2b_participations_status_check|B2B_PARTICIPATION_TRANSITION_DENIED/,
     );
     await sqlFails(
       `UPDATE b2b_participations SET status='suspended' WHERE business_id=$1`,
@@ -378,6 +367,20 @@ describe.skipIf(!process.env.DATABASE_URL)('B2B participation foundation (integr
       [ids.bizB, terms.rows[0]!.id, 'c'.repeat(64), ids.ownerB, ids.admin],
       /B2B_PARTICIPATION_REQUIRES_ACTIVE_TERMS/,
     );
+  });
+
+  it('allows a participating owner to withdraw once and records immutable history', async () => {
+    const withdrawn = await svc.withdraw({ businessId: ids.bizA, actorUserId: ids.ownerA });
+    expect(withdrawn.status).toBe('withdrawn');
+    expect(await svc.isParticipating(ids.bizA)).toBe(false);
+    await expect(
+      svc.withdraw({ businessId: ids.bizA, actorUserId: ids.ownerA }),
+    ).rejects.toMatchObject({ code: 'B2B_PARTICIPATION_WITHDRAWAL_CONFLICT' });
+    const event = await client.query(
+      `SELECT count(*)::int AS n FROM b2b_participation_events WHERE participation_id=$1 AND event_type='withdrawn'`,
+      [withdrawn.id],
+    );
+    expect(event.rows[0].n).toBe(1);
   });
 
   it('participation touches no loyalty, points, credit or billing rows', async () => {
