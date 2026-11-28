@@ -1,3 +1,6 @@
+Warning: truncated output (original token count: 6683)
+Total output lines: 353
+
 CREATE TABLE "b2b_abuse_reports" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"reporter_business_id" uuid NOT NULL,
@@ -120,83 +123,7 @@ ALTER TABLE "b2b_notification_reads" ADD CONSTRAINT "b2b_notification_reads_noti
 ALTER TABLE "b2b_notification_reads" ADD CONSTRAINT "b2b_notification_reads_business_id_businesses_id_fk" FOREIGN KEY ("business_id") REFERENCES "public"."businesses"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "b2b_notification_reads" ADD CONSTRAINT "b2b_notification_reads_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "b2b_notifications" ADD CONSTRAINT "b2b_notifications_recipient_business_id_businesses_id_fk" FOREIGN KEY ("recipient_business_id") REFERENCES "public"."businesses"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "b2b_proposal_events" ADD CONSTRAINT "b2b_proposal_events_proposal_id_b2b_proposals_id_fk" FOREIGN KEY ("proposal_id") REFERENCES "public"."b2b_proposals"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "b2b_proposal_events" ADD CONSTRAINT "b2b_proposal_events_actor_business_id_businesses_id_fk" FOREIGN KEY ("actor_business_id") REFERENCES "public"."businesses"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "b2b_proposal_events" ADD CONSTRAINT "b2b_proposal_events_actor_user_id_users_id_fk" FOREIGN KEY ("actor_user_id") REFERENCES "public"."users"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "b2b_proposals" ADD CONSTRAINT "b2b_proposals_partnership_id_b2b_partnerships_id_fk" FOREIGN KEY ("partnership_id") REFERENCES "public"."b2b_partnerships"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "b2b_proposals" ADD CONSTRAINT "b2b_proposals_proposer_business_id_businesses_id_fk" FOREIGN KEY ("proposer_business_id") REFERENCES "public"."businesses"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "b2b_proposals" ADD CONSTRAINT "b2b_proposals_created_by_user_id_users_id_fk" FOREIGN KEY ("created_by_user_id") REFERENCES "public"."users"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "b2b_proposals" ADD CONSTRAINT "b2b_proposals_responded_by_user_id_users_id_fk" FOREIGN KEY ("responded_by_user_id") REFERENCES "public"."users"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
-CREATE INDEX "b2b_abuse_reports_open_idx" ON "b2b_abuse_reports" USING btree ("status","created_at");--> statement-breakpoint
-CREATE INDEX "b2b_abuse_reports_reporter_idx" ON "b2b_abuse_reports" USING btree ("reporter_business_id","created_at");--> statement-breakpoint
-CREATE UNIQUE INDEX "b2b_message_reads_once_uq" ON "b2b_message_reads" USING btree ("message_id","user_id");--> statement-breakpoint
-CREATE INDEX "b2b_message_reads_unread_idx" ON "b2b_message_reads" USING btree ("partnership_id","business_id","user_id");--> statement-breakpoint
-CREATE INDEX "b2b_messages_conversation_idx" ON "b2b_messages" USING btree ("partnership_id","created_at","id");--> statement-breakpoint
-CREATE INDEX "b2b_moderation_actions_business_idx" ON "b2b_moderation_actions" USING btree ("target_business_id","created_at");--> statement-breakpoint
-CREATE UNIQUE INDEX "b2b_notification_reads_once_uq" ON "b2b_notification_reads" USING btree ("notification_id","user_id");--> statement-breakpoint
-CREATE INDEX "b2b_notification_reads_business_idx" ON "b2b_notification_reads" USING btree ("business_id","user_id");--> statement-breakpoint
-CREATE UNIQUE INDEX "b2b_notifications_event_key_uq" ON "b2b_notifications" USING btree ("event_key");--> statement-breakpoint
-CREATE INDEX "b2b_notifications_recipient_created_idx" ON "b2b_notifications" USING btree ("recipient_business_id","created_at");--> statement-breakpoint
-CREATE INDEX "b2b_proposal_events_proposal_idx" ON "b2b_proposal_events" USING btree ("proposal_id","created_at");--> statement-breakpoint
-CREATE INDEX "b2b_proposals_partnership_idx" ON "b2b_proposals" USING btree ("partnership_id","created_at");
---> statement-breakpoint
-CREATE OR REPLACE FUNCTION b2b_append_only_guard() RETURNS trigger
-LANGUAGE plpgsql SET search_path = pg_catalog, public AS $$
-BEGIN
-  IF TG_OP <> 'INSERT' THEN
-    RAISE EXCEPTION 'B2B_APPEND_ONLY (% on %)', TG_OP, TG_TABLE_NAME USING ERRCODE = 'integrity_constraint_violation';
-  END IF;
-  RETURN NEW;
-END;
-$$;
---> statement-breakpoint
-CREATE OR REPLACE FUNCTION b2b_no_truncate() RETURNS trigger
-LANGUAGE plpgsql SET search_path = pg_catalog, public AS $$
-BEGIN
-  RAISE EXCEPTION 'B2B_NO_TRUNCATE (%)', TG_TABLE_NAME USING ERRCODE = 'integrity_constraint_violation';
-END;
-$$;
---> statement-breakpoint
-CREATE OR REPLACE FUNCTION b2b_request_lifecycle_guard() RETURNS trigger
-LANGUAGE plpgsql SET search_path = pg_catalog, public AS $$
-BEGIN
-  IF TG_OP = 'DELETE' THEN
-    RAISE EXCEPTION 'B2B_REQUEST_HISTORY_PRESERVED' USING ERRCODE = 'integrity_constraint_violation';
-  END IF;
-  IF TG_OP = 'UPDATE' THEN
-    IF NEW.requester_business_id <> OLD.requester_business_id OR NEW.target_business_id <> OLD.target_business_id
-      OR NEW.created_by_user_id <> OLD.created_by_user_id OR NEW.reason <> OLD.reason
-      OR NEW.idempotency_key <> OLD.idempotency_key OR NEW.created_at <> OLD.created_at OR NEW.expires_at <> OLD.expires_at THEN
-      RAISE EXCEPTION 'B2B_REQUEST_IDENTITY_IMMUTABLE' USING ERRCODE = 'integrity_constraint_violation';
-    END IF;
-    IF NEW.status <> OLD.status AND NOT (OLD.status = 'pending' AND NEW.status IN ('accepted','rejected','cancelled','expired')) THEN
-      RAISE EXCEPTION 'B2B_REQUEST_BAD_TRANSITION (% to %)', OLD.status, NEW.status USING ERRCODE = 'integrity_constraint_violation';
-    END IF;
-    IF OLD.status <> 'pending' AND NEW.status = OLD.status AND (NEW.responded_at IS DISTINCT FROM OLD.responded_at
-      OR NEW.responded_by_user_id IS DISTINCT FROM OLD.responded_by_user_id OR NEW.cancelled_at IS DISTINCT FROM OLD.cancelled_at
-      OR NEW.cancelled_by_user_id IS DISTINCT FROM OLD.cancelled_by_user_id OR NEW.response_note IS DISTINCT FROM OLD.response_note) THEN
-      RAISE EXCEPTION 'B2B_REQUEST_TERMINAL_IMMUTABLE' USING ERRCODE = 'integrity_constraint_violation';
-    END IF;
-  END IF;
-  RETURN NEW;
-END;
-$$;
---> statement-breakpoint
-CREATE TRIGGER b2b_requests_lifecycle_guard BEFORE UPDATE OR DELETE ON b2b_partnership_requests FOR EACH ROW EXECUTE FUNCTION b2b_request_lifecycle_guard();
---> statement-breakpoint
-CREATE OR REPLACE FUNCTION b2b_partnership_lifecycle_guard() RETURNS trigger
-LANGUAGE plpgsql SET search_path = pg_catalog, public AS $$
-BEGIN
-  IF TG_OP = 'DELETE' THEN RAISE EXCEPTION 'B2B_PARTNERSHIP_HISTORY_PRESERVED' USING ERRCODE = 'integrity_constraint_violation'; END IF;
-  IF TG_OP = 'UPDATE' THEN
-    IF NEW.source_request_id <> OLD.source_request_id OR NEW.business_a_id <> OLD.business_a_id OR NEW.business_b_id <> OLD.business_b_id OR NEW.created_at <> OLD.created_at THEN
-      RAISE EXCEPTION 'B2B_PARTNERSHIP_IDENTITY_IMMUTABLE' USING ERRCODE = 'integrity_constraint_violation';
-    END IF;
-    IF NEW.status <> OLD.status AND NOT ((OLD.status = 'active' AND NEW.status IN ('suspended','terminated')) OR (OLD.status = 'suspended' AND NEW.status IN ('active','terminated'))) THEN
-      RAISE EXCEPTION 'B2B_PARTNERSHIP_BAD_TRANSITION (% to %)', OLD.status, NEW.status USING ERRCODE = 'integrity_constraint_violation';
-    END IF;
-    IF OLD.status = 'terminated' AND NEW IS DISTINCT FROM OLD THEN
-      RAISE EXCEPTION 'B2B_PARTNERSHIP_TERMINAL_IMMUTABLE' USING ERRCODE = 'integrity_constraint_violation';
+ALTER TABLE "b2b_proposal_events" ADD CONSTRAINT "b2b_proposal_e…1683 tokens truncated…_violation';
     END IF;
   END IF;
   IF TG_OP = 'INSERT' AND NOT EXISTS (
@@ -292,8 +219,6 @@ CREATE TRIGGER b2b_notifications_no_truncate BEFORE TRUNCATE ON b2b_notification
 CREATE TRIGGER b2b_notification_reads_no_truncate BEFORE TRUNCATE ON b2b_notification_reads FOR EACH STATEMENT EXECUTE FUNCTION b2b_no_truncate();
 --> statement-breakpoint
 CREATE TRIGGER b2b_message_reads_no_truncate BEFORE TRUNCATE ON b2b_message_reads FOR EACH STATEMENT EXECUTE FUNCTION b2b_no_truncate();
---> statement-breakpoint
-CREATE TRIGGER b2b_messages_no_truncate BEFORE TRUNCATE ON b2b_messages FOR EACH STATEMENT EXECUTE FUNCTION b2b_no_truncate();
 --> statement-breakpoint
 CREATE TRIGGER b2b_proposals_no_truncate BEFORE TRUNCATE ON b2b_proposals FOR EACH STATEMENT EXECUTE FUNCTION b2b_no_truncate();
 --> statement-breakpoint
