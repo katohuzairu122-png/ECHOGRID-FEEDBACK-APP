@@ -4,6 +4,7 @@ import {
   text,
   timestamp,
   uniqueIndex,
+  foreignKey,
   index,
   check,
   jsonb,
@@ -86,6 +87,7 @@ export const b2bParticipations = pgTable(
   },
   (t) => [
     uniqueIndex('b2b_participations_business_key').on(t.businessId),
+    uniqueIndex('b2b_participations_id_business_key').on(t.id, t.businessId),
     check(
       'b2b_participations_status_check',
       sql`${t.status} IN ('active','suspended','withdrawn')`,
@@ -107,8 +109,7 @@ export const b2bParticipationEvents = pgTable(
   {
     id: uuid('id').primaryKey().defaultRandom(),
     participationId: uuid('participation_id')
-      .notNull()
-      .references(() => b2bParticipations.id, { onDelete: 'restrict' }),
+      .notNull(),
     businessId: uuid('business_id')
       .notNull()
       .references(() => businesses.id, { onDelete: 'restrict' }),
@@ -120,6 +121,11 @@ export const b2bParticipationEvents = pgTable(
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
+    foreignKey({
+      name: 'b2b_participation_events_participation_business_fk',
+      columns: [t.participationId, t.businessId],
+      foreignColumns: [b2bParticipations.id, b2bParticipations.businessId],
+    }).onDelete('restrict'),
     index('b2b_participation_events_identity_idx').on(t.participationId, t.createdAt),
     index('b2b_participation_events_business_idx').on(t.businessId, t.createdAt),
     check(

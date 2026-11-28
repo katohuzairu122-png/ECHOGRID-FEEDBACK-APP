@@ -1,4 +1,4 @@
-# Split 09 B2B network migration notes (0110–0112)
+# Split 09 B2B network migration notes (0110–0113)
 
 These migrations are additive and have not been applied to staging or production.
 
@@ -7,13 +7,14 @@ These migrations are additive and have not been applied to staging or production
 - **0110** adds partnership requests, lifecycle events, and partnerships. It adds unique pair/idempotency indexes and request expiry/cooldown access indexes. The 10-request cap is computed against each sender business's existing IANA `defaultTimezone`.
 - **0111** adds in-app business notifications/read receipts, partnership messages/read receipts, non-binding collaboration proposals/events, abuse reports, and append-only moderation evidence. It adds lifecycle guards and `ENABLE ALWAYS` protections for immutable ledgers.
 - **0112** adds participation withdrawal evidence and participation history. It extends the guarded participation state machine so withdrawal is terminal.
+- **0113** replaces the participation-history single-column reference with a composite `(participation_id, business_id)` foreign key, backed by a matching unique parent key. This prevents a history row from naming one business while pointing at another business's participation and satisfies the repository's tenant-reference coverage gate.
 
 ## Replay and upgrade requirements
 
 - Generate/apply using the repository's Drizzle migration runner and journal; do not edit migration counts in scripts or workflows.
 - Before any shared environment deployment, verify the migration prefix and schema compatibility through the existing release gates.
 - The migrations require PostgreSQL and existing schema through 0109. Clean replay and upgrade testing from the current baseline must run in CI or an authorized disposable PostgreSQL database.
-- The development environment used to prepare this change had no disposable PostgreSQL service or `DATABASE_URL`; no migration was applied locally.
+- Hosted CI applied the full migration chain to its ephemeral PostgreSQL database, including 0110–0113. No shared database was changed.
 
 ## Recovery
 
