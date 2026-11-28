@@ -69,6 +69,9 @@ export const DEFAULT_ROLES: Record<DefaultRoleName, string[]> = {
     'profile:edit',
     'profile:submit',
     'network:post',
+    'b2b:view',
+    'b2b:manage',
+    'b2b:message',
     'cashier:manage',
   ],
   // Admin mirrors Owner for everything EXCEPT the two irreversible,
@@ -112,6 +115,9 @@ export const DEFAULT_ROLES: Record<DefaultRoleName, string[]> = {
     'profile:edit',
     'profile:submit',
     'network:post',
+    'b2b:view',
+    'b2b:manage',
+    'b2b:message',
     'cashier:manage',
   ],
   Manager: [
@@ -140,6 +146,9 @@ export const DEFAULT_ROLES: Record<DefaultRoleName, string[]> = {
     'settlement:fulfill',
     'messages:view',
     'messages:send',
+    'b2b:view',
+    'b2b:manage',
+    'b2b:message',
   ],
   // Staff is the front-counter (cashier) role and is deliberately minimal (D-C1):
   // verified QR service through loyalty:serve (resolve a signed customer QR,
@@ -167,7 +176,10 @@ export class RoleProvisioningService {
    * (typically Owner) to the business's creator. Keyed by DefaultRoleName
    * rather than `string`, so `roleIds.Owner` is a `string` and not a
    * maybe-missing lookup every caller has to re-guard. */
-  async seedDefaultRoles(businessId: string, createdBy: string): Promise<Record<DefaultRoleName, string>> {
+  async seedDefaultRoles(
+    businessId: string,
+    createdBy: string,
+  ): Promise<Record<DefaultRoleName, string>> {
     // Assertion justified by the loop below iterating DEFAULT_ROLE_NAMES
     // exhaustively -- every key is assigned before this is returned.
     const roleIds = {} as Record<DefaultRoleName, string>;

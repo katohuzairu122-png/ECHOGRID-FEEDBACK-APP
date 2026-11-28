@@ -10,7 +10,11 @@ import { PermissionRepository, type NewPermission } from '../../repositories/per
  * idempotent, so this is safe to run on every deploy.
  */
 const PERMISSIONS: NewPermission[] = [
-  { key: 'business:view', description: 'View business profile and settings.', category: 'Business' },
+  {
+    key: 'business:view',
+    description: 'View business profile and settings.',
+    category: 'Business',
+  },
   {
     key: 'business:manage_settings',
     description: 'Edit business profile and settings.',
@@ -18,7 +22,11 @@ const PERMISSIONS: NewPermission[] = [
   },
   { key: 'business:delete', description: 'Permanently delete the business.', category: 'Business' },
   { key: 'branches:view', description: 'View branches.', category: 'Branches' },
-  { key: 'branches:manage', description: 'Create, edit, and delete branches.', category: 'Branches' },
+  {
+    key: 'branches:manage',
+    description: 'Create, edit, and delete branches.',
+    category: 'Branches',
+  },
   { key: 'team:view', description: 'View team members and their roles.', category: 'Team' },
   { key: 'team:invite', description: 'Invite new team members and grant roles.', category: 'Team' },
   { key: 'team:remove', description: "Remove a team member's access.", category: 'Team' },
@@ -56,27 +64,32 @@ const PERMISSIONS: NewPermission[] = [
   },
   {
     key: 'loyalty:view',
-    description: 'View loyalty programme configuration (tiers, rewards, settings). Account directory access needs loyalty:accounts:view.',
+    description:
+      'View loyalty programme configuration (tiers, rewards, settings). Account directory access needs loyalty:accounts:view.',
     category: 'Loyalty',
   },
   {
     key: 'loyalty:manage',
-    description: 'Legacy. Superseded by loyalty:serve (counter service) and loyalty:adjust; no route requires it any more.',
+    description:
+      'Legacy. Superseded by loyalty:serve (counter service) and loyalty:adjust; no route requires it any more.',
     category: 'Loyalty',
   },
   {
     key: 'loyalty:serve',
-    description: 'Front-counter service: verify a signed customer QR, record a purchase, review and confirm a reward handoff.',
+    description:
+      'Front-counter service: verify a signed customer QR, record a purchase, review and confirm a reward handoff.',
     category: 'Loyalty',
   },
   {
     key: 'loyalty:accounts:view',
-    description: 'View the business-wide loyalty account directory, account details and transaction history.',
+    description:
+      'View the business-wide loyalty account directory, account details and transaction history.',
     category: 'Loyalty',
   },
   {
     key: 'loyalty:adjust',
-    description: 'Apply manual balance adjustments to a loyalty account (administrative correction).',
+    description:
+      'Apply manual balance adjustments to a loyalty account (administrative correction).',
     category: 'Loyalty',
   },
   {
@@ -101,7 +114,8 @@ const PERMISSIONS: NewPermission[] = [
   },
   {
     key: 'notifications:manage',
-    description: 'Configure business-wide notification channel kill switches and the daily SMS cap.',
+    description:
+      'Configure business-wide notification channel kill switches and the daily SMS cap.',
     category: 'Notifications',
   },
   {
@@ -116,7 +130,8 @@ const PERMISSIONS: NewPermission[] = [
   },
   {
     key: 'partner_credits:view',
-    description: 'View business-wide Partner Credit account and ledger under explicit authorization.',
+    description:
+      'View business-wide Partner Credit account and ledger under explicit authorization.',
     category: 'Partner Credits',
   },
   {
@@ -146,22 +161,44 @@ const PERMISSIONS: NewPermission[] = [
   },
   {
     key: 'profile:edit',
-    description: 'Edit the draft of the business public profile. Business-wide access only; never publishes anything.',
+    description:
+      'Edit the draft of the business public profile. Business-wide access only; never publishes anything.',
     category: 'Business profile',
   },
   {
     key: 'cashier:manage',
-    description: 'Create and manage business-managed cashier accounts (credentials, status, sessions, business code). Business-wide access only; granted to Owner and Admin by default, never to Manager unless the Owner grants it.',
+    description:
+      'Create and manage business-managed cashier accounts (credentials, status, sessions, business code). Business-wide access only; granted to Owner and Admin by default, never to Manager unless the Owner grants it.',
     category: 'Cashier accounts',
   },
   {
     key: 'profile:submit',
-    description: 'Submit the business public profile for platform review and withdraw or re-publish an approved profile. Business-wide access only.',
+    description:
+      'Submit the business public profile for platform review and withdraw or re-publish an approved profile. Business-wide access only.',
     category: 'Business profile',
   },
   {
+    key: 'b2b:view',
+    description:
+      'View the business network, participation, requests and partnerships. Business-wide access only; never granted to cashier roles by default.',
+    category: 'Business network',
+  },
+  {
+    key: 'b2b:manage',
+    description:
+      'Manage business network participation and partnership requests. Business-wide access only; never granted to cashier roles.',
+    category: 'Business network',
+  },
+  {
+    key: 'b2b:message',
+    description:
+      'Read and send messages inside an active business partnership. Business-wide access only; never granted to cashier roles.',
+    category: 'Business network',
+  },
+  {
     key: 'network:post',
-    description: 'Draft, submit and withdraw business posts for the Community feed and view their moderation status. Business-wide access only; granted to Owner and Admin by default, never to Manager or cashiers unless the Owner grants it.',
+    description:
+      'Draft, submit and withdraw business posts for the Community feed and view their moderation status. Business-wide access only; granted to Owner and Admin by default, never to Manager or cashiers unless the Owner grants it.',
     category: 'Community publishing',
   },
 ];
