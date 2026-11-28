@@ -1,1538 +1,947 @@
 {
- "role": "echogrid_app_runtime",
- "sequences": [
-  "benefit_application_transitions_seq_seq",
-  "community_pilot_eligibility_events_seq_seq",
-  "partner_credit_dispute_events_seq_seq",
-  "stripe_evidence_control_events_seq_seq",
-  "stripe_provider_event_dispositions_seq_seq"
- ],
- "tables": {
-  "ai_usage_log": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT",
-    "UPDATE"
-   ],
-   "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
-  },
-  "audit_log": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT"
-   ],
-   "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
-  },
-  "b2b_abuse_reports": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT",
-    "UPDATE"
-   ],
-   "reason": "Split 09 B2B network: service-layer access under business-level authorization; append-only records remain database-guarded"
-  },
-  "b2b_message_reads": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT"
-   ],
-   "reason": "Split 09 B2B network: service-layer access under business-level authorization; append-only records remain database-guarded"
-  },
-  "b2b_messages": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT"
-   ],
-   "reason": "Split 09 B2B network: service-layer access under business-level authorization; append-only records remain database-guarded"
-  },
-  "b2b_moderation_actions": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT"
-   ],
-   "reason": "Split 09 B2B network: service-layer access under business-level authorization; append-only records remain database-guarded"
-  },
-  "b2b_notification_reads": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT"
-   ],
-   "reason": "Split 09 B2B network: service-layer access under business-level authorization; append-only records remain database-guarded"
-  },
-  "b2b_notifications": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT"
-   ],
-   "reason": "Split 09 B2B network: service-layer access under business-level authorization; append-only records remain database-guarded"
-  },
-  "b2b_participation_events": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT"
-   ],
-   "reason": "Split 09 B2B network: service-layer access under business-level authorization; append-only records remain database-guarded"
-  },
-  "b2b_partnership_events": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT"
-   ],
-   "reason": "Split 09 B2B network: service-layer access under business-level authorization; append-only records remain database-guarded"
-  },
-  "b2b_partnership_request_events": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT"
-   ],
-   "reason": "Split 09 B2B network: service-layer access under business-level authorization; append-only records remain database-guarded"
-  },
-  "b2b_partnership_requests": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT",
-    "UPDATE"
-   ],
-   "reason": "Split 09 B2B network: service-layer access under business-level authorization; append-only records remain database-guarded"
-  },
-  "b2b_partnerships": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT",
-    "UPDATE"
-   ],
-   "reason": "Split 09 B2B network: service-layer access under business-level authorization; append-only records remain database-guarded"
-  },
-  "b2b_proposal_events": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT"
-   ],
-   "reason": "Split 09 B2B network: service-layer access under business-level authorization; append-only records remain database-guarded"
-  },
-  "b2b_proposals": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT",
-    "UPDATE"
-   ],
-   "reason": "Split 09 B2B network: service-layer access under business-level authorization; append-only records remain database-guarded"
-  },
-  "b2b_participations": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT",
-    "UPDATE"
-   ],
-   "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
-  },
-  "b2b_terms_versions": {
-   "class": "RUNTIME",
-   "verbs": [
-    "SELECT"
-   ],
-   "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
-  },
-  "benefit_application_compensations": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT"
-   ],
-   "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
-  },
-  "benefit_application_intents": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT",
-    "UPDATE"
-   ],
-   "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
-  },
-  "benefit_application_transitions": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT"
-   ],
-   "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
-  },
-  "benefit_provider_attempts": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT"
-   ],
-   "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
-  },
-  "benefit_provider_observations": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT"
-   ],
-   "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
-  },
-  "benefit_reconciliation_attempts": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT",
-    "UPDATE"
-   ],
-   "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
-  },
-  "billing_partner_credit_applications": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT"
-   ],
-   "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
-  },
-  "branches": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT",
-    "UPDATE"
-   ],
-   "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
-  },
-  "business_appearance": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT",
-    "UPDATE"
-   ],
-   "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
-  },
-  "business_categories": {
-   "class": "RUNTIME",
-   "verbs": [
-    "SELECT"
-   ],
-   "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
-  },
-  "business_category_translations": {
-   "class": "NO_ACCESS",
-   "verbs": [],
-   "reason": "no application code path (seeded by the migrator); revisit if a reader is added"
-  },
-  "business_customer_memberships": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT",
-    "UPDATE"
-   ],
-   "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
-  },
-  "business_notification_settings": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT",
-    "UPDATE"
-   ],
-   "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
-  },
-  "business_profile_revision_locations": {
-   "class": "RUNTIME",
-   "verbs": [
-    "DELETE",
-    "INSERT",
-    "SELECT"
-   ],
-   "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
-  },
-  "business_profile_revision_translations": {
-   "class": "RUNTIME",
-   "verbs": [
-    "DELETE",
-    "INSERT",
-    "SELECT"
-   ],
-   "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
-  },
-  "business_profile_revisions": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT",
-    "UPDATE"
-   ],
-   "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
-  },
-  "business_public_profiles": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT",
-    "UPDATE"
-   ],
-   "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
-  },
-  "business_subscriptions": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT",
-    "UPDATE"
-   ],
-   "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
-  },
-  "businesses": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT",
-    "UPDATE"
-   ],
-   "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
-  },
-  "community_memberships": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT",
-    "UPDATE"
-   ],
-   "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
-  },
-  "community_point_accounts": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT",
-    "UPDATE"
-   ],
-   "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
-  },
-  "community_point_award_decisions": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT",
-    "UPDATE"
-   ],
-   "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
-  },
-  "community_point_rules": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT",
-    "UPDATE"
-   ],
-   "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
-  },
-  "community_point_transactions": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT"
-   ],
-   "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
-  },
-  "consent_grants": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT",
-    "UPDATE"
-   ],
-   "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
-  },
-  "conversations": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT",
-    "UPDATE"
-   ],
-   "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
-  },
-  "critical_incidents": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT",
-    "UPDATE"
-   ],
-   "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
-  },
-  "customer_action_authorizations": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT",
-    "UPDATE"
-   ],
-   "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
-  },
-  "customer_auth_challenges": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT",
-    "UPDATE"
-   ],
-   "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
-  },
-  "customer_auth_events": {
-   "class": "RUNTIME",
-   "verbs": [
-    "DELETE",
-    "INSERT",
-    "SELECT"
-   ],
-   "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
-  },
-  "customer_credentials": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT",
-    "UPDATE"
-   ],
-   "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
-  },
-  "customer_onboarding_events": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT"
-   ],
-   "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
-  },
-  "customer_recovery_attempts": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT",
-    "UPDATE"
-   ],
-   "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
-  },
-  "customer_recovery_code_sets": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT",
-    "UPDATE"
-   ],
-   "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
-  },
-  "customer_recovery_codes": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT",
-    "UPDATE"
-   ],
-   "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
-  },
-  "customer_refresh_tokens": {
-   "class": "RUNTIME",
-   "verbs": [
-    "DELETE",
-    "INSERT",
-    "SELECT",
-    "UPDATE"
-   ],
-   "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
-  },
-  "customer_sanctions": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT"
-   ],
-   "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
-  },
-  "customer_sessions": {
-   "class": "RUNTIME",
-   "verbs": [
-    "DELETE",
-    "INSERT",
-    "SELECT",
-    "UPDATE"
-   ],
-   "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
-  },
-  "customers": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT",
-    "UPDATE"
-   ],
-   "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
-  },
-  "feedback": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT",
-    "UPDATE"
-   ],
-   "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
-  },
-  "feedback_answers": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT"
-   ],
-   "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
-  },
-  "feedback_form_versions": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT"
-   ],
-   "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
-  },
-  "feedback_forms": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT"
-   ],
-   "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
-  },
-  "feedback_questions": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT"
-   ],
-   "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
-  },
-  "feedback_summaries": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT"
-   ],
-   "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
-  },
-  "fraud_signals": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT",
-    "UPDATE"
-   ],
-   "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
-  },
-  "heta_provenance_comparisons": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT"
-   ],
-   "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
-  },
-  "heta_reconciliation_work": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT",
-    "UPDATE"
-   ],
-   "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
-  },
-  "heta_record_revisions": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT"
-   ],
-   "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
-  },
-  "legal_holds": {
-   "class": "NO_ACCESS",
-   "verbs": [],
-   "reason": "privacy-operator only (0086); the application runtime must never read or write the privacy workflow, holds or retention registry"
-  },
-  "loyalty_accounts": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT",
-    "UPDATE"
-   ],
-   "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
-  },
-  "loyalty_purchase_events": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT"
-   ],
-   "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
-  },
-  "loyalty_rewards": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT",
-    "UPDATE"
-   ],
-   "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
-  },
-  "loyalty_settings": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT",
-    "UPDATE"
-   ],
-   "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
-  },
-  "loyalty_tiers": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT",
-    "UPDATE"
-   ],
-   "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
-  },
-  "loyalty_transactions": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT",
-    "UPDATE"
-   ],
-   "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
-  },
-  "messages": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT",
-    "UPDATE"
-   ],
-   "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
-  },
-  "network_post_revisions": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT",
-    "UPDATE"
-   ],
-   "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
-  },
-  "network_posts": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT",
-    "UPDATE"
-   ],
-   "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
-  },
-  "network_revision_approvals": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT"
-   ],
-   "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
-  },
-  "notification_preferences": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT",
-    "UPDATE"
-   ],
-   "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
-  },
-  "notifications": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT",
-    "UPDATE"
-   ],
-   "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
-  },
-  "onboarding_erasure_operations": {
-   "class": "NO_ACCESS",
-   "verbs": [],
-   "reason": "privacy-operator only (0084); the runtime must never read or write it"
-  },
-  "orphan_reward_claims": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT",
-    "UPDATE"
-   ],
-   "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
-  },
-  "orphan_settlement_events": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT"
-   ],
-   "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
-  },
-  "orphan_settlements": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT",
-    "UPDATE"
-   ],
-   "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
-  },
-  "otp_codes": {
-   "class": "RUNTIME",
-   "verbs": [
-    "DELETE",
-    "INSERT",
-    "SELECT",
-    "UPDATE"
-   ],
-   "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
-  },
-  "otp_request_cooldowns": {
-   "class": "RUNTIME",
-   "verbs": [
-    "DELETE",
-    "INSERT",
-    "SELECT",
-    "UPDATE"
-   ],
-   "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
-  },
-  "partner_credit_accounts": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT",
-    "UPDATE"
-   ],
-   "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
-  },
-  "partner_credit_award_decisions": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT",
-    "UPDATE"
-   ],
-   "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
-  },
-  "partner_credit_award_disputes": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT",
-    "UPDATE"
-   ],
-   "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
-  },
-  "partner_credit_corrections": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT",
-    "UPDATE"
-   ],
-   "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
-  },
-  "partner_credit_dispute_events": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT"
-   ],
-   "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
-  },
-  "partner_credit_ledger": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT"
-   ],
-   "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
-  },
-  "partner_credit_lots": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT",
-    "UPDATE"
-   ],
-   "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
-  },
-  "partner_credit_multiunit_lot_allocations": {
-   "class": "NO_ACCESS",
-   "verbs": [],
-   "reason": "dormant/inert multi-unit tables (no code path); enabling needs its own review"
-  },
-  "partner_credit_multiunit_movements": {
-   "class": "NO_ACCESS",
-   "verbs": [],
-   "reason": "dormant/inert multi-unit tables (no code path); enabling needs its own review"
-  },
-  "partner_credit_policies": {
-   "class": "RUNTIME",
-   "verbs": [
-    "SELECT"
-   ],
-   "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
-  },
-  "partner_credit_recovery_obligations": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT",
-    "UPDATE"
-   ],
-   "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
-  },
-  "partner_credit_reservations": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT",
-    "UPDATE"
-   ],
-   "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
-  },
-  "partner_credit_settlement_authorizations": {
-   "class": "NO_ACCESS",
-   "verbs": [],
-   "reason": "forced-RLS settlement family; policies target dedicated settlement_* roles (the runtime would see and insert nothing), so the grant would be pure excess privilege"
-  },
-  "partner_program_enrollments": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT"
-   ],
-   "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
-  },
-  "password_reset_tokens": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT",
-    "UPDATE"
-   ],
-   "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
-  },
-  "permissions": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT"
-   ],
-   "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
-  },
-  "privacy_request_transitions": {
-   "class": "NO_ACCESS",
-   "verbs": [],
-   "reason": "privacy-operator only (0086); the application runtime must never read or write the privacy workflow, holds or retention registry"
-  },
-  "privacy_requests": {
-   "class": "NO_ACCESS",
-   "verbs": [],
-   "reason": "privacy-operator only (0086); the application runtime must never read or write the privacy workflow, holds or retention registry"
-  },
-  "qr_codes": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT",
-    "UPDATE"
-   ],
-   "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
-  },
-  "qr_scan_events": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT"
-   ],
-   "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
-  },
-  "refresh_tokens": {
-   "class": "RUNTIME",
-   "verbs": [
-    "DELETE",
-    "INSERT",
-    "SELECT",
-    "UPDATE"
-   ],
-   "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
-  },
-  "retention_policies": {
-   "class": "NO_ACCESS",
-   "verbs": [],
-   "reason": "privacy-operator only (0086); the application runtime must never read or write the privacy workflow, holds or retention registry"
-  },
-  "retention_runs": {
-   "class": "NO_ACCESS",
-   "verbs": [],
-   "reason": "privacy-operator only (0086); the application runtime must never read or write the privacy workflow, holds or retention registry"
-  },
-  "role_permissions": {
-   "class": "RUNTIME",
-   "verbs": [
-    "DELETE",
-    "INSERT",
-    "SELECT"
-   ],
-   "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
-  },
-  "roles": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT",
-    "UPDATE"
-   ],
-   "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
-  },
-  "s08_allocation_freeze_items": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT"
-   ],
-   "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
-  },
-  "s08_allocation_freezes": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT"
-   ],
-   "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
-  },
-  "settlement_custody_authorization_links": {
-   "class": "NO_ACCESS",
-   "verbs": [],
-   "reason": "forced-RLS settlement family; dedicated settlement_* roles, no code path in the runtime"
-  },
-  "signed_evidence_events": {
-   "class": "NO_ACCESS",
-   "verbs": [],
-   "reason": "forced-RLS signed-evidence family; dedicated signed_evidence_* roles"
-  },
-  "signed_evidence_records": {
-   "class": "NO_ACCESS",
-   "verbs": [],
-   "reason": "forced-RLS signed-evidence family; dedicated signed_evidence_* roles"
-  },
-  "stripe_evidence_control_events": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT"
-   ],
-   "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
-  },
-  "stripe_evidence_keys": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT"
-   ],
-   "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
-  },
-  "stripe_provider_event_conflicts": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT"
-   ],
-   "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
-  },
-  "stripe_provider_event_dispositions": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT"
-   ],
-   "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
-  },
-  "stripe_provider_events": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT"
-   ],
-   "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
-  },
-  "stripe_provider_malformed_receipts": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT"
-   ],
-   "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
-  },
-  "stripe_read_authorization_events": {
-   "class": "NO_ACCESS",
-   "verbs": [],
-   "reason": "forced-RLS Stripe read-authorization family; dedicated stripe_read_auth_* roles"
-  },
-  "stripe_read_authorization_policy": {
-   "class": "NO_ACCESS",
-   "verbs": [],
-   "reason": "forced-RLS Stripe read-authorization family; dedicated stripe_read_auth_* roles"
-  },
-  "stripe_read_authorizations": {
-   "class": "NO_ACCESS",
-   "verbs": [],
-   "reason": "forced-RLS Stripe read-authorization family; dedicated stripe_read_auth_* roles"
-  },
-  "stripe_read_policy_changes": {
-   "class": "NO_ACCESS",
-   "verbs": [],
-   "reason": "forced-RLS Stripe read-authorization family; dedicated stripe_read_auth_* roles"
-  },
-  "stripe_read_policy_events": {
-   "class": "NO_ACCESS",
-   "verbs": [],
-   "reason": "forced-RLS Stripe read-authorization family; dedicated stripe_read_auth_* roles"
-  },
-  "stripe_subscription_tier_observations": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT"
-   ],
-   "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
-  },
-  "subscription_plans": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT",
-    "UPDATE"
-   ],
-   "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
-  },
-  "survey_answers": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT"
-   ],
-   "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
-  },
-  "survey_campaigns": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT",
-    "UPDATE"
-   ],
-   "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
-  },
-  "survey_participations": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT",
-    "UPDATE"
-   ],
-   "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
-  },
-  "survey_questions": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT"
-   ],
-   "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
-  },
-  "survey_versions": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT",
-    "UPDATE"
-   ],
-   "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
-  },
-  "surveys": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT",
-    "UPDATE"
-   ],
-   "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
-  },
-  "team_invitations": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT",
-    "UPDATE"
-   ],
-   "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
-  },
-  "user_business_roles": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT",
-    "UPDATE"
-   ],
-   "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
-  },
-  "users": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT",
-    "UPDATE"
-   ],
-   "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
-  },
-  "visit_sessions": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT",
-    "UPDATE"
-   ],
-   "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
-  },
-  "community_terms_current": {
-   "class": "RUNTIME",
-   "verbs": [
-    "SELECT"
-   ],
-   "reason": "Community-only terms authority reads; runtime cannot approve, publish or mutate terms."
-  },
-  "community_terms_publications": {
-   "class": "RUNTIME",
-   "verbs": [
-    "SELECT"
-   ],
-   "reason": "Community-only terms authority reads; runtime cannot approve, publish or mutate terms."
-  },
-  "business_closure_requests": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT",
-    "UPDATE"
-   ],
-   "reason": "BIZ-CLOSE-01: owner closure requests; UPDATE is pending->cancelled only, enforced by a database guard; no DELETE/TRUNCATE; closure processing is blocked and not implemented"
-  },
-  "tentaship_badge_definitions": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT"
-   ],
-   "reason": "TB-02: canonical badge identity; append-only, no UPDATE/DELETE/TRUNCATE"
-  },
-  "tentaship_badge_definition_versions": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT",
-    "UPDATE"
-   ],
-   "reason": "TB-02: immutable versioned content; UPDATE is lifecycle-only (draft->active->retired), enforced by a database guard; no DELETE/TRUNCATE"
-  },
-  "tentaship_badge_awards": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT"
-   ],
-   "reason": "TB-03: append-only award ledger with evidence; no UPDATE/DELETE/TRUNCATE"
-  },
-  "tentaship_badge_revocations": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT"
-   ],
-   "reason": "TB-03: append-only approved revocations; no UPDATE/DELETE/TRUNCATE"
-  },
-  "customer_invitations": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT",
-    "UPDATE"
-   ],
-   "reason": "OWNER-INVITE-01: owner-issued customer invitations; UPDATE is the one-time revocation only, enforced by a database guard; no DELETE/TRUNCATE"
-  },
-  "qualification_rule_versions": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT",
-    "UPDATE"
-   ],
-   "reason": "TSH-02: shared qualification rules; immutable content, UPDATE is the approval/retirement move only (database guard); no route approves a rule in this block; no DELETE/TRUNCATE"
-  },
-  "qualification_evidence_consumptions": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT"
-   ],
-   "reason": "TSH-02: append-only record of evidence consumed by a qualification; no UPDATE/DELETE/TRUNCATE"
-  },
-  "customer_referrals": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT"
-   ],
-   "reason": "TSH-02: immutable referral attribution, one per referred customer; no UPDATE/DELETE/TRUNCATE"
-  },
-  "customer_referral_events": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT"
-   ],
-   "reason": "TSH-02: append-only referral lifecycle with database-validated transitions; verified needs an approved rule; no UPDATE/DELETE/TRUNCATE"
-  },
-  "shuffle_campaigns": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT",
-    "UPDATE"
-   ],
-   "reason": "TSH-03: campaign shell; UPDATE is the controlled status move only (database guard); no DELETE/TRUNCATE; no participation or publication exists"
-  },
-  "shuffle_campaign_versions": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT"
-   ],
-   "reason": "TSH-03: immutable campaign configuration versions; release_state is always not_released; no UPDATE/DELETE/TRUNCATE"
-  },
-  "shuffle_eligibility_snapshots": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT"
-   ],
-   "reason": "TSH-03: append-only eligibility snapshots; admits nobody; no UPDATE/DELETE/TRUNCATE"
-  },
-  "customer_deletion_requests": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT",
-    "UPDATE"
-   ],
-   "reason": "CUST-DEL-01: customer deletion requests; UPDATE is cancel-only, enforced by a database guard; no DELETE/TRUNCATE"
-  },
-  "community_pilot_eligibility_events": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT"
-   ],
-   "reason": "Community pilot allowlist event history: append-only (database guard); the runtime inserts grants/revokes through the platform route and reads eligibility; no UPDATE/DELETE/TRUNCATE"
-  },
-  "network_follows": {
-   "class": "RUNTIME",
-   "verbs": [
-    "DELETE",
-    "INSERT",
-    "SELECT"
-   ],
-   "reason": "BCOMM-04 voluntary follow: customer-owned rows, created and removed by the customer through the Feed API, read for the Following filter"
-  },
-  "network_engagement_events": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT"
-   ],
-   "reason": "BCOMM-05 append-only engagement evidence: the server inserts impression/engagement/follow/unfollow events for a signed-in customer and reads thresholded aggregates for the owning business; no UPDATE (database guard) and no DELETE except the customer-account cascade"
-  },
-  "shuffle_invitations": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT",
-    "UPDATE"
-   ],
-   "reason": "TSH-05: synthetic-only invitation; UPDATE is the guarded status machine; no DELETE/TRUNCATE"
-  },
-  "shuffle_invitation_events": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT"
-   ],
-   "reason": "TSH-05: append-only invitation transition log"
-  },
-  "shuffle_notification_intents": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT"
-   ],
-   "reason": "TSH-05: informational in-app intents held (never delivered); append-only"
-  },
-  "shuffle_entries": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT",
-    "UPDATE"
-   ],
-   "reason": "TSH-05: synthetic-only entries; UPDATE is the guarded status machine with capacity check; no DELETE/TRUNCATE"
-  },
-  "shuffle_allocation_events": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT"
-   ],
-   "reason": "TSH-04/08: hash-chained append-only evidence; chain linkage enforced by trigger"
-  },
-  "shuffle_selection_results": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT"
-   ],
-   "reason": "TSH-04: one append-only synthetic selection record per version with replay-verifiable transcript"
-  },
-  "drop_sponsorships": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT",
-    "UPDATE"
-   ],
-   "reason": "TDP-02: synthetic-only sponsorship; UPDATE is the guarded offer status machine with independent review; no DELETE/TRUNCATE"
-  },
-  "drop_sponsorship_versions": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT"
-   ],
-   "reason": "TDP-02: immutable descriptive sponsorship versions (draft only); no price/payment fields"
-  },
-  "drop_inventory": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT"
-   ],
-   "reason": "TDP-02: single authoritative inventory row; counters change only via the reservation trigger (no runtime UPDATE grant)"
-  },
-  "drop_reservations": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT",
-    "UPDATE"
-   ],
-   "reason": "TDP-02: allocation state machine; UPDATE is the guarded unit status; atomic inventory via trigger; no DELETE/TRUNCATE"
-  },
-  "drop_events": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT"
-   ],
-   "reason": "TDP-02: hash-chained append-only evidence; linkage enforced by trigger"
-  },
-  "governance_operators": {
-   "class": "RUNTIME",
-   "verbs": [
-    "SELECT"
-   ],
-   "reason": "TSH-08: operator assignments are an Owner grant; runtime READ only (no INSERT/UPDATE grant); empty by default so review/decision/override stay disabled"
-  },
-  "governance_cases": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT",
-    "UPDATE"
-   ],
-   "reason": "TSH-08: synthetic-only fraud/dispute cases; UPDATE is the guarded status machine; decisions never rewritten; no DELETE/TRUNCATE"
-  },
-  "governance_case_evidence": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT"
-   ],
-   "reason": "TSH-08: append-only case evidence"
-  },
-  "governance_events": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT"
-   ],
-   "reason": "TSH-08: hash-chained append-only case log; linkage enforced by trigger"
-  },
-  "governance_overrides": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT",
-    "UPDATE"
-   ],
-   "reason": "TSH-08: two-person override machine; UPDATE is the guarded status; no DELETE/TRUNCATE"
-  },
-  "shuffle_drop_allocations": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT"
-   ],
-   "reason": "TSH-04: append-only provenance linking a SELECTED entry to its Drops allocation (synthetic only); the unit state and inventory stay on drop_reservations/drop_inventory"
-  },
-  "governance_decision_policies": {
-   "class": "RUNTIME",
-   "verbs": [
-    "SELECT"
-   ],
-   "reason": "G5: Owner-approved decision policy versions (read by the runtime; authored and approved by privileged tooling only)"
-  },
-  "governance_operator_events": {
-   "class": "RUNTIME",
-   "verbs": [
-    "SELECT"
-   ],
-   "reason": "G5: append-only operator assignment/revocation audit (read by the runtime; written by privileged tooling only)"
-  },
-  "sponsor_applications": {
-   "class": "RUNTIME",
-   "verbs": [
-    "SELECT"
-   ],
-   "reason": "G6: synthetic sponsor application state (read by the runtime; written by privileged tooling only; no route)"
-  },
-  "sponsor_application_events": {
-   "class": "RUNTIME",
-   "verbs": [
-    "SELECT"
-   ],
-   "reason": "G6: append-only sponsor application audit (read by the runtime)"
-  },
-  "drop_fulfilment_policies": {
-   "class": "RUNTIME",
-   "verbs": [
-    "SELECT"
-   ],
-   "reason": "G6: Owner-approved fulfilment policy versions (read by the runtime; authored by privileged tooling only)"
-  },
-  "shuffle_notification_deliveries": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT"
-   ],
-   "reason": "G2: append-only synthetic delivery-decision history for held Shuffle notification intents"
-  },
-  "loyalty_programs": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT",
-    "UPDATE"
-   ],
-   "reason": "LOYALTY-PROGRAMME-COMPLETION: the business primary programme (one active per business, enforced by the database); a programme is retired, never deleted"
-  },
-  "loyalty_program_versions": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT"
-   ],
-   "reason": "LOYALTY-PROGRAMME-COMPLETION: append-only immutable configuration versions; earning reads the current version"
-  },
-  "loyalty_program_events": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT"
-   ],
-   "reason": "LOYALTY-PROGRAMME-COMPLETION: append-only programme lifecycle and activation history"
-  },
-  "loyalty_program_setup": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT",
-    "UPDATE"
-   ],
-   "reason": "LOYALTY-PROGRAMME-COMPLETION: pending (Configure Later) or configured marker per business"
-  },
-  "loyalty_program_progress": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT",
-    "UPDATE"
-   ],
-   "reason": "LOYALTY-PROGRAMME-COMPLETION: per-account programme counters, updated under a row lock; frozen when the programme is paused; never deleted"
-  },
-  "loyalty_program_progress_events": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT"
-   ],
-   "reason": "LOYALTY-PROGRAMME-COMPLETION: append-only progress history with a unique source key (duplicate prevention)"
-  },
-  "loyalty_program_entitlements": {
-   "class": "RUNTIME",
-   "verbs": [
-    "INSERT",
-    "SELECT",
-    "UPDATE"
-   ],
-   "reason": "LOYALTY-PROGRAMME-COMPLETION: earned single-use programme rewards; only the status moves, once; never deleted"
+  "role": "echogrid_app_runtime",
+  "sequences": [
+    "benefit_application_transitions_seq_seq",
+    "community_pilot_eligibility_events_seq_seq",
+    "partner_credit_dispute_events_seq_seq",
+    "stripe_evidence_control_events_seq_seq",
+    "stripe_provider_event_dispositions_seq_seq"
+  ],
+  "tables": {
+    "ai_usage_log": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT", "UPDATE"],
+      "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
+    },
+    "audit_log": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT"],
+      "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
+    },
+    "b2b_abuse_reports": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT", "UPDATE"],
+      "reason": "Split 09 B2B network: service-layer access under business-level authorization; append-only records remain database-guarded"
+    },
+    "b2b_message_reads": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT"],
+      "reason": "Split 09 B2B network: service-layer access under business-level authorization; append-only records remain database-guarded"
+    },
+    "b2b_messages": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT"],
+      "reason": "Split 09 B2B network: service-layer access under business-level authorization; append-only records remain database-guarded"
+    },
+    "b2b_moderation_actions": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT"],
+      "reason": "Split 09 B2B network: service-layer access under business-level authorization; append-only records remain database-guarded"
+    },
+    "b2b_notification_reads": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT"],
+      "reason": "Split 09 B2B network: service-layer access under business-level authorization; append-only records remain database-guarded"
+    },
+    "b2b_notifications": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT"],
+      "reason": "Split 09 B2B network: service-layer access under business-level authorization; append-only records remain database-guarded"
+    },
+    "b2b_participation_events": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT"],
+      "reason": "Split 09 B2B network: service-layer access under business-level authorization; append-only records remain database-guarded"
+    },
+    "b2b_partnership_events": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT"],
+      "reason": "Split 09 B2B network: service-layer access under business-level authorization; append-only records remain database-guarded"
+    },
+    "b2b_partnership_request_events": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT"],
+      "reason": "Split 09 B2B network: service-layer access under business-level authorization; append-only records remain database-guarded"
+    },
+    "b2b_partnership_requests": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT", "UPDATE"],
+      "reason": "Split 09 B2B network: service-layer access under business-level authorization; append-only records remain database-guarded"
+    },
+    "b2b_partnerships": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT", "UPDATE"],
+      "reason": "Split 09 B2B network: service-layer access under business-level authorization; append-only records remain database-guarded"
+    },
+    "b2b_proposal_events": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT"],
+      "reason": "Split 09 B2B network: service-layer access under business-level authorization; append-only records remain database-guarded"
+    },
+    "b2b_proposals": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT", "UPDATE"],
+      "reason": "Split 09 B2B network: service-layer access under business-level authorization; append-only records remain database-guarded"
+    },
+    "b2b_participations": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT", "UPDATE"],
+      "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
+    },
+    "b2b_terms_versions": {
+      "class": "RUNTIME",
+      "verbs": ["SELECT"],
+      "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
+    },
+    "benefit_application_compensations": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT"],
+      "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
+    },
+    "benefit_application_intents": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT", "UPDATE"],
+      "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
+    },
+    "benefit_application_transitions": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT"],
+      "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
+    },
+    "benefit_provider_attempts": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT"],
+      "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
+    },
+    "benefit_provider_observations": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT"],
+      "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
+    },
+    "benefit_reconciliation_attempts": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT", "UPDATE"],
+      "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
+    },
+    "billing_partner_credit_applications": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT"],
+      "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
+    },
+    "branches": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT", "UPDATE"],
+      "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
+    },
+    "business_appearance": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT", "UPDATE"],
+      "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
+    },
+    "business_categories": {
+      "class": "RUNTIME",
+      "verbs": ["SELECT"],
+      "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
+    },
+    "business_category_translations": {
+      "class": "NO_ACCESS",
+      "verbs": [],
+      "reason": "no application code path (seeded by the migrator); revisit if a reader is added"
+    },
+    "business_customer_memberships": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT", "UPDATE"],
+      "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
+    },
+    "business_notification_settings": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT", "UPDATE"],
+      "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
+    },
+    "business_profile_revision_locations": {
+      "class": "RUNTIME",
+      "verbs": ["DELETE", "INSERT", "SELECT"],
+      "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
+    },
+    "business_profile_revision_translations": {
+      "class": "RUNTIME",
+      "verbs": ["DELETE", "INSERT", "SELECT"],
+      "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
+    },
+    "business_profile_revisions": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT", "UPDATE"],
+      "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
+    },
+    "business_public_profiles": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT", "UPDATE"],
+      "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
+    },
+    "business_subscriptions": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT", "UPDATE"],
+      "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
+    },
+    "businesses": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT", "UPDATE"],
+      "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
+    },
+    "community_memberships": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT", "UPDATE"],
+      "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
+    },
+    "community_point_accounts": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT", "UPDATE"],
+      "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
+    },
+    "community_point_award_decisions": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT", "UPDATE"],
+      "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
+    },
+    "community_point_rules": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT", "UPDATE"],
+      "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
+    },
+    "community_point_transactions": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT"],
+      "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
+    },
+    "consent_grants": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT", "UPDATE"],
+      "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
+    },
+    "conversations": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT", "UPDATE"],
+      "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
+    },
+    "critical_incidents": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT", "UPDATE"],
+      "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
+    },
+    "customer_action_authorizations": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT", "UPDATE"],
+      "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
+    },
+    "customer_auth_challenges": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT", "UPDATE"],
+      "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
+    },
+    "customer_auth_events": {
+      "class": "RUNTIME",
+      "verbs": ["DELETE", "INSERT", "SELECT"],
+      "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
+    },
+    "customer_credentials": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT", "UPDATE"],
+      "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
+    },
+    "customer_onboarding_events": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT"],
+      "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
+    },
+    "customer_recovery_attempts": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT", "UPDATE"],
+      "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
+    },
+    "customer_recovery_code_sets": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT", "UPDATE"],
+      "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
+    },
+    "customer_recovery_codes": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT", "UPDATE"],
+      "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
+    },
+    "customer_refresh_tokens": {
+      "class": "RUNTIME",
+      "verbs": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
+    },
+    "customer_sanctions": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT"],
+      "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
+    },
+    "customer_sessions": {
+      "class": "RUNTIME",
+      "verbs": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
+    },
+    "customers": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT", "UPDATE"],
+      "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
+    },
+    "feedback": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT", "UPDATE"],
+      "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
+    },
+    "feedback_answers": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT"],
+      "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
+    },
+    "feedback_form_versions": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT"],
+      "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
+    },
+    "feedback_forms": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT"],
+      "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
+    },
+    "feedback_questions": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT"],
+      "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
+    },
+    "feedback_summaries": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT"],
+      "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
+    },
+    "fraud_signals": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT", "UPDATE"],
+      "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
+    },
+    "heta_provenance_comparisons": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT"],
+      "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
+    },
+    "heta_reconciliation_work": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT", "UPDATE"],
+      "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
+    },
+    "heta_record_revisions": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT"],
+      "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
+    },
+    "legal_holds": {
+      "class": "NO_ACCESS",
+      "verbs": [],
+      "reason": "privacy-operator only (0086); the application runtime must never read or write the privacy workflow, holds or retention registry"
+    },
+    "loyalty_accounts": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT", "UPDATE"],
+      "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
+    },
+    "loyalty_purchase_events": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT"],
+      "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
+    },
+    "loyalty_rewards": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT", "UPDATE"],
+      "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
+    },
+    "loyalty_settings": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT", "UPDATE"],
+      "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
+    },
+    "loyalty_tiers": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT", "UPDATE"],
+      "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
+    },
+    "loyalty_transactions": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT", "UPDATE"],
+      "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
+    },
+    "messages": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT", "UPDATE"],
+      "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
+    },
+    "network_post_revisions": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT", "UPDATE"],
+      "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
+    },
+    "network_posts": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT", "UPDATE"],
+      "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
+    },
+    "network_revision_approvals": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT"],
+      "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
+    },
+    "notification_preferences": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT", "UPDATE"],
+      "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
+    },
+    "notifications": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT", "UPDATE"],
+      "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
+    },
+    "onboarding_erasure_operations": {
+      "class": "NO_ACCESS",
+      "verbs": [],
+      "reason": "privacy-operator only (0084); the runtime must never read or write it"
+    },
+    "orphan_reward_claims": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT", "UPDATE"],
+      "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
+    },
+    "orphan_settlement_events": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT"],
+      "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
+    },
+    "orphan_settlements": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT", "UPDATE"],
+      "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
+    },
+    "otp_codes": {
+      "class": "RUNTIME",
+      "verbs": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
+    },
+    "otp_request_cooldowns": {
+      "class": "RUNTIME",
+      "verbs": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
+    },
+    "partner_credit_accounts": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT", "UPDATE"],
+      "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
+    },
+    "partner_credit_award_decisions": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT", "UPDATE"],
+      "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
+    },
+    "partner_credit_award_disputes": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT", "UPDATE"],
+      "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
+    },
+    "partner_credit_corrections": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT", "UPDATE"],
+      "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
+    },
+    "partner_credit_dispute_events": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT"],
+      "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
+    },
+    "partner_credit_ledger": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT"],
+      "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
+    },
+    "partner_credit_lots": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT", "UPDATE"],
+      "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
+    },
+    "partner_credit_multiunit_lot_allocations": {
+      "class": "NO_ACCESS",
+      "verbs": [],
+      "reason": "dormant/inert multi-unit tables (no code path); enabling needs its own review"
+    },
+    "partner_credit_multiunit_movements": {
+      "class": "NO_ACCESS",
+      "verbs": [],
+      "reason": "dormant/inert multi-unit tables (no code path); enabling needs its own review"
+    },
+    "partner_credit_policies": {
+      "class": "RUNTIME",
+      "verbs": ["SELECT"],
+      "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
+    },
+    "partner_credit_recovery_obligations": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT", "UPDATE"],
+      "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
+    },
+    "partner_credit_reservations": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT", "UPDATE"],
+      "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
+    },
+    "partner_credit_settlement_authorizations": {
+      "class": "NO_ACCESS",
+      "verbs": [],
+      "reason": "forced-RLS settlement family; policies target dedicated settlement_* roles (the runtime would see and insert nothing), so the grant would be pure excess privilege"
+    },
+    "partner_program_enrollments": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT"],
+      "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
+    },
+    "password_reset_tokens": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT", "UPDATE"],
+      "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
+    },
+    "permissions": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT"],
+      "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
+    },
+    "privacy_request_transitions": {
+      "class": "NO_ACCESS",
+      "verbs": [],
+      "reason": "privacy-operator only (0086); the application runtime must never read or write the privacy workflow, holds or retention registry"
+    },
+    "privacy_requests": {
+      "class": "NO_ACCESS",
+      "verbs": [],
+      "reason": "privacy-operator only (0086); the application runtime must never read or write the privacy workflow, holds or retention registry"
+    },
+    "qr_codes": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT", "UPDATE"],
+      "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
+    },
+    "qr_scan_events": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT"],
+      "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
+    },
+    "refresh_tokens": {
+      "class": "RUNTIME",
+      "verbs": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
+    },
+    "retention_policies": {
+      "class": "NO_ACCESS",
+      "verbs": [],
+      "reason": "privacy-operator only (0086); the application runtime must never read or write the privacy workflow, holds or retention registry"
+    },
+    "retention_runs": {
+      "class": "NO_ACCESS",
+      "verbs": [],
+      "reason": "privacy-operator only (0086); the application runtime must never read or write the privacy workflow, holds or retention registry"
+    },
+    "role_permissions": {
+      "class": "RUNTIME",
+      "verbs": ["DELETE", "INSERT", "SELECT"],
+      "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
+    },
+    "roles": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT", "UPDATE"],
+      "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
+    },
+    "s08_allocation_freeze_items": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT"],
+      "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
+    },
+    "s08_allocation_freezes": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT"],
+      "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
+    },
+    "settlement_custody_authorization_links": {
+      "class": "NO_ACCESS",
+      "verbs": [],
+      "reason": "forced-RLS settlement family; dedicated settlement_* roles, no code path in the runtime"
+    },
+    "signed_evidence_events": {
+      "class": "NO_ACCESS",
+      "verbs": [],
+      "reason": "forced-RLS signed-evidence family; dedicated signed_evidence_* roles"
+    },
+    "signed_evidence_records": {
+      "class": "NO_ACCESS",
+      "verbs": [],
+      "reason": "forced-RLS signed-evidence family; dedicated signed_evidence_* roles"
+    },
+    "stripe_evidence_control_events": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT"],
+      "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
+    },
+    "stripe_evidence_keys": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT"],
+      "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
+    },
+    "stripe_provider_event_conflicts": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT"],
+      "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
+    },
+    "stripe_provider_event_dispositions": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT"],
+      "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
+    },
+    "stripe_provider_events": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT"],
+      "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
+    },
+    "stripe_provider_malformed_receipts": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT"],
+      "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
+    },
+    "stripe_read_authorization_events": {
+      "class": "NO_ACCESS",
+      "verbs": [],
+      "reason": "forced-RLS Stripe read-authorization family; dedicated stripe_read_auth_* roles"
+    },
+    "stripe_read_authorization_policy": {
+      "class": "NO_ACCESS",
+      "verbs": [],
+      "reason": "forced-RLS Stripe read-authorization family; dedicated stripe_read_auth_* roles"
+    },
+    "stripe_read_authorizations": {
+      "class": "NO_ACCESS",
+      "verbs": [],
+      "reason": "forced-RLS Stripe read-authorization family; dedicated stripe_read_auth_* roles"
+    },
+    "stripe_read_policy_changes": {
+      "class": "NO_ACCESS",
+      "verbs": [],
+      "reason": "forced-RLS Stripe read-authorization family; dedicated stripe_read_auth_* roles"
+    },
+    "stripe_read_policy_events": {
+      "class": "NO_ACCESS",
+      "verbs": [],
+      "reason": "forced-RLS Stripe read-authorization family; dedicated stripe_read_auth_* roles"
+    },
+    "stripe_subscription_tier_observations": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT"],
+      "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
+    },
+    "subscription_plans": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT", "UPDATE"],
+      "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
+    },
+    "survey_answers": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT"],
+      "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
+    },
+    "survey_campaigns": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT", "UPDATE"],
+      "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
+    },
+    "survey_participations": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT", "UPDATE"],
+      "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
+    },
+    "survey_questions": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT"],
+      "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
+    },
+    "survey_versions": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT", "UPDATE"],
+      "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
+    },
+    "surveys": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT", "UPDATE"],
+      "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
+    },
+    "team_invitations": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT", "UPDATE"],
+      "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
+    },
+    "user_business_roles": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT", "UPDATE"],
+      "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
+    },
+    "users": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT", "UPDATE"],
+      "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
+    },
+    "visit_sessions": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT", "UPDATE"],
+      "reason": "verbs observed in application source (ORM calls and raw SQL); SELECT added wherever a write exists (RETURNING/WHERE need it)"
+    },
+    "community_terms_current": {
+      "class": "RUNTIME",
+      "verbs": ["SELECT"],
+      "reason": "Community-only terms authority reads; runtime cannot approve, publish or mutate terms."
+    },
+    "community_terms_publications": {
+      "class": "RUNTIME",
+      "verbs": ["SELECT"],
+      "reason": "Community-only terms authority reads; runtime cannot approve, publish or mutate terms."
+    },
+    "business_closure_requests": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT", "UPDATE"],
+      "reason": "BIZ-CLOSE-01: owner closure requests; UPDATE is pending->cancelled only, enforced by a database guard; no DELETE/TRUNCATE; closure processing is blocked and not implemented"
+    },
+    "tentaship_badge_definitions": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT"],
+      "reason": "TB-02: canonical badge identity; append-only, no UPDATE/DELETE/TRUNCATE"
+    },
+    "tentaship_badge_definition_versions": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT", "UPDATE"],
+      "reason": "TB-02: immutable versioned content; UPDATE is lifecycle-only (draft->active->retired), enforced by a database guard; no DELETE/TRUNCATE"
+    },
+    "tentaship_badge_awards": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT"],
+      "reason": "TB-03: append-only award ledger with evidence; no UPDATE/DELETE/TRUNCATE"
+    },
+    "tentaship_badge_revocations": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT"],
+      "reason": "TB-03: append-only approved revocations; no UPDATE/DELETE/TRUNCATE"
+    },
+    "customer_invitations": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT", "UPDATE"],
+      "reason": "OWNER-INVITE-01: owner-issued customer invitations; UPDATE is the one-time revocation only, enforced by a database guard; no DELETE/TRUNCATE"
+    },
+    "qualification_rule_versions": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT", "UPDATE"],
+      "reason": "TSH-02: shared qualification rules; immutable content, UPDATE is the approval/retirement move only (database guard); no route approves a rule in this block; no DELETE/TRUNCATE"
+    },
+    "qualification_evidence_consumptions": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT"],
+      "reason": "TSH-02: append-only record of evidence consumed by a qualification; no UPDATE/DELETE/TRUNCATE"
+    },
+    "customer_referrals": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT"],
+      "reason": "TSH-02: immutable referral attribution, one per referred customer; no UPDATE/DELETE/TRUNCATE"
+    },
+    "customer_referral_events": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT"],
+      "reason": "TSH-02: append-only referral lifecycle with database-validated transitions; verified needs an approved rule; no UPDATE/DELETE/TRUNCATE"
+    },
+    "shuffle_campaigns": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT", "UPDATE"],
+      "reason": "TSH-03: campaign shell; UPDATE is the controlled status move only (database guard); no DELETE/TRUNCATE; no participation or publication exists"
+    },
+    "shuffle_campaign_versions": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT"],
+      "reason": "TSH-03: immutable campaign configuration versions; release_state is always not_released; no UPDATE/DELETE/TRUNCATE"
+    },
+    "shuffle_eligibility_snapshots": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT"],
+      "reason": "TSH-03: append-only eligibility snapshots; admits nobody; no UPDATE/DELETE/TRUNCATE"
+    },
+    "customer_deletion_requests": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT", "UPDATE"],
+      "reason": "CUST-DEL-01: customer deletion requests; UPDATE is cancel-only, enforced by a database guard; no DELETE/TRUNCATE"
+    },
+    "community_pilot_eligibility_events": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT"],
+      "reason": "Community pilot allowlist event history: append-only (database guard); the runtime inserts grants/revokes through the platform route and reads eligibility; no UPDATE/DELETE/TRUNCATE"
+    },
+    "network_follows": {
+      "class": "RUNTIME",
+      "verbs": ["DELETE", "INSERT", "SELECT"],
+      "reason": "BCOMM-04 voluntary follow: customer-owned rows, created and removed by the customer through the Feed API, read for the Following filter"
+    },
+    "network_engagement_events": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT"],
+      "reason": "BCOMM-05 append-only engagement evidence: the server inserts impression/engagement/follow/unfollow events for a signed-in customer and reads thresholded aggregates for the owning business; no UPDATE (database guard) and no DELETE except the customer-account cascade"
+    },
+    "shuffle_invitations": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT", "UPDATE"],
+      "reason": "TSH-05: synthetic-only invitation; UPDATE is the guarded status machine; no DELETE/TRUNCATE"
+    },
+    "shuffle_invitation_events": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT"],
+      "reason": "TSH-05: append-only invitation transition log"
+    },
+    "shuffle_notification_intents": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT"],
+      "reason": "TSH-05: informational in-app intents held (never delivered); append-only"
+    },
+    "shuffle_entries": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT", "UPDATE"],
+      "reason": "TSH-05: synthetic-only entries; UPDATE is the guarded status machine with capacity check; no DELETE/TRUNCATE"
+    },
+    "shuffle_allocation_events": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT"],
+      "reason": "TSH-04/08: hash-chained append-only evidence; chain linkage enforced by trigger"
+    },
+    "shuffle_selection_results": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT"],
+      "reason": "TSH-04: one append-only synthetic selection record per version with replay-verifiable transcript"
+    },
+    "drop_sponsorships": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT", "UPDATE"],
+      "reason": "TDP-02: synthetic-only sponsorship; UPDATE is the guarded offer status machine with independent review; no DELETE/TRUNCATE"
+    },
+    "drop_sponsorship_versions": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT"],
+      "reason": "TDP-02: immutable descriptive sponsorship versions (draft only); no price/payment fields"
+    },
+    "drop_inventory": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT"],
+      "reason": "TDP-02: single authoritative inventory row; counters change only via the reservation trigger (no runtime UPDATE grant)"
+    },
+    "drop_reservations": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT", "UPDATE"],
+      "reason": "TDP-02: allocation state machine; UPDATE is the guarded unit status; atomic inventory via trigger; no DELETE/TRUNCATE"
+    },
+    "drop_events": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT"],
+      "reason": "TDP-02: hash-chained append-only evidence; linkage enforced by trigger"
+    },
+    "governance_operators": {
+      "class": "RUNTIME",
+      "verbs": ["SELECT"],
+      "reason": "TSH-08: operator assignments are an Owner grant; runtime READ only (no INSERT/UPDATE grant); empty by default so review/decision/override stay disabled"
+    },
+    "governance_cases": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT", "UPDATE"],
+      "reason": "TSH-08: synthetic-only fraud/dispute cases; UPDATE is the guarded status machine; decisions never rewritten; no DELETE/TRUNCATE"
+    },
+    "governance_case_evidence": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT"],
+      "reason": "TSH-08: append-only case evidence"
+    },
+    "governance_events": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT"],
+      "reason": "TSH-08: hash-chained append-only case log; linkage enforced by trigger"
+    },
+    "governance_overrides": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT", "UPDATE"],
+      "reason": "TSH-08: two-person override machine; UPDATE is the guarded status; no DELETE/TRUNCATE"
+    },
+    "shuffle_drop_allocations": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT"],
+      "reason": "TSH-04: append-only provenance linking a SELECTED entry to its Drops allocation (synthetic only); the unit state and inventory stay on drop_reservations/drop_inventory"
+    },
+    "governance_decision_policies": {
+      "class": "RUNTIME",
+      "verbs": ["SELECT"],
+      "reason": "G5: Owner-approved decision policy versions (read by the runtime; authored and approved by privileged tooling only)"
+    },
+    "governance_operator_events": {
+      "class": "RUNTIME",
+      "verbs": ["SELECT"],
+      "reason": "G5: append-only operator assignment/revocation audit (read by the runtime; written by privileged tooling only)"
+    },
+    "sponsor_applications": {
+      "class": "RUNTIME",
+      "verbs": ["SELECT"],
+      "reason": "G6: synthetic sponsor application state (read by the runtime; written by privileged tooling only; no route)"
+    },
+    "sponsor_application_events": {
+      "class": "RUNTIME",
+      "verbs": ["SELECT"],
+      "reason": "G6: append-only sponsor application audit (read by the runtime)"
+    },
+    "drop_fulfilment_policies": {
+      "class": "RUNTIME",
+      "verbs": ["SELECT"],
+      "reason": "G6: Owner-approved fulfilment policy versions (read by the runtime; authored by privileged tooling only)"
+    },
+    "shuffle_notification_deliveries": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT"],
+      "reason": "G2: append-only synthetic delivery-decision history for held Shuffle notification intents"
+    },
+    "loyalty_programs": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT", "UPDATE"],
+      "reason": "LOYALTY-PROGRAMME-COMPLETION: the business primary programme (one active per business, enforced by the database); a programme is retired, never deleted"
+    },
+    "loyalty_program_versions": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT"],
+      "reason": "LOYALTY-PROGRAMME-COMPLETION: append-only immutable configuration versions; earning reads the current version"
+    },
+    "loyalty_program_events": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT"],
+      "reason": "LOYALTY-PROGRAMME-COMPLETION: append-only programme lifecycle and activation history"
+    },
+    "loyalty_program_setup": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT", "UPDATE"],
+      "reason": "LOYALTY-PROGRAMME-COMPLETION: pending (Configure Later) or configured marker per business"
+    },
+    "loyalty_program_progress": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT", "UPDATE"],
+      "reason": "LOYALTY-PROGRAMME-COMPLETION: per-account programme counters, updated under a row lock; frozen when the programme is paused; never deleted"
+    },
+    "loyalty_program_progress_events": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT"],
+      "reason": "LOYALTY-PROGRAMME-COMPLETION: append-only progress history with a unique source key (duplicate prevention)"
+    },
+    "loyalty_program_entitlements": {
+      "class": "RUNTIME",
+      "verbs": ["INSERT", "SELECT", "UPDATE"],
+      "reason": "LOYALTY-PROGRAMME-COMPLETION: earned single-use programme rewards; only the status moves, once; never deleted"
+    }
   }
- }
 }

@@ -108,8 +108,7 @@ export const b2bParticipationEvents = pgTable(
   'b2b_participation_events',
   {
     id: uuid('id').primaryKey().defaultRandom(),
-    participationId: uuid('participation_id')
-      .notNull(),
+    participationId: uuid('participation_id').notNull(),
     businessId: uuid('business_id')
       .notNull()
       .references(() => businesses.id, { onDelete: 'restrict' }),
